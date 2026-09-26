@@ -1,8 +1,9 @@
 "use client";
 
+import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { z } from "zod";
 import { loadFromStorage } from "@/lib/client/load-from-storage";
 import { cn } from "@/lib/client/utils";
@@ -55,8 +56,13 @@ function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
+/** Delade props för länkar/användardel: `iconOnly` = hopfällt desktop-läge (#1198). */
+interface IconOnlyProp {
+  iconOnly?: boolean;
+}
+
 /** Navigations-länkarna (delas av mobil-drawern + desktop-sidofältet, DRY). */
-function NavLinks({ pathname, onNavigate, py = "py-2" }: { pathname: string; onNavigate?: () => void; py?: string }) {
+function NavLinks({ pathname, onNavigate, py = "py-2", iconOnly = false }: { pathname: string; onNavigate?: () => void; py?: string } & IconOnlyProp) {
   return (
     <>
       {navigation.map((item) => (
@@ -64,35 +70,117 @@ function NavLinks({ pathname, onNavigate, py = "py-2" }: { pathname: string; onN
           key={item.href}
           href={item.href}
           {...(onNavigate ? { onClick: onNavigate } : {})}
+          {...(iconOnly ? { title: item.name } : {})}
           className={cn(
             "flex items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
             py,
+            iconOnly && "justify-center",
             isActive(pathname, item.href)
               ? "bg-blue-50 text-blue-700"
               : "text-gray-700 hover:bg-gray-100 hover:text-gray-900",
           )}
         >
-          <span className="text-lg">{item.icon}</span>
-          {item.name}
+          <span className="text-lg" aria-hidden="true">{item.icon}</span>
+          <span className={cn(iconOnly && "sr-only")}>{item.name}</span>
         </Link>
       ))}
     </>
   );
 }
 
-/** Användarnamn + "Logga ut" (delas av mobil-drawern + desktop-sidofältet). */
-function UserSection({ userName, nameMargin = "mb-1" }: { userName?: string | null | undefined; nameMargin?: string }) {
-  return (
-    <div className="px-4 py-4 border-t border-gray-200">
-      {userName && (
-        <p className={cn("text-sm font-medium text-gray-900 truncate", nameMargin)}>{userName}</p>
-      )}
+/** "Logga ut" — textknapp, eller ikonknapp i hopfällt läge. */
+function LogoutButton({ iconOnly = false }: IconOnlyProp) {
+  if (iconOnly) {
+    return (
       <button
         onClick={() => signOutLocally()}
-        className="text-sm text-gray-500 hover:text-gray-700"
+        aria-label="Logga ut"
+        title="Logga ut"
+        className="flex w-full justify-center rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
       >
-        Logga ut
+        <LogOut className="h-5 w-5" aria-hidden="true" />
       </button>
+    );
+  }
+  return (
+    <button
+      onClick={() => signOutLocally()}
+      className="text-sm text-gray-500 hover:text-gray-700"
+    >
+      Logga ut
+    </button>
+  );
+}
+
+/** Användarnamn + "Logga ut" (delas av mobil-drawern + desktop-sidofältet). */
+function UserSection({ userName, nameMargin = "mb-1", iconOnly = false }: { userName?: string | null | undefined; nameMargin?: string } & IconOnlyProp) {
+  return (
+    <div className={cn("py-4 border-t border-gray-200", iconOnly ? "px-2" : "px-4")}>
+      {userName && !iconOnly && (
+        <p className={cn("text-sm font-medium text-gray-900 truncate", nameMargin)}>{userName}</p>
+      )}
+      <LogoutButton iconOnly={iconOnly} />
+    </div>
+  );
+}
+
+/** localStorage-nyckel för desktop-menyns hopfällda läge (per webbläsare). */
+const COLLAPSED_KEY = "ava.sidebar.collapsed";
+
+const noopSubscribe = (): (() => void) => () => {};
+const readCollapsed = (): boolean => loadFromStorage(COLLAPSED_KEY, z.boolean(), false);
+const serverCollapsed = (): boolean => false;
+
+/**
+ * Hopfällt-läget för desktop-menyn. Sidofältet server-renderas i den
+ * statiska exporten → lagringen läses via `useSyncExternalStore` med
+ * server-snapshot `false` (ingen hydreringsmismatch, ingen setState-i-effect).
+ * Efter en växling gäller komponentens eget val, även om lagringen är blockerad.
+ */
+function useCollapsed(): [boolean, () => void] {
+  const stored = useSyncExternalStore(noopSubscribe, readCollapsed, serverCollapsed);
+  const [override, setOverride] = useState<boolean | null>(null);
+  const collapsed = override ?? stored;
+  const toggle = (): void => {
+    const next = !collapsed;
+    setOverride(next);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+    } catch { /* lagring blockerad — läget gäller bara denna vy */ }
+  };
+  return [collapsed, toggle];
+}
+
+/** Sidofältets huvud: "AVA" (+ "Advokat CRM" i fullt läge) och växlingsknappen. */
+function SidebarHeader({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  const toggleLabel = collapsed ? "Fäll ut menyn" : "Fäll ihop menyn";
+  return (
+    <div className={cn("flex h-16 items-center border-b border-gray-200", collapsed ? "flex-col justify-center gap-1 px-2" : "px-6")}>
+      <h1 className={cn("font-bold text-gray-900", collapsed ? "text-base" : "text-xl")}>AVA</h1>
+      {!collapsed && <span className="ml-2 text-sm text-gray-500">Advokat CRM</span>}
+      <button
+        onClick={onToggle}
+        aria-label={toggleLabel}
+        title={toggleLabel}
+        className={cn("rounded-lg p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700", !collapsed && "ml-auto")}
+      >
+        <ToggleIcon className="h-5 w-5" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/** Desktop-sidofältet — fullt (lg:w-64) eller bara ikoner (lg:w-16). */
+function DesktopSidebar({ pathname, userName }: { pathname: string; userName?: string | null | undefined }) {
+  const [collapsed, toggle] = useCollapsed();
+  return (
+    <div className={cn("hidden lg:flex lg:flex-col lg:border-r lg:border-gray-200 lg:bg-white lg:shrink-0", collapsed ? "lg:w-16" : "lg:w-64")}>
+      <SidebarHeader collapsed={collapsed} onToggle={toggle} />
+      <nav className={cn("flex-1 py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
+        <NavLinks pathname={pathname} iconOnly={collapsed} />
+      </nav>
+      <UserSection userName={userName} iconOnly={collapsed} />
     </div>
   );
 }
@@ -147,16 +235,7 @@ export function Sidebar({ userName }: SidebarProps) {
       )}
 
       {/* Desktop sidebar */}
-      <div className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r lg:border-gray-200 lg:bg-white lg:shrink-0">
-        <div className="flex h-16 items-center px-6 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-gray-900">AVA</h1>
-          <span className="ml-2 text-sm text-gray-500">Advokat CRM</span>
-        </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          <NavLinks pathname={pathname} />
-        </nav>
-        <UserSection userName={userName} />
-      </div>
+      <DesktopSidebar pathname={pathname} userName={userName} />
     </>
   );
 }
