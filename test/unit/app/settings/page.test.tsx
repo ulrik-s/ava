@@ -158,6 +158,23 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ defaultHourlyRate: null }), { timeout: 2000 });
   });
 
+  it("timpris tidsspillan: visar sparat öre-pris i kr/h", () => {
+    settingsQuery.data = { ...settingsQuery.data, tidsspillanHourlyRate: 150000, defaultHourlyRate: 250000 };
+    render(<SettingsPage />);
+    expect(screen.getByLabelText(/Timpris tidsspillan/)).toHaveProperty("value", "1500");
+    expect(screen.getByLabelText(/Standardtimpris/)).toHaveProperty("value", "2500");
+    expect(screen.getByText("Tomt = samma timpris som arbete.")).toBeTruthy();
+  });
+
+  it("timpris tidsspillan: kr/h i fältet, sparas i öre; tomt tar bort det (null)", async () => {
+    render(<SettingsPage />);
+    const rate = screen.getByLabelText(/Timpris tidsspillan/);
+    fireEvent.change(rate, { target: { value: "1500" } });
+    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ tidsspillanHourlyRate: 150000 }), { timeout: 2000 });
+    fireEvent.change(rate, { target: { value: "" } });
+    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ tidsspillanHourlyRate: null }), { timeout: 2000 });
+  });
+
   it("öppnar formuläret för att lägga till kontor och sparar", async () => {
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("button", { name: /Lägg till kontor/i }));

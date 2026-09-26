@@ -57,6 +57,8 @@ export const organizations = pgTable("organizations", {
   accontoThresholdOre: integer("acconto_threshold_ore"),
   /** Byråns standardtimpris (öre/h, exkl moms) — när varken ärendet eller juristen har eget. */
   defaultHourlyRate: integer("default_hourly_rate"),
+  /** Timpris för tidsspillan (öre/h, exkl moms) vid privat fakturering. NULL = samma som arbete. */
+  tidsspillanHourlyRate: integer("tidsspillan_hourly_rate"),
   /** Byråns standardåtgärder (#956) — samma beskrivning + tidsåtgång för alla. */
   standardAtgarder: jsonb("standard_atgarder").notNull().default([]).$type<StandardAtgard[]>(),
 });

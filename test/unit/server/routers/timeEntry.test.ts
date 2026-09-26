@@ -116,6 +116,25 @@ describe("timeEntry.create", () => {
     expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(200000);
   });
 
+  it("timpris: tidsspillan får byråns tidsspillan-pris, arbete i samma ärende inte", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: 300000 });
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", hourlyRate: 450000 });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", defaultHourlyRate: 200000, tidsspillanHourlyRate: 150000 });
+    mockPrisma.timeEntry.create.mockResolvedValue({});
+    await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Resa", kind: "TIDSSPILLAN_OVRIG_TID" });
+    await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Möte", kind: "ARBETE" });
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(150000);
+    expect(mockPrisma.timeEntry.create.mock.calls[1]![0].data.hourlyRate).toBe(450000);
+  });
+
+  it("timpris: tidsspillan utan tidsspillan-pris → samma kedja som arbete", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: 300000 });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", defaultHourlyRate: 200000, tidsspillanHourlyRate: null });
+    mockPrisma.timeEntry.create.mockResolvedValue({});
+    await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Resa", kind: "TIDSSPILLAN" });
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(300000);
+  });
+
   it("nollställer hourlyRate om user saknar timtaxa", async () => {
     mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: null });
     mockPrisma.timeEntry.create.mockResolvedValue({});

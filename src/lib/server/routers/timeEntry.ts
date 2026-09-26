@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { advokatberedskapFtaxForDate, isPerDayKind } from "@/lib/shared/brottmalstaxa";
+import { hourlyRateForKind } from "@/lib/shared/hourly-rate";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { type TimeEntry } from "@/lib/shared/schemas/billing";
 import { timeEntryKindSchema, type TimeEntryKind } from "@/lib/shared/schemas/enums";
@@ -57,16 +58,20 @@ function rateForEntry(input: EntryShape & { hourlyRate?: number | undefined }, u
 }
 
 /**
- * Timpriset en ny tidspost får: ärendets avvikande pris → juristens → byråns
- * standard → 0. Priset sparas på posten, så en senare ändring rör inte gammal tid.
+ * Timpriset en ny tidspost får: byråns tidsspillan-pris för tidsspillan (om
+ * satt), annars ärendets avvikande pris → juristens → byråns standard → 0.
+ * Priset sparas på posten, så en senare ändring rör inte gammal tid.
  */
 async function hourlyRateFor(
   ctx: { repos: Context["repos"]; user: { organizationId: string } },
-  matterId: MatterId, userRate: number | null | undefined,
+  entry: { matterId: MatterId; kind?: TimeEntryKind | undefined }, userRate: number | null | undefined,
 ): Promise<number> {
   const orgId = asId<"OrganizationId">(ctx.user.organizationId);
-  const [matter, org] = await Promise.all([ctx.repos.matters.getByIdInOrg(matterId, orgId), ctx.repos.organizations.getById(orgId)]);
-  return matter?.hourlyRate ?? userRate ?? org?.defaultHourlyRate ?? 0;
+  const [matter, org] = await Promise.all([ctx.repos.matters.getByIdInOrg(entry.matterId, orgId), ctx.repos.organizations.getById(orgId)]);
+  return hourlyRateForKind(entry.kind, {
+    matterRate: matter?.hourlyRate, userRate,
+    orgDefaultRate: org?.defaultHourlyRate, orgTidsspillanRate: org?.tidsspillanHourlyRate,
+  });
 }
 
 export const timeEntryRouter = router({
@@ -126,7 +131,7 @@ export const timeEntryRouter = router({
       const userId = input.userId ?? asId<"UserId">(ctx.user.id);
       const user = await ctx.repos.users.getById(userId);
       if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte." });
-      const rate = await hourlyRateFor(ctx, input.matterId, user.hourlyRate);
+      const rate = await hourlyRateFor(ctx, input, user.hourlyRate);
 
       const entry = await ctx.repos.timeEntries.create(omitUndefined({
         id: input.id, // undefined → store genererar

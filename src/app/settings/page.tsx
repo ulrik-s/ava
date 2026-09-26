@@ -237,19 +237,27 @@ interface OrgForm {
   accontoThresholdKr: string;
   /** Byråns standardtimpris i KRONOR/h — sparas som öre; tomt = inget standardpris. */
   defaultHourlyRateKr: string;
+  /** Byråns timpris för tidsspillan i KRONOR/h — sparas som öre; tomt = samma som arbete. */
+  tidsspillanHourlyRateKr: string;
 }
 
 type NullableStr = string | null | undefined;
 /** Settings-data → form (null/undefined → ""). Egen helper håller
  *  useOrgSettings under complexity@8 (annars 6× `??`). */
-function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: NullableStr; phone?: NullableStr; email?: NullableStr; bankgiro?: NullableStr; accontoThresholdOre?: number | null; defaultHourlyRate?: number | null }): OrgForm {
+function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: NullableStr; phone?: NullableStr; email?: NullableStr; bankgiro?: NullableStr; accontoThresholdOre?: number | null; defaultHourlyRate?: number | null; tidsspillanHourlyRate?: number | null }): OrgForm {
   const s = (v: NullableStr): string => v ?? "";
   return {
     name: s(d.name), orgNumber: s(d.orgNumber), address: s(d.address),
     phone: s(d.phone), email: s(d.email), bankgiro: s(d.bankgiro),
-    accontoThresholdKr: d.accontoThresholdOre != null ? String(d.accontoThresholdOre / 100) : "",
-    defaultHourlyRateKr: d.defaultHourlyRate != null ? String(d.defaultHourlyRate / 100) : "",
+    accontoThresholdKr: oreToKr(d.accontoThresholdOre),
+    defaultHourlyRateKr: oreToKr(d.defaultHourlyRate),
+    tidsspillanHourlyRateKr: oreToKr(d.tidsspillanHourlyRate),
   };
+}
+
+/** Öre → kronor-sträng för ett formulärfält; inget belopp → "". */
+function oreToKr(ore: number | null | undefined): string {
+  return ore != null ? String(ore / 100) : "";
 }
 
 /** Kronor-sträng → öre (heltal), eller undefined om tomt/ogiltigt (#885). */
@@ -258,12 +266,18 @@ function krToOre(kr: string): number | undefined {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : undefined;
 }
 
+/** Timprisfält → öre. Tomt fält tar bort priset (null), till skillnad från
+ *  övriga fält där tomt betyder "ändra inte". */
+function rateKrToOre(kr: string): number | null {
+  return krToOre(kr) ?? null;
+}
+
 /** Byrå-inställningar: query + auto-save (debounce 800ms) + form-state.
  *  Populerar formuläret i render-fasen när data anlänt (samma som förr). */
 function useOrgSettings() {
   const settings = trpc.organization.getSettings.useQuery();
   const utils = trpc.useUtils();
-  const [form, setForm] = useState<OrgForm>({ name: "", orgNumber: "", address: "", phone: "", email: "", bankgiro: "", accontoThresholdKr: "", defaultHourlyRateKr: "" });
+  const [form, setForm] = useState<OrgForm>({ name: "", orgNumber: "", address: "", phone: "", email: "", bankgiro: "", accontoThresholdKr: "", defaultHourlyRateKr: "", tidsspillanHourlyRateKr: "" });
   const [formReady, setFormReady] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -288,8 +302,8 @@ function useOrgSettings() {
         address: form.address || undefined, phone: form.phone || undefined,
         email: form.email || undefined, bankgiro: form.bankgiro || undefined,
         accontoThresholdOre: krToOre(form.accontoThresholdKr),
-        // Tomt fält tar bort standardpriset (null), till skillnad från övriga fält.
-        defaultHourlyRate: krToOre(form.defaultHourlyRateKr) ?? null,
+        defaultHourlyRate: rateKrToOre(form.defaultHourlyRateKr),
+        tidsspillanHourlyRate: rateKrToOre(form.tidsspillanHourlyRateKr),
       });
     }, 800);
     return () => clearTimeout(id);
@@ -430,7 +444,6 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
   const phoneId = useId();
   const emailId = useId();
   const bankgiroId = useId();
-  const hourlyRateId = useId();
   const thresholdId = useId();
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
@@ -490,13 +503,12 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor={hourlyRateId} className="block text-xs font-medium text-gray-700 mb-1">Standardtimpris (kr/h, exkl moms)</label>
-            <input id={hourlyRateId} type="number" min={0} step={50} value={form.defaultHourlyRateKr} placeholder="t.ex. 2500"
-              onChange={(e) => setForm({ ...form, defaultHourlyRateKr: e.target.value })}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-            <p className="text-[11px] text-gray-500 mt-1">Gäller ny tid när juristen inte har eget timpris (och ärendet inget avvikande).</p>
-          </div>
+          <HourlyRateField label="Standardtimpris (kr/h, exkl moms)" placeholder="t.ex. 2500"
+            value={form.defaultHourlyRateKr} onChange={(v) => setForm({ ...form, defaultHourlyRateKr: v })}
+            help="Gäller ny tid när juristen inte har eget timpris (och ärendet inget avvikande)." />
+          <HourlyRateField label="Timpris tidsspillan (kr/h, exkl moms)" placeholder="t.ex. 1500"
+            value={form.tidsspillanHourlyRateKr} onChange={(v) => setForm({ ...form, tidsspillanHourlyRateKr: v })}
+            help="Tomt = samma timpris som arbete." />
         </div>
       </div>
 
@@ -506,6 +518,22 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
         {saved && <span className="text-green-600">✓ Sparat</span>}
         {error && <span className="text-red-600">{error}</span>}
       </div>
+    </div>
+  );
+}
+
+/** Ett timprisfält i kr/h — värdet är kronor-strängen, omräkningen till öre sker vid sparning. */
+function HourlyRateField({ label, placeholder, value, onChange, help }: {
+  label: string; placeholder: string; value: string; onChange: (value: string) => void; help: string;
+}) {
+  const id = useId();
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+      <input id={id} type="number" min={0} step={50} value={value} placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      <p className="text-[11px] text-gray-500 mt-1">{help}</p>
     </div>
   );
 }
