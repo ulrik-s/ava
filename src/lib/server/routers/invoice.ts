@@ -15,6 +15,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { invoiceStatusNote, radgivningInvoicedNote } from "@/lib/shared/billing-notes";
 import { arvodeInclVatOre, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
 import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-state-machine";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
@@ -37,6 +38,7 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
+import { logMatterNote } from "../billing/matter-note";
 import { emit } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
@@ -201,6 +203,7 @@ export const invoiceRouter = router({
           notes: RADGIVNING_INVOICE_NOTES,
         } satisfies Partial<Invoice>);
         await repos.matters.update(input.matterId, { radgivningBetaldAt: when } satisfies Partial<Matter>);
+        await logMatterNote(repos, ctx, input.matterId, radgivningInvoicedNote(invoice.invoiceNumber, grossOre), when);
         await emit.invoiceCreated(ctx, invoice);
         const entry = await createRadgivningEntry(repos, {
           matterId: input.matterId, invoiceId: invoice.id, userId: input.userId ?? asId<"UserId">(ctx.user.id), when, avgift,
@@ -488,7 +491,11 @@ export const invoiceRouter = router({
       if (!canTransition(inv.status as InvoiceStatus, input.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: transitionErrorMessage(inv.status as InvoiceStatus, input.status) });
       }
-      return ctx.repos.invoices.update(input.invoiceId, { status: input.status });
+      return ctx.repos.transaction(async (repos) => {
+        const updated = await repos.invoices.update(input.invoiceId, { status: input.status });
+        await logMatterNote(repos, ctx, inv.matterId, invoiceStatusNote(inv.invoiceNumber, input.status));
+        return updated;
+      });
     }),
 
   /**

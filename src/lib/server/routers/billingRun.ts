@@ -19,6 +19,10 @@ import { z } from "zod";
 import { deductAcconto } from "@/lib/shared/acconto-vat";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
+import {
+  beslutRegisteredNote, invoiceCreatedNote, insurerPruningNote, kostnadsrakningSubmittedNote,
+  krAppealedNote, krVoidedNote, settledNote,
+} from "@/lib/shared/billing-notes";
 import { buildProposal, proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import {
   expenseGrossOre,
@@ -42,7 +46,7 @@ import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { isRadgivningInvoiced } from "@/lib/shared/rattshjalp";
 import { settlementBreakdownSchema, type BillingRun, type Invoice } from "@/lib/shared/schemas/billing";
-import { billingRunRecipientSchema, type BillingRunRecipient, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import { BILLING_RUN_RECIPIENT_LABELS, billingRunRecipientSchema, type BillingRunRecipient, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
   billingRunIdSchema,
@@ -63,6 +67,7 @@ import {
   type SettlementBreakdown, type SettlementRowKind, type SettlementView,
 } from "@/lib/shared/settlement-view";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
+import { eventTime, logMatterNote } from "../billing/matter-note";
 import { emit, type EmitCtx } from "../events/emit";
 import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
 import { nextInvoiceNumberFrom } from "../repositories/invoice-repository";
@@ -478,6 +483,15 @@ function invoiceMeta(input: { id?: string | undefined; invoiceDate?: string | un
   });
 }
 
+/** Domstolens namn ur ärendets DOMSTOL-kontakt (till anteckningen, #1221), eller null. */
+async function courtNameOf(repos: Repositories, orgId: OrganizationId, matterId: MatterId): Promise<string | null> {
+  const detail = await repos.matters.getByIdWithContacts(matterId, orgId);
+  // In-memory-lagret bakar bara in kontakt-joinen när seeden gjort det (demo-
+  // prebake) — rå rader ger inga `contacts`. Saknas de: "domstolen" i texten.
+  const contacts: ReadonlyArray<{ role: string; contact?: { name: string } | undefined }> = detail?.contacts ?? [];
+  return contacts.find((c) => c.role === "DOMSTOL")?.contact?.name ?? null;
+}
+
 /** Applicera en KR-övergång; översätt otillåten övergång till TRPCError. */
 function applyKrTransition(state: KostnadsrakningState, action: KostnadsrakningAction): KostnadsrakningState {
   try {
@@ -600,6 +614,7 @@ export const billingRunRouter = router({
           invoiceId: invoice.id, deductedBillingRunIds: [],
           periodTo: new Date(), notes: input.notes,
         });
+        await logMatterNote(tx, ctx, input.matterId, invoiceCreatedNote(invoice.invoiceNumber, "ACCONTO", invoice.amount), eventTime(input.invoiceDate));
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
@@ -648,6 +663,7 @@ export const billingRunRouter = router({
         await freezeSelectedWork(tx, input.matterId, work, selected, run.id);
         // Länka posterna + acconto-avdrag → slutfaktura-vyn visar rätt arvode/utlägg (#728).
         await linkFinalInvoice(tx, invoice.id, work, accontoInvoiceIds(deductedRuns));
+        await logMatterNote(tx, ctx, input.matterId, invoiceCreatedNote(invoice.invoiceNumber, "FINAL", invoice.amount), eventTime(input.invoiceDate));
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
@@ -682,6 +698,7 @@ export const billingRunRouter = router({
         // lämnar "Upparbetat ofakturerat". Dom/slutreglering läser raderna via
         // körningen (fetchWorkByRun), inte som ofryst.
         await freezeWork(tx, input.matterId, run.id);
+        await logMatterNote(tx, ctx, input.matterId, kostnadsrakningSubmittedNote(run.reference, await courtNameOf(tx, ctx.orgId, input.matterId), grossValue));
         return { run };
       });
     }),
@@ -706,6 +723,7 @@ export const billingRunRouter = router({
         await tx.timeEntries.unfreezeByBillingRun(run.id);
         await tx.expenses.unfreezeByBillingRun(run.id);
         const updated = await tx.billingRuns.update(run.id, { status: "VOIDED" });
+        await logMatterNote(tx, ctx, run.matterId, krVoidedNote(run.reference));
         return { run: updated };
       });
     }),
@@ -731,6 +749,10 @@ export const billingRunRouter = router({
           kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt,
           awardedOre: input.awardedOre, prutningOre: input.prutningOre ?? null,
         });
+        await logMatterNote(tx, ctx, run.matterId, beslutRegisteredNote({
+          hovratt: action === "REGISTRERA_HOVRATT_BESLUT", awardedOre: input.awardedOre,
+          claimedOre: run.workValueOreAtRun, prutningOre: input.prutningOre,
+        }));
         return { run: updated };
       });
     }),
@@ -747,6 +769,7 @@ export const billingRunRouter = router({
         const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
         const next = applyKrTransition(krStateOf(run), "OVERKLAGA");
         const updated = await tx.billingRuns.update(run.id, { kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt });
+        await logMatterNote(tx, ctx, run.matterId, krAppealedNote(run.reference));
         return { run: updated };
       });
     }),
@@ -835,6 +858,7 @@ export const billingRunRouter = router({
         // och totalen (arvode + utlägg − prutning) reconciler mot beloppet (#732).
         await linkFinalInvoice(tx, invoice.id, work, []);
         if (prutningExpenseId) await tx.expenses.flagBilled([prutningExpenseId], invoice.id);
+        await logMatterNote(tx, ctx, run.matterId, invoiceCreatedNote(invoice.invoiceNumber, "FINAL", invoice.amount, "kostnadsräkning till domstol"));
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
@@ -942,6 +966,10 @@ export const billingRunRouter = router({
           const next = applyKrTransition(krStateOf(krRun), "SKAPA_FAKTURA");
           await tx.billingRuns.update(krRun.id, { status: "SENT", kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt });
         }
+        await logMatterNote(tx, ctx, input.matterId, settledNote({
+          client: { invoiceNumber: clientInvoice.invoiceNumber, amountOre: clientInvoice.amount, credit: creditInvoice !== null },
+          payer: { invoiceNumber: payerInvoice.invoiceNumber, amountOre: payerInvoice.amount, recipientLabel: BILLING_RUN_RECIPIENT_LABELS[input.payerRecipient] },
+        }), settleDate);
         await emit.invoiceCreated(ctx, payerInvoice); // klientfakturan emittas i helpern
         // `creditInvoice` = klientfakturan när den blev en CREDIT (överfakturerad), annars null.
         return { split, clientInvoice, payerInvoice, creditInvoice, clientRun, payerRun, breakdown };
@@ -1000,6 +1028,7 @@ export const billingRunRouter = router({
           notes: input.notes ?? `Försäkringens prutning ${input.prunedNetOre / 100} kr (exkl moms) — omfördelad till klientfakturan ${clientInvoice.invoiceNumber ?? ""}`.trim(),
         });
         await tx.billingRuns.update(t.clientRun.id, { amountOre: clientInvoice.amount });
+        await logMatterNote(tx, ctx, input.matterId, insurerPruningNote(input.prunedNetOre, clientInvoice.invoiceNumber), when);
         await emit.invoiceAdjusted(ctx, payerInvoice, "insurer_pruning");
         await emit.invoiceAdjusted(ctx, clientInvoice, "insurer_pruning");
         return { payerInvoice, clientInvoice, prunedGross, adjustedAt: when };

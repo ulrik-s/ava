@@ -13,13 +13,19 @@ import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const updateMutate = vi.fn();
+let updateOpts: { onSuccess: () => void } | undefined;
+const utilsMock = {
+  matter: { getById: { invalidate: vi.fn() } },
+  serviceNote: { list: { invalidate: vi.fn(async () => {}) } },
+  watchlist: { list: { invalidate: vi.fn(async () => {}) } },
+};
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ matter: { getById: { invalidate: vi.fn() } } }),
+    useUtils: () => utilsMock,
     matter: {
       update: {
-        useMutation: () => ({ mutate: updateMutate, isPending: false }),
+        useMutation: (o: { onSuccess: () => void }) => { updateOpts = o; return { mutate: updateMutate, isPending: false }; },
       },
     },
     organization: {
@@ -156,6 +162,19 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote: "Privatfaktura",
       }),
     );
+  });
+
+  it("nytt betalningssätt → Anteckningar och Att bevaka hämtas om (#1221)", () => {
+    render(
+      <PaymentMethodCard
+        matterId={asId<"MatterId">("m1")} paymentMethod="PENDING" paymentMethodNote={null} paymentMethodDecidedAt={null}
+        clientShareBips={null} rattsskyddMaxOre={null} rattshjalpMaxTimmar={null}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
+    updateOpts?.onSuccess();
+    expect(utilsMock.serviceNote.list.invalidate).toHaveBeenCalled();
+    expect(utilsMock.watchlist.list.invalidate).toHaveBeenCalled();
   });
 
   it("visar beslutsdatum när satt", () => {

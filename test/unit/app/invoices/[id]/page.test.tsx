@@ -14,11 +14,15 @@ const invoiceQuery = {
 };
 
 const utilsMock = {
+  // Faktureringshändelser loggas som anteckning och kan lösa en bevakning (#1221).
+  serviceNote: { list: { invalidate: vi.fn(async () => {}) } },
+  watchlist: { list: { invalidate: vi.fn(async () => {}) } },
   invoice: {
     getById: { invalidate: vi.fn() },
     list: { invalidate: vi.fn() },
   },
 };
+let setStatusOpts: { onSuccess: () => void } | undefined;
 const stubs = {
   recordPayment: { mutate: vi.fn(), isPending: false },
   createPaymentPlan: { mutate: vi.fn(), isPending: false },
@@ -53,7 +57,7 @@ vi.mock("@/lib/client/trpc", () => ({
       recordPayment: { useMutation: () => stubs.recordPayment },
       createPaymentPlan: { useMutation: () => stubs.createPaymentPlan },
       cancelPaymentPlan: { useMutation: () => stubs.cancelPaymentPlan },
-      setStatus: { useMutation: () => stubs.setStatus },
+      setStatus: { useMutation: (o: { onSuccess: () => void }) => { setStatusOpts = o; return stubs.setStatus; } },
       createCredit: { useMutation: () => stubs.createCredit },
       writeOff: { useMutation: () => stubs.writeOff },
     },
@@ -273,6 +277,14 @@ describe("InvoiceDetailPage", () => {
       invoiceId: "i1",
       notes: "Felaktig fakturering",
     });
+  });
+
+  it("efter statusändring hämtas ärendets Anteckningar och Att bevaka om (#1221)", async () => {
+    renderPage();
+    await waitFor(() => screen.getByRole("button", { name: /Annullera/i }));
+    setStatusOpts?.onSuccess();
+    expect(utilsMock.serviceNote.list.invalidate).toHaveBeenCalled();
+    expect(utilsMock.watchlist.list.invalidate).toHaveBeenCalled();
   });
 
   it("Annullera-knappen sätter status till CANCELLED", async () => {

@@ -83,6 +83,14 @@ describe("Att bevaka-sidan", () => {
     expect(screen.queryByText("Tidsfrist")).not.toBeInTheDocument();
   });
 
+  it("filtret Fakturering visar bara faktureringsåtgärder (#1221)", () => {
+    query.data = { items: [item({ kind: "deadline" }), item({ kind: "billingAction", title: "Skicka faktura F-1" })] };
+    render(<WatchlistPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Fakturering" }));
+    expect(screen.getByText("Skicka faktura F-1")).toBeInTheDocument();
+    expect(screen.queryByText("Tidsfrist")).not.toBeInTheDocument();
+  });
+
   it("markerar valt filter för skärmläsare", () => {
     render(<WatchlistPage />);
     fireEvent.click(screen.getByRole("button", { name: "Tidsfrister" }));

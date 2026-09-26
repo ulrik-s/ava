@@ -56,6 +56,10 @@ const mockPrisma = {
     findMany: vi.fn(),
     create: vi.fn(),
   },
+  // Faktureringshändelser loggas som tjänsteanteckning (#1221).
+  serviceNote: {
+    create: vi.fn(),
+  },
   paymentPlan: {
     create: vi.fn(),
     update: vi.fn(),

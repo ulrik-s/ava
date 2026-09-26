@@ -23,6 +23,7 @@ const KIND_META: Record<WatchlistKind, { icon: string; label: string }> = {
   deadline: { icon: "⏳", label: "Tidsfrist" },
   overdueInvoice: { icon: "📄", label: "Förfallen faktura" },
   failedDispatch: { icon: "✉️", label: "Utskick misslyckades" },
+  billingAction: { icon: "💼", label: "Fakturering" },
 };
 
 /**
