@@ -300,6 +300,7 @@ describe("organization.getSettings", () => {
 
     expect(result.name).toBe("Advokat AB");
     expect(result.bankgiro).toBe("123-4567");
+    expect(result.defaultHourlyRate).toBeNull(); // inget standardtimpris satt
     expect(mockPrisma.organization.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "org-a" } })
     );
@@ -307,6 +308,19 @@ describe("organization.getSettings", () => {
 });
 
 describe("organization.updateSettings", () => {
+  it("sparar och tar bort byråns standardtimpris (öre/h)", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
+    await makeCaller("org-a").updateSettings({ defaultHourlyRate: 250000 });
+    expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ defaultHourlyRate: 250000 }) }),
+    );
+    await makeCaller("org-a").updateSettings({ defaultHourlyRate: null });
+    expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ defaultHourlyRate: null }) }),
+    );
+  });
+
   it("uppdaterar bankgiro och övriga fält", async () => {
     // Repo.update läser nuvarande raden (version-bump) före skrivning.
     mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });

@@ -37,7 +37,7 @@ function useEditUser(id: string) {
         email: user.data.email,
         role: user.data.role,
         matterNumberPrefix: (user.data as { matterNumberPrefix?: string | null }).matterNumberPrefix ?? "",
-        hourlyRate: user.data.hourlyRate != null ? String(user.data.hourlyRate) : "",
+        hourlyRate: user.data.hourlyRate != null ? String(user.data.hourlyRate / 100) : "",
         mileageRate: user.data.mileageRate != null ? String(user.data.mileageRate / 100) : "",
         password: "",
         confirmPassword: "",
@@ -76,7 +76,8 @@ function useEditUser(id: string) {
       role: form.role,
       title: form.title || undefined,
       matterNumberPrefix: form.matterNumberPrefix || null,
-      hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : undefined,
+      // Formuläret är i kr/h, lagringen i öre (som tidsposterna). Tomt = följ byråns standard.
+      hourlyRate: form.hourlyRate ? Math.round(Number(form.hourlyRate.replace(",", ".")) * 100) : null,
       mileageRate: form.mileageRate ? Math.round(Number(form.mileageRate) * 100) : undefined,
       password: form.password || undefined,
     } as Parameters<typeof updateUser.mutate>[0]);

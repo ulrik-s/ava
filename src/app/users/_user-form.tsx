@@ -89,7 +89,7 @@ export function UserForm({
             Juristens egen ärendenummerserie (AA2026-0001). Byte fortsätter serien.
           </p>
         </FormField>
-        <FormField id={hourlyRateId} label="Timtaxa (kr/h)">
+        <FormField id={hourlyRateId} label="Timtaxa (kr/h) — tomt = byråns standard">
           <input id={hourlyRateId} type="text" inputMode="decimal" value={form.hourlyRate}
             onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />

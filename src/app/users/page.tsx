@@ -68,7 +68,7 @@ function buildUserColumns(opts: {
       render: (u) => <span className="text-sm text-gray-500">{roleLabels[u.role] || u.role}</span> },
     { key: "hourlyRate", label: "Timtaxa", sortable: true, align: "right",
       sortValue: (u) => u.hourlyRate ?? -1,
-      render: (u) => <span className="text-sm text-gray-500">{u.hourlyRate != null ? `${u.hourlyRate} kr/h` : "—"}</span> },
+      render: (u) => <span className="text-sm text-gray-500">{u.hourlyRate != null ? `${u.hourlyRate / 100} kr/h` : "byråns standard"}</span> },
     { key: "mileageRate", label: "Milersättning", sortable: true, align: "right",
       sortValue: (u) => u.mileageRate ?? -1,
       render: (u) => <span className="text-sm text-gray-500">{u.mileageRate != null ? `${(u.mileageRate / 100).toFixed(2)} kr/km` : "—"}</span> },

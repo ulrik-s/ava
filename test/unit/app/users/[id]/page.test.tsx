@@ -65,7 +65,7 @@ beforeEach(() => {
     title: "Advokat",
     email: "anna@x.se",
     role: "LAWYER",
-    hourlyRate: 2500,
+    hourlyRate: 250000, // öre = 2 500 kr/h
     mileageRate: 2500,
   };
   userQuery.isLoading = false;
@@ -142,7 +142,7 @@ describe("EditUserPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     const arg = updateMutate.mock.calls[0]![0];
     expect(arg.role).toBe("ADMIN");
-    expect(arg.hourlyRate).toBe(3000);
+    expect(arg.hourlyRate).toBe(300000); // 3 000 kr/h lagras i öre, som tidsposterna
   });
 
   it("inkluderar lösenord i submit när matchande", async () => {

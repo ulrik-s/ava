@@ -113,7 +113,7 @@ describe("NewUserPage", () => {
     fireEvent.change(passwords[1]!, { target: { value: "pp" } });
     fireEvent.click(screen.getByRole("button", { name: /Skapa användare/i }));
     const arg = createMutate.mock.calls[0]![0];
-    expect(arg.hourlyRate).toBe(3500);
+    expect(arg.hourlyRate).toBe(350000); // 3 500 kr/h lagras i öre, som tidsposterna
   });
 });
 

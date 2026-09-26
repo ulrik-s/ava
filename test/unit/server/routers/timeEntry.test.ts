@@ -19,6 +19,9 @@ const mockPrisma = {
   user: {
     findFirst: vi.fn(),
   },
+  // Timpris-upplösningen (ärende → jurist → byrå) läser ärendet och byrån.
+  matter: { findFirst: vi.fn() },
+  organization: { findFirst: vi.fn() },
 };
 
 function makeCaller(orgId = "org-a", userId = "u1") {
@@ -34,6 +37,8 @@ function makeCaller(orgId = "org-a", userId = "u1") {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPrisma.matter.findFirst.mockResolvedValue(null);
+  mockPrisma.organization.findFirst.mockResolvedValue(null);
   mockPrisma.timeEntry.findMany.mockResolvedValue([]);
   mockPrisma.timeEntry.count.mockResolvedValue(0);
   mockPrisma.timeEntry.aggregate.mockResolvedValue({ _sum: { minutes: 0 } });
@@ -91,6 +96,24 @@ describe("timeEntry.create", () => {
     expect(args.data.hourlyRate).toBe(3000);
     expect(args.data.minutes).toBe(90);
     expect(args.data.date).toBeInstanceOf(Date);
+  });
+
+  it("timpris: ärendets avvikande pris vinner över juristens och byråns", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: 300000 });
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", hourlyRate: 450000 });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", defaultHourlyRate: 200000 });
+    mockPrisma.timeEntry.create.mockResolvedValue({});
+    await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Möte" });
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(450000);
+  });
+
+  it("timpris: juristen utan eget pris → byråns standard", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: null });
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", hourlyRate: null });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", defaultHourlyRate: 200000 });
+    mockPrisma.timeEntry.create.mockResolvedValue({});
+    await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Möte" });
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(200000);
   });
 
   it("nollställer hourlyRate om user saknar timtaxa", async () => {

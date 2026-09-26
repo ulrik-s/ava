@@ -235,17 +235,20 @@ interface OrgForm {
   bankgiro: string;
   /** Aconto-gränsbelopp i KRONOR (öre/100) — sparas som öre (#885). */
   accontoThresholdKr: string;
+  /** Byråns standardtimpris i KRONOR/h — sparas som öre; tomt = inget standardpris. */
+  defaultHourlyRateKr: string;
 }
 
 type NullableStr = string | null | undefined;
 /** Settings-data → form (null/undefined → ""). Egen helper håller
  *  useOrgSettings under complexity@8 (annars 6× `??`). */
-function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: NullableStr; phone?: NullableStr; email?: NullableStr; bankgiro?: NullableStr; accontoThresholdOre?: number | null }): OrgForm {
+function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: NullableStr; phone?: NullableStr; email?: NullableStr; bankgiro?: NullableStr; accontoThresholdOre?: number | null; defaultHourlyRate?: number | null }): OrgForm {
   const s = (v: NullableStr): string => v ?? "";
   return {
     name: s(d.name), orgNumber: s(d.orgNumber), address: s(d.address),
     phone: s(d.phone), email: s(d.email), bankgiro: s(d.bankgiro),
     accontoThresholdKr: d.accontoThresholdOre != null ? String(d.accontoThresholdOre / 100) : "",
+    defaultHourlyRateKr: d.defaultHourlyRate != null ? String(d.defaultHourlyRate / 100) : "",
   };
 }
 
@@ -260,7 +263,7 @@ function krToOre(kr: string): number | undefined {
 function useOrgSettings() {
   const settings = trpc.organization.getSettings.useQuery();
   const utils = trpc.useUtils();
-  const [form, setForm] = useState<OrgForm>({ name: "", orgNumber: "", address: "", phone: "", email: "", bankgiro: "", accontoThresholdKr: "" });
+  const [form, setForm] = useState<OrgForm>({ name: "", orgNumber: "", address: "", phone: "", email: "", bankgiro: "", accontoThresholdKr: "", defaultHourlyRateKr: "" });
   const [formReady, setFormReady] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -285,6 +288,8 @@ function useOrgSettings() {
         address: form.address || undefined, phone: form.phone || undefined,
         email: form.email || undefined, bankgiro: form.bankgiro || undefined,
         accontoThresholdOre: krToOre(form.accontoThresholdKr),
+        // Tomt fält tar bort standardpriset (null), till skillnad från övriga fält.
+        defaultHourlyRate: krToOre(form.defaultHourlyRateKr) ?? null,
       });
     }, 800);
     return () => clearTimeout(id);
@@ -425,6 +430,7 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
   const phoneId = useId();
   const emailId = useId();
   const bankgiroId = useId();
+  const hourlyRateId = useId();
   const thresholdId = useId();
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
@@ -480,6 +486,16 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
               onChange={(e) => setForm({ ...form, accontoThresholdKr: e.target.value })}
               className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
             <p className="text-[11px] text-gray-500 mt-1">Aconto skickas när klientens självrisk nått detta belopp.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor={hourlyRateId} className="block text-xs font-medium text-gray-700 mb-1">Standardtimpris (kr/h, exkl moms)</label>
+            <input id={hourlyRateId} type="number" min={0} step={50} value={form.defaultHourlyRateKr} placeholder="t.ex. 2500"
+              onChange={(e) => setForm({ ...form, defaultHourlyRateKr: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <p className="text-[11px] text-gray-500 mt-1">Gäller ny tid när juristen inte har eget timpris (och ärendet inget avvikande).</p>
           </div>
         </div>
       </div>

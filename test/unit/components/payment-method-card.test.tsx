@@ -241,4 +241,42 @@ describe("PaymentMethodCard", () => {
       expect.objectContaining({ id: "m1", clientShareBips: null }),
     );
   });
+
+  describe("avvikande timpris (ovanligt — hopfällt)", () => {
+    const card = (hourlyRate: number | null) => (
+      <PaymentMethodCard
+        matterId={asId<"MatterId">("m1")} paymentMethod="PRIVAT" paymentMethodNote={null} paymentMethodDecidedAt={null}
+        clientShareBips={null} rattsskyddMaxOre={null} rattshjalpMaxTimmar={null} hourlyRate={hourlyRate}
+      />
+    );
+
+    it("kortet visar inget om timpris när ärendet följer jurist/byrå", () => {
+      render(card(null));
+      expect(screen.queryByText(/Avvikande timpris/)).not.toBeInTheDocument();
+    });
+
+    it("kortet visar det avvikande priset när det är satt", () => {
+      render(card(300000));
+      expect(screen.getByText("Avvikande timpris: 3000 kr/h")).toBeInTheDocument();
+    });
+
+    it("sätts i redigeringen (hopfällt) och sparas i öre; tomt = null", () => {
+      render(card(null));
+      fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
+      const details = screen.getByText("Avvikande timpris för ärendet").closest("details");
+      expect(details?.open).toBe(false);
+      fireEvent.change(screen.getByLabelText(/Timpris \(kr\/h/), { target: { value: "3 000" } });
+      fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+      expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "m1", hourlyRate: 300000 }));
+    });
+
+    it("ett befintligt pris öppnar sektionen; töms det sparas null", () => {
+      render(card(300000));
+      fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
+      expect(screen.getByText("Avvikande timpris för ärendet").closest("details")?.open).toBe(true);
+      fireEvent.change(screen.getByLabelText(/Timpris \(kr\/h/), { target: { value: "" } });
+      fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+      expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ hourlyRate: null }));
+    });
+  });
 });

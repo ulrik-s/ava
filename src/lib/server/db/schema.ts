@@ -55,6 +55,8 @@ export const organizations = pgTable("organizations", {
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: integer("acconto_threshold_ore"),
+  /** Byråns standardtimpris (öre/h, exkl moms) — när varken ärendet eller juristen har eget. */
+  defaultHourlyRate: integer("default_hourly_rate"),
   /** Byråns standardåtgärder (#956) — samma beskrivning + tidsåtgång för alla. */
   standardAtgarder: jsonb("standard_atgarder").notNull().default([]).$type<StandardAtgard[]>(),
 });
@@ -126,6 +128,8 @@ export const matters = pgTable("matters", {
   radgivningBetaldAt: timestamp("radgivning_betald_at", { withTimezone: true }),
   /** Klientens andel (självrisk/avgift) i bips — rättsskydd/rättshjälp (#778). */
   clientShareBips: integer("client_share_bips"),
+  /** Avvikande timpris för ärendet (öre/h) — ovanligt; vinner över jurist och byrå. */
+  hourlyRate: integer("hourly_rate"),
   /** Rättsskyddets maxbelopp (öre) resp. rättshjälpens timtak — täcknings-tak (#793). */
   rattsskyddMaxOre: integer("rattsskydd_max_ore"),
   /** Rättsskyddets lägsta självrisk (öre) — "dock lägst 1 800 kr" (#899). */
