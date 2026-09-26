@@ -199,6 +199,14 @@ describe("matter.update", () => {
     const { caller } = makeCaller({ matters: [matter()] }, "org-b");
     await expect(caller.update({ id: "matter-1", status: "CLOSED" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
+
+  it("sparar ärendets avvikande timpriser per kategori — hela kartan ersätts (#1206)", async () => {
+    const { caller, ds } = makeCaller({ matters: [matter({ hourlyRates: { ARBETE: 300000 } })] });
+    await caller.update({ id: "matter-1", hourlyRates: { TIDSSPILLAN: 150000 } });
+    const m = (src(ds).matters as Array<{ id: string; hourlyRates?: unknown }>).find((x) => x.id === "matter-1")!;
+    expect(m.hourlyRates).toEqual({ TIDSSPILLAN: 150000 });
+    await expect(caller.update({ id: "matter-1", hourlyRates: { ADVOKATBEREDSKAP: 1 } as never })).rejects.toThrow();
+  });
 });
 
 describe("matter.addContact", () => {

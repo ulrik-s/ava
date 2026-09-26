@@ -60,7 +60,7 @@ describe("TimeEntryRepository list/report — Drizzle (pglite)", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
-    await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna", hourlyRate: 1000 }));
+    await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna", hourlyRates: { ARBETE: 1000 } }));
     await db.insert(contacts).values(v({ id: cId, organizationId: org, name: "Klient AB", contactType: "COMPANY" }));
     await db.insert(matterContacts).values(v({ id: uuidv7(), matterId: mId, contactId: cId, role: "KLIENT" }));
     await db.insert(timeEntries).values(v({ id: t1, userId, matterId: mId, minutes: 60, description: "a", hourlyRate: 1000, date: new Date("2026-06-02") }));

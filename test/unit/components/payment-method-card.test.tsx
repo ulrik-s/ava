@@ -9,6 +9,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
+import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const updateMutate = vi.fn();
@@ -20,6 +21,9 @@ vi.mock("@/lib/client/trpc", () => ({
       update: {
         useMutation: () => ({ mutate: updateMutate, isPending: false }),
       },
+    },
+    organization: {
+      getSettings: { useQuery: () => ({ data: { hourlyRates: { ARBETE: 250000 } } }) },
     },
   },
 }));
@@ -242,41 +246,45 @@ describe("PaymentMethodCard", () => {
     );
   });
 
-  describe("avvikande timpris (ovanligt — hopfällt)", () => {
-    const card = (hourlyRate: number | null) => (
+  describe("avvikande timpris per kategori (ovanligt — hopfällt, #1206)", () => {
+    const card = (hourlyRates?: HourlyRates) => (
       <PaymentMethodCard
         matterId={asId<"MatterId">("m1")} paymentMethod="PRIVAT" paymentMethodNote={null} paymentMethodDecidedAt={null}
-        clientShareBips={null} rattsskyddMaxOre={null} rattshjalpMaxTimmar={null} hourlyRate={hourlyRate}
+        clientShareBips={null} rattsskyddMaxOre={null} rattshjalpMaxTimmar={null} hourlyRates={hourlyRates}
       />
     );
 
     it("kortet visar inget om timpris när ärendet följer jurist/byrå", () => {
-      render(card(null));
+      render(card({}));
+      expect(screen.queryByText(/Avvikande timpris/)).not.toBeInTheDocument();
+      render(card(undefined));
       expect(screen.queryByText(/Avvikande timpris/)).not.toBeInTheDocument();
     });
 
-    it("kortet visar det avvikande priset när det är satt", () => {
-      render(card(300000));
-      expect(screen.getByText("Avvikande timpris: 3000 kr/h")).toBeInTheDocument();
+    it("kortet visar bara de satta priserna, i kategoriordning", () => {
+      render(card({ TIDSSPILLAN: 150000, ARBETE: 300000 }));
+      expect(screen.getByText("Avvikande timpris: Timarvode 3 000 kr/h · Tidsspillan 1 500 kr/h")).toBeInTheDocument();
     });
 
-    it("sätts i redigeringen (hopfällt) och sparas i öre; tomt = null", () => {
-      render(card(null));
+    it("sätts i redigeringen (hopfällt) och sparas som karta i öre; placeholdern visar byråns", () => {
+      render(card({}));
       fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
       const details = screen.getByText("Avvikande timpris för ärendet").closest("details");
       expect(details?.open).toBe(false);
-      fireEvent.change(screen.getByLabelText(/Timpris \(kr\/h/), { target: { value: "3 000" } });
+      const arbete = screen.getByLabelText(/^Timarvode \(kr\/h/) as HTMLInputElement;
+      expect(arbete.placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
+      fireEvent.change(arbete, { target: { value: "3 000" } });
       fireEvent.click(screen.getByRole("button", { name: "Spara" }));
-      expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "m1", hourlyRate: 300000 }));
+      expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "m1", hourlyRates: { ARBETE: 300000 } }));
     });
 
-    it("ett befintligt pris öppnar sektionen; töms det sparas null", () => {
-      render(card(300000));
+    it("ett befintligt pris öppnar sektionen; töms det försvinner kategorin ur kartan", () => {
+      render(card({ ARBETE: 300000, TIDSSPILLAN: 150000 }));
       fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
       expect(screen.getByText("Avvikande timpris för ärendet").closest("details")?.open).toBe(true);
-      fireEvent.change(screen.getByLabelText(/Timpris \(kr\/h/), { target: { value: "" } });
+      fireEvent.change(screen.getByLabelText(/^Timarvode \(kr\/h/), { target: { value: "" } });
       fireEvent.click(screen.getByRole("button", { name: "Spara" }));
-      expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ hourlyRate: null }));
+      expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ hourlyRates: { TIDSSPILLAN: 150000 } }));
     });
   });
 });

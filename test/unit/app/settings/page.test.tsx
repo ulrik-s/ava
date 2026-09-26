@@ -149,30 +149,21 @@ describe("SettingsPage", () => {
     expect(updateSettingsMutate.mock.calls.at(-1)![0]).toMatchObject({ name: "Byrå AB" });
   });
 
-  it("standardtimpris: kr/h i fältet, sparas i öre; tomt tar bort det (null)", async () => {
+  it("timpriser: sparat öre-pris visas i kr/h per kategori; tomt ärver timarvodet (#1206)", () => {
+    settingsQuery.data = { ...settingsQuery.data, hourlyRates: { ARBETE: 250000, TIDSSPILLAN: 150000 } };
     render(<SettingsPage />);
-    const rate = screen.getByLabelText(/Standardtimpris/);
-    fireEvent.change(rate, { target: { value: "2500" } });
-    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ defaultHourlyRate: 250000 }), { timeout: 2000 });
-    fireEvent.change(rate, { target: { value: "" } });
-    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ defaultHourlyRate: null }), { timeout: 2000 });
+    expect(screen.getByLabelText(/^Timarvode \(kr/)).toHaveProperty("value", "2500");
+    expect(screen.getByLabelText(/^Tidsspillan \(kr/)).toHaveProperty("value", "1500");
+    expect((screen.getByLabelText(/^Tidsspillan helg\/kväll/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
   });
 
-  it("timpris tidsspillan: visar sparat öre-pris i kr/h", () => {
-    settingsQuery.data = { ...settingsQuery.data, tidsspillanHourlyRate: 150000, defaultHourlyRate: 250000 };
+  it("timpriser: kr/h i fältet, hela kartan sparas i öre; tömt fält tar bort kategorin", async () => {
     render(<SettingsPage />);
-    expect(screen.getByLabelText(/Timpris tidsspillan/)).toHaveProperty("value", "1500");
-    expect(screen.getByLabelText(/Standardtimpris/)).toHaveProperty("value", "2500");
-    expect(screen.getByText("Tomt = samma timpris som arbete.")).toBeTruthy();
-  });
-
-  it("timpris tidsspillan: kr/h i fältet, sparas i öre; tomt tar bort det (null)", async () => {
-    render(<SettingsPage />);
-    const rate = screen.getByLabelText(/Timpris tidsspillan/);
-    fireEvent.change(rate, { target: { value: "1500" } });
-    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ tidsspillanHourlyRate: 150000 }), { timeout: 2000 });
-    fireEvent.change(rate, { target: { value: "" } });
-    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ tidsspillanHourlyRate: null }), { timeout: 2000 });
+    const tidsspillan = screen.getByLabelText(/^Tidsspillan \(kr/);
+    fireEvent.change(tidsspillan, { target: { value: "1500" } });
+    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ hourlyRates: { TIDSSPILLAN: 150000 } }), { timeout: 2000 });
+    fireEvent.change(tidsspillan, { target: { value: "" } });
+    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0].hourlyRates).toEqual({}), { timeout: 2000 });
   });
 
   it("öppnar formuläret för att lägga till kontor och sparar", async () => {

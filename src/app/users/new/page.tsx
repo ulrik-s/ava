@@ -17,7 +17,7 @@ export default function NewUserPage() {
     email: "",
     role: "LAWYER",
     matterNumberPrefix: "",
-    hourlyRate: "",
+    hourlyRates: {},
     mileageRate: "",
     password: "",
     confirmPassword: "",
@@ -46,7 +46,7 @@ export default function NewUserPage() {
       role: form.role,
       title: form.title || undefined,
       matterNumberPrefix: form.matterNumberPrefix || undefined,
-      hourlyRate: form.hourlyRate ? Math.round(Number(form.hourlyRate.replace(",", ".")) * 100) : undefined,
+      hourlyRates: form.hourlyRates,
       mileageRate: form.mileageRate ? Math.round(Number(form.mileageRate) * 100) : undefined,
       password: form.password || undefined,
     } as Parameters<typeof createUser.mutate>[0]);

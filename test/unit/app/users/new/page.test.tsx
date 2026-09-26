@@ -27,6 +27,9 @@ vi.mock("@/lib/client/trpc", () => ({
         }),
       },
     },
+    organization: {
+      getSettings: { useQuery: () => ({ data: undefined }) },
+    },
   },
 }));
 
@@ -73,6 +76,7 @@ describe("NewUserPage", () => {
       email: "anna@x.se",
       role: "LAWYER",
       password: "secret",
+      hourlyRates: {}, // inga egna priser → ärver byråns
     });
   });
 
@@ -101,11 +105,11 @@ describe("NewUserPage", () => {
     expect(createMutate.mock.calls[0]![0].role).toBe("ADMIN");
   });
 
-  it("ändrar timtaxa och milersättning", () => {
+  it("ändrar timpriser och milersättning", () => {
     const { container } = render(<NewUserPage />);
-    const numberInputs = container.querySelectorAll('input[inputmode="decimal"]');
-    fireEvent.change(numberInputs[0]!, { target: { value: "3500" } });
-    fireEvent.change(numberInputs[1]!, { target: { value: "3.50" } });
+    fireEvent.change(screen.getByLabelText(/^Timarvode \(kr/), { target: { value: "3500" } });
+    fireEvent.change(screen.getByLabelText(/^Tidsspillan \(kr/), { target: { value: "1487" } });
+    fireEvent.change(screen.getByLabelText(/Milersättning/), { target: { value: "3.50" } });
     fireEvent.change(container.querySelectorAll("input")[0]!, { target: { value: "X" } });
     fireEvent.change(container.querySelector('input[type="email"]')!, { target: { value: "x@x.se" } });
     const passwords = container.querySelectorAll('input[type="password"]');
@@ -113,7 +117,9 @@ describe("NewUserPage", () => {
     fireEvent.change(passwords[1]!, { target: { value: "pp" } });
     fireEvent.click(screen.getByRole("button", { name: /Skapa användare/i }));
     const arg = createMutate.mock.calls[0]![0];
-    expect(arg.hourlyRate).toBe(350000); // 3 500 kr/h lagras i öre, som tidsposterna
+    // kr/h lagras i öre, som tidsposterna — en karta per kategori (#1206).
+    expect(arg.hourlyRates).toEqual({ ARBETE: 350000, TIDSSPILLAN: 148700 });
+    expect(arg.mileageRate).toBe(350);
   });
 });
 

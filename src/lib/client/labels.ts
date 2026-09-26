@@ -133,10 +133,10 @@ export function creditRiskFor(method: PaymentMethod): CreditRisk {
  * dropdown och blir för bred i en kolumn som upprepas på varje rad.
  */
 export const TIME_ENTRY_KIND_SHORT: Record<TimeEntryKind, string> = {
-  ARBETE: "Arbete",
-  ARBETE_OBEKVAM_TID: "Obekväm tid",
+  ARBETE: "Timarvode",
+  ARBETE_OBEKVAM_TID: "Timarvode helg/kväll",
   TIDSSPILLAN: "Tidsspillan",
-  TIDSSPILLAN_OVRIG_TID: "Tidsspillan annan tid",
+  TIDSSPILLAN_OVRIG_TID: "Tidsspillan helg/kväll",
   ADVOKATBEREDSKAP: "Beredskap (dag)",
 };
 

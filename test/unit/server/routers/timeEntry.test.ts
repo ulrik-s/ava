@@ -82,8 +82,8 @@ describe("timeEntry.list", () => {
 });
 
 describe("timeEntry.create", () => {
-  it("kopplar userId och hourlyRate från user-record", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: 3000 });
+  it("kopplar userId och juristens timarvode", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRates: { ARBETE: 3000 } });
     mockPrisma.timeEntry.create.mockResolvedValue({});
     await makeCaller("org-a", "u-9").create({
       matterId: "m1",
@@ -98,45 +98,59 @@ describe("timeEntry.create", () => {
     expect(args.data.date).toBeInstanceOf(Date);
   });
 
-  it("timpris: ärendets avvikande pris vinner över juristens och byråns", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: 300000 });
-    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", hourlyRate: 450000 });
-    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", defaultHourlyRate: 200000 });
+  it("timpris: ärendets pris för kategorin vinner över juristens och byråns", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRates: { ARBETE: 300000 } });
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", hourlyRates: { ARBETE: 450000 } });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", hourlyRates: { ARBETE: 200000 } });
     mockPrisma.timeEntry.create.mockResolvedValue({});
     await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Möte" });
     expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(450000);
   });
 
-  it("timpris: juristen utan eget pris → byråns standard", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: null });
-    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", hourlyRate: null });
-    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", defaultHourlyRate: 200000 });
+  it("timpris: juristen utan eget pris → byråns", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRates: {} });
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", hourlyRates: {} });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", hourlyRates: { ARBETE: 200000 } });
     mockPrisma.timeEntry.create.mockResolvedValue({});
     await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Möte" });
     expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(200000);
   });
 
-  it("timpris: tidsspillan får byråns tidsspillan-pris, arbete i samma ärende inte", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: 300000 });
-    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", hourlyRate: 450000 });
-    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", defaultHourlyRate: 200000, tidsspillanHourlyRate: 150000 });
+  it("timpris: varje kategori har sitt eget pris med samma arv (#1206)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRates: { ARBETE: 300000, TIDSSPILLAN: 160000 } });
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", hourlyRates: { ARBETE_OBEKVAM_TID: 500000 } });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", hourlyRates: { ARBETE: 200000, TIDSSPILLAN: 148700, TIDSSPILLAN_OVRIG_TID: 97500 } });
     mockPrisma.timeEntry.create.mockResolvedValue({});
-    await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Resa", kind: "TIDSSPILLAN_OVRIG_TID" });
-    await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Möte", kind: "ARBETE" });
-    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(150000);
-    expect(mockPrisma.timeEntry.create.mock.calls[1]![0].data.hourlyRate).toBe(450000);
+    const kinds = ["ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID"] as const;
+    for (const kind of kinds) {
+      await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: kind, kind });
+    }
+    const rates = mockPrisma.timeEntry.create.mock.calls.map((c: [{ data: { hourlyRate: number } }]) => c[0].data.hourlyRate);
+    // jurist ARBETE · ärende OBEKVAM · jurist TIDSSPILLAN · byrå TIDSSPILLAN_OVRIG_TID
+    expect(rates).toEqual([300000, 500000, 160000, 97500]);
   });
 
-  it("timpris: tidsspillan utan tidsspillan-pris → samma kedja som arbete", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: 300000 });
-    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", defaultHourlyRate: 200000, tidsspillanHourlyRate: null });
+  it("timpris: kategori utan pris på någon nivå → timarvodet genom samma kedja", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRates: { ARBETE: 300000 } });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", hourlyRates: { ARBETE: 200000 } });
     mockPrisma.timeEntry.create.mockResolvedValue({});
     await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "Resa", kind: "TIDSSPILLAN" });
     expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(300000);
   });
 
-  it("nollställer hourlyRate om user saknar timtaxa", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: null });
+  it("explicit hourlyRate i input (setup-väg) vinner — utom för beredskap", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRates: { ARBETE: 300000 } });
+    mockPrisma.timeEntry.create.mockResolvedValue({});
+    await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "X", hourlyRate: 123400 });
+    await makeCaller().create({ matterId: "m1", date: "2026-04-18", minutes: 0, description: "Beredskap", kind: "ADVOKATBEREDSKAP", hourlyRate: 123400 });
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(123400);
+    // Beredskapen bär dagbeloppet, aldrig ett timpris.
+    expect(mockPrisma.timeEntry.create.mock.calls[1]![0].data.hourlyRate).not.toBe(123400);
+    expect(mockPrisma.timeEntry.create.mock.calls[1]![0].data.hourlyRate).toBeGreaterThan(0);
+  });
+
+  it("nollställer hourlyRate när ingen nivå har ett pris", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRates: {} });
     mockPrisma.timeEntry.create.mockResolvedValue({});
     await makeCaller().create({
       matterId: "m1",
@@ -193,7 +207,7 @@ describe("timeEntry.update", () => {
  */
 describe("timeEntry — arvodeskategori (#953)", () => {
   it("create sparar kategorin; utan kategori sätts inget fält (= ARBETE)", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: 3000 });
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRates: { ARBETE: 3000 } });
     mockPrisma.timeEntry.create.mockResolvedValue({});
     await makeCaller().create({
       matterId: "m1", date: "2026-03-07", minutes: 60,
@@ -228,6 +242,41 @@ describe("timeEntry — arvodeskategori (#953)", () => {
       id: "t1", kind: "HELGARVODE" as any,
     })).rejects.toThrow();
     expect(mockPrisma.timeEntry.update).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Kategoribyte räknar om á-priset (#1206): en post som rättas från timarvode
+ * till tidsspillan ska debiteras som tidsspillan. Andra ändringar rör inte
+ * priset — en ändrad byrå-/jurist-/ärendetaxa gäller bara ny tid.
+ */
+describe("timeEntry.update — kategoribyte byter timpris (#1206)", () => {
+  beforeEach(() => {
+    mockPrisma.timeEntry.findFirst.mockResolvedValue({ id: "t1", matterId: "m1", userId: "u-7", kind: "ARBETE", hourlyRate: 300000, date: new Date("2026-04-15") });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-7", hourlyRates: { ARBETE: 300000 } });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", hourlyRates: { TIDSSPILLAN: 148700 } });
+    mockPrisma.timeEntry.update.mockResolvedValue({ id: "t1", matterId: "m1" });
+  });
+
+  it("nytt á-pris ur den nya kategorins arv, med postens jurist", async () => {
+    await makeCaller().update({ id: "t1", kind: "TIDSSPILLAN" });
+    expect(mockPrisma.timeEntry.update.mock.calls[0]![0].data).toMatchObject({ kind: "TIDSSPILLAN", hourlyRate: 148700 });
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: "u-7" }) }));
+  });
+
+  it("samma kategori (även utelämnad = timarvode) eller ingen kategori rör inte priset", async () => {
+    await makeCaller().update({ id: "t1", kind: "ARBETE" });
+    await makeCaller().update({ id: "t1", minutes: 45 });
+    mockPrisma.timeEntry.findFirst.mockResolvedValue({ id: "t1", matterId: "m1", userId: "u-7", hourlyRate: 300000 });
+    await makeCaller().update({ id: "t1", kind: "ARBETE" });
+    for (const call of mockPrisma.timeEntry.update.mock.calls) expect(call[0].data.hourlyRate).toBeUndefined();
+  });
+
+  it("byte till beredskap ger dagbeloppet", async () => {
+    await makeCaller().update({ id: "t1", kind: "ADVOKATBEREDSKAP" });
+    const rate = mockPrisma.timeEntry.update.mock.calls[0]![0].data.hourlyRate;
+    expect(rate).toBeGreaterThan(0);
+    expect(rate).not.toBe(148700);
   });
 });
 

@@ -51,9 +51,10 @@ function fmt(v: number | null): string {
   return v == null ? "" : String(v);
 }
 
-/** Text → tal eller null (tomt/ogiltigt/under min). Tillåter komma-decimal. */
+/** Text → tal eller null (tomt/ogiltigt/under min). Tillåter komma-decimal och
+ *  tusentalsavgränsning med mellanslag ("3 000"). */
 export function parseDecimal(raw: string, min = 0): number | null {
-  const t = raw.trim().replace(",", ".");
+  const t = raw.replace(/\s/g, "").replace(",", ".");
   if (t === "") return null;
   const n = Number.parseFloat(t);
   if (!Number.isFinite(n) || n < min) return null;

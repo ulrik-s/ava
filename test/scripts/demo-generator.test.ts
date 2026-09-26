@@ -20,7 +20,7 @@ import type { SeedDataset } from "../../tooling/scripts/seed-data";
 const now = new Date("2026-01-01T00:00:00Z");
 const tinySeed = {
   organizations: [{ id: "org-test", name: "Testbyrå AB", orgNumber: "556111-0001", createdAt: now, updatedAt: now }],
-  users: [{ id: "u-test", email: "anna@test.se", name: "Anna Advokat", role: "ADMIN", hourlyRate: 250_000, organizationId: "org-test", createdAt: now, updatedAt: now }],
+  users: [{ id: "u-test", email: "anna@test.se", name: "Anna Advokat", role: "ADMIN", hourlyRates: { ARBETE: 250_000 }, organizationId: "org-test", createdAt: now, updatedAt: now }],
   contacts: [{ id: "c-test", name: "Klient AB", contactType: "COMPANY", organizationId: "org-test", createdAt: now, updatedAt: now }],
   matters: [{ id: "m-test", matterNumber: "2024-0007", title: "Testärende", description: "Demo", status: "CLOSED", matterType: "Tvist", paymentMethod: "PRIVAT", paymentMethodDecidedAt: now, isTaxeArende: false, organizationId: "org-test", createdAt: now, updatedAt: now }],
   matterContacts: [{ id: "mc-test", matterId: "m-test", contactId: "c-test", role: "KLIENT", organizationId: "org-test", createdAt: now }],

@@ -1,6 +1,6 @@
 /**
  * Drizzle `TimeEntryRepository` (ADR 0020) — server-impl. Ärver bas-CRUD;
- * `listUnbilled` joinar users för timtaxan, `flagBilled` bulk-sätter invoiceId.
+ * `listUnbilled` hämtar valda ofakturerade poster, `flagBilled` bulk-sätter invoiceId.
  *
  * `timeEntries`-kolumnerna är brandade (#562) → `select({ te: timeEntries })` bär
  * branded id:n och projektionernas \`...r.te\`-spread är typad (ingen \`as object\`).
@@ -18,7 +18,7 @@ import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import { matterOrg } from "./matter-org";
 import type {
   LawyerReportTimeEntry, TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow,
-  TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository, UnbilledTimeEntry,
+  TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository,
 } from "./time-entry-repository";
 
 /** Org-scopat where för `listForOrg` (utbruten för komplexitet ≤8). */
@@ -108,15 +108,11 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     }));
   }
 
-  async listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<UnbilledTimeEntry[]> {
+  async listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<TimeEntry[]> {
     if (!ids.length) return [];
-    const rows = await this.db
-      .select({ te: timeEntries, hourlyRate: users.hourlyRate }).from(timeEntries)
-      .innerJoin(users, eq(timeEntries.userId, users.id))
+    return await this.db
+      .select().from(timeEntries)
       .where(and(inArray(timeEntries.id, ids), eq(timeEntries.matterId, matterId), isNull(timeEntries.invoiceId)));
-    return rows.map((r): UnbilledTimeEntry => ({
-      ...r.te, user: { hourlyRate: r.hourlyRate },
-    }));
   }
 
   async flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void> {

@@ -58,7 +58,7 @@ function pick(seed: SeedDataset, key: keyof SeedDataset): Row[] {
 async function createOrganizations(c: AnyCaller, rows: Row[]): Promise<void> {
   for (const o of rows) {
     await c.organization.create(
-      defined({ id: o.id, name: o.name, orgNumber: o.orgNumber, address: o.address, phone: o.phone, email: o.email, bankgiro: o.bankgiro, accontoThresholdOre: o.accontoThresholdOre, standardAtgarder: o.standardAtgarder }),
+      defined({ id: o.id, name: o.name, orgNumber: o.orgNumber, address: o.address, phone: o.phone, email: o.email, bankgiro: o.bankgiro, accontoThresholdOre: o.accontoThresholdOre, hourlyRates: o.hourlyRates, standardAtgarder: o.standardAtgarder }),
     );
   }
 }
@@ -66,7 +66,7 @@ async function createOrganizations(c: AnyCaller, rows: Row[]): Promise<void> {
 async function createUsers(c: AnyCaller, rows: Row[]): Promise<void> {
   for (const u of rows) {
     await c.user.create(
-      defined({ id: u.id, email: u.email, name: u.name, title: u.title, role: u.role, hourlyRate: u.hourlyRate, mileageRate: u.mileageRate }),
+      defined({ id: u.id, email: u.email, name: u.name, title: u.title, role: u.role, hourlyRates: u.hourlyRates, mileageRate: u.mileageRate }),
     );
   }
 }

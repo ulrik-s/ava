@@ -300,7 +300,8 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     }],
     users: users.map((u) => ({
       id: u.id, organizationId: orgId, email: u.email, name: u.name,
-      title: u.title, role: u.role, hourlyRate: u.hourlyRate, mileageRate: 250,
+      // Juristens timarvode (#1206) — övriga kategorier ärver det.
+      title: u.title, role: u.role, hourlyRates: { ARBETE: u.hourlyRate }, mileageRate: 250,
       active: true,
       createdAt: isoDate(-200), updatedAt: isoDate(-30),
     })),

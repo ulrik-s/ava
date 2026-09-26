@@ -137,8 +137,8 @@ describe("generateFakturaFromTemplate", () => {
     expect(html).toContain(`${formatCurrency(148_700)}/tim`); // tidsspillan 2026 (297 400 / 2 tim)
     // Utan arvodeskategori på raden (äldre faktura) räddas tidsspillan-normerna ur
     // taxan; resten benämns arvode (#953).
-    expect(html).toContain("<td>Arvode</td>");
-    expect(html).toContain("Tidsspillan — vardag 08–18");
+    expect(html).toContain("<td>Timarvode</td>");
+    expect(html).toContain("<td>Tidsspillan</td>");
     // Kedjan (#1200): summa arvode exkl moms → moms på arvode → utlägg exkl moms →
     // summa inkl moms. Utläggen är momsfria här → ingen momsrad för utlägg.
     const iArvode = html.indexOf("Summa arvode exkl moms");

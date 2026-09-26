@@ -14,6 +14,8 @@ const mockPrisma = {
   document: { create: vi.fn() },
   user: { findFirst: vi.fn() },
   timeEntry: { create: vi.fn() },
+  // Tidspostens á-pris ärvs ärende → jurist → byrå (#1206).
+  organization: { findFirst: vi.fn() },
 };
 
 let dataStore: MockDataStore;
@@ -48,7 +50,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a" });
   mockPrisma.document.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => data);
-  mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", hourlyRate: 1800 });
+  mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", hourlyRates: { ARBETE: 1800 } });
+  mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", hourlyRates: { ARBETE: 1000 } });
   mockPrisma.timeEntry.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "te-1", ...data }));
 });
 
@@ -118,6 +121,12 @@ describe("mail.saveIncoming", () => {
     });
     const args = mockPrisma.timeEntry.create.mock.calls[0]![0] as { data: { date: Date } };
     expect(args.data.date).toBeInstanceOf(Date);
+  });
+
+  it("med time: juristen utan eget timarvode → byråns (samma arv som timeEntry.create, #1206)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", hourlyRates: {} });
+    await makeCaller().saveIncoming({ ...base, documentId: "doc-1", time: { minutes: 15 } });
+    expect(mockPrisma.timeEntry.create).toHaveBeenCalledWith({ data: expect.objectContaining({ hourlyRate: 1000 }) });
   });
 
   it("med time + egen beskrivning → använder den + emit:ar time-entry.added", async () => {

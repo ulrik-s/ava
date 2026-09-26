@@ -79,6 +79,13 @@ describe("user.getById", () => {
     mockPrisma.user.findFirst.mockResolvedValue(null);
     await expect(makeCaller().getById({ id: "nope" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
+
+  it("returnerar juristens timpriser per kategori; saknas de → tom karta (#1206)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRates: { ARBETE: 300000 } });
+    expect((await makeCaller().getById({ id: "u1" })).hourlyRates).toEqual({ ARBETE: 300000 });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A" });
+    expect((await makeCaller().getById({ id: "u1" })).hourlyRates).toEqual({});
+  });
 });
 
 describe("user.create", () => {
@@ -108,6 +115,15 @@ describe("user.create", () => {
     await makeCaller().create({ email: "x@y.se", name: "Y" });
     const args = mockPrisma.user.create.mock.calls[0]![0];
     expect(args.data.role).toBe("LAWYER");
+  });
+
+  it("lagrar timpriser per kategori när angivna; annars sätts inget (ärver byråns, #1206)", async () => {
+    mockPrisma.user.create.mockResolvedValue({});
+    await makeCaller().create({ email: "x@y.se", name: "Y", hourlyRates: { ARBETE: 300000, TIDSSPILLAN: 150000 } });
+    expect(mockPrisma.user.create.mock.calls[0]![0].data.hourlyRates).toEqual({ ARBETE: 300000, TIDSSPILLAN: 150000 });
+    await makeCaller().create({ email: "z@y.se", name: "Z" });
+    expect(mockPrisma.user.create.mock.calls[1]![0].data.hourlyRates).toBeUndefined();
+    await expect(makeCaller().create({ email: "q@y.se", name: "Q", hourlyRates: { ARBETE: -1 } })).rejects.toThrow();
   });
 
   it("lagrar ärendenummer-prefix när angivet (#174)", async () => {
@@ -141,6 +157,13 @@ describe("user.update", () => {
     const args = mockPrisma.user.update.mock.calls[0]![0];
     expect(args.data.passwordHash).toBeDefined();
     expect(args.data.password).toBeUndefined();
+  });
+
+  it("ersätter hela timpris-kartan (#1206)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a" });
+    mockPrisma.user.update.mockResolvedValue({});
+    await makeCaller().update({ id: "u1", hourlyRates: { TIDSSPILLAN_OVRIG_TID: 97500 } });
+    expect(mockPrisma.user.update.mock.calls[0]![0].data.hourlyRates).toEqual({ TIDSSPILLAN_OVRIG_TID: 97500 });
   });
 
   it("uppdaterar utan att röra passwordHash om password ej skickas", async () => {
@@ -223,14 +246,16 @@ describe("user.current", () => {
     mockPrisma.user.findFirst.mockResolvedValue(null);
     const me = await makeCallerWithRole("ADMIN", "demo-user").current();
     expect(me.id).toBe("demo-user");
+    expect(me.hourlyRates).toEqual({});
   });
 
   it("returnerar databas-rad om finns", async () => {
     mockPrisma.user.findFirst.mockResolvedValue({
       id: "u1", organizationId: "org-a", email: "u1@x", name: "U1", title: null, role: "LAWYER",
-      hourlyRate: null, mileageRate: null, createdAt: new Date(),
+      hourlyRates: { ARBETE: 250000 }, mileageRate: null, createdAt: new Date(),
     });
     const me = await makeCallerWithRole("LAWYER", "u1").current();
     expect(me.id).toBe("u1");
+    expect(me.hourlyRates).toEqual({ ARBETE: 250000 });
   });
 });

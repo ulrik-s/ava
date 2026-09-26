@@ -300,47 +300,38 @@ describe("organization.getSettings", () => {
 
     expect(result.name).toBe("Advokat AB");
     expect(result.bankgiro).toBe("123-4567");
-    expect(result.defaultHourlyRate).toBeNull(); // inget standardtimpris satt
-    expect(result.tidsspillanHourlyRate).toBeNull(); // tidsspillan = samma som arbete
+    expect(result.hourlyRates).toEqual({}); // inga byråpriser satta (#1206)
     expect(mockPrisma.organization.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "org-a" } })
     );
   });
 });
 
-describe("organization.getSettings — tidsspillan", () => {
-  it("returnerar byråns timpris för tidsspillan (öre/h)", async () => {
-    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB", tidsspillanHourlyRate: 150000 });
+describe("organization.getSettings — timpriser", () => {
+  it("returnerar byråns timpris per kategori (öre/h, #1206)", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB", hourlyRates: { ARBETE: 250000, TIDSSPILLAN: 150000 } });
     const result = await makeCaller("org-a").getSettings();
-    expect(result.tidsspillanHourlyRate).toBe(150000);
+    expect(result.hourlyRates).toEqual({ ARBETE: 250000, TIDSSPILLAN: 150000 });
   });
 });
 
 describe("organization.updateSettings", () => {
-  it("sparar och tar bort byråns timpris för tidsspillan (öre/h)", async () => {
+  it("ersätter hela kartan med byråns timpriser (öre/h) — en borttagen kategori försvinner", async () => {
     mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
     mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
-    await makeCaller("org-a").updateSettings({ tidsspillanHourlyRate: 150000 });
+    await makeCaller("org-a").updateSettings({ hourlyRates: { ARBETE: 250000, TIDSSPILLAN: 150000 } });
     expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ tidsspillanHourlyRate: 150000 }) }),
+      expect.objectContaining({ data: expect.objectContaining({ hourlyRates: { ARBETE: 250000, TIDSSPILLAN: 150000 } }) }),
     );
-    await makeCaller("org-a").updateSettings({ tidsspillanHourlyRate: null });
+    await makeCaller("org-a").updateSettings({ hourlyRates: { ARBETE: 250000 } });
     expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ tidsspillanHourlyRate: null }) }),
+      expect.objectContaining({ data: expect.objectContaining({ hourlyRates: { ARBETE: 250000 } }) }),
     );
   });
 
-  it("sparar och tar bort byråns standardtimpris (öre/h)", async () => {
-    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
-    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
-    await makeCaller("org-a").updateSettings({ defaultHourlyRate: 250000 });
-    expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ defaultHourlyRate: 250000 }) }),
-    );
-    await makeCaller("org-a").updateSettings({ defaultHourlyRate: null });
-    expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ defaultHourlyRate: null }) }),
-    );
+  it("avvisar en okänd kategori och ett negativt pris", async () => {
+    await expect(makeCaller("org-a").updateSettings({ hourlyRates: { ADVOKATBEREDSKAP: 1 } as never })).rejects.toThrow();
+    await expect(makeCaller("org-a").updateSettings({ hourlyRates: { ARBETE: -1 } })).rejects.toThrow();
   });
 
   it("uppdaterar bankgiro och övriga fält", async () => {

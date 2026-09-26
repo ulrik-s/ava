@@ -1,6 +1,6 @@
 /**
  * TimeEntryRepository-paritet (ADR 0020, #409 fan-out) — in-memory + Drizzle
- * (pglite). `listUnbilled` (med user.hourlyRate) + `flagBilled` (bulk-koppling).
+ * (pglite). `listUnbilled` (postens eget á-pris) + `flagBilled` (bulk-koppling).
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
@@ -13,16 +13,16 @@ import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
 describe("TimeEntryRepository — in-memory", () => {
-  it("listUnbilled (user.hourlyRate) + flagBilled kopplar till faktura", async () => {
+  it("listUnbilled (postens á-pris) + flagBilled kopplar till faktura", async () => {
     const matterId = uuidv7();
     const userId = uuidv7();
     const t1 = uuidv7();
     const t2 = uuidv7();
     const store = new LocalStore({
       matters: [{ id: matterId, organizationId: "org-1" }],
-      users: [{ id: userId, name: "Anna", hourlyRate: 150_000 }],
+      users: [{ id: userId, name: "Anna", hourlyRates: { ARBETE: 150_000 } }],
       timeEntries: [
-        { id: t1, userId, matterId, minutes: 60, billable: true, invoiceId: null },
+        { id: t1, userId, matterId, minutes: 60, billable: true, invoiceId: null, hourlyRate: 90_000 },
         { id: t2, userId, matterId, minutes: 30, billable: true, invoiceId: null },
       ],
     }, async () => {});
@@ -30,7 +30,8 @@ describe("TimeEntryRepository — in-memory", () => {
 
     const unbilled = await repo.listUnbilled(asId<"MatterId">(matterId), [asId<"TimeEntryId">(t1), asId<"TimeEntryId">(t2)]);
     expect(unbilled).toHaveLength(2);
-    expect(unbilled[0]!.user.hourlyRate).toBe(150_000);
+    // Postens sparade pris — inte juristens nuvarande (#1206).
+    expect(unbilled.find((t) => t.id === t1)!.hourlyRate).toBe(90_000);
     expect(await repo.listUnbilled(asId<"MatterId">(matterId), [])).toEqual([]);
 
     await repo.flagBilled([asId<"TimeEntryId">(t1)], asId<"InvoiceId">(uuidv7()));
@@ -43,7 +44,7 @@ describe("TimeEntryRepository — Drizzle (pglite)", () => {
   beforeAll(async () => { handle = await createTestDb(); });
   afterAll(async () => { await handle.close(); });
 
-  it("listUnbilled joinar user.hourlyRate + flagBilled bulk-sätter invoiceId", async () => {
+  it("listUnbilled ger postens á-pris + flagBilled bulk-sätter invoiceId", async () => {
     const db = handle.db;
     const org = uuidv7();
     const mId = uuidv7();
@@ -53,14 +54,14 @@ describe("TimeEntryRepository — Drizzle (pglite)", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
-    await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna", hourlyRate: 150_000 }));
+    await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna", hourlyRates: { ARBETE: 150_000 } }));
     await db.insert(timeEntries).values(v({ id: t1, userId, matterId: mId, date: new Date(), minutes: 60, description: "x", hourlyRate: 1000 }));
     await db.insert(timeEntries).values(v({ id: t2, userId, matterId: mId, date: new Date(), minutes: 30, description: "y", hourlyRate: 1000 }));
     const repo = new DrizzleTimeEntryRepository(handle.db);
 
     const unbilled = await repo.listUnbilled(asId<"MatterId">(mId), [asId<"TimeEntryId">(t1), asId<"TimeEntryId">(t2)]);
     expect(unbilled).toHaveLength(2);
-    expect(unbilled[0]!.user.hourlyRate).toBe(150_000);
+    expect(unbilled.map((t) => t.hourlyRate)).toEqual([1000, 1000]);
 
     await repo.flagBilled([asId<"TimeEntryId">(t1)], asId<"InvoiceId">(uuidv7()));
     expect(await repo.listUnbilled(asId<"MatterId">(mId), [asId<"TimeEntryId">(t1), asId<"TimeEntryId">(t2)])).toHaveLength(1);

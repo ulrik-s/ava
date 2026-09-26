@@ -8,7 +8,7 @@
  * brottmål, rättshjälp i tvistemål, offentligt biträde i förvaltnings-
  * och migrationsmål, vårdnadsmål LVU/LPT — ersätts enligt
  * Domstolsverkets timkostnadsnorm × faktisk arbetstid, tidsspillan
- * och utlägg (DVFS 2025:6 § 8).
+ * och utlägg (förordningen (2009:1237) om timkostnadsnorm).
  *
  * Detta scenario: ett KOMPLEXT brottmål där huvudförhandlingen sträcker
  * sig över 8 timmar (förhandlingstid > 225 min) → taxan tillämpas INTE,
@@ -18,7 +18,7 @@
  *   • Tidsspillan (restid + väntan utan arbete) — timkostnadsnorm
  *   • Utlägg
  *
- * Timkostnadsnorm 2026 (DVFS 2025:6 § 8): 1 626 kr/h exkl moms med F-skatt.
+ * Timkostnadsnorm 2026 (förordningen (2009:1237)): 1 626 kr/h exkl moms med F-skatt.
  */
 
 import { describe, it, expect, beforeAll } from "vitest-compat";
@@ -47,7 +47,7 @@ function makeStore(): { caller: ReturnType<typeof appRouter.createCaller>; sourc
     organizations: [{ id: ORG_ID, name: "Anna Advokat AB", orgNumber: "556677-8899" }],
     // OBS: vi sätter timtaxa = timkostnadsnormen så time-entries beräknas
     // korrekt mot DV-normen i routerns invoice-flöde.
-    users: [{ ...ADMIN_USER, hourlyRate: TIMKOSTNADSNORM_FTAX_ORE_PER_H, mileageRate: 250, title: "Senior partner" }],
+    users: [{ ...ADMIN_USER, hourlyRates: { ARBETE: TIMKOSTNADSNORM_FTAX_ORE_PER_H }, mileageRate: 250, title: "Senior partner" }],
     contacts: [], matters: [], matterContacts: [],
     documents: [], timeEntries: [], expenses: [],
     invoices: [], calendarEvents: [], tasks: [],

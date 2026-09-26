@@ -2,12 +2,14 @@
 
 import { ShieldAlert, UserX, UserRound } from "lucide-react";
 import Link from "next/link";
+import { formatKrPerHour } from "@/components/billing/hourly-rates-fields";
 import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { patchFirmaConfig } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
+import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
@@ -21,7 +23,8 @@ interface UserRow {
   title?: string | null;
   email: string;
   role: string;
-  hourlyRate?: number | null;
+  /** Juristens egna timpriser (öre/h, #1206). */
+  hourlyRates?: HourlyRates | undefined;
   mileageRate?: number | null;
 }
 
@@ -48,6 +51,12 @@ function BecomeButton({ user, onClick }: { user: UserRow; onClick: (u: UserRow) 
   );
 }
 
+/** Juristens eget timarvode, eller att hen följer byråns. */
+function userRateLabel(rates: HourlyRates | undefined): string {
+  const own = rates?.ARBETE;
+  return own != null ? formatKrPerHour(own) : "byråns";
+}
+
 function buildUserColumns(opts: {
   isAdmin: boolean;
   /** Byta principal i klienten — bara meningsfullt i demon; under OIDC är
@@ -66,9 +75,9 @@ function buildUserColumns(opts: {
       render: (u) => <span className="text-sm text-gray-500">{u.email}</span> },
     { key: "role", label: "Roll", sortable: true, sortValue: (u) => roleLabels[u.role] || u.role,
       render: (u) => <span className="text-sm text-gray-500">{roleLabels[u.role] || u.role}</span> },
-    { key: "hourlyRate", label: "Timtaxa", sortable: true, align: "right",
-      sortValue: (u) => u.hourlyRate ?? -1,
-      render: (u) => <span className="text-sm text-gray-500">{u.hourlyRate != null ? `${u.hourlyRate / 100} kr/h` : "byråns standard"}</span> },
+    { key: "hourlyRate", label: "Timarvode", sortable: true, align: "right",
+      sortValue: (u) => u.hourlyRates?.ARBETE ?? -1,
+      render: (u) => <span className="text-sm text-gray-500">{userRateLabel(u.hourlyRates)}</span> },
     { key: "mileageRate", label: "Milersättning", sortable: true, align: "right",
       sortValue: (u) => u.mileageRate ?? -1,
       render: (u) => <span className="text-sm text-gray-500">{u.mileageRate != null ? `${(u.mileageRate / 100).toFixed(2)} kr/km` : "—"}</span> },

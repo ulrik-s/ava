@@ -43,10 +43,10 @@ const KIND_OPTIONS = Object.entries(TIME_ENTRY_KIND_LABELS) as Array<[TimeEntryK
  * stryker om det blir fel.
  */
 const KIND_GUIDANCE: Partial<Record<TimeEntryKind, string>> = {
-  TIDSSPILLAN: "Dagtaxan gäller vardag 08.00–18.00. Ersättning lämnas bara för tid mellan 07.00 och 22.00, och normal måltidspaus är inte tidsspillan (DVFS 2025:4 §§ 2–4).",
-  TIDSSPILLAN_OVRIG_TID: "All tidsspillan utanför vardag 08.00–18.00 — men bara inom 07.00–22.00; tid mellan 22.00 och 07.00 ersätts inte alls. Vid övernattning på annan ort än tjänstestället ersätts 18.00–22.00 endast om den avser restid (DVFS 2025:4 §§ 2, 4).",
-  ARBETE_OBEKVAM_TID: "Häktningsförhandling under helg (DVFS 2025:7) eller polisförhör utanför ordinarie kontorstid (DVFS 2025:8). Tidsspillan i samband med sådana ersätts med DAGTAXAN, även 22.00–07.00.",
-  ADVOKATBEREDSKAP: "Garantiersättning PER DAG för beredskap vid tingsrätten under helg (DVFS 2025:9 § 1) — ingen tid registreras. Blir du inkallad registrerar du arbetet som obekväm tid i stället: garantin utgår inte för dag då sådant arvode utgår (§ 2).",
+  TIDSSPILLAN: "Vardag 08.00–18.00. Ersättning lämnas bara för tid mellan 07.00 och 22.00, och normal måltidspaus är inte tidsspillan (DVFS 2025:4 §§ 2–4). Undantag: tidsspillan i samband med häktningsförhandling under helg (DVFS 2025:7 § 1) eller polisförhör utanför kontorstid (DVFS 2025:8 § 3) ersätts med den här taxan även på helg och mellan 22.00 och 07.00.",
+  TIDSSPILLAN_OVRIG_TID: "All tidsspillan utanför vardag 08.00–18.00 — men bara inom 07.00–22.00; tid mellan 22.00 och 07.00 ersätts inte alls. Vid övernattning på annan ort än tjänstestället ersätts 18.00–22.00 endast om den avser restid (DVFS 2025:4 §§ 2, 4). Tidsspillan i samband med häktningsförhandling under helg eller polisförhör utanför kontorstid registreras i stället som Tidsspillan — den ersätts med vardagstaxan (DVFS 2025:7 § 1, 2025:8 § 3).",
+  ARBETE_OBEKVAM_TID: "Häktningsförhandling lördag, söndag, helgdag eller midsommar-, jul- eller nyårsafton (DVFS 2025:7 § 1), eller polisförhör vardagar 00.00–07.00 och 18.00–24.00 samt helg (DVFS 2025:8 § 1). Tidsspillan i samband med sådana registreras som Tidsspillan (vardagstaxan), även 22.00–07.00.",
+  ADVOKATBEREDSKAP: "Garantiersättning PER DAG för beredskap vid tingsrätten under helg (DVFS 2025:9 § 1) — ingen tid registreras. Blir du inkallad registrerar du arbetet som Timarvode helg/kväll i stället: garantin utgår inte för dag då sådant arvode utgår (§ 2).",
 };
 
 /**

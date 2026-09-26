@@ -31,6 +31,7 @@ import {
   computeCoverageSplit, coverageInvoiceLines, rattsskyddCoverage, resolveAward,
   type CoverageSplit,
 } from "@/lib/shared/coverage-billing";
+import { resolveHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import {
   buildInvoiceSpecification, specExpenseLines, specTimeLines,
@@ -169,21 +170,27 @@ function resolveAwardedOre(krRun: BillingRunListRow | undefined, inputAwardedOre
 /**
  * Det DÅ GÄLLANDE timarvodet (öre/tim) som arbetet ska värderas om på vid
  * fakturering (#800): rättshjälp → timkostnadsnormen (F-skatt-variant);
- * rättsskydd m.fl. → ansvariga juristens AKTUELLA timtaxa (ej snapshot).
+ * rättsskydd m.fl. → AKTUELLT timarvode (ej snapshot) genom ärende → ansvarig
+ * jurist → byrå (#1206).
  */
 async function currentArvodeRateOre(
   repos: Repositories,
   orgId: OrganizationId,
-  matter: { paymentMethod: string; taxaHasFTax?: boolean | null | undefined; responsibleLawyerId?: UserId | null | undefined },
+  matter: {
+    paymentMethod: string; taxaHasFTax?: boolean | null | undefined;
+    responsibleLawyerId?: UserId | null | undefined; hourlyRates?: LevelRates;
+  },
 ): Promise<number> {
   if (matter.paymentMethod === "RATTSHJALP") {
     // Alla advokater har F-skatt (#839) → alltid F-skatt-normen, oberoende av
     // matter.taxaHasFTax (ett brottmåls-taxefält som är meningslöst här).
     return TIMKOSTNADSNORM_FTAX_ORE_PER_H;
   }
-  if (!matter.responsibleLawyerId) return 0;
-  const lawyer = await repos.users.getByIdInOrg(matter.responsibleLawyerId, orgId);
-  return lawyer?.hourlyRate ?? 0;
+  const [lawyer, org] = await Promise.all([
+    matter.responsibleLawyerId ? repos.users.getByIdInOrg(matter.responsibleLawyerId, orgId) : null,
+    repos.organizations.getById(orgId),
+  ]);
+  return resolveHourlyRate("ARBETE", { matter: matter.hourlyRates, user: lawyer?.hourlyRates, org: org?.hourlyRates });
 }
 
 
@@ -370,7 +377,9 @@ async function resolveFinalWork(
   }
   return {
     work: {
-      timeEntries: selTime.map((t) => ({ id: t.id, minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0, billable: t.billable, date: t.date, description: t.description })),
+      // Postens eget á-pris — samma som ovalda poster (fetchUnfrozenWork): priset
+      // sparades på posten vid registrering/kategoribyte (#1206).
+      timeEntries: selTime,
       expenses: selExp.filter((e) => e.kind !== "PRUTNING").map((e) => ({ id: e.id, amount: e.amount, billable: e.billable, vatRate: e.vatRate, vatIncluded: e.vatIncluded })),
     },
     selected: true,

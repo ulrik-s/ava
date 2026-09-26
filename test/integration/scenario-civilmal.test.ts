@@ -46,7 +46,7 @@ const ADMIN_USER = {
 function makeStore(): { caller: ReturnType<typeof appRouter.createCaller>; source: DemoSource } {
   const source: DemoSource = prebakeJoins({
     organizations: [{ id: ORG_ID, name: "Anna Advokat AB", orgNumber: "556677-8899" }],
-    users: [{ ...ADMIN_USER, hourlyRate: HOURLY_RATE, mileageRate: 250, title: "Senior partner" }],
+    users: [{ ...ADMIN_USER, hourlyRates: { ARBETE: HOURLY_RATE }, mileageRate: 250, title: "Senior partner" }],
     contacts: [], matters: [], matterContacts: [],
     documents: [], timeEntries: [], expenses: [],
     invoices: [], calendarEvents: [], tasks: [],

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { baseFields, optionalDateLike } from "./common";
 import { userRoleSchema } from "./enums";
+import { hourlyRatesSchema } from "./hourly-rates";
 import { userIdSchema, organizationIdSchema } from "./ids";
 
 /**
@@ -28,7 +29,8 @@ export const userSchema = z.object({
    * fortsätter serien i stället för att börja om. Nullish = ingen prefix.
    */
   matterNumberPrefix: matterNumberPrefixSchema.nullish(),
-  hourlyRate: z.number().int().nullish(),
+  /** Juristens timpris per kategori (öre/h) — vinner över byråns (#1206). */
+  hourlyRates: hourlyRatesSchema.default({}),
   mileageRate: z.number().int().nullish(),
   active: z.boolean().default(true),
   /** bcrypt-hash. Frivilligt — fattas för demo-användare och Azure-only. */

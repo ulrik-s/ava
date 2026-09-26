@@ -73,9 +73,9 @@ describe("TimeSection — arvodeskategori (#953)", () => {
     render(<TimeSection matterId={matterId} />);
     expect(screen.getByText("Kategori")).toBeInTheDocument();
     expect(screen.getByText("Tidsspillan")).toBeInTheDocument();
-    expect(screen.getByText("Obekväm tid")).toBeInTheDocument();
-    // Poster utan kind visas som Arbete (default), inte som tomt.
-    expect(screen.getByText("Arbete")).toBeInTheDocument();
+    expect(screen.getByText("Timarvode helg/kväll")).toBeInTheDocument();
+    // Poster utan kind visas som Timarvode (default), inte som tomt.
+    expect(screen.getByText("Timarvode")).toBeInTheDocument();
   });
 
   it("beskrivningen bryter rad i stället för att rinna in i grannkolumnen (#1197)", () => {
@@ -167,7 +167,7 @@ describe("TimeSection — DVFS-hjälptext vid kategorivalet (#969)", () => {
     expect(text).toHaveTextContent("DVFS 2025:4 §§ 2–4");
   });
 
-  it("Tidsspillan annan tid visar övernattningsregeln — den gäller just 18–22", () => {
+  it("Tidsspillan helg/kväll visar övernattningsregeln — den gäller just 18–22", () => {
     openForm("RATTSHJALP");
     fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "TIDSSPILLAN_OVRIG_TID" } });
     const text = screen.getByText(/övernattning/);
@@ -176,10 +176,18 @@ describe("TimeSection — DVFS-hjälptext vid kategorivalet (#969)", () => {
     expect(text).toHaveTextContent("22.00 och 07.00 ersätts inte alls");
   });
 
-  it("Obekväm tid pekar på att TIDSSPILLAN då ersätts med dagtaxan", () => {
+  it("Timarvode helg/kväll anger föreskrifternas tider och att tidsspillan då registreras som Tidsspillan", () => {
     openForm("RATTSHJALP");
     fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "ARBETE_OBEKVAM_TID" } });
-    expect(screen.getByText(/Häktningsförhandling/)).toHaveTextContent("ersätts med DAGTAXAN");
+    const text = screen.getByText(/^Häktningsförhandling/);
+    expect(text).toHaveTextContent("polisförhör vardagar 00.00–07.00 och 18.00–24.00 samt helg (DVFS 2025:8 § 1)");
+    expect(text).toHaveTextContent("registreras som Tidsspillan (vardagstaxan)");
+  });
+
+  it("Tidsspillan helg/kväll pekar ut undantaget: helghäktning/nattförhör registreras som Tidsspillan", () => {
+    openForm("RATTSHJALP");
+    fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "TIDSSPILLAN_OVRIG_TID" } });
+    expect(screen.getByText(/övernattning/)).toHaveTextContent("DVFS 2025:7 § 1, 2025:8 § 3");
   });
 
   it("privatärenden får ingen hjälptext — normerna styr inte deras arvode", () => {

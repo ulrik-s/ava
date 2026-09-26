@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
+import { hourlyRatesSchema, type HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { matterNumberPrefixSchema, type User } from "@/lib/shared/schemas/user";
 import { assertAdmin } from "../auth/assert-admin";
@@ -10,7 +11,7 @@ import { router, protectedProcedure } from "../trpc";
 function pickList(u: User) {
   return {
     id: u.id, email: u.email, name: u.name, title: u.title ?? null, role: u.role,
-    hourlyRate: u.hourlyRate ?? null, mileageRate: u.mileageRate ?? null,
+    hourlyRates: u.hourlyRates ?? {}, mileageRate: u.mileageRate ?? null,
     matterNumberPrefix: u.matterNumberPrefix ?? null, createdAt: u.createdAt as Date,
   };
 }
@@ -31,7 +32,8 @@ export interface UserProfile {
   name: string;
   title: string | null;
   role: string;
-  hourlyRate: number | null;
+  /** Juristens egna timpriser per kategori (öre/h, #1206); tom = ärver byråns. */
+  hourlyRates: HourlyRates;
   mileageRate: number | null;
   matterNumberPrefix: string | null;
   createdAt: Date;
@@ -58,7 +60,7 @@ export const userRouter = router({
         name: ctx.user.name,
         title: null,
         role: ctx.user.role,
-        hourlyRate: null,
+        hourlyRates: {},
         mileageRate: null,
         matterNumberPrefix: null,
         createdAt: new Date(),
@@ -93,7 +95,8 @@ export const userRouter = router({
       name: z.string().min(1),
       title: z.string().optional(),
       role: userRoleSchema.default("LAWYER"),
-      hourlyRate: z.number().nullable().optional(),
+      /** Timpris per kategori (öre/h, #1206); utelämnad kategori ärvs från byrån. */
+      hourlyRates: hourlyRatesSchema.optional(),
       mileageRate: z.number().nullable().optional(),
       /** Ärendenummer-prefix (#174) — juristens egen serie. */
       matterNumberPrefix: matterNumberPrefixSchema.optional(),
@@ -108,7 +111,7 @@ export const userRouter = router({
         name: input.name,
         title: input.title,
         role: input.role,
-        hourlyRate: input.hourlyRate,
+        ...(input.hourlyRates ? { hourlyRates: input.hourlyRates } : {}),
         mileageRate: input.mileageRate,
         ...(input.matterNumberPrefix ? { matterNumberPrefix: input.matterNumberPrefix } : {}),
         passwordHash,
@@ -128,7 +131,8 @@ export const userRouter = router({
       name: z.string().min(1).optional(),
       title: z.string().nullable().optional(),
       role: userRoleSchema.optional(),
-      hourlyRate: z.number().nullable().optional(),
+      /** Timpris per kategori (öre/h, #1206). HELA kartan ersätts. */
+      hourlyRates: hourlyRatesSchema.optional(),
       mileageRate: z.number().nullable().optional(),
       /** Ärendenummer-prefix (#174); null rensar den. Byte fortsätter serien. */
       matterNumberPrefix: matterNumberPrefixSchema.nullable().optional(),
