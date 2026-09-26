@@ -37,6 +37,11 @@ import type { PaymentMethod, TimeEntryKind } from "./schemas/enums";
 import type { ExpenseId, TimeEntryId } from "./schemas/ids";
 import { DEFAULT_VAT_RATE } from "./vat";
 
+/** Det som behövs för att värdera ARVODET — tidsposternas värderingsfält. */
+export interface ArvodeWork {
+  timeEntries: ReadonlyArray<{ minutes: number; hourlyRate: number; billable: boolean; date: Date | string; kind?: TimeEntryKind | null | undefined }>;
+}
+
 export interface UnfrozenWork {
   timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; description: string; kind?: TimeEntryKind | null | undefined }>;
   expenses: Array<{ id: ExpenseId; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>;
@@ -137,7 +142,7 @@ export function vatOnNet(netOre: number): number {
 }
 
 /** Arvode netto (exkl. moms) — summa av debiterbara tidsposter. */
-export function arvodeNetOre(work: UnfrozenWork): number {
+export function arvodeNetOre(work: ArvodeWork): number {
   return payableCoverageEntries(work.timeEntries.filter((t) => t.billable))
     .reduce((sum, t) => sum + entryOwnValueOre(t), 0);
 }
@@ -181,7 +186,7 @@ export function invoiceVatBreakdown(work: UnfrozenWork): VatBreakdownLine[] {
  * rådgivningstimmen vid rättshjälp), tidsspillan på tidsspillan-normen, obekväm
  * tid och beredskap på sina DVFS-belopp. PRIVAT/MIX: posternas egna á-priser.
  */
-export function settlementArvodeNet(method: PaymentMethod, work: UnfrozenWork, settleDate: Date | string): number {
+export function settlementArvodeNet(method: PaymentMethod, work: ArvodeWork, settleDate: Date | string): number {
   const billable = work.timeEntries.filter((t) => t.billable);
   // Varje post värderas på SIN KATEGORIS norm för slutregleringsåret (#949/#950).
   // Tidigare plattade icke-rättshjälp ut allt till ansvarig jurists timtaxa, vilket
@@ -197,6 +202,37 @@ export function settlementArvodeNet(method: PaymentMethod, work: UnfrozenWork, s
   // Rådgivningstimmen carvas ur ARBETE (rättshjälp) — den faktureras klienten separat.
   byKind.set("ARBETE", coverageBaseMinutes(method, byKind.get("ARBETE") ?? 0));
   return sumKindValueOre(byKind, settleDate) + perDayValueOre(payable, settleDate);
+}
+
+/** Det av ärendet som styr hur arbetet värderas. */
+export interface ValuationMatter {
+  paymentMethod: PaymentMethod;
+  isTaxeArende?: boolean | null | undefined;
+}
+
+/** Värderas arbetet på posternas EGNA á-priser? Privat/blandat — och taxeärenden
+ *  (offentligt uppdrag), där brottmålstaxan styr och posterna bara är underlag. */
+function usesOwnRates(m: ValuationMatter): boolean {
+  return m.paymentMethod === "PRIVAT" || m.paymentMethod === "MIX" || (m.paymentMethod === "OFFENTLIGT_UPPDRAG" && m.isTaxeArende === true);
+}
+
+/**
+ * Ärendets arvode netto — EN regel för förslag, "upparbetat ofakturerat",
+ * aconto och kostnadsräkning. Domstolsersatta betalningssätt (rättshjälp,
+ * rättsskydd, offentligt uppdrag) värderas på Domstolsverkets normer och
+ * rättshjälp utan rådgivningstimmen (den faktureras klienten separat); privat
+ * och taxeärenden på posternas egna á-priser. Förr värderade förslaget alltid
+ * på posternas á-pris — en jurist utan timpris gav 0 kr i ett rättshjälpsärende.
+ */
+export function matterArvodeNet(m: ValuationMatter, work: ArvodeWork, date: Date | string): number {
+  return usesOwnRates(m) ? arvodeNetOre(work) : settlementArvodeNet(m.paymentMethod, work, date);
+}
+
+/** En enskild tidsposts värde enligt samma regel (rådgivningstimmen dras bara av i summan). */
+export function matterEntryValueOre(
+  m: ValuationMatter, t: ArvodeWork["timeEntries"][number], date: Date | string,
+): number {
+  return usesOwnRates(m) ? entryOwnValueOre(t) : coverageEntryValueOre(t, date);
 }
 
 /** Kostnadsräkningens yrkade brutto — den går ALLTID till domstol, så utläggen

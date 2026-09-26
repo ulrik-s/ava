@@ -12,13 +12,14 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
+import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
 };
 
-function makeCaller(opts?: { workMinutes?: number; expenseOre?: number; paymentMethod?: string; tidsspillanMin?: number }) {
+function makeCaller(opts?: { workMinutes?: number; expenseOre?: number; paymentMethod?: string; tidsspillanMin?: number; hourlyRate?: number }) {
   const tids = opts?.tidsspillanMin != null
     ? [{ id: "te-2", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: opts.tidsspillanMin, description: "Restid", hourlyRate: 250000, billable: true, kind: "TIDSSPILLAN" as const }]
     : [];
@@ -26,7 +27,7 @@ function makeCaller(opts?: { workMinutes?: number; expenseOre?: number; paymentM
     organizations: [{ id: "org-1", name: "X" }],
     matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "Test", status: "ACTIVE", paymentMethod: opts?.paymentMethod ?? "RATTSSKYDD", createdAt: new Date() }],
     users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250000 }],
-    timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: opts?.workMinutes ?? 120, description: "Möte", hourlyRate: 250000, billable: true }, ...tids],
+    timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: opts?.workMinutes ?? 120, description: "Möte", hourlyRate: opts?.hourlyRate ?? 250000, billable: true }, ...tids],
     expenses: opts?.expenseOre != null ? [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: opts.expenseOre, description: "Avgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" }] : [],
   }, async () => { /* writable: noop write-back */ });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,7 +36,7 @@ function makeCaller(opts?: { workMinutes?: number; expenseOre?: number; paymentM
 
 describe("billingRun.createAcconto", () => {
   it("skapar BillingRun + Invoice (ACCONTO) men FRYSER INTE raderna", async () => {
-    const { ds, caller } = makeCaller({ workMinutes: 120 }); // 2h × 2500kr = 5000kr = 500000öre
+    const { ds, caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" }); // 2h × 2500kr = 5000kr = 500000öre
     const res = await caller.billingRun.createAcconto({
       matterId: "m-1", clientShareBips: 2000, amountOre: 100000,
     });
@@ -52,7 +53,7 @@ describe("billingRun.createAcconto", () => {
   });
 
   it("proposedAmountOre = %-sats × upparbetat (inga tidigare aconton) — #397", async () => {
-    const { caller } = makeCaller({ workMinutes: 120 }); // 5000 kr
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" }); // 5000 kr
     const res = await caller.billingRun.createAcconto({
       matterId: "m-1", clientShareBips: 2000, amountOre: 100000,
     });
@@ -61,7 +62,7 @@ describe("billingRun.createAcconto", () => {
   });
 
   it("proposedAmountOre drar av tidigare ACCONTO-runs (#397)", async () => {
-    const { caller } = makeCaller({ workMinutes: 120 }); // 5000 kr
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" }); // 5000 kr
     await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 100000 });
     const second = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 5000, amountOre: 1 });
     // 50% × 500000 − 100000 (tidigare) = 150000
@@ -70,8 +71,25 @@ describe("billingRun.createAcconto", () => {
 });
 
 describe("billingRun.proposal (#397)", () => {
+  // Rättshjälp värderas på timkostnadsnormen, inte på posternas á-pris — en jurist
+  // utan timpris gav annars 0 kr trots 7,5 h i ärendet. Rådgivningstimmen dras av
+  // (den faktureras klienten separat).
+  it("rättshjälp: posternas timpris 0 → normen, minus rådgivningstimmen", async () => {
+    const { caller } = makeCaller({ workMinutes: 450, paymentMethod: "RATTSHJALP", hourlyRate: 0 });
+    const p = await caller.billingRun.proposal({ matterId: "m-1" });
+    const norm = timkostnadsnormFtaxForDate(new Date());
+    expect(p.workValueOre).toBe(Math.round((390 / 60) * norm));
+    expect(p.timeEntries[0]?.valueOre).toBe(Math.round((450 / 60) * norm));
+  });
+
+  it("rättsskydd: normen, ingen rådgivningstimme", async () => {
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "RATTSSKYDD", hourlyRate: 0 });
+    const p = await caller.billingRun.proposal({ matterId: "m-1" });
+    expect(p.workValueOre).toBe(Math.round(2 * timkostnadsnormFtaxForDate(new Date())));
+  });
+
   it("returnerar ofakturerade poster, upparbetat värde och tidigare aconto-summa", async () => {
-    const { caller } = makeCaller({ workMinutes: 120, expenseOre: 90000 }); // 5000 + 900 kr
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT", expenseOre: 90000 }); // 5000 + 900 kr
     await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 60000 });
     const p = await caller.billingRun.proposal({ matterId: "m-1" });
     expect(p.workValueOre).toBe(500000 + 90000);

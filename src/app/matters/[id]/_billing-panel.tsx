@@ -610,10 +610,9 @@ function BillingSummary({ matterId }: { matterId: MatterId }) {
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
   const invoices = trpc.invoice.list.useQuery({ matterId });
   const d = proposal.data;
-  const unbilledOre = d
-    ? d.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0)
-      + d.expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0)
-    : 0;
+  // Förslagets värde följer ärendets betalningssätt (rättshjälp: normen, utan
+  // rådgivningstimmen som redan fakturerats klienten).
+  const unbilledOre = d?.workValueOre ?? 0;
   const list = invoices.data?.items ?? [];
   const fakturerat = list.filter((i) => i.status !== "DRAFT" && i.status !== "CANCELLED").reduce((s, i) => s + i.amount, 0);
   const betalt = list.reduce((s, i) => s + (i.payments ?? []).reduce((p, pm) => p + pm.amount, 0), 0);
