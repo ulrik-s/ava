@@ -3,10 +3,12 @@
 /**
  * `renderFakturaPdf` (#938) — faktura-PDF client-side via pdf-lib, med SAMMA
  * upplägg som det arkiverade HTML-dokumentet:
- *   sida 1  Sammanställning (rad per timtaxa, utlägg, moms, summa) + uppdelning
- *           klient/betalare + "att betala".
- *   sida 2+ Specifikation — tidsspecifikation + utläggsspecifikation, med
- *           automatisk sidbrytning när raderna inte får plats.
+ *   sida 1  Sammanställning (rad per kategori + timpris, uträkningskedjan
+ *           arvode → moms → utlägg → moms → äkta utlägg → summa inkl moms)
+ *           + uppdelning klient/betalare + "att betala".
+ *   sida 2+ Specifikation — tidsspecifikation per arvodeskategori (med timpris
+ *           och delsumma, #1200) + utläggsspecifikation, med automatisk
+ *           sidbrytning när raderna inte får plats.
  *
  * Renderaren räknar INGENTING: den tar en färdig `FakturaView`
  * (`buildFakturaView` i `faktura-template.ts`), så bilagan som mejlas och
@@ -159,32 +161,40 @@ function drawHeader(c: Ctx, v: FakturaView): void {
   c.y -= 8;
 }
 
-/** Kolumnernas högerkanter i sammanställningen (benämning flödar från M). */
-const SUM_RATE_X = 385;
-const SUM_HOURS_X = 440;
+/** Kolumnernas högerkanter i sammanställningen (benämning flödar från M):
+ *  Benämning | Tim | Timpris | Belopp — raden läses som en uträkning (#1200). */
+const SUM_HOURS_X = 350;
+const SUM_RATE_X = 450;
+
+/** En sammanställningsrad. Summarader (#1200) får linje ovanför och fet stil så
+ *  kedjan "raderna ovan = summan" syns även på papper. */
+function drawSummaryRow(c: Ctx, row: FakturaView["summary"][number]): void {
+  const style: TextOpts = { b: row.subtotal };
+  if (row.subtotal) { ensure(c, 30); c.y += 4; rule(c); c.y -= 13; }
+  labelRow(c, row.label, SUM_HOURS_X - M - 50, () => {
+    drawRight(c, row.hours, SUM_HOURS_X, style);
+    drawRight(c, row.rateLabel, SUM_RATE_X, style);
+    drawRight(c, row.amount, RIGHT, style);
+  }, style);
+}
 
 function drawSummary(c: Ctx, v: FakturaView): void {
   ensure(c, 90);
   draw(c, "Sammanställning", { size: 13, b: true });
   c.y -= 18;
   draw(c, "Benämning", { size: 9, b: true });
-  drawRight(c, "Timtaxa", SUM_RATE_X, { size: 9, b: true });
   drawRight(c, "Tim", SUM_HOURS_X, { size: 9, b: true });
+  drawRight(c, "Timpris", SUM_RATE_X, { size: 9, b: true });
   drawRight(c, "Belopp", RIGHT, { size: 9, b: true });
   c.y -= 5;
   rule(c);
   c.y -= 13;
-  for (const row of v.summary) {
-    labelRow(c, row.label, SUM_RATE_X - M - 55, () => {
-      if (row.rateLabel) drawRight(c, row.rateLabel, SUM_RATE_X);
-      if (row.hours) drawRight(c, row.hours, SUM_HOURS_X);
-      drawRight(c, row.amount, RIGHT);
-    });
-  }
+  for (const row of v.summary) drawSummaryRow(c, row);
+  ensure(c, 30);
   c.y += 3;
-  rule(c);
+  rule(c, 1.2);
   c.y -= 15;
-  draw(c, "Summa (inkl moms)", { b: true });
+  draw(c, v.summaryTotalLabel, { b: true });
   drawRight(c, v.summaryTotal, RIGHT, { b: true });
   c.y -= 22;
 }
@@ -215,52 +225,74 @@ function drawSplit(c: Ctx, v: FakturaView): void {
 // ── Sida 2+: specifikationen ────────────────────────────────────────────────
 
 const SPEC_DATE_W = 66;
-const SPEC_HOURS_X = 445;
+const SPEC_DESC_X = M + SPEC_DATE_W;
 
 interface SpecCol { header: string; rightX: number }
 
-/** Rita en specifikationstabells rubrikrad (datum + beskrivning + två tal). */
-function specHead(c: Ctx, cols: [SpecCol, SpecCol]): void {
+/** Tidsspecifikationens talkolumner (#1200): Tim | Timpris | Belopp. */
+const TIME_COLS: readonly SpecCol[] = [
+  { header: "Tim", rightX: 380 }, { header: "Timpris", rightX: 465 }, { header: "Belopp", rightX: RIGHT },
+];
+const EXPENSE_COLS: readonly SpecCol[] = [{ header: "Netto", rightX: 470 }, { header: "Brutto", rightX: RIGHT }];
+
+/** Rita talkolumnerna högerjusterat, en cell per kolumn. */
+function drawCells(c: Ctx, cols: readonly SpecCol[], cells: readonly string[], o: TextOpts): void {
+  cols.forEach((col, i) => drawRight(c, cells[i] ?? "", col.rightX, o));
+}
+
+/** Rita en specifikationstabells rubrikrad (datum + beskrivning + talkolumner). */
+function specHead(c: Ctx, cols: readonly SpecCol[]): void {
+  ensure(c, 40);
   draw(c, "Datum", { size: 9, b: true });
-  draw(c, "Beskrivning", { size: 9, b: true, x: M + SPEC_DATE_W });
-  drawRight(c, cols[0].header, cols[0].rightX, { size: 9, b: true });
-  drawRight(c, cols[1].header, cols[1].rightX, { size: 9, b: true });
+  draw(c, "Beskrivning", { size: 9, b: true, x: SPEC_DESC_X });
+  drawCells(c, cols, cols.map((col) => col.header), { size: 9, b: true });
   c.y -= 5;
   rule(c);
   c.y -= 13;
 }
 
-/** En specifikationsrad: datum, beskrivning och tabellens två talkolumner. */
-interface SpecRow { date: string; description: string; a: string; b: string }
-
-function specRow(c: Ctx, r: SpecRow, cols: [SpecCol, SpecCol]): void {
+/** En specifikationsrad: datum, beskrivning (kapas så den ryms före första
+ *  talkolumnen) och tabellens talkolumner. */
+function specRow(c: Ctx, date: string, description: string, cells: readonly string[], cols: readonly SpecCol[]): void {
   ensure(c, 20);
-  draw(c, r.date, { size: 9 });
-  draw(c, fit(c, r.description, cols[0].rightX - (M + SPEC_DATE_W) - 46, { size: 9 }), { size: 9, x: M + SPEC_DATE_W });
-  drawRight(c, r.a, cols[0].rightX, { size: 9 });
-  drawRight(c, r.b, cols[1].rightX, { size: 9 });
+  const descWidth = (cols[0]?.rightX ?? RIGHT) - SPEC_DESC_X - 46;
+  draw(c, date, { size: 9 });
+  draw(c, fit(c, description, descWidth, { size: 9 }), { size: 9, x: SPEC_DESC_X });
+  drawCells(c, cols, cells, { size: 9 });
   c.y -= 14;
 }
 
+/** En kategoris deltabell (#1200): rubrik, poster och fet delsumma. */
+function drawTimeGroup(c: Ctx, g: FakturaView["timeGroups"][number]): void {
+  ensure(c, 70);
+  draw(c, g.label, { size: 10, b: true });
+  c.y -= 14;
+  specHead(c, TIME_COLS);
+  for (const l of g.lines) specRow(c, l.date, l.description, [l.hours, l.rate, l.amount], TIME_COLS);
+  ensure(c, 24);
+  c.y += 4;
+  rule(c);
+  c.y -= 11;
+  draw(c, g.subtotalLabel, { size: 9, b: true });
+  drawCells(c, TIME_COLS, [g.hours, "", g.amount], { size: 9, b: true });
+  c.y -= 20;
+}
+
 function drawTimeSpec(c: Ctx, v: FakturaView): void {
-  if (v.timeLines.length === 0) return;
-  const cols: [SpecCol, SpecCol] = [{ header: "Tim", rightX: SPEC_HOURS_X }, { header: "Belopp", rightX: RIGHT }];
-  ensure(c, 60);
+  if (v.timeGroups.length === 0) return;
+  ensure(c, 90);
   draw(c, "Tidsspecifikation", { size: 11, b: true });
-  c.y -= 16;
-  specHead(c, cols);
-  for (const l of v.timeLines) specRow(c, { date: l.date, description: l.description, a: l.hours, b: l.amount }, cols);
-  c.y -= 8;
+  c.y -= 18;
+  for (const g of v.timeGroups) drawTimeGroup(c, g);
 }
 
 function drawExpenseSpec(c: Ctx, v: FakturaView): void {
   if (v.expenseLines.length === 0) return;
-  const cols: [SpecCol, SpecCol] = [{ header: "Netto", rightX: 470 }, { header: "Brutto", rightX: RIGHT }];
   ensure(c, 60);
   draw(c, "Utläggsspecifikation", { size: 11, b: true });
   c.y -= 16;
-  specHead(c, cols);
-  for (const l of v.expenseLines) specRow(c, { date: l.date, description: l.description, a: l.net, b: l.gross }, cols);
+  specHead(c, EXPENSE_COLS);
+  for (const l of v.expenseLines) specRow(c, l.date, l.description, [l.net, l.gross], EXPENSE_COLS);
 }
 
 /** Specifikationen börjar ALLTID på ny sida — speglar HTML-mallens sidbrytning. */

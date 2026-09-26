@@ -2,11 +2,15 @@
  * Faktura-mallen — EN källa för ALLA fakturor (#937/#938).
  *
  * Upplägget är detsamma oavsett fakturatyp och betalningssätt:
- *   sida 1  Sammanställning — en rad per timtaxa (benämning + timtaxa + tim +
- *           belopp), utlägg exkl/inkl moms, summa, och därefter uppdelningen
- *           mellan klient och betalare (domstol/försäkringsbolag).
- *   sida 2+ Specifikation — tidsspecifikation + utläggsspecifikation, dvs
- *           underlaget till beloppen på sida 1.
+ *   sida 1  Sammanställning — en rad per arvodeskategori + timpris, läst som
+ *           en uträkning (benämning | tim | timpris | belopp), och sedan en
+ *           kedja där varje summa = raderna ovanför (#1200): summa arvode exkl
+ *           moms → moms på arvode → utlägg exkl moms → moms på utlägg → äkta
+ *           utlägg → summa inkl moms. Därefter uppdelningen mellan klient och
+ *           betalare (domstol/försäkringsbolag) → att betala.
+ *   sida 2+ Specifikation — tidsspecifikation per arvodeskategori (arvode,
+ *           tidsspillan …) med timpris och delsumma + utläggsspecifikation,
+ *           dvs underlaget till beloppen på sida 1.
  *
  * `buildFakturaView` är den TYPADE vy-modellen (#938): färdigformaterade rader,
  * inga öre kvar. Både HTML-mallen (`renderFakturaHtml`) och PDF-bilagan
@@ -18,7 +22,9 @@
  */
 
 import { formatCurrency } from "@/lib/client/utils";
-import { tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
+import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
 import { buildInvoiceSpecification, type InvoiceSpecification } from "@/lib/shared/invoice-specification";
 import { TIME_ENTRY_KIND_LABELS, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
@@ -81,9 +87,14 @@ export interface FakturaTemplateArgs {
 
 // ── Vy-modellen (#938) ──────────────────────────────────────────────────────
 
-/** En rad i sammanställningen: taxegrupp, utlägg eller moms. Tomma sträng-fält
- *  betyder "ingen kolumn-uppgift" (utlägg har ingen timtaxa). */
-export interface FakturaSummaryRow { label: string; rateLabel: string; hours: string; amount: string }
+/**
+ * En rad i sammanställningen: taxegrupp (Benämning | Tim | Timpris | Belopp),
+ * utlägg, moms eller en summarad. Tomma sträng-fält betyder "ingen kolumn-
+ * uppgift" (utlägg har ingen timtaxa). `subtotal` (#1200) markerar en summarad:
+ * den är lika med föregående summarad plus raderna mellan — så kedjan går att
+ * räkna efter uppifrån och ned.
+ */
+export interface FakturaSummaryRow { label: string; rateLabel: string; hours: string; amount: string; subtotal: boolean }
 
 /**
  * En rad i uppdelningen klient/betalare. `style` är en CSS-färg för HTML;
@@ -92,7 +103,14 @@ export interface FakturaSummaryRow { label: string; rateLabel: string; hours: st
  */
 export interface FakturaSplitRow { label: string; amount: string; style: string; muted: boolean }
 
-export interface FakturaTimeRow { date: string; description: string; hours: string; amount: string }
+/** En tidspost. `rate` = timpriset ("1 500,00 kr/tim"), dagbeloppet för
+ *  per-dygns-kategorier ("… kr/dygn"), tomt när det saknas (#1200). */
+export interface FakturaTimeRow { date: string; description: string; hours: string; rate: string; amount: string }
+
+/** Tidsspecifikationens deltabell för EN arvodeskategori (#1200) — rubrik,
+ *  poster och delsumma ("Summa tidsspillan …: 3 tim — 4 461 kr"). */
+export interface FakturaTimeGroup { label: string; lines: FakturaTimeRow[]; subtotalLabel: string; hours: string; amount: string }
+
 export interface FakturaExpenseRow { date: string; description: string; net: string; gross: string }
 
 /** Färdigformaterad faktura — allt en renderare behöver, inga öre kvar. */
@@ -109,6 +127,8 @@ export interface FakturaView {
   /** Rådgivningsnotisen (#870) — tom sträng när den inte gäller. */
   footnote: string;
   summary: FakturaSummaryRow[];
+  /** Etiketten på sammanställningens slutsumma ("Summa inkl moms"). */
+  summaryTotalLabel: string;
   summaryTotal: string;
   /** Visa rubriken "Uppdelning klient / betalare" (bara vid faktisk split). */
   hasSplit: boolean;
@@ -117,7 +137,10 @@ export interface FakturaView {
   total: string;
   /** Finns underlag att specificera → egen sida efter sammanställningen. */
   hasSpec: boolean;
+  /** Alla tidsposter i fakturans ordning (platt — för byrå-mallar, #852). */
   timeLines: FakturaTimeRow[];
+  /** Tidsposterna per arvodeskategori, i kategori-ordning (#1200). */
+  timeGroups: FakturaTimeGroup[];
   expenseLines: FakturaExpenseRow[];
 }
 
@@ -133,9 +156,9 @@ const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="ut
 <h2 style="font-size:16px;margin-top:1.5rem;margin-bottom:.5rem">Sammanställning</h2>
 {{#if summary.length}}
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:1rem">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Benämning</th><th style="text-align:right">Timtaxa</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp</th></tr></thead>
-<tbody>{{#each summary}}<tr><td>{{this.label}}</td><td style="text-align:right">{{this.rateLabel}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
-<tfoot><tr style="border-top:1px solid #ccc"><td style="font-weight:bold">Summa (inkl moms)</td><td></td><td></td><td style="text-align:right;font-weight:bold">{{summaryTotal}}</td></tr></tfoot>
+<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Benämning</th><th style="text-align:right">Tim</th><th style="text-align:right">Timpris</th><th style="text-align:right">Belopp</th></tr></thead>
+<tbody>{{#each summary}}<tr{{#if this.subtotal}} style="border-top:1px solid #ccc;font-weight:bold"{{/if}}><td>{{this.label}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.rateLabel}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
+<tfoot><tr style="border-top:2px solid #333"><td style="font-weight:bold">{{summaryTotalLabel}}</td><td></td><td></td><td style="text-align:right;font-weight:bold">{{summaryTotal}}</td></tr></tfoot>
 </table>{{/if}}
 {{#if hasSplit}}<h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Uppdelning klient / betalare</h3>{{/if}}
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px">
@@ -147,12 +170,16 @@ const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="ut
 <hr class="page-break">
 <h2 style="font-size:16px;margin-bottom:.25rem">Specifikation</h2>
 <p style="color:#777;font-size:12px;margin-top:0">Underlag till beloppen i sammanställningen ovan.</p>
-{{#if timeLines.length}}
+{{#if timeGroups.length}}
 <h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Tidsspecifikation</h3>
+{{#each timeGroups}}
+<h4 style="font-size:13px;margin-top:1rem;margin-bottom:.25rem">{{this.label}}</h4>
 <table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp</th></tr></thead>
-<tbody>{{#each timeLines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
-</table>{{/if}}
+<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Tim</th><th style="text-align:right">Timpris</th><th style="text-align:right">Belopp</th></tr></thead>
+<tbody>{{#each this.lines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right;white-space:nowrap">{{this.rate}}</td><td style="text-align:right;white-space:nowrap">{{this.amount}}</td></tr>{{/each}}</tbody>
+<tfoot><tr style="border-top:1px solid #ccc;font-weight:bold"><td colspan="2">{{this.subtotalLabel}}</td><td style="text-align:right">{{this.hours}}</td><td></td><td style="text-align:right;white-space:nowrap">{{this.amount}}</td></tr></tfoot>
+</table>
+{{/each}}{{/if}}
 {{#if expenseLines.length}}
 <h3 style="font-size:14px;margin-top:1.5rem;margin-bottom:.25rem">Utläggsspecifikation</h3>
 <table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
@@ -215,8 +242,22 @@ function specFromCarriedWork(carried: CarriedWork, spec: InvoiceSpecification | 
   });
 }
 
+type SpecLine = InvoiceSpecification["timeLines"][number];
+
+/** Kategori-ordning i sammanställning och specifikation: arbete först, tidsspillan sist. */
+const KIND_ORDER = Object.keys(TIME_ENTRY_KIND_LABELS) as TimeEntryKind[];
+
 /**
- * Benämning för en taxegrupp (#925/#953). Bär raden sin ARVODESKATEGORI används
+ * Postens pris per enhet (öre, exkl moms): dagbeloppet för per-dygns-kategorier
+ * (advokatberedskap har ingen timnorm, #950), annars timpriset ur belopp/minuter.
+ */
+function unitRateOre(l: SpecLine): number {
+  if (isPerDayKind(l.kind)) return l.amountOre;
+  return l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
+}
+
+/**
+ * Postens arvodeskategori (#925/#953). Bär raden sin ARVODESKATEGORI används
  * den — det är den enda uppgift som faktiskt avgör vilken norm posten ersätts på.
  * Att gissa ur timtaxan räcker inte: efter en retroaktiv höjning värderas posten
  * på slutregleringsårets norm men bär sitt eget datum, och två tidsspillan-normer
@@ -225,68 +266,99 @@ function specFromCarriedWork(carried: CarriedWork, spec: InvoiceSpecification | 
  * Äldre fakturor (persisterade före #953) saknar kategorin. För dem räddas de två
  * tidsspillan-normerna ur taxan — resten är arvode.
  */
-function rateGroupLabel(kind: TimeEntryKind | null | undefined, rateOre: number, date: Date | string): string {
-  if (kind) return TIME_ENTRY_KIND_LABELS[kind];
-  if (rateOre === tidsspillanFtaxForDate(date)) return TIME_ENTRY_KIND_LABELS.TIDSSPILLAN;
-  if (rateOre === tidsspillanOvrigFtaxForDate(date)) return TIME_ENTRY_KIND_LABELS.TIDSSPILLAN_OVRIG_TID;
-  return TIME_ENTRY_KIND_LABELS.ARBETE;
+function resolveKind(l: SpecLine): TimeEntryKind {
+  if (l.kind) return l.kind;
+  const rateOre = unitRateOre(l);
+  if (rateOre === tidsspillanFtaxForDate(l.date)) return "TIDSSPILLAN";
+  if (rateOre === tidsspillanOvrigFtaxForDate(l.date)) return "TIDSSPILLAN_OVRIG_TID";
+  return "ARBETE";
 }
 
-interface RateGroup { minutes: number; amountOre: number; date: Date | string; kind: TimeEntryKind | null | undefined; rateOre: number }
+/** Tidsposterna per kategori, i KIND_ORDER; tomma kategorier utelämnas. */
+function groupByKind(lines: readonly SpecLine[]): Array<{ kind: TimeEntryKind; lines: SpecLine[] }> {
+  return KIND_ORDER
+    .map((kind) => ({ kind, lines: lines.filter((l) => resolveKind(l) === kind) }))
+    .filter((g) => g.lines.length > 0);
+}
+
+const sumOf = (lines: readonly SpecLine[], pick: (l: SpecLine) => number): number => lines.reduce((s, l) => s + pick(l), 0);
+
+/** Omfattningen: timmar ("2,5") — eller antal dygn för per-dygns-kategorier. */
+function quantityLabel(kind: TimeEntryKind, lines: readonly SpecLine[]): string {
+  return isPerDayKind(kind) ? `${lines.length} dygn` : svHours(sumOf(lines, (l) => l.minutes));
+}
+
+/** Priset per enhet ("1 500,00 kr/tim" eller "… kr/dygn"); tomt utan pris. */
+function rateLabelFor(kind: TimeEntryKind, rateOre: number, fc: Fc): string {
+  if (rateOre === 0) return "";
+  return `${fc(rateOre)}/${isPerDayKind(kind) ? "dygn" : "tim"}`;
+}
+
+/** En kategoris poster per pris per enhet, högsta priset först. */
+function linesByRate(lines: readonly SpecLine[]): Array<[number, SpecLine[]]> {
+  const byRate = new Map<number, SpecLine[]>();
+  for (const l of lines) byRate.set(unitRateOre(l), [...(byRate.get(unitRateOre(l)) ?? []), l]);
+  return [...byRate.entries()].sort(([a], [b]) => b - a);
+}
 
 /**
- * Gruppera arvodet per KATEGORI + timtaxa → en rad per unik kombination. Taxan
- * ingår i nyckeln så ärenden som debiterar byråns egen taxa (privat) fortfarande
- * får en rad per taxa när den ändrats under ärendet.
+ * Sammanställningens arvoderader (#925/#1200): en rad per KATEGORI + pris, som
+ * läses som en uträkning (tim × timpris = belopp). Priset ingår i nyckeln så
+ * ärenden som debiterar byråns egen taxa (privat) får en rad per taxa när den
+ * ändrats under ärendet.
  */
 function arvodeRateRows(spec: InvoiceSpecification, fc: Fc): FakturaSummaryRow[] {
-  const groups = new Map<string, RateGroup>();
-  for (const l of spec.timeLines) {
-    const rateOre = l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
-    const key = `${l.kind ?? ""}|${rateOre}`;
-    const g = groups.get(key) ?? { minutes: 0, amountOre: 0, date: l.date, kind: l.kind, rateOre };
-    groups.set(key, { ...g, minutes: g.minutes + l.minutes, amountOre: g.amountOre + l.amountOre });
-  }
-  return [...groups.values()]
-    .sort((a, b) => KIND_ORDER.indexOf(a.kind ?? "ARBETE") - KIND_ORDER.indexOf(b.kind ?? "ARBETE") || b.rateOre - a.rateOre)
-    .map((g) => ({
-      label: rateGroupLabel(g.kind, g.rateOre, g.date),
-      rateLabel: `${fc(g.rateOre)}/tim`,
-      hours: svHours(g.minutes),
-      amount: fc(g.amountOre),
-    }));
+  return groupByKind(spec.timeLines).flatMap(({ kind, lines }) =>
+    linesByRate(lines).map(([rateOre, ls]) => ({
+      label: TIME_ENTRY_KIND_LABELS[kind], rateLabel: rateLabelFor(kind, rateOre, fc),
+      hours: quantityLabel(kind, ls), amount: fc(sumOf(ls, (l) => l.amountOre)), subtotal: false,
+    })));
 }
 
-/** Kategori-ordning i sammanställningen: arbete först, tidsspillan sist. */
-const KIND_ORDER = Object.keys(TIME_ENTRY_KIND_LABELS) as TimeEntryKind[];
+/** Momssats i basis points → "25 %". Satsen kommer ur samma konstant som räknade momsen. */
+const vatPercent = (bips: number): string => `${(bips / 100).toLocaleString("sv-SE")} %`;
+
+const amountRow = (label: string, amount: string, subtotal: boolean): FakturaSummaryRow => ({ label, rateLabel: "", hours: "", amount, subtotal });
 
 /**
- * Sammanställningens rader (#925): en rad per timtaxa (arvode exkl moms), följt
- * av utlägg exkl moms → moms → utlägg inkl moms. Summan är det faktiska bruttot
- * (arvode inkl moms + utlägg inkl moms). Ren + testbar.
+ * Uträkningskedjan under arvoderaderna (#1200). Varje summarad = föregående
+ * summarad + raderna mellan, så kedjan går att räkna efter:
+ *   Summa arvode exkl moms (= arvoderaderna) → Moms på arvode → Utlägg exkl moms
+ *   → Moms på utlägg → Äkta utlägg (utan moms) → [Summa inkl moms = slutsumman].
+ * Momsbeloppen är spec:ens egna (inga omräkningar här). Äkta utlägg (#975) är
+ * vidarefakturerade utan moms och ingår därför inte i momsunderlaget. Nollrader
+ * utelämnas.
  */
-function summarySection(a: FakturaTemplateArgs, spec: InvoiceSpecification | null, fc: Fc): { summary: FakturaSummaryRow[]; summaryTotal: string } {
+function derivationRows(spec: InvoiceSpecification, fc: Fc): FakturaSummaryRow[] {
+  const passThroughOre = spec.expenseLines.filter((l) => l.passThrough).reduce((s, l) => s + l.grossOre, 0);
+  const rows: Array<[string, number]> = [
+    [`Moms ${vatPercent(ARVODE_VAT_BIPS)} på arvode`, spec.arvodeVatOre],
+    ["Utlägg exkl moms", spec.expensesNetOre - passThroughOre],
+    [`Moms ${vatPercent(CHARGED_EXPENSE_VAT_RATE)} på utlägg`, spec.expensesVatOre],
+    ["Äkta utlägg (utan moms)", passThroughOre],
+  ];
+  return [
+    amountRow("Summa arvode exkl moms", fc(spec.arvodeNetOre), true),
+    ...rows.filter(([, ore]) => ore !== 0).map(([label, ore]) => amountRow(label, fc(ore), false)),
+  ];
+}
+
+const SUMMARY_TOTAL_LABEL = "Summa inkl moms";
+
+/**
+ * Sammanställningens rader (#925/#1200): arvoderaderna (exkl moms), följt av
+ * uträkningskedjan. Slutsumman är det faktiska bruttot (arvode + moms + utlägg
+ * + moms + äkta utlägg). Ren + testbar.
+ */
+function summarySection(a: FakturaTemplateArgs, spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView, "summary" | "summaryTotalLabel" | "summaryTotal"> {
   if (!spec || spec.timeLines.length === 0) {
     // Fakturor helt utan itemiserat arbete (rådgivningstimmen, rena aconton) får
     // ändå en sammanställningsrad ur `notes` (#870) → beloppet är aldrig oförklarat.
     const label = a.invoice.notes?.trim() || "Arvode";
-    return { summary: [{ label, rateLabel: "", hours: "", amount: fc(a.invoice.amount) }], summaryTotal: fc(a.invoice.amount) };
+    return { summary: [amountRow(label, fc(a.invoice.amount), false)], summaryTotalLabel: SUMMARY_TOTAL_LABEL, summaryTotal: fc(a.invoice.amount) };
   }
-  const summary = arvodeRateRows(spec, fc);
-  // Ordning (#925): utlägg exkl moms → momsraden (total moms) → utlägg inkl moms
-  // → summa (allt inkl moms). Momsraden är fakturans hela moms (arvode + utlägg),
-  // så arvode-raderna (exkl moms) + utlägg exkl + moms = summan.
-  //
-  // Äkta utlägg (#975) redovisas som EGEN rad: de är vidarefakturerade utan moms
-  // och ingår därför inte i momsunderlaget. Klienten ska kunna se skillnaden.
-  const passThroughOre = spec.expenseLines.filter((l) => l.passThrough).reduce((s, l) => s + l.grossOre, 0);
-  const chargedNetOre = spec.expensesNetOre - passThroughOre;
-  if (chargedNetOre > 0) summary.push({ label: "Utlägg exkl moms", rateLabel: "", hours: "", amount: fc(chargedNetOre) });
-  summary.push({ label: "Moms", rateLabel: "", hours: "", amount: fc(spec.arvodeVatOre + spec.expensesVatOre) });
-  if (chargedNetOre > 0) summary.push({ label: "Utlägg inkl moms", rateLabel: "", hours: "", amount: fc(chargedNetOre + spec.expensesVatOre) });
-  if (passThroughOre > 0) summary.push({ label: "Äkta utlägg (utan moms)", rateLabel: "", hours: "", amount: fc(passThroughOre) });
   const summaOre = spec.arvodeNetOre + spec.arvodeVatOre + spec.expensesNetOre + spec.expensesVatOre;
-  return { summary, summaryTotal: fc(summaOre) };
+  return { summary: [...arvodeRateRows(spec, fc), ...derivationRows(spec, fc)], summaryTotalLabel: SUMMARY_TOTAL_LABEL, summaryTotal: fc(summaOre) };
 }
 
 /** Itemiserad summering (#858) → uppdelningsrader. `deduct`=−, `info`=(parentes). */
@@ -332,12 +404,32 @@ function splitRowsFor(a: FakturaTemplateArgs, spec: InvoiceSpecification | null,
   ];
 }
 
+/** En tidspost i specifikationen, med sitt pris per enhet (#1200). */
+function timeRow(l: SpecLine, fc: Fc): FakturaTimeRow {
+  const kind = resolveKind(l);
+  return { date: svDate(l.date), description: l.description, hours: quantityLabel(kind, [l]), rate: rateLabelFor(kind, unitRateOre(l), fc), amount: fc(l.amountOre) };
+}
+
+const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** Tidsspecifikationen per arvodeskategori med delsumma (#1200). */
+function timeGroups(spec: InvoiceSpecification, fc: Fc): FakturaTimeGroup[] {
+  return groupByKind(spec.timeLines).map(({ kind, lines }) => ({
+    label: TIME_ENTRY_KIND_LABELS[kind],
+    lines: lines.map((l) => timeRow(l, fc)),
+    subtotalLabel: `Summa ${lowerFirst(TIME_ENTRY_KIND_LABELS[kind])}`,
+    hours: quantityLabel(kind, lines),
+    amount: fc(sumOf(lines, (l) => l.amountOre)),
+  }));
+}
+
 /** Specifikationens tabeller (tider + utlägg) ur den upplösta specifikationen. */
-function specTables(spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView, "hasSpec" | "timeLines" | "expenseLines"> {
-  if (!spec) return { hasSpec: false, timeLines: [], expenseLines: [] };
+function specTables(spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView, "hasSpec" | "timeLines" | "timeGroups" | "expenseLines"> {
+  if (!spec) return { hasSpec: false, timeLines: [], timeGroups: [], expenseLines: [] };
   return {
     hasSpec: spec.timeLines.length > 0 || spec.expenseLines.length > 0,
-    timeLines: spec.timeLines.map((l) => ({ date: svDate(l.date), description: l.description, hours: svHours(l.minutes), amount: fc(l.amountOre) })),
+    timeLines: spec.timeLines.map((l) => timeRow(l, fc)),
+    timeGroups: timeGroups(spec, fc),
     expenseLines: spec.expenseLines.map((l) => ({ date: svDate(l.date), description: l.description, net: fc(l.netOre), gross: fc(l.grossOre) })),
   };
 }

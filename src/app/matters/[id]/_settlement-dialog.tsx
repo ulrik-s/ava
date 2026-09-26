@@ -15,7 +15,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
-import type { FakturaDocMeta, InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
+import type { FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate, type DocUtils, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
@@ -95,19 +95,13 @@ type FakturaViewArgs = Pick<Parameters<typeof generateFakturaFromTemplate>[0], "
 
 /** Persisterad slutregleringsvy (#876) → faktura-mallens argument. Servern äger nu
  *  raderna (buildClientView/buildPayerView) och sparar dem på fakturan → EN källa
- *  för både dokumentet och Slutfaktura-sidan. `timeLines` ger tidsspec-tabellen;
+ *  för både dokumentet och Slutfaktura-sidan. `timeLines` bärs av nedbrytningen
+ *  (#880) → mallen bygger specifikationen med den kanoniska `buildInvoiceSpecification`,
+ *  så sammanställningens summor härleds ur raderna i st.f. nollor (#1200);
  *  `rows` ger beloppstrappan (spec-summeringen undertrycks när breakdown finns). */
 function viewToFakturaArgs(view: SettlementView | null | undefined): FakturaViewArgs {
   if (!view) return {};
-  const spec: InvoiceSpecification | null = view.timeLines.length
-    ? {
-        timeLines: view.timeLines, expenseLines: [],
-        totalMinutes: view.timeLines.reduce((s, l) => s + l.minutes, 0),
-        arvodeNetOre: 0, arvodeVatOre: 0, expensesNetOre: 0, expensesVatOre: 0,
-        grossOre: 0, deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 0,
-      }
-    : null;
-  return { spec, breakdown: { rows: view.rows, totalLabel: view.totalLabel, totalOre: view.totalOre } };
+  return { breakdown: { rows: view.rows, totalLabel: view.totalLabel, totalOre: view.totalOre, timeLines: view.timeLines } };
 }
 
 async function generateSettlementDocs(res: SettleResult, opts: {
