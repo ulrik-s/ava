@@ -80,8 +80,8 @@ describe("WatchSection", () => {
 
   it("visar ärendets övriga signaler ur globala listan — men inte tidsfristerna igen", () => {
     signals = [
-      { kind: "unbilled", severity: "approaching", title: "30 000 kr ofakturerat", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: null, amountOre: 3_000_000, href: "/matters/m1" },
-      { kind: "deadline", severity: "passed", title: "Tidsfrist passerad: X", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: "2026-01-01", amountOre: null, href: "/matters/m1" },
+      { kind: "unbilled", severity: "approaching", title: "30 000 kr ofakturerat", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: null, amountOre: 3_000_000, link: { route: "matters", id: "m1" } },
+      { kind: "deadline", severity: "passed", title: "Tidsfrist passerad: X", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: "2026-01-01", amountOre: null, link: { route: "matters", id: "m1" } },
     ];
     render(<WatchSection matterId={M} />);
     expect(lastSignalArgs).toEqual({ mine: false, matterId: "m1" });

@@ -9,7 +9,7 @@ function item(p: Partial<WatchlistItem> = {}): WatchlistItem {
     title: "Tidsfrist om 3 dagar: Ge in yttrande",
     detail: "Förfaller 2026-09-08.",
     matterId: "m1", matterNumber: "2026-0001",
-    at: "2026-09-08", amountOre: null, href: "/matters/m1", ...p,
+    at: "2026-09-08", amountOre: null, link: { route: "matters", id: "m1" }, ...p,
   };
 }
 
@@ -28,7 +28,9 @@ describe("WatchlistList", () => {
 
   it("länkar dit man åtgärdar posten", () => {
     render(<WatchlistList items={[item()]} emptyText="" />);
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/matters/m1");
+    // EntityLink: via den förrenderade __shell__-routen — funkar för ärenden skapade efter bygget (#1215).
+    expect(screen.getByRole("link").getAttribute("href")).toContain("/matters/__shell__");
+    expect(screen.getByRole("link").getAttribute("href")).toContain("id=m1");
   });
 
   it("visar belopp när posten har ett", () => {

@@ -9,8 +9,8 @@
  * `@/lib/shared/watchlist` och all hämtning i anropande vy.
  */
 
-import Link from "next/link";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { formatCurrency } from "@/lib/client/utils";
 import { deadlineOf } from "@/lib/shared/deadline";
 import type { WatchlistItem, WatchlistKind } from "@/lib/shared/watchlist";
@@ -75,8 +75,9 @@ export function WatchlistRow({ item, onComplete }: { item: WatchlistItem; onComp
   return (
     <li className="flex items-start gap-2">
       <CompleteBox item={item} onComplete={onComplete} />
-      <Link
-        href={item.href}
+      <EntityLink
+        route={item.link?.route ?? "matters"}
+        id={item.link?.id}
         className={`block flex-1 rounded-lg border px-3 py-2 text-sm hover:brightness-95 ${due ? "border-2 border-red-600 bg-red-50 text-red-900" : severityClasses(item.severity)}`}
       >
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -93,7 +94,7 @@ export function WatchlistRow({ item, onComplete }: { item: WatchlistItem; onComp
           <span className="sr-only">{meta.label}: </span>
           {item.detail}
         </p>
-      </Link>
+      </EntityLink>
     </li>
   );
 }

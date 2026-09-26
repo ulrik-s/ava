@@ -137,7 +137,7 @@ describe("deadlineItems", () => {
 
   it("utan ärende länkar till Att bevaka (/tasks fanns inte, #1167) och bär uppgiftens id", () => {
     const [item] = deadlineItems([{ ...bas, matterId: null, matterNumber: null, dueAt: "2026-09-06" }], NOW);
-    expect(item?.href).toBe("/watchlist");
+    expect(item?.link).toBeNull();
     expect(item?.taskId).toBe(bas.id); // så den kan bockas av i listan
   });
 });
@@ -184,7 +184,7 @@ describe("failedDispatchItems", () => {
 describe("sortWatchlist", () => {
   const item = (p: Partial<WatchlistItem>): WatchlistItem => ({
     kind: "deadline", severity: "approaching", title: "t", detail: "d",
-    matterId: null, matterNumber: null, at: null, amountOre: null, href: "/", ...p,
+    matterId: null, matterNumber: null, at: null, amountOre: null, link: null, ...p,
   });
 
   it("sätter passerat före annalkande", () => {
