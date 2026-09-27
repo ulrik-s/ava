@@ -187,28 +187,30 @@ describe("BillingPanel — översikt", () => {
   });
 });
 
-describe("BillingPanel — summa-vy (#819: bara tre tal)", () => {
-  it("visar Upparbetat ofakturerat / Fakturerat / Betalt — inte de gamla korten", () => {
+describe("BillingPanel — summa-vy (#819, #1236: fyra kort)", () => {
+  it("visar Upparbetat ofakturerat / Yrkat i kostnadsräkning / Fakturerat / Betalt — inte de gamla korten", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText("Upparbetat ofakturerat")).toBeInTheDocument();
+    expect(screen.getByText("Yrkat i kostnadsräkning")).toBeInTheDocument();
     expect(screen.getByText("Fakturerat")).toBeInTheDocument();
     expect(screen.getByText("Betalt")).toBeInTheDocument();
     expect(screen.queryByText("Aconto fakturerat")).not.toBeInTheDocument();
     expect(screen.queryByText("Väntar på dom")).not.toBeInTheDocument();
   });
 
-  it("Fakturerat = Σ utställda fakturor (ej DRAFT/CANCELLED); Betalt = Σ betalningar", () => {
+  it("Fakturerat = Σ fakturor utom CANCELLED (DRAFT som 'varav'); Betalt = Σ betalningar", () => {
     invoiceListData = [
       { id: "i1", amount: 250_000, status: "SENT", payments: [{ amount: 100_000 }] },
       { id: "i2", amount: 50_000, status: "PAID", payments: [{ amount: 50_000 }] },
-      { id: "i3", amount: 999_000, status: "DRAFT", payments: [] },
+      { id: "i3", amount: 700_000, status: "DRAFT", payments: [] },
       { id: "i4", amount: 888_000, status: "CANCELLED", payments: [] },
     ];
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
-    // Fakturerat = 250000 + 50000 = 300000 → "3 000,00"; Betalt = 150000 → "1 500,00".
+    // Fakturerat = 250000 + 50000 + 700000 = 1000000 → "10 000,00"; Betalt = 150000 → "1 500,00".
     // (Brutto-basis + default inkl-läge visar lagrat belopp.)
-    expect(screen.getByText(/3\s*000,00/)).toBeInTheDocument();
-    expect(screen.getByText(/1\s*500,00/)).toBeInTheDocument();
+    expect(screen.getByText(/10\s*000,00/)).toBeInTheDocument();
+    expect(screen.getAllByText(/1\s*500,00/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/varav skapat, ej skickat/).textContent).toMatch(/7\s*000,00/);
   });
 });
 

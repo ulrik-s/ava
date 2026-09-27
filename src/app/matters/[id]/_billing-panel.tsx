@@ -3,7 +3,8 @@
 /**
  * `BillingPanel` — översikt + skapa-faktura-actions per ärende.
  *
- * Visar summa-kort (Upparbetat / Aconto fakturerat / Beräknat netto),
+ * Visar summa-kort (`BillingSummary`: Upparbetat ofakturerat / Yrkat i
+ * kostnadsräkning / Fakturerat / Betalt),
  * lista över billing-runs (aconto, slutfaktura, kostnadsräkning) och en
  * "+ Skapa faktura"-knapp som öppnar rätt dialog beroende på matter:s
  * paymentMethod.
@@ -43,6 +44,7 @@ import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_RECIPIENT_LABELS, BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type InvoiceStatus, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
+import { BillingSummary } from "./_billing-summary";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { RadgivningEntryWarning } from "./_radgivning-entry";
 import { SettlementDialog } from "./_settlement-dialog";
@@ -479,7 +481,7 @@ export function BillingPanel({ matterId, matter }: Props) {
         <BillingHeaderActions actions={actions} onPick={onPick}
           hint={noActionsHint(flowMatter.paymentMethod)} />
       </div>
-      <BillingSummary matterId={matterId} />
+      <BillingSummary matterId={matterId} runs={rows} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
       <RadgivningEntryWarning matterId={matterId} paymentMethod={matter.paymentMethod} />
       <SjalvriskAccontoHint matterId={matterId} matter={matter} rows={rows} />
@@ -612,32 +614,6 @@ function InsurerPruningBanner({ matterId, matter, rows, onRecorded }: { matterId
 }
 
 /**
- * Fakturapanelens summa-vy (#819) — exakt tre tal användaren bryr sig om:
- *   - Upparbetat ofakturerat: debiterbart arbete (arvode netto + utlägg netto)
- *     som ännu inte frysts/fakturerats (billingRun.proposal, PRUTNING exkl).
- *   - Fakturerat: Σ utställda fakturors belopp (status ≠ DRAFT/CANCELLED).
- *   - Betalt: Σ registrerade betalningar på ärendets fakturor.
- */
-function BillingSummary({ matterId }: { matterId: MatterId }) {
-  const proposal = trpc.billingRun.proposal.useQuery({ matterId });
-  const invoices = trpc.invoice.list.useQuery({ matterId });
-  const d = proposal.data;
-  // Förslagets värde följer ärendets betalningssätt (rättshjälp: normen). Den
-  // redan fakturerade rådgivningstimmen är låst och ingår inte (#1205).
-  const unbilledOre = d?.workValueOre ?? 0;
-  const list = invoices.data?.items ?? [];
-  const fakturerat = list.filter((i) => i.status !== "DRAFT" && i.status !== "CANCELLED").reduce((s, i) => s + i.amount, 0);
-  const betalt = list.reduce((s, i) => s + (i.payments ?? []).reduce((p, pm) => p + pm.amount, 0), 0);
-  return (
-    <div className="grid grid-cols-3 gap-3 px-6 py-4">
-      <Card label="Upparbetat ofakturerat" value={unbilledOre} basis="net" />
-      <Card label="Fakturerat" value={fakturerat} />
-      <Card label="Betalt" value={betalt} />
-    </div>
-  );
-}
-
-/**
  * Rättshjälpens kostnadsräkning till domstol (#806) — enkel bekräftelse (arbetet
  * värderas på timkostnadsnormen vid domen, inte brottmålstaxan). Skickar in
  * kostnadsräkningen, vilket fryser det upparbetade direkt; domen slutregleras
@@ -708,15 +684,6 @@ function RattshjalpKrDialog({ matterId, matter, onClose, onRecorded }: { matterI
         </div>
       </div>
     </Modal>
-  );
-}
-
-function Card({ label, value, dim, basis = "gross" }: { label: string; value: number; dim?: boolean; basis?: "net" | "gross" }) {
-  return (
-    <div className={`rounded-lg border ${dim ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50"} px-3 py-2`}>
-      <div className="text-[10px] uppercase text-gray-500">{label}</div>
-      <Money ore={value} basis={basis} className="font-mono font-semibold text-sm" />
-    </div>
   );
 }
 
