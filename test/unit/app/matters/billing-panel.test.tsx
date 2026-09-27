@@ -343,7 +343,7 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     expect(screen.queryByRole("button", { name: /Faktura till myndighet/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     // Rättshjälps-dialogen (egen, ej brottmåls-KR-modalen) bekräftar inskicket.
-    expect(screen.getByRole("button", { name: "Skicka kostnadsräkning" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Skapa kostnadsräkning" })).toBeInTheDocument();
     expect(screen.queryByTestId("kr-modal")).not.toBeInTheDocument();
   });
 
@@ -351,7 +351,7 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
-    fireEvent.click(screen.getByRole("button", { name: "Skicka kostnadsräkning" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skapa kostnadsräkning" }));
     await krOpts?.onSuccess?.({ run: { id: "kr-1" } });
     expect(generateKrDocFn).toHaveBeenCalledWith(expect.objectContaining({
       ownBillingRunId: "kr-1", timeEntries: [],

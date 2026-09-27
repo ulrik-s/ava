@@ -690,9 +690,9 @@ function RattshjalpKrDialog({ matterId, matter, onClose, onRecorded }: { matterI
     <Modal open title="Kostnadsräkning till domstol" onClose={onClose} widthClass="max-w-md">
       <div className="space-y-3">
         <p className="text-sm text-gray-600">
-          Kostnadsräkningen skickas till domstolen för bedömning — den är ingen faktura
-          ännu och kan prutas. Det upparbetade fryses nu; vid domen slutreglerar du
-          (klientens självrisk, statens del och ev. byrå-förlust).
+          Kostnadsräkningen skapas och sparas i ärendet — du skickar den till domstolen
+          i nästa steg. Den är ingen faktura och kan prutas. Det upparbetade fryses nu;
+          vid domen slutreglerar du (klientens självrisk, statens del och ev. byrå-förlust).
         </p>
         <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 space-y-1 text-sm">
           <div className="flex justify-between text-gray-700"><span>Arvode (exkl moms)</span><span className="font-mono">{formatCurrency(arvodeOre)}</span></div>
@@ -703,7 +703,7 @@ function RattshjalpKrDialog({ matterId, matter, onClose, onRecorded }: { matterI
           <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">Avbryt</button>
           <button type="button" disabled={create.isPending} onClick={() => create.mutate({ matterId })}
             className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
-            {create.isPending ? "Skickar…" : "Skicka kostnadsräkning"}
+            {create.isPending ? "Skapar…" : "Skapa kostnadsräkning"}
           </button>
         </div>
       </div>

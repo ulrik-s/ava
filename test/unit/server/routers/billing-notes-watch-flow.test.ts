@@ -93,7 +93,7 @@ describe("faktureringshändelser blir tjänsteanteckningar (#1221)", () => {
   it("kostnadsräkningens livscykel: inskick → beslut → överklagande → hovrätt → faktura; 'Registrera beslut' i Att bevaka", async () => {
     const c = makeCaller({ paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const { run } = await c.billingRun.createKostnadsrakning({ matterId: M });
-    expect((await noteTexts(c)).at(-1)).toMatch(new RegExp(`^Kostnadsräkning ${run.reference} skickad till Stockholms tingsrätt — `));
+    expect((await noteTexts(c)).at(-1)).toMatch(new RegExp(`^Kostnadsräkning ${run.reference} till Stockholms tingsrätt skapad — `));
     expect(await actionTitles(c)).toEqual(["Registrera domstolens beslut på kostnadsräkningen"]);
 
     await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: run.id, awardedOre: 100_000, prutningOre: -20_000 });
@@ -140,7 +140,7 @@ describe("faktureringshändelser blir tjänsteanteckningar (#1221)", () => {
   it("ångrad kostnadsräkning loggas; utan domstolskontakt står 'domstolen'", async () => {
     const c = makeCaller({ paymentMethod: "OFFENTLIGT_UPPDRAG" }, { noCourt: true });
     const { run } = await c.billingRun.createKostnadsrakning({ matterId: M });
-    expect((await noteTexts(c))[0]).toMatch(/skickad till domstolen — /);
+    expect((await noteTexts(c))[0]).toMatch(/till domstolen skapad — /);
     await c.billingRun.voidKostnadsrakning({ billingRunId: run.id });
     expect(await noteTexts(c)).toContain(`Kostnadsräkning ${run.reference} ångrad — tidposter och utlägg upplåsta`);
   });
