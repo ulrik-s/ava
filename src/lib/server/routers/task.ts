@@ -1,8 +1,10 @@
 /**
  * Task router — CRUD för Task (todo med valfri due-date).
  *
- * Tasks är per-user (ägare = userId). Ingen Outlook-spegling i v1 (Microsoft
- * To Do är en separat Graph-API).
+ * Tasks har en ägare (userId) — den som lade in dem — men ändra, bocka av,
+ * återöppna och radera får ALLA på byrån (#1231): en bevakning i ett ärende
+ * angår alla som arbetar i det. Vakten är därför org-scopad, inte ägar-scopad.
+ * Ingen Outlook-spegling i v1 (Microsoft To Do är en separat Graph-API).
  *
  * `complete` är en convenience-mutation som sätter status=DONE + completedAt=now.
  */
@@ -11,8 +13,22 @@ import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { pageEnvelope } from "@/lib/shared/paginate";
 import { taskPrioritySchema, taskStatusSchema, type Task } from "@/lib/shared/schemas";
-import { asId, taskIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, taskIdSchema, matterIdSchema, userIdSchema, type TaskId } from "@/lib/shared/schemas/ids";
+import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure, TRPCError } from "../trpc";
+
+/**
+ * Org-vakt (#1231): uppgiften måste finnas i användarens byrå, annars
+ * NOT_FOUND (inget läckage mellan byråer). Ägarskap krävs inte.
+ */
+async function requireTaskInOrg(
+  ctx: { repos: Pick<Repositories, "tasks">; user: { organizationId: string } },
+  id: TaskId,
+): Promise<Task> {
+  const task = await ctx.repos.tasks.getByIdInOrg(id, asId<"OrganizationId">(ctx.user.organizationId));
+  if (!task) throw new TRPCError({ code: "NOT_FOUND" });
+  return task;
+}
 
 const createInput = z.object({
   title: z.string().min(1),
@@ -85,9 +101,7 @@ export const taskRouter = router({
     .input(updateInput)
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      // Ownership-guard (id + userId + org).
-      const owned = await ctx.repos.tasks.getOwned(id, ctx.user.id, ctx.user.organizationId);
-      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      await requireTaskInOrg(ctx, id);
       // Auto-set completedAt när status flippas till DONE
       const patch: Record<string, unknown> = { ...data };
       if (data.status === "DONE") patch.completedAt = new Date();
@@ -98,17 +112,17 @@ export const taskRouter = router({
   complete: protectedProcedure
     .input(z.object({ id: taskIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      const owned = await ctx.repos.tasks.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
-      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      await requireTaskInOrg(ctx, input.id);
       return ctx.repos.tasks.update(input.id, { status: "DONE", completedAt: new Date() } satisfies Partial<Task>);
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: taskIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      const owned = await ctx.repos.tasks.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
-      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      // Hård delete bevarar dagens beteende (ADR 0017-delete-policy öppen).
+      await requireTaskInOrg(ctx, input.id);
+      // Hård delete bevarar dagens beteende (ADR 0017-delete-policy öppen). I
+      // browsern (där routrarna kör) köas den som en "delete"-mutation som
+      // servern applicerar som softDelete + change_log → når andra klienter.
       await ctx.repos.tasks.hardDelete(input.id);
       return { id: input.id };
     }),

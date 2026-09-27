@@ -2,7 +2,8 @@
 
 /**
  * Att bevaka i ärendet (#1162, #1167). Ärendets bevakningar — alla användares
- * (en frist angår alla som arbetar i ärendet); egna kan bockas av. En bevakning
+ * (en frist angår alla som arbetar i ärendet). Alla på byrån kan bocka av,
+ * återöppna och radera vilken bevakning som helst (#1231). En bevakning
  * som är inne eller passerad lyser rött med stor fet text, och samma poster
  * finns i den globala "Att bevaka". Under dem: ärendets övriga signaler ur den
  * globala listan (täckningstak, ofakturerat, förfallna fakturor) — EN lista,
@@ -55,7 +56,7 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
       {open.length === 0 && <p className="px-6 py-3 text-sm text-gray-500">Inga öppna bevakningar i ärendet.</p>}
       <ul className="divide-y divide-gray-100">
         {[...open, ...(showDone ? done : [])].map((t) => (
-          <TaskRow key={t.id} task={t} matterId={matterId} own={t.userId === me.data?.id} ownerName={nameOf(t.userId)} />
+          <TaskRow key={t.id} task={t} matterId={matterId} ownerName={t.userId === me.data?.id ? null : nameOf(t.userId)} />
         ))}
       </ul>
       <MatterSignals matterId={matterId} />
@@ -123,27 +124,38 @@ function AddTaskForm({ matterId }: { matterId: MatterId }) {
   );
 }
 
-function TaskRow({ task, matterId, own, ownerName }: { task: MatterTask; matterId: MatterId; own: boolean; ownerName: string }) {
+/**
+ * En bevakning. Kryssrutan och Radera fungerar för alla på byrån (#1231);
+ * ägarens namn visas när det är någon annans — som information, inte spärr.
+ */
+function TaskRow({ task, matterId, ownerName }: { task: MatterTask; matterId: MatterId; ownerName: string | null }) {
   const invalidate = useInvalidateTasks(matterId);
   const complete = trpc.task.complete.useMutation({ onSuccess: invalidate });
   const reopen = trpc.task.update.useMutation({ onSuccess: invalidate });
+  const remove = trpc.task.delete.useMutation({ onSuccess: invalidate });
   const done = task.status === "DONE";
   const due = isDeadlineDue(task);
+  const id = asId<"TaskId">(task.id);
   const toggle = (): void => {
-    const id = asId<"TaskId">(task.id);
     if (done) reopen.mutate({ id, status: "TODO" });
     else complete.mutate({ id });
   };
+  const confirmDelete = (): void => {
+    if (confirm(`Radera bevakningen "${task.title}"?`)) remove.mutate({ id });
+  };
   return (
     <li className={`px-6 py-3 flex flex-wrap items-center gap-3 ${due ? "bg-red-50 border-l-4 border-red-600" : ""}`}>
-      <input type="checkbox" checked={done} disabled={!own} onChange={toggle}
-        aria-label={`${done ? "Återöppna" : "Markera klar"}: ${task.title}`}
-        title={own ? undefined : `Bara ${ownerName} kan bocka av`} />
+      <input type="checkbox" checked={done} onChange={toggle}
+        aria-label={`${done ? "Återöppna" : "Markera klar"}: ${task.title}`} />
       <span className={due ? "text-lg font-extrabold text-red-800" : `text-sm ${done ? "line-through text-gray-400" : "text-gray-900"}`}>
         {task.title}
       </span>
       <DeadlineBadge dueAt={task.dueAt} done={done} />
-      {!own && <span className="text-xs text-gray-400">({ownerName})</span>}
+      {ownerName !== null && <span className="text-xs text-gray-400">({ownerName})</span>}
+      <button type="button" onClick={confirmDelete} disabled={remove.isPending}
+        aria-label={`Radera: ${task.title}`} className="ml-auto text-xs text-red-500 hover:underline disabled:opacity-50">
+        Radera
+      </button>
     </li>
   );
 }
