@@ -58,6 +58,10 @@
 >   (explicita metoder + typade returer, två impls), tar bort tolken. Amenderar
 >   ADR 0019 #5. Inkrementell per-entitet-migrering; query-engine/LocalStore (#412)
 >   återanvänds internt.
+> - [ADR 0037](./adr/0037-harda-egen-synkmotor.md) — **härda den egna synkmotorn**:
+>   kön lagrar procedur-anrop och servern kör om dem auktoritativt via samma
+>   `appRouter` (mutator-modellen); logiken ligger kvar i klienten så allt fungerar
+>   offline. Reviderar ADR 0017:s kö-format. Valdes framför Electric/PowerSync (#1248).
 
 ## Två lager
 
