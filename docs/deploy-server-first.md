@@ -316,6 +316,37 @@ manuell del; delar som rättats i dokumentpanelen (MANUAL) bevaras så länge
 sidantalet är detsamma. LLM-anropen är högst 12 per dokument (~11 s styck med
 qwen2.5:1.5b) — räkna med att kön tar en stund för stora arkiv.
 
+### Standardmappar i befintliga ärenden (engångs-backfill, #1228)
+
+Nya ärenden får dokumentmapparna direkt när de skapas (`DEFAULT_MATTER_FOLDERS`
+i `src/lib/shared/default-matter-folders.ts`):
+
+```
+Faktura
+Domstol
+  Kallelse
+  Föreläggande
+  Förordnande
+  Inlagor
+Beslut
+Korrespondans
+Avtal
+Övrigt
+```
+
+Ärenden som fanns innan dess får de mappar som saknas med:
+
+```bash
+avarun tooling/scripts/backfill-matter-folders.ts
+```
+
+Skriptet går igenom alla ärenden som inte är raderade och skapar bara de mappar
+som saknas. En mapp med samma namn (oavsett versaler/gemener) i samma
+föräldramapp räknas som redan skapad, så undermapparna läggs också till under
+en "Domstol" som redan finns. Att köra skriptet igen skapar inga fler mappar.
+Mapparna skrivs via repona med change_log, så klienterna får dem vid nästa
+synk. Ingen migration eller omstart behövs.
+
 ## AVA Helper (valfritt)
 
 Helpern (ADR 0028) öppnar dokument i Word/Excel på användarens dator och

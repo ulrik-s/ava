@@ -168,6 +168,30 @@ describe("matter.create", () => {
     expect(mcs(ds)).toHaveLength(0);
   });
 
+  it("#1228: skapar standardmapparna (rot + Domstols undermappar) för det nya ärendet", async () => {
+    const { caller, ds } = makeCaller();
+    const m = await caller.create({ title: "Mappar" });
+    const folders = ((src(ds).documentFolders ?? []) as Array<Record<string, unknown>>)
+      .filter((f) => f.matterId === m.id);
+    const roots = folders.filter((f) => f.parentId === null).map((f) => f.name);
+    expect(roots).toEqual(["Faktura", "Domstol", "Beslut", "Korrespondans", "Avtal", "Övrigt"]);
+    const domstol = folders.find((f) => f.name === "Domstol");
+    expect(folders.filter((f) => f.parentId === domstol?.id).map((f) => f.name))
+      .toEqual(["Kallelse", "Föreläggande", "Förordnande", "Inlagor"]);
+  });
+
+  it("#1228: två ärenden får var sitt träd, inga dubbletter inom ärendet", async () => {
+    const { caller, ds } = makeCaller();
+    const a = await caller.create({ title: "A" });
+    const b = await caller.create({ title: "B" });
+    const all = (src(ds).documentFolders ?? []) as Array<Record<string, unknown>>;
+    for (const id of [a.id, b.id]) {
+      const mine = all.filter((f) => f.matterId === id);
+      expect(mine).toHaveLength(10);
+      expect(new Set(mine.map((f) => `${String(f.parentId)}/${String(f.name)}`)).size).toBe(10);
+    }
+  });
+
   it("kräver title (zod min(1))", async () => {
     const { caller } = makeCaller();
     await expect(caller.create({ title: "" })).rejects.toThrow();

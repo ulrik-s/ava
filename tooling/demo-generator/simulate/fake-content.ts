@@ -43,7 +43,7 @@ export const FOLDER_BY_RECIPIENT: Record<DocumentRecipient, string> = {
   KLIENT: "Klient",
   DOMSTOL: "Domstol",
   MOTPART: "Korrespondens",
-  MYNDIGHET: "Myndighetsbeslut",
+  MYNDIGHET: "Beslut",
   FORSAKRING: "Försäkring",
   OVRIGT: "Övrigt",
 };
