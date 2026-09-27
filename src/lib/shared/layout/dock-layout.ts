@@ -63,6 +63,19 @@ export function parseStoredLayout(prefs: unknown): SerializedLayout | null {
   return r.success ? r.data.layout : null;
 }
 
+/**
+ * Maximering är tillfällig (#1263) och sparas aldrig: dockviews `toJSON()` tar
+ * med `grid.maximizedNode`, och en sparad sådan skulle öppna panelen maximerad
+ * nästa gång.
+ */
+export function withoutMaximized<L extends { grid: object }>(layout: L): L {
+  // Fältet saknas i dockviews exporterade typ men skrivs av toJSON() → runtime-kontroll.
+  if (!("maximizedNode" in layout.grid)) return layout;
+  const grid = { ...layout.grid };
+  Reflect.deleteProperty(grid, "maximizedNode");
+  return { ...layout, grid };
+}
+
 /** Paneler i visningsordning: vänster→höger, uppifrån och ned, flikordning. */
 export function panelOrder(layout: SerializedLayout): string[] {
   const walk = (n: GridNode): string[] => (n.type === "leaf" ? n.data.views : n.data.flatMap(walk));

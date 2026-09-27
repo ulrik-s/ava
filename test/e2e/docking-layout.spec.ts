@@ -89,3 +89,30 @@ test("dra en flik till en annan grupp och återställ", async ({ page, baseURL }
   await page.getByRole("button", { name: "Återställ layout" }).click();
   await expect(groupOf(page, "Att bevaka").getByRole("tab", { name: /^Kontakter/ })).toHaveCount(1, { timeout: 15_000 });
 });
+
+test("maximera Dokument-panelen och återställ den (#1263)", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  await showPanel(page, "Dokument");
+  const docGroup = groupOf(page, "Dokument");
+  const width = async (): Promise<number> => (await docGroup.boundingBox())?.width ?? 0;
+  const normal = await width();
+
+  // Maximera: Dokument-gruppen tar hela arbetsytan (dockview döljer övriga grupper).
+  await docGroup.getByRole("button", { name: "Maximera panelen" }).click();
+  await expect(page.getByRole("button", { name: "Återställ panelen" })).toBeVisible();
+  await expect.poll(width).toBeGreaterThan(normal + 200);
+
+  // Escape återställer till ursprunglig storlek.
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Återställ panelen" })).toHaveCount(0);
+  await expect.poll(width).toBeLessThan(normal + 20);
+
+  // Maximeringen sparas aldrig: efter omladdning är layouten inte maximerad.
+  await docGroup.getByRole("button", { name: "Maximera panelen" }).click();
+  await expect(page.getByRole("button", { name: "Återställ panelen" })).toBeVisible();
+  await page.waitForTimeout(1200); // låt en ev. (debouncad) layoutsparning ske
+  await page.reload({ waitUntil: "load" });
+  await expect(page.getByRole("tab", { name: /^Tid/ }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Återställ panelen" })).toHaveCount(0);
+});

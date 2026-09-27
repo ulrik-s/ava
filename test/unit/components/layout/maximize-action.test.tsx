@@ -1,0 +1,67 @@
+/**
+ * Maximera/återställ en panelgrupp (#1263).
+ */
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest-compat";
+import { MaximizeAction, type MaximizeActionProps } from "@/components/layout/maximize-action";
+
+function setup(initial = false) {
+  let maximized = initial;
+  let listener: (() => void) | null = null;
+  const dispose = vi.fn();
+  const api = {
+    isMaximized: () => maximized,
+    maximize: vi.fn(() => { maximized = true; listener?.(); }),
+    exitMaximized: vi.fn(() => { maximized = false; listener?.(); }),
+  };
+  const containerApi = { onDidMaximizedGroupChange: (l: () => void) => { listener = l; return { dispose }; } };
+  const props: MaximizeActionProps = { group: { api }, containerApi };
+  const view = render(<MaximizeAction {...props} />);
+  return { api, dispose, view };
+}
+
+describe("MaximizeAction", () => {
+  it("maximerar gruppen och växlar till Återställ", () => {
+    const { api } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Maximera panelen" }));
+    expect(api.maximize).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Återställ panelen" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("återställer med knappen", () => {
+    const { api } = setup(true);
+    fireEvent.click(screen.getByRole("button", { name: "Återställ panelen" }));
+    expect(api.exitMaximized).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Maximera panelen" })).toBeInTheDocument();
+  });
+
+  it("Escape återställer när panelen är maximerad", () => {
+    const { api } = setup(true);
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
+    expect(api.exitMaximized).toHaveBeenCalledTimes(1);
+  });
+
+  it("Escape gör inget när en dialog är öppen, eller när panelen inte är maximerad", () => {
+    const { api } = setup(true);
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.appendChild(dialog);
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
+    expect(api.exitMaximized).not.toHaveBeenCalled();
+    dialog.remove();
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" })); });
+    expect(api.exitMaximized).not.toHaveBeenCalled();
+  });
+
+  it("Escape lyssnar inte när panelen inte är maximerad", () => {
+    const { api } = setup(false);
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
+    expect(api.exitMaximized).not.toHaveBeenCalled();
+  });
+
+  it("slutar lyssna vid avmontering", () => {
+    const { dispose, view } = setup();
+    view.unmount();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+});

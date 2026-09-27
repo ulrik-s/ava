@@ -31,7 +31,7 @@ vi.mock("dockview-react", () => ({
         Object.keys(j.panels).forEach((id) => panels.add(id));
       },
       clear: () => { panels.clear(); },
-      toJSON: () => ({ saved: true }),
+      toJSON: () => ({ saved: true, grid: {} }),
       onDidLayoutChange: (l: () => void) => { fake.layoutListener = l; },
     };
     // En gång per montering, som dockview.
@@ -136,7 +136,7 @@ describe("DockWorkspace — spara", () => {
     fireEvent.pointerDown(screen.getByTestId("dock"));
     act(() => { fake.layoutListener?.(); fake.layoutListener?.(); });
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1), { timeout: 2000 });
-    expect(save).toHaveBeenCalledWith({ key: "layout.matter.laptop", prefs: { version: LAYOUT_VERSION, layout: { saved: true } } });
+    expect(save).toHaveBeenCalledWith({ key: "layout.matter.laptop", prefs: { version: LAYOUT_VERSION, layout: { saved: true, grid: {} } } });
   });
 
   it("återställ rensar den personliga layouten", async () => {
@@ -158,7 +158,7 @@ describe("DockWorkspace — firmastandard (admin)", () => {
     prefsData.org = stored(SAVED);
     renderWs();
     fireEvent.click(screen.getByRole("button", { name: "Spara som firmastandard" }));
-    expect(setOrg).toHaveBeenCalledWith({ key: "layout.matter.laptop", prefs: { version: LAYOUT_VERSION, layout: { saved: true } } });
+    expect(setOrg).toHaveBeenCalledWith({ key: "layout.matter.laptop", prefs: { version: LAYOUT_VERSION, layout: { saved: true, grid: {} } } });
     fireEvent.click(screen.getByRole("button", { name: "Ta bort firmastandard" }));
     expect(clearOrg).toHaveBeenCalledWith({ key: "layout.matter.laptop" });
   });
