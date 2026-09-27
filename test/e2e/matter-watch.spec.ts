@@ -33,3 +33,25 @@ test("bevakning idag: röd i ärendet och i Att bevaka på startsidan", async ({
   await expect(page.getByRole("heading", { name: /Kalender/ })).toBeVisible();
   await expect(page.getByText("Att göra", { exact: true })).toHaveCount(0);
 });
+
+test("Radera: bevakningen försvinner ur ärendets Att bevaka efter bekräftelse (#1231)", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const matterId = matterIdWith(seed, "timeEntries");
+
+  await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
+  const section = page.getByRole("region", { name: "Att bevaka" }).last();
+  await expect(section).toBeVisible({ timeout: 25_000 });
+
+  const title = "E2E-bevakning: felaktig dom";
+  await section.getByLabel("Bevakning", { exact: true }).fill(title);
+  await section.getByLabel("Bevakningsdatum").fill("2030-01-15");
+  await section.getByRole("button", { name: "Lägg till" }).click();
+  const row = section.locator("li", { hasText: title });
+  await expect(row).toBeVisible();
+
+  page.once("dialog", (d) => { void d.accept(); });
+  await row.getByRole("button", { name: `Radera: ${title}` }).click();
+  await expect(row).toHaveCount(0);
+});
