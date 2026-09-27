@@ -82,6 +82,9 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void>;
   /** Tidsposter kopplade till en faktura (date asc) — fakturaspecifikationen (#856). */
   listByInvoice(invoiceId: InvoiceId): Promise<TimeEntry[]>;
+  /** Tidsposter kopplade till någon av fakturorna, debiterbara eller ej — batchat
+   *  för Att bevaka (rådgivningsposten, #1235). Tom lista → tomt svar. */
+  listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<TimeEntry[]>;
   /** Ofrysta tidsposter i ett ärende (date asc) — underlag för billing-run. Ofryst =
    *  varken fryst av en körning eller låst mot en faktura (`frozenAt`, #1205). */
   listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]>;

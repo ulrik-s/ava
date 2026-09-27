@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+import { isRadgivningInvoice } from "@/lib/shared/radgivning-entry";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
@@ -141,13 +142,15 @@ function overdueInput(rows: readonly InvoiceRow[]): OverdueInvoice[] {
 async function billingActionInput(
   ctx: Ctx, matters: readonly MatterRow[], invoices: readonly InvoiceRow[], entries: readonly EntryRow[], now: Date,
 ): Promise<BillingActionMatter[]> {
-  const [runs, org] = await Promise.all([
+  const [runs, org, radgivningEntries] = await Promise.all([
     ctx.repos.billingRuns.listForOrg(ctx.orgId),
     ctx.repos.organizations.getById(ctx.orgId),
+    // Rådgivningsposten kan vara ej debiterbar (#1235) — `entries` är bara debiterbara.
+    ctx.repos.timeEntries.listByInvoiceIds(invoices.filter(isRadgivningInvoice).map((i) => i.id)),
   ]);
   return billingActionMatters({
     matters, now,
-    runs, entries,
+    runs, entries, radgivningEntries,
     invoices: invoices.map((i) => ({ ...i, day: isoDate(i.invoiceDate) })),
     // Byråns gränsbelopp (#885), annars default — samma som panelens ruta.
     sjalvriskThresholdOre: org?.accontoThresholdOre ?? SJALVRISK_ACCONTO_THRESHOLD_ORE,

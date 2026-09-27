@@ -230,29 +230,39 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   );
 }
 
+/** "Markera som rådgivning" (#1207) — bara där regeln tillåter markeringen. */
+function MarkRadgivningButton({ entry, radgivning }: { entry: TimeEntryRow; radgivning: MarkRadgivning }) {
+  if (!radgivning.canMark(entry)) return null;
+  return (
+    <button onClick={() => radgivning.mark(entry.id)} className="text-xs text-blue-600 hover:underline mr-3"
+      title="Koppla posten till rättshjälpens rådgivningsfaktura (#1207)">
+      Markera som rådgivning
+    </button>
+  );
+}
+
 /**
  * Ändra/Ta bort — eller låst (#1170): servern avvisar ändring av en post som
  * ingår i slutfaktura eller kostnadsräkning. Förr visades Ändra ändå och
- * sparandet föll tyst — "inget händer".
+ * sparandet föll tyst — "inget händer". En låst ej debiterbar post kan ändå
+ * markeras som rådgivning (#1235).
  */
 function TimeRowActions({ entry, onEdit, onDelete, radgivning }: {
   entry: TimeEntryRow; onEdit: (e: TimeEntryRow) => void; onDelete: (id: TimeEntryId) => void; radgivning: MarkRadgivning;
 }) {
   if (entry.frozenAt) {
     return (
-      <span className="text-xs text-gray-500 whitespace-nowrap" title="Ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort.">
-        🔒 Låst
+      <span className="whitespace-nowrap">
+        <MarkRadgivningButton entry={entry} radgivning={radgivning} />
+        <span className="text-xs text-gray-500" title="Ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort.">
+          🔒 Låst
+        </span>
       </span>
     );
   }
   return (
     <span className="whitespace-nowrap">
-      {radgivning.canMark(entry) && (
-        <button onClick={() => radgivning.mark(entry.id)} className="text-xs text-blue-600 hover:underline mr-3"
-          title="Lås posten som rättshjälpens rådgivningstimme (#1207)">
-          Markera som rådgivning
-        </button>
-      )}
+      <MarkRadgivningButton entry={entry} radgivning={radgivning} />
       <button onClick={() => onEdit(entry)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
       <button onClick={() => onDelete(entry.id)} className="text-xs text-red-500 hover:underline">Ta bort</button>
     </span>

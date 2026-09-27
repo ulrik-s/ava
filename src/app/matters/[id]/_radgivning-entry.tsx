@@ -17,7 +17,7 @@ import type { MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 /** Bekräftelsetexten — vad markeringen gör, innan den görs. */
 export const MARK_RADGIVNING_CONFIRM =
   "Markera tidsposten som rådgivningstimmen?\n\n" +
-  "Posten låses mot rådgivningsfakturan och yrkas inte i kostnadsräkningen eller slutregleringen. " +
+  "Posten kopplas till rådgivningsfakturan och yrkas inte i kostnadsräkningen eller slutregleringen. " +
   "En post över 60 minuter delas: 60 minuter låses och resten blir kvar som vanlig tid. " +
   "Markeringen kan inte ångras.";
 

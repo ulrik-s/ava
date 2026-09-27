@@ -58,18 +58,25 @@ async function assertMarkable(repos: Repos, orgId: OrganizationId, id: TimeEntry
   return { entry, invoiceId: target.invoiceId };
 }
 
-/** Resten (minuter över rådgivningstimmen) som en ny, olåst post med samma innehåll. */
+/**
+ * Resten (minuter över rådgivningstimmen) som en ny post med samma innehåll.
+ * Var posten fryst av en körning (ej debiterbar, #1235) behåller resten den
+ * frysningen — körningens underlag rörs inte; annars blir resten olåst.
+ */
 function createRemainder(repos: Repos, entry: TimeEntry, minutes: number): Promise<TimeEntry> {
   return repos.timeEntries.create(omitUndefined({
     matterId: entry.matterId, userId: entry.userId, date: entry.date, minutes,
     description: entry.description, hourlyRate: entry.hourlyRate, kind: entry.kind,
     standardAtgardId: entry.standardAtgardId, billable: entry.billable,
+    frozenAt: entry.frozenAt ?? undefined, frozenByBillingRunId: entry.frozenByBillingRunId ?? undefined,
   }) satisfies Partial<TimeEntry>);
 }
 
 /**
  * Lås posten mot rådgivningsfakturan (`frozenAt` + `invoiceId`, ingen körning —
- * samma form som `invoice.createRadgivning` ger). Över 60 min delas posten:
+ * samma form som `invoice.createRadgivning` ger). En ej debiterbar post som
+ * redan frysts av en körning (#1235) kopplas bara: `invoiceId` sätts, frysningen
+ * (`frozenAt` + `frozenByBillingRunId`) behålls. Över 60 min delas posten:
  * DEN UTPEKADE posten (samma id) blir rådgivningstimmen på exakt 60 min och
  * resten blir en ny olåst post. Id:t följer det juristen pekade ut som mötet,
  * så ≤ 60 och > 60 går samma väg och den låsta posten behåller sin historik.
@@ -79,7 +86,7 @@ export async function markEntryAsRadgivning(
 ): Promise<MarkRadgivningResult> {
   const { entry, invoiceId } = await assertMarkable(repos, orgId, id);
   const { locked, rest } = splitRadgivningMinutes(entry.minutes);
-  const lockedEntry = await repos.timeEntries.update(entry.id, { minutes: locked, frozenAt: now, invoiceId } satisfies Partial<TimeEntry>);
+  const lockedEntry = await repos.timeEntries.update(entry.id, { minutes: locked, frozenAt: entry.frozenAt ?? now, invoiceId } satisfies Partial<TimeEntry>);
   const remainder = rest > 0 ? await createRemainder(repos, entry, rest) : null;
   return { locked: lockedEntry, remainder };
 }

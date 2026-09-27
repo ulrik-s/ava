@@ -57,12 +57,15 @@ describe("RadgivningEntryWarning", () => {
 });
 
 describe("useMarkRadgivning", () => {
-  it("canMark: bara olåst debiterbar tid i ett ärende som saknar posten", () => {
+  it("canMark följer regeln i ett ärende som saknar posten (#1235)", () => {
     statusQuery.data = MISSING;
+    const run = asId<"BillingRunId">("run-kr");
     const { result } = renderHook(() => useMarkRadgivning(matterId, "RATTSHJALP"));
     expect(result.current.canMark({ billable: true })).toBe(true);
+    expect(result.current.canMark({ billable: false })).toBe(true);
+    expect(result.current.canMark({ billable: false, frozenAt: new Date(), frozenByBillingRunId: run })).toBe(true);
+    expect(result.current.canMark({ billable: true, frozenAt: new Date(), frozenByBillingRunId: run })).toBe(false);
     expect(result.current.canMark({ billable: true, frozenAt: new Date() })).toBe(false);
-    expect(result.current.canMark({ billable: false })).toBe(false);
   });
 
   it("canMark är false när status saknas", () => {

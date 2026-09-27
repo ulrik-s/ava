@@ -20,7 +20,7 @@ const PRINCIPAL: Principal = {
 };
 const M = asId<"MatterId">("m-1");
 
-function makeCaller(matter: Record<string, unknown>, extra: { minutes?: number; otherLawyer?: boolean; noCourt?: boolean; invoices?: Array<Record<string, unknown>> } = {}) {
+function makeCaller(matter: Record<string, unknown>, extra: { minutes?: number; otherLawyer?: boolean; noCourt?: boolean; invoices?: Array<Record<string, unknown>>; entry?: Record<string, unknown> } = {}) {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "X" }],
     matters: [{
@@ -36,7 +36,7 @@ function makeCaller(matter: Record<string, unknown>, extra: { minutes?: number; 
     matterContacts: extra.noCourt ? [] : [{ id: "mc-1", matterId: "m-1", contactId: "c-dom", role: "DOMSTOL", contact: { id: "c-dom", name: "Stockholms tingsrätt" } }],
     timeEntries: [{
       id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(),
-      minutes: extra.minutes ?? 120, description: "Möte", hourlyRate: 250_000, billable: true,
+      minutes: extra.minutes ?? 120, description: "Möte", hourlyRate: 250_000, billable: true, ...extra.entry,
     }],
     expenses: [],
     invoices: extra.invoices ?? [],
@@ -179,6 +179,17 @@ describe("billingAction i Att bevaka (#1221)", () => {
     expect(await actionTitles(c)).toEqual(["Markera rådgivningsmötet som rådgivning"]);
     await c.timeEntry.markAsRadgivning({ id: asId<"TimeEntryId">("te-1") });
     expect(await actionTitles(c)).toEqual([]);
+  });
+
+  it("prod-formen (#1235): ej debiterbart möte fryst av KR-körningen — posten försvinner när mötet markerats", async () => {
+    const c = makeCaller({ paymentMethod: "RATTSHJALP", clientShareBips: 0, radgivningBetaldAt: new Date("2025-11-01") }, {
+      minutes: 60,
+      entry: { billable: false, frozenAt: new Date("2026-05-01"), frozenByBillingRunId: "run-kr" },
+      invoices: [{ id: "inv-r", organizationId: "org-1", matterId: "m-1", invoiceNumber: "F-2026-0001", amount: 100, status: "DRAFT", invoiceType: "STANDARD", notes: RADGIVNING_INVOICE_NOTES }],
+    });
+    expect(await actionTitles(c)).toContain("Markera rådgivningsmötet som rådgivning");
+    await c.timeEntry.markAsRadgivning({ id: asId<"TimeEntryId">("te-1") });
+    expect(await actionTitles(c)).not.toContain("Markera rådgivningsmötet som rådgivning");
   });
 
   it("självrisken över byråns tröskel → 'Skicka självrisk-aconto'; aconto till klienten tar bort den", async () => {

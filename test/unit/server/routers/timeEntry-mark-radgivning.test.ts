@@ -95,6 +95,47 @@ describe("timeEntry.markAsRadgivning — låser (#1207)", () => {
   });
 });
 
+describe("timeEntry.markAsRadgivning — ej debiterbar tid (#1235)", () => {
+  const FROZEN_AT = new Date("2026-05-01T10:00:00Z");
+  const frozenByKr = { billable: false, frozenAt: FROZEN_AT, frozenByBillingRunId: "run-kr" };
+
+  it("olåst ej debiterbar ≤ 60 min: kopplas + låses, ingen delning", async () => {
+    const caller = makeCaller({}, [entry("mote", 60, { billable: false })]);
+    const res = await caller.timeEntry.markAsRadgivning({ id: id("mote") });
+    expect(res.remainder).toBeNull();
+    expect(res.locked).toMatchObject({ id: "mote", minutes: 60, invoiceId: INV, billable: false });
+    expect(res.locked.frozenAt).toBeTruthy();
+    expect(await caller.timeEntry.radgivningStatus({ matterId: MATTER })).toEqual({ kind: "present", invoiceId: INV });
+  });
+
+  it("olåst ej debiterbar > 60 min: delas, resten behåller ej debiterbar och är olåst", async () => {
+    const caller = makeCaller({}, [entry("mote", 90, { billable: false })]);
+    const res = await caller.timeEntry.markAsRadgivning({ id: id("mote") });
+    expect(res.locked).toMatchObject({ id: "mote", minutes: 60, invoiceId: INV });
+    expect(res.remainder).toMatchObject({ minutes: 30, billable: false });
+    expect(res.remainder!.frozenAt ?? null).toBeNull();
+  });
+
+  it("prod-formen: ej debiterbar fryst av KR — kopplas, frysningen och körningen behålls", async () => {
+    const caller = makeCaller({}, [entry("mote", 60, frozenByKr)]);
+    expect(await caller.timeEntry.radgivningStatus({ matterId: MATTER })).toEqual({ kind: "missing", invoiceId: INV });
+    const res = await caller.timeEntry.markAsRadgivning({ id: id("mote") });
+    expect(res.remainder).toBeNull();
+    expect(res.locked).toMatchObject({ id: "mote", minutes: 60, invoiceId: INV, billable: false, frozenByBillingRunId: "run-kr" });
+    expect(new Date(res.locked.frozenAt!).toISOString()).toBe(FROZEN_AT.toISOString());
+    expect(await caller.timeEntry.radgivningStatus({ matterId: MATTER })).toEqual({ kind: "present", invoiceId: INV });
+  });
+
+  it("ej debiterbar fryst av KR > 60 min: resten behåller samma frysning och körning", async () => {
+    const caller = makeCaller({}, [entry("mote", 100, frozenByKr)]);
+    const res = await caller.timeEntry.markAsRadgivning({ id: id("mote") });
+    expect(res.locked).toMatchObject({ minutes: 60, invoiceId: INV, frozenByBillingRunId: "run-kr" });
+    expect(res.remainder).toMatchObject({ minutes: 40, billable: false, frozenByBillingRunId: "run-kr" });
+    expect(new Date(res.remainder!.frozenAt!).toISOString()).toBe(FROZEN_AT.toISOString());
+    expect(res.remainder!.invoiceId ?? null).toBeNull();
+  });
+});
+
 describe("timeEntry.markAsRadgivning — avvisar (#1207)", () => {
   it("en post per ärende: andra markeringen avvisas", async () => {
     const caller = makeCaller({}, [entry("mote", 45), entry("annan", 30)]);
@@ -109,10 +150,11 @@ describe("timeEntry.markAsRadgivning — avvisar (#1207)", () => {
       .rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("redan låst") });
   });
 
-  it("ej debiterbar post avvisas", async () => {
-    const caller = makeCaller({}, [entry("mote", 45, { billable: false })]);
+  it("debiterbar post fryst av kostnadsräkningens körning avvisas (#1235)", async () => {
+    const caller = makeCaller({}, [entry("mote", 45, { frozenAt: new Date(), frozenByBillingRunId: "run-kr" })]);
     await expect(caller.timeEntry.markAsRadgivning({ id: id("mote") }))
-      .rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("debiterbar") });
+      .rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("redan låst") });
+    expect(await caller.timeEntry.radgivningStatus({ matterId: MATTER })).toEqual({ kind: "missing", invoiceId: INV });
   });
 
   it("inte rättshjälp avvisas", async () => {

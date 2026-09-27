@@ -33,10 +33,11 @@ describe("findRadgivningInvoiceId", () => {
 });
 
 describe("hasRadgivningEntry", () => {
-  it("bara en post låst utan körning räknas", () => {
+  it("varje post kopplad till rådgivningsfakturan räknas — även fryst av en körning (#1235)", () => {
     expect(hasRadgivningEntry([{ frozenAt: new Date() }])).toBe(true);
-    expect(hasRadgivningEntry([{ frozenAt: new Date(), frozenByBillingRunId: RUN }])).toBe(false);
-    expect(hasRadgivningEntry([{}])).toBe(false);
+    expect(hasRadgivningEntry([{ frozenAt: new Date(), frozenByBillingRunId: RUN }])).toBe(true);
+    expect(hasRadgivningEntry([{}])).toBe(true);
+    expect(hasRadgivningEntry([])).toBe(false);
   });
 });
 
@@ -48,8 +49,8 @@ describe("radgivningEntryStatus + needsRadgivningEntry", () => {
   it("rådgivning men fakturan hittas inte → no-invoice", () => {
     expect(radgivningEntryStatus(RATTSHJALP, null, [])).toEqual({ kind: "no-invoice" });
   });
-  it("fakturan utan låst post → missing (behöver post)", () => {
-    const s = radgivningEntryStatus(RATTSHJALP, INV, [{}]);
+  it("ingen post kopplad till fakturan → missing (behöver post)", () => {
+    const s = radgivningEntryStatus(RATTSHJALP, INV, []);
     expect(s).toEqual({ kind: "missing", invoiceId: INV });
     expect(needsRadgivningEntry(s)).toBe(true);
   });
@@ -57,6 +58,12 @@ describe("radgivningEntryStatus + needsRadgivningEntry", () => {
     const s = radgivningEntryStatus(RATTSHJALP, INV, [{ frozenAt: "2026-03-01" }]);
     expect(s).toEqual({ kind: "present", invoiceId: INV });
     expect(needsRadgivningEntry(s)).toBe(false);
+  });
+  it("prod-formen (#1235): ej debiterbart möte fryst av KR-körningen — saknas utan koppling, finns med", () => {
+    const mote = { billable: false, frozenAt: "2026-05-01", frozenByBillingRunId: RUN };
+    expect(radgivningEntryStatus(RATTSHJALP, INV, [])).toEqual({ kind: "missing", invoiceId: INV });
+    expect(entryMarkBlocker(mote)).toBeNull();
+    expect(radgivningEntryStatus(RATTSHJALP, INV, [mote])).toEqual({ kind: "present", invoiceId: INV });
   });
 });
 
@@ -72,14 +79,23 @@ describe("markTarget", () => {
 });
 
 describe("entryMarkBlocker", () => {
-  it("olåst debiterbar arbetstid får markeras", () => {
+  it("olåst tid får markeras — debiterbar eller ej (#1235)", () => {
     expect(entryMarkBlocker({ billable: true, kind: "ARBETE" })).toBeNull();
     expect(entryMarkBlocker({ billable: true })).toBeNull();
+    expect(entryMarkBlocker({ billable: false })).toBeNull();
   });
-  it("låst, ej debiterbar eller beredskap avvisas", () => {
-    expect(entryMarkBlocker({ billable: true, frozenAt: new Date() })).toContain("redan låst");
+  it("ej debiterbar tid fryst av en körning får markeras — den yrkas inte (#1235)", () => {
+    expect(entryMarkBlocker({ billable: false, frozenAt: new Date(), frozenByBillingRunId: RUN })).toBeNull();
+  });
+  it("debiterbar tid fryst av en körning avvisas — den ingår i det yrkade beloppet", () => {
+    expect(entryMarkBlocker({ billable: true, frozenAt: new Date(), frozenByBillingRunId: RUN })).toContain("redan låst");
     expect(entryMarkBlocker({ billable: true, frozenByBillingRunId: RUN })).toContain("redan låst");
-    expect(entryMarkBlocker({ billable: false })).toContain("debiterbar");
+  });
+  it("låst direkt mot en faktura avvisas oavsett debiterbar", () => {
+    expect(entryMarkBlocker({ billable: true, frozenAt: new Date() })).toContain("redan låst");
+    expect(entryMarkBlocker({ billable: false, frozenAt: new Date() })).toContain("redan låst");
+  });
+  it("beredskap avvisas", () => {
     expect(entryMarkBlocker({ billable: true, kind: "ADVOKATBEREDSKAP" })).toContain("beredskap");
   });
 });

@@ -158,6 +158,13 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       .orderBy(asc(timeEntries.date));
   }
 
+  async listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<TimeEntry[]> {
+    if (!invoiceIds.length) return [];
+    return await this.db
+      .select().from(timeEntries)
+      .where(and(inArray(timeEntries.invoiceId, invoiceIds), isNull(timeEntries.deletedAt)));
+  }
+
   async coverageUsageForMatter(matterId: MatterId): Promise<{ billableMinutes: number; billableValueOre: number }> {
     const rows = await this.db
       .select({ minutes: timeEntries.minutes, hourlyRate: timeEntries.hourlyRate })

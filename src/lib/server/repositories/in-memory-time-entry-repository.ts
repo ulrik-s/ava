@@ -117,6 +117,11 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     })) as TimeEntry[];
   }
 
+  async listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<TimeEntry[]> {
+    if (!invoiceIds.length) return [];
+    return (await this.delegate.findMany({ where: { invoiceId: { in: invoiceIds } } })) as TimeEntry[];
+  }
+
   async coverageUsageForMatter(matterId: MatterId): Promise<{ billableMinutes: number; billableValueOre: number }> {
     const rows = (await this.delegate.findMany({ where: { matterId } })) as TimeEntry[];
     let billableMinutes = 0;

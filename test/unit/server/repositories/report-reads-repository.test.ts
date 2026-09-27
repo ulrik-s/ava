@@ -1,6 +1,6 @@
 /**
  * Paritet (ADR 0020) för rapport-läsningarna: TimeEntry.listForLawyerInPeriod/
- * listBillableForOrg, Expense.listForLawyerInPeriod, Payment/WriteOff.listByInvoiceIds.
+ * listBillableForOrg/listByInvoiceIds, Expense.listForLawyerInPeriod, Payment/WriteOff.listByInvoiceIds.
  * in-memory (LocalStore) + Drizzle (pglite).
  */
 
@@ -39,7 +39,7 @@ describe("Report-läsningar — in-memory", () => {
       invoices: [{ id: invId, matterId: mId, amount: 1000, status: "SENT" }],
       timeEntries: [
         { id: uuidv7(), userId: uId, matterId: mId, minutes: 60, billable: true, hourlyRate: 1000, date: new Date("2026-06-10") },
-        { id: uuidv7(), userId: uId, matterId: mId, minutes: 30, billable: false, hourlyRate: 1000, date: new Date("2026-06-11") },
+        { id: uuidv7(), userId: uId, matterId: mId, minutes: 30, billable: false, hourlyRate: 1000, date: new Date("2026-06-11"), invoiceId: invId },
         { id: uuidv7(), userId: uId, matterId: mId, minutes: 99, billable: true, hourlyRate: 1000, date: new Date("2026-01-01") },
       ],
       expenses: [{ id: uuidv7(), userId: uId, matterId: mId, amount: 500, billable: true, date: new Date("2026-06-12") }],
@@ -61,6 +61,9 @@ describe("Report-läsningar — in-memory", () => {
     expect(lawyerTime[0]!.matter?.paymentMethod).toBe("RATTSHJALP");
     expect(lawyerTime[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
     expect((await te.listBillableForOrg(asId<"OrganizationId">(ORG))).length).toBe(2); // 2 billable totalt
+    // Kopplade till fakturan oavsett debiterbar (#1235).
+    expect((await te.listByInvoiceIds([asId<"InvoiceId">(invId)])).map((t) => t.minutes)).toEqual([30]);
+    expect(await te.listByInvoiceIds([])).toHaveLength(0);
     expect(await ex.listForLawyerInPeriod(asId<"OrganizationId">(ORG), asId<"UserId">(uId), FROM, TO)).toHaveLength(1);
     expect((await pay.listByInvoiceIds([asId<"InvoiceId">(invId)]))[0]!.amount).toBe(200);
     expect(await pay.listByInvoiceIds([])).toHaveLength(0);
@@ -88,7 +91,8 @@ describe("Report-läsningar — Drizzle (pglite)", () => {
     await db.insert(matterContacts).values(v({ id: uuidv7(), matterId: mId, contactId: cId, role: "KLIENT" }));
     await db.insert(invoices).values(v({ id: invId, matterId: mId, amount: 1000, status: "SENT", invoiceDate: new Date() }));
     await db.insert(timeEntries).values(v({ id: uuidv7(), userId: uId, matterId: mId, minutes: 60, billable: true, hourlyRate: 1000, description: "a", date: new Date("2026-06-10") }));
-    await db.insert(timeEntries).values(v({ id: uuidv7(), userId: uId, matterId: mId, minutes: 30, billable: false, hourlyRate: 1000, description: "b", date: new Date("2026-06-11") }));
+    await db.insert(timeEntries).values(v({ id: uuidv7(), userId: uId, matterId: mId, minutes: 30, billable: false, hourlyRate: 1000, description: "b", date: new Date("2026-06-11"), invoiceId: invId }));
+    await db.insert(timeEntries).values(v({ id: uuidv7(), userId: uId, matterId: mId, minutes: 5, billable: false, hourlyRate: 1000, description: "raderad", date: new Date("2026-06-11"), invoiceId: invId, deletedAt: new Date() }));
     await db.insert(timeEntries).values(v({ id: uuidv7(), userId: uId, matterId: mId, minutes: 99, billable: true, hourlyRate: 1000, description: "c", date: new Date("2026-01-01") }));
     await db.insert(expenses).values(v({ id: uuidv7(), userId: uId, matterId: mId, amount: 500, billable: true, description: "e", date: new Date("2026-06-12"), vatRate: 0, vatIncluded: false }));
     await db.insert(payments).values(v({ id: uuidv7(), invoiceId: invId, amount: 200, paidAt: new Date(), recordedById: uId }));
@@ -103,6 +107,9 @@ describe("Report-läsningar — Drizzle (pglite)", () => {
     expect(lawyerTime[0]!.matter?.paymentMethod).toBe("RATTSHJALP");
     expect(lawyerTime[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
     expect((await te.listBillableForOrg(asId<"OrganizationId">(org))).length).toBe(2);
+    // Kopplade till fakturan oavsett debiterbar, raderade utelämnas (#1235).
+    expect((await te.listByInvoiceIds([asId<"InvoiceId">(invId)])).map((t) => t.minutes)).toEqual([30]);
+    expect(await te.listByInvoiceIds([])).toHaveLength(0);
     expect(await ex.listForLawyerInPeriod(asId<"OrganizationId">(org), asId<"UserId">(uId), FROM, TO)).toHaveLength(1);
     expect((await pay.listByInvoiceIds([asId<"InvoiceId">(invId)]))[0]!.amount).toBe(200);
     expect(await pay.listByInvoiceIds([])).toHaveLength(0);
