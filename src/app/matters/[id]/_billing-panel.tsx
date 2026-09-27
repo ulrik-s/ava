@@ -34,9 +34,9 @@ import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
-import { insurerPruningPending, isActiveKr, paymentMethodPending, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
+import { insurerPruningPending, isActiveKr, krCanCreateInvoice, paymentMethodPending, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
 import type { KrDocumentFields } from "@/lib/shared/kostnadsrakning";
-import { availableKrActions, canVoidKostnadsrakning, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
+import { availableKrActions, canVoidKostnadsrakning, krStateOf, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
@@ -175,7 +175,7 @@ interface KrCardProps {
 function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, onSkapaFaktura, onAngra }: KrCardProps) {
   const doc = findKrDocument(matterId, run);
   const utils = trpc.useUtils();
-  const state: KostnadsrakningState = { status: run.kostnadsrakningStatus ?? "INSKICKAD", slutgiltigt: run.beslutSlutgiltigt ?? false };
+  const state = krStateOf(run);
   return (
     <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div className="text-sm text-amber-900 space-y-1">
@@ -190,14 +190,17 @@ function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, o
           </div>
         )}
       </div>
-      <KrCardButtons state={state} onRegistreraBeslut={onRegistreraBeslut} onOverklaga={onOverklaga} onSkapaFaktura={onSkapaFaktura} onAngra={onAngra} />
+      <KrCardButtons state={state} canInvoice={krCanCreateInvoice(run)} onRegistreraBeslut={onRegistreraBeslut} onOverklaga={onOverklaga} onSkapaFaktura={onSkapaFaktura} onAngra={onAngra} />
     </div>
   );
 }
 
 /** KR-kortets nästa-stegs-knappar — vilka som visas styrs av availableKrActions. */
-function KrCardButtons({ state, onRegistreraBeslut, onOverklaga, onSkapaFaktura, onAngra }: {
-  state: KostnadsrakningState; onRegistreraBeslut: () => void; onOverklaga: () => void; onSkapaFaktura: () => void;
+function KrCardButtons({ state, canInvoice, onRegistreraBeslut, onOverklaga, onSkapaFaktura, onAngra }: {
+  state: KostnadsrakningState;
+  /** `krCanCreateInvoice` — samma predikat som Att bevakas "Skapa faktura för kostnadsräkningen". */
+  canInvoice: boolean;
+  onRegistreraBeslut: () => void; onOverklaga: () => void; onSkapaFaktura: () => void;
   /** Satt bara när kostnadsräkningen får ångras (före domstolens beslut, #1121). */
   onAngra?: (() => void) | undefined;
 }) {
@@ -206,7 +209,7 @@ function KrCardButtons({ state, onRegistreraBeslut, onOverklaga, onSkapaFaktura,
   return (
     <div className="flex gap-2 whitespace-nowrap">
       {canBeslut && <button onClick={onRegistreraBeslut} className="text-xs px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700">{beslutButtonLabel(state)}</button>}
-      {acts.includes("SKAPA_FAKTURA") && <button onClick={onSkapaFaktura} className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Skapa faktura</button>}
+      {canInvoice && <button onClick={onSkapaFaktura} className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Skapa faktura</button>}
       {acts.includes("OVERKLAGA") && <button onClick={onOverklaga} className="text-xs px-3 py-1 border border-amber-600 text-amber-800 rounded hover:bg-amber-100">Överklaga prutning</button>}
       {onAngra && <button onClick={onAngra} className="text-xs px-3 py-1 border border-gray-400 text-gray-700 rounded hover:bg-gray-100">Ångra kostnadsräkning</button>}
     </div>

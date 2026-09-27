@@ -77,7 +77,18 @@ describe("billingActionItems", () => {
       .toEqual(["Registrera domstolens beslut på kostnadsräkningen"]);
     expect(titles(matter({ paymentMethod: "OFFENTLIGT_UPPDRAG", runs: [{ ...run, kostnadsrakningStatus: "OVERKLAGAD" }] })))
       .toEqual(["Registrera hovrättens beslut på kostnadsräkningen"]);
-    expect(titles(matter({ paymentMethod: "OFFENTLIGT_UPPDRAG", runs: [{ ...run, kostnadsrakningStatus: "BESLUTAD" }] })))
+    expect(titles(matter({ paymentMethod: "OFFENTLIGT_UPPDRAG", runs: [{ ...run, kostnadsrakningStatus: "FAKTURERAD" }] })))
+      .toEqual([]);
+  });
+
+  it("beslutad kostnadsräkning → 'Skapa faktura för kostnadsräkningen (dömt belopp)'; hovrättsvariant; försvinner när fakturerad (#1225)", () => {
+    const run = { type: "KOSTNADSRAKNING" as const, status: "PENDING_VERDICT" as const, recipient: "DOMSTOL" as const, kostnadsrakningStatus: "BESLUTAD" as const };
+    const [tr] = billingActionItems([matter({ paymentMethod: "OFFENTLIGT_UPPDRAG", runs: [{ ...run, awardedOre: 100_000 }] })], NOW);
+    expect(tr).toMatchObject({ kind: "billingAction", detail: "Domstolens beslut är registrerat.", amountOre: 100_000 });
+    expect(tr!.title.replace(/\s/g, " ")).toBe("Skapa faktura för kostnadsräkningen (1 000,00 kr)");
+    const [hr] = billingActionItems([matter({ paymentMethod: "OFFENTLIGT_UPPDRAG", runs: [{ ...run, beslutSlutgiltigt: true, awardedOre: null }] })], NOW);
+    expect(hr).toMatchObject({ title: "Skapa faktura för kostnadsräkningen", detail: "Hovrättens beslut är registrerat.", amountOre: null });
+    expect(titles(matter({ paymentMethod: "OFFENTLIGT_UPPDRAG", runs: [{ ...run, kostnadsrakningStatus: "FAKTURERAD", awardedOre: 100_000 }] })))
       .toEqual([]);
   });
 });
