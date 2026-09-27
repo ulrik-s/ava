@@ -24,7 +24,7 @@ type Row = Record<string, unknown>;
 const ISSUED_STATUSES = new Set(["SENT", "PAID", "BAD_DEBT", "INSTALLMENT_PLAN"]);
 
 /** Id:n på fakturor som har en kreditnota — de annullerades av krediteringen. */
-function creditedInvoiceIds(invoices: readonly Row[]): Set<string> {
+export function creditedInvoiceIds(invoices: readonly Row[]): Set<string> {
   const ids = new Set<string>();
   for (const i of invoices) {
     if (i.invoiceType !== "CREDIT") continue;
