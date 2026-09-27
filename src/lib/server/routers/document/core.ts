@@ -12,8 +12,9 @@ import { log } from "@/lib/shared/observability/logger";
 import { errorMessage } from "@/lib/shared/observability/redact";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { documentAnalysisStatusSchema, documentDirectionSchema, documentRecipientSchema, type Document } from "@/lib/shared/schemas/document";
-import { asId, documentFolderIdSchema, documentIdSchema, invoiceIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, billingRunIdSchema, documentFolderIdSchema, documentIdSchema, invoiceIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
+import { removeDocument } from "../../documents/remove-document";
 import { writeSuggestionsFromText } from "../../documents/suggest-from-text";
 import { orgProcedure } from "../../trpc";
 import { assertDocAccess } from "./shared";
@@ -97,8 +98,7 @@ export const coreProcedures = {
     .input(z.object({ id: documentIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const doc = await assertDocAccess(ctx, input.id);
-      await ctx.repos.documents.hardDelete(input.id);
-      ctx.ports.searchIndex.remove(input.id).catch(() => {});
+      await removeDocument(ctx.repos, ctx.ports.searchIndex, input.id);
       return doc;
     }),
 
@@ -132,6 +132,8 @@ export const coreProcedures = {
       createdAt: z.string().optional(),
       /** Koppla dokumentet till en faktura (t.ex. genererad faktura/underlag). */
       invoiceId: invoiceIdSchema.nullable().optional(),
+      /** Koppla dokumentet till sin faktureringskörning (#1230: kostnadsräkningens PDF). */
+      billingRunId: billingRunIdSchema.nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Verifiera matter:n tillhör org:n
@@ -157,6 +159,7 @@ export const coreProcedures = {
         analyzedAt: input.analyzedAt ? new Date(input.analyzedAt) : undefined,
         createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
         invoiceId: input.invoiceId ?? undefined,
+        billingRunId: input.billingRunId ?? undefined,
       });
       return ctx.repos.documents.create(data);
     }),

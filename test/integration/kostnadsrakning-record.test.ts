@@ -108,4 +108,15 @@ describe("kostnadsrakning.record — dokumentet syns i ärendet (demo-backend)",
     const list = await caller.document.list({ matterId, folderId: null, pageSize: 100 });
     expect(list.documents.some((d) => d.id === "kostn-test-1")).toBe(true);
   });
+
+  it("record() lagrar länken till körningen (#1230); utan körning blir den null", async () => {
+    const base = { matterId, mimeType: "application/pdf", sizeBytes: 1, totalInclVat: 1, huvudforhandlingMinutes: 0 };
+    const linked = await caller.kostnadsrakning.record({
+      ...base, id: "kostn-link-1", fileName: "a.pdf", storagePath: "documents/content/kostn-link-1.pdf", billingRunId: "run-77",
+    });
+    expect((linked as { billingRunId?: string | null }).billingRunId).toBe("run-77");
+    const list = await caller.document.list({ matterId, folderId: null, pageSize: 100 });
+    expect(list.documents.find((d) => d.id === "kostn-link-1")?.billingRunId).toBe("run-77");
+    expect(list.documents.find((d) => d.id === "kostn-test-1")?.billingRunId).toBeNull();
+  });
 });

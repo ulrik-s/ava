@@ -48,7 +48,8 @@ export interface GenerateKrDocArgs {
   meta: KrDocMeta;
   expenses: readonly KrDocExpense[];
   timeEntries: readonly KrDocTimeEntry[];
-  /** Kostnadsräkningens körning: posterna den just frös är dess underlag (#1205). */
+  /** Kostnadsräkningens körning: posterna den just frös är dess underlag (#1205),
+   *  och dokumentet länkas till den så att det försvinner om körningen ångras (#1230). */
   ownBillingRunId?: BillingRunId;
   register: RegisterMut;
   utils: DocUtils;
@@ -96,6 +97,7 @@ export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
     id: asId<"DocumentId">(docId), matterId, fileName, mimeType: "application/pdf",
     sizeBytes: bytes.byteLength, storagePath, documentType: KOSTNADSRAKNING_DOCUMENT_TYPE,
     analysisStatus: "DONE",
+    ...omitUndefined({ billingRunId: ownBillingRunId }),
   });
   await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });
   try {

@@ -23,7 +23,7 @@ import { Modal } from "@/components/ui/modal";
 import { Money } from "@/components/ui/money";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
 import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
-import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-billing-side-effects";
+import { invalidateBillingSideEffects, invalidateDocumentLists } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
@@ -37,6 +37,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
 import { insurerPruningPending, isActiveKr, krCanCreateInvoice, paymentMethodPending, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
 import type { KrDocumentFields } from "@/lib/shared/kostnadsrakning";
+import { pickKrDocForRun } from "@/lib/shared/kr-document";
 import { availableKrActions, canVoidKostnadsrakning, krStateOf, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { OrgImage } from "@/lib/shared/org-image";
@@ -113,19 +114,11 @@ interface KrDocInfo { id: DocumentId; fileName: string; storagePath: string | nu
 
 type DocumentListOutput = inferRouterOutputs<AppRouter>["document"]["list"];
 
-/** Väljer KR-dokumentet närmast en körning i tid (pure — ingen hook, så den kan
- *  anropas per rad i listan). Vanligtvis 1 KR-dokument per ärende i MVP. */
+/** Körningens KR-dokument (pure — ingen hook, så den kan anropas per rad i
+ *  listan): det länkade (#1230); äldre olänkade närmast körningen i tid. */
 function pickKrDoc(list: DocumentListOutput["documents"], run: BillingRunRow): KrDocInfo | null {
-  const kostn = list.filter((d) => d.documentType === "Kostnadsräkning");
-  if (kostn.length === 0) return null;
-  const runTs = new Date(run.createdAt).getTime();
-  const sorted = [...kostn].sort((a, b) => {
-    const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return Math.abs(at - runTs) - Math.abs(bt - runTs);
-  });
-  const d = sorted[0];
-  return d ? { id: d.id, fileName: d.fileName, storagePath: d.storagePath ?? null } : null;
+  const d = pickKrDocForRun(list, run);
+  return d ? { id: d.id, fileName: d.fileName, storagePath: d.storagePath } : null;
 }
 
 function findKrDocument(matterId: MatterId, run: BillingRunRow): KrDocInfo | null {
@@ -266,7 +259,7 @@ type DialogState = "NONE" | "ACCONTO" | "FINAL";
 function angraHandler(run: BillingRunRow, voidKr: (id: BillingRunId) => void): (() => void) | undefined {
   if (!canVoidKostnadsrakning(run)) return undefined;
   return () => {
-    const ok = confirm("Ångra kostnadsräkningen? Tidposter och utlägg låses upp så att du kan komplettera och skapa en ny. Det genererade dokumentet ligger kvar i ärendet.");
+    const ok = confirm("Ångra kostnadsräkningen? Tidposter och utlägg låses upp så att du kan komplettera och skapa en ny. Det genererade kostnadsräkningsdokumentet tas bort ur ärendets dokument.");
     if (ok) voidKr(run.id);
   };
 }
@@ -412,9 +405,12 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
   const createKr = trpc.billingRun.createKostnadsrakning.useMutation();
   if (!open) return null;
   // Skapa (och frys) först när PDF:en faktiskt genererats — att stänga modalen
-  // (Avbryt/Escape/X) skapade förut en inskickad KR av misstag (#1121).
-  const onGenerated = (): void => {
-    createKr.mutate({ matterId }, { onSuccess: onRecorded });
+  // (Avbryt/Escape/X) skapade förut en inskickad KR av misstag (#1121). Körningens
+  // id länkar sedan dokumentet (#1230).
+  const createRun = async (): Promise<BillingRunId> => {
+    const { run } = await createKr.mutateAsync({ matterId });
+    onRecorded();
+    return run.id;
   };
   return (
     <KostnadsrakningModal
@@ -431,7 +427,7 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
       initialIsTaxe={matter.isTaxeArende ?? undefined}
       radgivningPaid={!!matter.radgivningBetaldAt}
       onClose={onClose}
-      onGenerated={onGenerated}
+      createRun={createRun}
     />
   );
 }
@@ -467,7 +463,8 @@ export function BillingPanel({ matterId, matter }: Props) {
     invalidateBillingSideEffects(utils);
   };
   const appeal = trpc.billingRun.appealKostnadsrakning.useMutation({ onSuccess: refetch });
-  const voidKr = trpc.billingRun.voidKostnadsrakning.useMutation({ onSuccess: refetch });
+  // Ångrad KR tar bort sitt dokument (#1230) → dokumentlistorna hämtas om.
+  const voidKr = trpc.billingRun.voidKostnadsrakning.useMutation({ onSuccess: () => { refetch(); invalidateDocumentLists(utils); } });
   // Routa action → dialog via descriptorns `dialog`-fält (panelen är "dum").
   const onPick = (a: BillingAction) => {
     if (a.dialog === "kostnadsrakning") setShowKr(true);

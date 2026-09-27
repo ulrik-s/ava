@@ -1,13 +1,14 @@
 /**
  * Test för KostnadsrakningModal — rättssals-flödet: rendering av sektionerna
  * (huvudförhandling, ersättningstyp, förhandsvisning, helper-status) + stäng-
- * vägarna (Avbryt-knapp + Escape). Generate-flödet (PDF) testas inte här.
+ * vägarna (Avbryt-knapp + Escape) + att det genererade dokumentet länkas till
+ * körningen som skapas när PDF:en renderats (#1230).
  *
  * buildKostnadsrakningContext körs på riktigt (ren beräkning); tunga
  * sidoeffekter (PDF-render, persist, helper, trpc) stubbas.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { KostnadsrakningModal } from "@/app/matters/[id]/_kostnadsrakning-modal";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -24,12 +25,13 @@ vi.mock("@/lib/client/demo/persist-generated-doc", () => ({
 }));
 
 const noopMut = () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false });
+const recordMutateAsync = vi.fn().mockResolvedValue({});
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ document: { list: { invalidate: vi.fn() }, tree: { invalidate: vi.fn(), refetch: vi.fn() } } }),
     matter: { update: { useMutation: noopMut } },
-    kostnadsrakning: { record: { useMutation: noopMut } },
+    kostnadsrakning: { record: { useMutation: () => ({ mutateAsync: recordMutateAsync, isPending: false }) } },
     timeEntry: { list: { useQuery: () => ({ data: { entries: [] }, isLoading: false }) } },
   },
 }));
@@ -44,6 +46,7 @@ const baseProps = {
   initialHufStart: "2026-03-01T09:00", // i det förflutna → hufMin > 0
   initialIsTaxe: true,
   onClose: vi.fn(),
+  createRun: vi.fn().mockResolvedValue(asId<"BillingRunId">("run-1")),
 };
 
 beforeEach(() => {
@@ -74,6 +77,15 @@ describe("KostnadsrakningModal", () => {
     render(<KostnadsrakningModal {...baseProps} onClose={onClose} />);
     fireEvent.click(screen.getByText("Avbryt"));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("Generera: skapar körningen och registrerar dokumentet länkat till den (#1230)", async () => {
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-9"));
+    render(<KostnadsrakningModal {...baseProps} createRun={createRun} />);
+    fireEvent.click(screen.getByText("Generera + spara"));
+    await waitFor(() => expect(recordMutateAsync).toHaveBeenCalled());
+    expect(createRun).toHaveBeenCalledOnce();
+    expect(recordMutateAsync.mock.calls[0]?.[0]).toMatchObject({ matterId: "m1", billingRunId: "run-9" });
   });
 
   it("Escape stänger modalen", () => {

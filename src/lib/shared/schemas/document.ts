@@ -3,6 +3,7 @@ import { KNOWN_KINDS } from "../document-kind";
 import { baseFields, optionalDateLike } from "./common";
 import { suggestionStatusSchema, matterRoleSchema, contactTypeSchema } from "./enums";
 import {
+  billingRunIdSchema,
   documentIdSchema,
   documentFolderIdSchema,
   documentPartIdSchema,
@@ -51,6 +52,9 @@ export const documentSchema = z.object({
   id: documentIdSchema,
   matterId: matterIdSchema,
   folderId: documentFolderIdSchema.nullish(),
+  /** Faktureringskörningen dokumentet genererades för (#1230) — kostnadsräkningens
+   *  PDF länkas till sin körning så "Ångra kostnadsräkning" kan ta bort den. */
+  billingRunId: billingRunIdSchema.nullish(),
   fileName: z.string(),
   mimeType: z.string(),
   sizeBytes: z.number().int().nonnegative(),

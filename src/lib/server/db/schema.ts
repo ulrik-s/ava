@@ -371,6 +371,9 @@ export const documents = pgTable("documents", {
   matterId: uuid("matter_id").notNull().$type<MatterId>(),
   /** Valfri faktura-koppling (#397: genererade faktura-dokument). */
   invoiceId: uuid("invoice_id").$type<InvoiceId>(),
+  /** Faktureringskörningen dokumentet hör till (#1230: kostnadsräkningens PDF) —
+   *  ångras körningen tas dokumentet bort. Null = ingen koppling. */
+  billingRunId: uuid("billing_run_id").$type<BillingRunId>(),
   folderId: uuid("folder_id").$type<DocumentFolderId>(),
   fileName: text("file_name").notNull(),
   mimeType: text("mime_type").notNull(),

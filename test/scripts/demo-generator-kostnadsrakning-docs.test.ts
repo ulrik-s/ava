@@ -38,6 +38,10 @@ describe("populateKostnadsrakningDocs", () => {
     const krRuns = (runs as Any[]).filter((r) => r.type === "KOSTNADSRAKNING");
     expect(krRuns.length).toBeGreaterThan(0);
     expect(n).toBe(krRuns.length); // ett dokument per KR-run
+    // Varje dokument är länkat till sin körning (#1230).
+    const linked = new Set<string>();
+    for (const r of krRuns) for (const d of await krDocsFor(c, r.matterId)) linked.add(String(d.billingRunId));
+    expect(krRuns.every((r) => linked.has(String(r.id)))).toBe(true);
     expect(writes.every((p) => p.startsWith("documents/content/krdoc-") && p.endsWith(".html"))).toBe(true);
   });
 
