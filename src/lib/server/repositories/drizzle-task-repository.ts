@@ -1,6 +1,6 @@
 /**
  * Drizzle `TaskRepository` (ADR 0020) — server-impl. Ärver bas-CRUD;
- * `listForUser` left-joinar matter (nullable FK), `getOwned` ägar-scopar.
+ * `listForUser` left-joinar matter (nullable FK), `getByIdInOrg` org-scopar.
  */
 
 import { and, asc, eq, isNull, type SQL } from "drizzle-orm";
@@ -46,13 +46,11 @@ export class DrizzleTaskRepository extends DrizzleRepository<Task> implements Ta
     }));
   }
 
-  async getOwned(id: TaskId, userId: UserId, organizationId: OrganizationId): Promise<Task | null> {
+  async getByIdInOrg(id: TaskId, organizationId: OrganizationId): Promise<Task | null> {
     const rows = await this.db
       .select().from(tasks)
-      .where(and(
-        eq(tasks.id, id), eq(tasks.userId, userId),
-        eq(tasks.organizationId, organizationId), isNull(tasks.deletedAt),
-      )).limit(1);
+      .where(and(eq(tasks.id, id), eq(tasks.organizationId, organizationId), isNull(tasks.deletedAt)))
+      .limit(1);
     return rows[0] ?? null;
   }
 }

@@ -12,6 +12,8 @@ let tasks: unknown[] = [];
 const createMutate = vi.fn();
 const completeMutate = vi.fn();
 const updateMutate = vi.fn();
+const deleteMutate = vi.fn();
+let deletePending = false;
 const invalidate = { matter: vi.fn(), watchlist: vi.fn() };
 let signals: unknown[] = [];
 vi.mock("@/lib/client/trpc", () => ({
@@ -30,13 +32,14 @@ vi.mock("@/lib/client/trpc", () => ({
       create: { useMutation: (o: { onSuccess: () => void }) => ({ mutate: (a: unknown) => { createMutate(a); o.onSuccess(); }, isPending: false }) },
       complete: { useMutation: (o: { onSuccess: () => void }) => ({ mutate: (a: unknown) => { completeMutate(a); o.onSuccess(); }, isPending: false }) },
       update: { useMutation: () => ({ mutate: updateMutate, isPending: false }) },
+      delete: { useMutation: (o: { onSuccess: () => void }) => ({ mutate: (a: unknown) => { deleteMutate(a); o.onSuccess(); }, isPending: deletePending }) },
     },
   },
 }));
 
 let lastSignalArgs: unknown = null;
 const M = asId<"MatterId">("m1");
-beforeEach(() => { tasks = []; signals = []; vi.clearAllMocks(); });
+beforeEach(() => { tasks = []; signals = []; deletePending = false; vi.clearAllMocks(); });
 
 describe("WatchSection", () => {
   it("frist i dag lyser rött med stor fet titel och 'FRIST IDAG'", () => {
@@ -89,7 +92,7 @@ describe("WatchSection", () => {
     expect(screen.queryByText("Tidsfrist passerad: X")).not.toBeInTheDocument();
   });
 
-  it("egen uppgift kan bockas av; kollegas är låst och visar ägaren", () => {
+  it("alla på byrån kan bocka av — även kollegas uppgift; ägaren visas bara som info (#1231)", () => {
     tasks = [
       { id: "t1", title: "Min", dueAt: null, status: "TODO", userId: "me" },
       { id: "t2", title: "Bos", dueAt: null, status: "TODO", userId: "bo" },
@@ -97,8 +100,40 @@ describe("WatchSection", () => {
     render(<WatchSection matterId={M} />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Markera klar: Min" }));
     expect(completeMutate).toHaveBeenCalledWith({ id: "t1" });
-    expect(screen.getByRole("checkbox", { name: "Markera klar: Bos" })).toBeDisabled();
+    const bos = screen.getByRole("checkbox", { name: "Markera klar: Bos" });
+    expect(bos).toBeEnabled();
+    fireEvent.click(bos);
+    expect(completeMutate).toHaveBeenCalledWith({ id: "t2" });
     expect(screen.getByText("(Bo)")).toBeInTheDocument();
+    expect(screen.queryByText("(Cecilia)")).not.toBeInTheDocument(); // egen: inget namn
+  });
+
+  it("Radera: bekräfta → task.delete och ärendet + globala Att bevaka uppdateras (#1231)", () => {
+    tasks = [{ id: "t2", title: "Dom", dueAt: null, status: "TODO", userId: "bo" }];
+    const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    render(<WatchSection matterId={M} />);
+    fireEvent.click(screen.getByRole("button", { name: "Radera: Dom" }));
+    expect(confirmSpy).toHaveBeenCalledWith('Radera bevakningen "Dom"?');
+    expect(deleteMutate).toHaveBeenCalledWith({ id: "t2" });
+    expect(invalidate.matter).toHaveBeenCalledWith({ matterId: "m1" });
+    expect(invalidate.watchlist).toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("Radera avbrutet i bekräftelsen → ingen mutation", () => {
+    tasks = [{ id: "t2", title: "Dom", dueAt: null, status: "TODO", userId: "bo" }];
+    const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+    render(<WatchSection matterId={M} />);
+    fireEvent.click(screen.getByRole("button", { name: "Radera: Dom" }));
+    expect(deleteMutate).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("Radera är avstängd medan raderingen pågår", () => {
+    tasks = [{ id: "t2", title: "Dom", dueAt: null, status: "TODO", userId: "bo" }];
+    deletePending = true;
+    render(<WatchSection matterId={M} />);
+    expect(screen.getByRole("button", { name: "Radera: Dom" })).toBeDisabled();
   });
 
   it("klar uppgift återöppnas via task.update", () => {

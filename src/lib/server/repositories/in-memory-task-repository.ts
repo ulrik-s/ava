@@ -1,6 +1,6 @@
 /**
  * In-memory `TaskRepository` (ADR 0020) — browser/offline-impl. Ärver bas-CRUD;
- * list/ägar-vakt använder samma where/include som routern.
+ * list/org-vakt använder samma where/include som routern.
  */
 
 import type { Task } from "@/lib/shared/schemas/calendar";
@@ -38,8 +38,8 @@ export class InMemoryTaskRepository extends InMemoryRepository<Task> implements 
     })) as TaskListRow[];
   }
 
-  async getOwned(id: TaskId, userId: UserId, organizationId: OrganizationId): Promise<Task | null> {
-    const row = (await this.delegate.findFirst({ where: { id, userId, organizationId } })) as Task | null;
+  async getByIdInOrg(id: TaskId, organizationId: OrganizationId): Promise<Task | null> {
+    const row = (await this.delegate.findFirst({ where: { id, organizationId } })) as Task | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 }

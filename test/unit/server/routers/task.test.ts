@@ -1,6 +1,7 @@
 /**
  * Tester för taskRouter — CRUD + complete + auto-completedAt-hantering.
- * Migrerad till repository-sömmen (ADR 0020): ägar-vakt via getOwned (findFirst).
+ * Migrerad till repository-sömmen (ADR 0020): org-vakt via getByIdInOrg (findFirst) —
+ * alla på byrån får ändra/bocka av/radera (#1231), annan byrå → NOT_FOUND.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
@@ -94,11 +95,29 @@ describe("task.create", () => {
   });
 });
 
+/** Uppgift som Bo lagt in i byrån org-a. */
+const bosTask = { id: "t-1", userId: "u-bo", organizationId: "org-a" };
+
 describe("task.update", () => {
-  it("guardar ownership (NOT_FOUND när ej ägd)", async () => {
+  it("annan byrå → NOT_FOUND, org-scopad uppslagning (inte ägar-scopad)", async () => {
     mockPrisma.task.findFirst.mockResolvedValue(null);
-    await expect(makeCaller().update({ id: "t-1", title: "x" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(makeCaller("u1", "org-b").update({ id: "t-1", title: "x" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.task.findFirst).toHaveBeenCalledWith({ where: { id: "t-1", organizationId: "org-b" } });
     expect(mockPrisma.task.update).not.toHaveBeenCalled();
+  });
+
+  it("kollega i samma byrå (ej ägare) får ändra (#1231)", async () => {
+    mockPrisma.task.findFirst.mockResolvedValue(bosTask);
+    mockPrisma.task.update.mockResolvedValue({});
+    await makeCaller("u-cecilia", "org-a").update({ id: "t-1", title: "Dom meddelas" });
+    expect(mockPrisma.task.findFirst).toHaveBeenCalledWith({ where: { id: "t-1", organizationId: "org-a" } });
+    const arg = mockPrisma.task.update.mock.calls[0]![0] as { data: { title: string } };
+    expect(arg.data.title).toBe("Dom meddelas");
+  });
+
+  it("raderad (tombstone) uppgift → NOT_FOUND", async () => {
+    mockPrisma.task.findFirst.mockResolvedValue({ ...bosTask, deletedAt: new Date() });
+    await expect(makeCaller().update({ id: "t-1", title: "x" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("sätter completedAt när status=DONE", async () => {
@@ -109,42 +128,43 @@ describe("task.update", () => {
     expect(arg.data.completedAt).toBeInstanceOf(Date);
   });
 
-  it("nollställer completedAt när status flippas till TODO", async () => {
-    mockPrisma.task.findFirst.mockResolvedValue({ id: "t-1" });
+  it("nollställer completedAt när status flippas till TODO (kollega återöppnar)", async () => {
+    mockPrisma.task.findFirst.mockResolvedValue(bosTask);
     mockPrisma.task.update.mockResolvedValue({});
-    await makeCaller().update({ id: "t-1", status: "TODO" });
+    await makeCaller("u-cecilia", "org-a").update({ id: "t-1", status: "TODO" });
     const arg = mockPrisma.task.update.mock.calls[0]![0] as { data: { completedAt: Date | null } };
     expect(arg.data.completedAt).toBeNull();
   });
 });
 
 describe("task.complete", () => {
-  it("convenience-mutation — status=DONE + completedAt=now", async () => {
-    mockPrisma.task.findFirst.mockResolvedValue({ id: "t-1" });
+  it("kollega i samma byrå (ej ägare) bockar av — status=DONE + completedAt=now (#1231)", async () => {
+    mockPrisma.task.findFirst.mockResolvedValue(bosTask);
     mockPrisma.task.update.mockResolvedValue({});
-    await makeCaller().complete({ id: "t-1" });
+    await makeCaller("u-cecilia", "org-a").complete({ id: "t-1" });
     const arg = mockPrisma.task.update.mock.calls[0]![0] as { data: { status: string; completedAt: Date } };
     expect(arg.data.status).toBe("DONE");
     expect(arg.data.completedAt).toBeInstanceOf(Date);
   });
 
-  it("guardar ownership (NOT_FOUND när ej ägd)", async () => {
+  it("annan byrå → NOT_FOUND", async () => {
     mockPrisma.task.findFirst.mockResolvedValue(null);
-    await expect(makeCaller().complete({ id: "t-1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(makeCaller("u1", "org-b").complete({ id: "t-1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.task.update).not.toHaveBeenCalled();
   });
 });
 
 describe("task.delete", () => {
-  it("guardar ownership + hård delete", async () => {
-    mockPrisma.task.findFirst.mockResolvedValue({ id: "t-1" });
+  it("kollega i samma byrå (ej ägare) raderar — hård delete (#1231)", async () => {
+    mockPrisma.task.findFirst.mockResolvedValue(bosTask);
     mockPrisma.task.delete.mockResolvedValue({});
-    await makeCaller().delete({ id: "t-1" });
+    await expect(makeCaller("u-cecilia", "org-a").delete({ id: "t-1" })).resolves.toEqual({ id: "t-1" });
     expect(mockPrisma.task.delete).toHaveBeenCalledWith({ where: { id: "t-1" } });
   });
 
-  it("guardar ownership (NOT_FOUND när ej ägd)", async () => {
+  it("annan byrå → NOT_FOUND, inget raderas", async () => {
     mockPrisma.task.findFirst.mockResolvedValue(null);
-    await expect(makeCaller().delete({ id: "t-1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(makeCaller("u1", "org-b").delete({ id: "t-1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mockPrisma.task.delete).not.toHaveBeenCalled();
   });
 });
