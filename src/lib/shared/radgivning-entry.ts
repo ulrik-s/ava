@@ -29,15 +29,24 @@ export interface RadgivningInvoiceCandidate {
   invoiceType?: InvoiceType | null | undefined;
 }
 
-/** Ärendets rådgivningsfaktura (aldrig en kreditnota), eller null. */
-export function findRadgivningInvoiceId(invoices: readonly RadgivningInvoiceCandidate[]): InvoiceId | null {
-  const hit = invoices.find((i) => i.notes === RADGIVNING_INVOICE_NOTES && i.invoiceType !== "CREDIT");
-  return hit?.id ?? null;
+/** Är fakturan en rådgivningsfaktura (aldrig en kreditnota)? */
+export function isRadgivningInvoice(i: RadgivningInvoiceCandidate): boolean {
+  return i.notes === RADGIVNING_INVOICE_NOTES && i.invoiceType !== "CREDIT";
 }
 
-/** Är någon av rådgivningsfakturans poster redan låst mot den (utan körning)? */
+/** Ärendets rådgivningsfaktura (aldrig en kreditnota), eller null. */
+export function findRadgivningInvoiceId(invoices: readonly RadgivningInvoiceCandidate[]): InvoiceId | null {
+  return invoices.find(isRadgivningInvoice)?.id ?? null;
+}
+
+/**
+ * Finns en post kopplad till rådgivningsfakturan? Varje (icke-raderad) post med
+ * fakturans `invoiceId` räknas (#1235) — även ett ej debiterbart möte som också
+ * frysts av kostnadsräkningens körning. Raderade poster filtreras redan av
+ * `listByInvoice`.
+ */
 export function hasRadgivningEntry(invoiceEntries: readonly LockableEntry[]): boolean {
-  return invoiceEntries.some(isInvoicedOutsideCoverage);
+  return invoiceEntries.length > 0;
 }
 
 /** Ärendefälten predikatet läser. */
@@ -78,10 +87,19 @@ export interface MarkableEntry extends LockableEntry {
   kind?: TimeEntryKind | null | undefined;
 }
 
+/**
+ * Är posten redan låst på ett sätt som gör markeringen till en pengafråga?
+ * Låst direkt mot en faktura är alltid stopp. Fryst av en körning är stopp för
+ * debiterbar tid (den ingår i det yrkade beloppet) men inte för ej debiterbar
+ * tid (#1235) — den yrkas inte, så kopplingen flyttar inga pengar.
+ */
+function isLockedForMark(entry: MarkableEntry): boolean {
+  return isInvoicedOutsideCoverage(entry) || (entry.billable && isLockedEntry(entry));
+}
+
 /** Varför posten inte får markeras som rådgivning, eller null om den får det. */
 export function entryMarkBlocker(entry: MarkableEntry): string | null {
-  if (isLockedEntry(entry)) return "Tidsposten är redan låst och kan inte markeras som rådgivning.";
-  if (!entry.billable) return "Endast debiterbar tid kan markeras som rådgivning.";
+  if (isLockedForMark(entry)) return "Tidsposten är redan låst och kan inte markeras som rådgivning.";
   if (isPerDayKind(entry.kind)) return "Advokatberedskap kan inte markeras som rådgivning.";
   return null;
 }

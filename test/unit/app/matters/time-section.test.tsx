@@ -344,6 +344,28 @@ describe("TimeSection — Markera som rådgivning (#1207)", () => {
     expect(screen.queryByText(MARK)).toBeNull();
   });
 
+  it("prod-formen (#1235): ej debiterbart möte fryst av KR visar åtgärden bredvid Låst; debiterbar fryst tid gör det inte", () => {
+    const original = timeQuery.data;
+    timeQuery.data = {
+      entries: [
+        { id: "mote", date: "2026-03-01", minutes: 60, description: "Möte med huvudman", billable: false, user: { name: "Anna" }, hourlyRate: 162_600, frozenAt: "2026-05-01", frozenByBillingRunId: "run-kr" },
+        { id: "arbete", date: "2026-03-02", minutes: 90, description: "Genomgång", billable: true, user: { name: "Anna" }, hourlyRate: 162_600, frozenAt: "2026-05-01", frozenByBillingRunId: "run-kr" },
+      ],
+      totalMinutes: 150,
+    };
+    radgivningStatusQuery.data = { kind: "missing", invoiceId: "inv-r" };
+    vi.spyOn(globalThis, "confirm").mockReturnValueOnce(true);
+    try {
+      render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" />);
+      expect(screen.getAllByText(MARK)).toHaveLength(1);
+      expect(screen.getAllByText("🔒 Låst")).toHaveLength(2);
+      fireEvent.click(screen.getByText(MARK));
+      expect(markMutate).toHaveBeenCalledWith({ id: "mote" });
+    } finally {
+      timeQuery.data = original;
+    }
+  });
+
   it("bekräftar först — avbryt markerar inte, bekräfta markerar raden", () => {
     radgivningStatusQuery.data = { kind: "missing", invoiceId: "inv-r" };
     const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);

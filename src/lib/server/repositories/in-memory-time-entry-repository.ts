@@ -117,6 +117,11 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     })) as TimeEntry[];
   }
 
+  async listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<TimeEntry[]> {
+    if (!invoiceIds.length) return [];
+    return (await this.delegate.findMany({ where: { invoiceId: { in: invoiceIds } } })) as TimeEntry[];
+  }
+
   async coverageUsageForMatter(matterId: MatterId): Promise<{ billableMinutes: number; billableValueOre: number }> {
     const rows = (await this.delegate.findMany({ where: { matterId } })) as TimeEntry[];
     let billableMinutes = 0;
@@ -152,9 +157,15 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
   }
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
+    // Okopplade poster låses upp helt; de som är kvar är kopplade till en
+    // faktura (rådgivningstimmen, #1235) och behåller `frozenAt`.
+    await this.delegate.updateMany({
+      where: { frozenByBillingRunId: billingRunId, invoiceId: null },
+      data: { frozenAt: null, frozenByBillingRunId: null } as Partial<TimeEntry>,
+    });
     await this.delegate.updateMany({
       where: { frozenByBillingRunId: billingRunId },
-      data: { frozenAt: null, frozenByBillingRunId: null } as Partial<TimeEntry>,
+      data: { frozenByBillingRunId: null } as Partial<TimeEntry>,
     });
   }
 

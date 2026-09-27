@@ -82,6 +82,9 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void>;
   /** Tidsposter kopplade till en faktura (date asc) — fakturaspecifikationen (#856). */
   listByInvoice(invoiceId: InvoiceId): Promise<TimeEntry[]>;
+  /** Tidsposter kopplade till någon av fakturorna, debiterbara eller ej — batchat
+   *  för Att bevaka (rådgivningsposten, #1235). Tom lista → tomt svar. */
+  listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<TimeEntry[]>;
   /** Ofrysta tidsposter i ett ärende (date asc) — underlag för billing-run. Ofryst =
    *  varken fryst av en körning eller låst mot en faktura (`frozenAt`, #1205). */
   listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]>;
@@ -98,7 +101,9 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void>;
   /** Frys ENBART de angivna (ofrysta) tidsposterna mot en billing-run — per-post-val. */
   freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void>;
-  /** Lås upp ENBART posterna som just denna körning frös (annullerad kostnadsräkning, #1121). */
+  /** Lås upp ENBART posterna som just denna körning frös (annullerad kostnadsräkning, #1121).
+   *  En post kopplad till en faktura (`invoiceId`, rådgivningstimmen #1235) tappar bara
+   *  körningen och behåller `frozenAt` — den förblir låst direkt mot fakturan. */
   unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void>;
   /** En advokats tidsposter i en period (date asc), med ärende-ref (perLawyer-rapporten). */
   listForLawyerInPeriod(organizationId: OrganizationId, userId: UserId, from: Date, to: Date): Promise<LawyerReportTimeEntry[]>;

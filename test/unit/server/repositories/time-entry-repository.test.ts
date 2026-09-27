@@ -203,3 +203,57 @@ describe("TimeEntryRepository — låst mot faktura (#1205, Drizzle/pglite)", ()
     await expectLockedEntryUntouched(new DrizzleTimeEntryRepository(handle.db), f);
   });
 });
+
+// ─── Ångrad körning lämnar fakturakopplade poster låsta (#1235) ───
+
+/** Två poster frysta av samma körning: en okopplad och en kopplad till rådgivningsfakturan. */
+function unfreezeFixture() {
+  const mId = uuidv7(), uId = uuidv7(), plain = uuidv7(), linked = uuidv7(), run = uuidv7();
+  const frozenAt = new Date("2026-05-01");
+  const rows = [
+    { id: plain, userId: uId, matterId: mId, minutes: 90, date: new Date("2026-03-02"), description: "Inlaga", billable: true, frozenAt, frozenByBillingRunId: run },
+    { id: linked, userId: uId, matterId: mId, minutes: 60, date: new Date("2026-03-01"), description: "Möte", billable: false, invoiceId: uuidv7(), frozenAt, frozenByBillingRunId: run },
+  ];
+  return { mId, uId, plain, linked, run, rows };
+}
+
+/** Samma kontrakt för båda backends: den okopplade låses upp, den kopplade behåller `frozenAt`. */
+async function expectUnfreezeKeepsLinked(repo: InMemoryTimeEntryRepository | DrizzleTimeEntryRepository, f: ReturnType<typeof unfreezeFixture>): Promise<void> {
+  await repo.unfreezeByBillingRun(asId<"BillingRunId">(f.run));
+  expect((await repo.listUnfrozenForMatter(asId<"MatterId">(f.mId))).map((t) => t.id)).toEqual([f.plain]);
+  const linked = await repo.getById(asId<"TimeEntryId">(f.linked));
+  expect(linked?.frozenAt).toBeTruthy();
+  expect(linked?.frozenByBillingRunId ?? null).toBeNull();
+  const plain = await repo.getById(asId<"TimeEntryId">(f.plain));
+  expect(plain?.frozenAt ?? null).toBeNull();
+  expect(plain?.frozenByBillingRunId ?? null).toBeNull();
+}
+
+describe("TimeEntryRepository — unfreezeByBillingRun (#1235, in-memory)", () => {
+  it("fakturakopplad post tappar bara körningen", async () => {
+    const f = unfreezeFixture();
+    const store = new LocalStore({
+      matters: [{ id: f.mId, organizationId: ORG, matterNumber: "2026-1", title: "T" }],
+      users: [{ id: f.uId, name: "Anna" }],
+      timeEntries: f.rows,
+    }, async () => {});
+    await expectUnfreezeKeepsLinked(new InMemoryTimeEntryRepository(store), f);
+  });
+});
+
+describe("TimeEntryRepository — unfreezeByBillingRun (#1235, Drizzle/pglite)", () => {
+  let handle: TestDbHandle;
+  beforeAll(async () => { handle = await createTestDb(); });
+  afterAll(async () => { await handle.close(); });
+
+  it("fakturakopplad post tappar bara körningen", async () => {
+    const f = unfreezeFixture();
+    const org = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await handle.db.insert(matters).values(v({ id: f.mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
+    await handle.db.insert(users).values(v({ id: f.uId, organizationId: org, email: "a@x", name: "Anna" }));
+    for (const r of f.rows) await handle.db.insert(timeEntries).values(v({ ...r, hourlyRate: 1000 }));
+    await expectUnfreezeKeepsLinked(new DrizzleTimeEntryRepository(handle.db), f);
+  });
+});

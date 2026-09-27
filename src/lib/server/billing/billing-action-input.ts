@@ -1,8 +1,9 @@
 /**
  * Underlaget till "Att bevaka"-signalen `billingAction` (#1221), ur data som
  * watchlist-routern redan läst org-brett i EN omgång per entitetstyp:
- * ärenden, billing-runs, fakturor och debiterbara tidsposter. Inga frågor per
- * ärende — startsidan laddas hela dagen.
+ * ärenden, billing-runs, fakturor och debiterbara tidsposter — plus posterna
+ * kopplade till rådgivningsfakturorna (debiterbara eller ej, #1235). Inga
+ * frågor per ärende — startsidan laddas hela dagen.
  *
  * Predikaten själva bor i `@/lib/shared/billing-todo` och `radgivning-entry`,
  * samma som faktureringspanelen läser.
@@ -48,6 +49,8 @@ export interface BillingActionSources {
   runs: readonly ActionRunRow[];
   invoices: readonly ActionInvoiceRow[];
   entries: readonly ActionEntryRow[];
+  /** Poster kopplade till rådgivningsfakturorna — oavsett debiterbar (#1235). */
+  radgivningEntries: readonly ActionEntryRow[];
   sjalvriskThresholdOre: number;
   now: Date;
 }
@@ -81,6 +84,7 @@ export function billingActionMatters(src: BillingActionSources): BillingActionMa
   const runs = groupBy(src.runs);
   const invoices = groupBy(src.invoices);
   const entries = groupBy(src.entries);
+  const radgivningEntries = groupBy(src.radgivningEntries);
   return src.matters.filter(isOpen).map((m) => {
     const mRuns = runs.get(m.id) ?? [];
     const mInvoices = invoices.get(m.id) ?? [];
@@ -89,7 +93,7 @@ export function billingActionMatters(src: BillingActionSources): BillingActionMa
     return {
       id: m.id, matterNumber: m.matterNumber, paymentMethod: m.paymentMethod ?? null,
       runs: mRuns, invoices: mInvoices.map(toActionInvoice),
-      radgivningEntryMissing: radgivningMissing(m, mInvoices, mEntries),
+      radgivningEntryMissing: radgivningMissing(m, mInvoices, radgivningEntries.get(m.id) ?? []),
       sjalvriskClientOre: rattshjalp ? rattshjalpSjalvriskOre(mEntries, mRuns, m.clientShareBips ?? 0, src.now) : null,
       sjalvriskThresholdOre: src.sjalvriskThresholdOre,
     };
