@@ -22,6 +22,7 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { logMatterNote, type NoteCtx } from "../billing/matter-note";
+import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
 import { emit } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
@@ -244,9 +245,15 @@ export const matterRouter = router({
       // Ansvarig jurist = explicit val, annars skaparen (#174). Styr serien.
       const responsibleLawyerId = input.responsibleLawyerId ?? ctx.user.id;
       const matterNumber = input.matterNumber ?? (await nextMatterNumber(ctx, responsibleLawyerId));
-      const matter = await ctx.repos.matters.create(
-        buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input) satisfies Partial<Matter>,
-      );
+      // Ärendet + standardmapparna (#1228) i SAMMA transaktion — aldrig ett
+      // ärende utan mappträd.
+      const matter = await ctx.repos.transaction(async (repos) => {
+        const created = await repos.matters.create(
+          buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input) satisfies Partial<Matter>,
+        );
+        await ensureDefaultMatterFolders(repos, asId<"MatterId">(created.id));
+        return created;
+      });
       await emit.matterCreated(ctx, matter);
       // matter.id washar till `any` via Joined<>; brand explicit. klientId
       // kommer från (redan validerad) input-sträng → trusted boundary-cast.

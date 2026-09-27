@@ -49,8 +49,8 @@ async function hydrate(caller: Any, matterId: string, cache: FolderCache): Promi
   for (const f of folders) cache.set(`${matterId}/${pathOf(f, byId)}`, f.id);
 }
 
-/** Fakturadokumenten samlas för sig, oavsett vem fakturan ställts till. */
-export const INVOICE_FOLDER = ["Fakturor"];
+/** Fakturadokumenten samlas i standardmappen "Faktura" (#1228), oavsett mottagare. */
+export const INVOICE_FOLDER = ["Faktura"];
 
 /** Kostnadsräkningen går till domstolen men förtjänar en egen hylla där. */
 export const KOSTNADSRAKNING_FOLDER = ["Domstol", "Kostnadsräkningar"];

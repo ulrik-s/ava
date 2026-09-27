@@ -645,3 +645,40 @@ describe("DocumentBrowser — flera filer på en gång", () => {
     expect(screen.queryByText(/a\.pdf:/)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * #1228: ett nytt ärende visar standardmapparna direkt. Ärendet skapas via den
+ * RIKTIGA `matter.create`, trädet hämtas via den riktiga `document.tree` —
+ * browsern får exakt det svar servern ger.
+ */
+describe("DocumentBrowser — nytt ärende har standardmappar (#1228)", () => {
+  it("visar rotmapparna och Domstols undermappar", async () => {
+    const { appRouter } = await import("@/lib/server/routers/_app");
+    const { buildContext } = await import("@/lib/server/build-context");
+    const { DemoDataStore } = await import("@/lib/server/data-store/DemoDataStore");
+    const { noopPorts } = await import("@/lib/server/adapters/noop-ports");
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-a", name: "X" }],
+      users: [{ id: "user-1", organizationId: "org-a", email: "a@b.com", name: "T", role: "LAWYER" }],
+      matters: [], contacts: [], matterContacts: [],
+    }, async () => { /* writable */ });
+    const principal = {
+      id: asId<"UserId">("user-1"), email: "a@b.com", name: "T", role: "LAWYER" as const,
+      organizationId: asId<"OrganizationId">("org-a"),
+    };
+    const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal }));
+    const matter = await caller.matter.create({ title: "Nytt ärende" });
+    const tree = await caller.document.tree({ matterId: asId<"MatterId">(matter.id) });
+    treeQuery.data = { folders: tree.folders, documents: tree.documents };
+    render(<DocumentBrowser matterId={asId<"MatterId">(matter.id)} />);
+    // Mapparna är expanderade från start → hela trädet syns. ("Domstol" finns
+    // även som <option> i mottagarfiltret — räkna bara trädets noder.)
+    const inTree = (name: string) => screen.getAllByText(name).filter((el) => el.tagName !== "OPTION");
+    for (const name of [
+      "Faktura", "Domstol", "Beslut", "Korrespondens", "Avtal", "Övrigt",
+      "Kallelse", "Föreläggande", "Förordnande", "Inlagor",
+    ]) {
+      expect(inTree(name)).toHaveLength(1);
+    }
+  });
+});
