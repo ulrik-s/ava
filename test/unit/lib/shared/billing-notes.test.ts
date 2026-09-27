@@ -60,6 +60,17 @@ describe("anteckningstexter", () => {
     expect(krVoidedNote(undefined)).toBe("Kostnadsräkning ångrad — tidposter och utlägg upplåsta");
   });
 
+  it("ångrad kostnadsräkning: anteckningen säger vad som hände med dokumentet (#1230)", () => {
+    expect(krVoidedNote("KR-2026-0001", { kind: "removed", fileNames: ["Kostnadsräkning A.pdf"] }))
+      .toBe("Kostnadsräkning KR-2026-0001 ångrad — tidposter och utlägg upplåsta, dokumentet Kostnadsräkning A.pdf borttaget");
+    expect(krVoidedNote("KR-2026-0001", { kind: "removed", fileNames: ["a.pdf", "b.pdf"] }))
+      .toBe("Kostnadsräkning KR-2026-0001 ångrad — tidposter och utlägg upplåsta, dokumenten a.pdf, b.pdf borttagna");
+    expect(krVoidedNote("KR-2026-0001", { kind: "kept" }))
+      .toBe("Kostnadsräkning KR-2026-0001 ångrad — tidposter och utlägg upplåsta, dokumentet kunde inte identifieras och ligger kvar");
+    expect(krVoidedNote("KR-2026-0001", { kind: "none" }))
+      .toBe("Kostnadsräkning KR-2026-0001 ångrad — tidposter och utlägg upplåsta");
+  });
+
   it("slutreglering: faktura eller kreditfaktura till klienten + betalarens faktura", () => {
     const payer = { invoiceNumber: "F-2", amountOre: 800_000, recipientLabel: "Försäkringsbolag" };
     expect(norm(settledNote({ client: { invoiceNumber: "F-1", amountOre: 200_000, credit: false }, payer })))

@@ -29,7 +29,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { buildKostnadsrakningContext, withDocumentFields, type KrDocumentFields } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import type { MatterId } from "@/lib/shared/schemas/ids";
+import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 
 /** Dokumentfälten (#1218) — målnummer, titel och byråns sidfot — ärvs från KrDocumentFields. */
@@ -57,9 +57,11 @@ interface Props extends KrDocumentFields {
    *  text-rad på kostnadsräkningen. */
   radgivningPaid?: boolean | undefined;
   onClose: () => void;
-  /** Anropas EN gång när kostnadsräkningen faktiskt genererats — inte när
-   *  modalen stängs (Avbryt/Escape/X skapade förut en inskickad KR, #1121). */
-  onGenerated?: () => void;
+  /** Skickar in kostnadsräkningen (skapar körningen) och ger dess id. Anropas
+   *  EN gång när PDF:en faktiskt renderats — inte när modalen stängs (Avbryt/
+   *  Escape/X skapade förut en inskickad KR, #1121). Id:t länkar dokumentet till
+   *  körningen så att "Ångra kostnadsräkning" kan ta bort det (#1230). */
+  createRun: () => Promise<BillingRunId>;
 }
 
 function toDatetimeLocalValue(d: Date): string {
@@ -91,6 +93,7 @@ interface RecordDocOpts {
   };
   docId: string;
   matterId: MatterId;
+  billingRunId: BillingRunId;
   fileName: string;
   storagePath: string;
   bytes: Uint8Array;
@@ -108,6 +111,7 @@ async function recordDocument(opts: RecordDocOpts): Promise<void> {
     mimeType: "application/pdf", sizeBytes: opts.bytes.byteLength,
     storagePath: opts.storagePath, totalInclVat: opts.totalInclVat,
     huvudforhandlingMinutes: opts.huvudforhandlingMinutes,
+    billingRunId: opts.billingRunId,
   });
   // Steg 2 (invalidering) är best-effort — dokumentet är redan registrerat,
   // så ett invaliderings-hicka ska inte blockera success. DocumentBrowser
@@ -245,15 +249,15 @@ function useKostnadsrakningModal(props: Props) {
         },
       });
       const storagePath = `documents/content/${docId}.pdf`;
+      const billingRunId = await props.createRun();
       // Innehåll: in-memory blob-cache (öppna nu) + FSA (self-hosted) + demo-slab
       // (överlever reload). Metadata-raden skapas separat av recordDocument.
       await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });
       await recordDocument({
-        recordKostn, utils, docId, matterId: props.matterId, fileName, storagePath,
+        recordKostn, utils, docId, matterId: props.matterId, billingRunId, fileName, storagePath,
         bytes, totalInclVat: ctx.totalInclVat,
         huvudforhandlingMinutes: ctx.huvudforhandlingMinutes,
       });
-      props.onGenerated?.();
       const mailOpened = await maybeComposeMail({
         helperAvailable: Boolean(helper.version),
         fileName, bytes,

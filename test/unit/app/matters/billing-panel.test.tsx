@@ -32,9 +32,13 @@ const refetch = vi.fn();
 const radgivningMutate = vi.fn();
 let radgivningError: { message: string } | null = null;
 const krMutate = vi.fn();
+const krMutateAsync = vi.fn(async () => ({ run: { id: "run-new" } }));
+let createdRunId: string | null = null;
 let krOpts: { onSuccess?: (res: { run: { id: string } }) => Promise<void> } | undefined;
 const generateKrDocFn = vi.fn(async () => {});
 const voidMutate = vi.fn();
+let voidOpts: { onSuccess?: () => void } | undefined;
+const docInvalidate = vi.fn();
 let documentListData: { documents: Array<Record<string, unknown>> } = { documents: [] };
 let hasDoc = false;
 const openGeneratedDocFn = vi.fn();
@@ -50,15 +54,16 @@ vi.mock("@/lib/client/trpc", () => ({
       expense: { list: { invalidate } },
       serviceNote: { list: { invalidate } },
       watchlist: { list: { invalidate } },
+      document: { list: { invalidate: docInvalidate }, tree: { invalidate: docInvalidate } },
     }),
     billingRun: {
       list: { useQuery: () => ({ data: runsData, isLoading: runsLoading, refetch }) },
       proposal: { useQuery: () => ({ data: proposalData, isLoading: false }) },
       createKostnadsrakning: {
-        useMutation: (opts?: typeof krOpts) => { krOpts = opts; return { mutate: krMutate, isPending: false }; },
+        useMutation: (opts?: typeof krOpts) => { krOpts = opts; return { mutate: krMutate, mutateAsync: krMutateAsync, isPending: false }; },
       },
       appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      voidKostnadsrakning: { useMutation: () => ({ mutate: voidMutate, isPending: false, error: null }) },
+      voidKostnadsrakning: { useMutation: (opts?: typeof voidOpts) => { voidOpts = opts; return { mutate: voidMutate, isPending: false, error: null }; } },
       recordKostnadsrakningBeslut: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       recordInsurerPruning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       coverageSplit: { useQuery: () => ({ data: coverageSplitData }) },
@@ -113,10 +118,10 @@ vi.mock("@/app/matters/[id]/_verdict-dialog", () => ({
 }));
 // Modalen själv testas separat — här bara skillnaden stänga vs faktiskt generera (#1121).
 vi.mock("@/app/matters/[id]/_kostnadsrakning-modal", () => ({
-  KostnadsrakningModal: (p: { onClose: () => void; onGenerated?: () => void }) => (
+  KostnadsrakningModal: (p: { onClose: () => void; createRun: () => Promise<string> }) => (
     <div data-testid="kr-modal">
       <button type="button" onClick={p.onClose}>Avbryt modal</button>
-      <button type="button" onClick={() => p.onGenerated?.()}>Generera</button>
+      <button type="button" onClick={() => void p.createRun().then((id) => { createdRunId = id; })}>Generera</button>
     </div>
   ),
 }));
@@ -132,6 +137,7 @@ const baseMatter = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  createdRunId = null;
   runsData = { runs: [] };
   runsLoading = false;
   documentListData = { documents: [] };
@@ -240,7 +246,27 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ångra kostnadsräkning" }));
     expect(confirmSpy).toHaveBeenCalled();
     expect(voidMutate).toHaveBeenCalledWith({ billingRunId: "r3" });
+    // Bekräftelsen säger att dokumentet tas bort (#1230).
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("kostnadsräkningsdokumentet tas bort"));
     confirmSpy.mockRestore();
+  });
+
+  it("efter ångra hämtas dokumentlistorna om — dokumentet är borttaget (#1230)", () => {
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    voidOpts?.onSuccess?.();
+    expect(refetch).toHaveBeenCalled();
+    expect(docInvalidate).toHaveBeenCalledTimes(2);
+  });
+
+  it("KR-dokumentet länkat till körningen går före ett äldre närmare i tid (#1230)", () => {
+    documentListData = { documents: [
+      { id: "doc-old", fileName: "gammal.pdf", documentType: "Kostnadsräkning", createdAt: "2026-03-01" },
+      { id: "doc-link", fileName: "lankad.pdf", documentType: "Kostnadsräkning", billingRunId: "r3", createdAt: "2025-01-01" },
+    ] };
+    hasDoc = true;
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    fireEvent.click(screen.getByRole("button", { name: "lankad.pdf" }));
+    expect(openGeneratedDocFn).toHaveBeenCalledWith("doc-link");
   });
 
   it("ångra avbruten i bekräftelsen → inget händer", () => {
@@ -319,17 +345,20 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     expect(screen.getByTestId("kr-modal")).toBeInTheDocument();
   });
 
-  it("att STÄNGA KR-modalen skapar ingen kostnadsräkning — bara att generera gör det (#1121)", () => {
+  it("att STÄNGA KR-modalen skapar ingen kostnadsräkning — bara att generera gör det (#1121)", async () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     fireEvent.click(screen.getByRole("button", { name: "Avbryt modal" }));
     expect(krMutate).not.toHaveBeenCalled();
+    expect(krMutateAsync).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     fireEvent.click(screen.getByRole("button", { name: "Generera" }));
-    expect(krMutate).toHaveBeenCalledWith({ matterId: "m1" }, expect.anything());
+    // Körningens id går tillbaka till modalen, som länkar dokumentet till den (#1230).
+    await waitFor(() => expect(createdRunId).toBe("run-new"));
+    expect(krMutateAsync).toHaveBeenCalledWith({ matterId: "m1" });
   });
 
   it("PENDING: ingen knapp men en förklaring (#824)", () => {
@@ -428,14 +457,12 @@ describe("BillingPanel — informationsrutorna är borta (#1221)", () => {
     expect(screen.queryByRole("button", { name: "Registrera prutning" })).not.toBeInTheDocument();
   });
 
-  it("efter en faktureringshändelse hämtas Anteckningar och Att bevaka om", () => {
+  it("efter en faktureringshändelse hämtas Anteckningar och Att bevaka om", async () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
-    fireEvent.click(screen.getByRole("button", { name: "Generera" }));
-    const onSuccess = (krMutate.mock.calls[0]?.[1] as { onSuccess: () => void }).onSuccess;
     invalidate.mockClear();
-    onSuccess();
-    expect(invalidate).toHaveBeenCalledTimes(6);
+    fireEvent.click(screen.getByRole("button", { name: "Generera" }));
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(6));
   });
 });

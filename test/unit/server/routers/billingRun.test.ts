@@ -1055,6 +1055,63 @@ describe("billingRun.voidKostnadsrakning — ångra en kostnadsräkning (#1121)"
     expect(te.frozenByBillingRunId).toBe(created.run.id);
   });
 
+  // ── Dokumentet följer med (#1230) ──────────────────────────────────────
+  type Caller = ReturnType<typeof makeCaller>["caller"];
+  const docIds = async (ds: DemoDataStore): Promise<string[]> =>
+    ((await ds.documents.findMany({})) as Array<{ id: string }>).map((d) => d.id).sort();
+  const notes = async (ds: DemoDataStore): Promise<string[]> =>
+    ((await ds.serviceNotes.findMany({})) as Array<{ text: string }>).map((n) => n.text);
+  const addDoc = (caller: Caller, id: string, extra: { documentType?: string; billingRunId?: string; createdAt?: Date }) =>
+    caller.document.register({
+      id, matterId: "m-1", fileName: `${id}.pdf`, mimeType: "application/pdf", sizeBytes: 1,
+      storagePath: `documents/content/${id}.pdf`, documentType: extra.documentType ?? "Kostnadsräkning",
+      ...(extra.billingRunId ? { billingRunId: extra.billingRunId } : {}),
+      ...(extra.createdAt ? { createdAt: extra.createdAt.toISOString() } : {}),
+    });
+
+  it("tar bort dokumentet länkat till körningen — övriga dokument ligger kvar", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const created = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await addDoc(caller, "kr-doc", { billingRunId: created.run.id });
+    await addDoc(caller, "inlaga", { documentType: "Inlaga" });
+    await addDoc(caller, "annan-kr", { billingRunId: "annan-run" });
+
+    await caller.billingRun.voidKostnadsrakning({ billingRunId: created.run.id });
+    expect(await docIds(ds)).toEqual(["annan-kr", "inlaga"]);
+    expect(await notes(ds)).toContain(
+      `Kostnadsräkning ${created.run.reference} ångrad — tidposter och utlägg upplåsta, dokumentet kr-doc.pdf borttaget`,
+    );
+  });
+
+  it("äldre olänkat KR-dokument som entydigt är körningens tas bort", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const created = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await addDoc(caller, "legacy", { createdAt: new Date(new Date(created.run.createdAt).getTime() + 1000) });
+
+    await caller.billingRun.voidKostnadsrakning({ billingRunId: created.run.id });
+    expect(await docIds(ds)).toEqual([]);
+    expect((await notes(ds)).some((n) => n.endsWith("dokumentet legacy.pdf borttaget"))).toBe(true);
+  });
+
+  it("flera olänkade KR-dokument → inget tas bort, anteckningen säger att det ligger kvar", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const created = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    const at = new Date(created.run.createdAt).getTime();
+    await addDoc(caller, "legacy-1", { createdAt: new Date(at + 1000) });
+    await addDoc(caller, "legacy-2", { createdAt: new Date(at + 2000) });
+
+    await caller.billingRun.voidKostnadsrakning({ billingRunId: created.run.id });
+    expect(await docIds(ds)).toEqual(["legacy-1", "legacy-2"]);
+    expect((await notes(ds)).some((n) => n.endsWith("dokumentet kunde inte identifieras och ligger kvar"))).toBe(true);
+  });
+
+  it("utan dokument: anteckningen som förut", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const created = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await caller.billingRun.voidKostnadsrakning({ billingRunId: created.run.id });
+    expect(await notes(ds)).toContain(`Kostnadsräkning ${created.run.reference} ångrad — tidposter och utlägg upplåsta`);
+  });
+
   it("en redan ångrad kostnadsräkning kan inte ångras igen", async () => {
     const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const created = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });

@@ -71,9 +71,26 @@ export function krAppealedNote(reference: string | null | undefined): string {
   return `Beslutet om kostnadsräkning${ref} överklagat till hovrätten`;
 }
 
-export function krVoidedNote(reference: string | null | undefined): string {
+/**
+ * Vad som hände med kostnadsräkningens dokument när den ångrades (#1230):
+ * borttaget (filnamnen), kvar för att det inte gick att identifiera entydigt,
+ * eller inget dokument alls.
+ */
+export type KrVoidedDocOutcome =
+  | { kind: "removed"; fileNames: readonly string[] }
+  | { kind: "kept" }
+  | { kind: "none" };
+
+function voidedDocSuffix(doc: KrVoidedDocOutcome): string {
+  if (doc.kind === "kept") return ", dokumentet kunde inte identifieras och ligger kvar";
+  if (doc.kind === "none") return "";
+  const names = doc.fileNames.join(", ");
+  return doc.fileNames.length === 1 ? `, dokumentet ${names} borttaget` : `, dokumenten ${names} borttagna`;
+}
+
+export function krVoidedNote(reference: string | null | undefined, doc: KrVoidedDocOutcome = { kind: "none" }): string {
   const ref = reference ? ` ${reference}` : "";
-  return `Kostnadsräkning${ref} ångrad — tidposter och utlägg upplåsta`;
+  return `Kostnadsräkning${ref} ångrad — tidposter och utlägg upplåsta${voidedDocSuffix(doc)}`;
 }
 
 export interface SettledNoteInput {

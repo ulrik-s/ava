@@ -17,3 +17,17 @@ export function invalidateBillingSideEffects(utils: BillingSideEffectUtils): voi
   void utils.serviceNote.list.invalidate();
   void utils.watchlist.list.invalidate();
 }
+
+/** Dokumentdelen av `trpc.useUtils()` — listan (fakturapanelen) + trädet (dokumentvyn). */
+export interface DocumentListUtils {
+  document: { list: { invalidate: Invalidate }; tree: { invalidate: Invalidate } };
+}
+
+/**
+ * En faktureringshändelse som tar bort ett dokument (ångrad kostnadsräkning,
+ * #1230) — hämta om ärendets dokumentlistor så att det inte ligger kvar i vyn.
+ */
+export function invalidateDocumentLists(utils: DocumentListUtils): void {
+  void utils.document.list.invalidate();
+  void utils.document.tree.invalidate();
+}

@@ -14,7 +14,7 @@
 
 import { z } from "zod";
 import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
-import { asId, documentIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, billingRunIdSchema, documentIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import { router, orgProcedure } from "../trpc";
 
@@ -38,6 +38,9 @@ export const kostnadsrakningRouter = router({
       totalInclVat: z.number().int(),
       /** HUF-tid i minuter — bra att ha i auditen. */
       huvudforhandlingMinutes: z.number().int().nonnegative(),
+      /** Körningen kostnadsräkningen skickades in som (#1230) — ångras den tas
+       *  dokumentet bort. Valfri för äldre klienter. */
+      billingRunId: billingRunIdSchema.optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // 1. Registrera dokumentet (samma som document.register-flödet)
@@ -49,6 +52,7 @@ export const kostnadsrakningRouter = router({
         sizeBytes: input.sizeBytes,
         storagePath: input.storagePath,
         folderId: null,
+        billingRunId: input.billingRunId ?? null,
         organizationId: ctx.orgId,
         documentType: KOSTNADSRAKNING_DOCUMENT_TYPE,
         analysisStatus: "DONE" as const,

@@ -68,6 +68,7 @@ import {
 } from "@/lib/shared/settlement-view";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { eventTime, logMatterNote } from "../billing/matter-note";
+import { removeVoidedKrDocuments } from "../billing/void-kr-documents";
 import { emit, type EmitCtx } from "../events/emit";
 import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
 import { nextInvoiceNumberFrom } from "../repositories/invoice-repository";
@@ -708,6 +709,7 @@ export const billingRunRouter = router({
    * arbete registrerats. Bara före domstolens beslut (`canVoidKostnadsrakning`).
    * Låser upp EXAKT de poster körningen frös, och annullerar körningen (VOIDED)
    * så ärendet lämnar "väntar på dom" och en ny kostnadsräkning kan skapas.
+   * Kostnadsräkningens dokument tas bort i samma transaktion (#1230).
    */
   voidKostnadsrakning: orgProcedure
     .input(z.object({ billingRunId: billingRunIdSchema }))
@@ -723,7 +725,9 @@ export const billingRunRouter = router({
         await tx.timeEntries.unfreezeByBillingRun(run.id);
         await tx.expenses.unfreezeByBillingRun(run.id);
         const updated = await tx.billingRuns.update(run.id, { status: "VOIDED" });
-        await logMatterNote(tx, ctx, run.matterId, krVoidedNote(run.reference));
+        // Dokumentet presenterade det inskickade — ångrat inskick, borttaget dokument (#1230).
+        const doc = await removeVoidedKrDocuments(tx, ctx.ports.searchIndex, ctx.orgId, run);
+        await logMatterNote(tx, ctx, run.matterId, krVoidedNote(run.reference, doc));
         return { run: updated };
       });
     }),

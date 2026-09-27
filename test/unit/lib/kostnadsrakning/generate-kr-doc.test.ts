@@ -66,4 +66,14 @@ describe("generateKrDoc", () => {
     const arg = renderKostnadsrakningPdf.mock.calls[0]![0] as { result: { timeLines: Array<{ id: string }> } };
     expect(arg.result.timeLines.map((t: { id: string }) => t.id)).toEqual(["egen"]);
   });
+
+  it("dokumentet länkas till körningen så att det försvinner om den ångras (#1230)", async () => {
+    await generateKrDoc({ ...baseArgs, ownBillingRunId: asId<"BillingRunId">("kr-7") });
+    expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ billingRunId: "kr-7" }));
+  });
+
+  it("utan körning skickas ingen länk", async () => {
+    await generateKrDoc(baseArgs);
+    expect(registerMutateAsync.mock.calls[0]![0]).not.toHaveProperty("billingRunId");
+  });
 });

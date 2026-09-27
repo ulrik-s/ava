@@ -89,6 +89,8 @@ export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?
     await c.document.register({
       id, matterId: run.matter.id, folderId,
       invoiceId: run.invoiceId ?? undefined,
+      // Länkad till sin körning (#1230) — ångras den tas dokumentet bort.
+      billingRunId: run.id,
       fileName: `Kostnadsräkning ${run.matter.matterNumber}.html`,
       mimeType: "text/html; charset=utf-8", sizeBytes: size, storagePath,
       title: `Kostnadsräkning — ${run.matter.matterNumber}`,
