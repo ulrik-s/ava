@@ -198,3 +198,22 @@ describe("timeEntry.radgivningStatus (#1207)", () => {
       .rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
+
+describe("ångrad kostnadsräkning efter markering (#1235)", () => {
+  it("den kopplade rådgivningsposten förblir låst mot fakturan; övrig tid låses upp", async () => {
+    const caller = makeCaller({}, [entry("mote", 60, { billable: false }), entry("arbete", 90)]);
+    const { run } = await caller.billingRun.createKostnadsrakning({ matterId: MATTER });
+    const { locked } = await caller.timeEntry.markAsRadgivning({ id: id("mote") });
+    expect(locked).toMatchObject({ invoiceId: INV, frozenByBillingRunId: run.id });
+
+    await caller.billingRun.voidKostnadsrakning({ billingRunId: run.id });
+    const byId = new Map((await entriesOf(caller)).map((t) => [t.id, t]));
+    expect(byId.get(id("mote"))).toMatchObject({ invoiceId: INV });
+    expect(byId.get(id("mote"))!.frozenAt).toBeTruthy();
+    expect(byId.get(id("mote"))!.frozenByBillingRunId ?? null).toBeNull();
+    expect(byId.get(id("arbete"))!.frozenAt ?? null).toBeNull();
+    expect(await caller.timeEntry.radgivningStatus({ matterId: MATTER })).toEqual({ kind: "present", invoiceId: INV });
+    const proposal = await caller.billingRun.proposal({ matterId: MATTER });
+    expect(proposal.timeEntries.map((t) => t.id)).toEqual(["arbete"]);
+  });
+});

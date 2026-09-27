@@ -239,8 +239,13 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
   }
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
+    // Okopplade poster låses upp helt; de som är kvar är kopplade till en
+    // faktura (rådgivningstimmen, #1235) och behåller `frozenAt`.
     await this.db.update(timeEntries)
       .set({ frozenAt: null, frozenByBillingRunId: null })
+      .where(and(eq(timeEntries.frozenByBillingRunId, billingRunId), isNull(timeEntries.invoiceId)));
+    await this.db.update(timeEntries)
+      .set({ frozenByBillingRunId: null })
       .where(eq(timeEntries.frozenByBillingRunId, billingRunId));
   }
 

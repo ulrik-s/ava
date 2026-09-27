@@ -101,7 +101,9 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void>;
   /** Frys ENBART de angivna (ofrysta) tidsposterna mot en billing-run — per-post-val. */
   freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void>;
-  /** Lås upp ENBART posterna som just denna körning frös (annullerad kostnadsräkning, #1121). */
+  /** Lås upp ENBART posterna som just denna körning frös (annullerad kostnadsräkning, #1121).
+   *  En post kopplad till en faktura (`invoiceId`, rådgivningstimmen #1235) tappar bara
+   *  körningen och behåller `frozenAt` — den förblir låst direkt mot fakturan. */
   unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void>;
   /** En advokats tidsposter i en period (date asc), med ärende-ref (perLawyer-rapporten). */
   listForLawyerInPeriod(organizationId: OrganizationId, userId: UserId, from: Date, to: Date): Promise<LawyerReportTimeEntry[]>;

@@ -157,9 +157,15 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
   }
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
+    // Okopplade poster låses upp helt; de som är kvar är kopplade till en
+    // faktura (rådgivningstimmen, #1235) och behåller `frozenAt`.
+    await this.delegate.updateMany({
+      where: { frozenByBillingRunId: billingRunId, invoiceId: null },
+      data: { frozenAt: null, frozenByBillingRunId: null } as Partial<TimeEntry>,
+    });
     await this.delegate.updateMany({
       where: { frozenByBillingRunId: billingRunId },
-      data: { frozenAt: null, frozenByBillingRunId: null } as Partial<TimeEntry>,
+      data: { frozenByBillingRunId: null } as Partial<TimeEntry>,
     });
   }
 
