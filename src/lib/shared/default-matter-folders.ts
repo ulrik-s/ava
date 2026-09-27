@@ -30,7 +30,7 @@ export const DEFAULT_MATTER_FOLDERS: readonly DefaultFolderNode[] = [
     ],
   },
   { name: "Beslut" },
-  { name: "Korrespondans" },
+  { name: "Korrespondens" },
   { name: "Avtal" },
   { name: "Övrigt" },
 ];

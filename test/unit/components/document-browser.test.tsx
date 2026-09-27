@@ -675,7 +675,7 @@ describe("DocumentBrowser — nytt ärende har standardmappar (#1228)", () => {
     // även som <option> i mottagarfiltret — räkna bara trädets noder.)
     const inTree = (name: string) => screen.getAllByText(name).filter((el) => el.tagName !== "OPTION");
     for (const name of [
-      "Faktura", "Domstol", "Beslut", "Korrespondans", "Avtal", "Övrigt",
+      "Faktura", "Domstol", "Beslut", "Korrespondens", "Avtal", "Övrigt",
       "Kallelse", "Föreläggande", "Förordnande", "Inlagor",
     ]) {
       expect(inTree(name)).toHaveLength(1);

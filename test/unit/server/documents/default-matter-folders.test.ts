@@ -34,7 +34,7 @@ function paths(folders: DocumentFolder[]): string[] {
 
 const EXPECTED = [
   "Avtal", "Beslut", "Domstol", "Domstol/Föreläggande", "Domstol/Förordnande",
-  "Domstol/Inlagor", "Domstol/Kallelse", "Faktura", "Korrespondans", "Övrigt",
+  "Domstol/Inlagor", "Domstol/Kallelse", "Faktura", "Korrespondens", "Övrigt",
 ].sort();
 
 describe("ensureDefaultMatterFolders", () => {
@@ -52,7 +52,7 @@ describe("ensureDefaultMatterFolders", () => {
     await ensureDefaultMatterFolders(repos, MATTER);
     expect(created).toEqual([
       "Faktura", "Domstol", "Kallelse", "Föreläggande", "Förordnande", "Inlagor",
-      "Beslut", "Korrespondans", "Avtal", "Övrigt",
+      "Beslut", "Korrespondens", "Avtal", "Övrigt",
     ]);
   });
 
@@ -85,9 +85,9 @@ describe("ensureDefaultMatterFolders", () => {
 });
 
 describe("DEFAULT_MATTER_FOLDERS", () => {
-  it("rotnivån i ordning: Faktura, Domstol, Beslut, Korrespondans, Avtal, Övrigt", () => {
+  it("rotnivån i ordning: Faktura, Domstol, Beslut, Korrespondens, Avtal, Övrigt", () => {
     expect(DEFAULT_MATTER_FOLDERS.map((n) => n.name))
-      .toEqual(["Faktura", "Domstol", "Beslut", "Korrespondans", "Avtal", "Övrigt"]);
+      .toEqual(["Faktura", "Domstol", "Beslut", "Korrespondens", "Avtal", "Övrigt"]);
   });
 
   it("Domstol har Kallelse, Föreläggande, Förordnande, Inlagor", () => {

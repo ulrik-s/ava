@@ -329,7 +329,7 @@ Domstol
   Förordnande
   Inlagor
 Beslut
-Korrespondans
+Korrespondens
 Avtal
 Övrigt
 ```

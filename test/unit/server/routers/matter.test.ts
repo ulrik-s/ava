@@ -174,7 +174,7 @@ describe("matter.create", () => {
     const folders = ((src(ds).documentFolders ?? []) as Array<Record<string, unknown>>)
       .filter((f) => f.matterId === m.id);
     const roots = folders.filter((f) => f.parentId === null).map((f) => f.name);
-    expect(roots).toEqual(["Faktura", "Domstol", "Beslut", "Korrespondans", "Avtal", "Övrigt"]);
+    expect(roots).toEqual(["Faktura", "Domstol", "Beslut", "Korrespondens", "Avtal", "Övrigt"]);
     const domstol = folders.find((f) => f.name === "Domstol");
     expect(folders.filter((f) => f.parentId === domstol?.id).map((f) => f.name))
       .toEqual(["Kallelse", "Föreläggande", "Förordnande", "Inlagor"]);
