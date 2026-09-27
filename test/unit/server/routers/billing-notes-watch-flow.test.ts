@@ -97,10 +97,16 @@ describe("faktureringshändelser blir tjänsteanteckningar (#1221)", () => {
     expect(await actionTitles(c)).toEqual(["Registrera domstolens beslut på kostnadsräkningen"]);
 
     await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: run.id, awardedOre: 100_000, prutningOre: -20_000 });
-    expect(await actionTitles(c)).toEqual([]);
+    // Beslutet registrerat → "Skapa faktura" (#1225), samma villkor som KR-kortets knapp.
+    expect(await actionTitles(c)).toEqual(["Skapa faktura för kostnadsräkningen (1 000,00 kr)"]);
     await c.billingRun.appealKostnadsrakning({ billingRunId: run.id });
     expect(await actionTitles(c)).toEqual(["Registrera hovrättens beslut på kostnadsräkningen"]);
     await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: run.id, awardedOre: 110_000 });
+    const { items } = await c.watchlist.list({ mine: false });
+    expect(items.filter((i) => i.kind === "billingAction")).toEqual([expect.objectContaining({
+      title: expect.stringMatching(/^Skapa faktura för kostnadsräkningen \(1\s100,00\skr\)$/),
+      detail: "Hovrättens beslut är registrerat.", amountOre: 110_000,
+    })]);
     const { invoice } = await c.billingRun.setVerdict({ billingRunId: run.id });
 
     const texts = await noteTexts(c);
@@ -110,6 +116,25 @@ describe("faktureringshändelser blir tjänsteanteckningar (#1221)", () => {
     expect(texts.some((t) => t.startsWith(`Faktura ${invoice.invoiceNumber} skapad (kostnadsräkning till domstol, `))).toBe(true);
     // Domstolsfakturan är skapad men inte skickad → nästa åtgärd.
     expect(await actionTitles(c)).toEqual([`Skicka faktura ${invoice.invoiceNumber}`]);
+  });
+
+  it("kreditfaktura: 'Kreditfaktura … skapad (belopp) — krediterar faktura …' av användaren (#1225)", async () => {
+    const c = makeCaller({ paymentMethod: "PRIVAT" });
+    const a = await c.billingRun.createAcconto({ matterId: M, clientShareBips: 2000, amountOre: 100_000 });
+    const credit = await c.invoice.createCredit({ invoiceId: a.invoice.id });
+    const notes = await c.serviceNote.list({ matterId: M });
+    const note = notes.find((n) => n.text.startsWith("Kreditfaktura"));
+    expect(note).toMatchObject({ authorId: "u-1" });
+    expect(norm(note!.text)).toBe(`Kreditfaktura ${credit.invoiceNumber} skapad (−1 000,00 kr) — krediterar faktura ${a.invoice.invoiceNumber}`);
+  });
+
+  it("slutreglering med kreditfaktura loggas bara som slutreglering (ingen dubbel kreditanteckning)", async () => {
+    const c = makeCaller({ paymentMethod: "RATTSHJALP", clientShareBips: 5000, radgivningBetaldAt: null }, { minutes: 60 });
+    await c.billingRun.createAcconto({ matterId: M, recipient: "KLIENT", clientShareBips: 5000, amountOre: 5_000_000 });
+    const s = await c.billingRun.settleCoverage({ matterId: M, payerRecipient: "DOMSTOL" });
+    const texts = await noteTexts(c);
+    expect(texts.some((t) => t.startsWith(`Ärendet slutreglerat — kreditfaktura ${s.clientInvoice.invoiceNumber}`))).toBe(true);
+    expect(texts.some((t) => t.startsWith("Kreditfaktura"))).toBe(false);
   });
 
   it("ångrad kostnadsräkning loggas; utan domstolskontakt står 'domstolen'", async () => {
@@ -168,6 +193,15 @@ describe("billingAction i Att bevaka (#1221)", () => {
     const c = makeCaller({ paymentMethod: "PENDING" }, { otherLawyer: true });
     expect(await actionTitles(c, true)).toEqual([]);
     expect(await actionTitles(c, false)).toEqual(["Välj betalningssätt"]);
+  });
+
+  it("rättshjälp: beslutad kostnadsräkning → 'Skapa faktura …'; slutregleringen tar bort den (#1225)", async () => {
+    const c = makeCaller({ paymentMethod: "RATTSHJALP", clientShareBips: 0, radgivningBetaldAt: null });
+    const { run } = await c.billingRun.createKostnadsrakning({ matterId: M });
+    await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: run.id, awardedOre: 50_000 });
+    expect(await actionTitles(c)).toEqual(["Skapa faktura för kostnadsräkningen (500,00 kr)"]);
+    await c.billingRun.settleCoverage({ matterId: M, payerRecipient: "DOMSTOL" });
+    expect((await actionTitles(c)).some((t) => t.startsWith("Skapa faktura för kostnadsräkningen"))).toBe(false);
   });
 
   it("stängda ärenden väntar inte på något", async () => {

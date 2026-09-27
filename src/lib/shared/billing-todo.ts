@@ -10,7 +10,7 @@
 
 import { settlementArvodeNet } from "./billing-work-value";
 import { computeCoverageSplit } from "./coverage-billing";
-import { availableKrActions, krStateOf, type KostnadsrakningStatus } from "./kostnadsrakning-flow";
+import { availableKrActions, canKrAction, krStateOf, type KostnadsrakningStatus } from "./kostnadsrakning-flow";
 import type { BillingRunRecipient, BillingRunStatus, BillingRunType, InvoiceStatus, PaymentMethod, TimeEntryKind } from "./schemas/enums";
 import type { BillingRunId } from "./schemas/ids";
 
@@ -23,6 +23,8 @@ export interface TodoRun {
   kostnadsrakningStatus?: KostnadsrakningStatus | null | undefined;
   beslutSlutgiltigt?: boolean | null | undefined;
   prutningOre?: number | null | undefined;
+  /** Domstolens dömda belopp (brutto, öre) när beslutet är registrerat. */
+  awardedOre?: number | null | undefined;
   invoice?: { status?: InvoiceStatus | null | undefined } | null | undefined;
 }
 
@@ -47,6 +49,28 @@ export function krAwaitingBeslut(runs: readonly TodoRun[]): "TINGSRATT" | "HOVRA
   const acts = availableKrActions(krStateOf(kr));
   if (acts.includes("REGISTRERA_HOVRATT_BESLUT")) return "HOVRATT";
   return acts.includes("REGISTRERA_BESLUT") ? "TINGSRATT" : null;
+}
+
+/**
+ * Kan faktura skapas på kostnadsräkningen? Beslutet är registrerat men fakturan
+ * inte skapad. KR-kortets "Skapa faktura"-knapp och Att bevaka läser båda detta.
+ */
+export function krCanCreateInvoice(r: TodoRun): boolean {
+  return canKrAction(krStateOf(r), "SKAPA_FAKTURA");
+}
+
+/** Beslutad kostnadsräkning som väntar på sin faktura. */
+export interface KrAwaitingInvoice {
+  /** Beslutet är hovrättens (slutgiltiga), inte tingsrättens. */
+  hovratt: boolean;
+  awardedOre: number | null;
+}
+
+/** Väntar den aktiva kostnadsräkningen på att fakturan skapas? Null = nej. */
+export function krAwaitingInvoice(runs: readonly TodoRun[]): KrAwaitingInvoice | null {
+  const kr = runs.find(isActiveKr);
+  if (!kr || !krCanCreateInvoice(kr)) return null;
+  return { hovratt: kr.beslutSlutgiltigt ?? false, awardedOre: kr.awardedOre ?? null };
 }
 
 /** Har klienten redan fått ett självrisk-aconto? */

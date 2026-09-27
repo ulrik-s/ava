@@ -15,7 +15,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { invoiceStatusNote, radgivningInvoicedNote } from "@/lib/shared/billing-notes";
+import { creditCreatedNote, invoiceStatusNote, radgivningInvoicedNote } from "@/lib/shared/billing-notes";
 import { arvodeInclVatOre, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
 import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-state-machine";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
@@ -282,6 +282,7 @@ export const invoiceRouter = router({
         }) satisfies Partial<Invoice>);
 
         await repos.invoices.update(original.id, { status: "CANCELLED" });
+        await logMatterNote(repos, ctx, original.matterId, creditCreatedNote(credit.invoiceNumber, credit.amount, original.invoiceNumber));
         return credit;
       }),
     ),

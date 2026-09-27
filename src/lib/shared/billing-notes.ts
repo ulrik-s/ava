@@ -37,6 +37,14 @@ export function invoiceCreatedNote(invoiceNumber: string | null | undefined, typ
   return `Faktura ${nr(invoiceNumber)} skapad (${label}, ${formatKr(amountOre)})`;
 }
 
+/**
+ * Manuell kreditering (`invoice.createCredit`). Beloppet är kreditfakturans eget
+ * (negativt). Slutregleringens kreditfaktura står i `settledNote` i stället.
+ */
+export function creditCreatedNote(creditNumber: string | null | undefined, amountOre: number, originalNumber: string | null | undefined): string {
+  return `Kreditfaktura ${nr(creditNumber)} skapad (${formatKr(amountOre)}) — krediterar faktura ${nr(originalNumber)}`;
+}
+
 export function kostnadsrakningSubmittedNote(reference: string | null | undefined, court: string | null | undefined, grossOre: number): string {
   const ref = reference ? ` ${reference}` : "";
   return `Kostnadsräkning${ref} skickad till ${court ?? "domstolen"} — ${formatKr(grossOre)}`;

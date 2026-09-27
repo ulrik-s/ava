@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import {
-  beslutRegisteredNote, invoiceCreatedNote, invoiceQueuedNote, invoiceSentNote, invoiceStatusNote,
+  beslutRegisteredNote, creditCreatedNote, invoiceCreatedNote, invoiceQueuedNote, invoiceSentNote, invoiceStatusNote,
   insurerPruningNote, kostnadsrakningSubmittedNote, krAppealedNote, krVoidedNote, noteTimestamp,
   paymentMethodNote, radgivningInvoicedNote, rattsskyddNekadNote, settledNote,
 } from "@/lib/shared/billing-notes";
@@ -34,6 +34,11 @@ describe("anteckningstexter", () => {
   it("faktura skapad: typen som etikett, eller en egen beskrivning", () => {
     expect(norm(invoiceCreatedNote("F-2026-0002", "ACCONTO", 100_000))).toBe("Faktura F-2026-0002 skapad (aconto, 1 000,00 kr)");
     expect(norm(invoiceCreatedNote(null, "FINAL", 100, "kostnadsräkning till domstol"))).toBe("Faktura (utan nummer) skapad (kostnadsräkning till domstol, 1,00 kr)");
+  });
+
+  it("kreditfaktura: nummer, (negativt) belopp och krediterad faktura; saknat nummer (#1225)", () => {
+    expect(norm(creditCreatedNote("F-2026-0003", -100_000, "F-2026-0002"))).toBe("Kreditfaktura F-2026-0003 skapad (−1 000,00 kr) — krediterar faktura F-2026-0002");
+    expect(norm(creditCreatedNote(null, -100, undefined))).toBe("Kreditfaktura (utan nummer) skapad (−1,00 kr) — krediterar faktura (utan nummer)");
   });
 
   it("kostnadsräkning skickad: med referens och domstol, annars generiskt", () => {

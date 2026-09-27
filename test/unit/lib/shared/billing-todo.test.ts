@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import {
-  hasSjalvriskAconto, insurerPruningPending, isActiveKr, isUnsentInvoice, krAwaitingBeslut,
+  hasSjalvriskAconto, insurerPruningPending, isActiveKr, isUnsentInvoice, krAwaitingBeslut, krAwaitingInvoice, krCanCreateInvoice,
   paymentMethodPending, rattshjalpSjalvriskOre, sjalvriskAccontoDue, type TodoRun,
 } from "@/lib/shared/billing-todo";
 import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
@@ -42,6 +42,28 @@ describe("isActiveKr / krAwaitingBeslut", () => {
     expect(isActiveKr(kr("FAKTURERAD"))).toBe(false);
     expect(isActiveKr(kr(null))).toBe(false);
     expect(krAwaitingBeslut([])).toBeNull();
+  });
+});
+
+describe("krCanCreateInvoice / krAwaitingInvoice (#1225)", () => {
+  it("bara en beslutad KR kan faktureras", () => {
+    expect(krCanCreateInvoice(kr("BESLUTAD"))).toBe(true);
+    expect(krCanCreateInvoice(kr("BESLUTAD", { beslutSlutgiltigt: true }))).toBe(true);
+    expect(krCanCreateInvoice(kr("INSKICKAD"))).toBe(false);
+    expect(krCanCreateInvoice(kr("OVERKLAGAD"))).toBe(false);
+    expect(krCanCreateInvoice(kr("FAKTURERAD"))).toBe(false);
+  });
+
+  it("beslutad aktiv KR → dömt belopp + tingsrätt/hovrätt", () => {
+    expect(krAwaitingInvoice([kr("BESLUTAD", { awardedOre: 40_000 })])).toEqual({ hovratt: false, awardedOre: 40_000 });
+    expect(krAwaitingInvoice([kr("BESLUTAD", { beslutSlutgiltigt: true })])).toEqual({ hovratt: true, awardedOre: null });
+  });
+
+  it("ingen aktiv KR, ej beslutad eller ångrad → null", () => {
+    expect(krAwaitingInvoice([])).toBeNull();
+    expect(krAwaitingInvoice([kr("INSKICKAD")])).toBeNull();
+    expect(krAwaitingInvoice([kr("BESLUTAD", { status: "VOIDED" })])).toBeNull();
+    expect(krAwaitingInvoice([kr("FAKTURERAD", { awardedOre: 1 })])).toBeNull();
   });
 });
 

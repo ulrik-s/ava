@@ -23,7 +23,7 @@
  */
 
 import {
-  insurerPruningPending, isUnsentInvoice, krAwaitingBeslut, paymentMethodPending, sjalvriskAccontoDue,
+  insurerPruningPending, isUnsentInvoice, krAwaitingBeslut, krAwaitingInvoice, paymentMethodPending, sjalvriskAccontoDue,
   type TodoRun,
 } from "./billing-todo";
 import { coverageStatus, type CoverageCapInput } from "./coverage-cap";
@@ -400,6 +400,18 @@ function krBeslutItems(m: BillingActionMatter): WatchlistItem[] {
   })];
 }
 
+/** "Skapa faktura för kostnadsräkningen" — beslutet är registrerat, fakturan inte skapad. */
+function krInvoiceItems(m: BillingActionMatter): WatchlistItem[] {
+  const pending = krAwaitingInvoice(m.runs);
+  if (pending === null) return [];
+  const belopp = pending.awardedOre === null ? "" : ` (${formatKr(pending.awardedOre)})`;
+  return [actionItem(m, {
+    title: `Skapa faktura för kostnadsräkningen${belopp}`,
+    detail: pending.hovratt ? "Hovrättens beslut är registrerat." : "Domstolens beslut är registrerat.",
+    amountOre: pending.awardedOre,
+  })];
+}
+
 /** Övriga skäl — ett per ärende, när predikatet slår till. */
 function stateItems(m: BillingActionMatter): WatchlistItem[] {
   const out: WatchlistItem[] = [];
@@ -421,5 +433,5 @@ function stateItems(m: BillingActionMatter): WatchlistItem[] {
 
 /** Faktureringsåtgärder som väntar, per ärende. Försvinner när åtgärden är gjord. */
 export function billingActionItems(matters: readonly BillingActionMatter[], now: Date): WatchlistItem[] {
-  return matters.flatMap((m) => [...unsentInvoiceItems(m, now), ...krBeslutItems(m), ...stateItems(m)]);
+  return matters.flatMap((m) => [...unsentInvoiceItems(m, now), ...krBeslutItems(m), ...krInvoiceItems(m), ...stateItems(m)]);
 }
