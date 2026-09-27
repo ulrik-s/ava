@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest-compat";
 import {
+  withoutMaximized,
   LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, screenClassFor, type SerializedLayout,
 } from "@/lib/shared/layout/dock-layout";
 
@@ -59,5 +60,19 @@ describe("anpassa sparad layout till dagens paneler", () => {
 
   it("inget kvar → null (använd standardlayouten)", () => {
     expect(reconcileLayout(LAYOUT, ["billing"])).toBeNull();
+  });
+});
+
+describe("withoutMaximized (#1263)", () => {
+  it("tar bort grid.maximizedNode så maximeringen aldrig sparas", () => {
+    const layout = { grid: { root: { type: "leaf" }, width: 1, height: 1, orientation: "HORIZONTAL", maximizedNode: { location: [0] } }, panels: {} };
+    const out = withoutMaximized(layout);
+    expect("maximizedNode" in out.grid).toBe(false);
+    expect(out.grid.width).toBe(1);
+    expect("maximizedNode" in layout.grid).toBe(true); // originalet orört
+  });
+  it("lämnar en layout utan maximering orörd (samma objekt)", () => {
+    const layout = { grid: { width: 1 }, panels: {} };
+    expect(withoutMaximized(layout)).toBe(layout);
   });
 });

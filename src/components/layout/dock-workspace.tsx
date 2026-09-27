@@ -22,8 +22,9 @@ import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { useScreenClass } from "@/lib/client/layout/use-screen-class";
 import { trpc } from "@/lib/client/trpc";
 import {
-  LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, type SerializedLayout,
+  LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, withoutMaximized, type SerializedLayout,
 } from "@/lib/shared/layout/dock-layout";
+import { MaximizeAction } from "./maximize-action";
 import type { PanelDef } from "./panel-def";
 import { PhonePanels } from "./phone-panels";
 
@@ -127,6 +128,7 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { scr
           key={generation}
           className="min-h-0 flex-1"
           components={COMPONENTS}
+          rightHeaderActionsComponent={MaximizeAction}
           theme={document.documentElement.classList.contains("dark") ? themeDark : themeLight}
           onReady={({ api }) => {
             apiRef.current = api;
@@ -148,7 +150,7 @@ function useLayoutPersistence(key: string, remount: () => void) {
   const clearOrg = trpc.prefs.clearOrgDefault.useMutation();
   const touched = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stored = (layout: SerializedDockview) => ({ version: LAYOUT_VERSION, layout });
+  const stored = (layout: SerializedDockview) => ({ version: LAYOUT_VERSION, layout: withoutMaximized(layout) });
   const refresh = () => { void utils.prefs.get.invalidate({ key }).then(remount); };
   return {
     markTouched: () => { touched.current = true; },
