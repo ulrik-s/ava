@@ -42,8 +42,8 @@ describe("anteckningstexter", () => {
   });
 
   it("kostnadsräkning skickad: med referens och domstol, annars generiskt", () => {
-    expect(norm(kostnadsrakningSubmittedNote("KR-2026-0001", "Stockholms tingsrätt", 500_000))).toBe("Kostnadsräkning KR-2026-0001 skickad till Stockholms tingsrätt — 5 000,00 kr");
-    expect(norm(kostnadsrakningSubmittedNote(null, null, 100))).toBe("Kostnadsräkning skickad till domstolen — 1,00 kr");
+    expect(norm(kostnadsrakningSubmittedNote("KR-2026-0001", "Stockholms tingsrätt", 500_000))).toBe("Kostnadsräkning KR-2026-0001 till Stockholms tingsrätt skapad — 5 000,00 kr");
+    expect(norm(kostnadsrakningSubmittedNote(null, null, 100))).toBe("Kostnadsräkning till domstolen skapad — 1,00 kr");
   });
 
   it("beslut: tingsrätt utan prutning, hovrätt med prutning", () => {

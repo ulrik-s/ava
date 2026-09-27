@@ -47,7 +47,8 @@ export function creditCreatedNote(creditNumber: string | null | undefined, amoun
 
 export function kostnadsrakningSubmittedNote(reference: string | null | undefined, court: string | null | undefined, grossOre: number): string {
   const ref = reference ? ` ${reference}` : "";
-  return `Kostnadsräkning${ref} skickad till ${court ?? "domstolen"} — ${formatKr(grossOre)}`;
+  // Skapas först, skickas i ett senare steg — anteckningen säger därför "skapad".
+  return `Kostnadsräkning${ref} till ${court ?? "domstolen"} skapad — ${formatKr(grossOre)}`;
 }
 
 export interface BeslutNoteInput {
