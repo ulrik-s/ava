@@ -25,6 +25,7 @@ import type { IEventLog } from "@/lib/server/data-store/IDataStore";
 import type { AvaEvent, EmitInput, EventFilter } from "@/lib/server/events/schema";
 import type { IPorts } from "@/lib/server/ports";
 import type { Repositories } from "@/lib/server/repositories/repositories";
+import type { ProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import type { SyncStore } from "@/lib/server/sync/sync-store";
 import type { Context } from "@/lib/server/trpc-core";
 import type { Capabilities } from "@/lib/shared/capabilities";
@@ -92,6 +93,8 @@ export interface ServerContextDeps {
   headerNames?: ForwardedHeaderNames;
   /** Server-sidans delta-sync-port (ADR 0017) — driver `sync`-routern. */
   sync?: SyncStore;
+  /** Kör om köade procedur-anrop (#1265, ADR 0037) — driver `sync.replay`. */
+  replayer?: ProcedureReplayer;
   /**
    * Bearer-JWT-verifiering (ADR 0028/0013) för klienter utan OIDC-cookie
    * (helper, Office-add-in). Utelämnad → bara cookie-vägen (oförändrat).
@@ -122,7 +125,7 @@ export async function createServerContext(req: Request, deps: ServerContextDeps)
     (deps.bearer ? await bearerClaims(req.headers, deps.bearer) : null);
   const users = await deps.repos.users.listByOrg(asId<"OrganizationId">(deps.organizationId));
   const principal = new OidcAuthProvider(claims, toAllowlist(users)).getPrincipal();
-  return buildContext({
+  const ctx = buildContext({
     eventLog: serverFirstEventLog,
     ports: deps.ports,
     principal,
@@ -134,4 +137,8 @@ export async function createServerContext(req: Request, deps: ServerContextDeps)
     requestId: requestIdFrom(req.headers),
     capabilities: serverCapabilities(),
   });
+  // Omkörningen sker som DEN HÄR requestens principal (#1265) — aldrig som
+  // någon annan än den som skickade anropet.
+  const replayer = deps.replayer;
+  return replayer ? { ...ctx, replayProcedure: (call) => replayer.replay(call, ctx) } : ctx;
 }

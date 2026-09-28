@@ -16,7 +16,7 @@ function fakeStore(opts: { pending: number; fail?: boolean }) {
       state.reconciles++;
       if (opts.fail) throw new Error("nätverksfel");
       state.pending = 0;
-      return { pulled: 0, pushed: 1, rebased: 0, conflicts: [], cursor: 1 };
+      return { pulled: 0, pushed: 1, rebased: 0, replayed: 0, conflicts: [], cursor: 1 };
     },
     pendingCount: () => state.pending,
     onLocalChange: (l: () => void) => { state.listener = l; return () => { state.listener = null; }; },

@@ -186,6 +186,27 @@ export const changeLog = pgTable("change_log", {
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("change_log_org_seq_idx").on(t.organizationId, t.seq)]);
 
+/**
+ * Utfall av köade procedur-anrop som servern kört om (#1265, ADR 0037).
+ * SERVER-ONLY (ingen entitet, synkas aldrig). Nyckeln är klientens
+ * `mutationId` → samma anrop körs högst en gång, även om klienten skickar det
+ * igen efter ett avbrott. Ett accepterat utfall skrivs i SAMMA transaktion som
+ * anropets skrivningar; ett avvisat efteråt (ingenting annat skrevs).
+ */
+export const syncReplays = pgTable("sync_replays", {
+  mutationId: uuid("mutation_id").primaryKey(),
+  organizationId: uuid("organization_id").notNull(),
+  userId: uuid("user_id"),
+  path: text("path").notNull(),
+  codeVersion: text("code_version").notNull(),
+  /** accepted | rejected */
+  status: text("status").notNull(),
+  /** tRPC-kod och regelns meddelande (bara rejected). */
+  code: text("code"),
+  reason: text("reason"),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("sync_replays_org_at_idx").on(t.organizationId, t.at)]);
+
 // ─── Billing (scopar via matter/invoice — ingen egen organization_id) ──────
 
 export const timeEntries = pgTable("time_entries", {

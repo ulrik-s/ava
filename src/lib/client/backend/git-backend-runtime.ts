@@ -13,7 +13,7 @@
  */
 
 import type { TRPCLink } from "@trpc/client";
-import { inProcessLink } from "@/lib/client/demo/in-process-link";
+import { inProcessLink, type ProcedureRecorder } from "@/lib/client/demo/in-process-link";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import type { AuthProvider } from "@/lib/server/auth/principal";
@@ -29,6 +29,8 @@ export interface GitBackendRuntimeDeps {
   authProvider?: AuthProvider;
   /** Default: `buildGitPorts(dataStore)`. Override i tester. */
   ports?: IPorts;
+  /** Procedur-kön (#1265): satt i self-hosted, där servern kör om anropen. */
+  recordProcedure?: ProcedureRecorder;
 }
 
 export class GitBackendRuntime implements BackendRuntime {
@@ -38,6 +40,6 @@ export class GitBackendRuntime implements BackendRuntime {
     const ports = this.deps.ports ?? buildGitPorts(this.deps.dataStore);
     const principal = (this.deps.authProvider ?? new GitAuthProvider()).getPrincipal();
     const ctx = buildContext({ dataStore: this.deps.dataStore, ports, principal });
-    return inProcessLink(ctx);
+    return inProcessLink(ctx, this.deps.recordProcedure ? { recordProcedure: this.deps.recordProcedure } : {});
   }
 }

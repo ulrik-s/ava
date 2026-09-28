@@ -10,8 +10,10 @@
  */
 
 import type { TRPCClient } from "@trpc/client";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
-import type { PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
+import type { QueuedMutation, QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
+import type {
+  ProcedureReplayResult, PullResult, PushResult, SyncTransport,
+} from "@/lib/server/data-store/in-memory/sync-transport";
 import type { AppRouter } from "@/lib/server/routers/_app";
 
 export class TrpcSyncTransport implements SyncTransport {
@@ -23,5 +25,10 @@ export class TrpcSyncTransport implements SyncTransport {
 
   push(mutation: QueuedMutation): Promise<PushResult> {
     return this.client.sync.push.mutate(mutation) as Promise<PushResult>;
+  }
+
+  /** Låt servern köra om ett köat procedur-anrop (#1265, ADR 0037). */
+  pushProcedure(call: QueuedProcedureCall): Promise<ProcedureReplayResult> {
+    return this.client.sync.replay.mutate(call) as Promise<ProcedureReplayResult>;
   }
 }

@@ -220,6 +220,26 @@ sist i `build-demo.sh` och förcachar skalet: sidorna utan id (+ RSC-payloads),
 - **E2E**: `demo-storage-persistence.spec.ts`, `demo-offline.spec.ts` (kontakt
   offline) och `conflict/unsynced-logout.spec.ts` mot full self-hosted-stack.
 
+## Procedur-kön (ADR 0037, #1265)
+
+Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
+`timeEntry.create/update/delete`) köas som **anrop**, inte som färdiga rader:
+
+- **Klienten** kör proceduren lokalt som förut (offline fungerar). In-process-
+  länken ger en create ett klient-genererat UUIDv7 och kör anropet exklusivt
+  (`SharedExclusiveLock`), så `CachingSyncDataStore.runQueuedProcedure` kan
+  fånga dess radskrivningar som `touches` i stället för att köa dem som rader.
+  Kastar proceduren rullas skrivningarna tillbaka och ingenting köas.
+- **Servern** (`DrizzleProcedureReplayer`, `sync.replay`) kör samma
+  `appRouter`-procedur i en transaktion som den inloggade användaren.
+  Utfallet sparas i `sync_replays` (nyckel `mutationId`, samma transaktion) →
+  körs högst en gång. Regelbrott (BAD_REQUEST, NOT_FOUND, PRECONDITION_FAILED,
+  FORBIDDEN, CONFLICT) avvisar; tekniska fel kastas och klienten försöker igen.
+- **Svaret** bär de berörda radernas kanoniska läge (org-scopat, annars
+  tombstone). Klienten ersätter sitt optimistiska läge med dem i båda utfallen;
+  en avvisning ytläggs som konflikt.
+- Övriga entiteter går via radkön tills de flyttas.
+
 ## Data-modell
 
 **Sanningskälla:** `src/lib/shared/schemas/index.ts` — `ENTITY_REGISTRY` (zod-schema

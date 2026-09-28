@@ -17,6 +17,8 @@ import { IdbKv } from "./idb-kv";
 import type { MutationEvent, MutationKind } from "./writable-delegate";
 
 export interface QueuedMutation {
+  /** Radpost (radkön). Saknas på poster persisterade före #1265 — de är rader. */
+  type?: "row";
   /** Klient-genererat UUIDv7 — dedupe-nyckel + idempotent uppspelning. */
   mutationId: string;
   entity: string;
@@ -30,18 +32,52 @@ export interface QueuedMutation {
   enqueuedAt: number;
 }
 
+/** En rad som ett köat procedur-anrop skrev lokalt (för att läsa tillbaka serverns läge). */
+export interface ProcedureTouch {
+  entity: string;
+  id: string;
+}
+
+/**
+ * Ett köat procedur-anrop (#1265, ADR 0037): servern kör om `path(input)`
+ * auktoritativt med samma `appRouter`. Klientens lokala resultat är bara
+ * optimistiskt — `touches` säger vilka rader som ska ersättas av serverns läge.
+ */
+export interface QueuedProcedureCall {
+  type: "procedure";
+  mutationId: string;
+  /** tRPC-sökvägen, t.ex. `timeEntry.create` (se `QUEUED_PROCEDURES`). */
+  path: string;
+  input: Record<string, unknown>;
+  /** Klientkodens version när anropet köades (för migrering, #1247/#1269). */
+  codeVersion: string;
+  touches: ProcedureTouch[];
+  enqueuedAt: number;
+}
+
+/** En post i kön: en färdig rad eller ett procedur-anrop. */
+export type QueueEntry = QueuedMutation | QueuedProcedureCall;
+
+/** Är posten ett procedur-anrop (och inte en rad)? */
+export function isProcedureCall(entry: QueueEntry): entry is QueuedProcedureCall {
+  return entry.type === "procedure";
+}
+
+/** Klientkodens version — deploy-sha:n när den finns (samma som demo-cachens nyckel). */
+export const SYNC_CODE_VERSION = process.env.NEXT_PUBLIC_DEMO_VERSION || "dev";
+
 export interface MutationQueuePersistence {
-  load(): Promise<QueuedMutation[]>;
-  save(items: readonly QueuedMutation[]): Promise<void>;
+  load(): Promise<QueueEntry[]>;
+  save(items: readonly QueueEntry[]): Promise<void>;
 }
 
 /** In-memory-persistens (tester/demo) — djupkopierar för att undvika delad referens. */
 export class InMemoryMutationQueuePersistence implements MutationQueuePersistence {
-  constructor(private items: QueuedMutation[] = []) {}
-  async load(): Promise<QueuedMutation[]> {
+  constructor(private items: QueueEntry[] = []) {}
+  async load(): Promise<QueueEntry[]> {
     return structuredClone(this.items);
   }
-  async save(items: readonly QueuedMutation[]): Promise<void> {
+  async save(items: readonly QueueEntry[]): Promise<void> {
     this.items = structuredClone([...items]);
   }
 }
@@ -55,10 +91,10 @@ export class IndexedDbMutationQueuePersistence implements MutationQueuePersisten
   ) {
     this.kv = new IdbKv(factory, dbName, "queue");
   }
-  async load(): Promise<QueuedMutation[]> {
-    return (await this.kv.get<QueuedMutation[]>("pending")) ?? [];
+  async load(): Promise<QueueEntry[]> {
+    return (await this.kv.get<QueueEntry[]>("pending")) ?? [];
   }
-  async save(items: readonly QueuedMutation[]): Promise<void> {
+  async save(items: readonly QueueEntry[]): Promise<void> {
     await this.kv.put("pending", [...items]);
   }
 }
@@ -71,8 +107,15 @@ export interface EnqueueOpts {
   now?: number;
 }
 
+/** Val för `enqueueProcedure`. */
+export interface EnqueueProcedureOpts {
+  mutationId?: string;
+  now?: number;
+  codeVersion?: string;
+}
+
 export class MutationQueue {
-  private items: QueuedMutation[] = [];
+  private items: QueueEntry[] = [];
 
   constructor(private readonly persistence?: MutationQueuePersistence) {}
 
@@ -86,7 +129,7 @@ export class MutationQueue {
   /** Köa en mutation sist. Idempotent på `mutationId` (re-enqueue → no-op). */
   async enqueue(event: MutationEvent<Record<string, unknown>>, opts: EnqueueOpts = {}): Promise<QueuedMutation> {
     const mutationId = opts.mutationId ?? uuidv7(opts.now);
-    const existing = this.items.find((m) => m.mutationId === mutationId);
+    const existing = this.items.find((m): m is QueuedMutation => m.mutationId === mutationId && !isProcedureCall(m));
     if (existing) return existing;
     const item = omitUndefined({
       mutationId,
@@ -102,8 +145,30 @@ export class MutationQueue {
     return item;
   }
 
+  /** Köa ett procedur-anrop sist (#1265). Idempotent på `mutationId`. */
+  async enqueueProcedure(
+    call: Pick<QueuedProcedureCall, "path" | "input" | "touches">,
+    opts: EnqueueProcedureOpts = {},
+  ): Promise<QueuedProcedureCall> {
+    const mutationId = opts.mutationId ?? uuidv7(opts.now);
+    const existing = this.items.find((m): m is QueuedProcedureCall => m.mutationId === mutationId && isProcedureCall(m));
+    if (existing) return existing;
+    const item: QueuedProcedureCall = {
+      type: "procedure",
+      mutationId,
+      path: call.path,
+      input: call.input,
+      codeVersion: opts.codeVersion ?? SYNC_CODE_VERSION,
+      touches: call.touches,
+      enqueuedAt: opts.now ?? Date.now(),
+    };
+    this.items.push(item);
+    await this.persist();
+    return item;
+  }
+
   /** Köposterna i FIFO-ordning (för uppspelning). */
-  pending(): readonly QueuedMutation[] {
+  pending(): readonly QueueEntry[] {
     return this.items;
   }
 
@@ -123,7 +188,7 @@ export class MutationQueue {
   }
 
   /** Ersätt hela kön (id-reparation vid uppstart, se legacy-id-repair.ts). */
-  async replaceAll(items: readonly QueuedMutation[]): Promise<void> {
+  async replaceAll(items: readonly QueueEntry[]): Promise<void> {
     this.items = [...items];
     await this.persist();
   }

@@ -59,6 +59,10 @@ sanning — tilldelas i serverns körning: fakturanummer och andra obrutna serie
 **Migrering:** entitet för entitet. Radkön finns kvar för procedurer som ännu
 inte flyttats; servern validerar radkön under övergången (#1242).
 
+**Genomfört (#1265):** kärnan (kö-format, `sync.replay`, `sync_replays`,
+exklusiv lokal körning med `touches`) och tidsposterna
+(`timeEntry.create/update/delete`). Se `docs/architecture.md` → Procedur-kön.
+
 ## Konsekvenser
 
 - Affärsreglerna upprätthålls på servern utan att dubbelskrivas — samma kod körs

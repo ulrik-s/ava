@@ -92,7 +92,16 @@ function reposForTx(tx: AppDb, recorder?: ChangeLogRecorder): Repositories {
   return repos;
 }
 
-export function buildDrizzleRepositories(db: AppDb): Repositories {
+/**
+ * Server-aggregatet: `Repositories` + en transaktion som även ger tx-handlen,
+ * för server-only-tabeller som skrivs atomiskt med entiteterna (t.ex.
+ * `sync_replays`, #1265 — utfallet ska committas ihop med anropets skrivningar).
+ */
+export interface DrizzleRepositories extends Repositories {
+  transactionWithDb<T>(fn: (repos: Repositories, tx: AppDb) => Promise<T>): Promise<T>;
+}
+
+export function buildDrizzleRepositories(db: AppDb): DrizzleRepositories {
   // Fånga change-log-recordern när `enableChangeLogOnAll` slår på den, så
   // `transaction` kan ge SAMMA recorder till tx-scopade repos (#647).
   let recorder: ChangeLogRecorder | undefined;
@@ -106,5 +115,6 @@ export function buildDrizzleRepositories(db: AppDb): Repositories {
   return {
     ...entities,
     transaction: (fn) => db.transaction((tx) => fn(reposForTx(tx, recorder))),
+    transactionWithDb: (fn) => db.transaction((tx) => fn(reposForTx(tx, recorder), tx)),
   };
 }

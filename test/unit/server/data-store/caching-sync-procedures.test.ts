@@ -1,0 +1,97 @@
+/**
+ * `CachingSyncDataStore.runQueuedProcedure` (#1265, ADR 0037).
+ *
+ * En köbar procedur körs lokalt som förut (fungerar offline), men raderna den
+ * skriver köas INTE som rader: kön får EN post med anropet och vilka rader det
+ * berörde. Misslyckas proceduren lokalt rullas dess skrivningar tillbaka och
+ * ingenting köas.
+ */
+import { describe, expect, it } from "vitest-compat";
+import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
+import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
+import { isProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { uuidv7 } from "@/lib/shared/uuid";
+
+const entry = (id: string) => ({ id, matterId: uuidv7(), userId: uuidv7(), date: new Date(), minutes: 30, description: "Samtal", hourlyRate: 1500 });
+
+async function store() {
+  return CachingSyncDataStore.create({ transport: noSyncTransport });
+}
+
+describe("runQueuedProcedure", () => {
+  it("köar ETT anrop med berörda rader — inga radposter", async () => {
+    const ds = await store();
+    const id = uuidv7();
+    const result = await ds.runQueuedProcedure({ path: "timeEntry.create", input: { id } }, async () => {
+      await ds.store.timeEntries.create({ data: entry(id) as never });
+      return "ok";
+    });
+    expect(result).toBe("ok");
+    expect(ds.pendingCount()).toBe(1);
+    const [item] = ds.pendingEntries();
+    expect(item && isProcedureCall(item)).toBe(true);
+    expect(item).toMatchObject({ path: "timeEntry.create", input: { id }, touches: [{ entity: "timeEntry", id }] });
+    // Den lokala raden finns — offline fungerar som förut.
+    expect(await ds.store.timeEntries.findUnique({ where: { id } })).toMatchObject({ id });
+  });
+
+  it("en rad som berörs flera gånger står bara en gång i touches", async () => {
+    const ds = await store();
+    const id = uuidv7();
+    await ds.runQueuedProcedure({ path: "timeEntry.create", input: { id } }, async () => {
+      await ds.store.timeEntries.create({ data: entry(id) as never });
+      await ds.store.timeEntries.update({ where: { id }, data: { minutes: 45 } as never });
+    });
+    expect(ds.pendingEntries()[0]).toMatchObject({ touches: [{ entity: "timeEntry", id }] });
+  });
+
+  it("proceduren kastar → dess lokala skrivningar rullas tillbaka och inget köas", async () => {
+    const ds = await store();
+    const id = uuidv7();
+    await expect(ds.runQueuedProcedure({ path: "timeEntry.create", input: { id } }, async () => {
+      await ds.store.timeEntries.create({ data: entry(id) as never });
+      throw new Error("PRECONDITION_FAILED");
+    })).rejects.toThrow("PRECONDITION_FAILED");
+    expect(ds.pendingCount()).toBe(0);
+    expect(await ds.store.timeEntries.findUnique({ where: { id } })).toBeNull();
+  });
+
+  it("lyssnarna på lokala ändringar får EN signal per anrop", async () => {
+    const ds = await store();
+    let signals = 0;
+    ds.onLocalChange(() => { signals++; });
+    await ds.runQueuedProcedure({ path: "timeEntry.create", input: {} }, async () => {
+      await ds.store.timeEntries.create({ data: entry(uuidv7()) as never });
+      await ds.store.timeEntries.create({ data: entry(uuidv7()) as never });
+    });
+    expect(signals).toBe(1);
+  });
+
+  it("vanliga mutationer utanför ett anrop köas fortfarande som rader", async () => {
+    const ds = await store();
+    await ds.store.timeEntries.create({ data: entry(uuidv7()) as never });
+    expect(ds.pendingEntries()[0] && isProcedureCall(ds.pendingEntries()[0]!)).toBe(false);
+  });
+
+  it("en avvisad omkörning: serverns tombstone tar bort den lokala raden — även i det persisterade snapshotet", async () => {
+    const persistence = new InMemoryPersistence();
+    const ds = await CachingSyncDataStore.create({
+      transport: {
+        ...noSyncTransport,
+        pushProcedure: async (c) => ({
+          status: "rejected", code: "NOT_FOUND", reason: "Finns inte",
+          rows: c.touches.map((t) => ({ entity: t.entity, row: { id: t.id }, deleted: true })),
+        }),
+      },
+      persistence,
+    });
+    const id = uuidv7();
+    await ds.runQueuedProcedure({ path: "timeEntry.update", input: { id } }, async () => {
+      await ds.store.timeEntries.create({ data: entry(id) as never });
+    });
+    const res = await ds.reconcile();
+    expect(res.conflicts).toHaveLength(1);
+    expect(await ds.store.timeEntries.findUnique({ where: { id } })).toBeNull();
+    expect((await persistence.hydrate())?.timeEntries ?? []).toHaveLength(0);
+  });
+});

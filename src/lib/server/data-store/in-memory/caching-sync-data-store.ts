@@ -29,7 +29,9 @@ import { SOURCE_KEY_BY_ENTITY } from "./entity-source-keys";
 import { repairLegacyIds } from "./legacy-id-repair";
 import { LocalStore } from "./local-store";
 import type { LocalStorePersistence } from "./local-store-persistence";
-import { MutationQueue, type MutationQueuePersistence } from "./mutation-queue";
+import {
+  isProcedureCall, MutationQueue, type MutationQueuePersistence, type ProcedureTouch, type QueueEntry, type QueuedMutation,
+} from "./mutation-queue";
 import { ReconcileEngine, type ApplyCanonical, type ReconcileResult } from "./reconcile-engine";
 import type { SyncTransport } from "./sync-transport";
 import type { MutationEvent } from "./writable-delegate";
@@ -63,7 +65,14 @@ export interface CachingSyncDeps {
 export const noSyncTransport: SyncTransport = {
   pull: () => Promise.resolve({ changes: [], cursor: 0 }),
   push: (mutation) => Promise.resolve({ status: "accepted", row: mutation.row }),
+  pushProcedure: () => Promise.resolve({ status: "accepted", rows: [] }),
 };
+
+/** Ett procedur-anrop att spela in (#1265): sökväg + input som servern kör om. */
+export interface ProcedureCallInput {
+  path: string;
+  input: Record<string, unknown>;
+}
 
 /**
  * Skriv en kanonisk server-rad TYST till lokal source (ingen re-enqueue):
@@ -94,15 +103,29 @@ async function repairHydrated(
   queue: MutationQueue,
   persistence: LocalStorePersistence | undefined,
 ): Promise<DemoSource> {
-  const repair = repairLegacyIds(source, queue.pending());
+  const entries = queue.pending();
+  const rows = entries.filter((e): e is QueuedMutation => !isProcedureCall(e));
+  const repair = repairLegacyIds(source, rows);
   if (!repair.changed) return source;
   const queuedCreates = new Set(repair.queued.filter((m) => m.kind === "create").map((m) => keyOf(m.entity, m.row)));
-  await queue.replaceAll(repair.queued);
+  await queue.replaceAll(withRepairedRows(entries, repair.queued));
   for (const r of repair.recreated) {
     if (!queuedCreates.has(keyOf(r.entity, r.row))) await queue.enqueue({ entity: r.entity, kind: "create", row: r.row });
   }
   if (persistence) await persistence.save(repair.source);
   return repair.source;
+}
+
+/** Byt radposterna mot de reparerade (samma ordning); procedur-anropen står kvar på sin plats. */
+function withRepairedRows(entries: readonly QueueEntry[], repaired: readonly QueuedMutation[]): QueueEntry[] {
+  let next = 0;
+  return entries.map((e) => (isProcedureCall(e) ? e : repaired[next++] ?? e));
+}
+
+/** Lägg till en berörd rad (en gång per rad) i ett procedur-anrops fångst. */
+function recordTouch(touches: ProcedureTouch[], event: MutationEvent<Record<string, unknown>>): void {
+  const id = typeof event.row.id === "string" ? event.row.id : "";
+  if (!touches.some((t) => t.entity === event.entity && t.id === id)) touches.push({ entity: event.entity, id });
 }
 
 function keyOf(entity: string, row: Record<string, unknown>): string {
@@ -121,8 +144,40 @@ export class CachingSyncDataStore {
       /** Lyssnare på lokala ändringar (köad + persisterad) — driver synk-efter-spara. */
       localChangeListeners: Set<() => void>;
       afterReconcile: (() => Promise<unknown>) | undefined;
+      /**
+       * Aktiv under `runQueuedProcedure` (#1265): lokala radskrivningar samlas
+       * här som `touches` i stället för att köas som rader. `null` = ingen.
+       */
+      capture: { touches: ProcedureTouch[] | null };
     },
   ) {}
+
+  /**
+   * Kör en köbar procedur lokalt (#1265, ADR 0037) och köa ANROPET, inte
+   * raderna den skrev. `run` körs i en lokal transaktion: kastar den rullas
+   * dess skrivningar tillbaka och ingenting köas. In-process-länken kör köbara
+   * procedurer exklusivt (`SharedExclusiveLock`), så ingen samtidig mutations
+   * skrivningar hamnar i fångsten.
+   */
+  async runQueuedProcedure<T>(call: ProcedureCallInput, run: () => Promise<T>): Promise<T> {
+    const touches: ProcedureTouch[] = [];
+    this.hooks.capture.touches = touches;
+    let result: T;
+    try {
+      result = await this.store.transaction(() => run());
+    } finally {
+      this.hooks.capture.touches = null;
+    }
+    await this.queue.enqueueProcedure({ path: call.path, input: call.input, touches });
+    await this.persistSnapshot();
+    for (const listener of this.hooks.localChangeListeners) listener();
+    return result;
+  }
+
+  /** Köposterna i ordning (rader och procedur-anrop) — för diagnostik och tester. */
+  pendingEntries(): readonly QueueEntry[] {
+    return this.queue.pending();
+  }
 
   /**
    * Anropas efter varje lokal ändring, när den är köad och persisterad lokalt.
@@ -157,7 +212,12 @@ export class CachingSyncDataStore {
       deps.persistence ? deps.persistence.save(store.currentSource) : Promise.resolve();
 
     const localChangeListeners = new Set<() => void>();
+    const capture: { touches: ProcedureTouch[] | null } = { touches: null };
     const onLocalMutation = async (event: MutationEvent<Record<string, unknown>>): Promise<void> => {
+      if (capture.touches) {
+        recordTouch(capture.touches, event);
+        return;
+      }
       // Basen är versionen ändringen BYGGDE PÅ (#1176). Repo:t har redan bumpat
       // `row.version`; servern jämför basen mot sin version och avvisade annars
       // varje surface-uppdatering (faktura) som "stale".
@@ -189,7 +249,7 @@ export class CachingSyncDataStore {
     };
 
     const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply });
-    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile });
+    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile, capture });
   }
 
   /** Reconcile mot servern (pull→apply→replay→advance) — online-vägen.
@@ -197,7 +257,7 @@ export class CachingSyncDataStore {
    *  bara om något faktiskt ändrades (tom poll-reconcile → ingen skrivning). */
   async reconcile(): Promise<ReconcileResult> {
     const result = await this.engine.reconcile();
-    if (result.pulled > 0 || result.pushed > 0 || result.rebased > 0) {
+    if (result.pulled > 0 || result.pushed > 0 || result.rebased > 0 || result.replayed > 0) {
       this.rebakeJoins();
       await this.persistSnapshot();
     }

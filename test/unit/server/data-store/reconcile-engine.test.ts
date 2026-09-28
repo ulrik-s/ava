@@ -19,6 +19,9 @@ class FakeTransport implements SyncTransport {
   pulls: PullResult = { changes: [], cursor: 0 };
   pushResults = new Map<string, PushResult>();
   pushed: string[] = [];
+  async pushProcedure(): Promise<{ status: "accepted"; rows: [] }> {
+    return { status: "accepted", rows: [] };
+  }
   async pull(): Promise<PullResult> {
     return this.pulls;
   }

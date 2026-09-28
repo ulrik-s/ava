@@ -16,16 +16,41 @@ import { observable } from "@trpc/server/observable";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { appRouter } from "@/lib/server/routers/_app";
 import type { Context } from "@/lib/server/trpc-core";
+import { isQueuedProcedure, prepareQueuedInput } from "@/lib/shared/sync/queued-procedures";
+import { SharedExclusiveLock } from "./shared-exclusive-lock";
 
-export function inProcessLink(ctx: Context): TRPCLink<AppRouter> {
+/**
+ * Spelar in ett köbart procedur-anrop (#1265, ADR 0037): kör `exec` lokalt och
+ * köar anropet (inte raderna) för auktoritativ omkörning på servern.
+ */
+export type ProcedureRecorder = <T>(call: { path: string; input: Record<string, unknown> }, exec: () => Promise<T>) => Promise<T>;
+
+export interface InProcessLinkOpts {
+  /** Satt i self-hosted (server-first); utan den (demo) körs allt direkt. */
+  recordProcedure?: ProcedureRecorder;
+}
+
+export function inProcessLink(ctx: Context, opts: InProcessLinkOpts = {}): TRPCLink<AppRouter> {
   const caller = appRouter.createCaller(ctx);
+  // Köbara procedurer körs exklusivt (#1265): deras lokala skrivningar fångas
+  // som anropets `touches`, och en samtidig mutation får inte hamna där.
+  // Övriga mutationer körs delat; frågor läser bara och går förbi låset.
+  const lock = new SharedExclusiveLock();
+
+  const run = (path: string, input: unknown, type: string): Promise<unknown> => {
+    const fn = resolvePath(caller, path);
+    const recorder = opts.recordProcedure;
+    if (!recorder || type !== "mutation") return fn(input);
+    const prepared = isQueuedProcedure(path) ? prepareQueuedInput(path, input) : null;
+    if (!prepared) return lock.shared(() => fn(input));
+    return lock.exclusive(() => recorder({ path, input: prepared }, () => fn(prepared)));
+  };
 
   return () => ({ op }) =>
     observable((observer) => {
       void (async () => {
         try {
-          const fn = resolvePath(caller, op.path);
-          const result = await fn(op.input);
+          const result = await run(op.path, op.input, op.type);
           observer.next({ result: { data: result } });
           observer.complete();
         } catch (err) {

@@ -16,6 +16,8 @@ import type { CachingSyncStatus } from "./caching-sync-status";
 
 export interface ReconcileOutcome {
   pulled: number;
+  /** Rader ur serverns svar på omkörda procedur-anrop (#1265). */
+  replayed?: number;
 }
 
 export interface SyncSchedulerDeps {
@@ -23,7 +25,7 @@ export interface SyncSchedulerDeps {
   pendingCount: () => number;
   isOnline: () => boolean;
   onStatus: (status: CachingSyncStatus) => void;
-  /** Andra har ändrat något (pull > 0) → UI:t hämtar om sina frågor. */
+  /** Lokalt läge ändrat av servern (pull eller omkörda anrop) → UI:t hämtar om sina frågor. */
   onRemoteChanges?: () => void;
   debounceMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -71,7 +73,7 @@ export class SyncScheduler {
       const result = await this.deps.reconcile();
       this.lastSyncedAt = (this.deps.now ?? Date.now)();
       this.error = null;
-      if (result.pulled > 0) this.deps.onRemoteChanges?.();
+      if (result.pulled > 0 || (result.replayed ?? 0) > 0) this.deps.onRemoteChanges?.();
     } catch (err) {
       // Ändringen ligger kvar i kön (persisterad) — nästa runda försöker igen.
       this.error = `Kunde inte spara till servern: ${err instanceof Error ? err.message : String(err)}`;

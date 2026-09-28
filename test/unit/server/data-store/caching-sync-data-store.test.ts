@@ -18,6 +18,9 @@ class FakeTransport implements SyncTransport {
   pullResult: PullResult = { changes: [], cursor: 0 };
   pushImpl: (m: QueuedMutation) => PushResult = (m) => ({ status: "accepted", row: { ...m.row, version: 2 } });
   pushed: QueuedMutation[] = [];
+  async pushProcedure(): Promise<{ status: "accepted"; rows: [] }> {
+    return { status: "accepted", rows: [] };
+  }
   async pull(): Promise<PullResult> {
     return this.pullResult;
   }

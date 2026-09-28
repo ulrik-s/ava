@@ -24,6 +24,8 @@ import { newRequestId } from "@/lib/shared/observability/request-id";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
+import type { QueuedProcedureCall } from "./data-store/in-memory/mutation-queue";
+import type { ProcedureReplayResult } from "./data-store/in-memory/sync-transport";
 import type { IPorts } from "./ports";
 import type { Repositories } from "./repositories/repositories";
 import type { SyncStore } from "./sync/sync-store";
@@ -55,6 +57,11 @@ export type Context = {
    * NOT_IMPLEMENTED. Konkret impl (Drizzle) hålls server-side (ej i bundeln).
    */
   sync?: SyncStore;
+  /**
+   * Kör om ett köat procedur-anrop auktoritativt (#1265, ADR 0037), som den
+   * här contextens principal. Bara server-first-runtimen; `undefined` annars.
+   */
+  replayProcedure?: (call: QueuedProcedureCall) => Promise<ProcedureReplayResult>;
   /**
    * Kapabilitets-tier (ADR 0027): vad denna runtime kan. Server-first-contexten
    * annonserar serverns förmågor (probas av klienten via `system.capabilities`);

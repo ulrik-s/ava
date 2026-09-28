@@ -24,7 +24,7 @@ describe("MutationQueue — kärna", () => {
     const b = await q.enqueue(ev({ row: { id: "b" } }), { now: 2 });
     expect(a.mutationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7/); // v7
     expect(q.size()).toBe(2);
-    expect(q.pending().map((m) => (m.row as { id: string }).id)).toEqual(["a", "b"]);
+    expect(q.pending().map((m) => ("row" in m ? (m.row as { id: string }).id : null))).toEqual(["a", "b"]);
     expect(b.enqueuedAt).toBe(2);
   });
 

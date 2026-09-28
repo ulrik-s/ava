@@ -13,7 +13,7 @@
 import { conflictClassOf, type ConflictClass } from "@/lib/shared/conflict-policy";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { CursorStore } from "./cursor-store";
-import type { MutationQueue, QueuedMutation } from "./mutation-queue";
+import { isProcedureCall, type MutationQueue, type QueueEntry, type QueuedMutation, type QueuedProcedureCall } from "./mutation-queue";
 import type { PulledChange, SyncTransport } from "./sync-transport";
 
 /** Tyst skrivning av en kanonisk server-rad till lokal store (utan att köa om). */
@@ -24,7 +24,8 @@ export type ApplyCanonical = (
 ) => void | Promise<void>;
 
 export interface ConflictRecord {
-  mutation: QueuedMutation;
+  /** Radposten eller procedur-anropet som servern inte godtog. */
+  mutation: QueueEntry;
   conflictClass: ConflictClass;
   reason: string;
   current?: Record<string, unknown>;
@@ -34,6 +35,8 @@ export interface ReconcileResult {
   pulled: number;
   pushed: number;
   rebased: number;
+  /** Rader ur serverns svar på omkörda procedur-anrop (#1265) — ändrar lokalt läge. */
+  replayed: number;
   conflicts: ConflictRecord[];
   cursor: number;
 }
@@ -61,8 +64,14 @@ export class ReconcileEngine {
     return { pulled, ...replay, cursor: pull.cursor };
   }
 
+  /** Rader med en ej uppspelad lokal ändring — radposter och procedur-anropens `touches`. */
   private pendingKeys(): Set<string> {
-    return new Set(this.deps.queue.pending().map((m) => keyOf(m.entity, m.row)));
+    const keys = new Set<string>();
+    for (const m of this.deps.queue.pending()) {
+      if (isProcedureCall(m)) for (const t of m.touches) keys.add(`${t.entity}:${t.id}`);
+      else keys.add(keyOf(m.entity, m.row));
+    }
+    return keys;
   }
 
   /** Applicera kanoniska rader; hoppa rader med en ej-uppspelad lokal mutation. */
@@ -77,23 +86,49 @@ export class ReconcileEngine {
   }
 
   /** Spela upp kön (FIFO). accepted/rebased → applicera + ack; conflict → ytlägg + ack. */
-  private async replayQueue(): Promise<{ pushed: number; rebased: number; conflicts: ConflictRecord[] }> {
-    let pushed = 0;
-    let rebased = 0;
-    const conflicts: ConflictRecord[] = [];
+  private async replayQueue(): Promise<Tally> {
+    const tally: Tally = { pushed: 0, rebased: 0, replayed: 0, conflicts: [] };
     for (const m of [...this.deps.queue.pending()]) {
-      const res = await this.deps.transport.push(m);
-      if (res.status === "conflict") {
-        conflicts.push(omitUndefined({
-          mutation: m, conflictClass: conflictClassOf(m.entity), reason: res.reason, current: res.current,
-        }) as ConflictRecord);
-      } else {
-        await this.deps.apply(m.entity, res.row, false);
-        if (res.status === "rebased") rebased++;
-        else pushed++;
-      }
+      if (isProcedureCall(m)) await this.replayProcedure(m, tally);
+      else await this.replayRow(m, tally);
       await this.deps.queue.ack(m.mutationId);
     }
-    return { pushed, rebased, conflicts };
+    return tally;
   }
+
+  private async replayRow(m: QueuedMutation, tally: Tally): Promise<void> {
+    const res = await this.deps.transport.push(m);
+    if (res.status === "conflict") {
+      tally.conflicts.push(omitUndefined({
+        mutation: m, conflictClass: conflictClassOf(m.entity), reason: res.reason, current: res.current,
+      }) as ConflictRecord);
+      return;
+    }
+    await this.deps.apply(m.entity, res.row, false);
+    if (res.status === "rebased") tally.rebased++;
+    else tally.pushed++;
+  }
+
+  /**
+   * Servern kör om anropet och svarar med de berörda radernas kanoniska läge.
+   * Det ersätter det optimistiska läget i BÅDA utfallen — vid en avvisning
+   * försvinner t.ex. en rad klienten skapat men servern vägrat (#1265).
+   */
+  private async replayProcedure(m: QueuedProcedureCall, tally: Tally): Promise<void> {
+    const res = await this.deps.transport.pushProcedure(m);
+    for (const ch of res.rows) await this.deps.apply(ch.entity, ch.row, ch.deleted ?? false);
+    tally.replayed += res.rows.length;
+    if (res.status === "accepted") {
+      tally.pushed++;
+      return;
+    }
+    tally.conflicts.push({ mutation: m, conflictClass: "surface", reason: res.reason });
+  }
+}
+
+interface Tally {
+  pushed: number;
+  rebased: number;
+  replayed: number;
+  conflicts: ConflictRecord[];
 }
