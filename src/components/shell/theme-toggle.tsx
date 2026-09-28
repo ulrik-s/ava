@@ -13,30 +13,47 @@
  */
 
 import { Moon, Sun } from "lucide-react";
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "ava.theme";
 
 type Theme = "light" | "dark";
 
-function readTheme(): Theme {
-  if (typeof window === "undefined") return "light";
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+/**
+ * Temat läses ur `<html>`-klassen via `useSyncExternalStore` (#1131). Förr
+ * lästes klassen i `useState`-initieringen: förrenderad HTML har alltid ljust
+ * läge, men head-skriptet har redan satt `.dark` i en mörk webbläsare → annan
+ * ikon/etikett än HTML:en → React #418, hela trädet renderades om och första
+ * klicket/inmatningen tappades. Server-snapshoten ("light") används under
+ * hydreringen; direkt efter byter React till klientens värde utan skillnad.
+ */
+const listeners = new Set<() => void>();
+
+/** Egna växlingar notifieras direkt; observern fångar ändringar utifrån (ThemeRestore). */
+function subscribe(onChange: () => void): () => void {
+  listeners.add(onChange);
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  return () => {
+    listeners.delete(onChange);
+    observer.disconnect();
+  };
+}
+
+const readTheme = (): Theme => (document.documentElement.classList.contains("dark") ? "dark" : "light");
+const serverTheme = (): Theme => "light";
+
+function applyTheme(next: Theme): void {
+  document.documentElement.classList.toggle("dark", next === "dark");
+  for (const notify of listeners) notify();
+  try {
+    window.localStorage.setItem(STORAGE_KEY, next);
+  } catch { /* lagring blockerad — temat gäller bara den här sidan */ }
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(readTheme);
-
-  function toggle(): void {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    if (typeof document !== "undefined") {
-      document.documentElement.classList.toggle("dark", next === "dark");
-    }
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    }
-  }
+  const theme = useSyncExternalStore(subscribe, readTheme, serverTheme);
+  const toggle = (): void => applyTheme(theme === "dark" ? "light" : "dark");
 
   return (
     <button
