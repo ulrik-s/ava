@@ -16,7 +16,8 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { login } from "./_selfhosted-login";
 
 interface SeedInfo {
   matterId: string;
@@ -30,19 +31,6 @@ interface SeedInfo {
 const seed: SeedInfo = JSON.parse(
   readFileSync(join(__dirname, "..", "..", "..", "tooling", ".conflict-seed.json"), "utf8"),
 ) as SeedInfo;
-
-const AUTHORIZE_RE = /realms\/ava\/protocol\/openid-connect\/auth/;
-const onKeycloak = (u: URL): boolean => AUTHORIZE_RE.test(u.toString());
-
-/** Driv Keycloaks login-formulär i browsern; vänta tillbaka till appen. */
-async function login(page: Page, username: string, password: string): Promise<void> {
-  await page.goto("/ava/");
-  await page.waitForURL(AUTHORIZE_RE);
-  await page.fill("#username", username);
-  await page.fill("#password", password);
-  await page.click("#kc-login");
-  await page.waitForURL((u) => !onKeycloak(u));
-}
 
 test.describe("keep-both-konflikt (#742)", () => {
   test("ärendet visar 2 filer — originalet + keep-both-syskonet", async ({ page }) => {

@@ -30,7 +30,7 @@ export default defineConfig({
   // utanför tills de slutat hårdkoda seed-id:n; de slår upp sina fixtures i
   // `demo-seed.json` via `fetchDemoSeed`. Lägg inte till en spec här som pekar
   // på ett id den inte slagit upp — det var precis så de tystnade förra gången.
-  testMatch: /(column-menu|chrome-regressions|matter-watch|billing-watch|demo-invoice-document|demo-kostnadsrakning-verdict|demo-kostnadsrakning-void|demo-login|demo-smoke|kebab-verify|matters-employee-filter|docking-layout|hourly-rates|demo-offline)\.spec\.ts$/,
+  testMatch: /(column-menu|chrome-regressions|matter-watch|billing-watch|demo-invoice-document|demo-kostnadsrakning-verdict|demo-kostnadsrakning-void|demo-login|demo-smoke|kebab-verify|matters-employee-filter|docking-layout|hourly-rates|demo-offline|demo-storage-persistence)\.spec\.ts$/,
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,

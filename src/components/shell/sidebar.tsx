@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { z } from "zod";
 import { loadFromStorage } from "@/lib/client/load-from-storage";
+import { confirmSignOutIfUnsynced } from "@/lib/client/sync/confirm-sign-out";
 import { cn } from "@/lib/client/utils";
 
 /**
@@ -24,6 +25,14 @@ export function signOutLocally(): void {
   } catch { /* ignorera */ }
   const basePath = process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
   window.location.replace(`${basePath}/login/`);
+}
+
+/**
+ * "Logga ut" från UI:t (#1241): synka en sista gång och fråga om ändringar
+ * ändå inte nått servern. Nej → ingenting händer, sessionen står kvar.
+ */
+export async function signOutWithSyncCheck(): Promise<void> {
+  if (await confirmSignOutIfUnsynced()) signOutLocally();
 }
 
 const navigation = [
@@ -93,7 +102,7 @@ function LogoutButton({ iconOnly = false }: IconOnlyProp) {
   if (iconOnly) {
     return (
       <button
-        onClick={() => signOutLocally()}
+        onClick={() => void signOutWithSyncCheck()}
         aria-label="Logga ut"
         title="Logga ut"
         className="flex w-full justify-center rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -104,7 +113,7 @@ function LogoutButton({ iconOnly = false }: IconOnlyProp) {
   }
   return (
     <button
-      onClick={() => signOutLocally()}
+      onClick={() => void signOutWithSyncCheck()}
       className="text-sm text-gray-500 hover:text-gray-700"
     >
       Logga ut

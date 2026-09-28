@@ -6,6 +6,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { Sidebar } from "@/components/shell/sidebar";
+import { registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
 
 const pathnameMock = vi.fn(() => "/");
 
@@ -71,17 +72,40 @@ describe("Sidebar", () => {
     expect(screen.getAllByText("Anna Karlsson").length).toBeGreaterThan(0);
   });
 
-  it("rensar token + principalId och redirectar till /login vid Logga ut", () => {
+  it("rensar token + principalId och redirectar till /login vid Logga ut", async () => {
     localStorage.setItem("ava.firma", JSON.stringify({
       tier: "demo", token: "ghp_x", principalId: "u-uuid",
     }));
     render(<Sidebar />);
     const logout = screen.getAllByText("Logga ut")[0]!;
     fireEvent.click(logout);
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
     const stored = JSON.parse(localStorage.getItem("ava.firma") ?? "{}");
     expect(stored.token).toBeUndefined();
     expect(stored.principalId).toBeUndefined();
-    expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/));
+  });
+
+  it("osynkade ändringar (#1241): frågar först; 'Avbryt' → kvar, inloggad", async () => {
+    localStorage.setItem("ava.firma", JSON.stringify({ tier: "self-hosted", principalId: "u-uuid" }));
+    const unregister = registerServerSyncFlush(async () => { throw new Error("offline"); }, () => 2);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<Sidebar />);
+    fireEvent.click(screen.getAllByText("Logga ut")[0]!);
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith(expect.stringContaining("2 ändringar har inte nått servern")));
+    expect(replaceMock).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem("ava.firma") ?? "{}").principalId).toBe("u-uuid");
+    confirm.mockRestore();
+    unregister();
+  });
+
+  it("osynkade ändringar: 'OK' → loggas ut ändå", async () => {
+    const unregister = registerServerSyncFlush(async () => { throw new Error("offline"); }, () => 1);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<Sidebar />);
+    fireEvent.click(screen.getAllByText("Logga ut")[0]!);
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
+    confirm.mockRestore();
+    unregister();
   });
 
   it("öppnar mobil-meny vid klick på hamburgaren", () => {
@@ -191,15 +215,15 @@ describe("Sidebar — hopfällt ikon-läge (#1198)", () => {
     spy.mockRestore();
   });
 
-  it("ikonknappen Logga ut loggar fortfarande ut", () => {
+  it("ikonknappen Logga ut loggar fortfarande ut", async () => {
     localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", token: "ghp_x", principalId: "u-uuid" }));
     render(<Sidebar />);
     fireEvent.click(screen.getByRole("button", { name: "Fäll ihop menyn" }));
     const logout = screen.getByRole("button", { name: "Logga ut" });
     expect(logout.getAttribute("title")).toBe("Logga ut");
     fireEvent.click(logout);
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
     const stored = JSON.parse(localStorage.getItem("ava.firma") ?? "{}");
     expect(stored.token).toBeUndefined();
-    expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/));
   });
 });

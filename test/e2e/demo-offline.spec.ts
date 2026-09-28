@@ -140,3 +140,22 @@ test.describe("kontroll: utan service worker", () => {
     await context.setOffline(false);
   });
 });
+
+test.describe("ändringar offline (#1241)", () => {
+  test("en ny kontakt sparas offline i en öppen flik — hänger inte på 'Sparar…'", async ({ page, context }) => {
+    await seedDemoLogin(page, BASE);
+    await page.goto(`${BASE}/contacts/`);
+    await expect(page.getByRole("button", { name: "+ Ny kontakt" })).toBeVisible({ timeout: 30_000 });
+
+    // `offline`-händelsen är det som fick TanStack Query att pausa mutationen.
+    await context.setOffline(true);
+    const name = `Offline-kontakt ${Date.now()}`;
+    await page.getByRole("button", { name: "+ Ny kontakt" }).click();
+    await page.getByLabel("Namn *").fill(name);
+    await page.getByRole("button", { name: "Spara kontakt" }).click();
+
+    await expect(page.getByText(name).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Sparar..." })).toHaveCount(0);
+    await context.setOffline(false);
+  });
+});

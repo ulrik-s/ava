@@ -9,11 +9,12 @@
 
 import { Database } from "lucide-react";
 import { useEffect, useState } from "react";
-import { signOutLocally } from "@/components/shell/sidebar";
+import { signOutWithSyncCheck } from "@/components/shell/sidebar";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import type { FirmaConfig } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
 import { FirmaSettingsPanel } from "./firma-settings-panel";
+import { StorageStatus } from "./storage-status";
 import { SyncDiagnostics } from "./sync-diagnostics";
 
 export function DatasourceSection() {
@@ -53,6 +54,7 @@ export function DatasourceSection() {
             "Spara" hamnar allra längst ner i panelen. */}
         <LoginStatus />
         <SyncDiagnostics />
+        <StorageStatus />
       </FirmaSettingsPanel>
     </div>
   );
@@ -76,7 +78,7 @@ export function LoginStatus() {
           </p>
           <button
             type="button"
-            onClick={() => signOutLocally()}
+            onClick={() => void signOutWithSyncCheck()}
             className="text-xs text-red-600 hover:underline shrink-0"
           >
             Logga ut

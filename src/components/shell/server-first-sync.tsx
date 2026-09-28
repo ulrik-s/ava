@@ -2,9 +2,11 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { requestPersistentStorageOnce, type StoragePersistence } from "@/lib/client/storage/persistent-storage";
 import { syncStateFromCachingSync, type CachingSyncStatus } from "@/lib/client/sync/caching-sync-status";
 import { registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
 import { SyncScheduler } from "@/lib/client/sync/sync-scheduler";
+import { pluralChanges } from "@/lib/client/utils";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { SyncStatusPill } from "./sync-status-pill";
 
@@ -15,13 +17,45 @@ export type SyncableStore = Pick<CachingSyncDataStore, "reconcile" | "pendingCou
 const PERIODIC_SYNC_MS = 30_000;
 
 /**
+ * Varning när osynkade ändringar ligger i en lagring som webbläsaren får rensa
+ * (#1241) — då är fliken det enda som håller dem kvar tills synken lyckas.
+ */
+function StorageWarning({ pending }: { pending: number }) {
+  return (
+    <span
+      data-testid="storage-warning"
+      title={`${pending} ${pluralChanges(pending)} finns bara i den här webbläsaren, och den har inte lovat att behålla lagringen. Låt fliken vara öppen tills statusen visar "Sparat".`}
+      className="text-xs px-2 py-1 rounded border inline-flex items-center gap-1.5 bg-amber-50 text-amber-900 border-amber-300"
+    >
+      <span aria-hidden>⚠</span>
+      <span>Lokal lagring kan rensas</span>
+    </span>
+  );
+}
+
+interface ServerFirstSyncProps {
+  store: SyncableStore | null;
+  /** Be om beständig lagring (#1241). Injicerbar för tester. */
+  requestPersistence?: () => Promise<StoragePersistence>;
+}
+
+/**
  * Server-first-synken i webbläsaren: varje sparad ändring skickas till servern
  * direkt (inte först vid nästa sidladdning), läget syns i statuspillen, och man
- * varnas om man stänger fliken innan allt nått servern.
+ * varnas om man stänger fliken innan allt nått servern — eller om osynkade
+ * ändringar ligger i en lagring webbläsaren får rensa (#1241).
  */
-export function ServerFirstSync({ store }: { store: SyncableStore | null }) {
+export function ServerFirstSync({ store, requestPersistence = requestPersistentStorageOnce }: ServerFirstSyncProps) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<CachingSyncStatus | null>(null);
+  const [persistence, setPersistence] = useState<StoragePersistence | null>(null);
+
+  useEffect(() => {
+    if (!store) return;
+    let active = true;
+    void requestPersistence().then((p) => { if (active) setPersistence(p); });
+    return () => { active = false; };
+  }, [store, requestPersistence]);
 
   useEffect(() => {
     if (!store) return;
@@ -36,7 +70,7 @@ export function ServerFirstSync({ store }: { store: SyncableStore | null }) {
     const unregister = registerServerSyncFlush(async () => {
       await scheduler.syncNow();
       if (scheduler.hasUnsyncedChanges()) throw new Error("Alla ändringar har inte nått servern än — försök igen om en stund.");
-    });
+    }, () => store.pendingCount());
     const interval = setInterval(() => { void scheduler.syncNow(); }, PERIODIC_SYNC_MS);
     const onOnline = () => { void scheduler.syncNow(); };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -56,5 +90,11 @@ export function ServerFirstSync({ store }: { store: SyncableStore | null }) {
   }, [store, queryClient]);
 
   if (!status) return null;
-  return <SyncStatusPill state={syncStateFromCachingSync(status)} />;
+  const atRisk = persistence === "not-persisted" && status.pendingCount > 0;
+  return (
+    <>
+      <SyncStatusPill state={syncStateFromCachingSync(status)} />
+      {atRisk && <StorageWarning pending={status.pendingCount} />}
+    </>
+  );
 }

@@ -4,9 +4,10 @@
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest-compat";
+import { describe, expect, it, vi } from "vitest-compat";
 import { ServerFirstSync, type SyncableStore } from "@/components/shell/server-first-sync";
-import { flushServerSync } from "@/lib/client/sync/server-sync-flush";
+import type { StoragePersistence } from "@/lib/client/storage/persistent-storage";
+import { flushServerSync, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
 
 function fakeStore(opts: { pending: number; fail?: boolean }) {
   const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void) };
@@ -102,5 +103,46 @@ describe("ServerFirstSync", () => {
   it("utan store (demo) renderas inget", () => {
     const { container } = wrap(<ServerFirstSync store={null} />);
     expect(container.textContent).toBe("");
+  });
+
+  describe("beständig lagring (#1241)", () => {
+    const persistence = (value: StoragePersistence) => vi.fn(async () => value);
+
+    it("ber webbläsaren om beständig lagring när synken startar", async () => {
+      const { store } = fakeStore({ pending: 0 });
+      const request = persistence("persisted");
+      wrap(<ServerFirstSync store={store} requestPersistence={request} />);
+      await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    });
+
+    it("lagringen kan rensas + osynkade ändringar → synlig varning", async () => {
+      const { store } = fakeStore({ pending: 2, fail: true });
+      wrap(<ServerFirstSync store={store} requestPersistence={persistence("not-persisted")} />);
+      const warning = await screen.findByTestId("storage-warning");
+      expect(warning).toHaveTextContent(/kan rensas/i);
+      expect(warning.getAttribute("title")).toMatch(/2 ändringar/);
+    });
+
+    it("beständig lagring → ingen varning trots osynkade ändringar", async () => {
+      const { store } = fakeStore({ pending: 2, fail: true });
+      wrap(<ServerFirstSync store={store} requestPersistence={persistence("persisted")} />);
+      await waitFor(() => expect(screen.getByTestId("sync-pill")).toBeInTheDocument());
+      expect(screen.queryByTestId("storage-warning")).toBeNull();
+    });
+
+    it("allt synkat → ingen varning även om lagringen kan rensas", async () => {
+      const { store } = fakeStore({ pending: 0 });
+      wrap(<ServerFirstSync store={store} requestPersistence={persistence("not-persisted")} />);
+      await waitFor(() => expect(screen.getByText(/Sparat/)).toBeInTheDocument());
+      expect(screen.queryByTestId("storage-warning")).toBeNull();
+    });
+
+    it("antalet osynkade ändringar når utloggningen (unsyncedChangeCount)", async () => {
+      const { store } = fakeStore({ pending: 3, fail: true });
+      const { unmount } = wrap(<ServerFirstSync store={store} requestPersistence={persistence("persisted")} />);
+      await waitFor(() => expect(unsyncedChangeCount()).toBe(3));
+      unmount();
+      expect(unsyncedChangeCount()).toBe(0);
+    });
   });
 });

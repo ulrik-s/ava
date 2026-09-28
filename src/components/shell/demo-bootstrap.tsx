@@ -16,7 +16,7 @@
  * /demo-routen kör sin egen runtime (DemoClient → useDemoSeed).
  */
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import superjson from "superjson";
 import { AnalyzeDispatcherRegistrar } from "@/components/documents/analyze-dispatcher-registrar";
@@ -33,6 +33,7 @@ import { CapabilitiesProvider } from "@/lib/client/capabilities/use-capabilities
 import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import { loadFirmaConfig, patchFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import { makeAppQueryClient } from "@/lib/client/query-client";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
 import { trpc } from "@/lib/client/trpc";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
@@ -86,15 +87,6 @@ async function rehydrateGeneratedDocs(): Promise<void> {
   if (!blobs.length) return;
   const { stashGeneratedDoc } = await import("@/lib/client/demo/generated-doc-cache");
   for (const b of blobs) stashGeneratedDoc(b.id, b.bytes, b.mimeType, b.fileName);
-}
-
-function makeDemoQueryClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: {
-      queries: { staleTime: 60_000, refetchOnWindowFocus: false, retry: false },
-      mutations: { retry: false },
-    },
-  });
 }
 
 function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig) {
@@ -213,7 +205,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   // (React #418). Pathname-baserad logik flyttas till useDemoBootstrap.
   const [status, setStatus] = useState<Status>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [queryClient] = useState(makeDemoQueryClient);
+  const [queryClient] = useState(makeAppQueryClient);
   const [trpcClient, setTrpcClient] = useState<ReturnType<typeof createDemoTrpcClient> | null>(null);
 
   // Flippa efter första commit → byter från platshållare till full app-tree.
