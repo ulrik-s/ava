@@ -13,30 +13,31 @@
  */
 
 import { Moon, Sun } from "lucide-react";
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
+import {
+  readThemeClass, setThemeClass, subscribeTheme, THEME_STORAGE_KEY, type Theme,
+} from "@/lib/client/theme/theme-store";
 
-const STORAGE_KEY = "ava.theme";
+/**
+ * Temat läses via `useSyncExternalStore` (#1131). Förr lästes `.dark` i
+ * `useState`-initieringen: förrenderad HTML har alltid ljust läge, men
+ * head-skriptet har redan satt `.dark` i en mörk webbläsare → annan ikon och
+ * etikett än HTML:en → React #418, hela trädet renderades om och första
+ * klicket/inmatningen tappades. Server-snapshoten ("light") används under
+ * hydreringen; direkt efter byter React till klientens värde utan skillnad.
+ */
+const serverTheme = (): Theme => "light";
 
-type Theme = "light" | "dark";
-
-function readTheme(): Theme {
-  if (typeof window === "undefined") return "light";
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+function applyTheme(next: Theme): void {
+  setThemeClass(next);
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, next);
+  } catch { /* lagring blockerad — temat gäller bara den här sidan */ }
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(readTheme);
-
-  function toggle(): void {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    if (typeof document !== "undefined") {
-      document.documentElement.classList.toggle("dark", next === "dark");
-    }
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    }
-  }
+  const theme = useSyncExternalStore(subscribeTheme, readThemeClass, serverTheme);
+  const toggle = (): void => applyTheme(theme === "dark" ? "light" : "dark");
 
   return (
     <button
