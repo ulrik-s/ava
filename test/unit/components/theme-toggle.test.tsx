@@ -12,6 +12,7 @@ import { act, fireEvent, screen } from "@testing-library/react";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest-compat";
+import { ThemeRestore } from "@/components/shell/theme-restore";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 
 let root: Root | null = null;
@@ -58,11 +59,18 @@ describe("ThemeToggle — hydrering", () => {
     expect(screen.getByRole("button", { name: "Byt till mörkt läge" })).toBeInTheDocument();
   });
 
-  it("följer med när temat sätts utifrån efter mount (ThemeRestore)", async () => {
+  it("följer med när ThemeRestore sätter det sparade temat efter mount", async () => {
     await hydrateWith(false);
-    await act(async () => { document.documentElement.classList.add("dark"); });
-    // Observern (MutationObserver) är asynkron — generös gräns för en belastad testpool.
-    expect(await screen.findByRole("button", { name: "Byt till ljust läge" }, { timeout: 5_000 })).toBeInTheDocument();
+    localStorage.setItem("ava.theme", "dark");
+    const restore = document.createElement("div");
+    document.body.appendChild(restore);
+    const { createRoot } = await import("react-dom/client");
+    const restoreRoot = createRoot(restore);
+    await act(async () => { restoreRoot.render(<ThemeRestore />); });
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(screen.getByRole("button", { name: "Byt till ljust läge" })).toBeInTheDocument();
+    act(() => restoreRoot.unmount());
+    restore.remove();
   });
 });
 
@@ -72,7 +80,6 @@ describe("ThemeToggle — växling", () => {
     fireEvent.click(screen.getByRole("button", { name: "Byt till mörkt läge" }));
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(localStorage.getItem("ava.theme")).toBe("dark");
-    // Egen växling notifieras synkront — ingen väntan på observern.
     expect(screen.getByRole("button", { name: "Byt till ljust läge" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Byt till ljust läge" }));

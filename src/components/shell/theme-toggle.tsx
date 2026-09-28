@@ -14,45 +14,29 @@
 
 import { Moon, Sun } from "lucide-react";
 import { useSyncExternalStore } from "react";
-
-const STORAGE_KEY = "ava.theme";
-
-type Theme = "light" | "dark";
+import {
+  readThemeClass, setThemeClass, subscribeTheme, THEME_STORAGE_KEY, type Theme,
+} from "@/lib/client/theme/theme-store";
 
 /**
- * Temat läses ur `<html>`-klassen via `useSyncExternalStore` (#1131). Förr
- * lästes klassen i `useState`-initieringen: förrenderad HTML har alltid ljust
- * läge, men head-skriptet har redan satt `.dark` i en mörk webbläsare → annan
- * ikon/etikett än HTML:en → React #418, hela trädet renderades om och första
+ * Temat läses via `useSyncExternalStore` (#1131). Förr lästes `.dark` i
+ * `useState`-initieringen: förrenderad HTML har alltid ljust läge, men
+ * head-skriptet har redan satt `.dark` i en mörk webbläsare → annan ikon och
+ * etikett än HTML:en → React #418, hela trädet renderades om och första
  * klicket/inmatningen tappades. Server-snapshoten ("light") används under
  * hydreringen; direkt efter byter React till klientens värde utan skillnad.
  */
-const listeners = new Set<() => void>();
-
-/** Egna växlingar notifieras direkt; observern fångar ändringar utifrån (ThemeRestore). */
-function subscribe(onChange: () => void): () => void {
-  listeners.add(onChange);
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-  return () => {
-    listeners.delete(onChange);
-    observer.disconnect();
-  };
-}
-
-const readTheme = (): Theme => (document.documentElement.classList.contains("dark") ? "dark" : "light");
 const serverTheme = (): Theme => "light";
 
 function applyTheme(next: Theme): void {
-  document.documentElement.classList.toggle("dark", next === "dark");
-  for (const notify of listeners) notify();
+  setThemeClass(next);
   try {
-    window.localStorage.setItem(STORAGE_KEY, next);
+    window.localStorage.setItem(THEME_STORAGE_KEY, next);
   } catch { /* lagring blockerad — temat gäller bara den här sidan */ }
 }
 
 export function ThemeToggle() {
-  const theme = useSyncExternalStore(subscribe, readTheme, serverTheme);
+  const theme = useSyncExternalStore(subscribeTheme, readThemeClass, serverTheme);
   const toggle = (): void => applyTheme(theme === "dark" ? "light" : "dark");
 
   return (
