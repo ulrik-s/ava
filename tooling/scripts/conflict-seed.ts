@@ -26,13 +26,12 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createTRPCClient, httpBatchLink, TRPCClientError, type TRPCClient } from "@trpc/client";
-import superjson from "superjson";
+import { TRPCClientError, type TRPCClient } from "@trpc/client";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { asId } from "@/lib/shared/schemas/ids";
+import { clientFor, mintToken } from "./selfhosted-trpc-client";
 
 const WEB_URL = process.env.AVA_WEB_URL ?? "http://localhost:8080";
-const KC_URL = process.env.OIDC_KC_HOSTNAME ?? "http://localhost:8089";
 const OUT_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", ".conflict-seed.json");
 
 /** Klient-genererat textdokument-id + ärende-id (delas med Playwright-spec:en). */
@@ -52,32 +51,6 @@ function b64(text: string): string { return Buffer.from(text, "utf8").toString("
 function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
 
 /** Mynta en Keycloak access-token via password-grant (`ava`-klienten, direct-access). */
-async function mintToken(username: string, password: string): Promise<string> {
-  const res = await fetch(`${KC_URL}/realms/ava/protocol/openid-connect/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "password", client_id: "ava", client_secret: "ava-test-secret",
-      username, password, scope: "openid email profile",
-    }),
-  });
-  if (!res.ok) throw new Error(`token-mint ${username}: HTTP ${res.status} ${await res.text()}`);
-  const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) throw new Error(`token-mint ${username}: saknar access_token`);
-  return json.access_token;
-}
-
-/** tRPC-klient som bär en användares Bearer mot web-origin (oauth2-proxy → server-first). */
-function clientFor(token: string): TRPCClient<AppRouter> {
-  return createTRPCClient<AppRouter>({
-    links: [httpBatchLink({
-      url: `${WEB_URL}/api/trpc`,
-      transformer: superjson,
-      headers: () => ({ Authorization: `Bearer ${token}` }),
-    })],
-  });
-}
-
 async function waitForServer(client: TRPCClient<AppRouter>): Promise<void> {
   for (let i = 0; i < 40; i++) {
     try { await client.user.current.query(); return; } catch { await sleep(1000); }
