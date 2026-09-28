@@ -355,6 +355,10 @@ jobs:
         # CI gör exakt samma sak. Specarna bär dessutom en hermeticitets-vakt —
         # varje förfrågan utanför den egna originen fäller testet.
         #
+        # `demo-offline` (#1240) öppnar appen offline via service workern —
+        # omladdning, ny flik, ärende och okänt id — plus ett kontrolltest
+        # utan service worker och versionsbytet ("Ladda om").
+        #
         # `demo-smoke` + `kebab-verify` kom till i #972. De är billiga
         # render-smokes (~1 min tillsammans) och slår upp sina fixtures ur
         # seeden i stället för att hårdkoda id:n — det var just för att de låg
@@ -366,6 +370,7 @@ jobs:
           test/e2e/demo-login.spec.ts
           test/e2e/demo-smoke.spec.ts
           test/e2e/kebab-verify.spec.ts
+          test/e2e/demo-offline.spec.ts
           --config tooling/config/playwright-demo.config.ts
       - name: Upload Playwright report
         if: always()

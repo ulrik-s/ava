@@ -180,6 +180,13 @@ HTML
 # inte argv: bun:s node-fallback (oven/bun-imagen) lägger inte argv[1] där node gör.
 F="$ROOT/out/404.html" bun -e 'const f=process.env.F,fs=require("fs");fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace("__BASEPATH__",process.env.DEMO_BASE_PATH||""))'
 
+# Service worker (#1240): förcachar app-skalet (sidor utan id, RSC-payloads,
+# _next/static) så appen går att ÖPPNA offline — omladdning, ny flik. Körs
+# sist, efter 404.html, så att listan speglar den färdiga out/. Versionen är
+# en innehållshash: ett oförändrat skal ger ingen "ny version"-fråga.
+echo "[build-demo] Bygger service worker (out/sw.js)..."
+bun tooling/scripts/build-service-worker.ts "$ROOT/out"
+
 echo "[build-demo] Klar. Output: $ROOT/out/"
 echo "  • App: $(find "$ROOT/out" -name '*.html' | wc -l | tr -d ' ') HTML-filer"
 echo "  • Data: $(grep -c '"' "$ROOT/out/manifest.json" 2>/dev/null || echo 0) entiteter i manifest"

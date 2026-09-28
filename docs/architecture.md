@@ -185,6 +185,27 @@ Kontraktet vaktas i CI av `test/unit/lib/client/demo/no-detail-link-regression.t
 (failar om en `<Link>`/`router.push` mot `/<route>/<id>` smyger tillbaka) och e2e
 `test/e2e/demo-invoice-document.spec.ts` (asserterar soft-nav utan omladdning).
 
+## App-skalet offline (service worker, #1240)
+
+Datan överlever ett avbrott i IndexedDB — men utan skalet (HTML + JS) går appen
+inte att öppna igen. `out/sw.js` byggs av `tooling/scripts/build-service-worker.ts`
+sist i `build-demo.sh` och förcachar skalet: sidorna utan id (+ RSC-payloads),
+`__shell__`-sidorna, `_next/static` (utan källkartor) och favicon.
+
+- **Strategi** (`src/lib/client/pwa/sw-routing.ts`, en allowlist): `_next/static`
+  cache-first; navigeringar och RSC-payloads network-first med cache-fallback
+  (4 s timeout, 5xx → cache). Allt annat — `/api`, `/git`, `/oauth2`, demo-data,
+  dokument-bytes — rörs aldrig.
+- **Runtime-id:n offline** får `/<route>/__shell__/` ur cachen, precis som
+  Caddy/nginx skriver om dem online; okända sidor får roten.
+- **Omdirigeringar cachas aldrig** — en utgången session (302 till IdP:n) får
+  inte bli "sidan" offline.
+- **Versioner**: cache-namnet är `ava-app-<innehållshash>`. En ny version väntar
+  tills användaren klickar "Ladda om" (`PwaRegister`), och activate städar bara
+  gamla `ava-app-*`.
+- **E2E**: `test/e2e/demo-offline.spec.ts` (omladdning, ny flik, ärende och okänt
+  id offline + kontrolltest utan service worker + versionsbytet).
+
 ## Data-modell
 
 **Sanningskälla:** `src/lib/shared/schemas/index.ts` — `ENTITY_REGISTRY` (zod-schema

@@ -26,6 +26,16 @@ describe("registerServiceWorker", () => {
     expect(result.status).toBe("registered");
   });
 
+  it("skickar vidare scope (under-sökväg, t.ex. GH Pages /ava/) och returnerar registreringen", async () => {
+    const registration = { scope: "https://x/ava/" };
+    const register = vi.fn(async () => registration);
+    vi.stubGlobal("navigator", { serviceWorker: { register } });
+    const result = await registerServiceWorker("/ava/sw.js", "/ava/");
+    expect(register).toHaveBeenCalledWith("/ava/sw.js", { scope: "/ava/" });
+    expect(result.registration).toBe(registration);
+    expect(result.scope).toBe("https://x/ava/");
+  });
+
   it("returnerar `failed` om register kastar", async () => {
     const register = vi.fn(async () => { throw new Error("SSL invalid"); });
     vi.stubGlobal("navigator", { serviceWorker: { register } });
@@ -33,6 +43,7 @@ describe("registerServiceWorker", () => {
     const result = await registerServiceWorker("/sw.js");
     expect(result.status).toBe("failed");
     expect(result.error?.message).toMatch(/SSL invalid/);
+    expect(result.registration).toBeUndefined();
     spy.mockRestore();
   });
 
