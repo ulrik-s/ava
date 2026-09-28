@@ -9,6 +9,10 @@ const projectRoot = path.resolve(__dirname, "..", "..");
  * Stacken + konflikt-seeden körs av `tooling/scripts/conflict-e2e.sh`; spec:en
  * loggar in via Keycloaks riktiga formulär och bekräftar i webb-UIt att ärendet
  * har 2 filer (originalet + keep-both-syskonet). Web på AVA_WEB_PORT (8080).
+ *
+ * Samma stack bär `unsynced-logout.spec.ts` (#1241): en ändring offline →
+ * statuspill + lagringsvarning + fråga vid utloggning; online → synkas och
+ * utloggningen går igenom utan fråga. Delad inloggning: `_selfhosted-login.ts`.
  */
 export default defineConfig({
   testDir: path.join(projectRoot, "test/e2e/conflict"),

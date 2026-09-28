@@ -206,6 +206,20 @@ sist i `build-demo.sh` och förcachar skalet: sidorna utan id (+ RSC-payloads),
 - **E2E**: `test/e2e/demo-offline.spec.ts` (omladdning, ny flik, ärende och okänt
   id offline + kontrolltest utan service worker + versionsbytet).
 
+## Osynkade ändringar och lokal lagring (#1241)
+
+- **Beständig lagring**: `requestPersistentStorageOnce()` ber om
+  `navigator.storage.persist()` när server-synken startar och när /settings
+  öppnas. Svaret visas (`StorageStatus` under Datakälla); nekat + osynkade
+  ändringar → varningen "Lokal lagring kan rensas" bredvid statuspillen.
+- **Utloggning**: `signOutWithSyncCheck` synkar en sista gång och frågar om
+  ändringar ändå inte nått servern (`unsyncedChangeCount()` via
+  `registerServerSyncFlush`).
+- **Offline-mutationer**: `makeAppQueryClient` kör `networkMode: "always"` —
+  TanStacks standard pausade varje mutation så fort webbläsaren gick offline.
+- **E2E**: `demo-storage-persistence.spec.ts`, `demo-offline.spec.ts` (kontakt
+  offline) och `conflict/unsynced-logout.spec.ts` mot full self-hosted-stack.
+
 ## Data-modell
 
 **Sanningskälla:** `src/lib/shared/schemas/index.ts` — `ENTITY_REGISTRY` (zod-schema
