@@ -18,6 +18,7 @@ import type { IDocumentPageIndex, IPorts } from "@/lib/server/ports";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import { bearerConfigFromEnv, type BearerVerifyConfig } from "./bearer-claims";
 import { handleHealthRoute } from "./health";
 import { createServerTrpcHandler } from "./server-trpc-handler";
@@ -72,6 +73,8 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     ports: { ...(config.ports ?? noopPorts), searchIndex: search },
     organizationId: config.organizationId,
     sync: new DrizzleSyncStore(db, repos),
+    // Köade procedur-anrop körs om auktoritativt (#1265, ADR 0037).
+    replayer: new DrizzleProcedureReplayer(db, repos),
     ...(config.endpoint ? { endpoint: config.endpoint } : {}),
     ...(config.onError ? { onError: config.onError } : {}),
     ...(bearer ? { bearer } : {}),

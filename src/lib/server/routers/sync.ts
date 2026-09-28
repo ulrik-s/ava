@@ -26,6 +26,17 @@ const queuedMutationSchema = z.object({
   enqueuedAt: z.number(),
 });
 
+/** Ett köat procedur-anrop (#1265, ADR 0037). Fälten i `input` valideras av proceduren själv. */
+const queuedProcedureCallSchema = z.object({
+  type: z.literal("procedure"),
+  mutationId: z.string().uuid(),
+  path: z.string().min(1).max(200),
+  input: z.record(z.string(), z.unknown()),
+  codeVersion: z.string().max(200),
+  touches: z.array(z.object({ entity: z.string().max(100), id: z.string().max(100) })).max(100),
+  enqueuedAt: z.number(),
+});
+
 function requireSync(sync: SyncStore | undefined): SyncStore {
   if (!sync) {
     throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "Sync är inte tillgängligt i denna backend." });
@@ -43,4 +54,17 @@ export const syncRouter = router({
   push: orgProcedure
     .input(queuedMutationSchema)
     .mutation(({ ctx, input }) => requireSync(ctx.sync).push(ctx.orgId, input as QueuedMutation)),
+
+  /**
+   * Kör om ett köat procedur-anrop auktoritativt som den inloggade (#1265,
+   * ADR 0037). Svarar med utfallet och de berörda radernas kanoniska läge.
+   */
+  replay: orgProcedure
+    .input(queuedProcedureCallSchema)
+    .mutation(({ ctx, input }) => {
+      if (!ctx.replayProcedure) {
+        throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "Omkörning av köade anrop finns inte i denna backend." });
+      }
+      return ctx.replayProcedure(input);
+    }),
 });

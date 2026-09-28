@@ -207,6 +207,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   // ── Synk ─────────────────────────────────────────────────────────
   "sync.pull": "Hämta ändringar efter en viss markör (delta-synk). Maskinväg — inte något en användare anropar.",
   "sync.push": "Skicka en köad klientmutation för serverauktoritativ tillämpning. Maskinväg.",
+  "sync.replay": "Låt servern köra om ett köat procedur-anrop (t.ex. en tidspost skapad offline) med sina egna regler. Maskinväg.",
 
   // ── System ───────────────────────────────────────────────────────
   "system.capabilities": "Vad den här installationen kan (demo, self-hosted eller serverdrift) — styr vilka funktioner som är tillgängliga.",

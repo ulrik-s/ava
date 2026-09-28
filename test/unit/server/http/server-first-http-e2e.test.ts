@@ -21,16 +21,17 @@ import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-
 import { users } from "@/lib/server/db/schema";
 import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
-import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
-import type { Repositories } from "@/lib/server/repositories/repositories";
+import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
 const ORG = uuidv7();
+const ANNA = uuidv7();
 
 /**
  * `fetch` via `node:http` — kringgår happy-dom:s Same-Origin-grind (testmiljön
@@ -74,7 +75,7 @@ function clientFor(baseUrl: string, email?: string): TRPCClient<AppRouter> {
 
 describe("server-first E2E över riktig HTTP-socket (#470)", () => {
   let handle: TestDbHandle;
-  let repos: Repositories;
+  let repos: DrizzleRepositories;
   let server: Server;
   let baseUrl: string;
   let transport: TrpcSyncTransport;
@@ -86,10 +87,11 @@ describe("server-first E2E över riktig HTTP-socket (#470)", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await handle.db.insert(users).values(
-      v({ id: uuidv7(), organizationId: ORG, email: "anna@byra.se", name: "Anna", role: "LAWYER", active: true }),
+      v({ id: ANNA, organizationId: ORG, email: "anna@byra.se", name: "Anna", role: "LAWYER", active: true }),
     );
     const handler = createServerTrpcHandler({
       repos, ports: noopPorts, organizationId: ORG, sync: new DrizzleSyncStore(handle.db, repos),
+      replayer: new DrizzleProcedureReplayer(handle.db, repos),
     });
     server = serveFetchHandler(handler, { port: 0 });
     await once(server, "listening");
@@ -118,6 +120,20 @@ describe("server-first E2E över riktig HTTP-socket (#470)", () => {
     };
     expect((await transport.push(mutation)).status).toBe("accepted");
     expect(await repos.contacts.getById(asId<"ContactId">(c1))).toMatchObject({ id: c1, name: "Wire-kontakt" });
+  });
+
+  it("spelar upp ett procedur-anrop auktoritativt över riktig socket, som den inloggade (#1265)", async () => {
+    const matterId = uuidv7();
+    await repos.matters.create({ id: matterId, organizationId: ORG, title: "Kö-ärende", status: "ACTIVE", matterNumber: "2026-1266" } as never);
+    const id = uuidv7();
+    const res = await transport.pushProcedure({
+      type: "procedure", mutationId: uuidv7(), path: "timeEntry.create", codeVersion: "t", enqueuedAt: 0,
+      input: { id, matterId, date: "2026-09-02", minutes: 45, description: "Förhandling" },
+      touches: [{ entity: "timeEntry", id }],
+    });
+    expect(res.status).toBe("accepted");
+    expect(res.rows[0]).toMatchObject({ entity: "timeEntry", row: { id, minutes: 45 } });
+    expect(await repos.timeEntries.getById(asId<"TimeEntryId">(id))).toMatchObject({ userId: ANNA });
   });
 
   it("orgProcedure-grind: ingen forwarded identitet → klienten kastar", async () => {

@@ -110,3 +110,13 @@ describe("StaticSyncSource — integration med CachingSyncDataStore (hela reconc
     expect((await cs.store.contacts.findMany({})).length).toBe(3); // idempotent upsert
   });
 });
+
+describe("StaticSyncSource — procedur-anrop (#1265)", () => {
+  it("demon har ingen server som kör om: anropet godtas och det lokala resultatet gäller", async () => {
+    const src = new StaticSyncSource({});
+    const res = await src.pushProcedure();
+    expect(res).toEqual({ status: "accepted", rows: [] });
+    // Loggen rörs inte — inget att pulla tillbaka.
+    expect((await src.pull(0)).changes).toHaveLength(0);
+  });
+});

@@ -28,7 +28,7 @@ function harness(over: Partial<SyncSchedulerDeps> = {}) {
     scheduler, statuses, calls, timers,
     setPending: (n: number) => { pending = n; },
     setOnline: (v: boolean) => { online = v; },
-    setReconcile: (fn: () => Promise<{ pulled: number }>) => { reconcileImpl = fn; },
+    setReconcile: (fn: () => Promise<{ pulled: number; replayed?: number }>) => { reconcileImpl = fn; },
     fireTimers: async () => { const fns = timers.splice(0); for (const f of fns) f(); await Promise.resolve(); await Promise.resolve(); },
     last: () => statuses[statuses.length - 1]!,
   };
@@ -95,5 +95,19 @@ describe("SyncScheduler", () => {
     h.setReconcile(async () => ({ pulled: 4 }));
     await h.scheduler.syncNow();
     expect(h.calls.remote).toBe(1);
+  });
+
+  it("serverns svar på omkörda anrop (#1265) → UI:t hämtar om direkt, inte vid nästa periodiska synk", async () => {
+    const h = harness();
+    h.setReconcile(async () => ({ pulled: 0, replayed: 1 }));
+    await h.scheduler.syncNow();
+    expect(h.calls.remote).toBe(1);
+  });
+
+  it("ingenting nytt → ingen omhämtning", async () => {
+    const h = harness();
+    h.setReconcile(async () => ({ pulled: 0, replayed: 0 }));
+    await h.scheduler.syncNow();
+    expect(h.calls.remote).toBe(0);
   });
 });

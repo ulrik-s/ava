@@ -23,7 +23,7 @@
 import type { DemoSource } from "@/lib/shared/demo-source";
 import { ENTITY_NAME_BY_SOURCE_KEY } from "./entity-source-keys";
 import type { QueuedMutation } from "./mutation-queue";
-import type { PullResult, PulledChange, PushResult, SyncTransport } from "./sync-transport";
+import type { ProcedureReplayResult, PullResult, PulledChange, PushResult, SyncTransport } from "./sync-transport";
 
 /** Platta en `DemoSource` (plural-nycklar → rad-arrayer) till kanoniska
  *  `PulledChange`-rader (singular entity), i en stabil nyckel-ordning. Okända
@@ -63,6 +63,11 @@ export class StaticSyncSource implements SyncTransport {
     // Delete → tombstone (deleted), annars upsert av raden.
     this.append({ entity: mutation.entity, row: mutation.row, deleted: mutation.kind === "delete" });
     return Promise.resolve({ status: "accepted", row: mutation.row });
+  }
+
+  /** Loopback: demon har ingen server som kör om anrop — det lokala resultatet gäller. */
+  pushProcedure(): Promise<ProcedureReplayResult> {
+    return Promise.resolve({ status: "accepted", rows: [] });
   }
 
   /** Ersätt seeden (töm loggen, börja om från seq 0). Demo-vägen laddar seeden

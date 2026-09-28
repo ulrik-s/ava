@@ -32,6 +32,7 @@ import { StaticContentStore } from "@/lib/client/backend/static-content-store";
 import { CapabilitiesProvider } from "@/lib/client/capabilities/use-capabilities";
 import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
+import type { ProcedureRecorder } from "@/lib/client/demo/in-process-link";
 import { loadFirmaConfig, patchFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
 import { makeAppQueryClient } from "@/lib/client/query-client";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
@@ -89,7 +90,7 @@ async function rehydrateGeneratedDocs(): Promise<void> {
   for (const b of blobs) stashGeneratedDoc(b.id, b.bytes, b.mimeType, b.fileName);
 }
 
-function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig) {
+function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, recordProcedure?: ProcedureRecorder) {
   // Content-porten serverar de bundlade dokument-blobbarna (#545, ADR 0025) så
   // `document.downloadContent` → byte-cachen funkar i demon, via SAMMA
   // IContentStore-söm som GitContentStore server-side (noopContentStore gav
@@ -103,6 +104,7 @@ function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig) {
       new GitBackendRuntime({
         dataStore,
         ports,
+        ...(recordProcedure ? { recordProcedure } : {}),
         authProvider: new GitAuthProvider({
           // principalId sätts av login-flowet (`/login`). Demo utan satt
           // principal → guest-id (datakällan filtrerar bort user-bundna
@@ -461,7 +463,9 @@ async function bindOidcFirstLogin(a: {
 export async function bootstrapSelfHosted(a: SelfHostedBootstrapArgs): Promise<void> {
   const { firmaConfig, queryClient, setStatus, setErrorMsg, onStoreReady, isCancelled } = a;
   const makeStore = a.makeStore ?? defaultServerFirstStore;
-  const makeClient = a.makeClient ?? ((store: CachingSyncDataStore) => createDemoTrpcClient(store.store, firmaConfig));
+  // Procedur-kön (#1265, ADR 0037): servern kör om köbara anrop auktoritativt.
+  const makeClient = a.makeClient ?? ((store: CachingSyncDataStore) =>
+    createDemoTrpcClient(store.store, firmaConfig, (call, exec) => store.runQueuedProcedure(call, exec)));
   try {
     const { needsOidc, oidcClaims } = await resolveOidcLogin(firmaConfig);
     const store = await makeStore();
