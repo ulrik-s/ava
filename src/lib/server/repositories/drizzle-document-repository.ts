@@ -14,7 +14,7 @@ import type { AppDb } from "../db/types";
 import type {
   DocumentAccessRow, DocumentListRow, DocumentRepository,
 } from "./document-repository";
-import { DrizzleRepository, versionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable, withNextVersion } from "./drizzle-repository";
 import { matterOrg } from "./matter-org";
 
 /** documents.folderId = X, eller IS NULL för rot. */
@@ -50,6 +50,16 @@ export class DrizzleDocumentRepository
     const row = await super.softDelete(id);
     await this.db.delete(documentPages).where(eq(documentPages.documentId, id));
     return row;
+  }
+
+  /**
+   * Hård delete (#1234): databasen kaskad-raderar dokumentets delar (FK), och
+   * de loggas här som borttagna — annars ligger delarna kvar hos andra klienter.
+   */
+  override async hardDelete(id: DocumentId): Promise<void> {
+    const parts = await this.db.select().from(documentParts).where(eq(documentParts.documentId, id));
+    await super.hardDelete(id);
+    for (const part of parts) await this.logChangeAs("documentPart", withNextVersion(part), "delete");
   }
 
   async listInFolder(

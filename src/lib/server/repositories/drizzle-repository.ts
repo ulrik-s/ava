@@ -120,9 +120,16 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
     return this.asRow(row) as Row;
   }
 
-  /** Hård delete — se `Repository.hardDelete` (medvetet ADR 0017-undantag). */
+  /**
+   * Hård delete — se `Repository.hardDelete` (medvetet ADR 0017-undantag).
+   * Loggas som `delete` i change_log (#1234): utan loggraden får andra klienter
+   * aldrig någon tombstone när raderingen görs direkt på servern (CLI/MCP,
+   * helpern, serverns omkörning av köade procedurer), och raden lever kvar hos dem.
+   */
   async hardDelete(id: Row["id"]): Promise<void> {
-    await this.db.delete(this.table).where(eq(this.table.id, id));
+    const [raw] = await this.db.delete(this.table).where(eq(this.table.id, id)).returning();
+    const row = this.asRow(raw);
+    if (row) await this.logChange(withNextVersion(row), "delete");
   }
 
   /**
@@ -136,23 +143,42 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
 
   /** Append en change_log-rad om loggning är på och org kunde härledas. */
   private async logChange(row: unknown, op: ChangeOp): Promise<void> {
-    if (!this.changeLog) return;
-    const r = row as { id?: string; version?: number };
-    const organizationId = await this.resolveOrg(row);
-    if (!r.id || !organizationId) return; // utan org kan raden inte delta-synkas
+    await this.logChangeAs(this.entityName(), row, op);
+  }
+
+  /** Entitetsnamnet (ADR 0017, singular) för den här repons tabell. */
+  private entityName(): string {
     // getTableName ger snake_case (`document_folders`); ENTITY_NAME_BY_SOURCE_KEY
     // är keyat på camelCase source-key (`documentFolders`). Konvertera, annars
     // får fler-ords-tabeller fel entitetsnamn → klientens apply känner ej igen dem.
     const tableName = getTableName(this.table);
     const sourceKey = tableName.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
+    return ENTITY_NAME_BY_SOURCE_KEY[sourceKey] ?? ENTITY_NAME_BY_SOURCE_KEY[tableName] ?? tableName;
+  }
+
+  /**
+   * Logga en ändring för en GIVEN entitet — för rader repot påverkar i en annan
+   * tabell, t.ex. dokumentdelar som databasen kaskad-raderar med dokumentet.
+   * Org härleds med den här repons `resolveOrg` (samma ärende-scope).
+   */
+  protected async logChangeAs(entity: string, row: unknown, op: ChangeOp): Promise<void> {
+    if (!this.changeLog) return;
+    const r = row as { id?: string; version?: number };
+    const organizationId = await this.resolveOrg(row);
+    if (!r.id || !organizationId) return; // utan org kan raden inte delta-synkas
     await this.changeLog.record({
       organizationId,
-      entity: ENTITY_NAME_BY_SOURCE_KEY[sourceKey] ?? ENTITY_NAME_BY_SOURCE_KEY[tableName] ?? tableName,
+      entity,
       rowId: r.id,
       version: r.version ?? 1,
       op,
     }, this.db); // logga på SAMMA connection (tx-atomiskt, inget dödläge, #647)
   }
+}
+
+/** Raden med versionen en borttagning ger (tombstonens version i change_log). */
+export function withNextVersion<T extends RowBase>(row: T): T {
+  return { ...row, version: nextVersion(row) };
 }
 
 function nextVersion(row: RowBase): number {
