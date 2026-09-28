@@ -30,7 +30,7 @@ export default defineConfig({
   // utanför tills de slutat hårdkoda seed-id:n; de slår upp sina fixtures i
   // `demo-seed.json` via `fetchDemoSeed`. Lägg inte till en spec här som pekar
   // på ett id den inte slagit upp — det var precis så de tystnade förra gången.
-  testMatch: /(column-menu|chrome-regressions|matter-watch|billing-watch|demo-invoice-document|demo-kostnadsrakning-verdict|demo-kostnadsrakning-void|demo-login|demo-smoke|kebab-verify|matters-employee-filter|docking-layout|hourly-rates)\.spec\.ts$/,
+  testMatch: /(column-menu|chrome-regressions|matter-watch|billing-watch|demo-invoice-document|demo-kostnadsrakning-verdict|demo-kostnadsrakning-void|demo-login|demo-smoke|kebab-verify|matters-employee-filter|docking-layout|hourly-rates|demo-offline)\.spec\.ts$/,
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
@@ -42,6 +42,11 @@ export default defineConfig({
     baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // Service workern (#1240) blockeras som default: varje test får en färsk
+    // kontext, och en SW som förcachar hela skalet i bakgrunden per test gör
+    // bara körningen långsammare. `demo-offline.spec.ts` slår på den
+    // (`serviceWorkers: "allow"`) och testar den på riktigt.
+    serviceWorkers: "block",
   },
   // Bara när vi kör mot vår egen `out/`. `serve-demo-static.ts` är beroendefri
   // (node:http) och läser `out/` relativt cwd → därav `cwd: projectRoot`.
