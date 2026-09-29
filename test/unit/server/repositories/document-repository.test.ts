@@ -68,6 +68,21 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
     await folders.reassignParent(root, null);
     expect((await folders.getById(asId<"DocumentFolderId">(sub)))!.parentId).toBeNull();
   });
+
+  it("listStoredContent (#1145): varje dokuments adress + skapelsetid; saknad adress = tom", async () => {
+    const source = prebakeJoins({
+      documents: [
+        { id: "d-a", matterId: "m", fileName: "a.pdf", storagePath: "documents/content/a", createdAt: new Date("2026-09-01") },
+        { id: "d-b", matterId: "m", fileName: "b.pdf" },
+      ],
+    } as DemoSource);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const docs = new InMemoryDocumentRepository(new LocalStore(source, async () => {}) as any);
+    expect(await docs.listStoredContent()).toEqual([
+      { id: "d-a", storagePath: "documents/content/a", createdAt: new Date("2026-09-01") },
+      { id: "d-b", storagePath: "", createdAt: new Date(0) },
+    ]);
+  });
 });
 
 describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", () => {
@@ -117,5 +132,21 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
     expect((await docs.listInFolder(mId, root, 1, 50)).total).toBe(0);
     await folders.reassignParent(root, null);
     expect((await folders.getById(asId<"DocumentFolderId">(sub)))!.parentId).toBeNull();
+  });
+
+  it("listStoredContent (#1145): ej raderade dokuments adress + skapelsetid", async () => {
+    const db = handle.db;
+    const mId = asId<"MatterId">(uuidv7());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: uuidv7(), matterNumber: "2026-1145", title: "T" }));
+    const kept = uuidv7(), gone = uuidv7();
+    const doc = (id: string, extra: Record<string, unknown>) =>
+      v({ id, matterId: mId, fileName: "f", mimeType: "application/pdf", sizeBytes: 1, uploadedById: uuidv7(), ...extra });
+    await db.insert(documents).values(doc(kept, { storagePath: "documents/content/kvar" }));
+    await db.insert(documents).values(doc(gone, { storagePath: "documents/content/borta", deletedAt: new Date() }));
+    const rows = await new DrizzleDocumentRepository(db).listStoredContent();
+    expect(rows.find((r) => r.id === kept)).toMatchObject({ storagePath: "documents/content/kvar", createdAt: expect.any(Date) });
+    expect(rows.find((r) => r.id === gone)).toBeUndefined();
   });
 });

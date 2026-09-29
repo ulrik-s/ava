@@ -73,6 +73,23 @@ docker logs ava-server 2>&1 | jq -c 'select(.requestId == "K7M2PQX4RTBN")'
 docker logs ava-server 2>&1 | jq -c 'select(.durationMs > 1000) | {path, durationMs}'
 ```
 
+### Integritetskontrollen: metadata utan innehåll (#1145)
+
+Med ett innehållslager (`AVA_CONTENT_DIR`) kontrollerar servern vid start och
+sedan dagligen att varje dokument har sitt innehåll
+(`src/lib/server/integrity/content-integrity.ts`). Dokument yngre än 15
+minuter räknas inte, eftersom klienten laddar upp bytes:en efter raden.
+
+| Händelse | Nivå | Fält |
+|---|---|---|
+| `content.integrity.missing` | error | `count` (dokument utan innehåll), `total` (kontrollerade), `ids` (dokument-id:n) |
+| `content.integrity.ok` | info | `total`, `count: 0` |
+
+```bash
+# larma på dokument utan innehåll
+docker logs ava-server 2>&1 | jq -c 'select(.event == "content.integrity.missing") | {count, ids}'
+```
+
 ## Grinden
 
 `no-console` är **error** i `src/lib/server/**`. Att lägga till en logger utan

@@ -61,6 +61,12 @@ export interface LogRecord {
   code?: string;
   /** Maskerat felmeddelande. Går genom `redactMessage` före det hamnar här. */
   message?: string;
+  /** Antal berörda (t.ex. dokument utan innehåll, #1145). */
+  count?: number;
+  /** Antal kontrollerade (nämnaren till `count`). */
+  total?: number;
+  /** Rad-id:n händelsen gäller — bara id:n, aldrig innehåll. */
+  ids?: string[];
 }
 
 export type LogSink = (record: LogRecord) => void;

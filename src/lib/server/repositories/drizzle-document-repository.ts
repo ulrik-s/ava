@@ -12,7 +12,7 @@ import type {
 import { documentPages, documentParts, documents, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
-  DocumentAccessRow, DocumentListRow, DocumentRepository,
+  DocumentAccessRow, DocumentListRow, DocumentRepository, StoredContentRow,
 } from "./document-repository";
 import { DrizzleRepository, versionedTable, withNextVersion } from "./drizzle-repository";
 import { matterOrg } from "./matter-org";
@@ -83,6 +83,12 @@ export class DrizzleDocumentRepository
       .where(and(eq(documents.matterId, matterId), isNull(documents.deletedAt)))
       .orderBy(desc(documents.createdAt));
     return rows.map(toListRow);
+  }
+
+  async listStoredContent(): Promise<StoredContentRow[]> {
+    return await this.db
+      .select({ id: documents.id, storagePath: documents.storagePath, createdAt: documents.createdAt })
+      .from(documents).where(isNull(documents.deletedAt));
   }
 
   async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {
