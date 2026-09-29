@@ -61,6 +61,35 @@ export type JobWorker<P = Record<string, unknown>> = (
 type Listener = (jobs: Job[]) => void;
 
 const HISTORY_LIMIT = 50;
+/** Hur länge ett avbrutet jobb får hålla sin kind innan vakten varnar (#1283). */
+const CANCEL_STALL_WARN_MS = 10_000;
+
+/**
+ * Vem som håller en kinds plats i kön just nu — för att felsöka en kö som
+ * står still (#1283). Kön kör ett jobb per kind åt gången, och ett avbrutet
+ * jobb håller platsen tills workern faktiskt returnerar.
+ */
+export interface KindSlotDiagnostics {
+  kind: JobKind;
+  /** Jobbet som kör (och håller kinden), eller null om inget kör. */
+  holder: {
+    id: string;
+    label: string;
+    runningForMs: number;
+    /** Tid sedan avbrott begärdes, eller null om jobbet inte avbrutits. */
+    abortRequestedForMs: number | null;
+  } | null;
+  /** Antal jobb av kinden som väntar. */
+  queued: number;
+  /** Hur länge det äldsta väntande jobbet har väntat, eller null. */
+  oldestQueuedWaitMs: number | null;
+}
+
+/** Inställningar för en kö. */
+export interface JobQueueOptions {
+  /** Varna när ett avbrutet jobb inte släppt sin kind efter så här många ms. */
+  cancelStallWarnMs?: number;
+}
 
 class JobQueueImpl {
   private workers = new Map<JobKind, JobWorker>();
@@ -69,6 +98,15 @@ class JobQueueImpl {
   private listeners = new Set<Listener>();
   /** Map<kind, isRunning> — single-flight per kind. */
   private running = new Set<JobKind>();
+  /** När avbrott begärdes för ett jobb som kör (jobb-id → tidpunkt). */
+  private abortRequestedAt = new Map<string, number>();
+  /** Vakter för avbrutna jobb som inte returnerat (jobb-id → timer). */
+  private stallTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly cancelStallWarnMs: number;
+
+  constructor(opts: JobQueueOptions = {}) {
+    this.cancelStallWarnMs = opts.cancelStallWarnMs ?? CANCEL_STALL_WARN_MS;
+  }
 
   registerWorker<P extends Record<string, unknown>>(kind: JobKind, worker: JobWorker<P>): void {
     this.workers.set(kind, worker as JobWorker);
@@ -100,6 +138,7 @@ class JobQueueImpl {
       ac?.abort();
       // Status sätts till "canceled" när worker:n returnerar och vi
       // detekterar AbortError; se runJob.
+      this.watchStall(job);
     }
     this.notify();
   }
@@ -128,6 +167,64 @@ class JobQueueImpl {
   clearFinished(): void {
     this.jobs = this.jobs.filter((j) => j.status === "queued" || j.status === "running");
     this.notify();
+  }
+
+  /**
+   * Ögonblicksbild av varje kind som har ett jobb som kör eller väntar: vem
+   * som håller platsen, hur länge, och om den avbrutits utan att släppa.
+   */
+  diagnose(now: number = Date.now()): KindSlotDiagnostics[] {
+    const kinds = new Set(this.jobs.filter(isActive).map((j) => j.kind));
+    return [...kinds].map((kind) => this.diagnoseKind(kind, now));
+  }
+
+  private diagnoseKind(kind: JobKind, now: number): KindSlotDiagnostics {
+    const ofKind = this.jobs.filter((j) => j.kind === kind);
+    const running = ofKind.find((j) => j.status === "running");
+    const queued = ofKind.filter((j) => j.status === "queued");
+    const oldest = Math.min(...queued.map((j) => j.enqueuedAt));
+    return {
+      kind,
+      holder: running ? this.holderOf(running, now) : null,
+      queued: queued.length,
+      oldestQueuedWaitMs: queued.length > 0 ? now - oldest : null,
+    };
+  }
+
+  private holderOf(job: Job, now: number): NonNullable<KindSlotDiagnostics["holder"]> {
+    const abortAt = this.abortRequestedAt.get(job.id);
+    return {
+      id: job.id,
+      label: job.label,
+      runningForMs: now - (job.startedAt ?? now),
+      abortRequestedForMs: abortAt === undefined ? null : now - abortAt,
+    };
+  }
+
+  /**
+   * Vakt: ett avbrutet jobb ska returnera. Gör det inte det (workern
+   * ignorerar AbortSignal, eller hänger på ett anrop utan signal) blockeras
+   * alla följande jobb av samma kind. Det syns då i konsolen i stället för
+   * att kön tyst står still.
+   */
+  private watchStall(job: Job): void {
+    if (this.abortRequestedAt.has(job.id)) return;
+    this.abortRequestedAt.set(job.id, Date.now());
+    this.stallTimers.set(job.id, setTimeout(() => { this.warnStall(job); }, this.cancelStallWarnMs));
+  }
+
+  private warnStall(job: Job): void {
+    const d = this.diagnoseKind(job.kind, Date.now());
+    console.warn(
+      `[job-queue] '${job.kind}'-jobbet "${job.label}" avbröts för ${this.cancelStallWarnMs} ms sedan men workern har inte släppt; ` +
+      `${d.queued} jobb väntar. ${formatDiagnostics(this.diagnose())}`,
+    );
+  }
+
+  private releaseStallWatch(id: string): void {
+    clearTimeout(this.stallTimers.get(id));
+    this.stallTimers.delete(id);
+    this.abortRequestedAt.delete(id);
   }
 
   private async pump(): Promise<void> {
@@ -180,6 +277,7 @@ class JobQueueImpl {
     } finally {
       job.finishedAt = Date.now();
       this.abortControllers.delete(job.id);
+      this.releaseStallWatch(job.id);
       this.running.delete(job.kind);
       this.notify();
       // Kör nästa jobb
@@ -206,9 +304,35 @@ function makeId(): string {
   return `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function isActive(j: Job): boolean {
+  return j.status === "queued" || j.status === "running";
+}
+
+function formatKind(d: KindSlotDiagnostics): string {
+  const h = d.holder;
+  const abort = h?.abortRequestedForMs == null ? "" : `, avbruten för ${h.abortRequestedForMs} ms sedan`;
+  const who = h ? `kör ${h.id} "${h.label}" i ${h.runningForMs} ms${abort}` : "INGET kör";
+  const wait = d.oldestQueuedWaitMs === null ? "" : ` (äldsta ${d.oldestQueuedWaitMs} ms)`;
+  return `${d.kind}: ${who}; ${d.queued} väntar${wait}`;
+}
+
+/** En läsbar rad per kind — för felmeddelanden och konsolen. */
+export function formatDiagnostics(diagnostics: readonly KindSlotDiagnostics[]): string {
+  if (diagnostics.length === 0) return "jobbkön: inga aktiva kinds";
+  return `jobbkön: ${diagnostics.map(formatKind).join(" | ")}`;
+}
+
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && (err.name === "AbortError" || /aborted/i.test(err.message));
 }
 
+/** En jobbkö — appen använder singletonen `jobQueue`. */
+export type JobQueue = JobQueueImpl;
+
+/** Skapa en egen kö (tester, eller kortare vakt-tid). Appen använder `jobQueue`. */
+export function createJobQueue(opts: JobQueueOptions = {}): JobQueue {
+  return new JobQueueImpl(opts);
+}
+
 /** Singleton — instansieras en gång per browser-tab. */
-export const jobQueue = new JobQueueImpl();
+export const jobQueue = createJobQueue();

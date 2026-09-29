@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
+import { formatDiagnostics, jobQueue, type Job } from "@/lib/client/jobs/job-queue";
 
 beforeEach(() => {
   // Töm queue:n mellan testen — den är singleton
@@ -20,7 +20,8 @@ function waitForStatus(id: string, status: Job["status"], timeoutMs = 500): Prom
     const tick = () => {
       const j = jobQueue.list().find((x) => x.id === id);
       if (j && j.status === status) return resolve(j);
-      if (Date.now() - start > timeoutMs) return reject(new Error(`timeout: ${id} aldrig ${status} (är ${j?.status})`));
+      // Diagnostiken visar vem som håller kindens plats (#1283).
+      if (Date.now() - start > timeoutMs) return reject(new Error(`timeout: ${id} aldrig ${status} (är ${j?.status}) — ${formatDiagnostics(jobQueue.diagnose())}`));
       setTimeout(tick, 5);
     };
     tick();
