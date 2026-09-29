@@ -382,6 +382,14 @@ Vid hydrering kör en **versionsgrind** (repo nyare än koden → vägra starta)
 rader till aktuell form innan zod-parsern ser dem. Se
 [ADR 0004](./adr/0004-schemaversion-och-versionsgrind.md).
 
+## Webbläsarstöd (#1299)
+
+De två senaste versionerna av Chrome, Edge, Firefox och Safari på desktop, samt
+Safari och Chrome på iOS. Byggmålen (`browserslist` i `package.json`) är
+medvetet lägre versioner — Turbopack känner inte till de nyaste och skriver då
+om all modern syntax. Mappfunktionerna (File System Access API) finns bara i
+Chromium. Se [`browser-support.md`](./browser-support.md).
+
 ## Test-stack
 
 - `bun test --parallel` (#92): enhets-/komponenttester. happy-dom för DOM
