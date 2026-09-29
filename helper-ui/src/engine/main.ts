@@ -279,6 +279,8 @@ export interface EngineOpts {
   httpsPort?: number;
   /** Data-dir-override (default OS-dir). Sätts i test för hermetik. */
   dataDir?: string | null;
+  /** Loggkatalog (default OS-dir; null = ingen fil). Sätts i test för hermetik. */
+  logDir?: string | null;
 }
 
 export interface EngineHandle {
@@ -299,6 +301,10 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
   const port = opts.port ?? listenPort();
   const hsPort = opts.httpsPort ?? httpsPort();
   const dir = opts.dataDir !== undefined ? opts.dataDir : dataDir();
+  // Motorn initierar loggfilen själv (#1161): Electron-skalet anropar bara
+  // startEngine, och utan detta skrev appen aldrig någon logg hos användaren.
+  if (opts.logDir !== undefined) initLog(opts.logDir);
+  else initLog();
   log(`ava-helper ${VERSION} startar på 127.0.0.1:${port}`);
 
   const abort = new AbortController();
@@ -419,7 +425,6 @@ function runCliFlag(argv: readonly string[]): boolean {
 function main(): void {
   if (runCliFlag(process.argv)) return;
 
-  initLog();
   const engine = startEngine();
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, () => {

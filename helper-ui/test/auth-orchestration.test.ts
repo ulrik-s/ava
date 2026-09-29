@@ -106,6 +106,36 @@ describe("runLogin (injicerade deps)", () => {
     expect(exchangeArgs).toEqual({ code: "CODE", verifier: "V", redirectUri: "http://127.0.0.1:48765/callback" });
     expect(await store.load()).toMatchObject({ accessToken: "AT" });
   });
+
+  const failingDeps = (over: Partial<LoginDeps>): LoginDeps => ({
+    discover: async () => EP,
+    makePkce: () => ({ verifier: "V", challenge: "CH", method: "S256" }),
+    makeState: () => "ST",
+    openUrl: async () => {},
+    awaitCallback: async () => "CODE",
+    exchange: async () => ({ accessToken: "AT", refreshToken: "RT", expiresAt: 1 }),
+    store: new InMemoryTokenStore(),
+    ...over,
+  });
+  const cfg = { issuer: "http://localhost:8089/realms/ava", clientId: "ava-helper", redirectPort: 48765 };
+
+  test("inloggningsservern går inte att nå → säger VILKEN, och vad man gör (#1161, inte bara 'fetch failed')", async () => {
+    const deps = failingDeps({ discover: async () => { throw new TypeError("fetch failed"); } });
+    const err = await runLogin(cfg, deps).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    const msg = (err as Error).message;
+    expect(msg).toContain("http://localhost:8089/realms/ava");
+    expect(msg).toMatch(/Kunde inte nå inloggningsservern/);
+    expect(msg).toMatch(/Öppna AVA i webbläsaren/);
+    expect(msg).toContain("fetch failed"); // orsaken följer med
+  });
+
+  test("tokenbytet misslyckas → tydligt fel med servern, inga tokens sparas", async () => {
+    const store = new InMemoryTokenStore();
+    const deps = failingDeps({ store, exchange: async () => { throw new Error("token exchange HTTP 400"); } });
+    await expect(runLogin(cfg, deps)).rejects.toThrow(/Inloggningen kunde inte slutföras hos http:\/\/localhost:8089\/realms\/ava.*HTTP 400/);
+    expect(await store.load()).toBeNull();
+  });
 });
 
 describe("buildAuthHeaderProvider", () => {

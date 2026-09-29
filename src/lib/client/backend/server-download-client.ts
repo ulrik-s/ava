@@ -9,17 +9,11 @@
  * `loadDocumentBlob` cachar resultatet i IndexedDB (öppna→cache-populering).
  */
 
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import superjson from "superjson";
-import type { AppRouter } from "@/lib/server/routers/_app";
-import { serverTrpcEndpoint } from "./http-backend-runtime";
 import type { DownloadClient } from "./load-document-blob";
+import { serverTrpcClient } from "./server-trpc-client";
 
 /** Den deployade serverns tRPC-klient, smalnad till `DownloadClient`-ytan
  *  `loadDocumentBlob` behöver (full klient är strukturellt tilldelningsbar). */
 export function createServerDownloadClient(baseUrl?: string): DownloadClient {
-  const client = createTRPCClient<AppRouter>({
-    links: [httpBatchLink({ url: serverTrpcEndpoint(baseUrl), transformer: superjson })],
-  });
-  return client;
+  return serverTrpcClient(baseUrl);
 }

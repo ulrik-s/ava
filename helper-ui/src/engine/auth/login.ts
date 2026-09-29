@@ -69,8 +69,40 @@ export function defaultLoginDeps(): LoginDeps {
  * Kör hela paringsflödet. Startar callback-servern FÖRE browsern (annars kan
  * redirecten komma innan vi lyssnar). Returnerar true vid lyckad paring.
  */
+/** Felets text (orsaken följer med i det användaren ser). */
+const causeOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+/**
+ * Discovery med ett fel som säger VILKEN server som inte gick att nå (#1161).
+ * Förut såg användaren bara "fetch failed" — orsaken var en gammal config som
+ * pekade på en server som inte fanns, och det gick inte att se.
+ */
+async function discoverOrExplain(config: LoginConfig, deps: LoginDeps): Promise<OidcEndpoints> {
+  try {
+    return await deps.discover(config.issuer);
+  } catch (err) {
+    log(`auth: discovery mot ${config.issuer} misslyckades: ${causeOf(err)}`);
+    throw new Error(
+      `Kunde inte nå inloggningsservern ${config.issuer} (${causeOf(err)}). ` +
+        "Öppna AVA i webbläsaren så konfigureras helpern om, och försök sedan igen.",
+      { cause: err },
+    );
+  }
+}
+
+async function exchangeOrExplain(
+  config: LoginConfig, deps: LoginDeps, ep: OidcEndpoints, p: { code: string; verifier: string; redirectUri: string },
+): Promise<TokenSet> {
+  try {
+    return await deps.exchange(ep, { clientId: config.clientId, ...p });
+  } catch (err) {
+    log(`auth: tokenbytet hos ${config.issuer} misslyckades: ${causeOf(err)}`);
+    throw new Error(`Inloggningen kunde inte slutföras hos ${config.issuer}: ${causeOf(err)}`, { cause: err });
+  }
+}
+
 export async function runLogin(config: LoginConfig, deps: LoginDeps = defaultLoginDeps()): Promise<boolean> {
-  const ep = await deps.discover(config.issuer);
+  const ep = await discoverOrExplain(config, deps);
   const pkce = deps.makePkce();
   const state = deps.makeState();
   const redirectUri = `http://127.0.0.1:${config.redirectPort}/callback`;
@@ -87,7 +119,7 @@ export async function runLogin(config: LoginConfig, deps: LoginDeps = defaultLog
   await deps.openUrl(authUrl);
 
   const code = await callback;
-  const tokens = await deps.exchange(ep, { clientId: config.clientId, code, verifier: pkce.verifier, redirectUri });
+  const tokens = await exchangeOrExplain(config, deps, ep, { code, verifier: pkce.verifier, redirectUri });
   await deps.store.save(tokens);
   log("auth: paring klar — tokens sparade i keychain");
   return true;
