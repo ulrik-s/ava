@@ -10,7 +10,8 @@
  *   1. **Single-flight per kind**: vi kör max ett jobb per `kind`
  *      samtidigt (klassificering blockerar inte indexering, men två
  *      klassificeringar köas seriellt). Det minskar minnesproblem
- *      och håller LLM-anrop snälla.
+ *      och håller LLM-anrop snälla. Jobben körs i den ordning de köades
+ *      (FIFO, #1287).
  *
  *   2. **Abort-stöd**: varje worker får en AbortSignal; cancel-knappen
  *      i UI:n sätter signal:n. Workers ska respektera den och kasta.
@@ -130,6 +131,13 @@ class JobQueueImpl {
   private running = new Set<JobKind>();
   /** Övergivna körningar vars worker inte returnerat. */
   private abandoned = new Map<Run, Abandoned>();
+  /**
+   * Köplats per köat jobb (#1287): ett löpnummer som sätts vid enqueue och
+   * vid "Försök igen". Kön kör det lägsta först — FIFO. Listan `jobs` har de
+   * nyaste först (för /jobs) och kan därför inte ge ordningen.
+   */
+  private queuePosition = new Map<string, number>();
+  private nextPosition = 0;
   private readonly cancelStallWarnMs: number;
 
   constructor(opts: JobQueueOptions = {}) {
@@ -151,6 +159,7 @@ class JobQueueImpl {
       enqueuedAt: Date.now(),
     };
     this.jobs.unshift(job);
+    this.queuePosition.set(id, this.nextPosition++);
     this.trim();
     this.notify();
     void this.pump();
@@ -162,6 +171,7 @@ class JobQueueImpl {
     if (job?.status === "queued") {
       job.status = "canceled";
       job.finishedAt = Date.now();
+      this.queuePosition.delete(id);
       this.notify();
       return;
     }
@@ -173,6 +183,7 @@ class JobQueueImpl {
     const job = this.jobs.find((j) => j.id === id);
     if (!job || (job.status !== "failed" && job.status !== "canceled")) return;
     job.status = "queued";
+    this.queuePosition.set(id, this.nextPosition++); // sist i kön
     delete job.error;
     delete job.startedAt;
     delete job.finishedAt;
@@ -224,11 +235,9 @@ class JobQueueImpl {
   }
 
   private async pump(): Promise<void> {
-    // Hitta nästa queued-jobb vars kind inte redan körs
-    const next = this.jobs.find(
-      (j) => j.status === "queued" && !this.running.has(j.kind),
-    );
+    const next = this.nextQueued();
     if (!next) return;
+    this.queuePosition.delete(next.id);
     const worker = this.workers.get(next.kind);
     if (!worker) {
       next.status = "failed";
@@ -240,6 +249,12 @@ class JobQueueImpl {
     }
     this.running.add(next.kind);
     void this.runJob(next, worker);
+  }
+
+  /** Det köade jobb som köades först, bland dem vars kind inte redan kör (#1287). */
+  private nextQueued(): Job | undefined {
+    const ready = this.jobs.filter((j) => j.status === "queued" && !this.running.has(j.kind));
+    return minBy(ready, (j) => this.queuePosition.get(j.id) ?? 0);
   }
 
   private async runJob(job: Job, worker: JobWorker): Promise<void> {
@@ -359,6 +374,10 @@ class JobQueueImpl {
 
 function makeId(): string {
   return `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function minBy<T>(items: readonly T[], key: (t: T) => number): T | undefined {
+  return items.reduce<T | undefined>((best, t) => (best === undefined || key(t) < key(best) ? t : best), undefined);
 }
 
 function isActive(j: Job): boolean {
