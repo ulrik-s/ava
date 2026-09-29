@@ -260,7 +260,12 @@ speglar zod för Postgres.
 
 **Persistens per tier:**
 - **self-hosted:** Postgres (Drizzle-repos via `ctx.repos`, ADR 0020).
-- **klient (offline-first):** IndexedDB-snapshot av `DemoSource` + mutations-kö.
+- **klient (offline-first):** IndexedDB-snapshot av `DemoSource` + mutations-kö. Snapshotet
+  sparas med sin formatversion (#1269, `local-data-format.ts`): ett äldre lyfts
+  steg för steg vid start, ett nyare (gammal flik, nedgradering) ger ett besked
+  utan att något skrivs över. Kön migreras inte lokalt — den bär köformatet och
+  servern migrerar eller avvisar med besked (#1247); inget tas bort tyst.
+  `test/fixtures/local-data/` håller data i föregående releases format.
 - **demo-seed (CDN):** entiteterna serialiseras till JSON-filer som GH Pages servar
   och klienten bygger `DemoSource` ur. Den fillayouten (kvar från seed-formatet):
 

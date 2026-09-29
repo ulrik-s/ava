@@ -1,0 +1,18 @@
+{
+  "_comment": "Lokala data som klienten skrev före #1269/#1247: snapshotet utan formatversion, köposter utan format/type. Ändra inte — testet visar att nästa version läser detta utan att tappa något.",
+  "snapshot": {
+    "matters": [
+      { "id": "01928f3a-0000-7000-8000-000000000001", "organizationId": "01928f3a-0000-7000-8000-0000000000aa", "matterNumber": "2026-0001", "title": "Tvist om hyra", "status": "ACTIVE", "version": 3 }
+    ],
+    "timeEntries": [
+      { "id": "01928f3a-0000-7000-8000-000000000002", "matterId": "01928f3a-0000-7000-8000-000000000001", "userId": "01928f3a-0000-7000-8000-0000000000bb", "date": "2026-09-01T00:00:00.000Z", "minutes": 90, "description": "Genomgång av hyresavtal", "hourlyRate": 250000, "version": 1 }
+    ],
+    "invoices": [
+      { "id": "01928f3a-0000-7000-8000-000000000003", "matterId": "01928f3a-0000-7000-8000-000000000001", "invoiceNumber": "F-2026-0007", "amount": 375000, "status": "SENT", "version": 2 }
+    ]
+  },
+  "queue": [
+    { "mutationId": "01928f3a-0000-7000-8000-000000000010", "entity": "matter", "kind": "update", "row": { "id": "01928f3a-0000-7000-8000-000000000001", "title": "Tvist om hyra (lokal)" }, "baseVersion": 3, "enqueuedAt": 1759305600000 },
+    { "type": "procedure", "mutationId": "01928f3a-0000-7000-8000-000000000011", "path": "timeEntry.create", "input": { "id": "01928f3a-0000-7000-8000-000000000004", "matterId": "01928f3a-0000-7000-8000-000000000001", "date": "2026-09-02", "minutes": 30, "description": "Samtal" }, "codeVersion": "2026-09-release", "touches": [{ "entity": "timeEntry", "id": "01928f3a-0000-7000-8000-000000000004" }], "enqueuedAt": 1759392000000 }
+  ]
+}
