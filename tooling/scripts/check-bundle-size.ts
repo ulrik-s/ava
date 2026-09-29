@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /**
- * Bundle-size-budget (#14) — fäller om klient-JS:en sväller tyst.
+ * Bundle-size-budget (#14) — fäller om klient-JS:en sväller tyst. Fäller
+ * också om den skrivits om till gammal JavaScript (#1299, modern-syntax.ts).
  *
  * Mäter summan av alla statiska JS-chunks i demo-exporten (`out/`, byggd med
  * `bun run build:demo`) gzip-komprimerat och jämför mot en budget. CI kör detta
@@ -15,6 +16,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
+import { checkModernSyntax } from "./modern-syntax";
 
 /** Total gzip-budget för all statisk klient-JS (KB). Dagens nivå ~3164 KB. */
 const BUDGET_KB = 3400;
@@ -92,6 +94,20 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log("✓ inom budget.");
+
+  // #1299: byggmål som Turbopack inte känner till skriver om modern syntax.
+  const code = (await Promise.all((await jsFiles(dir)).map((f) => readFile(f, "utf8")))).join("\n");
+  const syntax = checkModernSyntax(code);
+  console.log(`Modern syntax: ${syntax.counts.class} class, ${syntax.counts.nullish} ??, ${syntax.counts.async} async`);
+  if (!syntax.ok) {
+    console.error(
+      `✗ klient-JS:en har skrivits om till gammal JavaScript (saknar: ${syntax.missing.join(", ")}).\n` +
+        "  Troligen ett byggmål i browserslist (package.json) som Turbopack inte känner till —\n" +
+        "  sänk målet till en version den känner till. Se docs/browser-support.md.",
+    );
+    process.exit(1);
+  }
+  console.log("✓ modern syntax.");
 }
 
 await main();

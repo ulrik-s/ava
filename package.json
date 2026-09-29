@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "license": "MIT",
   "private": true,
+  "//browserslist": "Byggmål (#1299, docs/browser-support.md). POLICYN är de två senaste versionerna av Chrome, Edge, Firefox och Safari på desktop, samt iOS (Safari och Chrome — WebKit). Målen här är medvetet LÄGRE: Turbopack känner inte till de nyaste versionerna och skriver då om all modern syntax. Kod för en äldre version körs på alla nyare. test/unit/tooling/browserslist.test.ts låser att målen täcker policyn.",
+  "browserslist": [
+    "chrome 111",
+    "edge 111",
+    "firefox 111",
+    "safari 16.4",
+    "ios_saf 16.4"
+  ],
   "scripts": {
     "dev": "concurrently -n next,cors -c blue,cyan \"next dev\" \"bun run dev:cors\"",
     "dev:next": "next dev",
@@ -130,6 +138,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "browserslist": "^4.28.9",
     "bun-types": "^1.3.14",
     "concurrently": "^10.0.3",
     "dependency-cruiser": "^18.1.0",
