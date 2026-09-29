@@ -30,6 +30,8 @@ const tinySeed = {
   tasks: [{ id: "task-test", userId: "u-test", organizationId: "org-test", title: "Skriv inlaga", status: "TODO", priority: "MEDIUM", dueAt: now, completedAt: null, matterId: "m-test", createdAt: now, updatedAt: now }],
   documentTemplates: [{ id: "tpl-test", organizationId: "org-test", name: "Mall", description: "x", category: "Allmänt", content: "<h1>Mall</h1>", createdById: "u-test", createdAt: now, updatedAt: now }],
   conflictChecks: [{ id: "cc-test", searchTerm: "Klient", searchType: "name", results: [], checkedById: "u-test", createdAt: now }],
+  offices: [{ id: "o-test", organizationId: "org-test", name: "Huvudkontor", isMain: true, createdAt: now, updatedAt: now }],
+  orgPreferences: [{ id: "op-test", organizationId: "org-test", key: "list.contacts", prefs: { sortBy: "name", sortDir: "asc" }, createdAt: now, updatedAt: now }],
 } as unknown as SeedDataset;
 
 const ADMIN = { id: asId<"UserId">("gen"), email: "gen@ava.local", name: "Generator", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">("org-test") };
@@ -45,6 +47,7 @@ describe("demo-generator — populate (org/users/contacts via tRPC)", () => {
     expect(res).toEqual({
       organizations: 1, users: 1, contacts: 1, matters: 1, matterContacts: 1,
       timeEntries: 1, expenses: 1, calendarEvents: 1, tasks: 1, documentTemplates: 1, conflictChecks: 1,
+      offices: 1, orgPreferences: 1,
     });
     expect(captured.find((c) => c.entity === "organization")?.id).toBe("org-test");
     expect(captured.find((c) => c.entity === "user")?.id).toBe("u-test");
@@ -57,6 +60,8 @@ describe("demo-generator — populate (org/users/contacts via tRPC)", () => {
     expect(captured.find((c) => c.entity === "task")?.id).toBe("task-test");
     expect(captured.find((c) => c.entity === "documentTemplate")?.id).toBe("tpl-test");
     expect(captured.find((c) => c.entity === "conflictCheck")).toBeDefined(); // id auto-genereras
+    expect(captured.find((c) => c.entity === "office")?.id).toBe("o-test"); // seedens id (setup-id)
+    expect(captured.find((c) => c.entity === "orgPreference")).toBeDefined(); // id auto-genereras
   });
 
   it("bevarar kurerade fixture-värden (matterNumber, status) genom API:t", async () => {
