@@ -187,7 +187,8 @@ function DesktopSidebar({ pathname, userName }: { pathname: string; userName?: s
   return (
     <div data-desktop-sidebar className={cn("hidden lg:flex lg:flex-col lg:border-r lg:border-gray-200 lg:bg-white lg:shrink-0", collapsed ? "lg:w-16" : "lg:w-64")}>
       <SidebarHeader collapsed={collapsed} onToggle={toggle} />
-      <nav className={cn("flex-1 py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
+      {/* Menyn scrollar själv i låga fönster — sidan aldrig (#1306). */}
+      <nav className={cn("relative min-h-0 flex-1 overflow-y-auto py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
         <NavLinks pathname={pathname} iconOnly={collapsed} />
       </nav>
       <UserSection userName={userName} iconOnly={collapsed} />
@@ -206,7 +207,9 @@ function IconSidebar({ pathname, userName }: { pathname: string; userName?: stri
       <div className="flex h-16 items-center justify-center border-b border-gray-200">
         <h1 className="text-base font-bold text-gray-900">AVA</h1>
       </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
+      {/* Menyn scrollar själv, sidan aldrig (#1306). `relative`: namnen är
+          `sr-only` (absoluta) och räknades annars mot dokumentet. */}
+      <nav className="relative min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-4">
         <NavLinks pathname={pathname} iconOnly />
       </nav>
       <UserSection userName={userName} iconOnly />
@@ -273,7 +276,7 @@ export function Sidebar({ userName }: SidebarProps) {
               <h1 className="text-xl font-bold text-gray-900">AVA</h1>
               <span className="ml-2 text-sm text-gray-500">Advokat CRM</span>
             </div>
-            <div className="px-3 space-y-1 flex-1">
+            <div className="relative min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
               <NavLinks pathname={pathname} onNavigate={() => setOpen(false)} py="py-2.5" />
             </div>
             <UserSection userName={userName} nameMargin="mb-2" />
