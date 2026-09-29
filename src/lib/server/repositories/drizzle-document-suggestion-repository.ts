@@ -84,6 +84,6 @@ export class DrizzleDocumentSuggestionRepository
 
   async updateManyByIds(ids: DocumentAnalysisSuggestionId[], patch: Partial<DocumentAnalysisSuggestion>): Promise<void> {
     if (!ids.length) return;
-    await this.db.update(S).set(patch as never).where(inArray(S.id, ids));
+    await this.updateWhere(inArray(S.id, ids), patch);
   }
 }

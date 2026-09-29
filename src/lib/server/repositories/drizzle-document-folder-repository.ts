@@ -70,8 +70,6 @@ export class DrizzleDocumentFolderRepository
   }
 
   async reassignParent(fromParentId: DocumentFolderId, toParentId: DocumentFolderId | null): Promise<void> {
-    await this.db.update(documentFolders)
-      .set({ parentId: toParentId })
-      .where(eq(documentFolders.parentId, fromParentId));
+    await this.updateWhere(eq(documentFolders.parentId, fromParentId), { parentId: toParentId });
   }
 }

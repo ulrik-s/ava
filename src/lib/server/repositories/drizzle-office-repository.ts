@@ -32,7 +32,6 @@ export class DrizzleOfficeRepository extends DrizzleRepository<Office> implement
   }
 
   async demoteMains(organizationId: OrganizationId): Promise<void> {
-    await this.db.update(offices).set({ isMain: false } as never)
-      .where(and(eq(offices.organizationId, organizationId), eq(offices.isMain, true)));
+    await this.updateWhere(and(eq(offices.organizationId, organizationId), eq(offices.isMain, true)), { isMain: false });
   }
 }
