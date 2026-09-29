@@ -11,6 +11,7 @@
 
 import { useEffect } from "react";
 import { reportSelfDetected } from "@/lib/client/diagnostics";
+import { useMatterDocuments } from "@/lib/client/documents/use-matter-documents";
 import { trpc } from "@/lib/client/trpc";
 import { detectMatterInvariants, type BillingRunView, type DocumentView } from "@/lib/shared/diagnostics/invariants";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -19,10 +20,11 @@ import type { MatterId } from "@/lib/shared/schemas/ids";
 export function useMatterInvariants(input: { matterId: MatterId; matterNumber?: string }): void {
   const { matterId, matterNumber } = input;
   const runs = trpc.billingRun.list.useQuery({ matterId });
-  const docs = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 });
+  // Alla mappar: KR-dokumentet ligger i en undermapp (#1308).
+  const docs = useMatterDocuments(matterId);
 
   const runRows = runs.data?.runs as ReadonlyArray<BillingRunView> | undefined;
-  const docRows = docs.data?.documents as ReadonlyArray<DocumentView> | undefined;
+  const docRows: ReadonlyArray<DocumentView> | undefined = docs;
 
   useEffect(() => {
     if (!runRows || !docRows) return;

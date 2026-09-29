@@ -15,7 +15,6 @@
  * slutregleringen (rättshjälp). Servern läser prutningen ur beslutet; det finns
  * ingen ett-stegs-knapp som gör båda (#996).
  */
-import type { inferRouterOutputs } from "@trpc/server";
 import { useEffect, useRef, useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { DecimalInput } from "@/components/ui/decimal-input";
@@ -27,13 +26,13 @@ import { invalidateBillingSideEffects, invalidateDocumentLists } from "@/lib/cli
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
+import { useMatterDocuments, type MatterDocument } from "@/lib/client/documents/use-matter-documents";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
 import type { FakturaDocInvoice } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
 import { insurerPruningPending, isActiveKr, krCanCreateInvoice, paymentMethodPending, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
 import type { KrDocumentFields } from "@/lib/shared/kostnadsrakning";
@@ -112,18 +111,15 @@ function useStandaloneInvoices(matterId: MatterId, rows: BillingRunRow[]): Stand
 
 interface KrDocInfo { id: DocumentId; fileName: string; storagePath: string | null }
 
-type DocumentListOutput = inferRouterOutputs<AppRouter>["document"]["list"];
-
 /** Körningens KR-dokument (pure — ingen hook, så den kan anropas per rad i
  *  listan): det länkade (#1230); äldre olänkade närmast körningen i tid. */
-function pickKrDoc(list: DocumentListOutput["documents"], run: BillingRunRow): KrDocInfo | null {
+function pickKrDoc(list: readonly MatterDocument[], run: BillingRunRow): KrDocInfo | null {
   const d = pickKrDocForRun(list, run);
   return d ? { id: d.id, fileName: d.fileName, storagePath: d.storagePath } : null;
 }
 
-function findKrDocument(matterId: MatterId, run: BillingRunRow): KrDocInfo | null {
-  const docs: DocumentListOutput | undefined = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data;
-  return pickKrDoc(docs?.documents ?? [], run);
+function useKrDocument(matterId: MatterId, run: BillingRunRow): KrDocInfo | null {
+  return pickKrDoc(useMatterDocuments(matterId) ?? [], run);
 }
 
 /**
@@ -168,7 +164,7 @@ interface KrCardProps {
  * överklaga → registrera hovrättens beslut). Ersätter den gamla dom-bannern.
  */
 function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, onSkapaFaktura, onAngra }: KrCardProps) {
-  const doc = findKrDocument(matterId, run);
+  const doc = useKrDocument(matterId, run);
   const utils = trpc.useUtils();
   const state = krStateOf(run);
   return (
@@ -730,7 +726,7 @@ const svDate = (d: string | Date | null | undefined): string => (d ? new Date(d)
 const runDateOf = (r: BillingRunRow): string | Date => r.invoice?.invoiceDate ?? r.createdAt;
 
 /** Åtgärds-cellen: KR-dokument-länk + faktura-länk. */
-function RunActions({ r, docs, client }: { r: BillingRunRow; docs: DocumentListOutput["documents"]; client: DownloadClient }) {
+function RunActions({ r, docs, client }: { r: BillingRunRow; docs: readonly MatterDocument[]; client: DownloadClient }) {
   const krDoc = r.type === "KOSTNADSRAKNING" ? pickKrDoc(docs, r) : null;
   // KR:ns referens `KR-YYYY-NNNN` (#889) i samma format som fakturornas F-nummer;
   // länken öppnar KR-dokumentet (faller tillbaka på etikett om referens saknas).
@@ -765,7 +761,7 @@ interface BillingListRow {
 
 /** Billing-run → listrad. Aconto visar sin sats (#878) så den varierande
  *  rättshjälpsavgiften syns per period; KR-raden länkar till sitt dokument. */
-function runListRow(r: BillingRunRow, docs: DocumentListOutput["documents"], client: DownloadClient): BillingListRow {
+function runListRow(r: BillingRunRow, docs: readonly MatterDocument[], client: DownloadClient): BillingListRow {
   const typeLabel = BILLING_RUN_TYPE_LABELS[r.type as keyof typeof BILLING_RUN_TYPE_LABELS] ?? r.type;
   const rate = r.type === "ACCONTO" && r.clientShareBips != null ? ` (${r.clientShareBips / 100} %)` : "";
   return {
@@ -840,8 +836,9 @@ function RattshjalpRateSchedule({ matter, rows }: { matter: MatterContext; rows:
 }
 
 function RunsList({ matterId, rows, standalone, loading }: { matterId: MatterId; rows: BillingRunRow[]; standalone: StandaloneInvoiceRow[]; loading: boolean }) {
-  // Dokumentlistan hämtas en gång → KOSTNADSRAKNING-raden kan länka till sitt KR-dokument (#843).
-  const docs = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data?.documents ?? [];
+  // Dokumentlistan hämtas en gång → KOSTNADSRAKNING-raden kan länka till sitt KR-dokument (#843),
+  // i vilken mapp det än ligger (#1308).
+  const docs = useMatterDocuments(matterId) ?? [];
   const utils = trpc.useUtils();
   if (loading) return <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>;
   if (rows.length === 0 && standalone.length === 0) return <p className="px-6 py-3 text-sm text-gray-500">Inga fakturor ännu.</p>;

@@ -84,6 +84,8 @@ vi.mock("@/lib/client/trpc", () => ({
     timeEntry: { list: { useQuery: () => ({ data: { entries: [] } }) }, radgivningStatus: { useQuery: () => ({ data: undefined }) }, markAsRadgivning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) }, },
     document: {
       list: { useQuery: () => ({ data: documentListData }) },
+      // KR-dokumentet slås upp i ärendets alla mappar (#1308).
+      tree: { useQuery: () => ({ data: { folders: [], ...documentListData } }) },
       register: { useMutation: () => ({ mutateAsync: vi.fn(async () => {}) }) },
     },
     invoice: {

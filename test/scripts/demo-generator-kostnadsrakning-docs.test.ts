@@ -62,7 +62,7 @@ describe("populateKostnadsrakningDocs", () => {
     // INNAN steget finns inget kostnadsräknings-dokument (buggen).
     expect(await krDocsFor(c, matterId)).toHaveLength(0);
 
-    // Efter steget finns dokumentet → billing-panelens findKrDocument hittar det.
+    // Efter steget finns dokumentet → billing-panelens useKrDocument hittar det.
     await populateKostnadsrakningDocs(c);
     const docs = await krDocsFor(c, matterId);
     expect(docs).toHaveLength(1);
