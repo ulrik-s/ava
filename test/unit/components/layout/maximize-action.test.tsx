@@ -64,4 +64,36 @@ describe("MaximizeAction", () => {
     view.unmount();
     expect(dispose).toHaveBeenCalledTimes(1);
   });
+
+  // #1293: den maximerade panelen visar en tydlig knapp med text — ikonen
+  // ensam (14 px, grå) syntes inte, och resten av panelerna var dolda.
+  it("maximerad: knappen visar texten Återställ; annars bara ikonen", () => {
+    const { api } = setup(false);
+    expect(screen.getByRole("button", { name: "Maximera panelen" })).not.toHaveTextContent("Återställ");
+    fireEvent.click(screen.getByRole("button", { name: "Maximera panelen" }));
+    expect(api.maximize).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Återställ panelen" })).toHaveTextContent("Återställ");
+  });
+
+  // #1293: ett Escape stängde BÅDE dialogen (som lyssnar på document) och
+  // maximeringen — vakten på window körde efter att dialogen redan stängts.
+  it("Escape som stänger en dialog återställer inte också panelen", () => {
+    const { api } = setup(true);
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.appendChild(dialog);
+    // Som Modal: stängs av Escape via en lyssnare på document.
+    const closeDialog = (e: KeyboardEvent): void => { if (e.key === "Escape") dialog.remove(); };
+    document.addEventListener("keydown", closeDialog);
+    try {
+      act(() => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+      expect(dialog.isConnected).toBe(false);
+      expect(api.exitMaximized).not.toHaveBeenCalled();
+      // Nästa Escape — nu utan dialog — återställer.
+      act(() => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+      expect(api.exitMaximized).toHaveBeenCalledTimes(1);
+    } finally {
+      document.removeEventListener("keydown", closeDialog);
+    }
+  });
 });
