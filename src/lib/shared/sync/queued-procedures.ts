@@ -44,6 +44,12 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "expectedReceivable.settle": Object.freeze({ entity: "expectedReceivable" }),
   "expectedReceivable.cancel": Object.freeze({ entity: "expectedReceivable" }),
   "expectedReceivable.update": Object.freeze({ entity: "expectedReceivable" }),
+  // Steg 2c (#1276): fakturorna. Frysningen av posterna loggas nu i change_log
+  // (#1319), och fakturanumret tilldelas i serverns körning (#1243).
+  "billingRun.createAcconto": Object.freeze({ entity: "invoice", idField: "id" }),
+  "billingRun.createFinal": Object.freeze({ entity: "invoice", idField: "id" }),
+  "invoice.createCredit": Object.freeze({ entity: "invoice", idField: "id" }),
+  "invoice.createRadgivning": Object.freeze({ entity: "invoice" }),
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
   // server-LLM). Klienten kör den inte själv — servern kör om anropet.
   "document.analyze": Object.freeze({ entity: "document" }),

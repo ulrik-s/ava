@@ -39,8 +39,3 @@ export async function logMatterNote(
     matterId, authorId: asId<"UserId">(ctx.user.id), date, time, text,
   } satisfies Partial<ServiceNote>);
 }
-
-/** Setup-datumet (`invoiceDate` o.d.) som händelsetidpunkt, annars nu. */
-export function eventTime(setupDate: string | undefined): Date {
-  return setupDate ? new Date(setupDate) : new Date();
-}
