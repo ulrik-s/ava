@@ -163,3 +163,45 @@ test("maximera i ett litet fönster, återställ i ett stort → proportionerna 
     return after.every((s, i) => Math.abs(s.w - (before[i]?.w ?? 0)) <= 3 && Math.abs(s.h - (before[i]?.h ?? 0)) <= 3);
   }, { message: `layouten ska ha samma proportioner som före maximeringen (${JSON.stringify(before)})` }).toBe(true);
 });
+
+// #1292: en sida har en fast uppsättning paneler. Flikens × (och mittenklick)
+// stängde panelen, och den var borta tills sidan laddades om — "flikarna
+// visades inte under ärende".
+test("flikarna går inte att stänga — varken med × eller mittenklick", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  const tabs = await page.getByRole("tab").count();
+  await expect(page.locator(".dv-default-tab-action")).toHaveCount(0);
+  await page.getByRole("tab", { name: /^Tid/ }).click({ button: "middle" });
+  await expect(page.getByRole("tab")).toHaveCount(tabs);
+});
+
+// #1292: flikar som inte ryms låg bakom en nästan osynlig "⌄ 1".
+test("smal grupp: dolda flikar nås via en tydlig knapp, även med tangentbordet", async ({ page, baseURL }) => {
+  // En halv skärm i en tiling-fönsterhanterare, och fler flikar i Tid-gruppen
+  // än den rymmer.
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  for (const t of ["Kontakter", "Betalningssätt", "Händelser"]) {
+    await page.getByRole("tab", { name: new RegExp(`^${t}`) }).dragTo(page.getByRole("tab", { name: /^Utlägg/ }));
+  }
+  const more = groupOf(page, "Tid").getByRole("button", { name: /^\d+ dold(a)? flik(ar)?$/ });
+  await expect(more).toBeVisible();
+  await expect(more).toHaveAccessibleName(/^\d+ dolda flikar$/);
+  // Namnet följer siffran på knappen — även när gruppen ändras.
+  const nameMatchesBadge = async (): Promise<boolean> =>
+    (await more.getAttribute("aria-label")) === `${((await more.textContent()) ?? "").trim()} dolda flikar`;
+  await expect.poll(nameMatchesBadge).toBe(true);
+  await page.getByRole("tab", { name: /^Förslag/ }).dragTo(page.getByRole("tab", { name: /^Utlägg/ }));
+  await expect.poll(nameMatchesBadge).toBe(true);
+
+  await more.focus();
+  await page.keyboard.press("Enter");
+  // Listan (dockviews popover) visar de dolda flikarna; välj den sista.
+  const list = page.locator(".dv-tabs-overflow-container");
+  await expect(list).toBeVisible();
+  const hidden = list.locator(".dv-default-tab-content").last();
+  const title = (await hidden.textContent()) ?? "";
+  await hidden.click();
+  await expect(page.getByRole("tab", { name: new RegExp(`^${title}`) })).toHaveAttribute("aria-selected", "true");
+});

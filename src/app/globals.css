@@ -171,3 +171,31 @@ body {
 
 /* Code-block inline-stiling — t.ex. demo-banner:n */
 .dark code { background-color: #334155; color: #f1f5f9; }
+
+/* Dockytans flikrad (#1292) ───────────────────────────────────────────
+   Flikar som inte ryms göms bakom dockviews överflödesknapp. Den var en liten
+   grå "⌄ 1" som ingen såg — nu en tydlig "+N"-knapp (märks upp som knapp med
+   namnet "N dolda flikar" i overflow-trigger.ts). Flikarna saknar stängknapp,
+   så textens marginal mot knappen behövs inte heller. */
+.dv-tabs-overflow-dropdown-root .dv-tabs-overflow-dropdown-default {
+  height: auto;
+  align-self: center;
+  margin: 0 4px;
+  padding: 1px 8px 1px 6px;
+  border: 1px solid #93c5fd;
+  border-radius: 9999px;
+  background-color: #dbeafe;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+}
+.dv-tabs-overflow-dropdown-root .dv-tabs-overflow-dropdown-default > span::before { content: "+"; }
+.dv-tabs-overflow-dropdown-root .dv-tabs-overflow-dropdown-default:hover { background-color: #bfdbfe; border-radius: 9999px; }
+.dv-tabs-overflow-dropdown-root:focus-visible { outline: none; }
+.dv-tabs-overflow-dropdown-root:focus-visible .dv-tabs-overflow-dropdown-default { outline: 2px solid #3b82f6; outline-offset: 1px; }
+.dark .dv-tabs-overflow-dropdown-root .dv-tabs-overflow-dropdown-default {
+  border-color: rgba(37, 99, 235, 0.5);
+  background-color: rgba(37, 99, 235, 0.25);
+  color: #93c5fd;
+}
+.dv-tab .dv-default-tab .dv-default-tab-content { margin-right: 0; }

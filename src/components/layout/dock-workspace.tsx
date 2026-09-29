@@ -15,8 +15,8 @@
 
 import "dockview-react/dist/styles/dockview.css";
 import {
-  DockviewReact, themeDark, themeLight,
-  type AddPanelPositionOptions, type DockviewApi, type IDockviewPanelProps, type SerializedDockview,
+  DockviewDefaultTab, DockviewReact, themeDark, themeLight,
+  type AddPanelPositionOptions, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type SerializedDockview,
 } from "dockview-react";
 import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { useScreenClass } from "@/lib/client/layout/use-screen-class";
@@ -26,6 +26,7 @@ import {
 } from "@/lib/shared/layout/dock-layout";
 import { MaximizeAction } from "./maximize-action";
 import { keepProportionsAcrossMaximize } from "./maximize-proportions";
+import { useOverflowTriggerLabels } from "./overflow-trigger";
 import type { PanelDef } from "./panel-def";
 import { PhonePanels } from "./phone-panels";
 
@@ -57,6 +58,15 @@ function PanelHost({ params }: IDockviewPanelProps<{ id: string }>) {
   return <div className="h-full overflow-y-auto p-3">{def?.render()}</div>;
 }
 const COMPONENTS = { panel: PanelHost };
+
+/**
+ * Fliken utan stängknapp (#1292): en sida har en fast uppsättning paneler.
+ * × (och mittenklick) stängde panelen, och den var borta tills sidan
+ * laddades om.
+ */
+export function PanelTab(props: IDockviewPanelHeaderProps) {
+  return <DockviewDefaultTab {...props} hideClose />;
+}
 
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -116,12 +126,13 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { scr
   const apiRef = useRef<DockviewApi | null>(null);
   const defs = useMemo(() => new Map(panels.map((p) => [p.id, p])), [panels]);
   const layout = useLayoutPersistence(key, () => { setGeneration((g) => g + 1); });
+  const overflowLabels = useOverflowTriggerLabels();
 
   if (prefs.isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;
   const stored = parseStoredLayout(prefs.data?.user) ?? parseStoredLayout(prefs.data?.org);
 
   return (
-    <div className="flex h-full min-h-0 flex-col" onPointerDown={layout.markTouched}>
+    <div ref={overflowLabels} className="flex h-full min-h-0 flex-col" onPointerDown={layout.markTouched}>
       <LayoutToolbar hasOrgDefault={prefs.data?.org != null} onReset={layout.reset}
         onSaveOrg={() => { if (apiRef.current) layout.saveOrgDefault(apiRef.current.toJSON()); }} onClearOrg={layout.clearOrgDefault} />
       <PanelDefs.Provider value={defs}>
@@ -129,6 +140,7 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { scr
           key={generation}
           className="min-h-0 flex-1"
           components={COMPONENTS}
+          defaultTabComponent={PanelTab}
           rightHeaderActionsComponent={MaximizeAction}
           theme={document.documentElement.classList.contains("dark") ? themeDark : themeLight}
           onReady={({ api }) => {
