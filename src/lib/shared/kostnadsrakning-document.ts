@@ -19,7 +19,7 @@
  */
 
 import type { TaxaLevel, TaxaResult } from "./brottmalstaxa";
-import { type Forhor, forhorMinutes, type ForordnandeResult } from "./forordnandetaxa";
+import { type Forhor, forhorMinutes, type ForordnandeResult, type TidsspillanUtover } from "./forordnandetaxa";
 import { toIsoDate, toLocalTime, toSwedishLongDate } from "./iso-date";
 import {
   expenseSpec, expenseSummaryRows, formatRow, hourlyRowSpecs, timeRowSpec, timeSpecSections,
@@ -59,7 +59,7 @@ export interface KrHuvudforhandling {
 /** Vad arvodet står på — styr sammanställningens arvodesrader och noter. */
 export type KrArvodeBasis =
   | { kind: "lopande"; notes: readonly string[] }
-  | { kind: "brottmalstaxa"; level: TaxaLevel; taxa: TaxaResult }
+  | { kind: "brottmalstaxa"; level: TaxaLevel; taxa: TaxaResult; tidsspillan: TidsspillanUtover }
   | { kind: "forordnande"; ford: Extract<ForordnandeResult, { kind: "taxa" }> };
 
 /** Indata till dokumentvyn. */
@@ -162,9 +162,27 @@ function title(courtCaseNumber: string | undefined): string {
 
 // ─── Arvodet: sammanställningsrader + noter per grund ──────────────────────
 
-function brottmalRows(basis: Extract<KrArvodeBasis, { kind: "brottmalstaxa" }>, huf: KrHuvudforhandling): KrRowSpec[] {
+/** Tidsspillan utöver den timme som ingår i taxan (DVFS 2025:6 6 §, 2025:5 8 §). */
+function tidsspillanUtoverRows(ts: TidsspillanUtover): KrRowSpec[] {
+  const rows: KrRowSpec[] = [];
+  if (ts.extraVardagMinutes > 0) rows.push(timeRowSpec("TIDSSPILLAN UTÖVER TAXAN", ts.extraVardagMinutes, ts.vardagRateOre));
+  if (ts.extraOvrigMinutes > 0) rows.push(timeRowSpec("TIDSSPILLAN ANNAN TID UTÖVER TAXAN", ts.extraOvrigMinutes, ts.ovrigRateOre));
+  return rows;
+}
+
+/**
+ * Taxan (allt arbete, 5 §) + tidsspillan utöver den timme som ingår (6 §, #1182)
+ * + advokatberedskapen per dygn, som ligger utanför taxan (#1024). Över taxans
+ * maxgräns yrkas ingenting här — räkningen ska då göras löpande (8 §).
+ */
+function brottmalRows(basis: Extract<KrArvodeBasis, { kind: "brottmalstaxa" }>, huf: KrHuvudforhandling, lines: readonly KrTimeLineLike[]): KrRowSpec[] {
   if (basis.taxa.kind !== "taxa-applies") return [];
-  return [{ label: "ARVODE ENLIGT BROTTMÅLSTAXAN", quantity: `${formatHours(huf.minutes)} tim`, amountOre: basis.taxa.ersattningExclVat }];
+  const beredskap = lines.filter((l) => l.kind === "ADVOKATBEREDSKAP" && l.amountOre > 0);
+  return [
+    { label: "ARVODE ENLIGT BROTTMÅLSTAXAN", quantity: `${formatHours(huf.minutes)} tim`, amountOre: basis.taxa.ersattningExclVat },
+    ...tidsspillanUtoverRows(basis.tidsspillan),
+    ...hourlyRowSpecs(beredskap),
+  ];
 }
 
 function brottmalNotes(basis: Extract<KrArvodeBasis, { kind: "brottmalstaxa" }>, huf: KrHuvudforhandling): string[] {
@@ -178,11 +196,10 @@ function brottmalNotes(basis: Extract<KrArvodeBasis, { kind: "brottmalstaxa" }>,
 type ForordnandeTaxa = Extract<ForordnandeResult, { kind: "taxa" }>;
 
 function forordnandeRows(ford: ForordnandeTaxa): KrRowSpec[] {
-  const ts = ford.tidsspillan;
-  const rows: KrRowSpec[] = [{ label: "ARVODE ENLIGT TAXA I FÖRORDNANDEMÅL", quantity: `${formatHours(ford.forhorMinutes)} tim`, amountOre: ford.taxa.ersattningExclVat }];
-  if (ts.extraVardagMinutes > 0) rows.push(timeRowSpec("TIDSSPILLAN UTÖVER TAXAN", ts.extraVardagMinutes, ts.vardagRateOre));
-  if (ts.extraOvrigMinutes > 0) rows.push(timeRowSpec("TIDSSPILLAN ANNAN TID UTÖVER TAXAN", ts.extraOvrigMinutes, ts.ovrigRateOre));
-  return rows;
+  return [
+    { label: "ARVODE ENLIGT TAXA I FÖRORDNANDEMÅL", quantity: `${formatHours(ford.forhorMinutes)} tim`, amountOre: ford.taxa.ersattningExclVat },
+    ...tidsspillanUtoverRows(ford.tidsspillan),
+  ];
 }
 
 function forordnandeNotes(ford: ForordnandeTaxa): string[] {
@@ -214,7 +231,7 @@ export function krArvodePart(basis: KrArvodeBasis, huf: KrHuvudforhandling, time
   const lines = [...hufLine(huf), ...timeLines];
   switch (basis.kind) {
     case "lopande": return { rows: hourlyRowSpecs(lines), notes: [...basis.notes], specSuffix: "", lines };
-    case "brottmalstaxa": return { rows: brottmalRows(basis, huf), notes: brottmalNotes(basis, huf), specSuffix: " (ingår i taxan)", lines };
+    case "brottmalstaxa": return { rows: brottmalRows(basis, huf, lines), notes: brottmalNotes(basis, huf), specSuffix: " (ingår i taxan)", lines };
     case "forordnande": return { rows: forordnandeRows(basis.ford), notes: forordnandeNotes(basis.ford), specSuffix: " (ingår i taxan)", lines };
     default: { const never: never = basis; return never; }
   }

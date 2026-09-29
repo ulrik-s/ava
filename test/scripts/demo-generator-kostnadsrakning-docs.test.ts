@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { formatOreAsKr } from "@/lib/shared/kr-format";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
@@ -85,5 +86,28 @@ describe("populateKostnadsrakningDocs", () => {
     expect(rattshjalp, "en rättshjälps-KR ska ha rådgivningsnotis").toBeDefined();
     expect(rattshjalp).toMatch(/ARVODE<\/td><td class="num">[\d,]+ á /);
     expect(rattshjalp).toContain("ARBETSREDOGÖRELSE");
+  });
+
+  it("varje KR-dokument yrkar exakt körningens belopp — också taxeärendet (#1024)", async () => {
+    const seed = buildSeed();
+    const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
+    await runDemoSeed(target.caller, seed);
+    const html = new Map<string, string>();
+    await populateKostnadsrakningDocs(target.caller, (p, b) => { html.set(p, new TextDecoder().decode(b)); return b.byteLength; });
+    const c = target.caller as Any;
+    const { runs } = await c.billingRun.list({});
+    const krRuns = (runs as Any[]).filter((r) => r.type === "KOSTNADSRAKNING");
+    for (const r of krRuns) {
+      const doc = html.get(`documents/content/krdoc-${String(r.id)}.html`);
+      expect(doc, `dokument för ${String(r.id)}`).toBeDefined();
+      expect(doc, `yrkat i dokumentet = körningens ${String(r.workValueOreAtRun)} öre`).toContain(formatOreAsKr(r.workValueOreAtRun));
+    }
+    const taxe = [];
+    for (const r of krRuns) {
+      const m = await c.matter.getById({ id: r.matterId });
+      if (m.isTaxeArende && m.paymentMethod === "OFFENTLIGT_UPPDRAG") taxe.push(html.get(`documents/content/krdoc-${String(r.id)}.html`));
+    }
+    expect(taxe.length, "demon har ett taxeärende med kostnadsräkning").toBeGreaterThan(0);
+    expect(taxe.every((h) => h?.includes("ARVODE ENLIGT BROTTMÅLSTAXAN"))).toBe(true);
   });
 });

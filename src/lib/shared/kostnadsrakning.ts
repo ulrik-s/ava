@@ -19,7 +19,7 @@
 
 import { applyNoFTaxFactorForDate, computeBrottmalstaxa, computeTimkostnadsnorm, coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries, timkostnadsnormFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
 import { CHARGED_EXPENSE_VAT_RATE, chargedVatOre, expenseNetOre as chargedExpenseNetOre } from "./expense-vat";
-import { computeForordnandeErsattning, forhorMinutes, type Forhor, type ForordnandeResult } from "./forordnandetaxa";
+import { computeForordnandeErsattning, forhorMinutes, type Forhor, type ForordnandeResult, tidsspillanUtover } from "./forordnandetaxa";
 import { isTidsspillanKind } from "./hourly-rate";
 import { toIsoDate, toLocalTime } from "./iso-date";
 import { buildKrDocument, krArvodePart, type KrArvodeBasis, type KrArvodePart, type KrDocumentView, type KrHuvudforhandling } from "./kostnadsrakning-document";
@@ -237,10 +237,22 @@ function orgContext(organization: BuildInput["organization"]): Record<string, st
   };
 }
 
+/** Tidsspillan i de debiterbara raderna — underlaget för "utöver taxan" (#1182). */
+function tidsspillanMinutes(billable: readonly TimeEntryInput[]): { vardagMinutes: number; ovrigMinutes: number } {
+  return { vardagMinutes: minutesOfKind(billable, "TIDSSPILLAN"), ovrigMinutes: minutesOfKind(billable, "TIDSSPILLAN_OVRIG_TID") };
+}
+
 /** Vad arvodet står på: förordnandetaxa, brottmålstaxa eller löpande räkning. */
-function arvodeBasis(input: BuildInput, ford: ForordnandeResult | null, level: TaxaLevel, taxa: TaxaResult): KrArvodeBasis {
+function arvodeBasis(a: {
+  input: BuildInput; ford: ForordnandeResult | null; level: TaxaLevel; taxa: TaxaResult;
+  billable: readonly TimeEntryInput[]; yrkandeDate: Date;
+}): KrArvodeBasis {
+  const { input, ford, level, taxa, billable, yrkandeDate } = a;
   if (ford?.kind === "taxa") return { kind: "forordnande", ford };
-  if (input.isTaxeArende ?? true) return { kind: "brottmalstaxa", level, taxa };
+  if (input.isTaxeArende ?? true) {
+    // DVFS 2025:6 6 §: en timmes tidsspillan ingår i taxan; resten yrkas (#1182).
+    return { kind: "brottmalstaxa", level, taxa, tidsspillan: tidsspillanUtover(tidsspillanMinutes(billable), yrkandeDate, input.hasFTax ?? true) };
+  }
   return { kind: "lopande", notes: ford?.kind === "utanfor-taxan" ? [UTANFOR_TEXT[ford.reason]] : [] };
 }
 
@@ -399,9 +411,10 @@ function valuateTimeLines(
  * advokatberedskapen ersätts per DAG — den har ingen timnorm alls, så `á-pris`
  * står tomt (0) och beloppet är dagbeloppet.
  *
- * Taxa-ärenden: alla rader är informativa (0), beloppet styrs av brottmålstaxan.
- * Det gäller även beredskapen — den ligger utanför taxans arvode och yrkas för
- * sig; se noten i `buildKostnadsrakningContext`.
+ * Taxa-ärenden: arbets- och tidsspillan-raderna är informativa (0) — taxan
+ * omfattar allt arbete (DVFS 2025:6 5 §), och tidsspillan utöver den timme som
+ * ingår yrkas som egen rad (#1182). Beredskapen ligger utanför taxan: den
+ * behåller sitt dygnsbelopp och yrkas för sig (#1024).
  */
 function valuateTimeLine(
   t: TimeEntryInput,
@@ -409,7 +422,8 @@ function valuateTimeLine(
 ): TimeLine {
   const perDay = isPerDayKind(t.kind);
   const rateOrePerH = ctx.isTaxe || perDay ? 0 : ctx.forFTax(coverageEntryRateOre(t.kind, ctx.valDate));
-  const amountOre = ctx.isTaxe ? 0 : ctx.forFTax(coverageEntryValueOre(t, ctx.valDate));
+  // Beredskapen ligger utanför taxan och behåller sitt dygnsbelopp (#1024).
+  const amountOre = ctx.isTaxe && !perDay ? 0 : ctx.forFTax(coverageEntryValueOre(t, ctx.valDate));
   return {
     id: t.id, date: toIsoDate(t.date), description: t.description, minutes: t.minutes,
     rateOrePerH, amountOre, isTidsspillan: isTidsspillanKind(t.kind), kind: t.kind ?? "ARBETE",
@@ -495,6 +509,18 @@ export function withDocumentFields(input: BuildInput, f: KrDocumentFields): Buil
   };
 }
 
+/** Det som påverkar yrkandets BELOPP — `BuildInput` utan dokumentfälten. */
+export type KrClaimInput = Omit<BuildInput, "matter" | "defender" | "organization" | "courtName">;
+
+/**
+ * Yrkandet inkl. moms — exakt samma beräkning som kostnadsräkningens dokument
+ * (#1024). Servern lagrar det som körningens `workValueOreAtRun`, så beslut och
+ * prutning räknas mot det belopp domstolen faktiskt fick se.
+ */
+export function kostnadsrakningClaimInclVat(input: KrClaimInput): number {
+  return buildKostnadsrakningContext({ ...input, matter: { matterNumber: "", title: "" }, defender: { name: "" } }).totalInclVat;
+}
+
 export function buildKostnadsrakningContext(original: BuildInput): KostnadsrakningResult {
   const yrkandeDate = yrkandeDateOf(original);
 
@@ -521,7 +547,7 @@ export function buildKostnadsrakningContext(original: BuildInput): Kostnadsrakni
     start, end, minutes: huvudforhandlingMinutes, rateOrePerH: arvodeNorm,
     amountOre: Math.round((huvudforhandlingMinutes / 60) * arvodeNorm),
   };
-  const basis = arvodeBasis(input, ford, level, taxa);
+  const basis = arvodeBasis({ input, ford, level, taxa, billable: billableTimeEntries, yrkandeDate });
   const claim = claimOf(krArvodePart(basis, huf, timeLines), expenseLines);
   const arvodeExclVat = claim.arvodeExclVat;
   // Delsummorna (äldre vy-fält): arvodets moms i hela kronor, utläggen tar resten

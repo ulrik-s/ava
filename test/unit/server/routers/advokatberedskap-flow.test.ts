@@ -127,16 +127,16 @@ describe("offentligt uppdrag värderas på Domstolsverkets kategorinormer (#1003
     expect(run.workValueOreAtRun).toBe(yrkat(162_600));
   });
 
-  it("taxa-ärenden omvärderas INTE — taxan styr arvodet, posterna är informativa", async () => {
-    // Att räkna om posterna per timnorm vore ett yrkande brottmålstaxan aldrig
-    // ger. Körningen behåller posternas eget värde (2 h × 2 500 kr), som före #1003.
+  it("taxa-ärenden yrkar brottmålstaxan — posterna är informativa (#1024)", async () => {
+    // Varken posternas egna á-priser (2 h × 2 500 kr, som före #1024) eller en
+    // omvärdering per timnorm: taxan för huvudförhandlingen (95 min, nivå 1).
     const caller = makeCaller(
       [{ id: "te-1", date: LUGN, minutes: 120, hourlyRate: 250_000 }],
       "OFFENTLIGT_UPPDRAG",
-      { isTaxeArende: true, taxaLevel: 1 },
+      { isTaxeArende: true, taxaLevel: 1, taxaHuvudforhandlingMin: 95, taxaHufStart: new Date("2026-05-04T09:00:00.000Z") },
     );
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(run.workValueOreAtRun).toBe(yrkat(500_000));
+    expect(run.workValueOreAtRun).toBe(yrkat(563_500));
   });
 });
 
