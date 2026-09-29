@@ -11,10 +11,11 @@ import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
 import {
   setOutlookTokenProvider,
   setMirrorStateDispatcher,
+  type UpdateMirrorStateArgs,
 } from "@/lib/client/jobs/mirror-outlook-dispatch";
 
 // Trigger registreringen av workern.
-import "@/lib/client/jobs/register-workers";
+import { WORKER_TIMEOUTS_MS } from "@/lib/client/jobs/register-workers";
 
 // Mocka Graph-modulen. `vi.hoisted` säkerställer att fns finns när workern
 // dynamiskt import:ar dem inuti job-körningen.
@@ -39,6 +40,15 @@ function waitForFinish(id: string, timeoutMs = 1000): Promise<Job> {
     };
     tick();
   });
+}
+
+/** Vänta tills `cond` är sant (poll var 5:e ms). */
+async function until(cond: () => boolean, timeoutMs = 5000): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error("until: timeout");
+    await new Promise((r) => { setTimeout(r, 5); });
+  }
 }
 
 beforeEach(() => {
@@ -255,5 +265,59 @@ describe("mirror-to-outlook worker", () => {
     expect(job.status).toBe("failed");
     expect(dispatch).toHaveBeenCalledOnce();
     expect(dispatch.mock.calls[0]![0].patch.mirrorError).toBe("rå-sträng-fel");
+  });
+
+  // ── #1286: ett Graph-anrop som hänger får inte blockera speglingen ──
+
+  it("Graph-anropen får jobbets avbrottssignal", async () => {
+    graph.createGraphEvent.mockResolvedValue({ id: "g-sig" });
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(vi.fn().mockResolvedValue(undefined));
+    const id = jobQueue.enqueue("mirror-to-outlook", "test", {
+      eventId: "ev-sig",
+      op: "upsert",
+      event: { title: "Sig", startAt: "2026-03-01T09:00:00Z", allDay: false, visibility: "normal", kind: "appointment" },
+    });
+    await waitForFinish(id);
+    expect(graph.createGraphEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  });
+
+  it("delete får också avbrottssignalen", async () => {
+    graph.deleteGraphEvent.mockResolvedValue(undefined);
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(vi.fn().mockResolvedValue(undefined));
+    const id = jobQueue.enqueue("mirror-to-outlook", "test", { eventId: "ev-del-sig", op: "delete", outlookEventId: "g-del" });
+    await waitForFinish(id);
+    expect(graph.deleteGraphEvent).toHaveBeenCalledWith("g-del", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  });
+
+  it("Graph hänger → Avbryt: jobbet avbryts direkt, eventet markeras som ej speglat, och nästa spegling körs", async () => {
+    // Första anropet hänger tills det avbryts (som fetch med signal); nästa lyckas.
+    graph.createGraphEvent.mockImplementationOnce((_b: unknown, opts: { signal?: AbortSignal }) => new Promise((_, reject) => {
+      opts.signal?.addEventListener("abort", () => { reject(new DOMException("The operation was aborted.", "AbortError")); });
+    }));
+    graph.createGraphEvent.mockResolvedValueOnce({ id: "g-next" });
+    const patches = new Map<string, UpdateMirrorStateArgs["patch"]>();
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(async (args) => { patches.set(args.eventId, args.patch); });
+    const event = { title: "Hänger", startAt: "2026-03-02T09:00:00Z", allDay: false, visibility: "normal", kind: "appointment" };
+    const hung = jobQueue.enqueue("mirror-to-outlook", "hänger", { eventId: "ev-hang", op: "upsert", event });
+    const next = jobQueue.enqueue("mirror-to-outlook", "nästa", { eventId: "ev-next", op: "upsert", event });
+    await until(() => graph.createGraphEvent.mock.calls.length === 1);
+
+    jobQueue.cancel(hung);
+    expect(jobQueue.list().find((j) => j.id === hung)?.status).toBe("canceled");
+    expect((await waitForFinish(next)).status).toBe("done");
+
+    await until(() => patches.has("ev-hang"));
+    const hangPatch = patches.get("ev-hang");
+    expect(hangPatch).toMatchObject({ mirrorStatus: "failed" });
+    expect(hangPatch?.mirrorError).toMatch(/avbröts eller tog för lång tid/);
+  });
+
+  it("varje kind som registreras har en tidsgräns; Outlook-speglingen 60 s", () => {
+    expect(WORKER_TIMEOUTS_MS["mirror-to-outlook"]).toBe(60_000);
+    expect(Object.keys(WORKER_TIMEOUTS_MS).sort()).toEqual(["classify-document", "extract-text", "mirror-to-outlook"]);
+    for (const ms of Object.values(WORKER_TIMEOUTS_MS)) expect(ms).toBeGreaterThan(0);
   });
 });

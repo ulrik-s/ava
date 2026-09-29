@@ -11,7 +11,25 @@
 
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
-import { jobQueue } from "./job-queue";
+import { jobQueue, type JobKind } from "./job-queue";
+
+/**
+ * Tidsgräns per kind (#1286). Ett jobb som hänger (ett Graph-anrop, en PDF
+ * som inte går att tolka) avbryts, blir "failed" och släpper kön, i stället
+ * för att blockera alla följande jobb av samma kind.
+ *
+ *   - mirror-to-outlook: några Graph-anrop, normalt under en sekund.
+ *   - classify-document: filnamnsheuristik och ett tRPC-anrop.
+ *   - extract-text: stora PDF:er tar tid att tolka i webbläsaren.
+ */
+export const WORKER_TIMEOUTS_MS = {
+  "mirror-to-outlook": 60_000,
+  "classify-document": 60_000,
+  "extract-text": 5 * 60_000,
+} as const satisfies Partial<Record<JobKind, number>>;
+
+/** Felet som sparas på eventet när speglingen avbröts (av användaren eller tidsgränsen). */
+const MIRROR_ABORTED = "Speglingen avbröts eller tog för lång tid. Försök igen från /jobs.";
 
 interface ClassifyPayload extends Record<string, unknown> {
   documentId: DocumentId;
@@ -50,9 +68,19 @@ interface MirrorPayload extends Record<string, unknown> {
   outlookCalendarId?: string | null;
 }
 
+/**
+ * Eventets status när speglingen misslyckats. Skickas utan signal: även ett
+ * avbrutet jobb ska lämna eventet som "ej speglat", inte som "pending" för
+ * alltid (#1286).
+ */
+function mirrorFailure(err: unknown, signal: AbortSignal): { mirrorStatus: "failed"; mirrorError: string } {
+  if (signal.aborted) return { mirrorStatus: "failed", mirrorError: MIRROR_ABORTED };
+  return { mirrorStatus: "failed", mirrorError: err instanceof Error ? err.message : String(err) };
+}
+
 /** Graph-anrops-opts: token + (valfritt) calendarId när payload har det. */
-function graphOpts(token: string, payload: MirrorPayload): { token: string; calendarId?: string } {
-  return { token, ...(payload.outlookCalendarId != null ? { calendarId: payload.outlookCalendarId } : {}) };
+function graphOpts(token: string, payload: MirrorPayload, signal: AbortSignal): { token: string; calendarId?: string; signal: AbortSignal } {
+  return { token, signal, ...(payload.outlookCalendarId != null ? { calendarId: payload.outlookCalendarId } : {}) };
 }
 
 jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx) => {
@@ -73,7 +101,7 @@ jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx)
   try {
     if (payload.op === "delete") {
       if (payload.outlookEventId) {
-        await graph.deleteGraphEvent(payload.outlookEventId, graphOpts(token, payload));
+        await graph.deleteGraphEvent(payload.outlookEventId, graphOpts(token, payload, ctx.signal));
       }
       // Vid delete på AVA-eventet finns ingen rad att uppdatera — workern
       // slutar bara här. (Calendar-routerns delete tar bort raden helt.)
@@ -85,10 +113,10 @@ jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx)
     const body = graph.toGraphEvent({ ...payload.event });
     let outlookEventId: string;
     if (payload.outlookEventId) {
-      const res = await graph.updateGraphEvent(payload.outlookEventId, body, graphOpts(token, payload));
+      const res = await graph.updateGraphEvent(payload.outlookEventId, body, graphOpts(token, payload, ctx.signal));
       outlookEventId = res.id;
     } else {
-      const res = await graph.createGraphEvent(body, graphOpts(token, payload));
+      const res = await graph.createGraphEvent(body, graphOpts(token, payload, ctx.signal));
       outlookEventId = res.id;
     }
     ctx.setProgress(0.9);
@@ -104,15 +132,10 @@ jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx)
     });
     ctx.setProgress(1);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await dispatchMirrorState({
-      eventId: payload.eventId,
-      patch: { mirrorStatus: "failed", mirrorError: msg },
-      signal: ctx.signal,
-    });
+    await dispatchMirrorState({ eventId: payload.eventId, patch: mirrorFailure(err, ctx.signal) });
     throw err;
   }
-});
+}, { timeoutMs: WORKER_TIMEOUTS_MS["mirror-to-outlook"] });
 
 jobQueue.registerWorker<ExtractTextPayload>("extract-text", async (payload, ctx) => {
   // Steg 1: hämta fil-bytes från FSA-handle
@@ -153,7 +176,7 @@ jobQueue.registerWorker<ExtractTextPayload>("extract-text", async (payload, ctx)
     setDocumentContent(payload.documentId, text);
   }
   ctx.setProgress(1);
-});
+}, { timeoutMs: WORKER_TIMEOUTS_MS["extract-text"] });
 
 jobQueue.registerWorker<ClassifyPayload>("classify-document", async (payload, ctx) => {
   ctx.setProgress(0.1);
@@ -181,7 +204,7 @@ jobQueue.registerWorker<ClassifyPayload>("classify-document", async (payload, ct
     signal: ctx.signal,
   });
   ctx.setProgress(1);
-});
+}, { timeoutMs: WORKER_TIMEOUTS_MS["classify-document"] });
 
 async function sleepWithAbort(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) throw new Error("Aborted");
