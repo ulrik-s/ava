@@ -50,6 +50,14 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "billingRun.createFinal": Object.freeze({ entity: "invoice", idField: "id" }),
   "invoice.createCredit": Object.freeze({ entity: "invoice", idField: "id" }),
   "invoice.createRadgivning": Object.freeze({ entity: "invoice" }),
+  // Steg 2d (#1276): kostnadsräkningsflödet och slutregleringen.
+  "billingRun.createKostnadsrakning": Object.freeze({ entity: "billingRun" }),
+  "billingRun.voidKostnadsrakning": Object.freeze({ entity: "billingRun" }),
+  "billingRun.recordKostnadsrakningBeslut": Object.freeze({ entity: "billingRun" }),
+  "billingRun.appealKostnadsrakning": Object.freeze({ entity: "billingRun" }),
+  "billingRun.setVerdict": Object.freeze({ entity: "invoice" }),
+  "billingRun.settleCoverage": Object.freeze({ entity: "invoice" }),
+  "billingRun.recordInsurerPruning": Object.freeze({ entity: "invoice" }),
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
   // server-LLM). Klienten kör den inte själv — servern kör om anropet.
   "document.analyze": Object.freeze({ entity: "document" }),
