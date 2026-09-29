@@ -29,6 +29,7 @@ import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { inProcessPorts } from "@/lib/client/backend/in-process-ports";
 import type { OidcLoginOutcome, OidcClaims } from "@/lib/client/backend/oidc-principal";
+import { loadServerHelperConfig } from "@/lib/client/backend/server-trpc-client";
 import { CapabilitiesProvider } from "@/lib/client/capabilities/use-capabilities";
 import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
@@ -297,7 +298,8 @@ function AuthGatedDemoTree(props: TreeProps) {
           <AnalyzeDispatcherRegistrar />
           <ExtractTextDispatcherRegistrar />
           <MirrorOutlookRegistrar />
-          <HelperAutoConfig />
+          {/* Serverns config hämtas från servern, inte in-process (#1161). Demon har ingen server. */}
+          {!isDemoTier && <HelperAutoConfig loadConfig={loadServerHelperConfig} />}
           {/* Statusraden + appen delar på skärmhöjden — annars skjuts den
               fullhöjds-appen ned och hela sidan scrollar (#1185). */}
           <div className="flex h-full flex-col">

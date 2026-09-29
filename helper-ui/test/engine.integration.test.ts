@@ -21,12 +21,13 @@ afterAll(async () => {
   await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })));
 });
 
-async function boot(opts: Pick<EngineOpts, "confirmOrigin"> = {}): Promise<{ base: string; dir: string }> {
+async function boot(opts: Pick<EngineOpts, "confirmOrigin" | "logDir"> = {}): Promise<{ base: string; dir: string }> {
   const dir = await mkdtemp(join(tmpdir(), "ava-engine-"));
   dirs.push(dir);
   // Lediga högportar (deterministiskt nog för test; undviker default 48761).
   const port = 49000 + Math.floor((dirs.length * 7) % 500);
-  const engine = startEngine({ port, httpsPort: port + 1, dataDir: dir, ...opts });
+  // logDir: null → rör inte användarens riktiga loggkatalog.
+  const engine = startEngine({ port, httpsPort: port + 1, dataDir: dir, logDir: null, ...opts });
   engines.push(engine);
   await new Promise((r) => setTimeout(r, 150)); // låt servern binda
   return { base: `http://127.0.0.1:${port}`, dir };
@@ -55,6 +56,20 @@ describe("startEngine (in-process, headless)", () => {
     expect(r.status).toBe(200);
     const written = JSON.parse(await readFile(join(dir, "helper-config.json"), "utf8"));
     expect(written).toMatchObject({ oidcIssuer: "http://localhost:8089/realms/ava" });
+  });
+
+  test("motorn loggar till fil — också i Electron-skalet, som bara anropar startEngine (#1161)", async () => {
+    const logDir = await mkdtemp(join(tmpdir(), "ava-engine-log-"));
+    dirs.push(logDir);
+    const { base } = await boot({ logDir });
+    await fetch(`${base}/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ oidcIssuer: "https://login.example/v2.0" }),
+    });
+    const text = await readFile(join(logDir, "helper.log"), "utf8");
+    expect(text).toMatch(/ava-helper .* startar/);
+    expect(text).toContain("config: konfigurerad av web-appen (issuer https://login.example/v2.0)");
   });
 
   test("okänd https-webbplats → användaren tillfrågas; Tillåt → släpps in + sparas (#1149)", async () => {
