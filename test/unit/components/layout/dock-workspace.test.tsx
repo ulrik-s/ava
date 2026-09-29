@@ -19,10 +19,14 @@ interface FakeApi {
 const fake: FakeApi = { added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListener: null };
 let readyCount = 0;
 
+const dockProps: { defaultTabComponent: unknown } = { defaultTabComponent: null };
+
 vi.mock("dockview-react", () => ({
   themeLight: { name: "light" },
   themeDark: { name: "dark" },
-  DockviewReact: ({ onReady }: { onReady: (e: { api: unknown }) => void }) => {
+  DockviewDefaultTab: ({ hideClose }: { hideClose?: boolean }) => <span data-testid="default-tab" data-hide-close={String(hideClose)} />,
+  DockviewReact: ({ onReady, defaultTabComponent }: { onReady: (e: { api: unknown }) => void; defaultTabComponent?: unknown }) => {
+    dockProps.defaultTabComponent = defaultTabComponent;
     const panels = new Set<string>();
     const api = {
       addPanel: (o: { id: string; inactive?: boolean; position?: unknown }) => { panels.add(o.id); fake.added.push(o); },
@@ -71,7 +75,7 @@ vi.mock("@/lib/client/trpc", () => ({
 const screenClass = { value: "laptop" as "laptop" | "large" | "phone" };
 vi.mock("@/lib/client/layout/use-screen-class", () => ({ useScreenClass: () => screenClass.value }));
 
-const { DockWorkspace } = await import("@/components/layout/dock-workspace");
+const { DockWorkspace, PanelTab } = await import("@/components/layout/dock-workspace");
 
 const PANELS = [
   { id: "a", title: "Alfa", render: () => <p>alfa-innehåll</p> },
@@ -216,5 +220,17 @@ describe("DockWorkspace — telefon", () => {
     screenClass.value = "phone";
     renderWs();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Alfa", "Beta", "Gamma"]);
+  });
+});
+
+// #1292: flikarna går inte att stänga — panelerna är sidans fasta uppsättning.
+describe("DockWorkspace — flikar", () => {
+  it("dockytan använder PanelTab, som är dockviews flik utan stängknapp", () => {
+    renderWs();
+    expect(dockProps.defaultTabComponent).toBe(PanelTab);
+    // Cast: dockviews header-props (api, containerApi, …) byggs av dockview och
+    // kan inte skapas här; attrappen av DockviewDefaultTab läser bara hideClose.
+    render(<PanelTab {...({} as Parameters<typeof PanelTab>[0])} />);
+    expect(screen.getByTestId("default-tab").getAttribute("data-hide-close")).toBe("true");
   });
 });
