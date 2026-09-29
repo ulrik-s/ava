@@ -12,12 +12,18 @@ import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   MatterEventSuggestionRepository, MatterEventSuggestionRow,
 } from "./matter-event-suggestion-repository";
+import { documentOrg } from "./matter-org";
 
 export class DrizzleMatterEventSuggestionRepository
   extends DrizzleRepository<MatterEventSuggestion>
   implements MatterEventSuggestionRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(matterEventSuggestions), now);
+  }
+
+  /** Förslaget saknar org- och ärendekolumn → org via dokumentet (#1242). */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return documentOrg(this.db, (row as { documentId?: DocumentId }).documentId);
   }
 
   async listForDocument(documentId: DocumentId): Promise<MatterEventSuggestion[]> {

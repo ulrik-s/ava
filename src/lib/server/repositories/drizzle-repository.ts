@@ -141,6 +141,14 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
     return (row as { organizationId?: string }).organizationId;
   }
 
+  /**
+   * Byrån raden hör till (#1242) — samma härledning som change_log använder.
+   * Synk-push avgränsar med den: en rad i en annan byrå får inte skrivas.
+   */
+  async organizationOf(row: unknown): Promise<string | undefined> {
+    return this.resolveOrg(row);
+  }
+
   /** Append en change_log-rad om loggning är på och org kunde härledas. */
   private async logChange(row: unknown, op: ChangeOp): Promise<void> {
     await this.logChangeAs(this.entityName(), row, op);

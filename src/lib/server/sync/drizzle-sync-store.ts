@@ -5,7 +5,8 @@
  *
  * pull: läs `change_log` (`seq > cursor`, per org), deduppa till senaste op per
  * rad, hämta kanonisk rad via repot (saknad/raderad → tombstone).
- * push: applicera en köad mutation per konfliktklass (ADR 0017):
+ * push: kontrollera byrå och låsta poster (#1242, `push-guard`), applicera sedan
+ * en köad mutation per konfliktklass (ADR 0017):
  *   - create  → idempotent (finns id → accepted), annars create.
  *   - update  → surface: stale `baseVersion` ⇒ conflict; annars update
  *               (server-nyare ⇒ rebased). append/lww applicerar.
@@ -22,6 +23,7 @@ import type { PullResult, PulledChange, PushResult } from "../data-store/in-memo
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
+import { checkLocked, checkScope, type PushRejection } from "./push-guard";
 import type { SyncStore } from "./sync-store";
 
 type Row = Record<string, unknown>;
@@ -39,6 +41,7 @@ interface BaseRepo {
   create(data: Row): Promise<Row>;
   update(id: string, patch: Row): Promise<Row>;
   softDelete(id: string): Promise<Row>;
+  organizationOf(row: Row): Promise<string | undefined>;
 }
 
 /** Repo-nycklarna i registret (alla fält utom `transaction`). */
@@ -130,13 +133,23 @@ export class DrizzleSyncStore implements SyncStore {
     // bara lokalt (dataförlust). "conflict" ackas också (inget 22P02-häng, #879)
     // men syns som konflikt. Klienten reparerar id:n före push (legacy-id-repair).
     if (!isUuidRowId(rowId(m))) return { status: "conflict", reason: `ogiltigt id (inte uuid): ${rowId(m)}` };
-    if (m.kind === "delete") return this.applyDelete(repo, m);
-    if (m.kind === "create") return this.applyCreate(organizationId, repo, m);
-    return this.applyUpdate(organizationId, repo, m);
+    const existing = await repo.getById(rowId(m));
+    const rejected = await this.guard(organizationId, repo, m, existing);
+    if (rejected) return { status: "conflict", ...rejected };
+    if (m.kind === "delete") return this.applyDelete(repo, m, existing);
+    if (m.kind === "create") return this.applyCreate(organizationId, repo, m, existing);
+    return this.applyUpdate(organizationId, repo, m, existing);
   }
 
-  private async applyCreate(organizationId: string, repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
-    const existing = await repo.getById(rowId(m));
+  /** Byrån och låsta poster (#1242): avvisas raden, skrivs ingenting. */
+  private async guard(organizationId: string, repo: BaseRepo, m: QueuedMutation, existing: Row | null): Promise<PushRejection | null> {
+    const incoming = m.kind === "delete" ? null : m.row;
+    const orgOf = (row: Row): Promise<string | undefined> => repo.organizationOf(row);
+    return await checkScope(orgOf, organizationId, m.entity, existing, incoming)
+      ?? checkLocked(m.entity, existing, incoming);
+  }
+
+  private async applyCreate(organizationId: string, repo: BaseRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
     if (existing) return { status: "accepted", row: existing }; // idempotent replay
     return { status: "accepted", row: await this.createRow(organizationId, repo, m) };
   }
@@ -149,8 +162,7 @@ export class DrizzleSyncStore implements SyncStore {
     ));
   }
 
-  private async applyUpdate(organizationId: string, repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
-    const existing = await repo.getById(rowId(m));
+  private async applyUpdate(organizationId: string, repo: BaseRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
     if (!existing) return { status: "accepted", row: await this.createRow(organizationId, repo, m) };
     const serverVersion = versionOf(existing);
     if (conflictClassOf(m.entity) === "surface" && m.baseVersion != null && serverVersion !== m.baseVersion) {
@@ -161,8 +173,7 @@ export class DrizzleSyncStore implements SyncStore {
     return { status: rebased ? "rebased" : "accepted", row: updated };
   }
 
-  private async applyDelete(repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
-    const existing = await repo.getById(rowId(m));
+  private async applyDelete(repo: BaseRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
     if (!existing) return { status: "accepted", row: { id: rowId(m) } }; // redan borta
     return { status: "accepted", row: await repo.softDelete(rowId(m)) };
   }

@@ -51,4 +51,9 @@ export interface Repository<Row extends RowBase, Id extends string = Row["id"]> 
    * när en gammal CANCELLED-plan måste ge plats åt en ny). Default = softDelete.
    */
   hardDelete(id: Id): Promise<void>;
+  /**
+   * Byrån raden hör till (#1242) — via egen kolumn eller ärendet/fakturan/
+   * dokumentet. Synk-pushen avgränsar med den. `undefined` = går inte att avgöra.
+   */
+  organizationOf(row: unknown): Promise<string | undefined>;
 }

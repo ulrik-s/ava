@@ -14,6 +14,7 @@ import type {
   DocumentSuggestionRepository, SuggestionListRow, SuggestionWithMatter,
 } from "./document-suggestion-repository";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
+import { documentOrg } from "./matter-org";
 
 const S = documentAnalysisSuggestions;
 
@@ -22,6 +23,11 @@ export class DrizzleDocumentSuggestionRepository
   implements DocumentSuggestionRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(S), now);
+  }
+
+  /** Förslaget saknar org- och ärendekolumn → org via dokumentet (#1242). */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return documentOrg(this.db, (row as { documentId?: DocumentId }).documentId);
   }
 
   async getByIdInOrg(id: DocumentAnalysisSuggestionId, organizationId: OrganizationId): Promise<SuggestionWithMatter | null> {
