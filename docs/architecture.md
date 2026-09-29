@@ -318,7 +318,25 @@ Klassificering av dokument (`documentType`) körs **server-side** via jobb-kön
 bytes, extraherar text (pdfjs/mammoth) och frågar en ollama-tjänst bakom
 docker-`--profile llm` (`AVA_LLM_ENDPOINT`/`AVA_LLM_MODEL`). Fail-soft hela
 vägen → filnamns-heuristik (`guessFromFilename`) om LLM:en är av/nere. Ingen
-användare behöver ladda ner en LLM lokalt.
+användare behöver ladda ner en LLM lokalt. Utan LLM avgör rubrikheuristiken
+(nedan) och filnamnet — ett dokument med rubriken "KALLELSE" klassas ur texten
+även med ett intetsägande filnamn.
+
+**pdfjs i den kompilerade binären (#1156, #1252).** Servern byggs med
+`bun build --compile`, som varken tar med pdfjs native `DOMMatrix`-polyfill
+(`@napi-rs/canvas`) eller den dynamiskt laddade worker-modulen — utan åtgärd blev
+PDF-texten tom. `preparePdfjsForServer()` (`pdfjs-server-runtime.ts`) sätter en
+minimal `DOMMatrix` (textutvinning renderar aldrig) och `globalThis.pdfjsWorker`
+(en statisk import → workern körs i samma tråd). Båda är interna detaljer i
+pdfjs, därför:
+
+- `pdfjs-dist` är låst **exakt** i `package.json` (vaktas av
+  `test/unit/tooling/pdfjs-pin.test.ts`),
+- Dependabot uppgraderar den i en **egen** grupp, så binärtestet
+  (`test/integration/pdf-extract-compiled.test.ts`: kompilerar en binär och läser
+  en komprimerad flersidig PDF med svenska tecken) syns för just den bytningen,
+- konflikt-E2E:n laddar upp en PDF i den riktiga server-first-imagen och ser den
+  klassas ur texten (`test/e2e/conflict/pdf-classification.spec.ts`).
 
 **Sammansatta dokument (#1220).** En PDF innehåller ofta flera dokument efter
 varandra ("kallelse + stämning + FUP", "delgivningskvitto + dom"). Filen delas

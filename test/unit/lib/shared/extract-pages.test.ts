@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { extractPages, extractText, joinPages } from "@/lib/shared/extract-text";
+import { flatePdf } from "../../../helpers/flate-pdf";
 import { minimalPdf } from "../../../helpers/minimal-pdf";
 
 const pdfBytes = (pages: string[]): Uint8Array => new TextEncoder().encode(minimalPdf(pages));
@@ -37,5 +38,18 @@ describe("extractPages", () => {
   it("joinPages: samma form som extractText", () => {
     expect(joinPages(["a", "b"])).toBe("a\n\nb");
     expect(joinPages([])).toBe("");
+  });
+
+  it("komprimerad PDF (FlateDecode) med svenska tecken och flera rader per sida (#1252)", async () => {
+    const bytes = flatePdf([["STÄMNINGSANSÖKAN", "Göteborgs tingsrätt"], ["Bilaga 1 (fullmakt)"]]);
+    const pages = await extractPages({ bytes, mimeType: "application/pdf" });
+    expect(pages).toHaveLength(2);
+    expect(pages[0]).toContain("STÄMNINGSANSÖKAN");
+    expect(pages[0]).toContain("Göteborgs tingsrätt");
+    expect(pages[1]).toContain("Bilaga 1 (fullmakt)");
+  });
+
+  it("flatePdf vägrar tecken utanför WinAnsi (hjälparen ljuger inte om vad den testar)", () => {
+    expect(() => flatePdf([["€ fungerar inte, men 😀 är utanför"]])).toThrow(/WinAnsi/);
   });
 });
