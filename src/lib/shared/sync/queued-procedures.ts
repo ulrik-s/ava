@@ -27,6 +27,10 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "timeEntry.create": Object.freeze({ entity: "timeEntry", idField: "id" }),
   "timeEntry.update": Object.freeze({ entity: "timeEntry" }),
   "timeEntry.delete": Object.freeze({ entity: "timeEntry" }),
+  // Utläggen (#1276): servern kör om routern — byrån och låsta utlägg gäller.
+  "expense.create": Object.freeze({ entity: "expense", idField: "id" }),
+  "expense.update": Object.freeze({ entity: "expense" }),
+  "expense.delete": Object.freeze({ entity: "expense" }),
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
   // server-LLM). Klienten kör den inte själv — servern kör om anropet.
   "document.analyze": Object.freeze({ entity: "document" }),

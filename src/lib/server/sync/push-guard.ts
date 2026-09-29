@@ -13,7 +13,7 @@
  */
 
 import { asId } from "@/lib/shared/schemas/ids";
-import { isLockedEntry } from "@/lib/shared/time-entry-lock";
+import { isBilledEntry } from "@/lib/shared/time-entry-lock";
 
 type Row = Record<string, unknown>;
 
@@ -57,12 +57,13 @@ const LOCKED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   expense: ["matterId", "userId", "date", "amount", "description", "billable", "vatRate", "vatIncluded", "passThrough"],
 };
 
-/** Låst enligt samma regel som routrarna och underlagen (`isLockedEntry`), eller fakturerad. */
+/** Låst eller fakturerad — samma regel som routrarna (`isBilledEntry`). */
 function isLocked(row: Row): boolean {
   const runId = row.frozenByBillingRunId;
-  return row.invoiceId != null || isLockedEntry({
+  return isBilledEntry({
     frozenAt: row.frozenAt == null ? null : String(row.frozenAt),
     frozenByBillingRunId: typeof runId === "string" ? asId<"BillingRunId">(runId) : null,
+    invoiceId: typeof row.invoiceId === "string" ? row.invoiceId : null,
   });
 }
 

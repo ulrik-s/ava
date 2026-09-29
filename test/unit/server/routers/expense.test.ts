@@ -10,6 +10,7 @@ import { expenseRouter } from "@/lib/server/routers/expense";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {
+  matter: { findFirst: vi.fn() },
   expense: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
@@ -39,6 +40,8 @@ beforeEach(() => {
   mockPrisma.expense.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
   // Default: utlägget tillhör anropande org (happy path för update/delete).
   mockPrisma.expense.findFirst.mockResolvedValue({ id: "e1" });
+  // Default: ärendet tillhör anropande org (create kontrollerar det, #1276).
+  mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a" });
 });
 
 describe("expense.list", () => {
@@ -99,10 +102,31 @@ describe("expense.create", () => {
     expect(mockPrisma.expense.create.mock.calls[0]![0].data.billable).toBe(true);
   });
 
+  it("ärende i en annan byrå → NOT_FOUND, inget skapas (#1276)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue(null);
+    await expect(
+      makeCaller().create({ matterId: "m-annan", date: "2026-04-15", amount: 100, description: "X" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.expense.create).not.toHaveBeenCalled();
+  });
+
   it("validerar belopp > 0", async () => {
     await expect(
       makeCaller().create({ matterId: "m1", date: "2026-01-01", amount: 0, description: "X" }),
     ).rejects.toThrow();
+  });
+});
+
+describe("låsta utlägg (#1276)", () => {
+  it.each([
+    ["fakturerat", { id: "e1", invoiceId: "inv-1" }],
+    ["fryst av en körning", { id: "e1", frozenAt: new Date("2026-06-30"), frozenByBillingRunId: "run-1" }],
+  ])("%s: update och delete → PRECONDITION_FAILED, inget skrivs", async (_label, locked) => {
+    mockPrisma.expense.findFirst.mockResolvedValue(locked);
+    await expect(makeCaller().update({ id: "e1", amount: 1 })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    await expect(makeCaller().delete({ id: "e1" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(mockPrisma.expense.update).not.toHaveBeenCalled();
+    expect(mockPrisma.expense.delete).not.toHaveBeenCalled();
   });
 });
 
