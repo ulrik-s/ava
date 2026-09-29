@@ -14,7 +14,12 @@ beforeEach(() => {
   jobQueue.clearFinished();
 });
 
-function waitForStatus(id: string, status: Job["status"], timeoutMs = 500): Promise<Job> {
+/**
+ * Vänta på ett jobbs status. Generös gräns (#1283): under `--parallel` med
+ * coverage kan timrarna gå många gånger långsammare än normalt. Gränsen kostar
+ * bara tid när testet ändå faller, och felet visar då köns diagnostik.
+ */
+function waitForStatus(id: string, status: Job["status"], timeoutMs = 5000): Promise<Job> {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const tick = () => {
@@ -80,8 +85,8 @@ describe("JobQueue", () => {
     });
     const a = jobQueue.enqueue("custom", "A", { n: 1 });
     const b = jobQueue.enqueue("custom", "B", { n: 2 });
-    await waitForStatus(a, "done", 1000);
-    await waitForStatus(b, "done", 1000);
+    await waitForStatus(a, "done");
+    await waitForStatus(b, "done");
     expect(order).toEqual([1, 2]);
   });
 

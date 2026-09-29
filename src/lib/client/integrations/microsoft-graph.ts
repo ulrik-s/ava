@@ -42,7 +42,12 @@ export interface GraphOpts {
   /** Outlook-kalender (default = primär). */
   calendarId?: string;
   /** Injicerbar för tester. */
-  fetchFn?: typeof fetch;
+  fetchFn?: (url: string, init: RequestInit) => Promise<Response>;
+  /**
+   * Avbryter anropet (#1286). Utan signal kan ett Graph-anrop som hänger
+   * inte avbrytas, och då blockerar det mirror-to-outlook-jobbet.
+   */
+  signal?: AbortSignal;
 }
 
 async function graphFetch(
@@ -53,6 +58,7 @@ async function graphFetch(
   const fn = opts.fetchFn ?? globalThis.fetch.bind(globalThis);
   return fn(`${GRAPH_BASE}${path}`, {
     ...init,
+    ...(opts.signal ? { signal: opts.signal } : {}),
     headers: {
       ...(init.headers ?? {}),
       Authorization: `Bearer ${opts.token}`,

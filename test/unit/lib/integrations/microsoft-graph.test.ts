@@ -153,3 +153,41 @@ describe("deleteGraphEvent", () => {
     await expect(deleteGraphEvent("g-1", { token: "tok", fetchFn })).rejects.toThrow(/500/);
   });
 });
+
+// #1286: ett Graph-anrop som hänger ska gå att avbryta — annars blockerar det
+// mirror-to-outlook-jobbet. Signalen skickas vidare till fetch.
+describe("avbrottssignal till fetch (#1286)", () => {
+  const ok = { id: "g-1", subject: "x", start: { dateTime: "x", timeZone: "UTC" }, end: { dateTime: "x", timeZone: "UTC" } };
+  const body: GraphEventBody = { subject: "x", start: { dateTime: "x", timeZone: "UTC" }, end: { dateTime: "x", timeZone: "UTC" } };
+
+  /** fetch som sparar init och svarar med `status`. */
+  function recordingFetch(status: number): { fetchFn: (url: string, init: RequestInit) => Promise<Response>; inits: RequestInit[] } {
+    const inits: RequestInit[] = [];
+    return { inits, fetchFn: async (_url, init) => { inits.push(init); return mockResponse(status, status === 204 ? "" : ok); } };
+  }
+
+  it("create, update och delete skickar signalen vidare", async () => {
+    const signal = new AbortController().signal;
+    const r = recordingFetch(200);
+    await createGraphEvent(body, { token: "tok", fetchFn: r.fetchFn, signal });
+    await updateGraphEvent("g-1", {}, { token: "tok", fetchFn: r.fetchFn, signal });
+    await deleteGraphEvent("g-1", { token: "tok", fetchFn: r.fetchFn, signal });
+    expect(r.inits.map((i) => i.signal)).toEqual([signal, signal, signal]);
+  });
+
+  it("utan signal → ingen signal i anropet", async () => {
+    const r = recordingFetch(200);
+    await createGraphEvent(body, { token: "tok", fetchFn: r.fetchFn });
+    expect(r.inits[0]?.signal).toBeUndefined();
+  });
+
+  it("ett avbrutet anrop avvisas, i stället för att hänga", async () => {
+    const ac = new AbortController();
+    const fetchFn = (_url: string, init: RequestInit): Promise<Response> => new Promise((_, reject) => {
+      init.signal?.addEventListener("abort", () => { reject(new DOMException("Avbrutet", "AbortError")); });
+    });
+    const pending = createGraphEvent(body, { token: "tok", fetchFn, signal: ac.signal });
+    ac.abort();
+    await expect(pending).rejects.toThrow(/Avbrutet/);
+  });
+});
