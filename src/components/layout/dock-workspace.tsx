@@ -52,10 +52,15 @@ interface Props {
 
 const PanelDefs = createContext<ReadonlyMap<string, PanelDef>>(new Map());
 
-/** Panelens innehåll; scrollar inom panelen, aldrig sidan. */
+/**
+ * Panelens innehåll; scrollar inom panelen, aldrig sidan. `relative` gör
+ * panelkroppen till referens för absoluta element (t.ex. `sr-only`). Annars
+ * räknades de mot dockviews `.dv-view`, som fick en egen scrollbar ovanpå
+ * panelens: två scrollbarer (#1306).
+ */
 function PanelHost({ params }: IDockviewPanelProps<{ id: string }>) {
   const def = useContext(PanelDefs).get(params.id);
-  return <div className="h-full overflow-y-auto p-3">{def?.render()}</div>;
+  return <div className="relative h-full overflow-y-auto p-3">{def?.render()}</div>;
 }
 const COMPONENTS = { panel: PanelHost };
 
