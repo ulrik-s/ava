@@ -197,6 +197,19 @@ export interface ArBridge {
   nettoRealiserat: number;
 }
 
+/**
+ * Dagar sedan förfallodagen, eller null om fakturan inte är förfallen. Förfallen
+ * = har ett förfallodatum OCH minst en hel dag har gått. En faktura utan
+ * förfallodatum kan inte vara förfallen — som i bevakningen. Bryggan och
+ * åldersanalysen delar regeln; förr räknade bryggan fakturor utan datum som
+ * förfallna, och de två motsade varandra (#1312).
+ */
+function daysOverdue(l: ArInvoiceLedgerRow, now: Date): number | null {
+  if (!l.dueDate) return null;
+  const days = Math.floor((now.getTime() - l.dueDate.getTime()) / 86_400_000);
+  return days > 0 ? days : null;
+}
+
 /** Kundfordrings-bryggan (waterfall), livstid. */
 export function computeArBridge(
   invoices: readonly Row[],
@@ -222,13 +235,11 @@ export function computeArBridge(
   const utestaende = justerat - inbetalt - konstateradKundforlust;
   const nettoRealiserat = justerat - konstateradKundforlust;
 
-  const ledgers = perInvoiceRows(invoices, payments, writeOffs);
-  let ejForfallet = 0;
-  for (const l of ledgers) {
-    if (l.outstanding <= 0) continue;
-    if (l.dueDate && l.dueDate.getTime() >= now.getTime()) ejForfallet += l.outstanding;
-  }
-  const forfallet = utestaende - ejForfallet;
+  // Förfallet = summan av de förfallna fakturorna (samma regel som
+  // åldersanalysen, #1312); resten av det utestående är ej förfallet.
+  const forfallet = perInvoiceRows(invoices, payments, writeOffs)
+    .reduce((s, l) => (l.outstanding > 0 && daysOverdue(l, now) !== null ? s + l.outstanding : s), 0);
+  const ejForfallet = utestaende - forfallet;
 
   return { fakturerat, krediterat, justerat, inbetalt, konstateradKundforlust, utestaende, ejForfallet, forfallet, nettoRealiserat };
 }
@@ -259,9 +270,8 @@ export function computeAging(
 ): AgingBucket[] {
   const amounts: [number, number, number, number] = [0, 0, 0, 0];
   for (const l of perInvoiceRows(invoices, payments, writeOffs)) {
-    if (l.outstanding <= 0 || !l.dueDate) continue;
-    const days = Math.floor((now.getTime() - l.dueDate.getTime()) / 86_400_000);
-    if (days <= 0) continue; // ej förfallet
+    const days = daysOverdue(l, now);
+    if (l.outstanding <= 0 || days === null) continue;
     const idx = bucketIndexForDaysOverdue(days);
     amounts[idx] = (amounts[idx] ?? 0) + l.outstanding;
   }
