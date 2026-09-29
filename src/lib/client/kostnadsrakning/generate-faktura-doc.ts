@@ -12,6 +12,7 @@
  */
 
 import type { inferRouterInputs } from "@trpc/server";
+import { finalInvoiceNumber } from "@/lib/client/billing/invoice-number-finality";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -44,7 +45,12 @@ export interface GenerateFakturaFromTemplateArgs {
    *  rådgivning, prutning, aconton). När satt renderas den som uppdelningen
    *  mellan klient och betalare i stället för spec-summeringen. */
   breakdown?: FakturaBreakdown | null | undefined;
+  /** Skjut upp dokumentet om numret inte är fastställt (default). `false` = hoppa över i stället. */
+  deferIfPending?: boolean;
 }
+
+/** Utfallet: skapat, uppskjutet (numret inte fastställt) eller överhoppat (väntar redan). */
+export type FakturaDocOutcome = "generated" | "deferred" | "pending";
 
 /**
  * Generera ett faktura-DOKUMENT via TEMPLATE-MOTORN (#852/#937): renderar den
@@ -53,8 +59,20 @@ export interface GenerateFakturaFromTemplateArgs {
  * fakturaflöden (aconto, rådgivning, slutreglering, dom) så klient-/betalar-
  * fakturorna får dokument i fil-listan + länk på faktura-objektet.
  */
-export async function generateFakturaFromTemplate(args: GenerateFakturaFromTemplateArgs): Promise<void> {
-  const { invoice, matterId, recipient, meta, register, utils, spec, breakdown } = args;
+export async function generateFakturaFromTemplate(args: GenerateFakturaFromTemplateArgs): Promise<FakturaDocOutcome> {
+  const { matterId, recipient, meta, register, utils, spec, breakdown } = args;
+  // Fakturanumret sätts av servern (#1243): dokumentet bär numret, så det
+  // skapas först när numret är fastställt — annars skjuts det upp till synk.
+  const number = await finalInvoiceNumber(args.invoice.id);
+  if (number.state === "pending") {
+    if (args.deferIfPending === false) return "pending";
+    const { deferFakturaDoc } = await import("@/lib/client/billing/deferred-faktura-docs");
+    await deferFakturaDoc({ invoiceId: args.invoice.id, invoice: args.invoice, matterId, recipient, meta, spec, breakdown });
+    return "deferred";
+  }
+  const invoice = number.state === "final"
+    ? { ...args.invoice, invoiceNumber: number.invoiceNumber, ocrReference: number.ocrReference }
+    : args.invoice;
   const { renderFakturaHtml } = await import("./faktura-template");
   const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
   const html = renderFakturaHtml({ invoice, recipient, meta, spec, breakdown });
@@ -73,4 +91,5 @@ export async function generateFakturaFromTemplate(args: GenerateFakturaFromTempl
     await utils.document.tree.refetch({ matterId });
     await utils.document.list.invalidate();
   } catch { /* best-effort */ }
+  return "generated";
 }

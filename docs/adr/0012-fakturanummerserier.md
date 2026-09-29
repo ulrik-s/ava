@@ -115,6 +115,30 @@ Eftersom lagen tillåter flera serier finns ingen anledning att betala det prise
   visuell förväxling är det en separat, valfri inställning (ej krav från detta
   beslut).
 
+## Tillägg: servern sätter numret i self-hosted (#1243)
+
+"Inget API-anrop krävs för att tilldela ett nummer" gäller fortfarande lokalt —
+men i **self-hosted** (flera jurister, en byrå) räknade varje klient fram numret
+ur de fakturor *den* kände till. Två jurister som fakturerade under samma
+avbrott fick samma nummer: en dubblett i serien, i strid med 17 kap. 24 § 2 ML.
+
+- **Klientens nummer är preliminärt.** När en faktura synkas
+  (`DrizzleSyncStore.createRow`) sätter servern nästa nummer i serien —
+  fakturadatumets år — och OCR följer numret (domstolsfakturor utan OCR förblir
+  utan). Reconcile skriver serverns nummer i klientens store.
+- **Registret `invoice_numbers`** (PK = byrå + nummer, server-only, migration
+  0031) gör en dubblett omöjlig i databasen, oavsett väg. Det skrivs *före*
+  fakturaraden; `nextInvoiceNumber` läser både fakturorna och registret och tar
+  ett `pg_advisory_xact_lock` per byrå, så samtidiga faktureringar serialiseras.
+- **Numret är oföränderligt**: en uppdatering som bär ett (gammalt preliminärt)
+  nummer skriver inte över det utfärdade.
+- **Dokumentet bär numret** → fakturadokumentet skapas först när numret är
+  fastställt (`finalInvoiceNumber`). Är fakturan inte synkad skjuts dokumentet
+  upp (IndexedDB) och skapas efter nästa lyckade synk
+  (`startServerInvoiceNumbering`). Demo (ingen server) är oförändrat.
+- Historiska dubbletter förs inte in två gånger av backfillen; migreringen
+  rapporterar dem som en `NOTICE` (rättas manuellt: kreditera och ställ ut nytt).
+
 ## Alternativ (förkastade)
 
 - **Delad räknare ägd av Fortnox via API** — bryter lokal-först, offline och

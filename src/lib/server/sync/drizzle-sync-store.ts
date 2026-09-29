@@ -14,6 +14,8 @@
 
 import { and, asc, eq, gt } from "drizzle-orm";
 import { conflictClassOf } from "@/lib/shared/conflict-policy";
+import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
+import { asId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { SOURCE_KEY_BY_ENTITY } from "../data-store/in-memory/entity-source-keys";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
 import type { PullResult, PulledChange, PushResult } from "../data-store/in-memory/sync-transport";
@@ -58,6 +60,18 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *  lokalt genererat nanoid) kan aldrig lagras → `getById` skulle kasta 22P02 och
  *  abortera hela reconcile-batchen. */
 function isUuidRowId(id: string): boolean { return UUID_RE.test(id); }
+
+/**
+ * Fakturanumret sätts av servern (#1243, ADR 0012): klientens nummer är
+ * preliminärt (räknat ur de fakturor den kände till). Serien är fakturadatumets
+ * år; OCR följer numret, utom där klienten medvetet inte satt någon (domstol).
+ */
+async function withServerInvoiceNumber(tx: Repositories, organizationId: OrganizationId, row: Row): Promise<Row> {
+  const date = new Date(typeof row.invoiceDate === "string" || row.invoiceDate instanceof Date ? row.invoiceDate : Date.now());
+  const invoiceNumber = await tx.invoices.nextInvoiceNumber(organizationId, date.getFullYear());
+  const ocrReference = row.ocrReference == null ? null : ocrFromInvoiceNumber(invoiceNumber);
+  return { ...row, invoiceNumber, ocrReference };
+}
 
 function versionOf(row: Row | null): number {
   return row && typeof row.version === "number" ? row.version : 1;
@@ -108,7 +122,7 @@ export class DrizzleSyncStore implements SyncStore {
     return { entity: r.entity, row: current };
   }
 
-  async push(_organizationId: string, m: QueuedMutation): Promise<PushResult> {
+  async push(organizationId: string, m: QueuedMutation): Promise<PushResult> {
     const repo = this.repoFor(m.entity);
     if (!repo) return { status: "conflict", reason: `okänd entitet: ${m.entity}` };
     // Ogiltigt (icke-uuid) rowId: kan aldrig lagras i de uuid-nycklade tabellerna.
@@ -117,20 +131,27 @@ export class DrizzleSyncStore implements SyncStore {
     // men syns som konflikt. Klienten reparerar id:n före push (legacy-id-repair).
     if (!isUuidRowId(rowId(m))) return { status: "conflict", reason: `ogiltigt id (inte uuid): ${rowId(m)}` };
     if (m.kind === "delete") return this.applyDelete(repo, m);
-    if (m.kind === "create") return this.applyCreate(repo, m);
-    return this.applyUpdate(repo, m);
+    if (m.kind === "create") return this.applyCreate(organizationId, repo, m);
+    return this.applyUpdate(organizationId, repo, m);
   }
 
-  private async applyCreate(repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
+  private async applyCreate(organizationId: string, repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
     const existing = await repo.getById(rowId(m));
     if (existing) return { status: "accepted", row: existing }; // idempotent replay
-    const created = await repo.create(m.row);
-    return { status: "accepted", row: created };
+    return { status: "accepted", row: await this.createRow(organizationId, repo, m) };
   }
 
-  private async applyUpdate(repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
+  /** Skapa raden; en faktura med nummer får SERVERNS nummer (#1243). */
+  private createRow(organizationId: string, repo: BaseRepo, m: QueuedMutation): Promise<Row> {
+    if (m.entity !== "invoice" || typeof m.row.invoiceNumber !== "string") return repo.create(m.row);
+    return this.repos.transaction(async (tx) => tx.invoices.create(
+      await withServerInvoiceNumber(tx, asId<"OrganizationId">(organizationId), m.row) as never,
+    ));
+  }
+
+  private async applyUpdate(organizationId: string, repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
     const existing = await repo.getById(rowId(m));
-    if (!existing) return { status: "accepted", row: await repo.create(m.row) };
+    if (!existing) return { status: "accepted", row: await this.createRow(organizationId, repo, m) };
     const serverVersion = versionOf(existing);
     if (conflictClassOf(m.entity) === "surface" && m.baseVersion != null && serverVersion !== m.baseVersion) {
       return { status: "conflict", reason: "stale", current: existing };

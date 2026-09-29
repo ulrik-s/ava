@@ -273,6 +273,20 @@ export const invoices = pgTable("invoices", {
   creditedInvoiceId: uuid("credited_invoice_id").$type<InvoiceId>(),
 }, (t) => [index("invoices_matter_idx").on(t.matterId)]);
 
+/**
+ * Register över utfärdade fakturanummer (#1243, ADR 0012) — SERVER-ONLY (ingen
+ * entitet, synkas aldrig). Primärnyckeln (byrå, nummer) gör en dubblett
+ * omöjlig i databasen: 17 kap. 24 § 2 ML kräver ett löpnummer som ensamt
+ * identifierar fakturan. Fakturorna själva scopas via ärendet (ingen egen
+ * org-kolumn), därför registret i stället för ett index på `invoices`.
+ */
+export const invoiceNumbers = pgTable("invoice_numbers", {
+  organizationId: uuid("organization_id").notNull(),
+  invoiceNumber: text("invoice_number").notNull(),
+  invoiceId: uuid("invoice_id").notNull().$type<InvoiceId>(),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.organizationId, t.invoiceNumber] })]);
+
 export const payments = pgTable("payments", {
   ...baseColumns,
   id: uuid("id").primaryKey().$type<PaymentId>(),

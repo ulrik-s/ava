@@ -101,8 +101,8 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
     return rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt);
   }
 
-  async nextInvoiceNumber(organizationId: OrganizationId): Promise<string> {
-    const prefix = invoiceNumberPrefix(this.now().getFullYear());
+  async nextInvoiceNumber(organizationId: OrganizationId, year: number = this.now().getFullYear()): Promise<string> {
+    const prefix = invoiceNumberPrefix(year);
     const last = (await this.store.invoices.findFirst({
       where: { matter: { organizationId }, invoiceNumber: { startsWith: prefix } },
       orderBy: { invoiceNumber: "desc" },

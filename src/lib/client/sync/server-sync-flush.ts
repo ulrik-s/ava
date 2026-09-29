@@ -35,3 +35,24 @@ export async function flushServerSync(): Promise<void> {
 export function unsyncedChangeCount(): number {
   return current?.pendingCount() ?? 0;
 }
+
+// Lyssnare på lyckade server-synkar (#1243) — t.ex. uppskjutna fakturadokument
+// som kan skapas när servern satt fakturans nummer.
+const syncedListeners = new Set<() => void>();
+
+/** Lyssna på lyckade server-synkar; returnerar avregistreringen. */
+export function onServerSynced(listener: () => void): () => void {
+  syncedListeners.add(listener);
+  return () => { syncedListeners.delete(listener); };
+}
+
+/** Anropas av server-synken efter varje lyckad reconcile. En kastande lyssnare stoppar inte de andra. */
+export function notifyServerSynced(): void {
+  for (const listener of syncedListeners) {
+    try {
+      listener();
+    } catch (e) {
+      console.warn("[server-sync] lyssnare kastade:", e);
+    }
+  }
+}

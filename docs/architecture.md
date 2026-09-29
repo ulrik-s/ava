@@ -36,7 +36,10 @@
 >   flera bakom en port (samexistens + utbytbarhet).
 > - [ADR 0012](./adr/0012-fakturanummerserier.md) — fakturanummerserier: AVA och
 >   externt system (Fortnox) har var sin obrutna serie, aldrig en delad räknare
->   (lagligt enl. 17 kap. 24 § 2 ML / art. 226.2 momsdirektivet).
+>   (lagligt enl. 17 kap. 24 § 2 ML / art. 226.2 momsdirektivet). I self-hosted
+>   sätter **servern** numret vid synk (klientens är preliminärt), registret
+>   `invoice_numbers` gör dubbletter omöjliga, och fakturadokumentet skapas först
+>   när numret är fastställt (#1243).
 > - [ADR 0013](./adr/0013-office-add-in-arkitektur.md) — Office-add-ins (Word/
 >   Outlook): tunna servern äger git-db + exponerar tRPC-over-HTTP; add-ins är
 >   tunna HTTP-klienter (Bearer-PAT). Web-app/demo förblir lokal-först (USP).
