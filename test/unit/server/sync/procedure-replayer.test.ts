@@ -151,6 +151,27 @@ describe("DrizzleProcedureReplayer", () => {
     expect(JSON.stringify(res.rows)).not.toContain("Hemlig");
   });
 
+  it("document.analyze körs om: SERVERNS klassificering köas (#1156)", async () => {
+    const docId = uuidv7();
+    await repos.documents.create({
+      id: docId, matterId, fileName: "skanning.pdf", mimeType: "application/pdf", storagePath: "documents/content/x", sizeBytes: 1, uploadedById: USER,
+    } as never);
+    const analyzed: string[] = [];
+    const withAnalyzer = buildContext({
+      repos, eventLog: serverFirstEventLog,
+      ports: { ...noopPorts, documentAnalyzer: { analyze: async (id) => { analyzed.push(id); } } },
+      principal: { id: asId<"UserId">(USER), email: "lena@byra.se", name: "Lena", role: "LAWYER", organizationId: asId<"OrganizationId">(ORG) },
+    });
+    // Inga touches: klassningen skriver ingenting synkront — resultatet når
+    // klienten via pull när jobbet är klart.
+    const c = call("document.analyze", { documentId: docId });
+    expect(await replayer.replay(c, withAnalyzer)).toMatchObject({ status: "accepted", rows: [] });
+    expect(analyzed).toEqual([docId]);
+    // Idempotent: samma mutationId köar inte en klassning till.
+    await replayer.replay(c, withAnalyzer);
+    expect(analyzed).toEqual([docId]);
+  });
+
   it("delete körs om och loggas (tombstone når andra klienter, #1234)", async () => {
     const id = uuidv7();
     await replayer.replay(call("timeEntry.create", createInput(id), [id]), ctx);

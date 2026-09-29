@@ -318,7 +318,16 @@ Klassificering av dokument (`documentType`) körs **server-side** via jobb-kön
 bytes, extraherar text (pdfjs/mammoth) och frågar en ollama-tjänst bakom
 docker-`--profile llm` (`AVA_LLM_ENDPOINT`/`AVA_LLM_MODEL`). Fail-soft hela
 vägen → filnamns-heuristik (`guessFromFilename`) om LLM:en är av/nere. Ingen
-användare behöver ladda ner en LLM lokalt. Utan LLM avgör rubrikheuristiken
+användare behöver ladda ner en LLM lokalt.
+
+**Servern äger klassificeringen i self-hosted (#1156).** Klientens in-process-
+tRPC klassar inte (`inProcessPorts`: no-op-analyzer) — dess gissning skrevs
+annars över serverns svar när den synkades. Servern köar klassificeringen när
+bytes:en kommer (`uploadContent`) och när en synkad dokumentrad pekar på
+innehåll servern redan har (`sync.push` → `classify-new-content`; samma fil
+uppladdad igen laddas aldrig upp). "Analysera" köas som anrop
+(`document.analyze` i `QUEUED_PROCEDURES`) och körs om av servern. Demon
+klassar som förut i klienten (filnamn). Utan LLM avgör rubrikheuristiken
 (nedan) och filnamnet — ett dokument med rubriken "KALLELSE" klassas ur texten
 även med ett intetsägande filnamn.
 
