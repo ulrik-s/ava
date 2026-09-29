@@ -9,7 +9,7 @@
  * ("första klicket gör inget").
  */
 import { act, fireEvent, screen } from "@testing-library/react";
-import { hydrateRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest-compat";
 import { ThemeRestore } from "@/components/shell/theme-restore";
@@ -93,5 +93,29 @@ describe("ThemeToggle — växling", () => {
     fireEvent.click(screen.getByRole("button", { name: "Byt till mörkt läge" }));
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     setItem.mockRestore();
+  });
+});
+
+// #1297: under 1024 px låg den flytande knappen ovanpå toppremsans "Öppna meny".
+// Där står temaknappen i stället i toppremsan (variant="inline").
+describe("ThemeToggle — varianter", () => {
+  it("standard: flytande (fixed), märkt för att kunna döljas när toppremsan visas", async () => {
+    await hydrateWith(false);
+    const btn = screen.getByRole("button", { name: "Byt till mörkt läge" });
+    expect(btn.dataset.themeToggle).toBe("floating");
+    expect(btn.className).toContain("fixed");
+  });
+
+  it("inline: en vanlig knapp i flödet, som växlar tema på samma sätt", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    const r = createRoot(container);
+    root = r;
+    act(() => { r.render(<ThemeToggle variant="inline" />); });
+    const btn = screen.getByRole("button", { name: "Byt till mörkt läge" });
+    expect(btn.dataset.themeToggle).toBe("inline");
+    expect(btn.className).not.toContain("fixed");
+    fireEvent.click(btn);
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 });

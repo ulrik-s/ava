@@ -108,6 +108,24 @@ describe("Sidebar", () => {
     unregister();
   });
 
+  // #1297: toppremsan låg `fixed` ovanpå statusraden och demobannern, och den
+  // flytande temaknappen låg ovanpå menyknappen.
+  it("toppremsan ligger i flödet (inte fixed) och har temaknappen bredvid menyknappen", () => {
+    const { container } = render(<Sidebar />);
+    const bar = container.querySelector("[data-mobile-topbar]");
+    expect(bar).not.toBeNull();
+    expect(bar?.className).not.toMatch(/\bfixed\b/);
+    expect(bar?.querySelector('[data-theme-toggle="inline"]')).not.toBeNull();
+    expect(bar?.querySelector('[aria-label="Öppna meny"]')).not.toBeNull();
+  });
+
+  it("märker <html> medan toppremsan finns (den flytande temaknappen döljs då), och tar bort märket efteråt", () => {
+    const { unmount } = render(<Sidebar />);
+    expect(document.documentElement.hasAttribute("data-mobile-topbar")).toBe(true);
+    unmount();
+    expect(document.documentElement.hasAttribute("data-mobile-topbar")).toBe(false);
+  });
+
   it("öppnar mobil-meny vid klick på hamburgaren", () => {
     render(<Sidebar />);
     const button = screen.getByRole("button", { name: /Öppna meny/i });
