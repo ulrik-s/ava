@@ -13,6 +13,7 @@
  * "Avbruten" direkt, och den andra speglingen ska starta (ett nytt
  * Graph-anrop).
  */
+import { createCalendarEvent, seedOutlookToken } from "./_calendar";
 import { DEMO_BASE_URL as BASE, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 test("Graph hänger → Avbryt på /jobs släpper kön, och nästa spegling startar", async ({ page }) => {
@@ -20,22 +21,13 @@ test("Graph hänger → Avbryt på /jobs släpper kön, och nästa spegling star
   // Registreras efter hermetik-vakten och vinner därför för Graph-origin.
   // Ingen fulfill/abort: anropet hänger, som ett Graph som inte svarar.
   await page.route("https://graph.microsoft.com/**", (route) => { graphCalls.push(route.request().url()); });
-  await page.addInitScript(() => {
-    try { localStorage.setItem("ava.outlookToken", "e2e-outlook-token"); } catch { /* privat läge */ }
-  });
+  await seedOutlookToken(page);
   await seedDemoLogin(page, BASE);
   await page.goto(`${BASE}/calendar/`);
   await showPanel(page, "Kalender");
 
-  for (const [title, start] of [["Hänger i Graph", "2026-10-05T09:00"], ["Nästa spegling", "2026-10-06T09:00"]] as const) {
-    await page.getByRole("button", { name: /Nytt event/ }).click();
-    const form = page.locator("form").filter({ hasText: "Spegla till Outlook" });
-    await form.getByLabel("Titel *").fill(title);
-    await form.getByLabel("Start *").fill(start);
-    await form.getByLabel(/Spegla till Outlook/).check();
-    await form.getByRole("button", { name: "Skapa" }).click();
-    await expect(form).toBeHidden({ timeout: 15_000 });
-  }
+  await createCalendarEvent(page, { title: "Hänger i Graph", start: "2026-10-05T09:00", mirrorToOutlook: true });
+  await createCalendarEvent(page, { title: "Nästa spegling", start: "2026-10-06T09:00", mirrorToOutlook: true });
   await expect.poll(() => graphCalls.length, { timeout: 15_000 }).toBe(1);
 
   // Klientnavigering via jobb-badgen: kön lever i fliken och får inte laddas om.
