@@ -15,6 +15,10 @@
 #
 # Larmar (exit 1 + macOS-notis) om senaste backupen är äldre än
 # AVA_BACKUP_MAX_AGE_H timmar: en backup som tyst slutat komma är den farliga.
+#
+# AVA_BACKUP_MIRROR=<katalog>: kopiera också de verifierade exporterna dit —
+# den andra backupplatsen (#1254). Se "Backup utanför servern" i
+# docs/deploy-server-first.md.
 set -euo pipefail
 
 DEST="${1:-}"
@@ -62,8 +66,31 @@ done
 
 find . -maxdepth 1 -name 'ava-*.tar.age*' -mtime +"$KEEP_DAYS" -delete
 
+# Andra backupplatsen (#1254): kopiera de verifierade exporterna dit — en annan
+# disk, en NAS eller en molnsynkad mapp, helst på en annan plats. Katalogen
+# måste FINNAS: en omonterad volym får inte tyst bli en lokal katalog.
+if [ -n "${AVA_BACKUP_MIRROR:-}" ]; then
+  MIRROR="$AVA_BACKUP_MIRROR"
+  [ -d "$MIRROR" ] || fail "andra backupplatsen $MIRROR finns inte (omonterad?)"
+  for f in ava-*.tar.age; do
+    [ -f "$f.verified" ] || continue
+    [ -f "$MIRROR/$f" ] && continue
+    cp -p "$f.sha256" "$MIRROR/" && cp -p "$f" "$MIRROR/" || fail "kunde inte kopiera $f till $MIRROR"
+    echo "✓ spegel: $f → $MIRROR"
+  done
+  # Kopiorna kontrolleras, inte bara skrivs: en sönderskriven spegel upptäcks här.
+  for f in "$MIRROR"/ava-*.tar.age; do
+    [ -f "$f" ] || continue
+    (cd "$MIRROR" && sha256 -c "$(basename "$f").sha256" >/dev/null 2>&1) || fail "spegelkopian $(basename "$f") stämmer inte"
+  done
+  find "$MIRROR" -maxdepth 1 -name 'ava-*.tar.age*' -mtime +"$KEEP_DAYS" -delete
+fi
+
 newest=$(ls -1t ava-*.tar.age 2>/dev/null | head -1)
 [ -n "$newest" ] || fail "inga backuper lokalt"
-age_h=$(( ( $(date +%s) - $(stat -f %m "$newest" 2>/dev/null || stat -c %Y "$newest") ) / 3600 ))
+# GNU stat först: på Linux betyder `stat -f` "filsystem" och LYCKAS med annan
+# utdata, så BSD-varianten (macOS) får vara reserven.
+mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
+age_h=$(( ( $(date +%s) - $(mtime "$newest") ) / 3600 ))
 [ "$age_h" -le "$MAX_AGE_H" ] || fail "senaste backupen ($newest) är ${age_h} h gammal"
 echo "✓ senaste: $newest (${age_h} h)"

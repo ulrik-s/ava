@@ -9,11 +9,15 @@
 #
 #   1. starta stacken (postgres + server-first, persistent volym)
 #   2. skapa ett ärende via det RIKTIGA API:t
-#   3. ta backup
+#   3. ta backup — och gör en krypterad export (backup-export.sh) som
+#      provåterställs i en engångs-Postgres (backup-verify.sh): hela
+#      offsite-kedjan, inklusive dokumenten (#1254)
 #   4. FÖRSTÖR datan — släpp tabellinnehållet
-#   5. bekräfta att ärendet är borta (annars bevisar steg 6 ingenting)
-#   6. återställ ur backupen
-#   7. bekräfta att ärendet är tillbaka, och att tjänsten är frisk
+#   5. bekräfta att ärendet OCH dokumentfilen är borta (annars bevisar steg 6
+#      ingenting)
+#   6. återställ databasen ur backupen och dokumenten ur den krypterade
+#      exporten, med runbookens kommandon (docs/runbook-aterstallning.md)
+#   7. bekräfta att ärendet och dokumentet är tillbaka, och att tjänsten är frisk
 #
 # Steg 5 är det som gör övningen ärlig. Utan det skulle en återställning som
 # inte gjorde någonting alls se ut att lyckas.
@@ -72,9 +76,32 @@ echo "▸ Tar backup …"
 bash tooling/scripts/backup-db.sh "$WORK"
 DUMP="$(ls -1 "$WORK"/ava-*.sql.gz | head -1)"
 
-echo "▸ FÖRSTÖR datan — släpper ärendetabellen …"
+echo "▸ Offsite-kedjan (#1254): krypterad export → provåterställning i engångs-Postgres …"
+# Den kedja som används vid en katastrof (backup-export → age → hämtning →
+# dekryptering → återställning) övas här, inte bara backup-db/restore-db. En
+# engångsnyckel: bara den publika hamnar hos backup-export, precis som på servern.
+docker run --rm -v "$WORK":/w alpine sh -c \
+  'apk add -q --no-cache age >/dev/null && age-keygen -o /w/age.key 2>/dev/null && chmod 644 /w/age.key'
+grep 'public key' "$WORK/age.key" | awk '{print $4}' > "$WORK/recipient.txt"
+AVA_CONTENT_VOLUME=ava_content bash tooling/scripts/backup-export.sh "$WORK/recipient.txt" "$WORK/export"
+EXPORT="$(ls -1 "$WORK"/export/ava-*.tar.age | head -1)"
+bash tooling/scripts/backup-verify.sh "$EXPORT" "$WORK/age.key" --expect-matter "$MARKER"
+
+# Markör-dokumentets fil i dokumentvolymen (för steget "dokumenten tillbaka").
+DOC_PATH=$(docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+  "SELECT storage_path FROM documents WHERE file_name = '$MARKER.txt'")
+[ -n "$DOC_PATH" ] || { echo "✗ markör-dokumentet saknas — övningen är meningslös." >&2; exit 1; }
+doc_on_disk() { docker run --rm -v ava_content:/content:ro alpine test -f "/content/$DOC_PATH"; }
+
+echo "▸ FÖRSTÖR datan — släpper ärendetabellen och tömmer dokumentvolymen …"
 docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "TRUNCATE matters CASCADE" >/dev/null
+docker run --rm -v ava_content:/content alpine sh -c 'rm -rf /content/documents'
+if doc_on_disk; then
+  echo "✗ Dokumentet finns kvar efter att volymen tömts — övningen är meningslös." >&2
+  exit 1
+fi
 
 echo "▸ Bekräftar att ärendet ÄR borta (annars bevisar återställningen inget) …"
 GONE=$(docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
@@ -89,6 +116,20 @@ echo "  ✓ Borta"
 echo "▸ Återställer ur backupen …"
 AVA_RESTORE_YES=1 bash tooling/scripts/restore-db.sh "$DUMP"
 
+echo "▸ Återställer dokumenten ur den krypterade exporten (runbook-aterstallning.md, steg 2 och 4) …"
+mkdir -p "$WORK/restore" && cp "$EXPORT" "$WORK/age.key" "$WORK/restore/"
+docker run --rm -v "$WORK/restore":/w alpine sh -c \
+  "apk add -q --no-cache age >/dev/null && age -d -i /w/age.key /w/$(basename "$EXPORT") | tar -C /w -xf -"
+(cd "$WORK/restore" && sha256sum -c SHA256SUMS >/dev/null)
+docker compose "${COMPOSE_ARGS[@]}" stop server-first >/dev/null
+docker run --rm -v ava_content:/content -v "$WORK/restore":/r:ro alpine tar -C /content -xzf /r/content.tar.gz
+docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout 120 server-first >/dev/null
+if ! doc_on_disk; then
+  echo "✗ Dokumentet kom inte tillbaka ($DOC_PATH) — dokumentbackupen går INTE att lita på." >&2
+  exit 1
+fi
+echo "  ✓ Dokumentet är tillbaka"
+
 echo "▸ Bekräftar att ärendet är TILLBAKA …"
 BACK=$(docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
@@ -99,5 +140,6 @@ if [ "$BACK" != "1" ]; then
 fi
 
 echo
-echo "✓ Återställningsövning klar: ärendet $MARKER förstördes och återskapades,"
+echo "✓ Återställningsövning klar: ärendet $MARKER och dess dokument förstördes och"
+echo "  återskapades — databasen ur dumpen, dokumenten ur den krypterade exporten —"
 echo "  och tjänsten är frisk efteråt (/readyz svarade ok)."
