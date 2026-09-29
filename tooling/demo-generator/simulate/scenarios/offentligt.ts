@@ -54,12 +54,20 @@ const FULL_SPREAD: readonly SimEvent[] = [
   { kind: "expense", dayOffset: 19, amountOre: 24_000, description: "Tågbiljett till häktet", vatRate: 600 },
 ];
 
+const COURT_RECEIVABLES: readonly SimEvent[] = [
+  { kind: "courtReceivable", dayOffset: 3, description: "Kostnadsräkning — häktningsförhandling", amountOre: 489_000, settle: true },
+  { kind: "courtReceivable", dayOffset: 20, description: "Ersättning för tidsspillan — resa till häktet", amountOre: 185_000 },
+];
+
 export function buildOffentligtScenario(parties: Parties, opts: OffentligtOpts = {}): SimEvent[] {
   const ev: SimEvent[] = [
     { kind: "note", dayOffset: 0, text: "Förordnad som offentlig försvarare." },
     { kind: "time", dayOffset: 1, minutes: 120, description: "Genomgång av förundersökningsprotokoll" },
   ];
   ev.push(...partyEvents(parties, { klient: 0, domstol: 2 }));
+  // Domstolsbetalningar utan faktura: häktningsförhandlingens kostnadsräkning är
+  // betald och avprickad; tidsspillan väntar på domstolens särskilda beslut.
+  ev.push(...COURT_RECEIVABLES);
   ev.push(
     { kind: "expense", dayOffset: 6, amountOre: 38_000, description: "Reskostnad häktesbesök" },
     { kind: "doc", dayOffset: 4, template: "brevTillOmbud" },

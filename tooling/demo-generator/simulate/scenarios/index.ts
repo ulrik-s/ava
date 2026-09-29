@@ -33,7 +33,21 @@ function offentligtOpts(matterNumber: string | undefined): OffentligtOpts {
   return (matterNumber && OFFENTLIGT_STOPS[matterNumber]) || {};
 }
 
+/**
+ * Domstolens kallelse i VARJE ärende: det är den som ger Händelser och Förslag
+ * något att visa. Ett öppet ärende fick kallelsen för tio dagar sedan, så
+ * förhandlingen ligger framför; ett avslutat fick den tidigt i ärendet.
+ */
+function kallelseEvent(matter: SimMatter): SimEvent {
+  const dayOffset = matter.status === "ACTIVE" ? Math.max(1, matter.startDaysAgo - 10) : 5;
+  return { kind: "doc", dayOffset, template: "kallelse" };
+}
+
 export function buildScenario(matter: SimMatter, parties: Parties, index: number): SimEvent[] {
+  return [...scenarioFor(matter, parties, index), kallelseEvent(matter)];
+}
+
+function scenarioFor(matter: SimMatter, parties: Parties, index: number): SimEvent[] {
   switch (matter.paymentMethod) {
     // 2026-0020 spänner över ett årsskifte + tidsspillan + retroaktiv höjning (#891).
     // 2026-0010 visar domstolens PRUTNING (#936): 15 % nedsättning som BYRÅN bär.

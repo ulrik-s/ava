@@ -135,6 +135,8 @@ export const organizationRouter = router({
   addOffice: protectedProcedure
     .input(
       z.object({
+        /** Valfritt setup-id (demo-generatorn, ADR 0003) — utelämnat genererar store:n. */
+        id: officeIdSchema.optional(),
         name: z.string().min(1),
         address: z.string().optional(),
         phone: z.string().optional(),
@@ -145,10 +147,10 @@ export const organizationRouter = router({
     .mutation(async ({ ctx, input }) => {
       // If new office is main, demote existing main first
       if (input.isMain) await ctx.repos.offices.demoteMains(ctx.user.organizationId);
-      return ctx.repos.offices.create({
+      return ctx.repos.offices.create(omitUndefined({
         ...input,
         organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-      } satisfies Partial<Office>);
+      }) satisfies Partial<Office>);
     }),
 
   updateOffice: protectedProcedure

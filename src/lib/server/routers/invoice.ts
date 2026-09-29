@@ -172,6 +172,8 @@ export const invoiceRouter = router({
   createRadgivning: orgProcedure
     .input(z.object({
       matterId: matterIdSchema, hasFTax: z.boolean().optional(), invoiceDate: z.string().optional(),
+      /** Förfallodatum (demo/fixtures) — utelämnat saknar fakturan ett. */
+      dueDate: z.string().optional(),
       /** Juristen som höll mötet (tidspostens ägare). Default: inloggad användare.
        *  Setup-fält för demo-generatorn/fixtures (ADR 0003), jfr timeEntry.create. */
       userId: userIdSchema.optional(),
@@ -199,7 +201,7 @@ export const invoiceRouter = router({
           matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
           amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }],
           invoiceType: "STANDARD", status: "DRAFT", invoiceDate: when, // "Skapad" tills den skickas (#1138)
-          dueDate: null,
+          dueDate: input.dueDate ? new Date(input.dueDate) : null,
           notes: RADGIVNING_INVOICE_NOTES,
         } satisfies Partial<Invoice>);
         await repos.matters.update(input.matterId, { radgivningBetaldAt: when } satisfies Partial<Matter>);

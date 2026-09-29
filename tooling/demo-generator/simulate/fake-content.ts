@@ -29,8 +29,74 @@ export interface DocTemplate {
    * Bara handlingar som bär parter eller kallelser har en — resten klarar sig
    * med sin summary. Poängen är inte att fylla demon med text, utan att
    * `SuggestionsPanel` och `EventsPanel` ska ha något att visa.
+   *
+   * En funktion när texten beror på ärendet — datum räknade från när handlingen
+   * kom, och parter som skiljer sig mellan ärendena ("Kallelse").
    */
-  body?: string;
+  body?: string | ((v: BodyVars) => string);
+}
+
+/** Det en ärendeberoende brödtext får veta. */
+export interface BodyVars {
+  /** När handlingen kom in. */
+  at: Date;
+  /** Ett tal per ärende — väljer parter ur listorna, så ärendena skiljer sig. */
+  seed: number;
+  /** Brottmål (offentligt uppdrag): huvudförhandling och åklagare i stället för
+   *  muntlig förberedelse och motpartsombud. */
+  criminal: boolean;
+}
+
+/** Mallens brödtext för ärendet, eller undefined om den saknar en. */
+export function bodyOf(t: DocTemplate, v: BodyVars): string | undefined {
+  return typeof t.body === "function" ? t.body(v) : t.body;
+}
+
+const WITNESSES: ReadonlyArray<readonly [string, string]> = [
+  ["Karin Holm", "780415-2231"], ["Per Sandberg", "690921-4412"], ["Lena Ek", "810303-5520"],
+  ["Mats Berglund", "750612-3318"], ["Sara Lind", "880130-6624"], ["Jonas Wikström", "720818-1137"],
+  ["Eva Nyström", "660505-2249"],
+];
+const COUNSEL = ["Helena Kjellberg", "Johan Ahlström", "Maria Ferm", "Olof Tegnér", "Ingrid Palm"];
+const PROSECUTORS = ["Anders Frid", "Cecilia Wahl", "Magnus Öberg"];
+
+/** "2026-10-14" — lokal dag, som domstolarnas kallelser skriver den. */
+function dayOf(d: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function daysAfter(d: Date, days: number): Date {
+  const out = new Date(d);
+  out.setDate(out.getDate() + days);
+  return out;
+}
+
+/** Element `seed` ur listan (listorna är aldrig tomma). */
+function pickFrom<T>(list: readonly T[], seed: number): T {
+  return list[seed % list.length] as T;
+}
+
+/**
+ * Domstolens kallelse: förhandlingen 3–6 veckor efter att kallelsen kom, en
+ * frist för bevisuppgift efter 10 dagar, ett vittne och motpartsombudet (i
+ * brottmål åklagaren). Ger ärendet både händelseförslag och kontaktförslag.
+ */
+function kallelseBody({ at, seed, criminal }: BodyVars): string {
+  const [witness, pnr] = pickFrom(WITNESSES, seed);
+  const hearing = dayOf(daysAfter(at, 21 + (seed % 21)));
+  return [
+    "KALLELSE",
+    criminal
+      ? `Huvudförhandling hålls den ${hearing} kl. 09.30.`
+      : `Muntlig förberedelse hålls den ${hearing} kl. 13.00.`,
+    `Vittne: ${witness} ${pnr}`,
+    criminal
+      ? `Åklagare: Kammaråklagare ${pickFrom(PROSECUTORS, seed)}`
+      : `Motpartens ombud: Advokat ${pickFrom(COUNSEL, seed)}`,
+    "",
+    `Frist för bevisuppgift: senast den ${dayOf(daysAfter(at, 10))}.`,
+  ].join("\n");
 }
 
 /**
@@ -50,6 +116,14 @@ export const FOLDER_BY_RECIPIENT: Record<DocumentRecipient, string> = {
 
 /** Fördefinierade dokument-mallar (nyckel → mall). Utökas per scenariobehov. */
 export const DOC_TEMPLATES: Record<string, DocTemplate> = {
+  // Varje ärende får en kallelse: utan den stod Händelser och
+  // Förslag tomma i de flesta ärenden.
+  kallelse: {
+    documentType: "Kallelse", direction: "INKOMMANDE", recipient: "DOMSTOL",
+    title: "Kallelse från domstolen", summary: "Domstolen kallar till förhandling och förelägger parterna att inkomma med bevisuppgift.",
+    subFolder: "Kallelser",
+    body: kallelseBody,
+  },
   fullmakt: {
     documentType: "Fullmakt", direction: "UTGAENDE", recipient: "KLIENT",
     title: "Fullmakt", summary: "Klienten befullmäktigar ombudet att företräda i ärendet.",

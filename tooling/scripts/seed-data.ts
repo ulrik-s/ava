@@ -240,6 +240,8 @@ export interface SeedDataset {
   billingRuns: Record<string, unknown>[];
   /** Utskickshistorik per utställd faktura (#1021). */
   invoiceDispatches: Record<string, unknown>[];
+  /** Byråns standardvyer för listor (Inställningar → Standardvyer). */
+  orgPreferences: Record<string, unknown>[];
 }
 
 /** Nullbara matter-fält som defaultar till null i seed-raden. */
@@ -291,12 +293,19 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
           paymentMethods: [], billable: true, active: true,
         },
       ],
+      // Etiketterna dokument kan taggas med (Inställningar → Dokument-etiketter).
+      documentTags: [...DOCUMENT_TAGS],
       createdAt: isoDate(-365), updatedAt: isoDate(-30),
     }],
+    // Kontoren som står i dokumentens sidfot (Inställningar → Kontor).
     offices: [{
       id: "o-sthlm", organizationId: orgId, name: "Stockholm — huvudkontor",
-      address: "Storgatan 1, 111 11 Stockholm",
+      address: "Storgatan 1, 111 11 Stockholm", phone: "08-100 100", email: `kontor@${emailDomain}`, isMain: true,
       createdAt: isoDate(-365), updatedAt: isoDate(-365),
+    }, {
+      id: "o-gbg", organizationId: orgId, name: "Göteborg",
+      address: "Kungsportsavenyen 10, 411 36 Göteborg", phone: "031-100 100", email: `goteborg@${emailDomain}`, isMain: false,
+      createdAt: isoDate(-200), updatedAt: isoDate(-200),
     }],
     users: users.map((u) => ({
       id: u.id, organizationId: orgId, email: u.email, name: u.name,
@@ -328,6 +337,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     serviceNotes: [],
     billingRuns: [],
     invoiceDispatches: [],
+    orgPreferences: buildOrgPreferences(orgId, currentUserId),
   };
 
   out.matterContacts = buildMatterContacts(orgId);
@@ -362,6 +372,24 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   out.serviceNotes = buildServiceNotes(orgId, ASSIGN_USERS);
 
   return out;
+}
+
+/** Etiketterna byrån taggar dokument med. */
+const DOCUMENT_TAGS = ["Bevisning", "Dom", "Fullmakt", "Kallelse", "Kostnadsräkning", "Korrespondens", "Yttrande"] as const;
+
+/**
+ * Byråns standardvyer (Inställningar → Standardvyer): sortering för listor som
+ * alla på byrån ser tills de gör egna val. Kolumnnycklarna är listornas egna.
+ */
+function buildOrgPreferences(orgId: string, adminId: string): SeedDataset["orgPreferences"] {
+  const row = (key: string, prefs: Record<string, unknown>) => ({
+    id: `op-${key.replace(/\W+/g, "-")}`, organizationId: orgId, key, prefs, createdById: adminId,
+    createdAt: isoDate(-60), updatedAt: isoDate(-60),
+  });
+  return [
+    row("list.invoices", { sortBy: "invoiceDate", sortDir: "desc" }),
+    row("list.contacts", { sortBy: "name", sortDir: "asc" }),
+  ];
 }
 
 /** Tjänsteanteckningar (#348) — 2-3 per aktivt ärende, spridda författare/datum. */
@@ -1251,6 +1279,7 @@ export function seedToFiles(dataset: SeedDataset): Array<{ path: string; data: R
     ["conflictChecks", "conflictCheck"],
     ["paymentPlans", "paymentPlan"],
     ["paymentPlanReminders", "paymentPlanReminder"],
+    ["orgPreferences", "orgPreference"],
   ];
   const out: Array<{ path: string; data: Record<string, unknown> }> = [];
   for (const [key, entityName] of entityKeys) {

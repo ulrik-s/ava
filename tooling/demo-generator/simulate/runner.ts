@@ -16,7 +16,7 @@ import type { BinarySink } from "../backend-target";
 import { ensureFolderPath } from "../folder-filing";
 import { eventIso } from "./clock";
 import type { SimEvent, SimMatter } from "./events";
-import { DOC_TEMPLATES, FOLDER_BY_RECIPIENT } from "./fake-content";
+import { bodyOf, DOC_TEMPLATES, FOLDER_BY_RECIPIENT } from "./fake-content";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -103,6 +103,11 @@ async function folderFor(ctx: RunCtx, m: SimMatter, path: string[], st: SimState
   return id;
 }
 
+/** Ett stabilt tal per ärende — väljer parter i kallelsen, så ärendena skiljer sig. */
+function seedOf(matterId: string): number {
+  return [...matterId].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+}
+
 async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
   const t = DOC_TEMPLATES[e.template];
   if (!t) return;
@@ -113,7 +118,8 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
   // `body` när mallen har en (#988) — det är den texten extraktionen läser, och
   // den ska stå i FILEN också, annars visar demon förslag som inte går att
   // härleda ur dokumentet man öppnar.
-  const text = t.body ?? t.summary;
+  const body = bodyOf(t, { at: new Date(iso), seed: seedOf(m.id), criminal: m.paymentMethod === "OFFENTLIGT_UPPDRAG" });
+  const text = body ?? t.summary;
   const bytes = await generateDocumentBytes({ id, title: t.title, fileName, documentType: t.documentType, summary: text, mimeType: "application/pdf", storagePath });
   const size = ctx.sink ? ctx.sink(storagePath, bytes) : bytes.byteLength;
   // Filas efter mottagare (#985) — demon hade tidigare allt i roten, så
@@ -128,8 +134,8 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
   ctx.res.documents++;
   // Kontakt- och händelseförslag ur texten (#988). Bara mallar med `body` bär
   // parter/kallelser; för övriga är det en no-op och kostar ett anrop.
-  if (t.body !== undefined) {
-    const res = await ctx.c.document.suggestFromText({ documentId: id, text: t.body }) as { parties: number; events: number };
+  if (body !== undefined) {
+    const res = await ctx.c.document.suggestFromText({ documentId: id, text: body }) as { parties: number; events: number };
     ctx.res.partySuggestions += res.parties;
     ctx.res.eventSuggestions += res.events;
   }
@@ -139,7 +145,7 @@ async function hRadgivning(ctx: RunCtx, m: SimMatter, _e: Any, iso: string): Pro
   // Rådgivningstimmen (#880/#1205): faktureras separat SAMMA DAG som mötet. Fakturan
   // skapar själv mötets tidspost — låst och kopplad till fakturan — så den ligger
   // utanför aconto-basen (rör INTE accruedNetOre) och ingår aldrig i KR/slutreglering.
-  const { invoice } = await ctx.c.invoice.createRadgivning({ matterId: m.id, invoiceDate: iso, userId: m.lawyerId });
+  const { invoice } = await ctx.c.invoice.createRadgivning({ matterId: m.id, invoiceDate: iso, dueDate: dueDateFor(iso), userId: m.lawyerId });
   ctx.res.timeEntries++;
   // Skapas som DRAFT ("Skapad", #1138) — i demohistoriken är den skickad.
   await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
@@ -168,7 +174,7 @@ async function sendAcconto(ctx: RunCtx, m: SimMatter, iso: string, st: SimState,
   };
   const { invoice } = await ctx.c.billingRun.createAcconto({
     matterId: m.id, recipient: "KLIENT", clientShareBips: bips, amountOre,
-    invoiceDate: iso, notes: `Aconto — klientens andel ${bips / 100} % (löpande)`, settlementBreakdown,
+    invoiceDate: iso, dueDate: dueDateFor(iso), notes: `Aconto — klientens andel ${bips / 100} % (löpande)`, settlementBreakdown,
   });
   await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
   st.billedNetOre = st.accruedNetOre;
@@ -263,6 +269,26 @@ async function hInsurerPruning(ctx: RunCtx, m: SimMatter, e: Any, iso: string): 
  * den igen. Utan klientens e-post hoppas steget över; en påhittad adress i
  * demodatat vore sämre än en tom historik.
  */
+/** Byråns betalningsvillkor i demon: 30 dagar netto. Utan förfallodatum blir ingen
+ *  faktura förfallen, och åldersanalysen och bevakningen hade inget att visa. */
+const PAYMENT_TERMS_DAYS = 30;
+
+function dueDateFor(invoiceIso: string): string {
+  return new Date(new Date(invoiceIso).getTime() + PAYMENT_TERMS_DAYS * 86_400_000).toISOString();
+}
+
+/**
+ * En domstolsbetalning utan faktura (ärendets "Domstolsbetalningar"): domstolen
+ * betalar en kostnadsräkning direkt. `settle` → betalningen har kommit och är
+ * avprickad samma dag som händelsen.
+ */
+async function hCourtReceivable(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<void> {
+  const row = await ctx.c.expectedReceivable.create({ matterId: m.id, description: e.description, expectedAmount: e.amountOre });
+  if (e.settle) {
+    await ctx.c.expectedReceivable.settle({ id: row.id, settledAmount: e.amountOre, settledAt: iso, paymentReference: `DV-${iso.slice(0, 10)}` });
+  }
+}
+
 async function recordDispatch(ctx: RunCtx, m: SimMatter, invoiceId: string, recipient: string): Promise<void> {
   if (recipient !== "KLIENT" || !m.clientEmail) return;
   await ctx.c.invoiceDispatch.recordManual({ invoiceId, channel: "email", recipient: m.clientEmail });
@@ -270,7 +296,7 @@ async function recordDispatch(ctx: RunCtx, m: SimMatter, invoiceId: string, reci
 }
 
 async function hFinal(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
-  const { invoice } = await ctx.c.billingRun.createFinal({ matterId: m.id, recipient: e.recipient, deductedBillingRunIds: [], invoiceDate: iso });
+  const { invoice } = await ctx.c.billingRun.createFinal({ matterId: m.id, recipient: e.recipient, deductedBillingRunIds: [], invoiceDate: iso, dueDate: dueDateFor(iso) });
   await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
   st.lastFinal = { id: invoice.id, amount: invoice.amount };
   ctx.res.invoices++;
@@ -372,7 +398,7 @@ async function hWriteOff(ctx: RunCtx, _m: SimMatter, e: Any, iso: string, st: Si
 const HANDLERS: Record<SimEvent["kind"], (ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState) => Promise<void>> = {
   party: hParty, time: hTime, note: hNote, expense: hExpense, doc: hDoc, radgivning: hRadgivning,
   acconto: hAcconto, rateChange: hRateChange, kostnadsrakning: hKostnadsrakning, beslut: hBeslut, overklaga: hOverklaga, verdict: hVerdict, settle: hSettle, insurerPruning: hInsurerPruning, final: hFinal, payment: hPayment,
-  paymentPlan: hPaymentPlan, writeOff: hWriteOff,
+  paymentPlan: hPaymentPlan, writeOff: hWriteOff, courtReceivable: hCourtReceivable,
 };
 
 /** Spela upp ett ärendes scenario kronologiskt. */

@@ -158,6 +158,16 @@ describe("InMemoryQueryEngine — orderBy", () => {
     expect(r.map(x => x.id)).toEqual(["4", "3", "2", "1"]);
   });
 
+  it("boolean desc — true först (huvudkontoret före övriga kontor)", () => {
+    const offices = [
+      { id: "gbg", name: "Göteborg", isMain: false },
+      { id: "sthlm", name: "Stockholm", isMain: true },
+      { id: "malmo", name: "Malmö", isMain: false },
+    ];
+    const r = new InMemoryQueryEngine<(typeof offices)[number]>().query(offices, { orderBy: [{ isMain: "desc" }, { name: "asc" }] });
+    expect(r.map((x) => x.id)).toEqual(["sthlm", "gbg", "malmo"]);
+  });
+
   it("orderBy som array — fallback till första", () => {
     const r = engine.query(rows, { orderBy: [{ status: "asc" }, { count: "desc" }] });
     // ACTIVE först (3 st), sen CLOSED. Inom ACTIVE: count desc.

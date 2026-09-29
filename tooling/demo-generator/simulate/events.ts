@@ -73,7 +73,9 @@ export type SimEvent =
    * `invoice.writeOff`. `partialBips` betalar först en del (2500 = 25 %); resten
    * skrivs av, vilket stänger fakturan som BAD_DEBT.
    */
-  | { kind: "writeOff"; dayOffset: number; partialBips?: number; reason?: string };
+  | { kind: "writeOff"; dayOffset: number; partialBips?: number; reason?: string }
+  /** Domstolsbetalning utan faktura (expectedReceivable) — `settle` prickar av den. */
+  | { kind: "courtReceivable"; dayOffset: number; description: string; amountOre: number; settle?: boolean };
 
 /** Det runnern behöver veta om ärendet för att spela upp dess scenario. */
 export interface SimMatter {
