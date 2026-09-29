@@ -6,7 +6,7 @@
  * registret går som förut via radkön.
  */
 import { describe, expect, it } from "vitest-compat";
-import { isQueuedProcedure, prepareQueuedInput, QUEUED_PROCEDURES } from "@/lib/shared/sync/queued-procedures";
+import { isQueuedProcedure, prepareQueuedInput, QUEUED_PROCEDURES, queuedProcedureEntity } from "@/lib/shared/sync/queued-procedures";
 import { isUuid } from "@/lib/shared/uuid";
 
 describe("isQueuedProcedure", () => {
@@ -14,6 +14,11 @@ describe("isQueuedProcedure", () => {
     expect(isQueuedProcedure("timeEntry.create")).toBe(true);
     expect(isQueuedProcedure("timeEntry.update")).toBe(true);
     expect(isQueuedProcedure("timeEntry.delete")).toBe(true);
+  });
+
+  it("omklassning av ett dokument köas som anrop — servern äger klassificeringen (#1156)", () => {
+    expect(isQueuedProcedure("document.analyze")).toBe(true);
+    expect(queuedProcedureEntity("document.analyze")).toBe("document");
   });
 
   it("allt annat går via radkön (ännu inte flyttat)", () => {

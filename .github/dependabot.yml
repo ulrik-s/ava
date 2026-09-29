@@ -17,8 +17,15 @@ updates:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
     groups:
+      # pdfjs-dist är låst exakt (#1252): den kompilerade server-binären hänger
+      # på interna detaljer i pdfjs (worker i samma tråd, DOMMatrix-shim — se
+      # pdfjs-server-runtime.ts). En uppgradering får en EGEN PR, där
+      # binärtestet (pdf-extract-compiled.test.ts) syns för just den.
+      pdfjs:
+        patterns: ["pdfjs-dist"]
       npm-minor-patch:
         update-types: ["minor", "patch"]
+        exclude-patterns: ["pdfjs-dist"]
 
   # ── Helper-UI (Electron, ADR 0030) ────────────────────────────────────────
   - package-ecosystem: npm

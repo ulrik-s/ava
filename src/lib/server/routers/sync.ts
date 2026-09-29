@@ -13,6 +13,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
+import { analyzeIfNewContent, storagePathBefore } from "../sync/classify-new-content";
 import type { SyncStore } from "../sync/sync-store";
 import { orgProcedure, router } from "../trpc";
 
@@ -50,10 +51,20 @@ export const syncRouter = router({
     .input(z.object({ sinceCursor: z.number().int().nonnegative() }))
     .query(({ ctx, input }) => requireSync(ctx.sync).pull(ctx.orgId, input.sinceCursor)),
 
-  /** Pusha en köad klient-mutation server-auktoritativt. */
+  /**
+   * Pusha en köad klient-mutation server-auktoritativt. Fick ett dokument nytt
+   * innehåll som servern redan har, klassar servern det (#1156).
+   */
   push: orgProcedure
     .input(queuedMutationSchema)
-    .mutation(({ ctx, input }) => requireSync(ctx.sync).push(ctx.orgId, input as QueuedMutation)),
+    .mutation(async ({ ctx, input }) => {
+      const sync = requireSync(ctx.sync);
+      const m = input as QueuedMutation;
+      const before = await storagePathBefore(ctx.repos, m);
+      const result = await sync.push(ctx.orgId, m);
+      await analyzeIfNewContent({ content: ctx.ports.content, analyzer: ctx.ports.documentAnalyzer }, m, before, result);
+      return result;
+    }),
 
   /**
    * Kör om ett köat procedur-anrop auktoritativt som den inloggade (#1265,

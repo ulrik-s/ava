@@ -27,6 +27,9 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "timeEntry.create": Object.freeze({ entity: "timeEntry", idField: "id" }),
   "timeEntry.update": Object.freeze({ entity: "timeEntry" }),
   "timeEntry.delete": Object.freeze({ entity: "timeEntry" }),
+  // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
+  // server-LLM). Klienten kör den inte själv — servern kör om anropet.
+  "document.analyze": Object.freeze({ entity: "document" }),
 });
 
 /** Är `path` en procedur som köas som anrop? (Egna nycklar — inte `__proto__` o.d.) */

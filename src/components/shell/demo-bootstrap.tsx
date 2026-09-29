@@ -27,8 +27,8 @@ import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
+import { inProcessPorts } from "@/lib/client/backend/in-process-ports";
 import type { OidcLoginOutcome, OidcClaims } from "@/lib/client/backend/oidc-principal";
-import { StaticContentStore } from "@/lib/client/backend/static-content-store";
 import { CapabilitiesProvider } from "@/lib/client/capabilities/use-capabilities";
 import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
@@ -37,7 +37,6 @@ import { loadFirmaConfig, patchFirmaConfig, type FirmaConfig } from "@/lib/clien
 import { makeAppQueryClient } from "@/lib/client/query-client";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
 import { trpc } from "@/lib/client/trpc";
-import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
@@ -92,14 +91,8 @@ async function rehydrateGeneratedDocs(): Promise<void> {
 }
 
 function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, recordProcedure?: ProcedureRecorder) {
-  // Content-porten serverar de bundlade dokument-blobbarna (#545, ADR 0025) så
-  // `document.downloadContent` → byte-cachen funkar i demon, via SAMMA
-  // IContentStore-söm som GitContentStore server-side (noopContentStore gav
-  // `read → null` → seed-dokument gick aldrig att öppna).
-  const ports = {
-    ...buildGitPorts(dataStore),
-    content: new StaticContentStore(demoDataBaseUrl(firmaConfig.repo)),
-  };
+  const ports = inProcessPorts(dataStore, firmaConfig);
+
   return trpc.createClient({
     links: [
       new GitBackendRuntime({
