@@ -13,8 +13,10 @@ interface FakeApi {
   titles: Record<string, string>;
   failLoad: boolean;
   layoutListener: (() => void) | null;
+  maximized: boolean;
+  maximizeListener: ((e: { isMaximized: boolean }) => void) | null;
 }
-const fake: FakeApi = { added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null };
+const fake: FakeApi = { added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListener: null };
 let readyCount = 0;
 
 vi.mock("dockview-react", () => ({
@@ -33,6 +35,10 @@ vi.mock("dockview-react", () => ({
       clear: () => { panels.clear(); },
       toJSON: () => ({ saved: true, grid: {} }),
       onDidLayoutChange: (l: () => void) => { fake.layoutListener = l; },
+      hasMaximizedGroup: () => fake.maximized,
+      width: 1200, height: 800,
+      getGroup: () => undefined,
+      onDidMaximizedGroupChange: (l: (e: { isMaximized: boolean }) => void) => { fake.maximizeListener = l; return { dispose: () => {} }; },
     };
     // En gång per montering, som dockview.
     if (readyCount++ === 0 || !fake.layoutListener) onReady({ api });
@@ -86,6 +92,7 @@ const renderWs = () => render(<DockWorkspace page="matter" panels={PANELS} defau
 beforeEach(() => {
   vi.clearAllMocks();
   fake.added = []; fake.loaded = []; fake.titles = {}; fake.failLoad = false; fake.layoutListener = null;
+  fake.maximized = false; fake.maximizeListener = null;
   readyCount = 0;
   prefsData.user = null; prefsData.org = null;
   role.value = "LAWYER";
@@ -129,6 +136,25 @@ describe("DockWorkspace — spara", () => {
     act(() => fake.layoutListener?.());
     await new Promise((r) => setTimeout(r, 900));
     expect(save).not.toHaveBeenCalled();
+  });
+
+  // #1291: under maximering serialiserar dockview de dolda gruppernas GAMLA
+  // pixlar — har fönstret bytt storlek blir den sparade layouten skev.
+  it("sparar INTE medan en grupp är maximerad; efter återställning sparas som vanligt", async () => {
+    renderWs();
+    fireEvent.pointerDown(screen.getByTestId("dock"));
+    fake.maximized = true;
+    act(() => fake.layoutListener?.());
+    await new Promise((r) => setTimeout(r, 900));
+    expect(save).not.toHaveBeenCalled();
+    fake.maximized = false;
+    act(() => fake.layoutListener?.());
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1), { timeout: 2000 });
+  });
+
+  it("lyssnar på maximeringar (proportionsvakten, #1291)", () => {
+    renderWs();
+    expect(fake.maximizeListener).not.toBeNull();
   });
 
   it("efter egen ändring: debouncad sparning med version", async () => {

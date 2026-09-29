@@ -25,6 +25,7 @@ import {
   LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, withoutMaximized, type SerializedLayout,
 } from "@/lib/shared/layout/dock-layout";
 import { MaximizeAction } from "./maximize-action";
+import { keepProportionsAcrossMaximize } from "./maximize-proportions";
 import type { PanelDef } from "./panel-def";
 import { PhonePanels } from "./phone-panels";
 
@@ -133,7 +134,10 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { scr
           onReady={({ api }) => {
             apiRef.current = api;
             applyLayout(api, stored, defs, () => defaultLayout(adder(api, defs), screen));
-            api.onDidLayoutChange(() => layout.onChange(api.toJSON()));
+            keepProportionsAcrossMaximize(api);
+            // Under maximering serialiserar dockview de dolda gruppernas gamla
+            // pixlar; sparas först när gruppen återställts (#1291).
+            api.onDidLayoutChange(() => { if (!api.hasMaximizedGroup()) layout.onChange(api.toJSON()); });
           }}
         />
       </PanelDefs.Provider>

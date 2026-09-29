@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest-compat";
 import {
-  withoutMaximized,
+  groupShares, withoutMaximized,
   LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, screenClassFor, type SerializedLayout,
 } from "@/lib/shared/layout/dock-layout";
 
@@ -74,5 +74,56 @@ describe("withoutMaximized (#1263)", () => {
   it("lämnar en layout utan maximering orörd (samma objekt)", () => {
     const layout = { grid: { width: 1 }, panels: {} };
     expect(withoutMaximized(layout)).toBe(layout);
+  });
+});
+
+// #1291: gruppernas andel av ytan, så att en återställd maximering kan skalas
+// om till fönstrets nya storlek i stället för att få gamla pixelstorlekar.
+describe("groupShares — varje grupps andel av ytan", () => {
+  const sized = (id: string, size: number) => ({ type: "leaf" as const, data: { id, views: [id] }, size });
+
+  it("två kolumner, höger kolumn delad: andelar i bredd och höjd", () => {
+    const shares = groupShares({
+      root: { type: "branch", data: [sized("g1", 600), { type: "branch", data: [sized("g2", 200), sized("g3", 600)], size: 600 }], size: 800 },
+      width: 1200, height: 800, orientation: "HORIZONTAL",
+    });
+    expect(shares.get("g1")).toEqual({ width: 0.5, height: 1 });
+    expect(shares.get("g2")).toEqual({ width: 0.5, height: 0.25 });
+    expect(shares.get("g3")).toEqual({ width: 0.5, height: 0.75 });
+  });
+
+  it("vertikal rot: barnen staplas uppifrån och ned", () => {
+    const shares = groupShares({
+      root: { type: "branch", data: [sized("top", 300), sized("bottom", 100)], size: 1000 },
+      width: 1000, height: 400, orientation: "VERTICAL",
+    });
+    expect(shares.get("top")).toEqual({ width: 1, height: 0.75 });
+    expect(shares.get("bottom")).toEqual({ width: 1, height: 0.25 });
+  });
+
+  it("tre nivåer djupt", () => {
+    const shares = groupShares({
+      root: { type: "branch", data: [
+        sized("a", 500),
+        { type: "branch", data: [sized("b", 400), { type: "branch", data: [sized("c", 250), sized("d", 250)], size: 400 }], size: 500 },
+      ], size: 800 },
+      width: 1000, height: 800, orientation: "HORIZONTAL",
+    });
+    expect(shares.get("c")).toEqual({ width: 0.25, height: 0.5 });
+    expect(shares.get("d")).toEqual({ width: 0.25, height: 0.5 });
+  });
+
+  it("en ensam grupp tar hela ytan", () => {
+    expect(groupShares({ root: sized("only", 800), width: 1200, height: 800, orientation: "HORIZONTAL" }).get("only"))
+      .toEqual({ width: 1, height: 1 });
+  });
+
+  it("noll-yta eller nod utan storlek → inga andelar (inget att skala efter)", () => {
+    expect(groupShares({ root: sized("x", 0), width: 0, height: 0, orientation: "HORIZONTAL" }).size).toBe(0);
+    const noSize = groupShares({
+      root: { type: "branch", data: [{ type: "leaf", data: { id: "n", views: ["n"] } }] },
+      width: 100, height: 100, orientation: "HORIZONTAL",
+    });
+    expect(noSize.get("n")).toEqual({ width: 0, height: 1 });
   });
 });
