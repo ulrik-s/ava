@@ -128,3 +128,24 @@ brottmål vilar i vart och ett av KR-maskinens lägen (#828 steg 6, PR #998), oc
 `simulate-orchestrate.test.ts` påstår om demons data att alla fyra finns
 samtidigt. Undantaget är `beslutSlutgiltigt: true`, som nås i ett steg från det
 överklagade ärendet och täcks av e2e i stället.
+
+## Tillägg: taxeärendets yrkande (#1024, #1182)
+
+Kostnadsräkningens **körning** och **dokument** yrkar samma belopp. Servern
+räknar `workValueOreAtRun` med samma funktion som dokumentet
+(`kostnadsrakningClaimInclVat`, via `valueKrRun`), så beslut och prutning räknas
+mot det domstolen fick se. I ett taxeärende (offentligt uppdrag, brottmålstaxan)
+består yrkandet av:
+
+- **taxan** för huvudförhandlingen. Den omfattar allt arbete (DVFS 2025:6 5 §),
+  och arbetsraderna är därför informativa,
+- **tidsspillan utöver den timme som ingår** (6 §). Timmen tas i första hand
+  från tid före 08 och efter 18, och resten yrkas på DVFS 2025:4-normerna (samma
+  `tidsspillanUtover` som förordnandemålen),
+- **advokatberedskapen** per dygn. Den ligger utanför taxan.
+
+Huvudförhandlingens tid och nivå kommer från dialogen och sparas på ärendet
+(`taxaHuvudforhandlingMin`, `taxaLevel`, `taxaHufStart`). Utan HUF-tid, eller
+över taxans maxgräns (1 §, 8 §), **vägras** inskicket (PRECONDITION_FAILED).
+Det är bättre än att yrka ett belopp som inte stämmer. Över maxgränsen räknas
+ärendet löpande: avmarkera taxeärende i dialogen.

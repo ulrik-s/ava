@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import type { TaxaResult } from "@/lib/shared/brottmalstaxa";
-import type { ForordnandeResult } from "@/lib/shared/forordnandetaxa";
+import type { ForordnandeResult, TidsspillanUtover } from "@/lib/shared/forordnandetaxa";
 import { toLocalTime, toSwedishLongDate } from "@/lib/shared/iso-date";
 import { buildKostnadsrakningContext, withDocumentFields, type BuildInput } from "@/lib/shared/kostnadsrakning";
 import { buildKrDocument, cityFromAddress, displayWebsite, vatNumberFromOrgNumber, type KrDocumentInput } from "@/lib/shared/kostnadsrakning-document";
@@ -189,15 +189,17 @@ describe("arbetsredogörelsen", () => {
 describe("taxeärenden", () => {
   const taxa = (kind: TaxaResult["kind"]): TaxaResult => ({ kind, level: 1, intervalLabel: "2 tim - 2 tim 14 min", ersattningExclVat: 563_500, gransvardeExclVat: 0, notes: [] });
   const huf = { start: new Date("2026-09-22T09:00:00"), end: new Date("2026-09-22T11:10:00"), minutes: 130, rateOrePerH: 0, amountOre: 0 };
+  /** Ingen tidsspillan utöver taxan. */
+  const noExtra: TidsspillanUtover = { ingarOvrigMinutes: 0, ingarVardagMinutes: 0, extraVardagMinutes: 0, extraOvrigMinutes: 0, vardagRateOre: 0, ovrigRateOre: 0, amountOre: 0 };
 
   it("brottmålstaxa: taxeraden + noter, redogörelsen 'ingår i taxan'", () => {
-    const d = buildKrDocument({ ...BASE, huf, basis: { kind: "brottmalstaxa", level: 1, taxa: taxa("taxa-applies") } });
+    const d = buildKrDocument({ ...BASE, huf, basis: { kind: "brottmalstaxa", level: 1, taxa: taxa("taxa-applies"), tidsspillan: noExtra } });
     expect(d.summaryRows.map((r) => [r.label, r.quantity, nb(r.amount)])).toEqual([["ARVODE ENLIGT BROTTMÅLSTAXAN", "2,17 tim", "5 635,00 kr"]]);
     expect(d.notes).toEqual(["Huvudförhandling 2026-09-22 kl. 09:00–11:10.", "Brottmålstaxa (DVFS 2025:6), nivå 1, intervall 2 tim - 2 tim 14 min."]);
     expect(d.specSections[0]?.heading).toBe("Arvode (ingår i taxan)");
   });
   it("brottmålstaxa över maxgränsen: ingen taxerad, varningsnot", () => {
-    const d = buildKrDocument({ ...BASE, huf, basis: { kind: "brottmalstaxa", level: 1, taxa: taxa("exceeds-max") } });
+    const d = buildKrDocument({ ...BASE, huf, basis: { kind: "brottmalstaxa", level: 1, taxa: taxa("exceeds-max"), tidsspillan: noExtra } });
     expect(d.summaryRows).toEqual([]);
     expect(d.notes[1]).toMatch(/överstiger taxans maxgräns/);
   });

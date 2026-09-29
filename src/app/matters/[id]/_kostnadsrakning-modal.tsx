@@ -60,8 +60,19 @@ interface Props extends KrDocumentFields {
   /** Skickar in kostnadsräkningen (skapar körningen) och ger dess id. Anropas
    *  EN gång när PDF:en faktiskt renderats — inte när modalen stängs (Avbryt/
    *  Escape/X skapade förut en inskickad KR, #1121). Id:t länkar dokumentet till
-   *  körningen så att "Ångra kostnadsräkning" kan ta bort det (#1230). */
-  createRun: () => Promise<BillingRunId>;
+   *  körningen så att "Ångra kostnadsräkning" kan ta bort det (#1230). Dialogens
+   *  huvudförhandling, nivå och taxeval följer med: servern yrkar samma taxa som
+   *  dokumentet (#1024). */
+  createRun: (claim: KrRunClaim) => Promise<BillingRunId>;
+}
+
+/** Det dialogen yrkar på — servern räknar körningens belopp ur samma underlag. */
+export interface KrRunClaim {
+  hufStart: string;
+  hufEnd: string;
+  taxaLevel: TaxaLevel;
+  isTaxeArende: boolean;
+  hasFTax: boolean;
 }
 
 function toDatetimeLocalValue(d: Date): string {
@@ -249,7 +260,9 @@ function useKostnadsrakningModal(props: Props) {
         },
       });
       const storagePath = `documents/content/${docId}.pdf`;
-      const billingRunId = await props.createRun();
+      const billingRunId = await props.createRun({
+        hufStart: new Date(hufStart).toISOString(), hufEnd: new Date(hufEnd).toISOString(), taxaLevel: level, isTaxeArende: isTaxe, hasFTax,
+      });
       // Innehåll: in-memory blob-cache (öppna nu) + FSA (self-hosted) + demo-slab
       // (överlever reload). Metadata-raden skapas separat av recordDocument.
       await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });

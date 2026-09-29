@@ -46,7 +46,7 @@ import { BILLING_RUN_RECIPIENT_LABELS, BILLING_RUN_TYPE_LABELS, BILLING_RUN_STAT
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { BillingSummary } from "./_billing-summary";
-import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
+import { type KrRunClaim, KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { RadgivningEntryWarning } from "./_radgivning-entry";
 import { SettlementDialog } from "./_settlement-dialog";
 import { VerdictDialog } from "./_verdict-dialog";
@@ -407,8 +407,8 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
   // Skapa (och frys) först när PDF:en faktiskt genererats — att stänga modalen
   // (Avbryt/Escape/X) skapade förut en inskickad KR av misstag (#1121). Körningens
   // id länkar sedan dokumentet (#1230).
-  const createRun = async (): Promise<BillingRunId> => {
-    const { run } = await createKr.mutateAsync({ matterId });
+  const createRun = async (claim: KrRunClaim): Promise<BillingRunId> => {
+    const { run } = await createKr.mutateAsync({ matterId, ...claim });
     onRecorded();
     return run.id;
   };

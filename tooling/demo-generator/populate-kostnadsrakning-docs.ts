@@ -38,26 +38,43 @@ function orgFields(org: Any): Record<string, string> {
   return Object.fromEntries(keys.filter((k) => typeof org?.[k] === "string").map((k) => [k, org[k] as string]));
 }
 
+/**
+ * Huvudförhandlingen och taxan ur ärendet (#1024): ett taxeärende (offentligt
+ * uppdrag) yrkar brottmålstaxan på den sparade HUF-tiden — samma underlag som
+ * körningen räknades på (`createKostnadsrakning`), så dokumentet och "yrkat"
+ * stämmer. Övriga har ingen huvudförhandling i dessa KR:er.
+ */
+function taxaFields(m: Any, date: Date): Record<string, unknown> {
+  const isTaxe = m.paymentMethod === "OFFENTLIGT_UPPDRAG" && m.isTaxeArende === true && m.taxaHuvudforhandlingMin != null;
+  if (!isTaxe) return { hufStart: date, hufEnd: date, isTaxeArende: false };
+  const start = m.taxaHufStart ? new Date(m.taxaHufStart) : date;
+  return {
+    hufStart: start, hufEnd: new Date(start.getTime() + Number(m.taxaHuvudforhandlingMin) * 60_000),
+    isTaxeArende: true, taxaLevel: m.taxaLevel ?? 1,
+  };
+}
+
 /** Bygg KR-contexten för en run ur ärendets tids-/utläggsposter (#864). */
 async function krContextFor(c: Any, run: Any): Promise<Any> {
   const matter = run.matter ?? {};
   const date = run.createdAt ? new Date(run.createdAt) : new Date();
-  const [te, ex, org] = await Promise.all([
+  const [te, ex, org, full] = await Promise.all([
     c.timeEntry.list({ matterId: matter.id, pageSize: 100 }),
     c.expense.list({ matterId: matter.id }),
     c.organization.getSettings(),
+    c.matter.getById({ id: matter.id }),
   ]);
   const result = buildKostnadsrakningContext({
     matter: { matterNumber: matter.matterNumber, title: matter.title, clientName: matter.clientName ?? undefined, radgivningPaid: matter.paymentMethod === "RATTSHJALP", courtCaseNumber: matter.courtCaseNumber ?? undefined },
     // Brevhuvud + sidfot (#1218) ur byråinställningarna.
     organization: orgFields(org),
     defender: { name: matter.responsibleLawyerName ?? "Ansvarig jurist" },
-    hufStart: date, hufEnd: date, // ingen huvudförhandling i dessa KR:er
+    ...taxaFields(full, date),
     // Yrkandet framställdes när KR-runnen skapades (#980) — det styr både
     // normvalet och räkningens datum i dokumentet. Explicit, så det inte råkar
     // följa med hufEnd om de fälten någon gång får riktiga förhandlingstider.
     yrkandeDate: date,
-    isTaxeArende: false, hasFTax: true,
+    hasFTax: true,
     timeEntries: (te.entries ?? []) as Any,
     // Posterna run:en frös är dess underlag; övriga låsta (t.ex. rådgivningen) utelämnas (#1205).
     ownBillingRunId: run.id,

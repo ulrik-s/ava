@@ -88,6 +88,17 @@ describe("KostnadsrakningModal", () => {
     expect(recordMutateAsync.mock.calls[0]?.[0]).toMatchObject({ matterId: "m1", billingRunId: "run-9" });
   });
 
+  it("Generera: skickar dialogens huvudförhandling, nivå och taxeval med inskicket — servern yrkar samma taxa (#1024)", async () => {
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-9"));
+    render(<KostnadsrakningModal {...baseProps} initialLevel={2} createRun={createRun} />);
+    fireEvent.click(screen.getByText("Generera + spara"));
+    await waitFor(() => expect(createRun).toHaveBeenCalledOnce());
+    const sent = createRun.mock.calls[0]?.[0] as { hufStart: string; hufEnd: string; taxaLevel: number; isTaxeArende: boolean };
+    expect(sent).toMatchObject({ taxaLevel: 2, isTaxeArende: true, hasFTax: true });
+    expect(new Date(sent.hufStart).toISOString()).toBe(new Date("2026-03-01T09:00").toISOString());
+    expect(new Date(sent.hufEnd).getTime()).toBeGreaterThan(new Date(sent.hufStart).getTime());
+  });
+
   it("Escape stänger modalen", () => {
     const onClose = vi.fn();
     render(<KostnadsrakningModal {...baseProps} onClose={onClose} />);

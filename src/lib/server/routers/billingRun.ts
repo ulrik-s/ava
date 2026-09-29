@@ -67,6 +67,7 @@ import {
   type SettlementBreakdown, type SettlementRowKind, type SettlementView,
 } from "@/lib/shared/settlement-view";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
+import { valueKrRun } from "../billing/kr-run-valuation";
 import { eventTime, logMatterNote } from "../billing/matter-note";
 import { removeVoidedKrDocuments } from "../billing/void-kr-documents";
 import { emit, type EmitCtx } from "../events/emit";
@@ -86,6 +87,13 @@ import { router, orgProcedure } from "../trpc";
 
 
 async function fetchUnfrozenWork(repos: Repositories, matterId: MatterId): Promise<UnfrozenWork> {
+  const te = await repos.timeEntries.listUnfrozenForMatter(matterId);
+  const ex = await repos.expenses.listUnfrozenForMatter(matterId);
+  return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
+}
+
+/** Som `fetchUnfrozenWork`, med hela raderna — kostnadsräkningens värdering läser datum och beskrivning (#1024). */
+async function fetchUnfrozenKrWork(repos: Repositories, matterId: MatterId) {
   const te = await repos.timeEntries.listUnfrozenForMatter(matterId);
   const ex = await repos.expenses.listUnfrozenForMatter(matterId);
   return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
@@ -671,22 +679,33 @@ export const billingRunRouter = router({
     }),
 
   createKostnadsrakning: orgProcedure
-    .input(z.object({ matterId: matterIdSchema, notes: z.string().nullish() }))
+    .input(z.object({
+      matterId: matterIdSchema, notes: z.string().nullish(),
+      // Dialogens huvudförhandling + nivå (#1024) — brottmålstaxan räknas på dem.
+      hufStart: z.string().datetime().optional(),
+      hufEnd: z.string().datetime().optional(),
+      taxaLevel: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+      isTaxeArende: z.boolean().optional(),
+      hasFTax: z.boolean().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
         await assertFlowAction(tx, ctx.orgId, input.matterId, "KOSTNADSRAKNING");
-        const work = await fetchUnfrozenWork(tx, input.matterId);
+        const work = await fetchUnfrozenKrWork(tx, input.matterId);
         const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
         if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
         // Domstolen ersätter enligt Domstolsverkets normer — rättshjälp (#839)
         // och offentligt uppdrag (#1003) värderas per kategori-norm på yrkande-
         // dagen (retroaktiv norm, #891), inte på posternas egna á-priser.
-        // TAXA-ÄRENDEN undantas: där styr brottmålstaxan arvodet och posterna är
-        // informativa — en omvärdering per timnorm vore ett yrkande taxan aldrig
-        // ger. Deras körning behåller posternas värde (status quo; jfr #1003).
-        // Brutto matchar kostnadsräkningens PDF (#782).
+        // TAXA-ÄRENDEN (#1024): brottmålstaxan + tidsspillan utöver timmen +
+        // beredskapen, räknat med SAMMA funktion som dokumentet.
         // Avrundat per rad till hela kronor som kostnadsräkningens dokument (#1218).
-        const grossValue = krGrossOre(work, matterKrArvodeRows(matter, work, new Date()));
+        const now = new Date();
+        const valuation = valueKrRun(matter, work, input, now);
+        if (Object.keys(valuation.matterPatch).length > 0) await tx.matters.update(input.matterId, valuation.matterPatch);
+        const grossValue = valuation.kind === "taxa"
+          ? valuation.grossOre
+          : krGrossOre(work, matterKrArvodeRows({ ...matter, ...valuation.matterPatch }, work, now));
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
           status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,
