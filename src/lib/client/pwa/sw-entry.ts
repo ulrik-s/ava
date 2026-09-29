@@ -18,6 +18,8 @@ declare const __AVA_SW_PRECACHE__: readonly string[];
 interface SwExtendableEvent {
   waitUntil(promise: Promise<unknown>): void;
   readonly data?: unknown;
+  /** `message`: avsändarens origin (ExtendableMessageEvent). */
+  readonly origin?: string;
 }
 
 /** Händelsen `fetch` — den del som används. */
@@ -67,7 +69,12 @@ const handlers = createSwHandlers(
 
 sw.addEventListener("install", (event) => { event.waitUntil(handlers.install()); });
 sw.addEventListener("activate", (event) => { event.waitUntil(handlers.activate()); });
-sw.addEventListener("message", (event) => { event.waitUntil(handlers.handleMessage(event.data)); });
+sw.addEventListener("message", (event) => {
+  // Bara appens egna flikar får styra workern. Kontrollen står här (där
+  // händelsen tas emot) OCH i handleMessage (enhetstestad).
+  if (event.origin !== sw.location.origin) return;
+  event.waitUntil(handlers.handleMessage(event.data, event.origin));
+});
 sw.addEventListener("fetch", (event) => {
   const response = handlers.handleFetch(event.request);
   if (response) event.respondWith(response);

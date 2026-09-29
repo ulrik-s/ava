@@ -170,19 +170,27 @@ describe("activate", () => {
 });
 
 describe("handleMessage", () => {
-  it("SKIP_WAITING → skipWaiting", async () => {
+  it("SKIP_WAITING från egen origin → skipWaiting", async () => {
     const h = harness();
-    await h.handlers.handleMessage({ type: "SKIP_WAITING" });
+    await h.handlers.handleMessage({ type: "SKIP_WAITING" }, ORIGIN);
     expect(h.deps.skipWaiting).toHaveBeenCalledTimes(1);
   });
   it("okända meddelanden ignoreras", async () => {
     const h = harness();
-    await h.handlers.handleMessage({ type: "NÅGOT" });
-    await h.handlers.handleMessage(null);
-    await h.handlers.handleMessage("SKIP_WAITING");
+    await h.handlers.handleMessage({ type: "NÅGOT" }, ORIGIN);
+    await h.handlers.handleMessage(null, ORIGIN);
+    await h.handlers.handleMessage("SKIP_WAITING", ORIGIN);
+    expect(h.deps.skipWaiting).not.toHaveBeenCalled();
+  });
+  it("meddelande från en annan origin (eller utan origin) ignoreras", async () => {
+    const h = harness();
+    await h.handlers.handleMessage({ type: "SKIP_WAITING" }, "https://evil.example");
+    await h.handlers.handleMessage({ type: "SKIP_WAITING" }, "");
+    await h.handlers.handleMessage({ type: "SKIP_WAITING" }, "null");
     expect(h.deps.skipWaiting).not.toHaveBeenCalled();
   });
 });
+
 
 describe("handleFetch — bypass", () => {
   it("returnerar null för /api (browsern tar förfrågan själv)", () => {
