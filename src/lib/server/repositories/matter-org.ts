@@ -7,8 +7,8 @@
  */
 
 import { eq } from "drizzle-orm";
-import type { InvoiceId, MatterId, OrganizationId, PaymentPlanId } from "@/lib/shared/schemas/ids";
-import { invoices, matters, paymentPlans } from "../db/schema";
+import type { DocumentId, InvoiceId, MatterId, OrganizationId, PaymentPlanId } from "@/lib/shared/schemas/ids";
+import { documents, invoices, matters, paymentPlans } from "../db/schema";
 import type { AppDb } from "../db/types";
 
 export async function matterOrg(db: AppDb, matterId: MatterId | null | undefined): Promise<OrganizationId | undefined> {
@@ -45,4 +45,19 @@ export async function planOrg(db: AppDb, planId: PaymentPlanId | null | undefine
     .where(eq(paymentPlans.id, planId))
     .limit(1);
   return invoiceOrg(db, plan?.invoiceId);
+}
+
+/**
+ * Org via dokumentet (#1242): dokument → ärende → org. Kontakt- och
+ * händelseförslagen bär bara `documentId`; utan det här loggades de aldrig i
+ * change_log och gick inte att byråavgränsa vid synk-push.
+ */
+export async function documentOrg(db: AppDb, documentId: DocumentId | null | undefined): Promise<OrganizationId | undefined> {
+  if (!documentId) return undefined;
+  const [doc] = await db
+    .select({ matterId: documents.matterId })
+    .from(documents)
+    .where(eq(documents.id, documentId))
+    .limit(1);
+  return matterOrg(db, doc?.matterId);
 }

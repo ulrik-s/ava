@@ -80,7 +80,11 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
 
   it("push update på surface-entitet med stale baseVersion → conflict", async () => {
     const inv = uuidv7();
-    await repos.invoices.create({ id: inv, organizationId: ORG, matterId: uuidv7(), amount: 50000, invoiceDate: new Date(), status: "DRAFT" } as never);
+    // Fakturan hör till byrån via ärendet — utan ett riktigt ärende stoppas den
+    // redan av byråavgränsningen (#1242), före versionskontrollen som prövas här.
+    const matter = uuidv7();
+    await repos.matters.create({ id: matter, organizationId: ORG, title: "Fakturaärende", status: "ACTIVE", matterNumber: "2026-0010" } as never);
+    await repos.invoices.create({ id: inv, organizationId: ORG, matterId: matter, amount: 50000, invoiceDate: new Date(), status: "DRAFT" } as never);
     const res = await sync.push(ORG, mut("invoice", "update", { id: inv, status: "SENT" }, 99));
     expect(res.status).toBe("conflict");
     expect(res).toMatchObject({ reason: "stale" });

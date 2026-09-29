@@ -62,6 +62,15 @@ export class InMemoryRepository<Row extends RowBase> implements Repository<Row> 
     return (await this.delegate.update({ where: { id }, data })) as Row;
   }
 
+  /**
+   * Byrån ur radens kolumn. Minnesvägen (demo/offline) har en enda byrå och
+   * ingen synk-push; härledning via ärendet finns i Drizzle-repona (#1242).
+   */
+  async organizationOf(row: unknown): Promise<string | undefined> {
+    if (typeof row !== "object" || row === null || !("organizationId" in row)) return undefined;
+    return typeof row.organizationId === "string" ? row.organizationId : undefined;
+  }
+
   /** Hård delete — se `Repository.hardDelete` (medvetet ADR 0017-undantag). */
   async hardDelete(id: Row["id"]): Promise<void> {
     await this.delegate.delete({ where: { id } });
