@@ -111,8 +111,6 @@ export class DrizzleDocumentRepository
   }
 
   async reassignFolder(fromFolderId: DocumentFolderId, toFolderId: DocumentFolderId | null): Promise<void> {
-    await this.db.update(documents)
-      .set({ folderId: toFolderId })
-      .where(eq(documents.folderId, fromFolderId));
+    await this.updateWhere(eq(documents.folderId, fromFolderId), { folderId: toFolderId });
   }
 }

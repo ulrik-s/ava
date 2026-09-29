@@ -132,8 +132,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
 
   async flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void> {
     if (!ids.length) return;
-    await this.db.update(timeEntries).set({ invoiceId })
-      .where(inArray(timeEntries.id, ids));
+    await this.updateWhere(inArray(timeEntries.id, ids), { invoiceId });
   }
 
   async listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]> {
@@ -233,26 +232,21 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
   }
 
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
-    await this.db.update(timeEntries)
-      .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
-      .where(and(eq(timeEntries.matterId, matterId), isUnlocked()));
+    await this.updateWhere(and(eq(timeEntries.matterId, matterId), isUnlocked()), { frozenAt: now, frozenByBillingRunId: billingRunId });
   }
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
     // Okopplade poster låses upp helt; de som är kvar är kopplade till en
     // faktura (rådgivningstimmen, #1235) och behåller `frozenAt`.
-    await this.db.update(timeEntries)
-      .set({ frozenAt: null, frozenByBillingRunId: null })
-      .where(and(eq(timeEntries.frozenByBillingRunId, billingRunId), isNull(timeEntries.invoiceId)));
-    await this.db.update(timeEntries)
-      .set({ frozenByBillingRunId: null })
-      .where(eq(timeEntries.frozenByBillingRunId, billingRunId));
+    await this.updateWhere(
+      and(eq(timeEntries.frozenByBillingRunId, billingRunId), isNull(timeEntries.invoiceId)),
+      { frozenAt: null, frozenByBillingRunId: null },
+    );
+    await this.updateWhere(eq(timeEntries.frozenByBillingRunId, billingRunId), { frozenByBillingRunId: null });
   }
 
   async freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (ids.length === 0) return;
-    await this.db.update(timeEntries)
-      .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
-      .where(and(inArray(timeEntries.id, ids), isUnlocked()));
+    await this.updateWhere(and(inArray(timeEntries.id, ids), isUnlocked()), { frozenAt: now, frozenByBillingRunId: billingRunId });
   }
 }

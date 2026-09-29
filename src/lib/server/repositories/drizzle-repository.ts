@@ -16,7 +16,7 @@
  * tabellnamnet. Bara org-scopade rader loggas (change_log är per-org).
  */
 
-import { and, eq, getTableName, isNull, type AnyColumn } from "drizzle-orm";
+import { and, eq, getTableName, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { ENTITY_NAME_BY_SOURCE_KEY } from "../data-store/in-memory/entity-source-keys";
@@ -130,6 +130,18 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
     const [raw] = await this.db.delete(this.table).where(eq(this.table.id, id)).returning();
     const row = this.asRow(raw);
     if (row) await this.logChange(withNextVersion(row), "delete");
+  }
+
+  /**
+   * Bulkändring (#1319): varje berörd rad får ny version och loggas i
+   * change_log, precis som vid `update`. Annars når ändringen (en
+   * faktureringskörning som fryser poster) aldrig andra enheter via pull.
+   */
+  protected async updateWhere(where: SQL | undefined, patch: Record<string, unknown>): Promise<void> {
+    const rows: unknown[] = await this.db.update(this.table)
+      .set({ ...patch, version: sql`${this.table.version} + 1`, updatedAt: this.now() } as never)
+      .where(where).returning();
+    for (const row of rows) await this.logChange(row, "update");
   }
 
   /**

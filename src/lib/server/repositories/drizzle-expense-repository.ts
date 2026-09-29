@@ -80,8 +80,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
 
   async flagBilled(ids: ExpenseId[], invoiceId: InvoiceId): Promise<void> {
     if (!ids.length) return;
-    await this.db.update(expenses).set({ invoiceId })
-      .where(inArray(expenses.id, ids));
+    await this.updateWhere(inArray(expenses.id, ids), { invoiceId });
   }
 
   async listUnfrozenForMatter(matterId: MatterId): Promise<Expense[]> {
@@ -107,22 +106,16 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
   }
 
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
-    await this.db.update(expenses)
-      .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
-      .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId)));
+    await this.updateWhere(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId)), { frozenAt: now, frozenByBillingRunId: billingRunId });
   }
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
-    await this.db.update(expenses)
-      .set({ frozenAt: null, frozenByBillingRunId: null })
-      .where(eq(expenses.frozenByBillingRunId, billingRunId));
+    await this.updateWhere(eq(expenses.frozenByBillingRunId, billingRunId), { frozenAt: null, frozenByBillingRunId: null });
   }
 
   async freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (ids.length === 0) return;
-    await this.db.update(expenses)
-      .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
-      .where(and(inArray(expenses.id, ids), isNull(expenses.frozenByBillingRunId)));
+    await this.updateWhere(and(inArray(expenses.id, ids), isNull(expenses.frozenByBillingRunId)), { frozenAt: now, frozenByBillingRunId: billingRunId });
   }
 
   async listForLawyerInPeriod(
