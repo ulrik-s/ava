@@ -17,7 +17,8 @@ import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
 import { expectedReceivableStatusSchema } from "@/lib/shared/schemas/billing";
-import { expectedReceivableIdSchema, matterIdSchema, type ExpectedReceivableId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { asId, expectedReceivableIdSchema, matterIdSchema, type ExpectedReceivableId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { dateOrCallTime, newRowId } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -74,6 +75,7 @@ export const expectedReceivableRouter = router({
 
       const now = new Date();
       return ctx.repos.expectedReceivables.create({
+        id: asId<"ExpectedReceivableId">(newRowId(ctx, "expectedReceivable")),
         matterId: input.matterId,
         description: input.description,
         expectedAmount: input.expectedAmount,
@@ -102,7 +104,7 @@ export const expectedReceivableRouter = router({
       return ctx.repos.expectedReceivables.update(input.id, {
         status: "SETTLED",
         settledAmount: input.settledAmount,
-        settledAt: input.settledAt ? new Date(input.settledAt) : new Date(),
+        settledAt: dateOrCallTime(ctx, input.settledAt),
         ...(input.paymentReference !== undefined ? { paymentReference: input.paymentReference } : {}),
         updatedAt: new Date(),
       } satisfies Partial<ExpectedReceivable>);

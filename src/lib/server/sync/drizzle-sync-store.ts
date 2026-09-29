@@ -17,35 +17,14 @@ import { and, asc, eq, gt } from "drizzle-orm";
 import { conflictClassOf } from "@/lib/shared/conflict-policy";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { asId, type OrganizationId } from "@/lib/shared/schemas/ids";
-import { SOURCE_KEY_BY_ENTITY } from "../data-store/in-memory/entity-source-keys";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
 import type { PullResult, PulledChange, PushResult } from "../data-store/in-memory/sync-transport";
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
+import { entityRepo, type EntityRepo, type Row } from "./entity-repo";
 import { checkLocked, checkScope, type PushRejection } from "./push-guard";
 import type { SyncStore } from "./sync-store";
-
-type Row = Record<string, unknown>;
-
-/**
- * Den heterogena delmängd av en entitets-repo som sync-bryggan kallar, typad mot
- * den strukturella rad-formen (`Record<string, unknown>`) i st.f. en specifik
- * entitet. Domän-rad-typerna (zod `.passthrough()`) bär en index-signatur och är
- * därför tilldelningsbara hit — så varje `Repository<Domän>` uppfyller `BaseRepo`
- * (metod-bivarians på param + kovariant retur via index-signaturen). Det låter
- * `repoFor` returnera en TYPAD repo utan rad-castar nedströms.
- */
-interface BaseRepo {
-  getById(id: string): Promise<Row | null>;
-  create(data: Row): Promise<Row>;
-  update(id: string, patch: Row): Promise<Row>;
-  softDelete(id: string): Promise<Row>;
-  organizationOf(row: Row): Promise<string | undefined>;
-}
-
-/** Repo-nycklarna i registret (alla fält utom `transaction`). */
-type RepoKey = keyof Omit<Repositories, "transaction">;
 
 interface ChangeRow {
   seq: number;
@@ -86,12 +65,8 @@ export class DrizzleSyncStore implements SyncStore {
     private readonly repos: Repositories,
   ) {}
 
-  private repoFor(entity: string): BaseRepo | null {
-    const key = SOURCE_KEY_BY_ENTITY[entity];
-    if (!key) return null;
-    // `key` är en source-key (= repo-fältnamn); den dynamiska dispatchen kräver
-    // en keyof-assertion (sträng→nyckel), men VÄRDET förblir typat (BaseRepo).
-    return this.repos[key as RepoKey] ?? null;
+  private repoFor(entity: string): EntityRepo | null {
+    return entityRepo(this.repos, entity);
   }
 
   async pull(organizationId: string, sinceCursor: number): Promise<PullResult> {
@@ -142,27 +117,27 @@ export class DrizzleSyncStore implements SyncStore {
   }
 
   /** Byrån och låsta poster (#1242): avvisas raden, skrivs ingenting. */
-  private async guard(organizationId: string, repo: BaseRepo, m: QueuedMutation, existing: Row | null): Promise<PushRejection | null> {
+  private async guard(organizationId: string, repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushRejection | null> {
     const incoming = m.kind === "delete" ? null : m.row;
     const orgOf = (row: Row): Promise<string | undefined> => repo.organizationOf(row);
     return await checkScope(orgOf, organizationId, m.entity, existing, incoming)
       ?? checkLocked(m.entity, existing, incoming);
   }
 
-  private async applyCreate(organizationId: string, repo: BaseRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
+  private async applyCreate(organizationId: string, repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
     if (existing) return { status: "accepted", row: existing }; // idempotent replay
     return { status: "accepted", row: await this.createRow(organizationId, repo, m) };
   }
 
   /** Skapa raden; en faktura med nummer får SERVERNS nummer (#1243). */
-  private createRow(organizationId: string, repo: BaseRepo, m: QueuedMutation): Promise<Row> {
+  private createRow(organizationId: string, repo: EntityRepo, m: QueuedMutation): Promise<Row> {
     if (m.entity !== "invoice" || typeof m.row.invoiceNumber !== "string") return repo.create(m.row);
     return this.repos.transaction(async (tx) => tx.invoices.create(
       await withServerInvoiceNumber(tx, asId<"OrganizationId">(organizationId), m.row) as never,
     ));
   }
 
-  private async applyUpdate(organizationId: string, repo: BaseRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
+  private async applyUpdate(organizationId: string, repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
     if (!existing) return { status: "accepted", row: await this.createRow(organizationId, repo, m) };
     const serverVersion = versionOf(existing);
     if (conflictClassOf(m.entity) === "surface" && m.baseVersion != null && serverVersion !== m.baseVersion) {
@@ -173,7 +148,7 @@ export class DrizzleSyncStore implements SyncStore {
     return { status: rebased ? "rebased" : "accepted", row: updated };
   }
 
-  private async applyDelete(repo: BaseRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
+  private async applyDelete(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
     if (!existing) return { status: "accepted", row: { id: rowId(m) } }; // redan borta
     return { status: "accepted", row: await repo.softDelete(rowId(m)) };
   }

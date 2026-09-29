@@ -24,16 +24,16 @@
 
 import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
-import { asId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import type { OrganizationId } from "@/lib/shared/schemas/ids";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import type { ProcedureTouch, QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
 import type { ProcedureReplayResult, PulledChange } from "../data-store/in-memory/sync-transport";
 import { syncReplays } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { DrizzleRepositories } from "../repositories/drizzle-repositories";
-import type { Repositories } from "../repositories/repositories";
 import { appRouter } from "../routers/_app";
 import type { Context } from "../trpc-core";
+import { entityRepo, getInOrg } from "./entity-repo";
 
 /** tRPC-koder som betyder "anropet bryter mot en regel" — permanenta, inte tekniska. */
 const RULE_CODES: ReadonlySet<string> = new Set(["BAD_REQUEST", "NOT_FOUND", "PRECONDITION_FAILED", "FORBIDDEN", "CONFLICT"]);
@@ -41,15 +41,6 @@ const RULE_CODES: ReadonlySet<string> = new Set(["BAD_REQUEST", "NOT_FOUND", "PR
 type Outcome =
   | { status: "accepted" }
   | { status: "rejected"; code: string; reason: string };
-
-/** Läs en berörd rad inom byrån (null = finns inte, eller tillhör en annan byrå). */
-type OrgScopedGetter = (repos: Repositories, id: string, orgId: OrganizationId) => Promise<Record<string, unknown> | null>;
-
-/** Hur varje köbar entitet läses tillbaka org-scopat. Utökas när fler entiteter flyttas. */
-const ORG_SCOPED_GETTERS: Readonly<Record<string, OrgScopedGetter>> = {
-  timeEntry: (repos, id, orgId) => repos.timeEntries.getByIdInOrg(asId<"TimeEntryId">(id), orgId),
-  expense: (repos, id, orgId) => repos.expenses.getByIdInOrg(asId<"ExpenseId">(id), orgId),
-};
 
 /** Porten sync-routern anropar (via `ctx.replayProcedure`). */
 export interface ProcedureReplayer {
@@ -92,7 +83,10 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
     if (stored) return stored;
     try {
       await this.repos.transactionWithDb(async (tx, txDb) => {
-        await resolveProcedure(appRouter.createCaller({ ...ctx, repos: tx }), call.path)(call.input);
+        // Samma identitet som klientens körning (#1276): skapade rader får
+        // samma id, affärsdatum är när anropet gjordes — inte nu.
+        const queued = { mutationId: call.mutationId, at: call.enqueuedAt };
+        await resolveProcedure(appRouter.createCaller({ ...ctx, repos: tx, queued }), call.path)(call.input);
         await this.record(txDb, call, ctx, orgId, { status: "accepted" });
       });
       return { status: "accepted" };
@@ -128,12 +122,14 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
 
   /**
    * De berörda radernas kanoniska läge, bara inom byrån. Alla berörda entiteter
-   * med en läsare — en procedur kan skriva flera (faktureringen, #1276).
+   * — en procedur kan skriva flera (faktureringen, #1276). En rad som inte finns
+   * (eller tillhör en annan byrå) blir en tombstone: klientens optimistiska rad
+   * tas bort, och serverns rad (om någon) kommer med pull.
    */
   private async currentRows(call: QueuedProcedureCall, orgId: OrganizationId): Promise<PulledChange[]> {
-    const readable = call.touches.filter((t: ProcedureTouch) => ORG_SCOPED_GETTERS[t.entity] !== undefined);
+    const readable = call.touches.filter((t: ProcedureTouch) => entityRepo(this.repos, t.entity) !== null);
     return Promise.all(readable.map(async (t): Promise<PulledChange> => {
-      const row = await ORG_SCOPED_GETTERS[t.entity]?.(this.repos, t.id, orgId);
+      const row = await getInOrg(this.repos, t.entity, t.id, orgId);
       return row ? { entity: t.entity, row } : { entity: t.entity, row: { id: t.id }, deleted: true };
     }));
   }

@@ -40,6 +40,7 @@ import type { Matter } from "@/lib/shared/schemas/matter";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
 import { logMatterNote } from "../billing/matter-note";
 import { emit } from "../events/emit";
+import { dateOrCallTime, newRowId } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -331,6 +332,7 @@ export const invoiceRouter = router({
         }
 
         const payment = await repos.payments.create(omitUndefined({
+          id: asId<"PaymentId">(newRowId(ctx, "payment")),
           invoiceId: inv.id,
           amount: input.amount,
           paidAt: new Date(input.paidAt),
@@ -451,9 +453,10 @@ export const invoiceRouter = router({
         const amount = resolveWriteOffAmount(ledger.outstanding, input.amount);
 
         const writeOff = await repos.writeOffs.create(omitUndefined({
+          id: asId<"WriteOffId">(newRowId(ctx, "writeOff")),
           invoiceId: inv.id,
           amount,
-          writtenOffAt: input.writtenOffAt ? new Date(input.writtenOffAt) : new Date(),
+          writtenOffAt: dateOrCallTime(ctx, input.writtenOffAt),
           reason: input.reason,
           recordedById: asId<"UserId">(ctx.user.id),
         }) satisfies Partial<WriteOff>);
