@@ -80,10 +80,20 @@ describe("InvoicesPage", () => {
         amount: 50000,
         matter: { id: "m2", matterNumber: "2026-0002", title: "Tvist" },
       },
+      {
+        id: "i3",
+        invoiceDate: new Date("2026-02-20").toISOString(),
+        invoiceType: "CREDIT",
+        status: "DRAFT",
+        amount: -10000,
+        matter: { id: "m3", matterNumber: "2026-0003", title: "Arv" },
+      },
     ]);
     render(<InvoicesPage />);
     expect(screen.getByText("Faktura")).toBeInTheDocument();
     expect(screen.getByText("Aconto")).toBeInTheDocument();
+    expect(screen.getByText("Kreditfaktura")).toBeInTheDocument(); // förr rått "CREDIT" (#1309)
+    expect(screen.queryByText("CREDIT")).toBeNull();
     expect(screen.getByText("Betald")).toBeInTheDocument();
     expect(screen.getByText("Skickad")).toBeInTheDocument();
     expect(screen.getByText(/2026-0001 — Bodelning/)).toBeInTheDocument();

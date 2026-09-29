@@ -64,6 +64,16 @@ describe("serviceNote.create", () => {
     expect(data.text).toBe("Samtal");
   });
 
+  it("datum måste vara YYYY-MM-DD och klockslag HH:mm — en ISO-tidpunkt visades rått i listan (#1309)", async () => {
+    await expect(
+      makeCaller().create({ matterId: "m1", date: "2026-09-11T09:00:00.000Z", time: "10:00", text: "X" }),
+    ).rejects.toThrow();
+    await expect(
+      makeCaller().create({ matterId: "m1", date: "2026-09-11", time: "10", text: "X" }),
+    ).rejects.toThrow();
+    expect(mockPrisma.serviceNote.create).not.toHaveBeenCalled();
+  });
+
   it("kräver icke-tom text", async () => {
     await expect(
       makeCaller().create({ matterId: "m1", date: "2026-06-15", time: "09:30", text: "" }),

@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { noteTimestamp } from "../../src/lib/shared/billing-notes";
 import type { SimMatter } from "../../tooling/demo-generator/simulate/events";
 import { emptyRunResult, runScenario, type RunCtx } from "../../tooling/demo-generator/simulate/runner";
 import { buildRattshjalpScenario } from "../../tooling/demo-generator/simulate/scenarios/rattshjalp";
@@ -57,6 +58,19 @@ const MATTER: SimMatter = {
 };
 
 describe("runScenario (#880)", () => {
+  it("anteckningar får dag (YYYY-MM-DD) och klockslag (HH:mm) ur händelsens tidpunkt, inte ISO-strängen (#1309)", async () => {
+    const { c, calls } = recordingCaller();
+    const ctx: RunCtx = { c, res: emptyRunResult() };
+    await runScenario(ctx, MATTER, buildRattshjalpScenario({ klient: "c-klient", motpart: "c-mot", motpartsombud: "c-omb", domstol: "c-dom" }));
+    const notes = calls.filter((x) => x.method === "serviceNote.create");
+    expect(notes.length).toBeGreaterThan(0);
+    for (const n of notes) {
+      expect(n.args.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(n.args.time).toMatch(/^\d{2}:\d{2}$/);
+      expect(noteTimestamp(new Date(n.args.createdAt))).toEqual({ date: n.args.date, time: n.args.time });
+    }
+  });
+
   it("spelar upp rättshjälps-scenariot kronologiskt med härledda aconto-belopp", async () => {
     const { c, calls } = recordingCaller();
     const ctx: RunCtx = { c, res: emptyRunResult() };
@@ -67,8 +81,9 @@ describe("runScenario (#880)", () => {
     const klientLink = calls.find((x) => x.method === "matter.addContact" && x.args.role === "KLIENT");
     expect(klientLink?.args.contactId).toBe("c-klient");
 
-    // Kronologi: varje mutations datum-arg (date/invoiceDate/createdAt) är icke-avtagande.
-    const dates = calls.map((x) => x.args.date ?? x.args.invoiceDate ?? x.args.createdAt).filter(Boolean).map((d: string) => new Date(d).getTime());
+    // Kronologi: varje mutations tidpunkt är icke-avtagande. `createdAt` först: en
+    // antecknings `date` är bara dagen (YYYY-MM-DD, #1309), tidpunkten står i createdAt.
+    const dates = calls.map((x) => x.args.createdAt ?? x.args.date ?? x.args.invoiceDate).filter(Boolean).map((d: string) => new Date(d).getTime());
     for (let i = 1; i < dates.length; i++) expect(dates[i]).toBeGreaterThanOrEqual(dates[i - 1]!);
 
     // Rådgivning skapas FÖRE första acontot.

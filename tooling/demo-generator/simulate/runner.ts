@@ -5,6 +5,7 @@
  * arbete (aconto) härleds här ur `state`; dokumentbytes skrivs via `BinarySink`.
  */
 
+import { noteTimestamp } from "@/lib/shared/billing-notes";
 import { coverageEntryRateOre } from "@/lib/shared/brottmalstaxa";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
@@ -13,7 +14,7 @@ import { AVA_NAMESPACE, uuidv5 } from "@/lib/shared/uuid-derive";
 import { demoPaymentPlanId } from "../../scripts/demo-billing-ids";
 import type { BinarySink } from "../backend-target";
 import { ensureFolderPath } from "../folder-filing";
-import { eventIso, eventTime } from "./clock";
+import { eventIso } from "./clock";
 import type { SimEvent, SimMatter } from "./events";
 import { DOC_TEMPLATES, FOLDER_BY_RECIPIENT } from "./fake-content";
 
@@ -80,7 +81,10 @@ async function hTime(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimStat
 }
 
 async function hNote(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<void> {
-  await ctx.c.serviceNote.create({ matterId: m.id, date: iso, time: eventTime(), text: e.text, createdAt: iso });
+  // Dag + klockslag ur händelsens tidpunkt, som appens egna anteckningar (#1309).
+  // Förr: hela ISO-strängen som `date` och ett fast "10:00" som `time`.
+  const { date, time } = noteTimestamp(new Date(iso));
+  await ctx.c.serviceNote.create({ matterId: m.id, date, time, text: e.text, createdAt: iso });
   ctx.res.notes++;
 }
 

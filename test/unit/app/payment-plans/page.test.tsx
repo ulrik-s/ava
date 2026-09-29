@@ -71,6 +71,8 @@ describe("PaymentPlansPage — utestående", () => {
       },
     ]);
     render(<PaymentPlansPage />);
+    // Radens status i singular (#1309) — "Aktiva" är filterknappen.
+    expect(screen.getByText("Aktiv")).toBeInTheDocument();
     // 100 000 − 30 000 betalt − 20 000 avskrivet = 50 000 öre = 500 kr utestående
     expect(screen.getByText("Utestående")).toBeInTheDocument();
     // formatCurrency(50000) → "500,00 kr" (sv-SE). Matcha siffran robust.

@@ -10,6 +10,14 @@ import type { ServiceNote } from "@/lib/shared/schemas/service-note";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 
 /**
+ * Dagen ("YYYY-MM-DD") och klockslaget ("HH:mm") som schemat beskriver. Förr
+ * godtogs vilken sträng som helst: demogeneratorn skickade en hel ISO-tidpunkt,
+ * som sedan visades rått i ärendets Anteckningar (#1309).
+ */
+const noteDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "datum ska vara YYYY-MM-DD");
+const noteTime = z.string().regex(/^\d{2}:\d{2}$/, "klockslag ska vara HH:mm");
+
+/**
  * Tjänsteanteckningar (#348) — korta, daterade noteringar i ett ärende.
  * `list` + `create` + `update` + `delete` (#375). `authorId` sätts från
  * principalen vid create (ej editerbart i UI:t). Redigera/ta-bort är
@@ -27,8 +35,8 @@ export const serviceNoteRouter = router({
     .input(
       z.object({
         matterId: matterIdSchema,
-        date: z.string().min(1),
-        time: z.string().min(1),
+        date: noteDate,
+        time: noteTime,
         text: z.string().min(1),
         // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
         id: serviceNoteIdSchema.optional(),
@@ -53,8 +61,8 @@ export const serviceNoteRouter = router({
     .input(
       z.object({
         id: serviceNoteIdSchema,
-        date: z.string().min(1).optional(),
-        time: z.string().min(1).optional(),
+        date: noteDate.optional(),
+        time: noteTime.optional(),
         text: z.string().min(1).optional(),
       })
     )
