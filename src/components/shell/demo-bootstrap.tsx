@@ -47,6 +47,7 @@ import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
 import { JobsBadge } from "./jobs-badge";
 import { ServerFirstSync } from "./server-first-sync";
+import { ServerInvoiceNumbering } from "./server-invoice-numbering";
 import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
 type Status = "loading" | "ready" | "error";
@@ -315,6 +316,7 @@ function AuthGatedDemoTree(props: TreeProps) {
               <JobsBadge />
               <AutoSync />
               {!isDemoTier && <ServerFirstSync store={cachingSync} />}
+              {!isDemoTier && <ServerInvoiceNumbering store={cachingSync} />}
             </div>
           </div>
           {status === "loading" && (

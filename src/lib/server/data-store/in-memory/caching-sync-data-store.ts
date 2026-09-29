@@ -174,6 +174,13 @@ export class CachingSyncDataStore {
     return result;
   }
 
+  /** Ligger en ej synkad ändring för raden kvar i kön? (rader + anropens touches) */
+  hasPendingFor(entity: string, id: string): boolean {
+    return this.queue.pending().some((e) => (isProcedureCall(e)
+      ? e.touches.some((t) => t.entity === entity && t.id === id)
+      : e.entity === entity && e.row.id === id));
+  }
+
   /** Köposterna i ordning (rader och procedur-anrop) — för diagnostik och tester. */
   pendingEntries(): readonly QueueEntry[] {
     return this.queue.pending();

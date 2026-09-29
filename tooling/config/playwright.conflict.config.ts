@@ -12,7 +12,8 @@ const projectRoot = path.resolve(__dirname, "..", "..");
  *
  * Samma stack bär `unsynced-logout.spec.ts` (#1241): en ändring offline →
  * statuspill + lagringsvarning + fråga vid utloggning; online → synkas och
- * utloggningen går igenom utan fråga. Delad inloggning: `_selfhosted-login.ts`.
+ * utloggningen går igenom utan fråga. `offline-invoice-number.spec.ts` (#1243):
+ * en faktura skapad offline får serverns nummer. Delad inloggning: `_selfhosted-login.ts`.
  */
 export default defineConfig({
   testDir: path.join(projectRoot, "test/e2e/conflict"),

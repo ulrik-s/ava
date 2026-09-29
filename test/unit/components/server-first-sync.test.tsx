@@ -7,7 +7,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest-compat";
 import { ServerFirstSync, type SyncableStore } from "@/components/shell/server-first-sync";
 import type { StoragePersistence } from "@/lib/client/storage/persistent-storage";
-import { flushServerSync, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
+import { flushServerSync, onServerSynced, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
 
 function fakeStore(opts: { pending: number; fail?: boolean }) {
   const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void) };
@@ -144,5 +144,20 @@ describe("ServerFirstSync", () => {
       unmount();
       expect(unsyncedChangeCount()).toBe(0);
     });
+  });
+
+  it("en lyckad synk signaleras (#1243) — en misslyckad inte", async () => {
+    let synced = 0;
+    const off = onServerSynced(() => { synced++; });
+    const ok = fakeStore({ pending: 1 });
+    const { unmount } = wrap(<ServerFirstSync store={ok.store} requestPersistence={async () => "persisted"} />);
+    await waitFor(() => expect(synced).toBe(1));
+    unmount();
+    const failing = fakeStore({ pending: 1, fail: true });
+    const second = wrap(<ServerFirstSync store={failing.store} requestPersistence={async () => "persisted"} />);
+    await waitFor(() => expect(failing.state.reconciles).toBeGreaterThanOrEqual(1));
+    expect(synced).toBe(1);
+    second.unmount();
+    off();
   });
 });

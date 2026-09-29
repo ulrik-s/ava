@@ -94,4 +94,19 @@ describe("runQueuedProcedure", () => {
     expect(await ds.store.timeEntries.findUnique({ where: { id } })).toBeNull();
     expect((await persistence.hydrate())?.timeEntries ?? []).toHaveLength(0);
   });
+
+  it("hasPendingFor: rader och procedur-anropens touches räknas; ackade inte", async () => {
+    const ds = await store();
+    const t = uuidv7(), c = uuidv7();
+    await ds.runQueuedProcedure({ path: "timeEntry.create", input: { id: t } }, async () => {
+      await ds.store.timeEntries.create({ data: entry(t) as never });
+    });
+    await ds.store.contacts.create({ data: { id: c, organizationId: uuidv7(), name: "K", contactType: "PERSON" } as never });
+    expect(ds.hasPendingFor("timeEntry", t)).toBe(true);
+    expect(ds.hasPendingFor("contact", c)).toBe(true);
+    expect(ds.hasPendingFor("invoice", t)).toBe(false);
+    await ds.reconcile();
+    expect(ds.hasPendingFor("timeEntry", t)).toBe(false);
+    expect(ds.hasPendingFor("contact", c)).toBe(false);
+  });
 });

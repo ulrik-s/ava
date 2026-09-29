@@ -94,8 +94,12 @@ export interface InvoiceRepository extends Repository<Invoice> {
   getByIdWithRelations(id: InvoiceId, organizationId: OrganizationId): Promise<InvoiceWithRelations | null>;
   /** Org-bred fakturalista (listvyns include), nyaste först, valfritt filtrerad. */
   listForOrg(organizationId: OrganizationId, filter?: InvoiceListFilter): Promise<InvoiceListRow[]>;
-  /** Nästa lediga fakturanummer (`F-YYYY-NNNN`) för org:en (året från repots klocka). */
-  nextInvoiceNumber(organizationId: OrganizationId): Promise<string>;
+  /**
+   * Nästa lediga fakturanummer (`F-YYYY-NNNN`) för org:en. `year` = seriens år
+   * (fakturadatumets, #1243); default året från repots klocka. Server-impl:en
+   * tar ett lås per byrå som hålls till transaktionens slut.
+   */
+  nextInvoiceNumber(organizationId: OrganizationId, year?: number): Promise<string>;
   /** Summa krediterat på en faktura: |belopp| av dess kreditnotor, org-scopat (öre). */
   sumCreditNotesFor(invoiceId: InvoiceId, organizationId: OrganizationId): Promise<number>;
   /** Kreditnotan för en faktura (`creditedInvoiceId = id`) — null om ej krediterad. */

@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { requestPersistentStorageOnce, type StoragePersistence } from "@/lib/client/storage/persistent-storage";
 import { syncStateFromCachingSync, type CachingSyncStatus } from "@/lib/client/sync/caching-sync-status";
-import { registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
+import { notifyServerSynced, registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
 import { SyncScheduler } from "@/lib/client/sync/sync-scheduler";
 import { pluralChanges } from "@/lib/client/utils";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
@@ -60,7 +60,11 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
   useEffect(() => {
     if (!store) return;
     const scheduler = new SyncScheduler({
-      reconcile: () => store.reconcile(),
+      reconcile: async () => {
+        const result = await store.reconcile();
+        notifyServerSynced(); // bara efter en LYCKAD synk (#1243)
+        return result;
+      },
       pendingCount: () => store.pendingCount(),
       isOnline: () => navigator.onLine,
       onStatus: setStatus,

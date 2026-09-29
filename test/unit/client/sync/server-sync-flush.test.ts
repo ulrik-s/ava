@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest-compat";
-import { flushServerSync, registerServerSyncFlush, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
+import { flushServerSync, notifyServerSynced, onServerSynced, registerServerSyncFlush, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
 
 describe("server-sync-flush", () => {
   it("no-op utan registrerad synk", async () => {
@@ -36,5 +36,26 @@ describe("server-sync-flush", () => {
     const un = registerServerSyncFlush(async () => undefined);
     expect(unsyncedChangeCount()).toBe(0);
     un();
+  });
+
+  it("onServerSynced (#1243): lyssnare får varje lyckad synk; avregistrering stoppar", () => {
+    let n = 0;
+    const off = onServerSynced(() => { n++; });
+    notifyServerSynced();
+    notifyServerSynced();
+    off();
+    notifyServerSynced();
+    expect(n).toBe(2);
+  });
+
+  it("en kastande lyssnare stoppar inte de andra", () => {
+    let n = 0;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const a = onServerSynced(() => { throw new Error("trasig"); });
+    const b = onServerSynced(() => { n++; });
+    notifyServerSynced();
+    a(); b();
+    expect(n).toBe(1);
+    warn.mockRestore();
   });
 });

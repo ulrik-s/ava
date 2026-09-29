@@ -11,8 +11,9 @@
 
 import { and, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
 import type { Invoice } from "@/lib/shared/schemas/billing";
-import type { InvoiceId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
-import { accontoDeductions, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
+import { asId, type InvoiceId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { uuidv7 } from "@/lib/shared/uuid";
+import { accontoDeductions, invoiceNumbers, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import {
@@ -30,6 +31,38 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
   /** invoices saknar org-kolumn → härled via ärendet (#647) så change_log/pull funkar. */
   protected override resolveOrg(row: unknown): Promise<string | undefined> {
     return matterOrg(this.db, (row as { matterId?: MatterId }).matterId);
+  }
+
+  /**
+   * Registrera numret och skapa (#1243). Registret skrivs FÖRST: en dubblett
+   * inom byrån bryter primärnyckeln innan någon fakturarad finns.
+   */
+  override async create(data: Partial<Invoice>): Promise<Invoice> {
+    const id = data.id ?? asId<"InvoiceId">(uuidv7());
+    await this.registerNumber({ id, matterId: data.matterId, invoiceNumber: data.invoiceNumber });
+    return super.create({ ...data, id });
+  }
+
+  /**
+   * Ett utfärdat fakturanummer är oföränderligt (#1243): en uppdatering som bär
+   * ett (t.ex. gammalt preliminärt) nummer skriver inte över det. Sätts ett
+   * nummer på en faktura som saknade det registreras det.
+   */
+  override async update(id: InvoiceId, patch: Partial<Invoice>): Promise<Invoice> {
+    const current = await this.getByIdOrThrow(id);
+    if (current.invoiceNumber) {
+      const { invoiceNumber: _n, ocrReference: _o, ...rest } = patch;
+      return super.update(id, rest);
+    }
+    await this.registerNumber({ id, matterId: patch.matterId ?? current.matterId, invoiceNumber: patch.invoiceNumber });
+    return super.update(id, patch);
+  }
+
+  private async registerNumber(inv: { id: InvoiceId; matterId?: MatterId | undefined; invoiceNumber?: string | null | undefined }): Promise<void> {
+    if (!inv.invoiceNumber) return;
+    const organizationId = await matterOrg(this.db, inv.matterId);
+    if (!organizationId) return;
+    await this.db.insert(invoiceNumbers).values({ organizationId, invoiceNumber: inv.invoiceNumber, invoiceId: inv.id });
   }
 
   async getByIdInOrg(id: InvoiceId, organizationId: OrganizationId): Promise<Invoice | null> {
@@ -132,14 +165,24 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
     }));
   }
 
-  async nextInvoiceNumber(organizationId: OrganizationId): Promise<string> {
-    const prefix = invoiceNumberPrefix(this.now().getFullYear());
-    const rows = await this.db
+  async nextInvoiceNumber(organizationId: OrganizationId, year: number = this.now().getFullYear()): Promise<string> {
+    const prefix = invoiceNumberPrefix(year);
+    // Ett nummer i taget per byrå (#1243): låset hålls till transaktionens slut,
+    // så två samtidiga faktureringar inte läser samma "senaste" nummer.
+    await this.db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`invoice-number:${organizationId}`}))`);
+    // Både fakturorna och registret: ett nummer som registrerats men vars
+    // fakturarad aldrig skrevs (avbrott utanför transaktion) återanvänds inte.
+    const [fromInvoices] = await this.db
       .select({ invoiceNumber: invoices.invoiceNumber }).from(invoices)
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(eq(matters.organizationId, organizationId), like(invoices.invoiceNumber, `${prefix}%`)))
       .orderBy(desc(invoices.invoiceNumber)).limit(1);
-    return nextInvoiceNumberFrom(prefix, rows[0]?.invoiceNumber);
+    const [fromRegister] = await this.db
+      .select({ invoiceNumber: invoiceNumbers.invoiceNumber }).from(invoiceNumbers)
+      .where(and(eq(invoiceNumbers.organizationId, organizationId), like(invoiceNumbers.invoiceNumber, `${prefix}%`)))
+      .orderBy(desc(invoiceNumbers.invoiceNumber)).limit(1);
+    const last = [fromInvoices?.invoiceNumber, fromRegister?.invoiceNumber].filter((n): n is string => !!n).sort().pop();
+    return nextInvoiceNumberFrom(prefix, last);
   }
 
   async sumCreditNotesFor(invoiceId: InvoiceId, organizationId: OrganizationId): Promise<number> {
