@@ -26,6 +26,8 @@
 # Kräver: docker, tar, sha256sum/shasum. age används om det finns, annars i en
 # engångs-container (samma som backup-export.sh).
 set -euo pipefail
+# shellcheck source=lib/pg-ready.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/pg-ready.sh"
 
 ARCHIVE="${1:-}"
 KEY="${2:-}"
@@ -71,14 +73,8 @@ echo "  ✓ checksummor ok"
 
 echo "▸ Läser in dumpen i en engångs-Postgres ($PG_IMAGE) …"
 docker run -d --name "$CONTAINER" -e POSTGRES_PASSWORD=verify -e POSTGRES_USER=ava -e POSTGRES_DB=ava "$PG_IMAGE" >/dev/null
-# Postgres-imagen kör först en tillfällig server för initdb och startar sedan om:
-# pg_isready svarar redan under init-fasen, så vänta in att init är KLAR.
-ready() {
-  docker logs "$CONTAINER" 2>&1 | grep -q "init process complete" \
-    && docker exec "$CONTAINER" pg_isready -U ava -d ava >/dev/null 2>&1
-}
-for _ in $(seq 1 90); do ready && break; sleep 1; done
-ready || fail "engångs-Postgres startade inte"
+# Väntan (init klar + pg_isready) och varför den ser ut som den gör: lib/pg-ready.sh.
+wait_for_pg "$CONTAINER" 90 || fail "engångs-Postgres startade inte"
 gunzip -c "$DUMP" | docker exec -i "$CONTAINER" psql -q -v ON_ERROR_STOP=1 -U ava -d ava >/dev/null \
   || fail "dumpen gick inte att läsa in"
 
