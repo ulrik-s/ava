@@ -10,7 +10,9 @@
  * backchannel + aud-claim) end-to-end, vilket en mock-IdP inte kan.
  *
  * Regressionsbatteri: inloggning (flera användare), fel lösenord, utloggning,
- * skydd utan session.
+ * skydd utan session. Sedan #1245 skyddar proxyn bara data (`/api`, `/git`) —
+ * skalet laddas fritt och klienten själv skickar en utloggad användare till
+ * `/oauth2/start`.
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -37,6 +39,17 @@ test.describe("OIDC-login mot Keycloak", () => {
     await page.goto("/ava/");
     await page.waitForURL(AUTHORIZE_RE);
     await expect(page.locator("#kc-form-login")).toBeVisible();
+  });
+
+  // #1245: skalet (statiska filer utan data) laddas utan inloggning — så att
+  // appen startar vid ett IdP-avbrott. Det är APPEN som skickar en utloggad
+  // användare till inloggningen (testet ovan); data kräver fortfarande session.
+  test("app-skalet laddas utan inloggning; /git kräver session (#1245)", async ({ page }) => {
+    const shell = await page.request.get("/ava/", { maxRedirects: 0 });
+    expect(shell.status()).toBe(200);
+    expect(await shell.text()).toContain("<html");
+    const git = await page.request.get("/git/firma.git/info/refs?service=git-upload-pack", { maxRedirects: 0 });
+    expect(git.status()).toBe(401);
   });
 
   test("admin loggar in → session + userinfo ger rätt email", async ({ page }) => {

@@ -110,4 +110,31 @@ describe("SyncScheduler", () => {
     await h.scheduler.syncNow();
     expect(h.calls.remote).toBe(0);
   });
+
+  // #1245: ett 401 är inte ett vanligt sparfel — sessionen omvalideras.
+  it("401 från servern → sessionens besked i stället för det generiska felet; kön ligger kvar", async () => {
+    let asked = 0;
+    const h = harness({ onUnauthorized: async () => { asked++; return "Ditt konto är inte längre aktivt i byrån."; } });
+    h.setPending(2);
+    h.setReconcile(async () => { throw Object.assign(new Error("UNAUTHORIZED"), { data: { httpStatus: 401 } }); });
+    await h.scheduler.syncNow();
+    expect(asked).toBe(1);
+    expect(h.last()).toMatchObject({ error: "Ditt konto är inte längre aktivt i byrån.", pendingCount: 2 });
+  });
+
+  it("401 men omvalideringen har inget besked → det generiska felet", async () => {
+    const h = harness({ onUnauthorized: async () => null });
+    h.setReconcile(async () => { throw Object.assign(new Error("nej"), { data: { code: "UNAUTHORIZED" } }); });
+    await h.scheduler.syncNow();
+    expect(h.last().error).toBe("Kunde inte spara till servern: nej");
+  });
+
+  it("andra fel omvaliderar inte sessionen", async () => {
+    let asked = 0;
+    const h = harness({ onUnauthorized: async () => { asked++; return "x"; } });
+    h.setReconcile(async () => { throw new Error("nätverk"); });
+    await h.scheduler.syncNow();
+    expect(asked).toBe(0);
+    expect(h.last().error).toBe("Kunde inte spara till servern: nätverk");
+  });
 });

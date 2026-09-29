@@ -12,6 +12,7 @@
  * runda efteråt, så inget blir liggande. Ren klass — timers injiceras (test).
  */
 
+import { isUnauthorizedError } from "../auth/unauthorized";
 import type { CachingSyncStatus } from "./caching-sync-status";
 
 export interface ReconcileOutcome {
@@ -27,6 +28,11 @@ export interface SyncSchedulerDeps {
   onStatus: (status: CachingSyncStatus) => void;
   /** Lokalt läge ändrat av servern (pull eller omkörda anrop) → UI:t hämtar om sina frågor. */
   onRemoteChanges?: () => void;
+  /**
+   * Servern svarade 401 (#1245): sessionen gick ut eller kontot är spärrat.
+   * Returnerar beskedet att visa i stället för det generiska felet.
+   */
+  onUnauthorized?: () => Promise<string | null>;
   debounceMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
@@ -34,6 +40,10 @@ export interface SyncSchedulerDeps {
 }
 
 const DEFAULT_DEBOUNCE_MS = 800;
+
+function saveErrorMessage(err: unknown): string {
+  return `Kunde inte spara till servern: ${err instanceof Error ? err.message : String(err)}`;
+}
 
 export class SyncScheduler {
   private timer: unknown = null;
@@ -76,8 +86,14 @@ export class SyncScheduler {
       if (result.pulled > 0 || (result.replayed ?? 0) > 0) this.deps.onRemoteChanges?.();
     } catch (err) {
       // Ändringen ligger kvar i kön (persisterad) — nästa runda försöker igen.
-      this.error = `Kunde inte spara till servern: ${err instanceof Error ? err.message : String(err)}`;
+      this.error = (await this.authMessage(err)) ?? saveErrorMessage(err);
     }
+  }
+
+  /** Ett 401 → låt sessionen omvalideras och visa dess besked (#1245). */
+  private async authMessage(err: unknown): Promise<string | null> {
+    if (!this.deps.onUnauthorized || !isUnauthorizedError(err)) return null;
+    return this.deps.onUnauthorized();
   }
 
   /** Finns det ändringar som inte nått servern? (varning vid stängning av fliken) */
