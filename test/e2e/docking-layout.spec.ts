@@ -116,3 +116,50 @@ test("maximera Dokument-panelen och återställ den (#1263)", async ({ page, bas
   await expect(page.getByRole("tab", { name: /^Tid/ }).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("button", { name: "Återställ panelen" })).toHaveCount(0);
 });
+
+/** Varje grupps storlek (bredd×höjd), i dockviews ordning. */
+const groupSizes = (page: Page) => page.locator(".dv-groupview").evaluateAll((els) =>
+  els.map((g) => { const r = g.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; }));
+
+// Tiling-fönsterhanterare (#1291): fönstret byter storlek medan en panel är
+// maximerad. Dockview återställde då de dolda gruppernas GAMLA pixelstorlekar,
+// och layouten blev skev för gott (374/776 i stället för 575/575). I ett litet
+// fönster kläms en grupp ihop så att flikarna knappt syns.
+test("maximera, fönstret byter storlek, återställ → proportionerna består", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  const before = await groupSizes(page);
+
+  await page.getByRole("button", { name: "Maximera panelen" }).first().click();
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.getByRole("button", { name: "Återställ panelen" }).click();
+  await page.setViewportSize({ width: 1470, height: 956 });
+
+  const sameAsBefore = async (): Promise<boolean> => {
+    const after = await groupSizes(page);
+    return after.every((s, i) => Math.abs(s.w - (before[i]?.w ?? 0)) <= 3 && Math.abs(s.h - (before[i]?.h ?? 0)) <= 3);
+  };
+  await expect.poll(sameAsBefore, { message: `layouten ska ha samma proportioner som före maximeringen (${JSON.stringify(before)})` }).toBe(true);
+
+  // Den sparade layouten är inte heller skev (dockview serialiserade förut de gamla pixlarna).
+  await page.waitForTimeout(1200); // låt den debouncade sparningen ske
+  await page.reload({ waitUntil: "load" });
+  await expect(page.getByRole("tab", { name: /^Tid/ }).first()).toBeVisible({ timeout: 30_000 });
+  await expect.poll(sameAsBefore, { message: "efter omladdning" }).toBe(true);
+});
+
+test("maximera i ett litet fönster, återställ i ett stort → proportionerna består", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  const before = await groupSizes(page);
+
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.getByRole("button", { name: "Maximera panelen" }).nth(1).click();
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await page.getByRole("button", { name: "Återställ panelen" }).click();
+
+  await expect.poll(async () => {
+    const after = await groupSizes(page);
+    return after.every((s, i) => Math.abs(s.w - (before[i]?.w ?? 0)) <= 3 && Math.abs(s.h - (before[i]?.h ?? 0)) <= 3);
+  }, { message: `layouten ska ha samma proportioner som före maximeringen (${JSON.stringify(before)})` }).toBe(true);
+});

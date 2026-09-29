@@ -82,6 +82,28 @@ export function panelOrder(layout: SerializedLayout): string[] {
   return walk(layout.grid.root);
 }
 
+/** En grupps andel (0..1) av arbetsytans bredd och höjd. */
+export interface GroupShare { width: number; height: number }
+
+/**
+ * Varje grupps andel av ytan, ur dockviews serialisering (#1291). En nods
+ * `size` ligger längs förälderns axel. Axeln växlar för varje nivå: en
+ * HORIZONTAL-nod lägger sina barn bredvid varandra.
+ */
+export function groupShares(grid: SerializedLayout["grid"]): Map<string, GroupShare> {
+  const shares = new Map<string, GroupShare>();
+  if (grid.width <= 0 || grid.height <= 0) return shares;
+  const walk = (n: GridNode, horizontal: boolean, w: number, h: number): void => {
+    if (n.type === "leaf") { shares.set(n.data.id, { width: w / grid.width, height: h / grid.height }); return; }
+    for (const c of n.data) {
+      const size = c.size ?? 0;
+      walk(c, !horizontal, horizontal ? size : w, horizontal ? h : size);
+    }
+  };
+  walk(grid.root, grid.orientation === "HORIZONTAL", grid.width, grid.height);
+  return shares;
+}
+
 /** Ta bort paneler ur trädet som inte längre finns; tomma grupper/grenar försvinner. */
 function pruneNode(n: GridNode, keep: ReadonlySet<string>): GridNode | null {
   if (n.type === "leaf") {
