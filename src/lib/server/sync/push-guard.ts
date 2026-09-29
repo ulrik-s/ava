@@ -70,7 +70,7 @@ function isLocked(row: Row): boolean {
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 
 /** Jämförbart värde: Date och ISO-tidpunkter som samma sträng, null för saknat. */
-function comparable(v: unknown): unknown {
+export function comparable(v: unknown): unknown {
   if (v instanceof Date) return v.toISOString();
   if (typeof v === "string" && ISO_TIME.test(v)) return new Date(v).toISOString();
   return v ?? null;

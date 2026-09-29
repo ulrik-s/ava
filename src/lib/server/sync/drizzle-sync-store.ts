@@ -24,6 +24,7 @@ import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
 import { entityRepo, type EntityRepo, type Row } from "./entity-repo";
 import { checkLocked, checkScope, type PushRejection } from "./push-guard";
+import { withoutServerOwned } from "./server-owned-fields";
 import type { SyncStore } from "./sync-store";
 
 interface ChangeRow {
@@ -143,7 +144,8 @@ export class DrizzleSyncStore implements SyncStore {
     if (conflictClassOf(m.entity) === "surface" && m.baseVersion != null && serverVersion !== m.baseVersion) {
       return { status: "conflict", reason: "stale", current: existing };
     }
-    const updated = await repo.update(rowId(m), m.row);
+    // Server-ägda fält (dokumentets analys, #1280) skrivs aldrig av en radpush.
+    const updated = await repo.update(rowId(m), withoutServerOwned(m.entity, existing, m.row));
     const rebased = m.baseVersion != null && serverVersion > m.baseVersion;
     return { status: rebased ? "rebased" : "accepted", row: updated };
   }

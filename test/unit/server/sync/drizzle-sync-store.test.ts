@@ -208,4 +208,24 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     expect(res.status).toBe("conflict");
     expect(res.status === "conflict" && res.reason).toMatch(/ogiltigt id/);
   });
+
+  // #1280: klienten byter namn på ett dokument innan den hunnit pulla serverns
+  // klassning. Radpushen bär de gamla metadata — klassningen ska stå kvar.
+  it("en radpush med inaktuella metadata återställer inte serverns dokumentklassning (#1280)", async () => {
+    const m = uuidv7(), doc = uuidv7(), user = uuidv7();
+    await repos.matters.create({ id: m, organizationId: ORG, title: "Klassning", status: "ACTIVE", matterNumber: "2026-1280" } as never);
+    const uploaded = {
+      id: doc, matterId: m, fileName: "stamning.pdf", mimeType: "application/pdf",
+      sizeBytes: 10, storagePath: "documents/content/y", uploadedById: user, documentType: null, analysisStatus: "PENDING", analyzedAt: null,
+    };
+    await repos.documents.create(uploaded as never);
+    // Serverns jobb klassar dokumentet.
+    await repos.documents.updateMetadata(asId<"DocumentId">(doc), { documentType: "STAMNING", analysisStatus: "DONE", analyzedAt: new Date("2026-09-01T10:00:00Z") } as never);
+
+    const res = await sync.push(ORG, mut("document", "update", { ...uploaded, fileName: "stamning-tingsratten.pdf" }));
+    expect(res.status).not.toBe("conflict");
+    expect(await repos.documents.getById(asId<"DocumentId">(doc))).toMatchObject({
+      fileName: "stamning-tingsratten.pdf", documentType: "STAMNING", analysisStatus: "DONE",
+    });
+  });
 });
