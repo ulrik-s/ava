@@ -182,7 +182,7 @@ export default function CalendarPage() {
       header={(
         <div className="mb-3">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><CalendarIcon size={24} /> Kalender</h1>
-          <p className="text-sm text-gray-500">Möten, förhandlingar, frister och tasks. Färgkodat per användare.</p>
+          <p className="text-sm text-gray-500">Möten, förhandlingar, frister och uppgifter. Färgkodat per användare.</p>
         </div>
       )}
     />
@@ -291,18 +291,18 @@ function EventList() {
 
 // ─── Task-list ────────────────────────────────────────────────────────────
 
-/** Tasks-sektionen: rubrik + "ny task"-toggle + listan. */
+/** Uppgifter: rubrik + "Ny uppgift"-toggle + listan. */
 function TasksSection() {
   const [showNewTask, setShowNewTask] = useState(false);
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold text-gray-800">Tasks</h2>
+        <h2 className="text-lg font-semibold text-gray-800">Uppgifter</h2>
         <button
           onClick={() => setShowNewTask((v) => !v)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
         >
-          <Plus size={14} /> Ny task
+          <Plus size={14} /> Ny uppgift
         </button>
       </div>
       {showNewTask && <NewTaskForm onClose={() => setShowNewTask(false)} />}
@@ -319,7 +319,7 @@ function TaskList() {
   const del = trpc.task.delete.useMutation({ onSuccess: () => utils.task.list.invalidate() });
 
   if (isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;
-  if (!tasks?.length) return <p className="text-sm text-gray-400 italic">Inga tasks ännu.</p>;
+  if (!tasks?.length) return <p className="text-sm text-gray-400 italic">Inga uppgifter ännu.</p>;
 
   return (
     <ul className="divide-y divide-gray-100 bg-white rounded-lg border border-gray-200">

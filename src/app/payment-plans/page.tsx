@@ -17,10 +17,17 @@ import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 
 type Status = "ACTIVE" | "COMPLETED" | "CANCELLED";
 
+/** Filterknapparna: vilka planer som visas (plural). */
 const STATUS_LABEL: Record<Status, string> = {
   ACTIVE: "Aktiva",
   COMPLETED: "Slutförda",
   CANCELLED: "Avbrutna",
+};
+/** En plans status på raden (singular) — förr filterknappens "AKTIVA" (#1309). */
+const ROW_STATUS_LABEL: Record<Status, string> = {
+  ACTIVE: "Aktiv",
+  COMPLETED: "Slutförd",
+  CANCELLED: "Avbruten",
 };
 const STATUS_PILL: Record<Status, string> = {
   ACTIVE: "bg-green-100 text-green-800",
@@ -83,10 +90,10 @@ const planColumns: Column<PlanRow>[] = [
   { key: "klient", label: "Klient", sortable: true,
     sortValue: (p) => p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "",
     render: (p) => <span className="text-sm text-gray-500">{p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "—"}</span> },
-  { key: "status", label: "Status", sortable: true, sortValue: (p) => STATUS_LABEL[p.status],
+  { key: "status", label: "Status", sortable: true, sortValue: (p) => ROW_STATUS_LABEL[p.status],
     render: (p) => (
       <span className={`text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${STATUS_PILL[p.status]}`}>
-        {STATUS_LABEL[p.status]}
+        {ROW_STATUS_LABEL[p.status]}
       </span>
     ),
   },

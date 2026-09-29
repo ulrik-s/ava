@@ -1,6 +1,6 @@
 /**
  * CalendarPage (#27) — lista-vyn (EventList/TaskList + badges), samt
- * skapa-flödena (Nytt event → calendar.create, Ny task → task.create) och
+ * skapa-flödena (Nytt event → calendar.create, Ny uppgift → task.create) och
  * rad-åtgärder (ta bort event, klar/ta bort task).
  */
 
@@ -94,9 +94,11 @@ describe("CalendarPage — lista + skapa-flöden", () => {
     expect(calCreate).toHaveBeenCalledWith(expect.objectContaining({ title: "Möte" }));
   });
 
-  it("'Ny task' → fyll titel → Skapa → task.create", () => {
+  it("'Ny uppgift' → fyll titel → Skapa → task.create", () => {
     render(<CalendarPage />);
-    fireEvent.click(screen.getByRole("button", { name: /Ny task/ }));
+    // Svensk rubrik (#1309) — förr "Tasks".
+    expect(screen.getByRole("heading", { name: "Uppgifter", level: 2 })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ny uppgift/ }));
     const titleInput = screen.getAllByRole("textbox")[0] as HTMLInputElement;
     fireEvent.change(titleInput, { target: { value: "Skriv inlaga" } });
     fireEvent.click(screen.getByRole("button", { name: /^Skapa$/ }));

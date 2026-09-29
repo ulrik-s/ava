@@ -19,8 +19,3 @@ export function eventIso(startDaysAgo: number, dayOffset: number, hour = 10): st
   // betalning eller avskrivning daterad i framtiden. Klampa hela tidpunkten.
   return (d > now ? now : d).toISOString();
 }
-
-/** Klockslag (HH:MM) för en tjänsteanteckning, härlett ur timmen. */
-export function eventTime(hour = 10): string {
-  return `${String(hour).padStart(2, "0")}:00`;
-}

@@ -6,14 +6,12 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { INVOICE_STATUS_LABELS, type InvoiceStatus, type InvoiceType } from "@/lib/shared/schemas/enums";
+import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, type InvoiceStatus, type InvoiceType } from "@/lib/shared/schemas/enums";
 import { SieExportButton } from "./_sie-export-button";
 
-const TYPE_LABELS: Record<string, string> = {
-  STANDARD: "Faktura",
-  ACCONTO: "Aconto",
-  FINAL: "Slutfaktura",
-};
+/** Fakturatyperna, ur de delade etiketterna (förr en egen lista utan kreditfaktura,
+ *  som visades som rått "CREDIT", #1309). I listan heter en standardfaktura "Faktura". */
+const TYPE_LABELS: Record<InvoiceType, string> = { ...INVOICE_TYPE_LABELS, STANDARD: "Faktura" };
 
 function statusBadgeClass(status: InvoiceStatus): string {
   switch (status) {
@@ -61,8 +59,8 @@ const invoiceColumns: Column<InvoiceRow>[] = [
       </EntityLink>
     ),
   },
-  { key: "type", label: "Typ", sortable: true, sortValue: (i) => TYPE_LABELS[i.invoiceType] ?? i.invoiceType,
-    render: (i) => <span className="text-gray-600">{TYPE_LABELS[i.invoiceType] ?? i.invoiceType}</span> },
+  { key: "type", label: "Typ", sortable: true, sortValue: (i) => TYPE_LABELS[i.invoiceType],
+    render: (i) => <span className="text-gray-600">{TYPE_LABELS[i.invoiceType]}</span> },
   { key: "status", label: "Status", sortable: true, sortValue: (i) => INVOICE_STATUS_LABELS[i.status] ?? i.status,
     render: (i) => (
       <span className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${statusBadgeClass(i.status)}`}>
