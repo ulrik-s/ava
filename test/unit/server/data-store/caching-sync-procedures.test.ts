@@ -35,6 +35,15 @@ describe("runQueuedProcedure", () => {
     expect(await ds.store.timeEntries.findUnique({ where: { id } })).toMatchObject({ id });
   });
 
+  it("körningen får anropets identitet — samma mutationId och tid som köas (#1276)", async () => {
+    const ds = await store();
+    let seen: { mutationId: string; at: number } | undefined;
+    await ds.runQueuedProcedure({ path: "timeEntry.create", input: {} }, async (queued) => { seen = queued; });
+    const [item] = ds.pendingEntries();
+    expect(seen).toBeDefined();
+    expect(item).toMatchObject({ mutationId: seen?.mutationId, enqueuedAt: seen?.at });
+  });
+
   it("en rad som berörs flera gånger står bara en gång i touches", async () => {
     const ds = await store();
     const id = uuidv7();

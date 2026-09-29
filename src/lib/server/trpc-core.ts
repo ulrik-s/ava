@@ -27,6 +27,7 @@ import type { IDataStore } from "./data-store/IDataStore";
 import type { QueuedProcedureCall } from "./data-store/in-memory/mutation-queue";
 import type { ProcedureReplayResult } from "./data-store/in-memory/sync-transport";
 import type { IPorts } from "./ports";
+import type { QueuedCallIdentity } from "./queued-call";
 import type { Repositories } from "./repositories/repositories";
 import type { SyncStore } from "./sync/sync-store";
 
@@ -74,6 +75,12 @@ export type Context = {
    * nytt per anrop via `logged`-middleware:n nedan.
    */
   requestId?: string;
+  /**
+   * Satt när ett köat anrop körs (#1276, ADR 0037) — i klientens optimistiska
+   * körning och i serverns omkörning. Skapade rader och affärsdatum härleds
+   * ur det (`queued-call.ts`), så båda körningarna skriver samma rader.
+   */
+  queued?: QueuedCallIdentity;
 };
 
 const t = initTRPC.context<Context>().create({

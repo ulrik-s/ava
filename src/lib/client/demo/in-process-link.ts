@@ -13,6 +13,7 @@
 
 import { TRPCClientError, type TRPCLink } from "@trpc/client";
 import { observable } from "@trpc/server/observable";
+import type { QueuedCallIdentity } from "@/lib/server/queued-call";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { appRouter } from "@/lib/server/routers/_app";
 import type { Context } from "@/lib/server/trpc-core";
@@ -21,9 +22,14 @@ import { SharedExclusiveLock } from "./shared-exclusive-lock";
 
 /**
  * Spelar in ett köbart procedur-anrop (#1265, ADR 0037): kör `exec` lokalt och
- * köar anropet (inte raderna) för auktoritativ omkörning på servern.
+ * köar anropet (inte raderna) för auktoritativ omkörning på servern. `exec`
+ * får anropets identitet (#1276) — samma som servern kör om med, så att båda
+ * körningarna skapar rader med samma id och samma affärsdatum.
  */
-export type ProcedureRecorder = <T>(call: { path: string; input: Record<string, unknown> }, exec: () => Promise<T>) => Promise<T>;
+export type ProcedureRecorder = <T>(
+  call: { path: string; input: Record<string, unknown> },
+  exec: (queued: QueuedCallIdentity) => Promise<T>,
+) => Promise<T>;
 
 export interface InProcessLinkOpts {
   /** Satt i self-hosted (server-first); utan den (demo) körs allt direkt. */
@@ -43,7 +49,8 @@ export function inProcessLink(ctx: Context, opts: InProcessLinkOpts = {}): TRPCL
     if (!recorder || type !== "mutation") return fn(input);
     const prepared = isQueuedProcedure(path) ? prepareQueuedInput(path, input) : null;
     if (!prepared) return lock.shared(() => fn(input));
-    return lock.exclusive(() => recorder({ path, input: prepared }, () => fn(prepared)));
+    return lock.exclusive(() => recorder({ path, input: prepared }, (queued) =>
+      resolvePath(appRouter.createCaller({ ...ctx, queued }), path)(prepared)));
   };
 
   return () => ({ op }) =>

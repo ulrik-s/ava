@@ -23,6 +23,8 @@
  */
 
 import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
+import { uuidv7 } from "@/lib/shared/uuid";
+import type { QueuedCallIdentity } from "../../queued-call";
 import type { CursorStore } from "./cursor-store";
 import { InMemoryCursorStore } from "./cursor-store";
 import { SOURCE_KEY_BY_ENTITY } from "./entity-source-keys";
@@ -159,16 +161,20 @@ export class CachingSyncDataStore {
    * procedurer exklusivt (`SharedExclusiveLock`), så ingen samtidig mutations
    * skrivningar hamnar i fångsten.
    */
-  async runQueuedProcedure<T>(call: ProcedureCallInput, run: () => Promise<T>): Promise<T> {
+  async runQueuedProcedure<T>(call: ProcedureCallInput, run: (queued: QueuedCallIdentity) => Promise<T>): Promise<T> {
+    // Anropets identitet bestäms FÖRE körningen (#1276): den lokala körningen
+    // och serverns omkörning härleder skapade id:n och datum ur samma värden.
+    const at = Date.now();
+    const identity: QueuedCallIdentity = { mutationId: uuidv7(at), at };
     const touches: ProcedureTouch[] = [];
     this.hooks.capture.touches = touches;
     let result: T;
     try {
-      result = await this.store.transaction(() => run());
+      result = await this.store.transaction(() => run(identity));
     } finally {
       this.hooks.capture.touches = null;
     }
-    await this.queue.enqueueProcedure({ path: call.path, input: call.input, touches });
+    await this.queue.enqueueProcedure({ path: call.path, input: call.input, touches }, { mutationId: identity.mutationId, now: identity.at });
     await this.persistSnapshot();
     for (const listener of this.hooks.localChangeListeners) listener();
     return result;

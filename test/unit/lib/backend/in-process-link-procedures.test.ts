@@ -14,6 +14,8 @@ import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import { asId } from "@/lib/shared/schemas/ids";
+import { derivedId } from "@/lib/shared/sync/derived-id";
 import { isUuid } from "@/lib/shared/uuid";
 
 function ctx() {
@@ -21,12 +23,15 @@ function ctx() {
   return buildContext({ dataStore: ds, ports: buildGitPorts(ds), principal: new GitAuthProvider().getPrincipal() });
 }
 
+/** Anropets identitet som inspelaren ger körningen (#1276). */
+const Q = { mutationId: "01928f3a-1b2c-7d4e-8f00-112233445566", at: Date.UTC(2026, 0, 2) };
+
 type Op = { type: "query" | "mutation"; path: string; input: unknown };
 
 /** En inspelare som minns anropen och kör dem. */
 function spyRecorder(): { recorder: ProcedureRecorder; calls: Array<{ path: string; input: unknown }> } {
   const calls: Array<{ path: string; input: unknown }> = [];
-  const recorder: ProcedureRecorder = async (call, exec) => { calls.push(call); return exec(); };
+  const recorder: ProcedureRecorder = async (call, exec) => { calls.push(call); return exec(Q); };
   return { recorder, calls };
 }
 
@@ -50,7 +55,7 @@ describe("inProcessLink — köbara procedurer", () => {
 
   it("proceduren körs med SAMMA input som spelas in (id:t följer med)", async () => {
     let executedWith: unknown;
-    const recorder: ProcedureRecorder = async (call, exec) => { executedWith = call.input; return exec(); };
+    const recorder: ProcedureRecorder = async (call, exec) => { executedWith = call.input; return exec(Q); };
     const link = inProcessLink(ctx(), { recordProcedure: recorder });
     await invoke(link, { type: "mutation", path: "timeEntry.delete", input: { id: "0190a1b2-0000-7000-8000-000000000001" } })
       .catch(() => undefined);
@@ -73,7 +78,7 @@ describe("inProcessLink — köbara procedurer", () => {
   it("en vanlig mutation väntar tills en pågående köbar procedur är klar", async () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((r) => { release = r; });
-    const recorder: ProcedureRecorder = async (_call, exec) => { await gate; return exec(); };
+    const recorder: ProcedureRecorder = async (_call, exec) => { await gate; return exec(Q); };
     const link = inProcessLink(ctx(), { recordProcedure: recorder });
     const events: string[] = [];
     const first = invoke(link, { type: "mutation", path: "timeEntry.delete", input: { id: "x" } })
@@ -101,11 +106,25 @@ describe("inProcessLink — köbara procedurer", () => {
   it("frågor väntar inte på en pågående mutation", async () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((r) => { release = r; });
-    const recorder: ProcedureRecorder = async (_call, exec) => { await gate; return exec(); };
+    const recorder: ProcedureRecorder = async (_call, exec) => { await gate; return exec(Q); };
     const link = inProcessLink(ctx(), { recordProcedure: recorder });
     const pendingMutation = invoke(link, { type: "mutation", path: "timeEntry.delete", input: { id: "x" } }).catch(() => undefined);
     await expect(invoke(link, { type: "query", path: "doesNot.exist", input: {} })).rejects.toThrow(/No procedure/i);
     release();
     await pendingMutation;
+  });
+
+  it("proceduren körs med anropets identitet i contexten (#1276) — skapade rader får härledda id:n", async () => {
+    const matterId = "0190a1b2-0000-7000-8000-00000000000a";
+    const ds = new DemoDataStore({ matters: [{ id: matterId, organizationId: "demo-firma-ab", title: "Ärende", status: "ACTIVE", matterNumber: "2026-1" }] }, () => {});
+    const principal = new GitAuthProvider({ organizationId: asId<"OrganizationId">("demo-firma-ab"), id: asId<"UserId">("u1") }).getPrincipal();
+    const c = buildContext({ dataStore: ds, ports: buildGitPorts(ds), principal });
+    const recorder: ProcedureRecorder = async (_call, exec) => exec(Q);
+    const link = inProcessLink(c, { recordProcedure: recorder });
+    const created = await invoke(link, {
+      type: "mutation", path: "expectedReceivable.create",
+      input: { matterId, description: "Domstolen", expectedAmount: 100 },
+    }) as { id: string };
+    expect(created.id).toBe(derivedId(Q.mutationId, "expectedReceivable"));
   });
 });

@@ -46,8 +46,10 @@ billigt, eftersom **klient och server redan kör samma `appRouter`**.
    kollega hann fakturera samma poster) visas för användaren (#1266).
 
 **Krav på procedurerna** för att få köas:
-- *Deterministiska givet input:* id:n (UUIDv7) och tidsstämplar skapas i klienten
-  och skickas med i input; proceduren läser inte egen klocka eller slump.
+- *Deterministiska givet input och anropets identitet:* id:n (UUIDv7) och
+  tidsstämplar skapas i klienten och skickas med i input, eller härleds ur
+  anropet (`newRowId`, `callTime`, #1276); proceduren läser inte egen klocka
+  eller slump för affärsvärden.
 - *Sidoeffekter bara på servern:* jobb, e-post och externa anrop körs endast i
   serverns körning (ADR 0021 kvarstår).
 - *Idempotenta* via `mutationId`.
@@ -62,6 +64,17 @@ inte flyttats; servern validerar radkön under övergången (#1242).
 **Genomfört (#1265):** kärnan (kö-format, `sync.replay`, `sync_replays`,
 exklusiv lokal körning med `touches`) och tidsposterna
 (`timeEntry.create/update/delete`). Se `docs/architecture.md` → Procedur-kön.
+
+**Genomfört (#1276):** utläggen (`expense.*`) och faktureringens första del:
+`invoice.recordPayment/writeOff/setStatus/createPaymentPlan/cancelPaymentPlan`,
+`paymentPlan.cancel` och `expectedReceivable.*`. Procedurer som skapar flera
+rader behöver inte ta alla id:n i input: anropet har en identitet
+(`ctx.queued = { mutationId, at }`) som klientens körning och serverns omkörning
+delar. `newRowId(ctx, roll)` härleder radens id ur `mutationId` och rollen
+(`derived-id.ts`, ett UUIDv7 med anropets tidsstämpel), och `callTime(ctx)` ger
+när anropet gjordes. Affärsdatum som saknas i input (avskrivningsdag,
+anteckningens datum) blir därmed samma i båda körningarna. Svaret läser alla
+berörda rader via entitetens repo, avgränsat till byrån (`entity-repo.ts`).
 
 ## Konsekvenser
 
