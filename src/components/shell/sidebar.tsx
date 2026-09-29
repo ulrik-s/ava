@@ -185,7 +185,7 @@ function SidebarHeader({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
 function DesktopSidebar({ pathname, userName }: { pathname: string; userName?: string | null | undefined }) {
   const [collapsed, toggle] = useCollapsed();
   return (
-    <div className={cn("hidden lg:flex lg:flex-col lg:border-r lg:border-gray-200 lg:bg-white lg:shrink-0", collapsed ? "lg:w-16" : "lg:w-64")}>
+    <div data-desktop-sidebar className={cn("hidden lg:flex lg:flex-col lg:border-r lg:border-gray-200 lg:bg-white lg:shrink-0", collapsed ? "lg:w-16" : "lg:w-64")}>
       <SidebarHeader collapsed={collapsed} onToggle={toggle} />
       <nav className={cn("flex-1 py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
         <NavLinks pathname={pathname} iconOnly={collapsed} />
@@ -196,8 +196,27 @@ function DesktopSidebar({ pathname, userName }: { pathname: string; userName?: s
 }
 
 /**
+ * Ikonmenyn för 768–1023 px (#1301): en halv skärm i en tiling-fönsterhanterare
+ * eller en surfplatta. Alltid bara ikoner (namnen som tooltip), utan fäll ut —
+ * bredden räcker inte till hela menyn, men menyn ska synas till vänster.
+ */
+function IconSidebar({ pathname, userName }: { pathname: string; userName?: string | null | undefined }) {
+  return (
+    <div data-icon-sidebar className="hidden md:flex md:w-16 md:shrink-0 md:flex-col md:border-r md:border-gray-200 md:bg-white lg:hidden">
+      <div className="flex h-16 items-center justify-center border-b border-gray-200">
+        <h1 className="text-base font-bold text-gray-900">AVA</h1>
+      </div>
+      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
+        <NavLinks pathname={pathname} iconOnly />
+      </nav>
+      <UserSection userName={userName} iconOnly />
+    </div>
+  );
+}
+
+/**
  * Medan toppremsan finns: märk <html>, så att den flytande temaknappen döljs
- * under 1024 px (globals.css) — temaknappen står då i toppremsan (#1297).
+ * på telefon (globals.css) — temaknappen står då i toppremsan (#1297).
  */
 function useMarkMobileTopbar(): void {
   useEffect(() => {
@@ -213,10 +232,11 @@ export function Sidebar({ userName }: SidebarProps) {
 
   return (
     <>
-      {/* Toppremsa under 1024 px. I flödet (inte fixed): en fast toppremsa låg
-          ovanpå statusraden och demobannern (#1297). Temaknappen står här,
-          bredvid menyknappen — den flytande låg förr ovanpå den. */}
-      <div data-mobile-topbar className="lg:hidden flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4">
+      {/* Toppremsa på telefon (under 768 px; 768–1023 px har ikonmenyn, #1301).
+          I flödet (inte fixed): en fast toppremsa låg ovanpå statusraden och
+          demobannern (#1297). Temaknappen står här, bredvid menyknappen — den
+          flytande låg förr ovanpå den. */}
+      <div data-mobile-topbar className="md:hidden flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-bold text-gray-900">AVA</h1>
           <span className="text-xs text-gray-500">Advokat CRM</span>
@@ -243,7 +263,7 @@ export function Sidebar({ userName }: SidebarProps) {
 
       {/* Mobile overlay */}
       {open && (
-        <div className="lg:hidden fixed inset-0 z-40" onClick={() => setOpen(false)}>
+        <div className="md:hidden fixed inset-0 z-40" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/30" />
           <nav
             className="absolute top-0 left-0 bottom-0 w-64 bg-white shadow-xl pt-4 flex flex-col"
@@ -261,7 +281,8 @@ export function Sidebar({ userName }: SidebarProps) {
         </div>
       )}
 
-      {/* Desktop sidebar */}
+      {/* 768–1023 px: ikonmeny (#1301). 1024 px och uppåt: hela sidomenyn. */}
+      <IconSidebar pathname={pathname} userName={userName} />
       <DesktopSidebar pathname={pathname} userName={userName} />
     </>
   );

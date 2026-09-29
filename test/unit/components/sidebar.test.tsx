@@ -2,7 +2,7 @@
  * Test för Sidebar — navigation, aktiv markering, mobile drawer, lokal sign-out.
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { Sidebar } from "@/components/shell/sidebar";
@@ -119,6 +119,26 @@ describe("Sidebar", () => {
     expect(bar?.querySelector('[aria-label="Öppna meny"]')).not.toBeNull();
   });
 
+  // #1301: 768–1023 px (halv skärm i en tiling-fönsterhanterare) — ikonmeny
+  // till vänster i stället för bara ☰. Toppremsan gäller bara telefon.
+  it("toppremsan och mobilmenyn gäller bara under 768 px (md:hidden)", () => {
+    const { container } = render(<Sidebar />);
+    expect(container.querySelector("[data-mobile-topbar]")?.className).toMatch(/\bmd:hidden\b/);
+  });
+
+  it("768–1023 px: en ikonmeny (bara ikoner, med namn som tooltip) utan fäll ut-knapp", () => {
+    const { container } = render(<Sidebar />);
+    const rail = container.querySelector<HTMLElement>("[data-icon-sidebar]");
+    expect(rail).not.toBeNull();
+    expect(rail?.className).toMatch(/\bhidden\b/);
+    expect(rail?.className).toMatch(/\bmd:flex\b/);
+    expect(rail?.className).toMatch(/\blg:hidden\b/);
+    const matters = rail?.querySelector('a[href="/matters"]');
+    expect(matters?.getAttribute("title")).toBe("Ärenden");
+    expect(rail?.querySelector('[aria-label="Fäll ut menyn"], [aria-label="Fäll ihop menyn"]')).toBeNull();
+    expect(rail?.querySelector('[aria-label="Logga ut"]')).not.toBeNull();
+  });
+
   it("märker <html> medan toppremsan finns (den flytande temaknappen döljs då), och tar bort märket efteråt", () => {
     const { unmount } = render(<Sidebar />);
     expect(document.documentElement.hasAttribute("data-mobile-topbar")).toBe(true);
@@ -172,18 +192,25 @@ describe("Sidebar", () => {
 });
 
 describe("Sidebar — hopfällt ikon-läge (#1198)", () => {
+  /** Den stora sidomenyn (från 1024 px) — ikonmenyn för 768–1023 px har egna länkar (#1301). */
+  const desktop = (): HTMLElement => {
+    const el = document.querySelector<HTMLElement>("[data-desktop-sidebar]");
+    if (!el) throw new Error("ingen desktop-sidomeny");
+    return el;
+  };
+
   it("visar fullt läge som standard med Fäll ihop-knapp", () => {
     render(<Sidebar userName="Anna Karlsson" />);
     expect(screen.getByRole("button", { name: "Fäll ihop menyn" })).toBeInTheDocument();
     expect(screen.getAllByText("Advokat CRM").length).toBe(2);
-    const links = screen.getAllByRole("link", { name: "Kontakter" });
+    const links = within(desktop()).getAllByRole("link", { name: "Kontakter" });
     expect(links.every((l) => l.getAttribute("title") === null)).toBe(true);
   });
 
   it("fäller ihop: länkar får title, namnet blir sr-only och läget sparas", () => {
     render(<Sidebar userName="Anna Karlsson" />);
     fireEvent.click(screen.getByRole("button", { name: "Fäll ihop menyn" }));
-    const titled = screen.getAllByRole("link", { name: "Kontakter" }).filter((l) => l.getAttribute("title") === "Kontakter");
+    const titled = within(desktop()).getAllByRole("link", { name: "Kontakter" }).filter((l) => l.getAttribute("title") === "Kontakter");
     expect(titled.length).toBe(1);
     expect(titled[0]!.querySelector(".sr-only")?.textContent).toBe("Kontakter");
     expect(screen.getByRole("button", { name: "Fäll ut menyn" })).toBeInTheDocument();
@@ -237,7 +264,7 @@ describe("Sidebar — hopfällt ikon-läge (#1198)", () => {
     localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", token: "ghp_x", principalId: "u-uuid" }));
     render(<Sidebar />);
     fireEvent.click(screen.getByRole("button", { name: "Fäll ihop menyn" }));
-    const logout = screen.getByRole("button", { name: "Logga ut" });
+    const logout = within(desktop()).getByRole("button", { name: "Logga ut" });
     expect(logout.getAttribute("title")).toBe("Logga ut");
     fireEvent.click(logout);
     await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));

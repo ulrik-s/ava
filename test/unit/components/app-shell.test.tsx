@@ -40,7 +40,8 @@ describe("AppShell", () => {
     const main = container.querySelector("main");
     expect(main?.className).not.toContain("pt-16");
     expect(main?.parentElement?.className).toContain("flex-col");
-    expect(main?.parentElement?.className).toContain("lg:flex-row");
+    // Sida vid sida från 768 px: där står ikonmenyn till vänster (#1301).
+    expect(main?.parentElement?.className).toContain("md:flex-row");
   });
 
   it("renderar barn-content som main", () => {
