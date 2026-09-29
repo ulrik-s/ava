@@ -7,7 +7,7 @@
  *
  * Designval (per Material/Apple HIG):
  *   • Position: fixed top-right, alltid synlig oavsett scroll/route.
- *     Under `lg` (1024 px) står den i stället i toppremsan bredvid
+ *     På telefon (under 768 px, #1301) står den i stället i toppremsan bredvid
  *     "Öppna meny" (`variant="inline"`), och den flytande döljs
  *     (globals.css). Förr låg den flytande ovanpå menyknappen, och
  *     huvudmenyn gick inte att öppna i smala fönster eller på telefon (#1297).
@@ -44,7 +44,7 @@ const VARIANT_CLASS = {
   inline: "inline-flex items-center justify-center h-9 w-9 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900",
 } as const;
 
-/** `floating` (standard): i övre hörnet. `inline`: i toppremsan under 1024 px (#1297). */
+/** `floating` (standard): i övre hörnet. `inline`: i toppremsan på telefon (#1297, #1301). */
 export function ThemeToggle({ variant = "floating" }: { variant?: keyof typeof VARIANT_CLASS }) {
   const theme = useSyncExternalStore(subscribeTheme, readThemeClass, serverTheme);
   const toggle = (): void => applyTheme(theme === "dark" ? "light" : "dark");

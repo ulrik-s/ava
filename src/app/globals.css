@@ -200,10 +200,11 @@ body {
 }
 .dv-tab .dv-default-tab .dv-default-tab-content { margin-right: 0; }
 
-/* Under 1024 px står temaknappen i toppremsan (#1297); den flytande låg förr
-   ovanpå "Öppna meny". Toppremsan sätter `data-mobile-topbar` på <html> medan
-   den är monterad (inte `:has()` — Next-bygget tappade den regeln); sidor utan
-   toppremsa (t.ex. inloggningen) behåller den flytande. */
-@media (max-width: 1023.98px) {
+/* På telefon (under 768 px, där toppremsan visas — #1301) står temaknappen i
+   toppremsan (#1297); den flytande låg förr ovanpå "Öppna meny". Toppremsan
+   sätter `data-mobile-topbar` på <html> medan den är monterad (inte `:has()` —
+   Next-bygget tappade den regeln); sidor utan toppremsa (t.ex. inloggningen)
+   behåller den flytande. */
+@media (max-width: 767.98px) {
   html[data-mobile-topbar] [data-theme-toggle="floating"] { display: none; }
 }
