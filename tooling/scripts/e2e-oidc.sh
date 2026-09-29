@@ -29,6 +29,14 @@ COMPOSE=(docker compose -p "$PROJECT" -f tooling/docker/docker-compose.yml -f to
 cleanup() { "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
+# Appen själv (#1245): skalet skyddas inte längre av proxyn — det är appen som
+# frågar /oauth2/userinfo och skickar en utloggad användare till inloggningen.
+# Utan byggd `out/` servade web-containern ingenting och testerna gick bara
+# igenom för att proxyn omdirigerade innan någon fil lästes. Samma bygge som
+# konflikt-E2E:n (conflict-e2e.sh).
+echo "==> [0/4] Bygger appen (out/)…"
+bun run build:demo >/dev/null 2>&1
+
 echo "==> [1/4] Bygger + startar OIDC-stacken (web:${AVA_WEB_PORT}, keycloak:${KC_PORT})…"
 # --wait gatar på container-healthchecks (web blir healthy via /healthz).
 "${COMPOSE[@]}" up -d --build --wait --wait-timeout 180 web oauth2-proxy keycloak
