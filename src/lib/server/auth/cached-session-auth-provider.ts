@@ -13,10 +13,8 @@
  * abstraktion `buildContext({ principal })` matas med offline.
  */
 
+import { DEFAULT_OFFLINE_GRACE_MS } from "@/lib/shared/offline-grace";
 import type { AuthProvider, Principal } from "./principal";
-
-/** ~7 dagar — ADR 0018 default-grace. */
-export const DEFAULT_OFFLINE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface CachedSession {
   /** Den vid login verifierade principalen. */

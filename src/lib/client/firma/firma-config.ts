@@ -40,6 +40,12 @@ export interface FirmaConfig {
    * `/login` så användaren kan välja konto. Sätts av login-flowet.
    */
   principalId?: string;
+  /**
+   * När sessionen senast verifierades online (epoch-ms, #1245). Offline får
+   * användaren arbeta vidare under `principalId` inom grace-tiden räknat
+   * härifrån (ADR 0018). Saknas → aldrig verifierad.
+   */
+  sessionVerifiedAt?: number;
   /** Användarnamn för commits. */
   authorName: string;
   authorEmail: string;
@@ -122,6 +128,7 @@ const storedFirmaConfigSchema = z.object({
   token: z.string().optional(),
   organizationId: z.string().optional(),
   principalId: z.string().optional(),
+  sessionVerifiedAt: z.number().finite().optional().catch(undefined),
   authorName: z.string().optional(),
   authorEmail: z.string().optional(),
   corsProxy: z.string().optional(),

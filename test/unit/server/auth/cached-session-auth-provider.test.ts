@@ -4,11 +4,9 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import {
-  CachedSessionAuthProvider,
-  DEFAULT_OFFLINE_GRACE_MS,
-} from "@/lib/server/auth/cached-session-auth-provider";
+import { CachedSessionAuthProvider } from "@/lib/server/auth/cached-session-auth-provider";
 import type { Principal } from "@/lib/server/auth/principal";
+import { DEFAULT_OFFLINE_GRACE_MS } from "@/lib/shared/offline-grace";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {

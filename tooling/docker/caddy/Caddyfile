@@ -47,18 +47,13 @@
 		reverse_proxy server-first:3001
 	}
 
-	# ─── Den statiska appen: kräver inloggning ─────────────────────────
-	# Speglar nginx-selfhosted.conf: utloggad → till IdP:n (inte en naken
-	# 401), och hårda navigeringar till runtime-id:n → shell-routing-shimmen.
+	# ─── Den statiska appen: OSKYDDAD (#1245) ──────────────────────────
+	# Skalet är statiska filer utan data. Det laddas utan inloggning så att det
+	# går att starta vid ett IdP-avbrott; klienten frågar själv /oauth2/userinfo
+	# och skickar en utloggad användare till /oauth2/start. Data finns bara
+	# bakom /api, som kräver session. Hårda navigeringar till runtime-id:n →
+	# shell-routing-shimmen, som i nginx-selfhosted.conf.
 	handle {
-		forward_auth oauth2-proxy:4180 {
-			uri /oauth2/auth
-			copy_headers X-Auth-Request-Email
-			@unauthenticated status 401
-			handle_response @unauthenticated {
-				redir * /oauth2/start?rd={scheme}://{host}{uri}
-			}
-		}
 		root * /srv/ava
 		route {
 			@shell {

@@ -17,8 +17,9 @@ test("bevakning idag: röd i ärendet och i Att bevaka på startsidan", async ({
   const section = page.getByRole("region", { name: "Att bevaka" }).last();
   await expect(section).toBeVisible({ timeout: 25_000 });
 
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  // "Idag" i byråns tid — samma dag som appen räknar med (stockholmDay), inte
+  // testmaskinens UTC-datum (som är gårdagen mellan 22 och 24 UTC).
+  const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm" }).format(new Date());
   await section.getByLabel("Bevakning", { exact: true }).fill("E2E-bevakning: överklagandefrist");
   await section.getByLabel("Bevakningsdatum").fill(today);
   await section.getByRole("button", { name: "Lägg till" }).click();

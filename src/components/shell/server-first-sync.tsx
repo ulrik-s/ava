@@ -2,6 +2,8 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { revalidateSession } from "@/lib/client/auth/revalidate-session";
+import { probeUserinfo } from "@/lib/client/backend/oidc-principal";
 import { requestPersistentStorageOnce, type StoragePersistence } from "@/lib/client/storage/persistent-storage";
 import { syncStateFromCachingSync, type CachingSyncStatus } from "@/lib/client/sync/caching-sync-status";
 import { notifyServerSynced, registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
@@ -69,6 +71,12 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
       isOnline: () => navigator.onLine,
       onStatus: setStatus,
       onRemoteChanges: () => { void queryClient.invalidateQueries(); },
+      // 401 (#1245): sessionen gick ut → inloggningen; kontot spärrat → besked.
+      onUnauthorized: () => revalidateSession({
+        probe: () => probeUserinfo(),
+        redirect: (url) => { window.location.assign(url); },
+        location: () => window.location,
+      }),
     });
     const unsubscribe = store.onLocalChange(() => scheduler.notifyChange());
     const unregister = registerServerSyncFlush(async () => {

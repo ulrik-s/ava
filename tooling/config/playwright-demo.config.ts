@@ -40,6 +40,10 @@ export default defineConfig({
   outputDir: path.join(projectRoot, "reports/playwright-demo"),
   use: {
     baseURL,
+    // Byråns tid (svensk). Appen räknar "idag" i Europe/Stockholm (stockholmDay);
+    // en UTC-webbläsare hamnar på gårdagen mellan 22 och 24 UTC och fick
+    // datumkänsliga tester (frist idag) att falla varje kväll.
+    timezoneId: "Europe/Stockholm",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     // Service workern (#1240) blockeras som default: varje test får en färsk

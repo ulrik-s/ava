@@ -41,17 +41,22 @@ function makeArgs(over: Partial<Parameters<typeof bootstrapSelfHosted>[0]> = {})
   };
 }
 
-// Konfigurerbara OIDC-mocks (sätts per test).
-const fetchOidcClaims = vi.fn(async () => null);
+// Konfigurerbara OIDC-mocks (sätts per test). Default: ingen oauth2-proxy.
+const probeUserinfo = vi.fn(async (): Promise<unknown> => ({ kind: "absent" }));
 const classifyOidcLogin = vi.fn(() => ({ kind: "no-session" }) as unknown);
 vi.mock("@/lib/client/backend/oidc-principal", () => ({
-  fetchOidcClaims: (...a: unknown[]) => fetchOidcClaims(...(a as [])),
+  probeUserinfo: (...a: unknown[]) => probeUserinfo(...(a as [])),
   classifyOidcLogin: (...a: unknown[]) => classifyOidcLogin(...(a as [])),
 }));
 
+const NOW = Date.UTC(2026, 8, 30);
+const gateEnv = () => ({ now: () => NOW, redirect: vi.fn(), location: () => ({ pathname: "/ava/matters/", search: "" }) });
+const lena = { email: "a@b.se", subject: "", issuer: "", name: "A" };
+
 beforeEach(() => {
   vi.clearAllMocks();
-  fetchOidcClaims.mockResolvedValue(null);
+  localStorage.clear();
+  probeUserinfo.mockResolvedValue({ kind: "absent" });
   classifyOidcLogin.mockReturnValue({ kind: "no-session" });
 });
 
@@ -82,6 +87,7 @@ describe("bootstrapSelfHosted", () => {
   });
 
   it("OIDC-first-login (ingen principalId): frågar storens user.list", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "ok", claims: lena });
     const listQuery = vi.fn(async () => ({ users: [] }));
     const args = makeArgs({
       firmaConfig: noPrincipal as FirmaConfig,
@@ -94,7 +100,7 @@ describe("bootstrapSelfHosted", () => {
   });
 
   it("#628: skickar user.list-ARRAYEN (inte {users}-objektet) till classify", async () => {
-    fetchOidcClaims.mockResolvedValueOnce({ email: "lawyer@ava.test", subject: "", issuer: "", name: "" } as never);
+    probeUserinfo.mockResolvedValueOnce({ kind: "ok", claims: { email: "lawyer@ava.test", subject: "", issuer: "", name: "" } });
     const allowlist = [{ id: "u1", email: "lawyer@ava.test", name: "Lena", role: "LAWYER" }];
     const args = makeArgs({
       firmaConfig: noPrincipal as FirmaConfig,
@@ -103,5 +109,39 @@ describe("bootstrapSelfHosted", () => {
     await bootstrapSelfHosted(args);
     // Andra argumentet MÅSTE vara arrayen — inte `{ users: [...] }`.
     expect(classifyOidcLogin).toHaveBeenCalledWith(expect.anything(), allowlist);
+  });
+
+  // ── Sessionsgrinden (#1245) ──────────────────────────────────────────────
+  it("inloggad med samma identitet: bygger storen och noterar när sessionen verifierades", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "ok", claims: lena });
+    const args = makeArgs({ gateEnv: gateEnv() });
+    await bootstrapSelfHosted(args);
+    expect(args.setStatus).toHaveBeenCalledWith("ready");
+    expect(JSON.parse(localStorage.getItem("ava.firma") ?? "{}")).toMatchObject({ sessionVerifiedAt: NOW });
+  });
+
+  it("utloggad: till inloggningen med tillbaka-länk — ingen store byggs", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "unauthenticated" });
+    const env = gateEnv();
+    const args = makeArgs({ gateEnv: env });
+    await bootstrapSelfHosted(args);
+    expect(env.redirect).toHaveBeenCalledWith("/oauth2/start?rd=%2Fava%2Fmatters%2F");
+    expect(args.makeStore).not.toHaveBeenCalled();
+  });
+
+  it("offline inom grace: arbetar vidare under den cachade identiteten", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "unreachable" });
+    const args = makeArgs({ gateEnv: gateEnv(), firmaConfig: { ...baseConfig, sessionVerifiedAt: NOW - 1000 } });
+    await bootstrapSelfHosted(args);
+    expect(args.setStatus).toHaveBeenCalledWith("ready");
+  });
+
+  it("offline efter grace: tydligt besked, ingen store", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "unreachable" });
+    const args = makeArgs({ gateEnv: gateEnv(), firmaConfig: { ...baseConfig, sessionVerifiedAt: NOW - 30 * 24 * 3600 * 1000 } });
+    await bootstrapSelfHosted(args);
+    expect(args.setStatus).toHaveBeenCalledWith("error");
+    expect(args.setErrorMsg).toHaveBeenCalledWith(expect.stringMatching(/Anslut till nätet/));
+    expect(args.makeStore).not.toHaveBeenCalled();
   });
 });

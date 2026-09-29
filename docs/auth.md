@@ -24,10 +24,12 @@ docker compose -f tooling/docker/docker-compose.yml \
 
 **Komponenter:**
 
-- `nginx-oidc.conf` — nginx gat:ar appen + `/git/` med `auth_request` →
-  `oauth2-proxy`. 401 → `/oauth2/start` (OIDC-inloggning). Eftersom appen och
-  `/git/` är samma origin följer oauth2-proxy-cookien automatiskt med iso-gits
-  `fetch` → git-push/pull funkar utan klient-token-kod.
+- `nginx-oidc.conf` — nginx gat:ar `/git/` (och `/api/` i
+  `nginx-selfhosted.conf` / Caddyfile) med `auth_request` → `oauth2-proxy`;
+  utan session blir det en naken 401. **App-skalet gat:as inte** (#1245): det är
+  statiska filer utan data, och klienten skickar själv en utloggad användare
+  till `/oauth2/start`. Eftersom appen och `/git/` är samma origin följer
+  oauth2-proxy-cookien automatiskt med `fetch`.
 - `oauth2-proxy` — OIDC relying party. Pekas mot byråns IdP via
   `OAUTH2_PROXY_OIDC_ISSUER_URL` + `CLIENT_ID`/`CLIENT_SECRET`; cookie-secret
   ur secrets-valvet (#79). `keycloak`-tjänsten i overlayen är **endast dev/test**
@@ -40,6 +42,41 @@ docker compose -f tooling/docker/docker-compose.yml \
   (`src/lib/client/backend/oidc-principal.ts`) och auktoriserar mot
   användar-allowlisten i firma.git via `OidcAuthProvider` (#223). Okänd email
   nekas (autentisering ≠ auktorisering).
+
+### Sessionen i klienten och IdP-avbrott (#1245, ADR 0018)
+
+Vid varje start frågar klienten `/oauth2/userinfo`
+(`src/lib/client/auth/session-gate.ts`):
+
+| Svar | Klienten gör |
+|---|---|
+| Inloggad, samma identitet | Startar och noterar `sessionVerifiedAt` |
+| Inloggad, ny/annan identitet | Binder principalen mot användarlistan (som förut) |
+| Utloggad (401, omdirigering) | Skickar till `/oauth2/start?rd=<sidan>` |
+| Nås inte (nätverk, 5xx) | Startar under den cachade identiteten om den verifierades online inom **7 dagar**; annars ett besked om att ansluta |
+| Finns inte (404, basic-auth-drift) | Som förut |
+
+Vid synk omvalideras sessionen när servern svarar 401: utloggad → till
+inloggningen; inloggad men servern vägrar → kontot är spärrat, och användaren
+får veta att osynkade ändringar ligger kvar på enheten men inte sparas
+(karantän). Kön töms aldrig tyst.
+
+**När IdP:n (t.ex. Entra) är nere:**
+
+- Den som redan har en giltig proxysession märker inget: oauth2-proxy
+  validerar sin egen cookie utan IdP:n.
+- Den vars session gått ut kan inte logga in på nytt förrän IdP:n är uppe
+  igen, men **appen startar ändå** — skalet kommer från service workern eller
+  servern utan inloggning. Utan nät arbetar hen offline inom grace-tiden;
+  ändringarna köas och synkas efter nästa inloggning.
+- Servern tar aldrig emot data utan giltig session: `/api` och `/git` gat:as
+  fortfarande av proxyn, och principalen omvalideras vid varje anrop.
+
+Den cachade identiteten (`principalId`, e-post, `sessionVerifiedAt` i
+`ava.firma`) är ingen hemlighet: den ger ingen åtkomst till servern, bara till
+det som redan finns lokalt på enheten. Sessionshemligheten är proxyns
+HttpOnly-cookie. Option B i ADR 0018 (`offline_access`-refresh-token) är inte
+byggd.
 
 **Skarp drift (env, ur valvet):**
 

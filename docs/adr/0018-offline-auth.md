@@ -149,6 +149,26 @@ med verifierad principal; återkallad → karantän (surface-konflikt). Detta kr
 **ingen** ändring i reconcile-sekvensen — bara att principal-verifieringen körs som
 en del av server-validering per mutation.
 
+### Genomfört (#1245)
+
+Option A (fallback) är byggd för webbklienten; Option B är inte byggd.
+
+- Proxyn skyddar bara data (`/api`, `/git`). App-skalet laddas utan inloggning,
+  så appen startar även när IdP:n är nere.
+- Klientens sessionsgrind (`src/lib/client/auth/session-gate.ts`) frågar
+  `/oauth2/userinfo` vid varje start. Utloggad → inloggningen. Nås servern
+  inte → den cachade identiteten gäller inom grace-tiden (7 dagar från
+  `sessionVerifiedAt`, senaste lyckade verifiering online).
+- Ett 401 vid synk omvaliderar sessionen: utgången → inloggningen; giltig
+  session men avvisad → kontot är spärrat, ändringarna hålls kvar (karantän)
+  med besked. Inget töms tyst.
+- **Avvikelse från "krypterad i vila":** den cachade identiteten är ingen
+  bearer-hemlighet — den ger ingen serveråtkomst (proxyns HttpOnly-cookie är
+  sessionshemligheten), bara det som redan ligger okrypterat lokalt
+  (IndexedDB). Kryptering av just identiteten skulle inte skydda något. Den
+  ligger därför i `ava.firma` (localStorage). Refresh-tokens (Option B) ska
+  krypteras om de införs.
+
 ## Konsekvenser
 
 **Positivt**
