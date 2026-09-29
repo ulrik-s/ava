@@ -3,11 +3,12 @@
 import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { z } from "zod";
 import { loadFromStorage } from "@/lib/client/load-from-storage";
 import { confirmSignOutIfUnsynced } from "@/lib/client/sync/confirm-sign-out";
 import { cn } from "@/lib/client/utils";
+import { ThemeToggle } from "./theme-toggle";
 
 /**
  * Pure git-modell — ingen NextAuth-session. "Logga ut" rensar
@@ -194,33 +195,50 @@ function DesktopSidebar({ pathname, userName }: { pathname: string; userName?: s
   );
 }
 
+/**
+ * Medan toppremsan finns: märk <html>, så att den flytande temaknappen döljs
+ * under 1024 px (globals.css) — temaknappen står då i toppremsan (#1297).
+ */
+function useMarkMobileTopbar(): void {
+  useEffect(() => {
+    document.documentElement.dataset.mobileTopbar = "";
+    return () => { delete document.documentElement.dataset.mobileTopbar; };
+  }, []);
+}
+
 export function Sidebar({ userName }: SidebarProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  useMarkMobileTopbar();
 
   return (
     <>
-      {/* Mobile top bar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4">
+      {/* Toppremsa under 1024 px. I flödet (inte fixed): en fast toppremsa låg
+          ovanpå statusraden och demobannern (#1297). Temaknappen står här,
+          bredvid menyknappen — den flytande låg förr ovanpå den. */}
+      <div data-mobile-topbar className="lg:hidden flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-bold text-gray-900">AVA</h1>
           <span className="text-xs text-gray-500">Advokat CRM</span>
         </div>
-        <button
-          onClick={() => setOpen(!open)}
-          className="rounded-lg p-2 text-gray-600 hover:bg-gray-100"
-          aria-label="Öppna meny"
-        >
-          {open ? (
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-          )}
-        </button>
+        <div className="flex items-center gap-1">
+          <ThemeToggle variant="inline" />
+          <button
+            onClick={() => setOpen(!open)}
+            className="rounded-lg p-2 text-gray-600 hover:bg-gray-100"
+            aria-label="Öppna meny"
+          >
+            {open ? (
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Mobile overlay */}

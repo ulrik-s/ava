@@ -7,6 +7,10 @@
  *
  * Designval (per Material/Apple HIG):
  *   • Position: fixed top-right, alltid synlig oavsett scroll/route.
+ *     Under `lg` (1024 px) står den i stället i toppremsan bredvid
+ *     "Öppna meny" (`variant="inline"`), och den flytande döljs
+ *     (globals.css). Förr låg den flytande ovanpå menyknappen, och
+ *     huvudmenyn gick inte att öppna i smala fönster eller på telefon (#1297).
  *   • Icon-only (Sun/Moon) med tooltip — minimal visuell tyngd.
  *   • Subtil background med ring för att signalera tryckbarhet utan
  *     att stjäla fokus från huvudinnehållet.
@@ -35,7 +39,13 @@ function applyTheme(next: Theme): void {
   } catch { /* lagring blockerad — temat gäller bara den här sidan */ }
 }
 
-export function ThemeToggle() {
+const VARIANT_CLASS = {
+  floating: "fixed top-2 right-2 z-[60] inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/80 text-gray-600 shadow-sm ring-1 ring-gray-200 hover:bg-white hover:text-gray-900 backdrop-blur-sm transition",
+  inline: "inline-flex items-center justify-center h-9 w-9 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+} as const;
+
+/** `floating` (standard): i övre hörnet. `inline`: i toppremsan under 1024 px (#1297). */
+export function ThemeToggle({ variant = "floating" }: { variant?: keyof typeof VARIANT_CLASS }) {
   const theme = useSyncExternalStore(subscribeTheme, readThemeClass, serverTheme);
   const toggle = (): void => applyTheme(theme === "dark" ? "light" : "dark");
 
@@ -45,7 +55,8 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label={theme === "dark" ? "Byt till ljust läge" : "Byt till mörkt läge"}
       title={theme === "dark" ? "Ljust läge" : "Mörkt läge"}
-      className="fixed top-2 right-2 z-[60] inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/80 text-gray-600 shadow-sm ring-1 ring-gray-200 hover:bg-white hover:text-gray-900 backdrop-blur-sm transition"
+      data-theme-toggle={variant}
+      className={VARIANT_CLASS[variant]}
     >
       {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
     </button>

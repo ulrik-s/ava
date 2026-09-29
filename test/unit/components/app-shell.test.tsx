@@ -32,6 +32,17 @@ describe("AppShell", () => {
     expect(screen.getAllByText("Anna Advokat").length).toBeGreaterThan(0);
   });
 
+  // #1297: toppremsan (under 1024 px) ligger i flödet ovanför main — inte
+  // fixed ovanpå bannrarna — så main behöver ingen utfyllnad för den.
+  it("smala fönster: toppremsa och main staplas; main har ingen utfyllnad för en fast toppremsa", () => {
+    currentQuery.data = undefined;
+    const { container } = render(<AppShell>barn</AppShell>);
+    const main = container.querySelector("main");
+    expect(main?.className).not.toContain("pt-16");
+    expect(main?.parentElement?.className).toContain("flex-col");
+    expect(main?.parentElement?.className).toContain("lg:flex-row");
+  });
+
   it("renderar barn-content som main", () => {
     currentQuery.data = undefined;
     render(<AppShell><div data-testid="page-content">Innehåll</div></AppShell>);

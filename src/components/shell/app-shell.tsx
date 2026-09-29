@@ -36,9 +36,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <ExternalEditRegistrar />
       <DemoModeBanner />
       <ExternalEditIndicator />
-      <div className="flex flex-1 min-h-0">
+      {/* Under 1024 px staplas toppremsan (i flödet) och main; därefter sida vid sida (#1297). */}
+      <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
         <Sidebar userName={current.data?.name ?? null} />
-        <main className="flex-1 overflow-y-auto pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8 min-w-0">
+        <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 lg:p-8 min-w-0">
           {children}
         </main>
       </div>
