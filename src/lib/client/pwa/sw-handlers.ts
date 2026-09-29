@@ -49,7 +49,8 @@ export interface SwHandlers {
   activate(): Promise<void>;
   /** `null` → svara inte (browsern hanterar förfrågan själv). */
   handleFetch(request: Request): Promise<Response> | null;
-  handleMessage(data: unknown): Promise<void>;
+  /** Meddelande från en sida; ignoreras om `origin` inte är appens egen. */
+  handleMessage(data: unknown, origin: string): Promise<void>;
 }
 
 const CACHE_PREFIX = "ava-app-";
@@ -176,7 +177,13 @@ export function createSwHandlers(config: SwConfig, deps: SwDeps): SwHandlers {
     return null;
   }
 
-  async function handleMessage(data: unknown): Promise<void> {
+  /**
+   * Meddelanden från sidan. Bara från appens EGEN origin: webbläsaren levererar
+   * i praktiken bara därifrån, men workern litar inte på det (CodeQL
+   * js/missing-origin-check) — ett SKIP_WAITING byter skalet under öppna flikar.
+   */
+  async function handleMessage(data: unknown, origin: string): Promise<void> {
+    if (origin !== config.origin) return;
     if (typeof data === "object" && data !== null && "type" in data && data.type === "SKIP_WAITING") {
       await deps.skipWaiting();
     }
