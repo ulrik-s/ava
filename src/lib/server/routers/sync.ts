@@ -25,6 +25,8 @@ const queuedMutationSchema = z.object({
   previous: z.record(z.string(), z.unknown()).optional(),
   baseVersion: z.number().optional(),
   enqueuedAt: z.number(),
+  /** Köformatet (#1247) — saknas på poster köade före stämplingen. */
+  format: z.number().int().positive().optional(),
 });
 
 /** Ett köat procedur-anrop (#1265, ADR 0037). Fälten i `input` valideras av proceduren själv. */
@@ -36,6 +38,8 @@ const queuedProcedureCallSchema = z.object({
   codeVersion: z.string().max(200),
   touches: z.array(z.object({ entity: z.string().max(100), id: z.string().max(100) })).max(100),
   enqueuedAt: z.number(),
+  /** Köformatet (#1247) — saknas på poster köade före stämplingen. */
+  format: z.number().int().positive().optional(),
 });
 
 function requireSync(sync: SyncStore | undefined): SyncStore {

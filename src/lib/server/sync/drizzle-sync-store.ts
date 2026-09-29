@@ -17,6 +17,7 @@ import { and, asc, eq, gt } from "drizzle-orm";
 import { conflictClassOf } from "@/lib/shared/conflict-policy";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { asId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
 import type { PullResult, PulledChange, PushResult } from "../data-store/in-memory/sync-transport";
 import { changeLog } from "../db/schema";
@@ -24,6 +25,7 @@ import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
 import { entityRepo, type EntityRepo, type Row } from "./entity-repo";
 import { checkLocked, checkScope, type PushRejection } from "./push-guard";
+import { admitRow } from "./queue-admission";
 import { withoutServerOwned } from "./server-owned-fields";
 import type { SyncStore } from "./sync-store";
 
@@ -64,6 +66,8 @@ export class DrizzleSyncStore implements SyncStore {
   constructor(
     private readonly db: AppDb,
     private readonly repos: Repositories,
+    /** Köformatets gränser + migreringar (#1247); injicerbar i tester. */
+    private readonly queuePolicy: QueuePolicy = QUEUE_POLICY,
   ) {}
 
   private repoFor(entity: string): EntityRepo | null {
@@ -101,7 +105,15 @@ export class DrizzleSyncStore implements SyncStore {
     return { entity: r.entity, row: current };
   }
 
-  async push(organizationId: string, m: QueuedMutation): Promise<PushResult> {
+  async push(organizationId: string, queued: QueuedMutation): Promise<PushResult> {
+    // Köformatet (#1247): en för gammal post avvisas med ett besked; en äldre,
+    // stödd migreras; en nyare än servern kastar (klienten försöker igen).
+    const admission = admitRow(queued, this.queuePolicy);
+    if (admission.kind === "reject") return { status: "conflict", reason: admission.reason };
+    return this.pushAdmitted(organizationId, admission.entry);
+  }
+
+  private async pushAdmitted(organizationId: string, m: QueuedMutation): Promise<PushResult> {
     const repo = this.repoFor(m.entity);
     if (!repo) return { status: "conflict", reason: `okänd entitet: ${m.entity}` };
     // Ogiltigt (icke-uuid) rowId: kan aldrig lagras i de uuid-nycklade tabellerna.

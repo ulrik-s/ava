@@ -242,6 +242,15 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   tombstone). Klienten ersätter sitt optimistiska läge med dem i båda utfallen;
   en avvisning ytläggs som konflikt.
 - Övriga entiteter går via radkön tills de flyttas.
+- **Köformatet** (#1247, `src/lib/shared/sync/queue-format.ts`): varje köpost
+  (rad och anrop) stämplas med `format`. Poster utan stämpel skrevs före #1247 i
+  format 1. Servern (`queue-admission.ts`) kör dagens format som det är och
+  migrerar ett äldre, stött format steg för steg (`QUEUE_MIGRATIONS`). Ett för
+  gammalt format avvisas med ett tydligt besked; utfallet sparas, så kön
+  fastnar inte. Är klienten nyare än servern kastas ett tekniskt fel utan
+  utfall: posten ligger kvar och sparas när servern har uppgraderats. Höj
+  `QUEUE_FORMAT_VERSION` och lägg till migreringen när köpostens form eller en
+  köbar procedurs input ändras så att äldre poster inte klarar sig.
 
 ## Data-modell
 

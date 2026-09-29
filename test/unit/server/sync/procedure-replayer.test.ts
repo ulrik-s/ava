@@ -181,4 +181,37 @@ describe("DrizzleProcedureReplayer", () => {
     const logged = (await handle.db.select().from(changeLog)).filter((r) => r.rowId === id);
     expect(logged.map((r) => r.op)).toEqual(["create", "delete"]);
   });
+
+  // #1247: köformatet. En klient som varit offline länge kan ha köat anrop i ett
+  // format servern inte längre stöder — eller vara nyare än servern.
+  it("köformat nyare än servern → kastar, inget utfall sparas (klienten försöker igen)", async () => {
+    const id = uuidv7();
+    const c = { ...call("timeEntry.create", createInput(id), [id]), format: 99 };
+    await expect(replayer.replay(c, ctx)).rejects.toThrow(/Servern kör en äldre version/);
+    expect((await handle.db.select().from(syncReplays)).filter((r) => r.mutationId === c.mutationId)).toHaveLength(0);
+    expect(await repos.timeEntries.getById(asId<"TimeEntryId">(id))).toBeNull();
+  });
+
+  it("för gammalt köformat → avvisat med besked, sparat, och klientens rad blir en tombstone", async () => {
+    const strict = new DrizzleProcedureReplayer(handle.db, repos, { current: 2, min: 2, migrations: {} });
+    const id = uuidv7();
+    const c = { ...call("timeEntry.create", createInput(id), [id]), format: 1 };
+    const res = await strict.replay(c, ctx);
+    expect(res).toMatchObject({ status: "rejected", code: "PRECONDITION_FAILED" });
+    expect(res.status === "rejected" && res.reason).toMatch(/för gammal version av AVA/);
+    expect(res.rows).toEqual([{ entity: "timeEntry", row: { id }, deleted: true }]);
+    expect((await handle.db.select().from(syncReplays)).filter((r) => r.mutationId === c.mutationId)).toHaveLength(1);
+  });
+
+  it("ett äldre, stött köformat migreras och körs", async () => {
+    const migrating = new DrizzleProcedureReplayer(handle.db, repos, {
+      current: 2, min: 1,
+      migrations: { 1: (p) => ({ ...p, input: { ...p.input, minutes: Number(p.input?.hours) * 60 } }) },
+    });
+    const id = uuidv7();
+    const { minutes: _minutes, ...legacy } = createInput(id);
+    const res = await migrating.replay({ ...call("timeEntry.create", { ...legacy, hours: 2 }, [id]), format: 1 }, ctx);
+    expect(res.status).toBe("accepted");
+    expect(await repos.timeEntries.getById(asId<"TimeEntryId">(id))).toMatchObject({ minutes: 120 });
+  });
 });

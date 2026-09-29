@@ -12,6 +12,7 @@
  */
 
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { QUEUE_FORMAT_VERSION } from "@/lib/shared/sync/queue-format";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { IdbKv } from "./idb-kv";
 import type { MutationEvent, MutationKind } from "./writable-delegate";
@@ -30,6 +31,8 @@ export interface QueuedMutation {
   /** Observerad `version` vid mutationen (ADR 0017 optimistisk concurrency). */
   baseVersion?: number;
   enqueuedAt: number;
+  /** Köformatet posten skrevs i (#1247). Saknas på poster från före stämplingen = 1. */
+  format?: number | undefined;
 }
 
 /** En rad som ett köat procedur-anrop skrev lokalt (för att läsa tillbaka serverns läge). */
@@ -53,6 +56,8 @@ export interface QueuedProcedureCall {
   codeVersion: string;
   touches: ProcedureTouch[];
   enqueuedAt: number;
+  /** Köformatet posten skrevs i (#1247). Saknas på poster från före stämplingen = 1. */
+  format?: number | undefined;
 }
 
 /** En post i kön: en färdig rad eller ett procedur-anrop. */
@@ -139,6 +144,7 @@ export class MutationQueue {
       previous: event.previous,
       baseVersion: opts.baseVersion,
       enqueuedAt: opts.now ?? Date.now(),
+      format: QUEUE_FORMAT_VERSION,
     }) as QueuedMutation;
     this.items.push(item);
     await this.persist();
@@ -161,6 +167,7 @@ export class MutationQueue {
       codeVersion: opts.codeVersion ?? SYNC_CODE_VERSION,
       touches: call.touches,
       enqueuedAt: opts.now ?? Date.now(),
+      format: QUEUE_FORMAT_VERSION,
     };
     this.items.push(item);
     await this.persist();

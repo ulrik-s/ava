@@ -12,6 +12,7 @@ import {
   IndexedDbMutationQueuePersistence,
 } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
+import { QUEUE_FORMAT_VERSION } from "@/lib/shared/sync/queue-format";
 
 const ev = (o: Partial<MutationEvent<Record<string, unknown>>> = {}): MutationEvent<Record<string, unknown>> => ({
   entity: "invoice", kind: "create", row: { id: "inv-1", amount: 100 }, ...o,
@@ -26,6 +27,14 @@ describe("MutationQueue — kärna", () => {
     expect(q.size()).toBe(2);
     expect(q.pending().map((m) => ("row" in m ? (m.row as { id: string }).id : null))).toEqual(["a", "b"]);
     expect(b.enqueuedAt).toBe(2);
+  });
+
+  it("varje köpost stämplas med köformatet den skrevs i (#1247)", async () => {
+    const q = new MutationQueue();
+    const row = await q.enqueue(ev());
+    const call = await q.enqueueProcedure({ path: "timeEntry.create", input: {}, touches: [] });
+    expect(row.format).toBe(QUEUE_FORMAT_VERSION);
+    expect(call.format).toBe(QUEUE_FORMAT_VERSION);
   });
 
   it("enqueue är idempotent på explicit mutationId (re-enqueue = no-op)", async () => {
