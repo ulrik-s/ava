@@ -180,7 +180,16 @@ byrå   04:00  backup-pull.sh  ◄── hämtar nya, verifierar checksumma, pro
 (`age-keygen -o ~/.config/ava-backup/age.key`); bara den *publika* nyckeln
 ligger på servern (`/srv/ava/backup-recipient.txt`). Kapas servern kommer
 angriparen inte åt backuperna. **Förlorar ni den privata nyckeln går
-backuperna inte att läsa** — lägg en kopia i byråns lösenordshanterare.
+backuperna inte att läsa.** Därför, samma dag som nyckeln skapas (#1254):
+
+1. Lägg in hela `age.key` (tre rader) som en säker anteckning i byråns
+   lösenordshanterare. Den får inte bara ligga på datorn som hämtar.
+2. **Bevisa att kopian fungerar:** klistra ut den ur lösenordshanteraren till
+   en temporär fil och provåterställ med den (se *Provåterställning* nedan):
+   `bash tooling/scripts/backup-verify.sh ~/AVA-backup/<senaste>.tar.age /tmp/kopia.key`,
+   och radera sedan filen. En kopia som aldrig prövats är lika osäker som en
+   backup som aldrig återställts.
+3. Minst två personer på byrån ska kunna nå posten i lösenordshanteraren.
 
 **Servern:** en systemanvändare utan skal som bara når exportkatalogen
 read-only:
@@ -214,7 +223,50 @@ AVA_BACKUP_HOST=avabackup@ava.byra.se AVA_BACKUP_KEY=~/.config/ava-backup/age.ke
 
 Återställ från en hämtad kopia: `age -d -i age.key ava-<datum>.tar.age | tar -x`
 ger `ava-<datum>.sql.gz` (→ `restore-db.sh`) och `content.tar.gz` (packas upp i
-`content`-volymen).
+`content`-volymen). Steg för steg när servern är borta:
+[`runbook-aterstallning.md`](./runbook-aterstallning.md).
+
+#### Andra backupplatsen
+
+En enda dator på kontoret är fortfarande en enda plats: brand, stöld och
+ransomware på den datorn tar alla kopior. `backup-pull.sh` kopierar därför de
+verifierade exporterna till en **andra plats** när `AVA_BACKUP_MIRROR` är satt:
+en extern disk, en NAS eller en molnsynkad mapp, helst hos en annan leverantör
+eller på en annan adress.
+
+```bash
+AVA_BACKUP_HOST=avabackup@ava.byra.se AVA_BACKUP_KEY=~/.config/ava-backup/age.key \
+AVA_BACKUP_MIRROR=/Volumes/AVA-NAS/backup \
+  bash tooling/scripts/backup-pull.sh ~/AVA-backup
+```
+
+- Katalogen måste **finnas**. En omonterad volym larmar i stället för att
+  tyst bli en lokal katalog på samma disk.
+- Kopiorna kontrolleras mot sina checksummor vid varje körning, så en
+  sönderskriven spegel upptäcks. Gamla kopior gallras efter
+  `AVA_BACKUP_KEEP_DAYS`, som lokalt.
+- Kopiorna är krypterade. En molnleverantör ser bara chiffer, men nyckeln får
+  **aldrig** ligga i samma molnmapp.
+
+Alternativet är en andra hämtare på en annan plats: samma `backup-pull.sh` på
+en annan dator, med egen ssh-nyckel i `authorized_keys`. Servern påverkas inte
+av hur många som hämtar.
+
+#### Provåterställning (varje vecka)
+
+Hämtningen provdekrypterar varje natt. Det bevisar att filen går att *öppna*.
+`backup-verify.sh` bevisar att den går att **återställa**: den dekrypterar,
+läser in dumpen i en *engångs-Postgres* (docker) och kontrollerar att
+användarna och migrationerna finns och att **varje dokument databasen pekar på
+finns i dokumentarkivet**. Produktionen berörs inte.
+
+```bash
+bash tooling/scripts/backup-verify.sh ~/AVA-backup/ava-2026-09-29-0300.tar.age ~/.config/ava-backup/age.key
+```
+
+Lägg den i launchd eller cron varje söndag, på den senaste backupen. Samma
+kedja (export → dekryptering → återställning → kontroll) körs i CI av
+återställningsövningen nedan, mot en export med ett riktigt uppladdat dokument.
 
 ### Återställning
 
@@ -245,6 +297,11 @@ inte hinner ruttna. Kör den också mot din egen server första gången:
 ```bash
 bash tooling/scripts/restore-drill.sh
 ```
+
+Övningen går dessutom igenom **offsite-kedjan**: en krypterad export
+(`backup-export.sh`) med ett riktigt uppladdat dokument provåterställs med
+`backup-verify.sh` i en engångs-Postgres. Det är samma väg som används när
+servern är borta ([`runbook-aterstallning.md`](./runbook-aterstallning.md)).
 
 Steget "bekräfta att den är borta" är det som gör övningen ärlig — utan det
 skulle en återställning som inte gör någonting alls se ut att lyckas.

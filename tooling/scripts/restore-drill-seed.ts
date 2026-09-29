@@ -13,6 +13,9 @@
  * lägger till.
  */
 
+import { bytesToBase64 } from "@/lib/shared/content-address";
+import { asId } from "@/lib/shared/schemas/ids";
+import { uuidv7 } from "@/lib/shared/uuid";
 import { clientFor, seedUser, waitForServer } from "./e2e-harness";
 
 const USER = "drill@byra.se";
@@ -23,13 +26,24 @@ async function main(): Promise<void> {
   await waitForServer(c);
 
   const marker = `DRILL-${Date.now().toString(36)}`;
-  await c.matter.create.mutate({
+  const matter = await c.matter.create.mutate({
     matterNumber: marker,
     title: "Återställningsövning — markör",
     matterType: "Allmän praktik",
     paymentMethod: "PRIVAT",
     responsibleLawyerId: userId,
   });
+
+  // Ett dokument med riktigt innehåll (#1254): backup-verify.sh kontrollerar att
+  // varje dokument databasen pekar på finns i den krypterade exportens
+  // dokumentarkiv — utan ett uppladdat dokument vore den kontrollen tom.
+  const documentId = uuidv7();
+  const bytes = new TextEncoder().encode(`Återställningsövning ${marker}`);
+  await c.document.register.mutate({
+    id: documentId, matterId: matter.id, fileName: `${marker}.txt`, mimeType: "text/plain",
+    sizeBytes: bytes.byteLength, storagePath: `documents/content/${documentId}.txt`,
+  });
+  await c.document.uploadContent.mutate({ documentId: asId<"DocumentId">(documentId), contentBase64: bytesToBase64(bytes) });
 
   // Bara markören på stdout — scriptet läser den rakt av.
   console.log(marker);
