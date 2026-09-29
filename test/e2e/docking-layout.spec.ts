@@ -205,3 +205,31 @@ test("smal grupp: dolda flikar nås via en tydlig knapp, även med tangentbordet
   await hidden.click();
   await expect(page.getByRole("tab", { name: new RegExp(`^${title}`) })).toHaveAttribute("aria-selected", "true");
 });
+
+// #1293: den maximerade panelen återställs med en synlig knapp (testet ovan
+// använde bara Escape), och ett Escape som stänger en dialog återställer inte
+// också panelen.
+test("maximerad panel: synlig Återställ-knapp, och Escape stänger dialogen först", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  const tid = groupOf(page, "Tid");
+  const before = await groupSizes(page);
+
+  await tid.getByRole("button", { name: "Maximera panelen" }).click();
+  const restore = page.getByRole("button", { name: "Återställ panelen" });
+  await expect(restore).toBeVisible();
+  await expect(restore).toHaveText("Återställ");
+  await restore.click();
+  await expect(restore).toHaveCount(0);
+  await expect.poll(async () => (await groupSizes(page)).length).toBe(before.length);
+
+  await tid.getByRole("button", { name: "Maximera panelen" }).click();
+  await tid.getByRole("button", { name: /Registrera tid/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Registrera tid" });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(restore).toBeVisible(); // fortfarande maximerad
+  await page.keyboard.press("Escape");
+  await expect(restore).toHaveCount(0);
+});
