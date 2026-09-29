@@ -40,7 +40,7 @@ import type { Matter } from "@/lib/shared/schemas/matter";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
 import { logMatterNote } from "../billing/matter-note";
 import { emit } from "../events/emit";
-import { dateOrCallTime, newRowId } from "../queued-call";
+import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -119,9 +119,10 @@ function resolveWriteOffAmount(outstanding: number, requested?: number): number 
  * FINAL-körning hade flyttat ärendets fakturerings-fas. Låsregeln: `isLockedEntry`.
  */
 async function createRadgivningEntry(repos: Repositories, a: {
-  matterId: MatterId; invoiceId: InvoiceId; userId: UserId; when: Date; avgift: Radgivningsavgift;
+  matterId: MatterId; invoiceId: InvoiceId; userId: UserId; when: Date; avgift: Radgivningsavgift; scope: QueuedCallScope;
 }): Promise<TimeEntry> {
   return repos.timeEntries.create({
+    id: asId<"TimeEntryId">(newRowId(a.scope, "radgivningEntry")),
     matterId: a.matterId, userId: a.userId, date: a.when,
     minutes: a.avgift.minutes, description: RADGIVNING_DESCRIPTION, hourlyRate: a.avgift.rateOrePerH,
     kind: "ARBETE", billable: true, invoiceId: a.invoiceId, frozenAt: a.when,
@@ -191,14 +192,15 @@ export const invoiceRouter = router({
         // (#853): ärendets första händelse, betalas direkt av klienten → skapas
         // SKICKAD. Brutto (inkl moms) som alla klientfakturor. Dras ALDRIG av.
         // Datum = mötesdagen om angivet (#880: rådgivning faktureras samma dag som mötet), annars idag.
-        const when = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+        const when = dateOrCallTime(ctx, input.invoiceDate);
         // Norm efter mötesdagen (#897): rådgivning i nov 2025 → 2025 års timkostnadsnorm.
         const avgift = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }), date: when });
         const netOre = avgift.beloppExclVatOre;
         const grossOre = arvodeInclVatOre(netOre);
         const vatOre = grossOre - netOre;
-        const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId);
+        const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId, when.getFullYear());
         const invoice = await repos.invoices.create({
+          id: asId<"InvoiceId">(newRowId(ctx, "invoice")),
           matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
           amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }],
           invoiceType: "STANDARD", status: "DRAFT", invoiceDate: when, // "Skapad" tills den skickas (#1138)
@@ -209,7 +211,7 @@ export const invoiceRouter = router({
         await logMatterNote(repos, ctx, input.matterId, radgivningInvoicedNote(invoice.invoiceNumber, grossOre), when);
         await emit.invoiceCreated(ctx, invoice);
         const entry = await createRadgivningEntry(repos, {
-          matterId: input.matterId, invoiceId: invoice.id, userId: input.userId ?? asId<"UserId">(ctx.user.id), when, avgift,
+          matterId: input.matterId, invoiceId: invoice.id, userId: input.userId ?? asId<"UserId">(ctx.user.id), when, avgift, scope: ctx,
         });
         await emit.timeEntryAdded(ctx, entry);
         return { invoice, beloppExclVatOre: netOre };
@@ -267,11 +269,12 @@ export const invoiceRouter = router({
           await repos.paymentPlans.update(plan.id, { status: "CANCELLED" });
         }
 
+        const creditDate = callTime(ctx);
         const credit = await repos.invoices.create(omitUndefined({
           id: input.id, // undefined → store genererar
           notes: input.notes,
           matterId: original.matterId,
-          invoiceNumber: await repos.invoices.nextInvoiceNumber(ctx.orgId),
+          invoiceNumber: await repos.invoices.nextInvoiceNumber(ctx.orgId, creditDate.getFullYear()),
           amount: -original.amount,
           // Kreditnotan speglar originalet POST FÖR POST (#977): samma konton och
           // momssatser, omvända tecken. Förr bar den bara ett negativt belopp, så
@@ -280,7 +283,7 @@ export const invoiceRouter = router({
           ...mirroredCreditAmounts(original),
           invoiceType: "CREDIT",
           status: "SENT", // kreditfaktura är "färdig" direkt
-          invoiceDate: new Date(),
+          invoiceDate: creditDate,
           creditedInvoiceId: original.id,
         }) satisfies Partial<Invoice>);
 

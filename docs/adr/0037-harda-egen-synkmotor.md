@@ -75,6 +75,10 @@ delar. `newRowId(ctx, roll)` härleder radens id ur `mutationId` och rollen
 när anropet gjordes. Affärsdatum som saknas i input (avskrivningsdag,
 anteckningens datum) blir därmed samma i båda körningarna. Svaret läser alla
 berörda rader via entitetens repo, avgränsat till byrån (`entity-repo.ts`).
+Steg 2c: aconto-, slut-, kredit- och rådgivningsfakturor
+(`billingRun.createAcconto/createFinal`, `invoice.createCredit/createRadgivning`).
+Fakturanumret tilldelas i serverns körning i fakturadatumets serie; de poster
+slutfakturan fryser loggas i change_log (#1319) och följer med i svaret.
 
 ## Konsekvenser
 

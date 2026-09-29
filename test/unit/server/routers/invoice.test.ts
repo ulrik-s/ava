@@ -119,9 +119,11 @@ describe("invoice.createRadgivning", () => {
 
     expect(mockPrisma.timeEntry.create).toHaveBeenCalledTimes(1);
     const te = mockPrisma.timeEntry.create.mock.calls[0]![0].data;
+    // Fakturans id sätts av routern (#1276) — tidsposten kopplas till just den.
+    const invoiceId = mockPrisma.invoice.create.mock.calls[0]![0].data.id;
     expect(te).toMatchObject({
       matterId: "m1", userId: "user-1", minutes: 60, description: "Rådgivning", kind: "ARBETE",
-      billable: true, hourlyRate: 162_600, invoiceId: "rad-1",
+      billable: true, hourlyRate: 162_600, invoiceId,
     });
     // Låst: fryst samma dag som fakturan, utan billing-run (fasen flyttas inte).
     expect(te.frozenAt).toEqual(new Date("2026-03-02"));

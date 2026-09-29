@@ -68,9 +68,10 @@ import {
 } from "@/lib/shared/settlement-view";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { valueKrRun } from "../billing/kr-run-valuation";
-import { eventTime, logMatterNote } from "../billing/matter-note";
+import { logMatterNote } from "../billing/matter-note";
 import { removeVoidedKrDocuments } from "../billing/void-kr-documents";
 import { emit, type EmitCtx } from "../events/emit";
+import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
 import { nextInvoiceNumberFrom } from "../repositories/invoice-repository";
 import type { Repositories } from "../repositories/repositories";
@@ -222,8 +223,7 @@ async function sumPriorAccontos(repos: Repositories, matterId: MatterId): Promis
   return runs.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
 }
 
-async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId: BillingRunId): Promise<void> {
-  const now = new Date();
+async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId: BillingRunId, now: Date = new Date()): Promise<void> {
   await repos.timeEntries.freezeForMatter(matterId, billingRunId, now);
   await repos.expenses.freezeForMatter(matterId, billingRunId, now);
 }
@@ -360,11 +360,14 @@ async function linkFinalInvoice(
   invoiceId: InvoiceId,
   work: UnfrozenWork,
   deductedAccontoInvoiceIds: ReadonlyArray<InvoiceId>,
+  scope: QueuedCallScope = {},
 ): Promise<void> {
   await repos.timeEntries.flagBilled(work.timeEntries.filter((t) => t.billable).map((t) => t.id), invoiceId);
   await repos.expenses.flagBilled(work.expenses.filter((e) => e.billable).map((e) => e.id), invoiceId);
   for (const accontoInvoiceId of deductedAccontoInvoiceIds) {
-    await repos.accontoDeductions.create({ finalInvoiceId: invoiceId, accontoInvoiceId });
+    // Id per avdraget aconto (#1276): samma i klientens körning och serverns.
+    const id = asId<"AccontoDeductionId">(newRowId(scope, `accontoDeduction:${accontoInvoiceId}`));
+    await repos.accontoDeductions.create({ id, finalInvoiceId: invoiceId, accontoInvoiceId });
   }
 }
 
@@ -404,16 +407,13 @@ async function resolveFinalWork(
 /** Frys valda poster (per-post) eller hela ärendet (default). */
 async function freezeSelectedWork(
   repos: Repositories,
-  matterId: MatterId,
-  work: UnfrozenWork,
-  selected: boolean,
-  runId: BillingRunId,
+  a: { matterId: MatterId; work: UnfrozenWork; selected: boolean; runId: BillingRunId; now: Date },
 ): Promise<void> {
-  if (!selected) {
-    await freezeWork(repos, matterId, runId);
+  const { matterId, work, runId, now } = a;
+  if (!a.selected) {
+    await freezeWork(repos, matterId, runId, now);
     return;
   }
-  const now = new Date();
   await repos.timeEntries.freezeByIds(work.timeEntries.map((t) => t.id), runId, now);
   await repos.expenses.freezeByIds(work.expenses.map((e) => e.id), runId, now);
 }
@@ -455,8 +455,10 @@ async function invoiceNumbering(
   repos: Repositories,
   orgId: OrganizationId,
   recipient: BillingRunRecipient,
+  invoiceDate: Date = new Date(),
 ): Promise<{ invoiceNumber: string; ocrReference: string | null }> {
-  const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId);
+  // Serien är fakturadatumets år (ADR 0012) — samma som radkön (#1243).
+  const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId, invoiceDate.getFullYear());
   return { invoiceNumber, ocrReference: recipient === "DOMSTOL" ? null : ocrFromInvoiceNumber(invoiceNumber) };
 }
 
@@ -484,10 +486,13 @@ async function nextKrReference(repos: Repositories, orgId: OrganizationId): Prom
  * generatorn/fixtures kan styra dem). Default-invoiceDate = nu. Tomma → store
  * genererar id / sätter dueDate null.
  */
-function invoiceMeta(input: { id?: string | undefined; invoiceDate?: string | undefined; dueDate?: string | undefined }): Partial<{ id: ReturnType<typeof asId<"InvoiceId">>; invoiceDate: Date; dueDate: Date }> {
+function invoiceMeta(
+  scope: QueuedCallScope,
+  input: { id?: string | undefined; invoiceDate?: string | undefined; dueDate?: string | undefined },
+): Partial<{ id: ReturnType<typeof asId<"InvoiceId">>; invoiceDate: Date; dueDate: Date }> {
   return omitUndefined({
     id: input.id ? asId<"InvoiceId">(input.id) : undefined,
-    invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
+    invoiceDate: dateOrCallTime(scope, input.invoiceDate),
     dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
   });
 }
@@ -591,7 +596,9 @@ export const billingRunRouter = router({
         const work = await fetchUnfrozenWork(tx, input.matterId);
         const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
         if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-        const value = matterArvodeNet(matter, work, new Date()) + expenseNetOre(work);
+        const at = callTime(ctx);
+        const invoiceDate = dateOrCallTime(ctx, input.invoiceDate);
+        const value = matterArvodeNet(matter, work, at) + expenseNetOre(work);
         // #397: dra av tidigare aconton i det FÖRESLAGNA beloppet —
         // belopp = %-sats × upparbetat − Σ tidigare aconto-fakturor.
         const priorAccontoSumOre = await sumPriorAccontos(tx, input.matterId);
@@ -613,17 +620,18 @@ export const billingRunRouter = router({
             totalLabel: "Att betala (inkl moms)", totalOre: input.amountOre,
           },
           invoiceType: "ACCONTO", status: "DRAFT",
-          ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
-          ...invoiceMeta(input), notes: input.notes,
+          ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
+          ...invoiceMeta(ctx, input), notes: input.notes,
         });
         const run = await tx.billingRuns.create({
+          id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "ACCONTO", recipient: input.recipient,
           status: "SENT", workValueOreAtRun: value, clientShareBips: input.clientShareBips,
           proposedAmountOre: proposedOre, amountOre: input.amountOre,
           invoiceId: invoice.id, deductedBillingRunIds: [],
-          periodTo: new Date(), notes: input.notes,
+          periodTo: at, notes: input.notes,
         });
-        await logMatterNote(tx, ctx, input.matterId, invoiceCreatedNote(invoice.invoiceNumber, "ACCONTO", invoice.amount), eventTime(input.invoiceDate));
+        await logMatterNote(tx, ctx, input.matterId, invoiceCreatedNote(invoice.invoiceNumber, "ACCONTO", invoice.amount), invoiceDate);
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
@@ -655,24 +663,27 @@ export const billingRunRouter = router({
         // #968 (modell A): acontona har REDAN bokfört sin intäkt och sin moms.
         // Slutfakturan bär bara resten — annars bokförs acontot två gånger.
         const rest = deductAcconto(invoiceVatBreakdown(work), deductionOre);
+        const at = callTime(ctx);
+        const invoiceDate = dateOrCallTime(ctx, input.invoiceDate);
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: finalAmount, vatOre: vatOreOf(rest.lines),
           vatBreakdown: rest.lines,
           invoiceType: "FINAL", status: "DRAFT",
-          ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
-          ...invoiceMeta(input), notes: input.notes,
+          ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
+          ...invoiceMeta(ctx, input), notes: input.notes,
         });
         const run = await tx.billingRuns.create({
+          id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "FINAL", recipient: input.recipient,
           status: "SENT", workValueOreAtRun: grossValue,
           proposedAmountOre: grossValue, amountOre: finalAmount,
           invoiceId: invoice.id, deductedBillingRunIds: input.deductedBillingRunIds,
-          periodTo: new Date(), notes: input.notes,
+          periodTo: at, notes: input.notes,
         });
-        await freezeSelectedWork(tx, input.matterId, work, selected, run.id);
+        await freezeSelectedWork(tx, { matterId: input.matterId, work, selected, runId: run.id, now: at });
         // Länka posterna + acconto-avdrag → slutfaktura-vyn visar rätt arvode/utlägg (#728).
-        await linkFinalInvoice(tx, invoice.id, work, accontoInvoiceIds(deductedRuns));
-        await logMatterNote(tx, ctx, input.matterId, invoiceCreatedNote(invoice.invoiceNumber, "FINAL", invoice.amount), eventTime(input.invoiceDate));
+        await linkFinalInvoice(tx, invoice.id, work, accontoInvoiceIds(deductedRuns), ctx);
+        await logMatterNote(tx, ctx, input.matterId, invoiceCreatedNote(invoice.invoiceNumber, "FINAL", invoice.amount), invoiceDate);
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
