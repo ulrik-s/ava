@@ -165,6 +165,24 @@ describe("ExpenseRepository — frysning + perLawyer-period (in-memory)", () => 
   });
 });
 
+describe("ExpenseRepository.listForLawyerInPeriod — datum lagrade som strängar (#1303)", () => {
+  it("demolagret (JSON) har ISO-strängar: raderna filtreras och `date` blir Date", async () => {
+    const mId = uuidv7(), uId = uuidv7(), eIn = uuidv7(), eOut = uuidv7();
+    const store = new LocalStore({
+      matters: [{ id: mId, organizationId: "org-1", matterNumber: "2026-1", title: "T" }],
+      users: [{ id: uId, name: "Anna" }],
+      expenses: [
+        { id: eIn, userId: uId, matterId: mId, amount: 100, date: "2026-06-05T00:00:00.000Z", description: "juni" },
+        { id: eOut, userId: uId, matterId: mId, amount: 200, date: "2026-05-01T00:00:00.000Z", description: "maj" },
+      ],
+    }, async () => {});
+    const rows = await new InMemoryExpenseRepository(store).listForLawyerInPeriod(asId<"OrganizationId">("org-1"), asId<"UserId">(uId), new Date("2026-06-01"), new Date("2026-06-30"));
+    expect(rows.map((e) => e.id)).toEqual([eIn]);
+    expect(rows[0]!.date).toBeInstanceOf(Date);
+    expect(rows[0]!.date.toISOString()).toBe("2026-06-05T00:00:00.000Z");
+  });
+});
+
 describe("ExpenseRepository — frysning + perLawyer-period (Drizzle/pglite)", () => {
   let handle: TestDbHandle;
   beforeAll(async () => { handle = await createTestDb(); });

@@ -11,6 +11,15 @@
 import type { Delegate } from "../data-store/IDataStore";
 import type { Repository, RowBase } from "./types";
 
+/**
+ * `date` som Date. Demolagret laddas från JSON och lagrar datum som ISO-strängar,
+ * fast radtyperna säger `Date`. Rader som lämnar repot ska stämma med typen (#1303).
+ */
+export function withDateObject<T extends { date: Date }>(row: T): T {
+  const date: unknown = row.date;
+  return date instanceof Date ? row : { ...row, date: new Date(String(date)) };
+}
+
 export class InMemoryRepository<Row extends RowBase> implements Repository<Row> {
   constructor(
     protected readonly delegate: Delegate,

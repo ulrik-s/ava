@@ -8,7 +8,7 @@ import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
 import { isInvoicedOutsideCoverage } from "@/lib/shared/time-entry-lock";
 import type { IDataStore } from "../data-store/IDataStore";
-import { InMemoryRepository } from "./in-memory-repository";
+import { InMemoryRepository, withDateObject } from "./in-memory-repository";
 import type {
   LawyerReportTimeEntry, TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow,
   TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository,
@@ -180,11 +180,11 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
   async listForLawyerInPeriod(
     organizationId: OrganizationId, userId: UserId, from: Date, to: Date,
   ): Promise<LawyerReportTimeEntry[]> {
-    return (await this.delegate.findMany({
+    return ((await this.delegate.findMany({
       where: { matter: { organizationId }, userId, date: { gte: from, lte: to } },
       include: { matter: { include: { contacts: { where: { role: "KLIENT" }, include: { contact: { select: { name: true } } }, take: 1 } } } },
       orderBy: { date: "asc" },
-    })) as LawyerReportTimeEntry[];
+    })) as LawyerReportTimeEntry[]).map(withDateObject);
   }
 
   async listBillableForOrg(organizationId: OrganizationId): Promise<TimeEntry[]> {

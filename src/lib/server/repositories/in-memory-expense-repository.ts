@@ -9,7 +9,7 @@ import type { IDataStore } from "../data-store/IDataStore";
 import type {
   ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
 } from "./expense-repository";
-import { InMemoryRepository } from "./in-memory-repository";
+import { InMemoryRepository, withDateObject } from "./in-memory-repository";
 
 /** Delegaten repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
 export type ExpenseRepoSource = Pick<IDataStore, "expenses">;
@@ -103,10 +103,10 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
   async listForLawyerInPeriod(
     organizationId: OrganizationId, userId: UserId, from: Date, to: Date,
   ): Promise<LawyerReportExpense[]> {
-    return (await this.delegate.findMany({
+    return ((await this.delegate.findMany({
       where: { matter: { organizationId }, userId, date: { gte: from, lte: to } },
       include: { matter: { include: { contacts: { where: { role: "KLIENT" }, include: { contact: { select: { name: true } } }, take: 1 } } } },
       orderBy: { date: "asc" },
-    })) as LawyerReportExpense[];
+    })) as LawyerReportExpense[]).map(withDateObject);
   }
 }

@@ -10,8 +10,9 @@ const usersQuery = {
   data: undefined as Record<string, unknown> | undefined,
 };
 const reportQuery = {
-  data: undefined as Record<string, unknown> | undefined,
+  data: undefined as Record<string, unknown> | null | undefined,
   isLoading: false,
+  error: null as { message: string } | null,
 };
 const billedQuery = {
   data: undefined as Record<string, unknown> | undefined,
@@ -53,6 +54,7 @@ beforeEach(() => {
   usersQuery.data = { users: [{ id: "u1", name: "Anna" }, { id: "u2", name: "Bo" }] };
   reportQuery.data = undefined;
   reportQuery.isLoading = false;
+  reportQuery.error = null;
   billedQuery.data = undefined;
   billedQuery.isLoading = false;
 });
@@ -133,6 +135,26 @@ describe("ReportsPage", () => {
     reportQuery.isLoading = true;
     render(<ReportsPage />);
     expect(screen.getAllByText(/Laddar rapport/i).length).toBeGreaterThan(0); // en per rapportpanel (#1184)
+  });
+
+  it("rapporten felar → panelerna visar felet, inte \"Välj jurist och period.\" (#1303)", () => {
+    reportQuery.error = { message: "w.getUTCFullYear is not a function" };
+    render(<ReportsPage />);
+    expect(screen.getAllByText(/Rapporten kunde inte hämtas: w.getUTCFullYear is not a function/).length).toBe(4);
+    expect(screen.queryByText("Välj jurist och period.")).toBeNull();
+  });
+
+  it("advokaten finns inte (null) → säger det (#1303)", () => {
+    reportQuery.data = null;
+    render(<ReportsPage />);
+    expect(screen.getAllByText("Advokaten hittades inte.").length).toBe(4);
+    expect(screen.queryByText("Välj jurist och period.")).toBeNull();
+  });
+
+  it("ingen advokat att välja → \"Välj jurist och period.\"", () => {
+    usersQuery.data = { users: [] };
+    render(<ReportsPage />);
+    expect(screen.getAllByText("Välj jurist och period.").length).toBe(4);
   });
 
   it("renderar SummaryCard, MattersTable, WeeklyTable och UnbilledTable när data finns", () => {

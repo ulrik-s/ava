@@ -47,6 +47,17 @@ function lawyerNameFor(users: UserList, userId: UserId): string | undefined {
   return users?.users.find((u) => u.id === userId)?.name;
 }
 
+/**
+ * Vad rapportpanelerna visar när rapporten saknas. Fel och en advokat som inte
+ * hittas sägs rakt ut — förr visade båda "Välj jurist och period." (#1303).
+ */
+function reportStatusText(report: { isLoading: boolean; error: { message: string } | null; data: unknown }): string {
+  if (report.isLoading) return "Laddar rapport…";
+  if (report.error) return `Rapporten kunde inte hämtas: ${report.error.message}`;
+  if (report.data === null) return "Advokaten hittades inte.";
+  return "Välj jurist och period.";
+}
+
 /** Hämta Excel-exporten och trigga en nedladdning i browsern. */
 async function exportExcel(from: string, to: string, userId: UserId): Promise<void> {
   const params = new URLSearchParams({ from, to });
@@ -127,7 +138,7 @@ export default function ReportsPage() {
     { enabled: !!userId },
   );
 
-  const loading = <p className="text-sm text-gray-500">{report.isLoading ? "Laddar rapport…" : "Välj jurist och period."}</p>;
+  const loading = <p className="text-sm text-gray-500">{reportStatusText(report)}</p>;
   const r = report.data;
   const panels = [
     { id: "ar", title: "Kundfordringar", render: () => (
