@@ -10,7 +10,7 @@ import type {
 } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
-  DocumentAccessRow, DocumentListRow, DocumentRepository,
+  DocumentAccessRow, DocumentListRow, DocumentRepository, StoredContentRow,
 } from "./document-repository";
 import { InMemoryRepository } from "./in-memory-repository";
 
@@ -46,6 +46,11 @@ export class InMemoryDocumentRepository
       orderBy: { createdAt: "desc" },
       include: { uploadedBy: { select: { name: true } } },
     })) as DocumentListRow[];
+  }
+
+  async listStoredContent(): Promise<StoredContentRow[]> {
+    const rows = (await this.delegate.findMany({})) as Array<{ id: DocumentId; storagePath?: string; createdAt?: Date | string }>;
+    return rows.map((r) => ({ id: r.id, storagePath: r.storagePath ?? "", createdAt: new Date(r.createdAt ?? 0) }));
   }
 
   async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {

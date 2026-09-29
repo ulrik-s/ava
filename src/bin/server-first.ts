@@ -29,6 +29,7 @@ import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { emailStatusLine } from "@/lib/server/integrations/email/disabled-email-sender";
 import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-service";
+import { DEFAULT_INTEGRITY_INTERVAL_MS, runContentIntegrityCheck, scheduleContentIntegrity } from "@/lib/server/integrity/content-integrity";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { makeEmailPort } from "@/lib/server/jobs/queue-backed-email-sender";
@@ -37,7 +38,7 @@ import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import type { ILedgerService } from "@/lib/server/ports";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
-import { jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
+import { createLogger, jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
 
 function log(msg: string): void {
@@ -147,9 +148,23 @@ function main(): void {
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })
     .catch((err) => log(`jobb-kö start misslyckades (fortsätter utan): ${String(err)}`));
 
+  // Integritetskontroll (#1145): dokument med metadata men utan innehåll loggas
+  // som `content.integrity.missing` (level error) vid start och sedan dagligen.
+  // Bara med ett innehållslager — utan det saknas ju allt.
+  const stopIntegrity = contentStore
+    ? scheduleContentIntegrity({
+      run: () => runContentIntegrityCheck(
+        { listStoredContent: () => api.repos.documents.listStoredContent(), exists: (p) => contentStore.exists(p) },
+        createLogger({ orgId: config.organizationId }),
+      ),
+      intervalMs: DEFAULT_INTEGRITY_INTERVAL_MS,
+    })
+    : () => {};
+
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, () => {
       log(`${sig} — stoppar`);
+      stopIntegrity();
       server.close();
       void Promise.allSettled([api.close(), jobRuntime?.stop() ?? Promise.resolve()])
         .finally(() => process.exit(0));

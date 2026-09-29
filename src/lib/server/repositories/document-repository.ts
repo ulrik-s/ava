@@ -19,6 +19,13 @@ export interface DocumentAccessRow {
   matterId: MatterId;
 }
 
+/** Ett dokuments innehållsadress (#1145). */
+export interface StoredContentRow {
+  id: DocumentId;
+  storagePath: string;
+  createdAt: Date;
+}
+
 export interface DocumentRepository extends Repository<Document> {
   /** Paginerad lista i ett ärende/folder (createdAt desc) + total. */
   listInFolder(
@@ -30,6 +37,11 @@ export interface DocumentRepository extends Repository<Document> {
   listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>>;
   /** Dokument by id, org-scopat via ärendet. Null om saknas/annan org/raderat. */
   getByIdInOrg(id: DocumentId, organizationId: OrganizationId): Promise<DocumentAccessRow | null>;
+  /**
+   * Alla ej raderade dokuments innehållsadress + skapelsetid (#1145) — för
+   * integritetskontrollen som letar metadata utan innehåll.
+   */
+  listStoredContent(): Promise<StoredContentRow[]>;
   /** Flytta alla dokument i en folder till en annan (vid folder-radering). */
   reassignFolder(fromFolderId: DocumentFolderId, toFolderId: DocumentFolderId | null): Promise<void>;
 }
