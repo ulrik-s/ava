@@ -118,6 +118,22 @@ describe("TimeEntryRepository — frysning/perLawyer/billable (in-memory)", () =
   });
 });
 
+describe("TimeEntryRepository.listForLawyerInPeriod — datum lagrade som strängar (#1303)", () => {
+  it("demolagret (JSON) har ISO-strängar: raderna filtreras och `date` blir Date", async () => {
+    const f = teFixture();
+    const store = new LocalStore({
+      matters: [{ id: f.mId, organizationId: ORG, matterNumber: "2026-1", title: "T" }],
+      users: [{ id: f.uId, name: "Anna" }],
+      timeEntries: f.rows.map((r) => ({ ...r, date: r.date.toISOString() })),
+    }, async () => {});
+    const repo = new InMemoryTimeEntryRepository(store);
+    const period = await repo.listForLawyerInPeriod(asId<"OrganizationId">(ORG), asId<"UserId">(f.uId), new Date("2026-06-01"), new Date("2026-06-30"));
+    expect(period.map((t) => t.id)).toEqual([f.teEarly, f.teNonBill, f.teFrozen, f.teLate]);
+    for (const t of period) expect(t.date).toBeInstanceOf(Date);
+    expect(period[0]!.date.toISOString()).toBe("2026-06-01T00:00:00.000Z");
+  });
+});
+
 describe("TimeEntryRepository — frysning/perLawyer/billable (Drizzle/pglite)", () => {
   let handle: TestDbHandle;
   beforeAll(async () => { handle = await createTestDb(); });
