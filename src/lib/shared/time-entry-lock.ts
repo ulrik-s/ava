@@ -38,3 +38,12 @@ export function isLockedEntry(t: LockableEntry, ownRunId?: BillingRunId): boolea
 export function isInvoicedOutsideCoverage(t: LockableEntry): boolean {
   return t.frozenAt != null && t.frozenByBillingRunId == null;
 }
+
+/**
+ * Redovisad i ett underlag eller fakturerad (#1242, #1276): låst ELLER knuten
+ * till en faktura. En sådan post eller ett sådant utlägg får inte ändras i sak
+ * eller raderas — varken i routern eller via synk.
+ */
+export function isBilledEntry(t: LockableEntry & { invoiceId?: string | null | undefined }): boolean {
+  return t.invoiceId != null || isLockedEntry(t);
+}

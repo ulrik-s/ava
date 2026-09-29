@@ -80,3 +80,37 @@ test("offline-ändring av en tidspost som kollegan raderat återuppstår inte", 
   const { entries } = await admin.timeEntry.list.query({ matterId, pageSize: 100 });
   expect(entries.some((e) => e.id === entry.id), "posten får inte återskapas av offline-ändringen").toBe(false);
 });
+
+/**
+ * Utläggen (#1276) — samma sak: `expense.update` körs om på servern, som
+ * svarar NOT_FOUND för ett utlägg som kollegan raderat. Via radkön hade den
+ * ändrade raden återskapat det.
+ */
+test("offline-ändring av ett utlägg som kollegan raderat återuppstår inte", async ({ page, context }) => {
+  const admin = clientFor(await mintToken("admin", "admin"));
+  const description = `Utlägg raderas under avbrottet ${Date.now()}`;
+  const expense = await admin.expense.create.mutate({
+    matterId, date: new Date().toISOString().slice(0, 10), amount: 12_500, description,
+  });
+
+  await login(page, "lawyer", "lawyer");
+  await openMatter(page);
+  await page.getByRole("tab", { name: /^Utlägg/ }).first().click();
+  const row = page.getByRole("row").filter({ hasText: description });
+  await expect(row).toBeVisible({ timeout: 30_000 });
+
+  await context.setOffline(true);
+  await row.getByRole("button", { name: "Ändra" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ändra utlägg" });
+  await dialog.getByPlaceholder("Beskrivning *").fill(`${description} (ändrad offline)`);
+  await dialog.getByRole("button", { name: "Spara ändring" }).click();
+  await expect(page.getByText(`${description} (ändrad offline)`).first()).toBeVisible({ timeout: 15_000 });
+
+  await admin.expense.delete.mutate({ id: expense.id });
+
+  await context.setOffline(false);
+  await expect(page.getByText(description)).toHaveCount(0, { timeout: 30_000 });
+
+  const { expenses } = await admin.expense.list.query({ matterId, pageSize: 100 });
+  expect(expenses.some((e) => e.id === expense.id), "utlägget får inte återskapas av offline-ändringen").toBe(false);
+});

@@ -25,7 +25,7 @@
 import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
 import { asId, type OrganizationId } from "@/lib/shared/schemas/ids";
-import { isQueuedProcedure, queuedProcedureEntity } from "@/lib/shared/sync/queued-procedures";
+import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import type { ProcedureTouch, QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
 import type { ProcedureReplayResult, PulledChange } from "../data-store/in-memory/sync-transport";
 import { syncReplays } from "../db/schema";
@@ -48,6 +48,7 @@ type OrgScopedGetter = (repos: Repositories, id: string, orgId: OrganizationId) 
 /** Hur varje köbar entitet läses tillbaka org-scopat. Utökas när fler entiteter flyttas. */
 const ORG_SCOPED_GETTERS: Readonly<Record<string, OrgScopedGetter>> = {
   timeEntry: (repos, id, orgId) => repos.timeEntries.getByIdInOrg(asId<"TimeEntryId">(id), orgId),
+  expense: (repos, id, orgId) => repos.expenses.getByIdInOrg(asId<"ExpenseId">(id), orgId),
 };
 
 /** Porten sync-routern anropar (via `ctx.replayProcedure`). */
@@ -125,15 +126,15 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
     }).onConflictDoNothing();
   }
 
-  /** De berörda radernas kanoniska läge — bara procedurens entitet, bara inom byrån. */
+  /**
+   * De berörda radernas kanoniska läge, bara inom byrån. Alla berörda entiteter
+   * med en läsare — en procedur kan skriva flera (faktureringen, #1276).
+   */
   private async currentRows(call: QueuedProcedureCall, orgId: OrganizationId): Promise<PulledChange[]> {
-    const entity = queuedProcedureEntity(call.path);
-    const getter = entity ? ORG_SCOPED_GETTERS[entity] : undefined;
-    if (!entity || !getter) return [];
-    const touches = call.touches.filter((t: ProcedureTouch) => t.entity === entity);
-    return Promise.all(touches.map(async (t): Promise<PulledChange> => {
-      const row = await getter(this.repos, t.id, orgId);
-      return row ? { entity, row } : { entity, row: { id: t.id }, deleted: true };
+    const readable = call.touches.filter((t: ProcedureTouch) => ORG_SCOPED_GETTERS[t.entity] !== undefined);
+    return Promise.all(readable.map(async (t): Promise<PulledChange> => {
+      const row = await ORG_SCOPED_GETTERS[t.entity]?.(this.repos, t.id, orgId);
+      return row ? { entity: t.entity, row } : { entity: t.entity, row: { id: t.id }, deleted: true };
     }));
   }
 }

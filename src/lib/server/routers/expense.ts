@@ -8,7 +8,21 @@ import {
   expenseIdSchema,
   invoiceIdSchema,
 } from "@/lib/shared/schemas/ids";
+import { isBilledEntry } from "@/lib/shared/time-entry-lock";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
+
+/**
+ * Ett låst utlägg — fakturerat eller fryst av en körning — ändras inte och
+ * raderas inte (#1276): samma regel som tidsposterna och synk-pushen.
+ */
+function assertEditable(expense: Expense): void {
+  if (isBilledEntry(expense)) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Utlägget ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort.",
+    });
+  }
+}
 
 export const expenseRouter = router({
   list: protectedProcedure
@@ -34,7 +48,7 @@ export const expenseRouter = router({
       };
     }),
 
-  create: protectedProcedure
+  create: orgProcedure
     .input(
       z.object({
         matterId: matterIdSchema,
@@ -57,6 +71,10 @@ export const expenseRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Ärendet måste tillhöra byrån (#1276) — servern kör om anropet ur kön,
+      // och ett utlägg i en annan byrås ärende ska inte gå att skapa.
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
       return ctx.repos.expenses.create(omitUndefined({
         id: input.id, // undefined → store genererar
         userId: input.userId ?? asId<"UserId">(ctx.user.id),
@@ -91,6 +109,7 @@ export const expenseRouter = router({
       // `list`) INNAN update. NOT_FOUND vid mismatch — läcker inte existens.
       const owned = await ctx.repos.expenses.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      assertEditable(owned);
       const { id, date, amount, description, billable, vatRate, vatIncluded, passThrough } = input;
       return ctx.repos.expenses.update(id, omitUndefined({
         amount,
@@ -108,6 +127,7 @@ export const expenseRouter = router({
     .mutation(async ({ ctx, input }) => {
       const owned = await ctx.repos.expenses.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      assertEditable(owned);
       // Hård delete bevarar dagens beteende (utlägg tombstone-as ej). Se ADR 0017-
       // not om delete-policy (cross-cutting, ej avgjort per router).
       await ctx.repos.expenses.hardDelete(input.id);
