@@ -22,7 +22,7 @@ export interface CachingSyncStatus {
   syncing?: boolean;
   /** Epoch-ms för senaste lyckade reconcile (null = aldrig). */
   lastSyncedAt?: number | null;
-  /** Antal ytlagda surface-konflikter från senaste reconcile. */
+  /** Avvisade ändringar som väntar på användaren (#1266). */
   conflicts?: number;
   /** Felmeddelande från senaste reconcile (null = inget fel). */
   error?: string | null;
@@ -32,7 +32,7 @@ export interface CachingSyncStatus {
 export function syncStateFromCachingSync(status: CachingSyncStatus): SyncState {
   if (status.error) return { kind: "error", message: status.error };
   if (status.syncing) return { kind: "syncing", what: "push" };
-  if ((status.conflicts ?? 0) > 0) return { kind: "merge-needed" };
+  if (status.conflicts) return { kind: "rejected", count: status.conflicts };
   if (!status.online) return { kind: "offline", count: status.pendingCount };
   if (status.pendingCount > 0) return { kind: "pending", count: status.pendingCount };
   if (status.lastSyncedAt != null) return { kind: "synced", at: status.lastSyncedAt };

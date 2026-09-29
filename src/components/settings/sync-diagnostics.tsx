@@ -138,6 +138,7 @@ const LABEL_RENDERERS: { [K in SyncKind]: (s: SyncVariant<K>) => ReactNode } = {
   pending: (s) => <>⏳ {s.count} {pluralChanges(s.count)} — sparas inom kort</>,
   offline: (s) => <>⚠ Off-line — {s.count} {pluralChanges(s.count)} sparas lokalt</>,
   "merge-needed": () => <>⚠ Konflikt — behöver lösas manuellt</>,
+  rejected: (s) => <>⚠ {s.count} {s.count === 1 ? "ändring" : "ändringar"} avvisade av servern — se Avvisade ändringar</>,
   error: () => <>✗ Synk misslyckades — försöker igen automatiskt</>,
 };
 

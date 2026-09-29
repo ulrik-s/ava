@@ -32,6 +32,10 @@ import { loadAllGeneratedDocBlobs } from "../demo/generated-doc-idb";
 import { DocumentContentCache } from "./content-cache";
 import { queueLocalGeneratedDocs, syncDocumentContent } from "./content-sync";
 import { serverTrpcEndpoint } from "./http-backend-runtime";
+import {
+  IndexedDbRejectedChangesPersistence, InMemoryRejectedChangesPersistence, rejectedChanges,
+  type RejectedChanges, type RejectedChangesPersistence,
+} from "./rejected-changes";
 
 export type ServerFirstFetch = InjectableFetch;
 
@@ -46,6 +50,13 @@ export interface ServerFirstStoreDeps {
   fetch?: ServerFirstFetch;
   /** Hoppa initial reconcile (pull) — för tester som kontrollerar timing. */
   skipInitialReconcile?: boolean;
+  /** Var avvisade ändringar sparas (#1266). Default: flikens, i IndexedDB. */
+  rejected?: { changes: RejectedChanges; persistence: RejectedChangesPersistence };
+}
+
+/** IndexedDB i webbläsaren; i minnet där den saknas (tester, äldre miljöer). */
+function defaultRejectedPersistence(): RejectedChangesPersistence {
+  return typeof globalThis.indexedDB === "undefined" ? new InMemoryRejectedChangesPersistence() : new IndexedDbRejectedChangesPersistence();
 }
 
 /** Lokalt dokument-id → serverns id (samma översättning som legacy-id-reparationen, #1124). */
@@ -70,6 +81,8 @@ async function rescueLocalGeneratedDocs(): Promise<void> {
  * `ctx.dataStore`, `.reconcile()` driver löpande synk.
  */
 export async function createServerFirstStore(deps: ServerFirstStoreDeps = {}): Promise<CachingSyncDataStore> {
+  const rejected = deps.rejected ?? { changes: rejectedChanges, persistence: defaultRejectedPersistence() };
+  await rejected.changes.attach(rejected.persistence);
   const client = createTRPCClient<AppRouter>({
     links: [
       httpBatchLink({
@@ -86,6 +99,8 @@ export async function createServerFirstStore(deps: ServerFirstStoreDeps = {}): P
     // Byte-synk (#518/#1143): varje reconcile laddar upp dokument-bytes servern
     // saknar — inte bara vid sidladdning.
     afterReconcile: () => syncDocumentContent(client).catch((e: unknown) => console.warn("[server-first] byte-synk misslyckades:", e)),
+    // Avvisade ändringar sparas (#1266) — ingen försvinner tyst.
+    onConflicts: (conflicts) => rejected.changes.record(conflicts),
   });
   await rescueLocalGeneratedDocs();
   if (!deps.skipInitialReconcile) {

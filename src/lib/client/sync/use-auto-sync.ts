@@ -69,6 +69,8 @@ export type SyncState =
   | { kind: "pending"; count: number }
   | { kind: "offline"; count: number }
   | { kind: "merge-needed" }
+  /** Servern avvisade ändringar som väntar på att användaren tar ställning (#1266). */
+  | { kind: "rejected"; count: number }
   | { kind: "error"; message: string };
 
 export interface UseAutoSyncOptions {

@@ -10,7 +10,7 @@ import type { StoragePersistence } from "@/lib/client/storage/persistent-storage
 import { flushServerSync, onServerSynced, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
 
 function fakeStore(opts: { pending: number; fail?: boolean }) {
-  const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void) };
+  const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void), requeued: [] as unknown[] };
   const store: SyncableStore = {
     reconcile: async () => {
       state.reconciles++;
@@ -20,6 +20,7 @@ function fakeStore(opts: { pending: number; fail?: boolean }) {
     },
     pendingCount: () => state.pending,
     onLocalChange: (l: () => void) => { state.listener = l; return () => { state.listener = null; }; },
+    requeue: async (entry) => { state.requeued.push(entry); },
   };
   return { state, store };
 }
@@ -159,5 +160,20 @@ describe("ServerFirstSync", () => {
     expect(synced).toBe(1);
     second.unmount();
     off();
+  });
+
+  // #1266: avvisade ändringar syns i pillret och "Försök igen" köar mot storen.
+  it("avvisade ändringar: pillret leder till vyn, och ett nytt försök köas mot storen", async () => {
+    const { rejectedChanges, InMemoryRejectedChangesPersistence } = await import("@/lib/client/backend/rejected-changes");
+    await rejectedChanges.attach(new InMemoryRejectedChangesPersistence());
+    const entry = { mutationId: "m1", entity: "invoice", kind: "update" as const, row: { id: "i1" }, enqueuedAt: 0 };
+    const { state, store } = fakeStore({ pending: 0 });
+    wrap(<ServerFirstSync store={store} requestPersistence={async () => "persisted"} />);
+    await act(async () => { await rejectedChanges.record([{ mutation: entry, conflictClass: "surface", reason: "stale", current: { id: "i1", version: 4 } }]); });
+    await waitFor(() => expect(screen.getByTestId("sync-pill")).toHaveTextContent("1 avvisad ändring"));
+    expect(screen.getByTestId("sync-pill")).toHaveAttribute("href", "/sync-conflicts");
+    await act(async () => { await rejectedChanges.retry("m1"); });
+    expect(state.requeued).toEqual([entry]);
+    expect(rejectedChanges.list()).toEqual([]);
   });
 });

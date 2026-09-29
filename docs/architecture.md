@@ -239,8 +239,13 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   körs högst en gång. Regelbrott (BAD_REQUEST, NOT_FOUND, PRECONDITION_FAILED,
   FORBIDDEN, CONFLICT) avvisar; tekniska fel kastas och klienten försöker igen.
 - **Svaret** bär de berörda radernas kanoniska läge (org-scopat, annars
-  tombstone). Klienten ersätter sitt optimistiska läge med dem i båda utfallen;
-  en avvisning ytläggs som konflikt.
+  tombstone). Klienten ersätter sitt optimistiska läge med dem i båda utfallen.
+- **Avvisade ändringar** (#1266) — från procedur-kön och radkön — sparas i
+  IndexedDB (`src/lib/client/backend/rejected-changes.ts`) och visas i
+  `/sync-conflicts` (länkas från synkpillret och Att bevaka) med orsak på
+  svenska. **Försök igen** köar ändringen på nytt (ett anrop med nytt
+  mutationId, en rad byggd på serverns version); **Kasta** låter serverns läge
+  gälla. Ingen avvisad ändring försvinner tyst.
 - Övriga entiteter går via radkön tills de flyttas.
 - **Köformatet** (#1247, `src/lib/shared/sync/queue-format.ts`): varje köpost
   (rad och anrop) stämplas med `format`. Poster utan stämpel skrevs före #1247 i

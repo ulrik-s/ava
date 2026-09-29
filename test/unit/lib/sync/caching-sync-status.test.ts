@@ -24,8 +24,8 @@ describe("syncStateFromCachingSync", () => {
     expect(syncStateFromCachingSync({ online: false, pendingCount: 2 })).toEqual({ kind: "offline", count: 2 });
   });
 
-  it("merge-needed vid surface-konflikter", () => {
-    expect(syncStateFromCachingSync({ ...base, pendingCount: 1, conflicts: 1 })).toEqual({ kind: "merge-needed" });
+  it("avvisade ändringar som väntar på användaren (#1266)", () => {
+    expect(syncStateFromCachingSync({ ...base, pendingCount: 1, conflicts: 2 })).toEqual({ kind: "rejected", count: 2 });
   });
 
   it("syncing väger tyngre än konflikt/offline/pending", () => {

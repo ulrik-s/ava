@@ -118,4 +118,31 @@ describe("runQueuedProcedure", () => {
     expect(ds.hasPendingFor("timeEntry", t)).toBe(false);
     expect(ds.hasPendingFor("contact", c)).toBe(false);
   });
+
+  // #1266: avvisningar sparas, och ett nytt försök köas på nytt.
+  it("en avvisning i reconcile lämnas till onConflicts — den glöms inte", async () => {
+    const seen: unknown[] = [];
+    const transport = {
+      ...noSyncTransport,
+      pushProcedure: async () => ({ status: "rejected" as const, code: "PRECONDITION_FAILED", reason: "Posterna är redan fakturerade.", rows: [] }),
+    };
+    const ds = await CachingSyncDataStore.create({ transport, onConflicts: async (c) => { seen.push(...c); } });
+    await ds.runQueuedProcedure({ path: "timeEntry.create", input: {} }, async () => {});
+    await ds.reconcile();
+    expect(seen).toMatchObject([{ reason: "Posterna är redan fakturerade.", mutation: { path: "timeEntry.create" } }]);
+  });
+
+  it("requeue: ett anrop köas med NYTT mutationId; en rad byggs på serverns version", async () => {
+    const ds = await store();
+    const call = { type: "procedure" as const, mutationId: "gammal", path: "timeEntry.update", input: { id: "t" }, codeVersion: "v", touches: [], enqueuedAt: 0 };
+    await ds.requeue(call);
+    const row = { mutationId: "r", entity: "invoice", kind: "update" as const, row: { id: "i1" }, baseVersion: 2, enqueuedAt: 0 };
+    await ds.requeue(row, { id: "i1", version: 5 });
+    await ds.requeue({ ...row, mutationId: "r2", row: { id: "i2" } });
+    const [again, rowAgain, rowFallback] = ds.pendingEntries();
+    expect(again).toMatchObject({ path: "timeEntry.update", input: { id: "t" } });
+    expect(again?.mutationId).not.toBe("gammal");
+    expect(rowAgain).toMatchObject({ entity: "invoice", row: { id: "i1" }, baseVersion: 5 });
+    expect(rowFallback).toMatchObject({ row: { id: "i2" }, baseVersion: 2 });
+  });
 });

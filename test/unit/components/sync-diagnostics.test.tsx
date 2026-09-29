@@ -100,6 +100,8 @@ describe("StateLabel (#6-ratchet: renderar-uppslag per läge)", () => {
     [{ kind: "pending", count: 3 }, /3 ändringar —/],
     [{ kind: "offline", count: 2 }, /Off-line — 2 ändringar/],
     [{ kind: "merge-needed" }, /Konflikt/],
+    [{ kind: "rejected", count: 1 }, /1 ändring avvisade av servern/],
+    [{ kind: "rejected", count: 2 }, /2 ändringar avvisade av servern/],
     [{ kind: "error", message: "x" }, /misslyckades/],
   ];
   for (const [state, re] of cases) {
