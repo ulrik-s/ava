@@ -37,7 +37,7 @@ export interface BillingRunView {
 
 /** Minimal vy av ett dokument som invarianten behöver. */
 export interface DocumentView {
-  documentType?: string | null;
+  documentType?: string | null | undefined;
 }
 
 export interface MatterInvariantInput {

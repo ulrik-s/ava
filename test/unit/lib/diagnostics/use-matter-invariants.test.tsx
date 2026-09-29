@@ -12,7 +12,8 @@ let docsResult: { data?: { documents: unknown[] } } = {};
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     billingRun: { list: { useQuery: () => runsResult } },
-    document: { list: { useQuery: () => docsResult } },
+    // Alla mappar (#1308): invarianten läser document.tree, inte en enskild mapp.
+    document: { tree: { useQuery: () => docsResult } },
   },
 }));
 
@@ -37,6 +38,13 @@ describe("useMatterInvariants", () => {
     renderHook(() => useMatterInvariants({ matterId: asId<"MatterId">("m-1"), matterNumber: "2026-1" }));
     expect(issueStore.count()).toBe(1);
     expect(issueStore.list()[0]!.code).toBe("KR_PENDING_NO_DOC");
+  });
+
+  it("KR-dokument i en undermapp räknas — inget falsklarm (#1308)", () => {
+    runsResult = { data: { runs: [pendingKr] } };
+    docsResult = { data: { documents: [{ documentType: "Kostnadsräkning", folderId: "f-kostnadsrakningar" }] } };
+    renderHook(() => useMatterInvariants({ matterId: asId<"MatterId">("m-1"), matterNumber: "2026-1" }));
+    expect(issueStore.count()).toBe(0);
   });
 
   it("rapporterar inget när KR-dokument finns", () => {
