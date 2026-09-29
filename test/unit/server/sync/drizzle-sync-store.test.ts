@@ -228,4 +228,15 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
       fileName: "stamning-tingsratten.pdf", documentType: "STAMNING", analysisStatus: "DONE",
     });
   });
+
+  // #1247: radkön följer samma köformat-regler som procedur-kön.
+  it("radpush i för gammalt köformat → konflikt med besked; nyare än servern → kastar", async () => {
+    const strict = new DrizzleSyncStore(handle.db, repos, { current: 2, min: 2, migrations: {} });
+    const m = uuidv7();
+    const old = { ...mut("matter", "create", { id: m, organizationId: ORG, title: "Gammal", status: "ACTIVE", matterNumber: "2026-1247" }), format: 1 };
+    const res = await strict.push(ORG, old);
+    expect(res).toMatchObject({ status: "conflict", reason: expect.stringMatching(/för gammal version av AVA/) });
+    expect(await repos.matters.getById(asId<"MatterId">(m))).toBeNull();
+    await expect(sync.push(ORG, { ...old, format: 99 })).rejects.toThrow(/Servern kör en äldre version/);
+  });
 });

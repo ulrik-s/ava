@@ -25,6 +25,7 @@
 import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
 import type { OrganizationId } from "@/lib/shared/schemas/ids";
+import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import type { ProcedureTouch, QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
 import type { ProcedureReplayResult, PulledChange } from "../data-store/in-memory/sync-transport";
@@ -34,6 +35,7 @@ import type { DrizzleRepositories } from "../repositories/drizzle-repositories";
 import { appRouter } from "../routers/_app";
 import type { Context } from "../trpc-core";
 import { entityRepo, getInOrg } from "./entity-repo";
+import { admitProcedure } from "./queue-admission";
 
 /** tRPC-koder som betyder "anropet bryter mot en regel" — permanenta, inte tekniska. */
 const RULE_CODES: ReadonlySet<string> = new Set(["BAD_REQUEST", "NOT_FOUND", "PRECONDITION_FAILED", "FORBIDDEN", "CONFLICT"]);
@@ -66,6 +68,8 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
   constructor(
     private readonly db: AppDb,
     private readonly repos: DrizzleRepositories,
+    /** Köformatets gränser + migreringar (#1247); injicerbar i tester. */
+    private readonly queuePolicy: QueuePolicy = QUEUE_POLICY,
   ) {}
 
   async replay(call: QueuedProcedureCall, ctx: Context): Promise<ProcedureReplayResult> {
@@ -81,6 +85,20 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
     }
     const stored = await this.storedOutcome(call.mutationId, orgId);
     if (stored) return stored;
+    // Köformatet (#1247): för gammal → avvisad (sparas som utfall); nyare än
+    // servern → kastar före allt annat (inget utfall, klienten försöker igen).
+    const admission = admitProcedure(call, this.queuePolicy);
+    if (admission.kind === "reject") return this.rejectOutright(call, ctx, orgId, admission.reason);
+    return this.run(admission.entry, ctx, orgId);
+  }
+
+  private async rejectOutright(call: QueuedProcedureCall, ctx: Context, orgId: OrganizationId, reason: string): Promise<Outcome> {
+    const rejected: Outcome = { status: "rejected", code: "PRECONDITION_FAILED", reason };
+    await this.record(this.db, call, ctx, orgId, rejected);
+    return rejected;
+  }
+
+  private async run(call: QueuedProcedureCall, ctx: Context, orgId: OrganizationId): Promise<Outcome> {
     try {
       await this.repos.transactionWithDb(async (tx, txDb) => {
         // Samma identitet som klientens körning (#1276): skapade rader får
