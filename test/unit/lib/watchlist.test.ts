@@ -218,6 +218,25 @@ describe("sortWatchlist", () => {
     expect(out[0]?.amountOre).toBe(900_00);
   });
 
+  // En frist som går ut IDAG är det enda som fortfarande går att rädda i dag —
+  // den får inte hamna under förfallna fakturor (startsidan visar bara fem).
+  it("en tidsfrist som går ut idag kommer före allt som redan passerat", () => {
+    const out = sortWatchlist([
+      item({ kind: "overdueInvoice", severity: "passed", at: "2026-08-01", amountOre: 500_00 }),
+      item({ kind: "deadline", severity: "approaching", at: "2026-09-29", title: "idag" }),
+      item({ kind: "deadline", severity: "passed", at: "2026-09-20" }),
+      item({ kind: "deadline", severity: "approaching", at: "2026-10-05", title: "senare" }),
+    ], "2026-09-29");
+    expect(out.map((i) => i.title === "idag" ? "idag" : `${i.kind}:${i.severity}`)).toEqual([
+      "idag", "overdueInvoice:passed", "deadline:passed", "deadline:approaching",
+    ]);
+  });
+
+  it("utan dagens datum: som förut, passerat före annalkande", () => {
+    const out = sortWatchlist([item({ severity: "approaching", at: "2026-09-29" }), item({ severity: "passed", at: "2026-09-01" })]);
+    expect(out[0]?.severity).toBe("passed");
+  });
+
   it("muterar inte indata", () => {
     const input = [item({ severity: "approaching" }), item({ severity: "passed" })];
     sortWatchlist(input);

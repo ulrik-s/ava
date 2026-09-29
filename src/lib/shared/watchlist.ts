@@ -107,13 +107,25 @@ export interface WatchlistItem {
 const SEVERITY_ORDER: Record<WatchlistSeverity, number> = { passed: 0, approaching: 1 };
 
 /**
+ * Hur bråttom posten är (lägre = först). En tidsfrist som går ut `today` går
+ * först: det är sista dagen den går att hålla, medan det som redan passerat
+ * inte blir värre av en dag till. Med många förfallna fakturor hamnade dagens
+ * frist annars utanför startsidans fem poster.
+ */
+function urgencyRank(i: WatchlistItem, today: string | undefined): number {
+  const lastDay = i.kind === "deadline" && i.severity === "approaching" && i.at === today;
+  return lastDay ? -1 : SEVERITY_ORDER[i.severity];
+}
+
+/**
  * Sortera efter hur bråttom det är. Poster utan datum hamnar sist inom sin
  * grupp — ett belopp är angeläget men inte tidsstyrt, och en lista som blandar
  * "förfallen i förrgår" med "25 000 kr ofakturerat" ska visa det förfallna först.
+ * `today` ("YYYY-MM-DD", byråns tidszon) lyfter dagens tidsfrister överst.
  */
-export function sortWatchlist(items: readonly WatchlistItem[]): WatchlistItem[] {
+export function sortWatchlist(items: readonly WatchlistItem[], today?: string): WatchlistItem[] {
   return [...items].sort((a, b) => {
-    const bySeverity = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+    const bySeverity = urgencyRank(a, today) - urgencyRank(b, today);
     if (bySeverity !== 0) return bySeverity;
     if (a.at !== null && b.at !== null) return a.at.localeCompare(b.at);
     if (a.at !== null) return -1;
