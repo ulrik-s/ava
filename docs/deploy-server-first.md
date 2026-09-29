@@ -98,6 +98,39 @@ släpps in, även om IdP:n godkänner inloggningen. Admin lägger till fler
 användare i appen (`/users`). Seeden går via repo-lagret så användarna får
 `change_log`-rader — rå-SQL hade gett en klient som hänger på "Laddar…".
 
+## Identitet: hur servern vet vem som anropar (#1256)
+
+Caddy och oauth2-proxy gör inloggningen. Servern kan få veta vem användaren är
+på två sätt, valt med `AVA_IDENTITY` i `ava-server.env`:
+
+| Läge | Servern litar på | Säkert så länge |
+|---|---|---|
+| `forwarded` (default) | `X-Auth-Request-Email` som Caddy sätter | servern inte kan nås förbi Caddy |
+| `verified` | en signerad token den själv verifierar mot IdP:ns nycklar | alltid (en förfalskad header ger ingenting) |
+
+I `forwarded` bärs säkerheten av konfigurationen: bara Caddy publicerar portar,
+och Caddy skriver över headern med det verifierade värdet.
+`test/unit/tooling/identity-boundary.test.ts` fäller en ändring som bryter det.
+
+**Slå på `verified`** (rekommenderat när inloggningen fungerar):
+
+```
+AVA_IDENTITY=verified
+# AVA_IDENTITY_ISSUER = OIDC_ISSUER_URL och AVA_IDENTITY_AUDIENCE =
+# OAUTH2_PROXY_CLIENT_ID sätts automatiskt; ange bara om de skiljer sig.
+```
+
+- oauth2-proxy lägger sin ID-token i auth-svaret
+  (`OAUTH2_PROXY_SET_AUTHORIZATION_HEADER`), och Caddy skickar den till servern
+  som `X-Ava-Identity-Token`. Servern hämtar IdP:ns nycklar via OIDC-discovery.
+- Token:en måste bära `email`, eller en e-postadress i `preferred_username`
+  (Entras UPN).
+- ID-token gäller ofta bara en timme. Sätt `OAUTH2_PROXY_COOKIE_REFRESH=30m`
+  (och `offline_access` i scope för Entra) så att proxyn förnyar den. Annars
+  skickas användaren till inloggningen när token gått ut — sessionen hos IdP:n
+  gör att det oftast går direkt.
+- Felkonfiguration (verified utan issuer eller audience) stoppar serverns start.
+
 ## Övervakning
 
 ### Två hälsokontroller, och skillnaden spelar roll

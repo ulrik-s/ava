@@ -22,6 +22,7 @@ import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import { bearerConfigFromEnv, type BearerVerifyConfig } from "./bearer-claims";
 import { handleHealthRoute } from "./health";
 import { createServerTrpcHandler } from "./server-trpc-handler";
+import { identityConfigFromEnv, type IdentityConfig } from "./verified-identity";
 
 export interface ServerFirstApiConfig {
   /** Postgres-connection-URL (`postgres://…`). */
@@ -41,6 +42,8 @@ export interface ServerFirstApiConfig {
    * 0028/0013). Default: härled ur miljön (`AVA_OIDC_*`); null → av.
    */
   bearer?: BearerVerifyConfig | null;
+  /** Identitetsläget (#1256). Default: ur miljön (`AVA_IDENTITY`). */
+  identity?: IdentityConfig;
 }
 
 export interface ServerFirstApi {
@@ -78,6 +81,7 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     ...(config.endpoint ? { endpoint: config.endpoint } : {}),
     ...(config.onError ? { onError: config.onError } : {}),
     ...(bearer ? { bearer } : {}),
+    identity: config.identity ?? identityConfigFromEnv(),
   });
   // Hälso-rutterna ligger FÖRE tRPC: de ska svara även när allt annat är
   // trasigt, och de får inte kräva en giltig principal (#1079).

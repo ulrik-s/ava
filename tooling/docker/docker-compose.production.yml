@@ -61,6 +61,11 @@ services:
       # Cookien får bara gå över TLS här — testriggen kör http och kan inte.
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      # #1256: ID-token i auth-svaret (`Authorization: Bearer`), som Caddy
+      # skickar vidare som X-Ava-Identity-Token → servern kan verifiera
+      # identiteten själv (AVA_IDENTITY=verified) i stället för att lita på
+      # X-Auth-Request-Email.
+      OAUTH2_PROXY_SET_AUTHORIZATION_HEADER: "true"
       # AVA Helper (ADR 0028) kör utanför browsern och har ingen session-cookie:
       # den skickar sin EGEN Entra-access-token som `Authorization: Bearer`.
       # "true" → oauth2-proxy verifierar token (signatur mot IdP:ns JWKS, issuer,
@@ -102,6 +107,15 @@ services:
       AVA_ORGANIZATION_ID: "${AVA_ORGANIZATION_ID:?AVA_ORGANIZATION_ID krävs}"
       AVA_HTTP_HOST: 0.0.0.0
       AVA_HTTP_PORT: "3001"
+      # Identitet (#1256): "verified" = servern godtar bara en signerad token
+      # (proxyns ID-token eller helperns Bearer), verifierad mot IdP:ns nycklar
+      # via OIDC-discovery — en förfalskad header ger ingenting. "forwarded"
+      # (default) litar på X-Auth-Request-Email, vilket bara är säkert så länge
+      # servern inte kan nås förbi Caddy (ingen publicerad port, se nedan).
+      # Se docs/deploy-server-first.md innan du slår på verified.
+      AVA_IDENTITY: "${AVA_IDENTITY:-forwarded}"
+      AVA_IDENTITY_ISSUER: "${OIDC_ISSUER_URL:-}"
+      AVA_IDENTITY_AUDIENCE: "${AVA_IDENTITY_AUDIENCE:-${OAUTH2_PROXY_CLIENT_ID:-}}"
       AVA_CONTENT_DIR: /data/content
       # "1" = inga mejl köas eller skickas (test-/pilotserver), se deploy-server-first.md.
       AVA_EMAIL_DISABLED: "${AVA_EMAIL_DISABLED:-}"

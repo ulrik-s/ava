@@ -31,7 +31,11 @@
 			uri /oauth2/auth
 			# Skriver över ev. klient-skickad header med den VERIFIERADE
 			# emailen ur auth-svaret. Utan detta är principalen spoofbar.
-			copy_headers X-Auth-Request-Email
+			# Proxyns signerade ID-token (#1256) följer med som
+			# X-Ava-Identity-Token: med AVA_IDENTITY=verified litar servern
+			# bara på den (verifierad mot IdP:ns nycklar), aldrig på headers.
+			# Omdöpt — inte Authorization — så helperns egen Bearer lämnas orörd.
+			copy_headers X-Auth-Request-Email Authorization>X-Ava-Identity-Token
 		}
 		reverse_proxy server-first:3001
 	}

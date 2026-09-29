@@ -22,8 +22,8 @@ import { parseBearerToken } from "./pat";
 export interface BearerVerifyConfig {
   /** Förväntad issuer (`iss`) — IdP:ns issuer-URL. */
   issuer: string;
-  /** Förväntad audience (`aud`). Utelämnad → ingen aud-kontroll. */
-  audience?: string;
+  /** Förväntad audience (`aud`), en eller flera. Utelämnad → ingen aud-kontroll. */
+  audience?: string | string[];
   /** Nyckelkälla (JWKS). Injicerbar för test (`createLocalJWKSet`). */
   jwks: JWTVerifyGetKey;
 }
@@ -34,7 +34,12 @@ export interface BearerVerifyConfig {
  * Email-only-modellen (#224/ADR 0009): saknas `email`-claim → `null`.
  */
 export async function bearerClaims(headers: Headers, config: BearerVerifyConfig): Promise<OidcClaims | null> {
-  const token = parseBearerToken(headers.get("authorization"));
+  return verifyBearerHeader(headers.get("authorization"), config);
+}
+
+/** Verifiera en `Bearer <jwt>`-headers värde → `OidcClaims`, eller `null`. */
+export async function verifyBearerHeader(value: string | null, config: BearerVerifyConfig): Promise<OidcClaims | null> {
+  const token = parseBearerToken(value);
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, config.jwks, {
@@ -47,9 +52,19 @@ export async function bearerClaims(headers: Headers, config: BearerVerifyConfig)
   }
 }
 
+/**
+ * E-posten ur en verifierad token: `email`, annars `preferred_username` när det
+ * är en adress (Entras ID-token bär UPN där; `email` är ett valfritt claim).
+ */
+function emailOf(payload: JWTPayload): string | undefined {
+  if (typeof payload.email === "string" && payload.email) return payload.email;
+  const upn = payload.preferred_username;
+  return typeof upn === "string" && upn.includes("@") ? upn : undefined;
+}
+
 /** Plocka OidcClaims ur en verifierad JWT-payload; null om email-claim saknas. */
 function claimsFromPayload(payload: JWTPayload): OidcClaims | null {
-  const email = typeof payload.email === "string" ? payload.email : undefined;
+  const email = emailOf(payload);
   if (!email) return null; // email-only-modellen (#224/ADR 0009)
   return {
     email,
