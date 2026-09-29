@@ -63,6 +63,17 @@ async function entriesOf(caller: Caller) {
   return (await caller.timeEntry.list({ matterId: MATTER, pageSize: 100 })).entries;
 }
 
+describe("invoice.createRadgivning — förfallodatum", () => {
+  it("utan dueDate saknar fakturan förfallodatum; med dueDate (demo/fixtures) sätts det", async () => {
+    const caller = makeCaller();
+    const { invoice } = await caller.invoice.createRadgivning({ matterId: MATTER, invoiceDate: "2026-03-01", dueDate: "2026-03-31" });
+    expect(invoice.dueDate?.toISOString().slice(0, 10)).toBe("2026-03-31");
+    const other = makeCaller();
+    const { invoice: plain } = await other.invoice.createRadgivning({ matterId: MATTER, invoiceDate: "2026-03-01" });
+    expect(plain.dueDate).toBeNull();
+  });
+});
+
 describe("invoice.createRadgivning registrerar mötet som låst post (#1205)", () => {
   it("exakt EN post: 60 min arbete, låst och kopplad till rådgivningsfakturan", async () => {
     const caller = makeCaller();

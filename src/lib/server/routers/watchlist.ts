@@ -224,7 +224,7 @@ export const watchlistRouter = router({
         ...overdueInvoiceItems(overdue.filter((i) => ownInvoice(i.matterId)), now),
         ...failedDispatchItems(failed),
         ...billingActionItems(billing, now),
-      ]);
+      ], stockholmDay(now));
 
       const scoped = input?.matterId ? items.filter((i) => i.matterId === String(input.matterId)) : items;
       return { items: scoped, generatedAt: now.toISOString() };

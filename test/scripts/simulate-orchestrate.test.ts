@@ -168,6 +168,67 @@ describe("runSimulation (#880 integration)", () => {
   });
 
   /**
+   * "Data i alla paneler": Händelser och Förslag stod tomma i 18 respektive 15
+   * av 21 ärenden — bara ett fåtal scenarier fick en handling med kallelse och
+   * parter. Varje ärende får nu en kallelse, med ärendets egna datum och parter.
+   */
+  it("VARJE ärende har händelser och kontaktförslag", async () => {
+    const { c } = await simulateDemo();
+    const matters = (await c.matter.list({})).matters as Any[];
+    for (const m of matters) {
+      const events = await c.document.events({ matterId: m.id });
+      expect((events.events ?? events).length, `${m.matterNumber}: händelser`).toBeGreaterThan(0);
+      const groups = await c.document.pendingSuggestionsGrouped({ matterId: m.id });
+      expect((groups.groups ?? groups).length, `${m.matterNumber}: kontaktförslag`).toBeGreaterThan(0);
+    }
+  });
+
+  it("Inställningar har data: två kontor (ett huvudkontor), dokument-etiketter och standardvyer", async () => {
+    const { c } = await simulateDemo();
+    const offices = await c.organization.listOffices() as Any[];
+    expect(offices.map((o: Any) => o.name)).toEqual(["Stockholm — huvudkontor", "Göteborg"]); // huvudkontoret först
+    expect(offices.filter((o: Any) => o.isMain)).toHaveLength(1);
+    expect((await c.organization.getSettings()).documentTags.length).toBeGreaterThan(3);
+    const defaults = await c.prefs.listOrgDefaults() as Any[];
+    expect(defaults.map((d: Any) => d.key).sort()).toEqual(["list.contacts", "list.invoices"]);
+  });
+
+  it("brottmålen (offentligt uppdrag) har domstolsbetalningar — både väntande och avprickade", async () => {
+    const { c } = await simulateDemo();
+    const matters = ((await c.matter.list({})).matters as Any[]).filter((m: Any) => m.paymentMethod === "OFFENTLIGT_UPPDRAG");
+    expect(matters.length).toBeGreaterThan(0);
+    const all: Any[] = [];
+    for (const m of matters) {
+      const rows = await c.expectedReceivable.list({ matterId: m.id }) as Any[];
+      expect(rows.length, `${m.matterNumber}: domstolsbetalningar`).toBeGreaterThan(0);
+      all.push(...rows);
+    }
+    expect(all.some((r: Any) => r.status === "PENDING"), "någon väntar").toBe(true);
+    expect(all.some((r: Any) => r.status === "SETTLED"), "någon är avprickad").toBe(true);
+  });
+
+  /**
+   * Utan förfallodatum blir ingen faktura förfallen — åldersanalysen och
+   * bevakningens "Förfallna fakturor" stod tomma. Aconto- och slutfakturor får
+   * 30 dagar netto. (Domstolens faktura ur beslutet betalas enligt beslutet och
+   * får inget förfallodatum.)
+   */
+  it("aconto- och slutfakturor har förfallodatum 30 dagar efter fakturadatum", async () => {
+    const { c } = await simulateDemo();
+    const { items: invoices } = (await c.invoice.list({})) as { items: Any[] };
+    const withDue = invoices.filter((i: Any) => i.dueDate);
+    expect(withDue.some((i: Any) => i.invoiceType === "ACCONTO"), "aconto med förfallodatum").toBe(true);
+    expect(withDue.some((i: Any) => i.invoiceType === "FINAL"), "slutfaktura med förfallodatum").toBe(true);
+    for (const i of withDue) {
+      const days = (new Date(i.dueDate).getTime() - new Date(i.invoiceDate).getTime()) / 86_400_000;
+      expect(Math.round(days), `${i.invoiceNumber}`).toBe(30);
+    }
+    // Några har hunnit förfalla — annars är åldersanalysen fortfarande tom.
+    const now = Date.now();
+    expect(withDue.some((i: Any) => new Date(i.dueDate).getTime() < now && i.status === "SENT"), "någon förfallen, obetald").toBe(true);
+  });
+
+  /**
    * #824/#882: upparbetat men ofakturerat arbete. `populate-unbilled-time.ts`
    * skapade det förr; simuleringen tog aldrig över, och ingen märkte något —
    * fakturapanelen visade bara "Upparbetat ofakturerat: 0 kr" på vartenda

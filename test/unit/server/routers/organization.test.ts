@@ -107,6 +107,14 @@ describe("organization.addOffice — registrera huvudkontor och filial", () => {
     expect(mockPrisma.office.create).toHaveBeenCalled();
   });
 
+  it("setup-id (demo-generatorn) följer med till repot; utelämnat skickas inget id", async () => {
+    mockPrisma.office.create.mockResolvedValue(MAIN_OFFICE);
+    await makeCaller("org-a").addOffice({ id: "o-sthlm", name: "Stockholm" });
+    expect(mockPrisma.office.create.mock.calls.at(-1)?.[0].data.id).toBe("o-sthlm");
+    await makeCaller("org-a").addOffice({ name: "Göteborg" });
+    expect("id" in mockPrisma.office.create.mock.calls.at(-1)?.[0].data).toBe(false);
+  });
+
   it("registrerar en filial (isMain: false) utan att påverka huvudkontor", async () => {
     mockPrisma.office.create.mockResolvedValue(BRANCH_OFFICE);
 

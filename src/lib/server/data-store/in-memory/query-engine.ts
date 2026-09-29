@@ -50,6 +50,16 @@ export interface QueryOptions {
   take?: number;
 }
 
+/**
+ * Värdet som går att jämföra: tal och strängar som de är, booleaner som 0/1.
+ * Förr gav booleaner 0, så `orderBy: { isMain: "desc" }` sorterade inte —
+ * huvudkontoret hamnade inte först bland kontoren.
+ */
+function sortable(v: unknown): number | string | undefined {
+  if (typeof v === "boolean") return Number(v);
+  return typeof v === "number" || typeof v === "string" ? v : undefined;
+}
+
 export class InMemoryQueryEngine<T extends Record<string, unknown>> {
   /**
    * Returnerar en filtrerad, sorterad och paginerad kopia av input-arrayen.
@@ -187,8 +197,9 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
     // coercion returnerar cmp 0 → både gte och lte sant → tomt resultat.
     const ad = toDate(a); const bd = toDate(b);
     if (ad && bd) return ad.getTime() - bd.getTime();
-    if (typeof a === "number" && typeof b === "number") return a - b;
-    if (typeof a === "string" && typeof b === "string") return a.localeCompare(b);
+    const x = sortable(a); const y = sortable(b);
+    if (typeof x === "number" && typeof y === "number") return x - y;
+    if (typeof x === "string" && typeof y === "string") return x.localeCompare(y);
     return 0;
   }
 

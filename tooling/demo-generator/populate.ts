@@ -29,6 +29,8 @@ export interface PopulateResult {
   tasks: number;
   documentTemplates: number;
   conflictChecks: number;
+  offices: number;
+  orgPreferences: number;
 }
 
 type Row = Record<string, unknown>;
@@ -137,6 +139,26 @@ async function createDocumentTemplates(c: AnyCaller, rows: Row[]): Promise<void>
   }
 }
 
+/** Kontoren (Inställningar → Kontor), med seedens id så de är stabila mellan byggen. */
+async function createOffices(c: AnyCaller, rows: Row[]): Promise<void> {
+  for (const o of rows) {
+    await c.organization.addOffice(defined({ id: o.id, name: o.name, address: o.address, phone: o.phone, email: o.email, isMain: o.isMain }));
+  }
+}
+
+/** Byråns dokument-etiketter — en inställning på organisationen, ingen egen rad. */
+async function applyDocumentTags(c: AnyCaller, orgs: Row[]): Promise<void> {
+  for (const o of orgs) {
+    const tags = Array.isArray(o.documentTags) ? o.documentTags : [];
+    if (tags.length > 0) await c.organization.updateSettings({ documentTags: tags });
+  }
+}
+
+/** Byråns standardvyer för listor (Inställningar → Standardvyer). Kräver ADMIN. */
+async function createOrgDefaults(c: AnyCaller, rows: Row[]): Promise<void> {
+  for (const p of rows) await c.prefs.setOrgDefault({ key: p.key, prefs: p.prefs });
+}
+
 /** Kör konflikt-sökningarna (check-flödet persisterar en konflikt-check-rad). */
 async function runConflictChecks(c: AnyCaller, rows: Row[]): Promise<void> {
   for (const cc of rows) {
@@ -178,6 +200,8 @@ export async function populate(caller: GeneratorCaller, seed: SeedDataset, opts:
   const tasks = pick(seed, "tasks");
   const documentTemplates = pick(seed, "documentTemplates");
   const conflictChecks = pick(seed, "conflictChecks");
+  const offices = pick(seed, "offices");
+  const orgPreferences = pick(seed, "orgPreferences");
 
   if (!opts.skipOrgUsers) {
     await createOrganizations(c, organizations); // rot — måste finnas före org-scopat
@@ -192,6 +216,10 @@ export async function populate(caller: GeneratorCaller, seed: SeedDataset, opts:
   await createTasks(c, tasks);
   await createDocumentTemplates(c, documentTemplates);
   await runConflictChecks(c, conflictChecks); // efter matter-contacts (söker i dem)
+  // Byråns inställningar — så att Inställningar inte är tomma i demon.
+  await createOffices(c, offices);
+  await applyDocumentTags(c, organizations);
+  await createOrgDefaults(c, orgPreferences);
 
   return {
     organizations: organizations.length,
@@ -205,5 +233,7 @@ export async function populate(caller: GeneratorCaller, seed: SeedDataset, opts:
     tasks: tasks.length,
     documentTemplates: documentTemplates.length,
     conflictChecks: conflictChecks.length,
+    offices: offices.length,
+    orgPreferences: orgPreferences.length,
   };
 }
