@@ -54,6 +54,30 @@ describe("computeArBridge", () => {
   });
 });
 
+describe("förfallen — samma regel i bryggan och åldersanalysen (#1312)", () => {
+  const invoices = [
+    { id: "gammal", status: "SENT", invoiceType: "STANDARD", amount: 100_00, dueDate: daysAgo(40) },
+    { id: "utan", status: "SENT", invoiceType: "STANDARD", amount: 200_00 }, // inget förfallodatum
+    { id: "idag", status: "SENT", invoiceType: "STANDARD", amount: 300_00, dueDate: NOW.toISOString() }, // förfaller idag
+    { id: "senare", status: "SENT", invoiceType: "STANDARD", amount: 400_00, dueDate: daysAhead(10) },
+  ];
+  const bridge = computeArBridge(invoices, [], [], NOW);
+  const aging = computeAging(invoices, [], [], NOW);
+
+  it("en faktura utan förfallodatum är inte förfallen", () => {
+    expect(bridge.forfallet).toBe(100_00);
+    expect(bridge.ejForfallet).toBe(200_00 + 300_00 + 400_00);
+  });
+
+  it("bryggans förfallna belopp = summan av åldersanalysens hinkar", () => {
+    expect(bridge.forfallet).toBe(aging.reduce((s, b) => s + b.amount, 0));
+  });
+
+  it("ej förfallet + förfallet = utestående", () => {
+    expect(bridge.ejForfallet + bridge.forfallet).toBe(bridge.utestaende);
+  });
+});
+
 describe("scopeArToPeriod", () => {
   const PERIOD = { from: new Date("2026-06-01T00:00:00Z"), to: new Date("2026-06-30T23:59:59Z") };
   const invoices = [
