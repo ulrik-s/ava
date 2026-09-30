@@ -53,6 +53,7 @@
     "test": "bun tooling/scripts/run-tests.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun tooling/scripts/db-migrate.ts",
+    "db:check-migrations": "bun tooling/scripts/check-migrations.ts",
     "test:run": "bun tooling/scripts/run-tests.ts",
     "test:watch": "bun test --isolate --watch --timeout 30000 test/unit test/integration test/scripts",
     "test:cov": "bun tooling/scripts/run-tests.ts --coverage",

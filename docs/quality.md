@@ -249,6 +249,22 @@ två high-CVE:er utan fix uppströms — för att rendera tre HTML-element i
 seed-datat. Det ersattes av `tooling/scripts/docx.ts`, ~120 rader OOXML (#970).
 Att äga lite kod är ibland billigare än att äga en beroendekedja.
 
+### Migrationer (`bun run db:check-migrations`, #1251)
+
+Migrationerna i `tooling/db/migrations/` skrivs för hand. Kontrollen körs i
+**Static analysis** och som test (`test/unit/tooling/check-migrations.test.ts`).
+Den fäller på:
+
+- ett filnamn som inte har formen `NNNN_namn.sql`,
+- två migrationer med samma nummer. Det hände med 0027, och ordningen mellan
+  dem avgjordes då av resten av filnamnet.
+- en skillnad mellan databasen och Drizzle-schemat, efter att alla migrationer
+  applicerats på en tom Postgres (pglite). Kontrollen jämför tabeller,
+  kolumner, typer och NOT NULL.
+
+Ta nästa lediga nummer när du skriver en migration. Om kontrollen säger att
+`main` redan har ditt nummer, byt nummer på din fil.
+
 ### Arkitektur (`bun run deps:check`)
 
 Hårda regler (severity `error`):
