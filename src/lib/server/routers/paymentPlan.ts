@@ -25,6 +25,7 @@ import {
 import { paymentPlanStatusSchema, reminderTypeSchema, type Invoice, type PaymentPlan } from "@/lib/shared/schemas";
 import { asId, paymentPlanIdSchema, paymentPlanReminderIdSchema, type MatterId } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
+import { dateOrCallTime, newRowId } from "../queued-call";
 import type {
   JoinedPaymentPlan, JoinedPaymentPlanWithReminders,
 } from "../repositories/payment-plan-repository";
@@ -151,7 +152,7 @@ export const paymentPlanRouter = router({
         planId: asId<"PaymentPlanId">(input.planId),
         dueMonth: input.dueMonth,
         type: input.type,
-        sentAt: input.sentAt ? new Date(input.sentAt) : new Date(),
+        sentAt: dateOrCallTime(ctx, input.sentAt),
       });
     }),
 
@@ -168,7 +169,7 @@ export const paymentPlanRouter = router({
   scanDueReminders: orgProcedure
     .input(z.object({ asOf: z.string().datetime().optional() }).optional())
     .mutation(async ({ ctx, input }) => {
-      const now = input?.asOf ? new Date(input.asOf) : new Date();
+      const now = dateOrCallTime(ctx, input?.asOf);
       const plans = await ctx.repos.paymentPlans.listActiveForScan(ctx.orgId);
 
       const logged = plans.flatMap((p) =>
@@ -178,6 +179,8 @@ export const paymentPlanRouter = router({
 
       for (const r of planned) {
         await ctx.repos.paymentPlanReminders.create({
+          // Samma påminnelse i klientens körning och serverns omkörning (#1242).
+          id: asId<"PaymentPlanReminderId">(newRowId(ctx, `reminder:${r.planId}:${r.dueMonth}:${r.type}`)),
           planId: asId<"PaymentPlanId">(r.planId), dueMonth: r.dueMonth, type: r.type, sentAt: now,
         });
         if (r.type === "DUE") await emit.paymentDue(ctx, r.payload, r.matterId);

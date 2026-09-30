@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { users } from "@/lib/server/db/schema";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { Repositories } from "@/lib/server/repositories/repositories";
@@ -79,13 +80,11 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
   });
 
   it("push update på surface-entitet med stale baseVersion → conflict", async () => {
-    const inv = uuidv7();
-    // Fakturan hör till byrån via ärendet — utan ett riktigt ärende stoppas den
-    // redan av byråavgränsningen (#1242), före versionskontrollen som prövas här.
-    const matter = uuidv7();
-    await repos.matters.create({ id: matter, organizationId: ORG, title: "Fakturaärende", status: "ACTIVE", matterNumber: "2026-0010" } as never);
-    await repos.invoices.create({ id: inv, organizationId: ORG, matterId: matter, amount: 50000, invoiceDate: new Date(), status: "DRAFT" } as never);
-    const res = await sync.push(ORG, mut("invoice", "update", { id: inv, status: "SENT" }, 99));
+    // Användaren är en surface-entitet i radkön (fakturor går via procedurkön, #1242).
+    const user = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handle.db.insert(users).values({ id: user, organizationId: ORG, email: "stale@byra.se", name: "Stale", role: "LAWYER", active: true, version: 1 } as any);
+    const res = await sync.push(ORG, mut("user", "update", { id: user, name: "Ny" }, 99));
     expect(res.status).toBe("conflict");
     expect(res).toMatchObject({ reason: "stale" });
   });

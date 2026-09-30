@@ -36,6 +36,10 @@ describe("isQueuedProcedure", () => {
 });
 
 describe("prepareQueuedInput — deterministisk omkörning", () => {
+  it("ett anrop utan input (valfri input) spelas in med {} (#1242)", () => {
+    expect(prepareQueuedInput("paymentPlan.scanDueReminders", undefined)).toEqual({});
+  });
+
   it("create utan id får ett klient-genererat UUIDv7 (servern skapar SAMMA rad)", () => {
     const out = prepareQueuedInput("timeEntry.create", { matterId: "m", minutes: 30 }) as { id: string; minutes: number };
     expect(isUuid(out.id)).toBe(true);
@@ -53,7 +57,7 @@ describe("prepareQueuedInput — deterministisk omkörning", () => {
   });
 
   it("icke-objekt-input spelas inte in (null)", () => {
-    expect(prepareQueuedInput("timeEntry.create", undefined)).toBeNull();
+    expect(prepareQueuedInput("timeEntry.create", null)).toBeNull();
     expect(prepareQueuedInput("timeEntry.create", [1])).toBeNull();
     expect(prepareQueuedInput("timeEntry.update", "x")).toBeNull();
   });
