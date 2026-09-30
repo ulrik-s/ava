@@ -99,6 +99,22 @@ acontoavdrag, utskick och domstolsfordringar), med ett besked som visas i vyn f�
 avvisade ändringar. Radvägens egna regler för dem (låsta poster, fakturanummer
 ur radpushen) behövs inte längre och är borttagna.
 
+**Genomfört (#1268):** simuleringstester
+(`test/unit/server/sync/simulation/`). Flera klienter, byggda som i
+webbläsaren, körs mot en server bakom den riktiga tRPC-handlern. Förloppet är
+seedat: slumpade ändringar, nätet av och på, avbrott mitt i en synk och
+omstarter ur persistensen. Efteråt prövas fyra invarianter:
+- ingen ändring försvinner tyst (varje köpost fick ett utfall, och en
+  avvisning syns hos klienten);
+- klienterna konvergerar mot servern;
+- inga dubbla fakturanummer;
+- serverläget är detsamma som en seriell körning av de accepterade
+  ändringarna i serverns ordning.
+
+På varje PR körs åtta seeds med 60 steg. Varje natt körs 200 seeds med 80 steg
+(`.github/workflows/sync-simulation.yml`). Ett fel återskapas med
+`AVA_SIM_SEED=<seed>`.
+
 **Genomfört (#1267):** uppföljning på servern. Klienten rapporterar efter
 varje synk köns längd och den äldsta osynkade ändringen; admin ser varje enhet
 och larmas när en ändring fastnat i en webbläsare mer än ett dygn eller en

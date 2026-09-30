@@ -264,6 +264,11 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   bevaka larmar när en osynkad ändring är äldre än ett dygn eller en enhet
   inte synkat på en vecka (`src/lib/shared/sync/device-health.ts`). Läget
   åldras på servern även när enheten är avstängd.
+- **Simuleringstester** (#1268, `test/unit/server/sync/simulation/`): flera
+  klienter mot en pglite-server med seedade ändringar, avbrott och omstarter.
+  Efter varje förlopp prövas att ingen ändring försvunnit tyst, att klienterna
+  konvergerat, att inga fakturanummer är dubbla och att serverläget är
+  detsamma som en seriell körning av det accepterade. Nattligt med fler seeds.
 - **Köformatet** (#1247, `src/lib/shared/sync/queue-format.ts`): varje köpost
   (rad och anrop) stämplas med `format`. Poster utan stämpel skrevs före #1247 i
   format 1. Servern (`queue-admission.ts`) kör dagens format som det är och
