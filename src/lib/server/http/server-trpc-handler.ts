@@ -42,6 +42,7 @@ export function createServerTrpcHandler(
     ...(deps.sync ? { sync: deps.sync } : {}),
     ...(deps.replayer ? { replayer: deps.replayer } : {}),
     ...(deps.bearer ? { bearer: deps.bearer } : {}),
+    ...(deps.identity ? { identity: deps.identity } : {}),
   };
   return (req: Request): Promise<Response> =>
     fetchRequestHandler({

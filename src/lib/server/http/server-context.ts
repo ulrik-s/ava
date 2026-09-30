@@ -18,7 +18,7 @@
  * sväljer tyst (precis som demo/git-vägen). Byts mot en Drizzle-logg vid #408.
  */
 
-import type { AllowlistedUser } from "@/lib/server/auth/oidc-auth-provider";
+import type { AllowlistedUser, OidcClaims } from "@/lib/server/auth/oidc-auth-provider";
 import { OidcAuthProvider } from "@/lib/server/auth/oidc-auth-provider";
 import { buildContext } from "@/lib/server/build-context";
 import type { IEventLog } from "@/lib/server/data-store/IDataStore";
@@ -32,8 +32,9 @@ import type { Capabilities } from "@/lib/shared/capabilities";
 import { requestIdFrom } from "@/lib/shared/observability/request-id";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { User } from "@/lib/shared/schemas/user";
-import { bearerClaims, type BearerVerifyConfig } from "./bearer-claims";
+import { bearerClaims, verifyBearerHeader, type BearerVerifyConfig } from "./bearer-claims";
 import { forwardedClaims, type ForwardedHeaderNames } from "./forwarded-claims";
+import { IDENTITY_TOKEN_HEADER, type IdentityConfig } from "./verified-identity";
 
 /**
  * Serverns annonserade kapabiliteter (ADR 0027) — vad DENNA deploy faktiskt kan.
@@ -100,6 +101,12 @@ export interface ServerContextDeps {
    * (helper, Office-add-in). Utelämnad → bara cookie-vägen (oförändrat).
    */
   bearer?: BearerVerifyConfig;
+  /**
+   * Identitetsläget (#1256). `verified` → proxyns headers ignoreras; bara en
+   * signerad token (proxyns ID-token eller klientens Bearer) godtas.
+   * Utelämnad → `forwarded` (oförändrat).
+   */
+  identity?: IdentityConfig;
 }
 
 /** Mappa en allowlist-rad ur full `User` → den delmängd `OidcAuthProvider` behöver. */
@@ -116,13 +123,21 @@ function toAllowlist(users: readonly User[]): AllowlistedUser[] {
   }));
 }
 
+/**
+ * Vem är det? `forwarded`: proxyns headers, annars Bearer. `verified` (#1256):
+ * bara signerade tokens — proxyns ID-token, annars klientens egen Bearer.
+ */
+async function claimsFor(headers: Headers, deps: ServerContextDeps): Promise<OidcClaims | null> {
+  const bearer = (): Promise<OidcClaims | null> => (deps.bearer ? bearerClaims(headers, deps.bearer) : Promise.resolve(null));
+  if (deps.identity?.mode !== "verified") return forwardedClaims(headers, deps.headerNames) ?? await bearer();
+  return await verifyBearerHeader(headers.get(IDENTITY_TOKEN_HEADER), deps.identity.verify) ?? await bearer();
+}
+
 /** Bygg en server-first-`Context` för en inkommande HTTP-request. */
 export async function createServerContext(req: Request, deps: ServerContextDeps): Promise<Context> {
   // Cookie-vägen (oauth2-proxy forwarded headers) först; annars Bearer-JWT
   // (helper/add-in) om konfigurerad. Båda → samma OidcClaims → samma allowlist.
-  const claims =
-    forwardedClaims(req.headers, deps.headerNames) ??
-    (deps.bearer ? await bearerClaims(req.headers, deps.bearer) : null);
+  const claims = await claimsFor(req.headers, deps);
   const users = await deps.repos.users.listByOrg(asId<"OrganizationId">(deps.organizationId));
   const principal = new OidcAuthProvider(claims, toAllowlist(users)).getPrincipal();
   const ctx = buildContext({
