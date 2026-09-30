@@ -34,7 +34,7 @@ import type { LocalStorePersistence } from "./local-store-persistence";
 import {
   isProcedureCall, MutationQueue, type MutationQueuePersistence, type ProcedureTouch, type QueueEntry, type QueuedMutation,
 } from "./mutation-queue";
-import { ReconcileEngine, type ApplyCanonical, type ReconcileResult } from "./reconcile-engine";
+import { ReconcileEngine, type ApplyCanonical, type ConflictRecord, type ReconcileResult } from "./reconcile-engine";
 import type { SyncTransport } from "./sync-transport";
 import type { MutationEvent } from "./writable-delegate";
 
@@ -55,6 +55,11 @@ export interface CachingSyncDeps {
   queuePersistence?: MutationQueuePersistence;
   /** Delta-sync-cursor-lagring. Default: in-memory. */
   cursor?: CursorStore;
+  /**
+   * Ändringar servern avvisade i en reconcile (#1266) — sparas så att ingen
+   * försvinner tyst. Utan den (demo, tester) glöms de som förut.
+   */
+  onConflicts?: (conflicts: readonly ConflictRecord[]) => Promise<void>;
   /**
    * Körs efter varje reconcile (best-effort, fel sväljs). Server-first-klienten
    * laddar upp dokument-bytes här (#1143) — EFTER att metadatan pushats, så
@@ -146,6 +151,7 @@ export class CachingSyncDataStore {
       /** Lyssnare på lokala ändringar (köad + persisterad) — driver synk-efter-spara. */
       localChangeListeners: Set<() => void>;
       afterReconcile: (() => Promise<unknown>) | undefined;
+      onConflicts: ((conflicts: readonly ConflictRecord[]) => Promise<void>) | undefined;
       /**
        * Aktiv under `runQueuedProcedure` (#1265): lokala radskrivningar samlas
        * här som `touches` i stället för att köas som rader. `null` = ingen.
@@ -178,6 +184,22 @@ export class CachingSyncDataStore {
     await this.persistSnapshot();
     for (const listener of this.hooks.localChangeListeners) listener();
     return result;
+  }
+
+  /**
+   * Köa en avvisad ändring på nytt (#1266, "Försök igen"). Ett anrop får ett
+   * NYTT mutationId — servern har redan sparat utfallet för det gamla, och
+   * samma id gav samma avvisning. En rad byggs på serverns aktuella version
+   * (`current`), så att den inte avvisas som inaktuell igen.
+   */
+  async requeue(entry: QueueEntry, current?: Record<string, unknown>): Promise<void> {
+    if (isProcedureCall(entry)) {
+      await this.queue.enqueueProcedure({ path: entry.path, input: entry.input, touches: entry.touches });
+    } else {
+      const version = typeof current?.version === "number" ? current.version : entry.baseVersion;
+      await this.queue.enqueue({ entity: entry.entity, kind: entry.kind, row: entry.row }, version !== undefined ? { baseVersion: version } : {});
+    }
+    for (const listener of this.hooks.localChangeListeners) listener();
   }
 
   /** Ligger en ej synkad ändring för raden kvar i kön? (rader + anropens touches) */
@@ -262,7 +284,7 @@ export class CachingSyncDataStore {
     };
 
     const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply });
-    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile, capture });
+    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile, onConflicts: deps.onConflicts, capture });
   }
 
   /** Reconcile mot servern (pull→apply→replay→advance) — online-vägen.
@@ -270,6 +292,7 @@ export class CachingSyncDataStore {
    *  bara om något faktiskt ändrades (tom poll-reconcile → ingen skrivning). */
   async reconcile(): Promise<ReconcileResult> {
     const result = await this.engine.reconcile();
+    if (result.conflicts.length > 0) await this.hooks.onConflicts?.(result.conflicts);
     if (result.pulled > 0 || result.pushed > 0 || result.rebased > 0 || result.replayed > 0) {
       this.rebakeJoins();
       await this.persistSnapshot();

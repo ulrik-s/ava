@@ -14,6 +14,7 @@
 
 import { useMemo, useState } from "react";
 import { ListPage } from "@/components/layout/list-page";
+import { RejectedChangesNotice } from "@/components/sync/rejected-changes-notice";
 import { NewWatchForm } from "@/components/watchlist/new-watch-form";
 import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
@@ -73,6 +74,8 @@ export default function WatchlistPage() {
         </>
       )}
     >
+
+      <RejectedChangesNotice />
 
       <NewWatchForm />
 

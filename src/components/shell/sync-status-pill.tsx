@@ -8,9 +8,11 @@
  *   ⏳ Sparas snart (pending — 3 ändringar)
  *   ⚠ Off-line    (offline — 3 ändringar väntar)
  *   ⚠ Merge       (merge-needed)
+ *   ⚠ 2 avvisade ändringar (rejected, #1266 → /sync-conflicts)
  *   ✗ Synk-fel    (error)
  *
- * Klick → navigera till /settings (där man kan trigga manuell sync).
+ * Klick → /settings (där man kan trigga manuell sync); avvisade ändringar →
+ * /sync-conflicts, där de går att försöka igen eller kasta.
  */
 
 import Link from "next/link";
@@ -25,7 +27,7 @@ export function SyncStatusPill({ state }: Props) {
   const { icon, label, cls, title } = formatState(state);
   return (
     <Link
-      href="/settings"
+      href={state.kind === "rejected" ? "/sync-conflicts" : "/settings"}
       title={title}
       data-testid="sync-pill"
       className={`text-xs px-2 py-1 rounded border inline-flex items-center gap-1.5 hover:opacity-80 ${cls}`}
@@ -39,6 +41,10 @@ export function SyncStatusPill({ state }: Props) {
 interface PillView { icon: string; label: string; cls: string; title: string }
 type SyncKind = SyncState["kind"];
 type SyncVariant<K extends SyncKind> = Extract<SyncState, { kind: K }>;
+
+function rejectedLabel(count: number): string {
+  return count === 1 ? "avvisad ändring" : "avvisade ändringar";
+}
 
 function offlineLabel(count: number): string {
   return count > 0 ? `Off-line — ${count} ${pluralChanges(count)} väntar` : "Off-line";
@@ -56,6 +62,7 @@ const PILL_VIEWS: { [K in SyncKind]: (s: SyncVariant<K>) => PillView } = {
   pending: (s) => ({ icon: "⏳", label: `${s.count} ${pluralChanges(s.count)} — sparas snart`, cls: "bg-amber-50 text-amber-800 border-amber-200", title: "Sparas automatiskt om några sekunder" }),
   offline: (s) => ({ icon: "⚠", label: offlineLabel(s.count), cls: "bg-gray-100 text-gray-700 border-gray-300", title: "Sparas till disk lokalt; pushas när du är tillbaka online" }),
   "merge-needed": () => ({ icon: "⚠", label: "Merge behövs", cls: "bg-orange-50 text-orange-900 border-orange-200", title: "Konflikt — öppna inställningar för att lösa" }),
+  rejected: (s) => ({ icon: "⚠", label: `${s.count} ${rejectedLabel(s.count)}`, cls: "bg-orange-50 text-orange-900 border-orange-200", title: "Servern avvisade ändringar — öppna för att försöka igen eller kasta" }),
   error: (s) => ({ icon: "✗", label: "Synk-fel — försöker igen", cls: "bg-red-50 text-red-800 border-red-200", title: s.message }),
 };
 

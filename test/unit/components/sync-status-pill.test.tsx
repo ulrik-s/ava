@@ -48,6 +48,14 @@ describe("SyncStatusPill", () => {
     expect(screen.getByText(/^Off-line$/)).toBeInTheDocument();
   });
 
+  it("rejected (#1266): antal avvisade, länkar till vyn där de hanteras", () => {
+    const { rerender } = render(<SyncStatusPill state={{ kind: "rejected", count: 1 }} />);
+    expect(screen.getByTestId("sync-pill")).toHaveTextContent("1 avvisad ändring");
+    expect(screen.getByTestId("sync-pill")).toHaveAttribute("href", "/sync-conflicts");
+    rerender(<SyncStatusPill state={{ kind: "rejected", count: 3 }} />);
+    expect(screen.getByTestId("sync-pill")).toHaveTextContent("3 avvisade ändringar");
+  });
+
   it("merge-needed: 'Merge behövs'", () => {
     render(<SyncStatusPill state={{ kind: "merge-needed" } as SyncState} />);
     expect(screen.getByText(/Merge behövs/)).toBeInTheDocument();

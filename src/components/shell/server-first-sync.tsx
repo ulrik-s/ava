@@ -4,16 +4,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { revalidateSession } from "@/lib/client/auth/revalidate-session";
 import { probeUserinfo } from "@/lib/client/backend/oidc-principal";
+import { rejectedChanges } from "@/lib/client/backend/rejected-changes";
 import { requestPersistentStorageOnce, type StoragePersistence } from "@/lib/client/storage/persistent-storage";
 import { syncStateFromCachingSync, type CachingSyncStatus } from "@/lib/client/sync/caching-sync-status";
 import { notifyServerSynced, registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
 import { SyncScheduler } from "@/lib/client/sync/sync-scheduler";
+import { useRejectedChanges } from "@/lib/client/sync/use-rejected-changes";
 import { pluralChanges } from "@/lib/client/utils";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { SyncStatusPill } from "./sync-status-pill";
 
 /** Det synken behöver ur server-first-storen — inget mer (smal söm, testbar). */
-export type SyncableStore = Pick<CachingSyncDataStore, "reconcile" | "pendingCount" | "onLocalChange">;
+export type SyncableStore = Pick<CachingSyncDataStore, "reconcile" | "pendingCount" | "onLocalChange" | "requeue">;
 
 /** Periodisk synk: fångar andras ändringar och gör om efter fel. */
 const PERIODIC_SYNC_MS = 30_000;
@@ -50,6 +52,13 @@ interface ServerFirstSyncProps {
 export function ServerFirstSync({ store, requestPersistence = requestPersistentStorageOnce }: ServerFirstSyncProps) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<CachingSyncStatus | null>(null);
+  const rejected = useRejectedChanges();
+
+  // "Försök igen" (#1266): en avvisad ändring köas på nytt mot den här storen.
+  useEffect(() => {
+    if (!store) return;
+    return rejectedChanges.setRetryHandler((change) => store.requeue(change.entry, change.current));
+  }, [store]);
   const [persistence, setPersistence] = useState<StoragePersistence | null>(null);
 
   useEffect(() => {
@@ -105,7 +114,7 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
   const atRisk = persistence === "not-persisted" && status.pendingCount > 0;
   return (
     <>
-      <SyncStatusPill state={syncStateFromCachingSync(status)} />
+      <SyncStatusPill state={syncStateFromCachingSync({ ...status, conflicts: rejected.length })} />
       {atRisk && <StorageWarning pending={status.pendingCount} />}
     </>
   );
