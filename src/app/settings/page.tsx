@@ -12,6 +12,7 @@ import { HelperSection } from "@/components/settings/helper-section";
 import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-section";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
 import { OrgImageSection } from "@/components/settings/org-image-section";
+import { SyncDevicesSection } from "@/components/sync/sync-devices-section";
 import { trpc } from "@/lib/client/trpc";
 import type { OrgImage } from "@/lib/shared/org-image";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
@@ -468,6 +469,7 @@ export default function SettingsPage() {
       </>
     ) },
     { id: "offices", title: "Kontor", render: () => <><PanelIntro text="Adresser för Stockholm, Göteborg osv. — visas på dokument-sidfot." /><OfficesSection /></> },
+    { id: "devices", title: "Enheter och synk", render: () => <><PanelIntro text="Varje webbläsare som synkar mot servern och vad som ligger kvar i dess kö (admin)." /><SyncDevicesSection /></> },
     { id: "external", title: "Extern editering", render: () => <><PanelIntro text="Öppna PDF/Word direkt i din favorit-editor. Valfritt." /><HelperSection /><ExternalEditSection /><EditorExtensionsSection /></> },
     { id: "views", title: "Standardvyer", render: () => <><PanelIntro text="Org-globala kolumn- och sort-defaults för listor (admin). Personliga val vinner." /><OrgDefaultsSection /></> },
     { id: "ledger", title: "Bokföring", render: () => <><PanelIntro text="Fortnox och konto-mappning (BAS) som SIE-exporten och Fortnox bokför mot (admin)." /><FortnoxSection /><LedgerAccountsSection /></> },

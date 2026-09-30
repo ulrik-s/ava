@@ -23,6 +23,7 @@ import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { DrizzleSyncDevices } from "@/lib/server/sync/drizzle-sync-devices";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
@@ -92,6 +93,7 @@ describe("server-first E2E över riktig HTTP-socket (#470)", () => {
     const handler = createServerTrpcHandler({
       repos, ports: noopPorts, organizationId: ORG, sync: new DrizzleSyncStore(handle.db, repos),
       replayer: new DrizzleProcedureReplayer(handle.db, repos),
+      syncDevices: new DrizzleSyncDevices(handle.db),
     });
     server = serveFetchHandler(handler, { port: 0 });
     await once(server, "listening");
@@ -102,6 +104,16 @@ describe("server-first E2E över riktig HTTP-socket (#470)", () => {
   afterAll(async () => {
     server.close();
     await handle.close();
+  });
+
+  it("enhetens synkläge rapporteras över riktig socket och sparas för den inloggade (#1267)", async () => {
+    const deviceId = uuidv7();
+    const client = clientFor(baseUrl, "anna@byra.se");
+    expect(await client.sync.reportDevice.mutate({ deviceId, label: "Chrome på macOS", pendingCount: 2, oldestPendingAt: 1000 })).toEqual({ ok: true });
+    const [row] = (await new DrizzleSyncDevices(handle.db).list(ORG)).filter((d) => d.deviceId === deviceId);
+    expect(row).toMatchObject({ userId: ANNA, pendingCount: 2, oldestPendingAt: 1000 });
+    // Bara admin ser listan — Anna är jurist.
+    await expect(client.sync.devices.query()).rejects.toThrow();
   });
 
   it("pull:ar server-skapade rader över riktig socket", async () => {

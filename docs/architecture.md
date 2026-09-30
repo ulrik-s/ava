@@ -256,6 +256,14 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   manipulerad klient, eller en post som en äldre version köade).
 - Övriga entiteter är ren data och går via radkön (byrån kontrolleras,
   server-ägda fält skrivs aldrig över).
+- **Synkläget per enhet** (#1267): efter varje lyckad synk rapporterar
+  webbläsaren sitt enhets-id, köns längd och den äldsta osynkade ändringen
+  (`sync.reportDevice`, `src/lib/client/backend/sync-device-report.ts`).
+  Servern sparar senaste rapporten i `sync_devices` (server-only). Admin ser
+  varje enhet i Inställningar → Enheter och synk (`/sync-devices`), och Att
+  bevaka larmar när en osynkad ändring är äldre än ett dygn eller en enhet
+  inte synkat på en vecka (`src/lib/shared/sync/device-health.ts`). Läget
+  åldras på servern även när enheten är avstängd.
 - **Köformatet** (#1247, `src/lib/shared/sync/queue-format.ts`): varje köpost
   (rad och anrop) stämplas med `format`. Poster utan stämpel skrevs före #1247 i
   format 1. Servern (`queue-admission.ts`) kör dagens format som det är och

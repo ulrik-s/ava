@@ -99,6 +99,11 @@ acontoavdrag, utskick och domstolsfordringar), med ett besked som visas i vyn f�
 avvisade ändringar. Radvägens egna regler för dem (låsta poster, fakturanummer
 ur radpushen) behövs inte längre och är borttagna.
 
+**Genomfört (#1267):** uppföljning på servern. Klienten rapporterar efter
+varje synk köns längd och den äldsta osynkade ändringen; admin ser varje enhet
+och larmas när en ändring fastnat i en webbläsare mer än ett dygn eller en
+enhet inte synkat på en vecka.
+
 **Genomfört (#1242, steg 3):** ärendet är procedurägt. `matter.create` får
 klientens id; ärendenumret tilldelas i serverns serie, för året då anropet
 gjordes; standardmapparna och klientkopplingen får id härledda ur anropet.

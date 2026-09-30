@@ -323,4 +323,10 @@ export class CachingSyncDataStore {
   pendingCount(): number {
     return this.queue.size();
   }
+
+  /** När den äldsta ändringen i kön gjordes (epoch-ms), eller null (#1267). */
+  oldestPendingAt(): number | null {
+    const times = this.queue.pending().map((e) => e.enqueuedAt);
+    return times.length > 0 ? Math.min(...times) : null;
+  }
 }

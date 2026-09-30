@@ -208,6 +208,9 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "sync.pull": "Hämta ändringar efter en viss markör (delta-synk). Maskinväg — inte något en användare anropar.",
   "sync.push": "Skicka en köad klientmutation för serverauktoritativ tillämpning. Maskinväg.",
   "sync.replay": "Låt servern köra om ett köat procedur-anrop (t.ex. en tidspost skapad offline) med sina egna regler. Maskinväg.",
+  "sync.reportDevice": "Rapportera en enhets synkläge efter en synk: hur många ändringar som ligger kvar och när den äldsta gjordes. Maskinväg.",
+  "sync.devices": "Lista byråns enheter och deras synkläge (senaste synk, osynkade ändringar). Bara för admin.",
+  "sync.forgetDevice": "Glöm en utrangerad enhet i synkuppföljningen. Bara för admin.",
 
   // ── System ───────────────────────────────────────────────────────
   "system.capabilities": "Vad den här installationen kan (demo, self-hosted eller serverdrift) — styr vilka funktioner som är tillgängliga.",

@@ -10,6 +10,7 @@ let lastArgs: unknown = null;
 const completeMutate = vi.fn();
 const createMutate = vi.fn();
 
+vi.mock("@/components/sync/stale-devices-notice", () => ({ StaleDevicesNotice: () => null }));
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     // Bocka av + ny bevakning (#1167).

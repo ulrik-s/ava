@@ -55,6 +55,9 @@ vi.mock("@/components/settings/fortnox-section", () => ({
   FortnoxSection: () => null,
 }));
 
+vi.mock("@/components/sync/sync-devices-section", () => ({
+  SyncDevicesSection: () => <div data-testid="sync-devices-section" />,
+}));
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,

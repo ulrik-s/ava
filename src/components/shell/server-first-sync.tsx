@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { revalidateSession } from "@/lib/client/auth/revalidate-session";
 import { probeUserinfo } from "@/lib/client/backend/oidc-principal";
 import { rejectedChanges } from "@/lib/client/backend/rejected-changes";
+import { reportSyncDevice } from "@/lib/client/backend/sync-device-report";
 import { requestPersistentStorageOnce, type StoragePersistence } from "@/lib/client/storage/persistent-storage";
 import { syncStateFromCachingSync, type CachingSyncStatus } from "@/lib/client/sync/caching-sync-status";
 import { notifyServerSynced, registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
@@ -16,7 +17,7 @@ import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/cac
 import { SyncStatusPill } from "./sync-status-pill";
 
 /** Det synken behöver ur server-first-storen — inget mer (smal söm, testbar). */
-export type SyncableStore = Pick<CachingSyncDataStore, "reconcile" | "pendingCount" | "onLocalChange" | "requeue">;
+export type SyncableStore = Pick<CachingSyncDataStore, "reconcile" | "pendingCount" | "oldestPendingAt" | "onLocalChange" | "requeue">;
 
 /** Periodisk synk: fångar andras ändringar och gör om efter fel. */
 const PERIODIC_SYNC_MS = 30_000;
@@ -42,7 +43,11 @@ interface ServerFirstSyncProps {
   store: SyncableStore | null;
   /** Be om beständig lagring (#1241). Injicerbar för tester. */
   requestPersistence?: () => Promise<StoragePersistence>;
+  /** Rapportera enhetens synkläge till servern (#1267). Injicerbar för tester. */
+  reportDevice?: (store: SyncableStore) => Promise<void>;
 }
+
+const reportToServer = (store: SyncableStore): Promise<void> => reportSyncDevice(store, navigator.userAgent);
 
 /**
  * Server-first-synken i webbläsaren: varje sparad ändring skickas till servern
@@ -50,7 +55,7 @@ interface ServerFirstSyncProps {
  * varnas om man stänger fliken innan allt nått servern — eller om osynkade
  * ändringar ligger i en lagring webbläsaren får rensa (#1241).
  */
-export function ServerFirstSync({ store, requestPersistence = requestPersistentStorageOnce }: ServerFirstSyncProps) {
+export function ServerFirstSync({ store, requestPersistence = requestPersistentStorageOnce, reportDevice = reportToServer }: ServerFirstSyncProps) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<CachingSyncStatus | null>(null);
   const rejected = useRejectedChanges();
@@ -76,6 +81,8 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
       reconcile: () => withSyncLock(async () => {
         const result = await store.reconcile();
         notifyServerSynced(); // bara efter en LYCKAD synk (#1243)
+        // Synkläget per enhet (#1267): servern larmar när något fastnat här.
+        void reportDevice(store);
         return result;
       }),
       pendingCount: () => store.pendingCount(),
@@ -110,7 +117,7 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
       window.removeEventListener("online", onOnline);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
-  }, [store, queryClient]);
+  }, [store, queryClient, reportDevice]);
 
   if (!status) return null;
   const atRisk = persistence === "not-persisted" && status.pendingCount > 0;

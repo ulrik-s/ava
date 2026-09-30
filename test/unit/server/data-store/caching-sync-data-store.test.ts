@@ -51,6 +51,9 @@ describe("CachingSyncDataStore (#415)", () => {
       // Köad, inte synkad.
       expect(ds.pendingCount()).toBe(1);
       expect(transport.pushed).toHaveLength(0);
+      // Den äldsta osynkade ändringen (#1267) är den nyss köade.
+      expect(ds.oldestPendingAt()).toBeLessThanOrEqual(Date.now());
+      expect(ds.oldestPendingAt()).toBeGreaterThan(Date.now() - 60_000);
       // Persisterad till (in-memory) store.
       const saved = await persistence.hydrate();
       expect(saved?.matters).toHaveLength(1);
@@ -109,6 +112,7 @@ describe("CachingSyncDataStore (#415)", () => {
       expect(res.pushed).toBe(1);
       expect(res.conflicts).toHaveLength(0);
       expect(ds.pendingCount()).toBe(0); // kön tömd
+      expect(ds.oldestPendingAt()).toBeNull();
       // Lokala raden rebasad till serverns kanoniska (version 5).
       const row = await ds.store.matters.findUnique({ where: { id: m1 } });
       expect(row).toMatchObject({ id: m1, version: 5 });
