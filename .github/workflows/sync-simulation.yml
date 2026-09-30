@@ -1,0 +1,40 @@
+name: Synksimulering
+
+# Nattlig synksimulering (#1268, ADR 0037). PR-körningen (Unit-jobbet) prövar
+# ett fast antal seeds; här prövas många fler, med längre förlopp. Ett fel
+# går att återskapa lokalt med seeden i utskriften:
+#
+#   AVA_SIM_SEED=<seed> AVA_SIM_STEPS=<steg> bun test test/unit/server/sync/simulation/
+
+on:
+  schedule:
+    - cron: "41 2 * * *" # varje natt 02:41 UTC
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: Antal seeds
+        default: "200"
+      steps:
+        description: Steg per förlopp
+        default: "80"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-simulation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulate:
+    name: Synksimulering (många seeds)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/bun-setup
+      - name: Simulera
+        env:
+          AVA_SIM_SEEDS: ${{ inputs.seeds || '200' }}
+          AVA_SIM_STEPS: ${{ inputs.steps || '80' }}
+        run: bun test --timeout 600000 test/unit/server/sync/simulation/
