@@ -108,11 +108,11 @@ type Key = Record<string, unknown>;
 
 async function serverState(db: AppDb): Promise<{ entries: Key[]; contactRows: Key[]; invoiceRows: Key[] }> {
   const entries = await db.select({ id: timeEntries.id, minutes: timeEntries.minutes, description: timeEntries.description })
-    .from(timeEntries).where(and(eq(timeEntries.matterId, MATTER), isNull(timeEntries.deletedAt)));
+    .from(timeEntries).where(and(eq(timeEntries.matterId, asId<"MatterId">(MATTER)), isNull(timeEntries.deletedAt)));
   const contactRows = await db.select({ id: contacts.id, name: contacts.name }).from(contacts)
-    .where(and(eq(contacts.organizationId, ORG), isNull(contacts.deletedAt)));
+    .where(and(eq(contacts.organizationId, asId<"OrganizationId">(ORG)), isNull(contacts.deletedAt)));
   const invoiceRows = await db.select({ id: invoices.id, amount: invoices.amount, invoiceNumber: invoices.invoiceNumber })
-    .from(invoices).where(and(eq(invoices.matterId, MATTER), isNull(invoices.deletedAt)));
+    .from(invoices).where(and(eq(invoices.matterId, asId<"MatterId">(MATTER)), isNull(invoices.deletedAt)));
   const byId = (a: Key, b: Key): number => String(a.id).localeCompare(String(b.id));
   return { entries: entries.sort(byId), contactRows: contactRows.sort(byId), invoiceRows: invoiceRows.sort(byId) };
 }
