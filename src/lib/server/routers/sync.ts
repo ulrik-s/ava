@@ -12,8 +12,10 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { assertAdmin } from "../auth/assert-admin";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
 import { analyzeIfNewContent, storagePathBefore } from "../sync/classify-new-content";
+import type { SyncDeviceStore } from "../sync/sync-device-store";
 import type { SyncStore } from "../sync/sync-store";
 import { orgProcedure, router } from "../trpc";
 
@@ -49,7 +51,48 @@ function requireSync(sync: SyncStore | undefined): SyncStore {
   return sync;
 }
 
+/** En enhets rapport (#1267). Etiketten är kort text om webbläsaren, aldrig innehåll. */
+const deviceReportSchema = z.object({
+  deviceId: z.string().uuid(),
+  label: z.string().max(120).nullable(),
+  pendingCount: z.number().int().nonnegative(),
+  oldestPendingAt: z.number().int().nonnegative().nullable(),
+});
+
+function requireDevices(store: SyncDeviceStore | undefined): SyncDeviceStore {
+  if (!store) {
+    throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "Synkuppföljning är inte tillgänglig i denna backend." });
+  }
+  return store;
+}
+
 export const syncRouter = router({
+  /**
+   * Enhetens synkläge efter en synk (#1267): köns längd och den äldsta
+   * osynkade ändringen. Servern stämplar när rapporten kom.
+   */
+  reportDevice: orgProcedure
+    .input(deviceReportSchema)
+    .mutation(async ({ ctx, input }) => {
+      await requireDevices(ctx.syncDevices).report(ctx.orgId, ctx.user.id, input);
+      return { ok: true as const };
+    }),
+
+  /** Byråns enheter och deras synkläge — bara för admin (#1267). */
+  devices: orgProcedure.query(({ ctx }) => {
+    assertAdmin(ctx);
+    return requireDevices(ctx.syncDevices).list(ctx.orgId);
+  }),
+
+  /** Glöm en utrangerad enhet — bara för admin (#1267). */
+  forgetDevice: orgProcedure
+    .input(z.object({ deviceId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      assertAdmin(ctx);
+      await requireDevices(ctx.syncDevices).forget(ctx.orgId, input.deviceId);
+      return { ok: true as const };
+    }),
+
   /** Delta-pull: kanoniska ändringar med `seq > sinceCursor` för org:en. */
   pull: orgProcedure
     .input(z.object({ sinceCursor: z.number().int().nonnegative() }))

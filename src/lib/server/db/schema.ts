@@ -207,6 +207,20 @@ export const syncReplays = pgTable("sync_replays", {
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("sync_replays_org_at_idx").on(t.organizationId, t.at)]);
 
+/**
+ * Synkläget per enhet (#1267) — senaste rapporten från varje webbläsare.
+ * Server-only (ingen entitet, synkas aldrig).
+ */
+export const syncDevices = pgTable("sync_devices", {
+  deviceId: uuid("device_id").primaryKey(),
+  organizationId: uuid("organization_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  label: text("label"),
+  pendingCount: integer("pending_count").notNull(),
+  oldestPendingAt: timestamp("oldest_pending_at", { withTimezone: true }),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("sync_devices_org_idx").on(t.organizationId)]);
+
 // ─── Billing (scopar via matter/invoice — ingen egen organization_id) ──────
 
 export const timeEntries = pgTable("time_entries", {

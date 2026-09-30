@@ -41,6 +41,7 @@ export function createServerTrpcHandler(
     ...(deps.headerNames ? { headerNames: deps.headerNames } : {}),
     ...(deps.sync ? { sync: deps.sync } : {}),
     ...(deps.replayer ? { replayer: deps.replayer } : {}),
+    ...(deps.syncDevices ? { syncDevices: deps.syncDevices } : {}),
     ...(deps.bearer ? { bearer: deps.bearer } : {}),
     ...(deps.identity ? { identity: deps.identity } : {}),
   };

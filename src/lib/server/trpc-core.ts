@@ -29,6 +29,7 @@ import type { ProcedureReplayResult } from "./data-store/in-memory/sync-transpor
 import type { IPorts } from "./ports";
 import type { QueuedCallIdentity } from "./queued-call";
 import type { Repositories } from "./repositories/repositories";
+import type { SyncDeviceStore } from "./sync/sync-device-store";
 import type { SyncStore } from "./sync/sync-store";
 
 export type Context = {
@@ -63,6 +64,8 @@ export type Context = {
    * här contextens principal. Bara server-first-runtimen; `undefined` annars.
    */
   replayProcedure?: (call: QueuedProcedureCall) => Promise<ProcedureReplayResult>;
+  /** Synkläget per enhet (#1267). Bara server-first-runtimen. */
+  syncDevices?: SyncDeviceStore;
   /**
    * Kapabilitets-tier (ADR 0027): vad denna runtime kan. Server-first-contexten
    * annonserar serverns förmågor (probas av klienten via `system.capabilities`);

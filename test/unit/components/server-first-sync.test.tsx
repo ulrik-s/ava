@@ -19,11 +19,15 @@ function fakeStore(opts: { pending: number; fail?: boolean }) {
       return { pulled: 0, pushed: 1, rebased: 0, replayed: 0, conflicts: [], cursor: 1 };
     },
     pendingCount: () => state.pending,
+    oldestPendingAt: () => (state.pending > 0 ? 1 : null),
     onLocalChange: (l: () => void) => { state.listener = l; return () => { state.listener = null; }; },
     requeue: async (entry) => { state.requeued.push(entry); },
   };
   return { state, store };
 }
+
+/** Ingen server i testerna — rapporten (#1267) prövas i ett eget test. */
+const noReport = async (): Promise<void> => {};
 
 const wrap = (ui: React.ReactElement) =>
   render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
@@ -31,7 +35,7 @@ const wrap = (ui: React.ReactElement) =>
 describe("ServerFirstSync", () => {
   it("flushServerSync synkar via den monterade synken (#1176)", async () => {
     const { state, store } = fakeStore({ pending: 0 });
-    const { unmount } = wrap(<ServerFirstSync store={store} />);
+    const { unmount } = wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
     await waitFor(() => expect(state.reconciles).toBe(1));
     state.pending = 1;
     await flushServerSync();
@@ -43,21 +47,28 @@ describe("ServerFirstSync", () => {
 
   it("flushServerSync kastar när ändringar inte når servern", async () => {
     const { store } = fakeStore({ pending: 1, fail: true });
-    const { unmount } = wrap(<ServerFirstSync store={store} />);
+    const { unmount } = wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
     await expect(flushServerSync()).rejects.toThrow(/inte nått servern/);
     unmount();
   });
 
+  it("rapporterar enhetens synkläge till servern efter en lyckad synk (#1267)", async () => {
+    const { store } = fakeStore({ pending: 1 });
+    const reported: SyncableStore[] = [];
+    wrap(<ServerFirstSync reportDevice={async (s) => { reported.push(s); }} store={store} />);
+    await waitFor(() => expect(reported).toEqual([store]));
+  });
+
   it("synkar köade ändringar direkt vid start och visar att allt är sparat", async () => {
     const { state, store } = fakeStore({ pending: 2 });
-    wrap(<ServerFirstSync store={store} />);
+    wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
     await waitFor(() => expect(state.reconciles).toBeGreaterThanOrEqual(1));
     await waitFor(() => expect(screen.getByText(/Sparat/)).toBeInTheDocument());
   });
 
   it("en lokal ändring triggar en ny synk", async () => {
     const { state, store } = fakeStore({ pending: 0 });
-    wrap(<ServerFirstSync store={store} />);
+    wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
     await waitFor(() => expect(state.reconciles).toBe(1));
     state.pending = 1;
     act(() => state.listener?.());
@@ -66,7 +77,7 @@ describe("ServerFirstSync", () => {
 
   it("varnar vid stängning av fliken när ändringar inte nått servern", async () => {
     const { store } = fakeStore({ pending: 1, fail: true });
-    wrap(<ServerFirstSync store={store} />);
+    wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
     const e = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(e);
     expect(e.defaultPrevented).toBe(true);
@@ -74,7 +85,7 @@ describe("ServerFirstSync", () => {
 
   it("ingen varning när allt är synkat", async () => {
     const { state, store } = fakeStore({ pending: 0 });
-    wrap(<ServerFirstSync store={store} />);
+    wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
     await waitFor(() => expect(state.reconciles).toBe(1));
     const e = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(e);
@@ -87,7 +98,7 @@ describe("ServerFirstSync", () => {
     Object.defineProperty(navigator, "onLine", { configurable: true, get: () => online });
     try {
       const { state, store } = fakeStore({ pending: 2 });
-      wrap(<ServerFirstSync store={store} />);
+      wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
       await waitFor(() => expect(screen.getByText(/väntar|offline|lokalt/i)).toBeInTheDocument());
       expect(state.reconciles).toBe(0);
 
@@ -112,13 +123,13 @@ describe("ServerFirstSync", () => {
     it("ber webbläsaren om beständig lagring när synken startar", async () => {
       const { store } = fakeStore({ pending: 0 });
       const request = persistence("persisted");
-      wrap(<ServerFirstSync store={store} requestPersistence={request} />);
+      wrap(<ServerFirstSync reportDevice={noReport} store={store} requestPersistence={request} />);
       await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     });
 
     it("lagringen kan rensas + osynkade ändringar → synlig varning", async () => {
       const { store } = fakeStore({ pending: 2, fail: true });
-      wrap(<ServerFirstSync store={store} requestPersistence={persistence("not-persisted")} />);
+      wrap(<ServerFirstSync reportDevice={noReport} store={store} requestPersistence={persistence("not-persisted")} />);
       const warning = await screen.findByTestId("storage-warning");
       expect(warning).toHaveTextContent(/kan rensas/i);
       expect(warning.getAttribute("title")).toMatch(/2 ändringar/);
@@ -126,21 +137,21 @@ describe("ServerFirstSync", () => {
 
     it("beständig lagring → ingen varning trots osynkade ändringar", async () => {
       const { store } = fakeStore({ pending: 2, fail: true });
-      wrap(<ServerFirstSync store={store} requestPersistence={persistence("persisted")} />);
+      wrap(<ServerFirstSync reportDevice={noReport} store={store} requestPersistence={persistence("persisted")} />);
       await waitFor(() => expect(screen.getByTestId("sync-pill")).toBeInTheDocument());
       expect(screen.queryByTestId("storage-warning")).toBeNull();
     });
 
     it("allt synkat → ingen varning även om lagringen kan rensas", async () => {
       const { store } = fakeStore({ pending: 0 });
-      wrap(<ServerFirstSync store={store} requestPersistence={persistence("not-persisted")} />);
+      wrap(<ServerFirstSync reportDevice={noReport} store={store} requestPersistence={persistence("not-persisted")} />);
       await waitFor(() => expect(screen.getByText(/Sparat/)).toBeInTheDocument());
       expect(screen.queryByTestId("storage-warning")).toBeNull();
     });
 
     it("antalet osynkade ändringar når utloggningen (unsyncedChangeCount)", async () => {
       const { store } = fakeStore({ pending: 3, fail: true });
-      const { unmount } = wrap(<ServerFirstSync store={store} requestPersistence={persistence("persisted")} />);
+      const { unmount } = wrap(<ServerFirstSync reportDevice={noReport} store={store} requestPersistence={persistence("persisted")} />);
       await waitFor(() => expect(unsyncedChangeCount()).toBe(3));
       unmount();
       expect(unsyncedChangeCount()).toBe(0);
@@ -151,11 +162,11 @@ describe("ServerFirstSync", () => {
     let synced = 0;
     const off = onServerSynced(() => { synced++; });
     const ok = fakeStore({ pending: 1 });
-    const { unmount } = wrap(<ServerFirstSync store={ok.store} requestPersistence={async () => "persisted"} />);
+    const { unmount } = wrap(<ServerFirstSync reportDevice={noReport} store={ok.store} requestPersistence={async () => "persisted"} />);
     await waitFor(() => expect(synced).toBe(1));
     unmount();
     const failing = fakeStore({ pending: 1, fail: true });
-    const second = wrap(<ServerFirstSync store={failing.store} requestPersistence={async () => "persisted"} />);
+    const second = wrap(<ServerFirstSync reportDevice={noReport} store={failing.store} requestPersistence={async () => "persisted"} />);
     await waitFor(() => expect(failing.state.reconciles).toBeGreaterThanOrEqual(1));
     expect(synced).toBe(1);
     second.unmount();
@@ -168,7 +179,7 @@ describe("ServerFirstSync", () => {
     await rejectedChanges.attach(new InMemoryRejectedChangesPersistence());
     const entry = { mutationId: "m1", entity: "invoice", kind: "update" as const, row: { id: "i1" }, enqueuedAt: 0 };
     const { state, store } = fakeStore({ pending: 0 });
-    wrap(<ServerFirstSync store={store} requestPersistence={async () => "persisted"} />);
+    wrap(<ServerFirstSync reportDevice={noReport} store={store} requestPersistence={async () => "persisted"} />);
     await act(async () => { await rejectedChanges.record([{ mutation: entry, conflictClass: "surface", reason: "stale", current: { id: "i1", version: 4 } }]); });
     await waitFor(() => expect(screen.getByTestId("sync-pill")).toHaveTextContent("1 avvisad ändring"));
     expect(screen.getByTestId("sync-pill")).toHaveAttribute("href", "/sync-conflicts");

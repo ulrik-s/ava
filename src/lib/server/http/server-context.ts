@@ -26,6 +26,7 @@ import type { AvaEvent, EmitInput, EventFilter } from "@/lib/server/events/schem
 import type { IPorts } from "@/lib/server/ports";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { ProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
+import type { SyncDeviceStore } from "@/lib/server/sync/sync-device-store";
 import type { SyncStore } from "@/lib/server/sync/sync-store";
 import type { Context } from "@/lib/server/trpc-core";
 import type { Capabilities } from "@/lib/shared/capabilities";
@@ -96,6 +97,8 @@ export interface ServerContextDeps {
   sync?: SyncStore;
   /** Kör om köade procedur-anrop (#1265, ADR 0037) — driver `sync.replay`. */
   replayer?: ProcedureReplayer;
+  /** Synkläget per enhet (#1267) — driver `sync.reportDevice` och `sync.devices`. */
+  syncDevices?: SyncDeviceStore;
   /**
    * Bearer-JWT-verifiering (ADR 0028/0013) för klienter utan OIDC-cookie
    * (helper, Office-add-in). Utelämnad → bara cookie-vägen (oförändrat).
@@ -154,6 +157,7 @@ export async function createServerContext(req: Request, deps: ServerContextDeps)
   });
   // Omkörningen sker som DEN HÄR requestens principal (#1265) — aldrig som
   // någon annan än den som skickade anropet.
+  const withDevices: Context = deps.syncDevices ? { ...ctx, syncDevices: deps.syncDevices } : ctx;
   const replayer = deps.replayer;
-  return replayer ? { ...ctx, replayProcedure: (call) => replayer.replay(call, ctx) } : ctx;
+  return replayer ? { ...withDevices, replayProcedure: (call) => replayer.replay(call, withDevices) } : withDevices;
 }

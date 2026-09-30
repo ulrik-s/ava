@@ -17,6 +17,7 @@ import { createPostgresDb } from "@/lib/server/db/client";
 import type { IDocumentPageIndex, IPorts } from "@/lib/server/ports";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
+import { DrizzleSyncDevices } from "@/lib/server/sync/drizzle-sync-devices";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import { bearerConfigFromEnv, type BearerVerifyConfig } from "./bearer-claims";
@@ -78,6 +79,8 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     sync: new DrizzleSyncStore(db, repos),
     // Köade procedur-anrop körs om auktoritativt (#1265, ADR 0037).
     replayer: new DrizzleProcedureReplayer(db, repos),
+    // Synkläget per enhet (#1267): rapporterna och adminens översikt.
+    syncDevices: new DrizzleSyncDevices(db),
     ...(config.endpoint ? { endpoint: config.endpoint } : {}),
     ...(config.onError ? { onError: config.onError } : {}),
     ...(bearer ? { bearer } : {}),
