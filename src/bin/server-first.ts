@@ -36,9 +36,10 @@ import { makeEmailPort } from "@/lib/server/jobs/queue-backed-email-sender";
 import { buildServerFirstJobHandlers, loadActiveSmtpConfig } from "@/lib/server/jobs/server-first-handlers";
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
+import { posthogConfigFromEnv, posthogErrorSink } from "@/lib/server/observability/posthog-sink";
 import type { ILedgerService } from "@/lib/server/ports";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
-import { createLogger, jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
+import { createLogger, jsonSink, setLogLevel, setLogSink, teeSink, type LogLevel } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
 
 function log(msg: string): void {
@@ -57,7 +58,10 @@ function log(msg: string): void {
  * för att en debug-rad per anrop ska dränka felen.
  */
 function startLogging(): void {
-  setLogSink(jsonSink);
+  // Felen även till PostHog (#1080) när AVA_POSTHOG_KEY är satt.
+  const posthog = posthogConfigFromEnv(process.env);
+  setLogSink(posthog ? teeSink(jsonSink, posthogErrorSink(posthog)) : jsonSink);
+  log(posthog ? `felrapportering: PostHog (${posthog.host})` : "felrapportering: av (AVA_POSTHOG_KEY saknas)");
   const level = process.env.AVA_LOG_LEVEL;
   if (level === "debug" || level === "info" || level === "warn" || level === "error") {
     setLogLevel(level satisfies LogLevel);

@@ -90,6 +90,32 @@ minuter räknas inte, eftersom klienten laddar upp bytes:en efter raden.
 docker logs ava-server 2>&1 | jq -c 'select(.event == "content.integrity.missing") | {count, ids}'
 ```
 
+### Felrapportering till PostHog (#1080)
+
+Med `AVA_POSTHOG_KEY` satt skickar servern varje **fel**post (`level: "error"`)
+till PostHogs felspårning som en `$exception`-händelse
+(`src/lib/server/observability/posthog-sink.ts`). Utan nyckel är den av, och
+loggen till stderr fungerar precis som förut. Båda får samma post (`teeSink`).
+
+| Variabel | Default | |
+|---|---|---|
+| `AVA_POSTHOG_KEY` | tomt = av | projektets token (`phc_…`) |
+| `AVA_POSTHOG_HOST` | `https://us.i.posthog.com` | regionens ingest-värd; AVA:s projekt (638276) ligger i **US** |
+
+Det som skickas är bara postens deklarerade fält: `event`, `requestId`,
+`userId`, `orgId`, `path`, `code`, `durationMs`, `count`, `total`, plus det
+redan maskerade `message` som felets text. `ids` och allt annat stannar i
+loggen. `distinct_id` är jurist-id:t (eller `ava-server:<orgId>`), och
+`$process_person_profile: false` gör att PostHog inte skapar någon personprofil.
+Samma `event:code:path` grupperas som ett fel.
+
+**Dataresidens:** med US-värden lämnar felposterna EU. Innehållet är id:n och
+maskerade meddelanden, inte klientdata, men beslutet är ett driftbeslut. Ett
+EU-projekt byts in med `AVA_POSTHOG_HOST=https://eu.i.posthog.com` och dess token.
+
+Sändningen är bäst-möjligt: timeout 5 s, och ett fel mot PostHog sväljs (det
+loggas inte, eftersom det skulle loopa).
+
 ## Grinden
 
 `no-console` är **error** i `src/lib/server/**`. Att lägga till en logger utan
@@ -101,11 +127,8 @@ UI loggar till konsolen med flit och berörs inte.
 
 ## Det som INTE finns än
 
-**Felrapportering till en mottagare** (Sentry/GlitchTip). Loggen är förutsättningen
-— en felrapportör konsumerar `LogRecord` — men valet av destination är ett
-drift­beslut med data­residens-konsekvenser som matchar USP:n *"din data, ingen
-tredjepartsinfra"*. Self-hosted GlitchTip talar Sentrys ingest-protokoll, så en
-sink kan skrivas utan att dra in `@sentry/*`. Se #1080.
+**Fel från webbläsaren.** Felrapporteringen ovan täcker servern; klientens
+fel (React, synkmotorn i fliken) når inte PostHog än.
 
 **Produktanalys** (PostHog e.d.) — medvetet inte gjort. Beteendedata från en
 advokatbyrå kan avslöja vem som arbetar med vad; det är en sekretessfråga, inte

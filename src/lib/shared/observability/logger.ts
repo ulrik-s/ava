@@ -89,6 +89,23 @@ export const jsonSink: LogSink = (record) => {
   console.error(JSON.stringify(record));
 };
 
+/**
+ * Skicka varje post till flera destinationer — t.ex. JSON till stderr och
+ * felen till en felrapportör (#1080). En destination som kastar stoppar inte
+ * de andra: loggningen får aldrig fälla det den loggar.
+ */
+export function teeSink(...sinks: readonly LogSink[]): LogSink {
+  return (record) => {
+    for (const s of sinks) {
+      try {
+        s(record);
+      } catch {
+        // En trasig destination får inte ta de andra med sig.
+      }
+    }
+  };
+}
+
 /** Kastar bort allt. Default i tester och i browser-bundlen. */
 export const nullSink: LogSink = () => {};
 

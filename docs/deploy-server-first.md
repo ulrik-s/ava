@@ -461,6 +461,24 @@ annars saknar helperns token det oauth2-proxy verifierar mot — se
 docker compose -f tooling/docker/docker-compose.production.yml up -d oauth2-proxy server-first
 ```
 
+## Felrapportering till PostHog (valfritt)
+
+Servern skickar sina felposter till PostHogs felspårning när en projekt-token
+finns. I `ava-server.env`:
+
+```bash
+AVA_POSTHOG_KEY=phc_uerix3kvxaE8FB5oprSEnEDpxPVmsJZtmn4rQqDQJsrL   # AVA:s projekt (638276, US)
+# AVA_POSTHOG_HOST=https://eu.i.posthog.com                     # bara för ett EU-projekt
+```
+
+```bash
+docker compose -f tooling/docker/docker-compose.production.yml up -d server-first
+docker compose -f tooling/docker/docker-compose.production.yml logs server-first | grep felrapportering
+```
+
+Vad som skickas (bara id:n, koder och maskerade meddelanden) och vad det betyder
+för dataresidens står i [observability.md](observability.md#felrapportering-till-posthog-1080).
+
 ## Dokumentklassificering med lokal LLM (valfritt)
 
 Uppladdade dokument klassificeras (stämning, dom, fullmakt …) av ett jobb på
