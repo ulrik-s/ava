@@ -8,6 +8,7 @@ import { rejectedChanges } from "@/lib/client/backend/rejected-changes";
 import { requestPersistentStorageOnce, type StoragePersistence } from "@/lib/client/storage/persistent-storage";
 import { syncStateFromCachingSync, type CachingSyncStatus } from "@/lib/client/sync/caching-sync-status";
 import { notifyServerSynced, registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
+import { withSyncLock } from "@/lib/client/sync/sync-lock";
 import { SyncScheduler } from "@/lib/client/sync/sync-scheduler";
 import { useRejectedChanges } from "@/lib/client/sync/use-rejected-changes";
 import { pluralChanges } from "@/lib/client/utils";
@@ -71,11 +72,12 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
   useEffect(() => {
     if (!store) return;
     const scheduler = new SyncScheduler({
-      reconcile: async () => {
+      // En flik i taget skickar kön (#1332).
+      reconcile: () => withSyncLock(async () => {
         const result = await store.reconcile();
         notifyServerSynced(); // bara efter en LYCKAD synk (#1243)
         return result;
-      },
+      }),
       pendingCount: () => store.pendingCount(),
       isOnline: () => navigator.onLine,
       onStatus: setStatus,
