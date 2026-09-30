@@ -14,24 +14,10 @@ import { serverFirstEventLog } from "@/lib/server/http/server-context";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import { asId } from "@/lib/shared/schemas/ids";
+import { type Rng, rng } from "../../../helpers/seeded-rng";
 import { createTestDb } from "../../db/pg-test-db";
 import { isProcedure, MATTER, ORG, seedWorld, SimClient, SimServer, userFor } from "./sync-world";
 
-/** Deterministisk slump (mulberry32). */
-export function rng(seed: number): { next: () => number; int: (lo: number, hi: number) => number; pick: <T>(xs: readonly T[]) => T | undefined } {
-  let a = seed >>> 0;
-  const next = (): number => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  const int = (lo: number, hi: number): number => lo + Math.floor(next() * (hi - lo + 1));
-  return { next, int, pick: (xs) => xs[Math.floor(next() * xs.length)] };
-}
-
-type Rng = ReturnType<typeof rng>;
 type Op = (c: SimClient, r: Rng, step: number) => Promise<unknown>;
 
 const DAY = "2026-09-15";

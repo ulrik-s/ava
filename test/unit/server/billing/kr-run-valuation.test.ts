@@ -20,8 +20,32 @@ describe("valueKrRun", () => {
     expect(valueKrRun({ ...TAXE, paymentMethod: "RATTSHJALP" }, NO_WORK, {}, NOW)).toEqual({ kind: "norm", matterPatch: {} });
   });
 
-  it("offentligt uppdrag utan taxa → normvägen", () => {
-    expect(valueKrRun({ ...TAXE, isTaxeArende: false }, NO_WORK, {}, NOW).kind).toBe("norm");
+  it("offentligt uppdrag utan taxa → löpande, räknat som dokumentet", () => {
+    expect(valueKrRun({ ...TAXE, isTaxeArende: false }, NO_WORK, {}, NOW)).toEqual({ kind: "lopande", grossOre: 0, matterPatch: {} });
+  });
+
+  // Dialogens dokument tar med huvudförhandlingen som arbete (#1255).
+  it("löpande: dialogens huvudförhandling yrkas som arbete, som i dokumentet", () => {
+    const huf = { hufStart: "2026-09-22T09:00:00.000Z", hufEnd: "2026-09-22T10:00:00.000Z" };
+    const expected = kostnadsrakningClaimInclVat({
+      hufStart: new Date(huf.hufStart), hufEnd: new Date(huf.hufEnd), yrkandeDate: NOW, hasFTax: true,
+      isTaxeArende: false, timeEntries: [], expenses: [],
+    });
+    const v = valueKrRun(TAXE, NO_WORK, { ...huf, isTaxeArende: false }, NOW);
+    expect(v).toEqual({ kind: "lopande", grossOre: expected, matterPatch: { isTaxeArende: false } });
+    expect(expected).toBeGreaterThan(0);
+  });
+
+  it("löpande: utan F-skatt → lägre belopp, som i dokumentet", () => {
+    const huf = { hufStart: "2026-09-22T09:00:00.000Z", hufEnd: "2026-09-22T10:00:00.000Z", isTaxeArende: false };
+    const med = valueKrRun(TAXE, NO_WORK, huf, NOW);
+    const utan = valueKrRun(TAXE, NO_WORK, { ...huf, hasFTax: false }, NOW);
+    expect(utan.kind !== "norm" && med.kind !== "norm" && utan.grossOre < med.grossOre).toBe(true);
+  });
+
+  it("löpande: slut före start → vägras", () => {
+    expect(() => valueKrRun(TAXE, NO_WORK, { hufStart: "2026-09-22T11:00:00.000Z", hufEnd: "2026-09-22T09:00:00.000Z", isTaxeArende: false }, NOW))
+      .toThrow(/slutar före/);
   });
 
   it("dialogen kryssar i taxeärende på ett ärende som saknade det → taxan, och valet sparas", () => {
