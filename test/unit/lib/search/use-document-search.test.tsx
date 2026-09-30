@@ -1,6 +1,7 @@
 /**
  * `useDocumentSearch` (#1215): omfånget väljer källa — servern frågas direkt
- * (Postgres-fulltext), demon kör in-process-routern, offline frågar ingen.
+ * (Postgres-fulltext), demon kör in-process-routern, och offline söker den
+ * i det som finns på enheten (#1244) — samma in-process-router.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
@@ -54,9 +55,10 @@ describe("useDocumentSearch", () => {
     expect(serverCalls).toEqual([]);
   });
 
-  it("offline: ingen fråga alls", () => {
-    renderHook(() => useDocumentSearch({ query: "x" }, "offline"), { wrapper });
-    expect(localCalls.every((c) => !c.enabled)).toBe(true);
+  it("offline: söker på enheten (in-process-routern), servern frågas inte (#1244)", () => {
+    const { result } = renderHook(() => useDocumentSearch({ query: "x" }, "offline"), { wrapper });
+    expect(result.current.data).toMatchObject({ source: "local" });
+    expect(localCalls.at(-1)).toEqual({ input: { query: "x" }, enabled: true });
     expect(serverCalls).toEqual([]);
   });
 
