@@ -37,6 +37,10 @@ vi.mock("@/lib/client/trpc", () => ({
   },
 }));
 
+vi.mock("@/components/watchlist/conflict-check-actions", () => ({
+  ConflictCheckActions: ({ hasHits }: { hasHits: boolean }) => <div data-testid="conflict-actions">{hasHits ? "träffar" : "väntar"}</div>,
+}));
+
 let lastSignalArgs: unknown = null;
 const M = asId<"MatterId">("m1");
 beforeEach(() => { tasks = []; signals = []; deletePending = false; vi.clearAllMocks(); });
@@ -142,5 +146,17 @@ describe("WatchSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Visa klara (1)" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Återöppna: Gjord" }));
     expect(updateMutate).toHaveBeenCalledWith({ id: "t2", status: "TODO" });
+  });
+
+  it("jävskontrollen i ärendets signaler får sina åtgärder (#1246)", () => {
+    signals = [{ kind: "conflictCheck", severity: "passed", title: "Jävskontroll: 1 träffar att bedöma", detail: "", matterId: "m1", matterNumber: "1", at: null, amountOre: null, link: null }];
+    render(<WatchSection matterId={M} />);
+    expect(screen.getByTestId("conflict-actions")).toHaveTextContent("träffar");
+  });
+
+  it("utan jävskontroll bland signalerna visas inga åtgärder", () => {
+    signals = [{ kind: "unbilled", severity: "approaching", title: "Ofakturerat", detail: "", matterId: "m1", matterNumber: "1", at: null, amountOre: 1, link: null }];
+    render(<WatchSection matterId={M} />);
+    expect(screen.queryByTestId("conflict-actions")).not.toBeInTheDocument();
   });
 });

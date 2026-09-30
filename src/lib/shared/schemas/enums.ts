@@ -34,6 +34,22 @@ export const MATTER_STATUS_LABELS = {
 export const matterStatusSchema = enumFromLabels(MATTER_STATUS_LABELS);
 export type MatterStatus = z.infer<typeof matterStatusSchema>;
 
+// ─── Jävskontroll per ärende (#1246) ──────────────────────────────────────
+
+/**
+ * Ärendets jävskontroll. `PENDING` = inte gjord mot byråns alla ärenden än
+ * (skapat offline eller utan klient); `HITS` = träffar som ska bedömas innan
+ * uppdraget tas; `REVIEWED` = träffarna bedömda av en jurist.
+ */
+export const CONFLICT_CHECK_STATUS_LABELS = {
+  PENDING: "Jävskontroll väntar",
+  CLEAR: "Inga träffar",
+  HITS: "Träffar att bedöma",
+  REVIEWED: "Bedömd",
+} as const satisfies Record<string, string>;
+export const conflictCheckStatusSchema = enumFromLabels(CONFLICT_CHECK_STATUS_LABELS);
+export type ConflictCheckStatus = z.infer<typeof conflictCheckStatusSchema>;
+
 // ─── Payment method (per matter) ──────────────────────────────────────────
 
 export const PAYMENT_METHOD_LABELS = {

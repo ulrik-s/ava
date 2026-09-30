@@ -50,7 +50,7 @@ export function inProcessLink(ctx: Context, opts: InProcessLinkOpts = {}): TRPCL
     const prepared = isQueuedProcedure(path) ? prepareQueuedInput(path, input) : null;
     if (!prepared) return lock.shared(() => fn(input));
     return lock.exclusive(() => recorder({ path, input: prepared }, (queued) =>
-      resolvePath(appRouter.createCaller({ ...ctx, queued }), path)(prepared)));
+      resolvePath(appRouter.createCaller({ ...ctx, queued, provisional: true }), path)(prepared)));
   };
 
   return () => ({ op }) =>

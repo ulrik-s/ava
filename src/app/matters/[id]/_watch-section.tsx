@@ -13,6 +13,7 @@
 import { useId, useState } from "react";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { ConflictCheckActions } from "@/components/watchlist/conflict-check-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { trpc } from "@/lib/client/trpc";
 import { isDeadlineDue } from "@/lib/shared/deadline";
@@ -73,9 +74,12 @@ function MatterSignals({ matterId }: { matterId: MatterId }) {
   const q = trpc.watchlist.list.useQuery({ mine: false, matterId });
   const items = (q.data?.items ?? []).filter((i) => i.kind !== "deadline");
   if (items.length === 0) return null;
+  const conflict = items.find((i) => i.kind === "conflictCheck");
   return (
     <div className="px-6 py-3 border-t border-gray-100">
       <WatchlistList items={items} emptyText="" />
+      {/* Träffar = passerad; en kontroll som väntar = annalkande (#1246). */}
+      {conflict && <ConflictCheckActions matterId={matterId} hasHits={conflict.severity === "passed"} />}
     </div>
   );
 }

@@ -72,6 +72,9 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   // om på servern. En ändring skriver bara fälten användaren ändrade.
   "matter.create": Object.freeze({ entity: "matter", idField: "id" }),
   "matter.update": Object.freeze({ entity: "matter" }),
+  // Jävskontrollen (#1246): offline väntar den tills servern kört den.
+  "matter.checkConflicts": Object.freeze({ entity: "matter" }),
+  "matter.markConflictsReviewed": Object.freeze({ entity: "matter" }),
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
   // server-LLM). Klienten kör den inte själv — servern kör om anropet.
   "document.analyze": Object.freeze({ entity: "document" }),

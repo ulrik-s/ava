@@ -128,3 +128,27 @@ describe("inProcessLink — köbara procedurer", () => {
     expect(created.id).toBe(derivedId(Q.mutationId, "expectedReceivable"));
   });
 });
+
+describe("inProcessLink — klientens körning är preliminär (#1246)", () => {
+  const KLIENT = "0190a1b2-0000-7000-8000-0000000000c1";
+  function seeded() {
+    const principal = new GitAuthProvider().getPrincipal();
+    const ds = new DemoDataStore({
+      organizations: [{ id: principal?.organizationId ?? "org", name: "Byrån" }],
+      contacts: [{ id: KLIENT, organizationId: principal?.organizationId ?? "org", name: "Bo Berg", contactType: "PERSON" }],
+      matters: [], matterContacts: [], conflictChecks: [],
+    }, async () => { /* skrivbart */ });
+    return buildContext({ dataStore: ds, ports: buildGitPorts(ds), principal });
+  }
+  const create = { type: "mutation" as const, path: "matter.create", input: { title: "Nytt", klientId: KLIENT } };
+
+  it("via inspelaren (self-hosted) väntar jävskontrollen på servern", async () => {
+    const { recorder } = spyRecorder();
+    const matter = await invoke(inProcessLink(seeded(), { recordProcedure: recorder }), create);
+    expect(matter).toMatchObject({ conflictCheckStatus: "PENDING" });
+  });
+
+  it("utan inspelare (demo, ingen server) avgörs den direkt", async () => {
+    expect(await invoke(inProcessLink(seeded()), create)).toMatchObject({ conflictCheckStatus: "CLEAR" });
+  });
+});

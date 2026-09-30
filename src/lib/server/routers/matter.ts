@@ -22,7 +22,9 @@ import {
   type UserId,
 } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
+import { uuidv7 } from "@/lib/shared/uuid";
 import { logMatterNote, type NoteCtx } from "../billing/matter-note";
+import { checkMatterConflicts } from "../conflict/matter-conflict-check";
 import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
 import { emit } from "../events/emit";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
@@ -253,10 +255,15 @@ export const matterRouter = router({
       const matterNumber = input.matterNumber ?? (await nextMatterNumber(ctx, responsibleLawyerId));
       // Ärendet + standardmapparna (#1228) i SAMMA transaktion — aldrig ett
       // ärende utan mappträd.
+      const klientId = input.klientId ? asId<"ContactId">(input.klientId) : null;
+      // Jävskontrollen innan uppdraget tas (#1246). Id:t är redan klientens
+      // (köade anrop) eller ett nytt — kontrollen utesluter bara ärendets egen koppling.
+      const matterId = asId<"MatterId">(input.id ?? uuidv7());
+      const conflict = await checkMatterConflicts(ctx, matterId, klientId);
       const matter = await ctx.repos.transaction(async (repos) => {
-        const created = await repos.matters.create(
-          buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input) satisfies Partial<Matter>,
-        );
+        const created = await repos.matters.create({
+          ...buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input), id: matterId, ...conflict,
+        } satisfies Partial<Matter>);
         // Samma mappar i klientens körning och serverns omkörning (#1242).
         await ensureDefaultMatterFolders(repos, asId<"MatterId">(created.id), DEFAULT_MATTER_FOLDERS, (key) => newRowId(ctx, key));
         return created;
@@ -264,10 +271,34 @@ export const matterRouter = router({
       await emit.matterCreated(ctx, matter);
       // matter.id washar till `any` via Joined<>; brand explicit. klientId
       // kommer från (redan validerad) input-sträng → trusted boundary-cast.
-      if (input.klientId) {
-        await linkKlient(ctx, asId<"MatterId">(matter.id), asId<"ContactId">(input.klientId));
-      }
+      if (klientId) await linkKlient(ctx, asId<"MatterId">(matter.id), klientId);
       return matter;
+    }),
+
+  /**
+   * Kör jävskontrollen igen (#1246) — t.ex. när klienten lagts till efter att
+   * ärendet skapades. Köat: offline väntar kontrollen tills servern kört den.
+   */
+  checkConflicts: orgProcedure
+    .input(z.object({ id: matterIdSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const matter = await ctx.repos.matters.getByIdWithContacts(input.id, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+      const klient = matter.contacts.find((c) => c.role === "KLIENT");
+      const conflict = await checkMatterConflicts(ctx, input.id, klient ? asId<"ContactId">(klient.contactId) : null);
+      return ctx.repos.matters.update(input.id, conflict);
+    }),
+
+  /** Juristen har bedömt träffarna och tar uppdraget (#1246). */
+  markConflictsReviewed: orgProcedure
+    .input(z.object({ id: matterIdSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const matter = await ctx.repos.matters.getByIdInOrg(input.id, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+      if (matter.conflictCheckStatus !== "HITS") {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Det finns inga träffar att bedöma." });
+      }
+      return ctx.repos.matters.update(input.id, { conflictCheckStatus: "REVIEWED" });
     }),
 
   update: orgProcedure

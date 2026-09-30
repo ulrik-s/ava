@@ -30,6 +30,7 @@ const FILTERS: Array<{ key: WatchlistKind | "all"; label: string }> = [
   { key: "overdueInvoice", label: "Förfallna fakturor" },
   { key: "failedDispatch", label: "Misslyckade utskick" },
   { key: "billingAction", label: "Fakturering" },
+  { key: "conflictCheck", label: "Jävskontroll" },
 ];
 
 export default function WatchlistPage() {

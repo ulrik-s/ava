@@ -66,7 +66,8 @@ export type WatchlistKind =
   | "deadline"         // tidsfrist ur en uppgift (dokument, överklagande)
   | "overdueInvoice"   // förfallen faktura eller avbetalningspost
   | "failedDispatch"   // fakturan nådde aldrig mottagaren
-  | "billingAction";   // faktureringen väntar på en åtgärd (#1221)
+  | "billingAction"    // faktureringen väntar på en åtgärd (#1221)
+  | "conflictCheck";   // jävskontrollen väntar eller har träffar (#1246)
 
 /**
  * `passed` = det har redan hänt (taket passerat, fristen ute, utskicket
@@ -345,6 +346,45 @@ export function failedDispatchItems(dispatches: readonly FailedDispatch[]): Watc
     at: d.failedAt, amountOre: null,
     link: { route: "invoices", id: d.invoiceId },
   }));
+}
+
+// ─── Jävskontroll (#1246) ─────────────────────────────────────────────────
+
+/** Ärendets jävskontroll, som den ligger på ärendet. */
+export interface ConflictCheckMatter {
+  id: string;
+  matterNumber: string;
+  status?: string | null;
+  conflictCheckStatus?: string | null;
+  conflictCheckHits?: number | null;
+}
+
+const isOpenMatter = (m: ConflictCheckMatter): boolean => m.status !== "CLOSED" && m.status !== "ARCHIVED";
+
+function conflictCheckItem(m: ConflictCheckMatter): WatchlistItem | null {
+  const base = { kind: "conflictCheck" as const, matterId: m.id, matterNumber: m.matterNumber, at: null, amountOre: null, link: { route: "matters" as const, id: m.id } };
+  if (m.conflictCheckStatus === "HITS") {
+    return {
+      ...base, severity: "passed",
+      title: `Jävskontroll: ${m.conflictCheckHits ?? 0} träffar att bedöma`,
+      detail: "Klienten förekommer i byråns andra ärenden. Bedöm träffarna innan uppdraget tas.",
+    };
+  }
+  if (m.conflictCheckStatus !== "PENDING") return null;
+  return {
+    ...base, severity: "approaching",
+    title: "Jävskontroll väntar",
+    detail: "Kontrollen är inte gjord mot byråns alla ärenden. Den körs när ärendet har synkats, eller när klienten lagts till och kontrollen körs om.",
+  };
+}
+
+/**
+ * Ärenden vars jävskontroll inte är klar. Advokatetiken kräver kontrollen innan
+ * uppdraget tas, och ett ärende som skapats offline har bara kontrollerats mot
+ * den lokala kopian. Träffar är mer akuta än en kontroll som väntar.
+ */
+export function conflictCheckItems(matters: readonly ConflictCheckMatter[]): WatchlistItem[] {
+  return matters.filter(isOpenMatter).map(conflictCheckItem).filter((i): i is WatchlistItem => i !== null);
 }
 
 // ─── Fakturering som väntar på en åtgärd (#1221) ───────────────────────────
