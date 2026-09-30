@@ -32,7 +32,7 @@ import {
 } from "@/lib/shared/billing-work-value";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
 import {
-  computeCoverageSplit, coverageInvoiceLines, rattsskyddCoverage, resolveAward,
+  computeCoverageSplit, coverageInvoiceLines, rattsskyddCoverage, resolveAward, settleToAward,
   type CoverageSplit,
 } from "@/lib/shared/coverage-billing";
 import { resolveHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
@@ -154,6 +154,46 @@ async function bookPayerRun(repos: Repositories, p: PayerRunInput): Promise<Bill
   });
   if (!p.krRun) await freezeWork(repos, p.matterId, run.id, at);
   return run;
+}
+
+/** Det slutregleringen fördelar: ärendet, arbetet och domstolens beslut. */
+interface SettlementLinesInput {
+  matter: Parameters<typeof rattsskyddCoverage>[0] & { paymentMethod: PaymentMethod; clientShareBips?: number | null | undefined };
+  work: UnfrozenWork;
+  totalArvodeNet: number;
+  awardedOre: number | null;
+  krRun: BillingRunListRow | undefined;
+  insurerPrutningOre: number | undefined;
+  settleDate: Date | string;
+}
+
+/**
+ * Fördelningen mellan klient och betalare med fakturornas rader.
+ *
+ * Domstolens beslut avser det kostnadsräkningen YRKADE: arvode + utlägg, inkl
+ * moms (#943). Nedsättningen härleds som en andel av hela anspråket och skalar
+ * BÅDE arvodet och utläggsraderna — annars klampas den bort (beviljat brutto >
+ * arvode netto) och byrån fakturerar som om domstolen beviljat allt. Rättsskydd
+ * rör inte den här vägen: där är bolagets prutning en egen händelse som klienten
+ * bär (`recordInsurerPruning`). Rättshjälp: fakturorna summerar till exakt det
+ * domstolen beviljat (#1255).
+ */
+function settlementLines(a: SettlementLinesInput) {
+  const method = a.matter.paymentMethod;
+  const award = resolveAward(method, a.totalArvodeNet, a.work, a.awardedOre, a.krRun?.workValueOreAtRun ?? null);
+  const baseSplit = computeCoverageSplit({
+    method, totalOre: a.totalArvodeNet, clientShareBips: a.matter.clientShareBips ?? 0,
+    awardedOre: award.awardedArvodeNetOre,
+    insurerPrutningOre: a.insurerPrutningOre ?? null,
+    ...rattsskyddCoverage(a.matter, a.work.timeEntries, a.settleDate),
+  });
+  const lines = coverageInvoiceLines(baseSplit, award.expenseLines);
+  const { split, payerLines } = settleToAward({ split: baseSplit, clientLines: lines.clientLines, payerLines: lines.payerLines }, method, a.awardedOre);
+  return {
+    split, payerLines, clientLines: lines.clientLines,
+    clientExpenseLines: lines.clientExpenseLines, payerExpenseLines: lines.payerExpenseLines,
+    expenseLossNetOre: award.expenseLossNetOre, expensesBaseNetOre: award.expensesBaseNetOre,
+  };
 }
 
 /** Domsbeloppet för slutregleringen (#828): finns en kostnadsräkning måste den
@@ -719,7 +759,7 @@ export const billingRunRouter = router({
         const now = callTime(ctx);
         const valuation = valueKrRun(matter, work, input, now);
         if (Object.keys(valuation.matterPatch).length > 0) await tx.matters.update(input.matterId, valuation.matterPatch);
-        const grossValue = valuation.kind === "taxa"
+        const grossValue = valuation.kind !== "norm"
           ? valuation.grossOre
           : krGrossOre(work, matterKrArvodeRows({ ...matter, ...valuation.matterPatch }, work, now));
         const run = await tx.billingRuns.create({
@@ -944,22 +984,8 @@ export const billingRunRouter = router({
         // över årsskifte + tidsspillan på egen norm); övriga metoder → platt rate.
         const settleDate = dateOrCallTime(ctx, input.invoiceDate);
         const totalArvodeNet = settlementArvodeNet(matter.paymentMethod, work, settleDate);
-        // Domstolens beslut avser det kostnadsräkningen YRKADE: arvode + utlägg,
-        // inkl moms (#943). Härled nedsättningen som en andel av hela anspråket och
-        // skala BÅDE arvodet och utläggsraderna med den — annars klampas nedsättningen
-        // bort (beviljat brutto > arvode netto) och byrån fakturerar som om domstolen
-        // beviljat allt. Rättsskydd rör inte den här vägen: där är bolagets prutning en
-        // egen händelse som klienten bär (`recordInsurerPruning`).
-        const award = resolveAward(matter.paymentMethod, totalArvodeNet, work, awardedOre);
-        const { expenseLines, expenseLossNetOre, expensesBaseNetOre } = award;
-        const split = computeCoverageSplit({
-          method: matter.paymentMethod, totalOre: totalArvodeNet, clientShareBips: matter.clientShareBips ?? 0,
-          awardedOre: award.awardedArvodeNetOre,
-          insurerPrutningOre: input.insurerPrutningOre ?? null,
-          ...rattsskyddCoverage(matter, work.timeEntries, settleDate),
-        });
-        const { clientLines, payerLines, clientExpenseLines, payerExpenseLines } =
-          coverageInvoiceLines(split, expenseLines);
+        const { split, clientLines, payerLines, clientExpenseLines, payerExpenseLines, expenseLossNetOre, expensesBaseNetOre } =
+          settlementLines({ matter, work, totalArvodeNet, awardedOre, krRun, insurerPrutningOre: input.insurerPrutningOre, settleDate });
 
         // Klient: självrisk (+ ev. prutning), moms 25 %, minus tidigare aconton.
         // Auto-dra av ALLA skickade klient-aconton (#856): de har redan betalats,

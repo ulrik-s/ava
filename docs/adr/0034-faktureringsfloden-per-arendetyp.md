@@ -149,3 +149,25 @@ Huvudförhandlingens tid och nivå kommer från dialogen och sparas på ärendet
 över taxans maxgräns (1 §, 8 §), **vägras** inskicket (PRECONDITION_FAILED).
 Det är bättre än att yrka ett belopp som inte stämmer. Över maxgränsen räknas
 ärendet löpande: avmarkera taxeärende i dialogen.
+
+## Tillägg: dokument, körning och faktura stämmer (#1255)
+
+Egenskapstester (`test/unit/server/billing/property/`) slumpar ärenden per
+betalningssätt och kör dem genom routrarna. De kräver att KR-dokumentets
+yrkande, körningens lagrade belopp och slutfakturan är samma när domstolen
+beviljar det yrkade. Ett fel återskapas med `AVA_BILLING_SEED=<seed>`.
+Testerna hittade två avvikelser, som nu är rättade:
+
+- **Löpande räkning i offentligt uppdrag.** Dialogens dokument räknar in
+  huvudförhandlingens tid som arbete, men körningen gick normvägen utan den och
+  yrkade mindre än dokumentet. Nu räknas körningen med samma funktion och samma
+  tid (`valueKrRun`, `kind: "lopande"`), och därmed också utan F-skatt som
+  dokumentet.
+- **Rättshjälpens slutreglering.** Yrkandet avrundas till hela kronor per rad,
+  men slutregleringen räknade om arvodet på öret. Två fel följde av det:
+  - fakturorna summerade till några ören från det beviljade, och
+  - fullt beviljat bokades som en nedsättning på några ören.
+
+  Nedsättningen mäts nu mot körningens yrkade belopp. Avrundningsresten läggs
+  på betalarens arvodesrad (`settleToAward`), så klientens och betalarens
+  fakturor tillsammans blir exakt det domstolen beslutat.

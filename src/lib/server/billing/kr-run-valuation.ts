@@ -54,9 +54,12 @@ export type KrRunMatterPatch = {
   taxaHufStart?: Date;
 };
 
-/** Värderingen: brottmålstaxan (med belopp) eller normvägen (routern räknar). */
+/**
+ * Värderingen: brottmålstaxan, löpande räkning i offentligt uppdrag (båda med
+ * belopp, räknat som dialogens dokument) eller normvägen (rättshjälp; routern räknar).
+ */
 export type KrRunValuation =
-  | { kind: "taxa"; grossOre: number; matterPatch: KrRunMatterPatch }
+  | { kind: "taxa" | "lopande"; grossOre: number; matterPatch: KrRunMatterPatch }
   | { kind: "norm"; matterPatch: KrRunMatterPatch };
 
 const precondition = (message: string): TRPCError => new TRPCError({ code: "PRECONDITION_FAILED", message });
@@ -64,6 +67,20 @@ const precondition = (message: string): TRPCError => new TRPCError({ code: "PREC
 /** Taxeärende = offentligt uppdrag med taxan vald (dialogens val går före ärendets). */
 function isTaxeClaim(matter: KrRunMatter, input: KrRunTaxaInput): boolean {
   return matter.paymentMethod === "OFFENTLIGT_UPPDRAG" && (input.isTaxeArende ?? matter.isTaxeArende === true);
+}
+
+/**
+ * Löpande räkning i offentligt uppdrag (#1255): dialogens dokument tar med
+ * huvudförhandlingens tid som arbete. Körningen räknas därför med samma funktion
+ * och samma tid, annars yrkar dokumentet mer än körningen lagrar. Utan dialog
+ * (skript, demo) finns ingen huvudförhandling att räkna med.
+ */
+function lopandeHuf(input: KrRunTaxaInput, now: Date): { start: Date; end: Date } {
+  if (!input.hufStart || !input.hufEnd) return { start: now, end: now };
+  const start = new Date(input.hufStart);
+  const end = new Date(input.hufEnd);
+  if (end < start) throw precondition("Huvudförhandlingen slutar före den börjar.");
+  return { start, end };
 }
 
 /** Huvudförhandlingen: dialogens start/slut, annars ärendets sparade tid. Null = okänd. */
@@ -95,7 +112,8 @@ function taxaLevelOf(matter: KrRunMatter, input: KrRunTaxaInput): TaxaLevel {
 /** Värdera körningen. Kastar PRECONDITION_FAILED när taxan inte kan räknas. */
 export function valueKrRun(matter: KrRunMatter, work: KrRunWork, input: KrRunTaxaInput, now: Date): KrRunValuation {
   const dialogChoice: KrRunMatterPatch = input.isTaxeArende === undefined ? {} : { isTaxeArende: input.isTaxeArende };
-  if (!isTaxeClaim(matter, input)) return { kind: "norm", matterPatch: dialogChoice };
+  if (matter.paymentMethod !== "OFFENTLIGT_UPPDRAG") return { kind: "norm", matterPatch: dialogChoice };
+  if (!isTaxeClaim(matter, input)) return lopandeValuation(matter, work, input, now, dialogChoice);
   const huf = validHuf(matter, input, now);
   const taxaLevel = taxaLevelOf(matter, input);
   const grossOre = kostnadsrakningClaimInclVat({
@@ -112,4 +130,20 @@ export function valueKrRun(matter: KrRunMatter, work: KrRunWork, input: KrRunTax
     kind: "taxa", grossOre,
     matterPatch: { ...dialogChoice, taxaLevel, taxaHuvudforhandlingMin: huf.minutes, taxaHufStart: huf.start },
   };
+}
+
+function lopandeValuation(
+  matter: KrRunMatter, work: KrRunWork, input: KrRunTaxaInput, now: Date, matterPatch: KrRunMatterPatch,
+): KrRunValuation {
+  const huf = lopandeHuf(input, now);
+  const grossOre = kostnadsrakningClaimInclVat({
+    hufStart: huf.start,
+    hufEnd: huf.end,
+    yrkandeDate: now,
+    hasFTax: input.hasFTax ?? matter.taxaHasFTax ?? true,
+    isTaxeArende: false,
+    timeEntries: [...work.timeEntries],
+    expenses: [...work.expenses],
+  });
+  return { kind: "lopande", grossOre, matterPatch };
 }

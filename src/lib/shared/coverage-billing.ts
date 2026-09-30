@@ -322,7 +322,11 @@ export function awardFactor(awardedOre: number | null, claimGrossOre: number): n
  * Rättsskydd rör inte den här vägen — där är bolagets prutning en egen händelse
  * som klienten bär (`recordInsurerPruning`).
  */
-export function resolveAward(method: PaymentMethod, totalArvodeNet: number, work: UnfrozenWork, awardedOre: number | null): {
+export function resolveAward(
+  method: PaymentMethod, totalArvodeNet: number, work: UnfrozenWork, awardedOre: number | null,
+  /** Kostnadsräkningens yrkade belopp (körningen) — beslutet avser DET, inte en omräkning (#1255). */
+  claimedOre: number | null = null,
+): {
   awardedArvodeNetOre: number | null; expenseLines: VatBreakdownLine[]; expenseLossNetOre: number; expensesBaseNetOre: number;
 } {
   const rawExpenseLines = expenseBreakdownLines(work);
@@ -330,7 +334,9 @@ export function resolveAward(method: PaymentMethod, totalArvodeNet: number, work
   if (method !== "RATTSHJALP") {
     return { awardedArvodeNetOre: awardedOre, expenseLines: rawExpenseLines, expenseLossNetOre: 0, expensesBaseNetOre };
   }
-  const claimGrossOre = arvodeInclVatOre(totalArvodeNet) + grossOreOf(rawExpenseLines);
+  // Yrkandet avrundas till hela kronor per rad; omräkningen här är på öret. Jämförs
+  // beslutet med omräkningen blir fullt beviljat en nedsättning på några ören.
+  const claimGrossOre = claimedOre ?? arvodeInclVatOre(totalArvodeNet) + grossOreOf(rawExpenseLines);
   const factor = awardFactor(awardedOre, claimGrossOre);
   const expenseLines = scaleVatLines(rawExpenseLines, factor);
   return {
@@ -339,4 +345,31 @@ export function resolveAward(method: PaymentMethod, totalArvodeNet: number, work
     // Byrån bär nedsättningen på utläggen också — arvodesdelen bärs via split.firmLossOre.
     expenseLossNetOre: netOreOf(rawExpenseLines) - netOreOf(expenseLines),
   };
+}
+
+/** Slutregleringens fördelning med fakturornas rader. */
+export interface SettlementLines {
+  split: CoverageSplit;
+  clientLines: VatBreakdownLine[];
+  payerLines: VatBreakdownLine[];
+}
+
+/**
+ * Rättshjälp med domstolens beslut (#1255): klientens och betalarens fakturor
+ * summerar exakt till det beviljade beloppet. Kostnadsräkningen yrkar i hela
+ * kronor per rad, medan slutregleringen räknar arvodet på öret, så utan
+ * justering fakturerar byrån några ören från det domstolen beslutat. Resten
+ * läggs på betalarens arvodesrad, och `split.payerOre` följer med så att
+ * slutregleringsvyn visar samma netto som fakturan.
+ */
+export function settleToAward(lines: SettlementLines, method: PaymentMethod, awardedOre: number | null): SettlementLines {
+  if (method !== "RATTSHJALP" || awardedOre == null) return lines;
+  const residual = awardedOre - grossOreOf(lines.clientLines) - grossOreOf(lines.payerLines);
+  const i = lines.payerLines.findIndex((l) => l.kind === "arvode");
+  const line = lines.payerLines[i];
+  if (residual === 0 || !line) return lines;
+  const netDelta = Math.round((residual * 10_000) / (10_000 + line.vatRate));
+  const payerLines = lines.payerLines.map((l, j) =>
+    j === i ? { ...l, netOre: l.netOre + netDelta, vatOre: l.vatOre + residual - netDelta } : l);
+  return { ...lines, payerLines, split: { ...lines.split, payerOre: lines.split.payerOre + netDelta } };
 }
