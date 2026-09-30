@@ -102,7 +102,11 @@
   OPFS/MemFs-vägen.
 - **Repository-söm** (ADR 0020): routrarna läser/skriver via `ctx.repos`
   (typade per-entitet-repos); `buildInMemoryRepositories` (klient/demo) +
-  `buildDrizzleRepositories` (server).
+  `buildDrizzleRepositories` (server). Båda måste klara samma kontrakt
+  (`test/unit/server/repositories/repository-contract.test.ts`, #1249): CRUD
+  med versionshöjning, mjuk borttagning, byrå ur egen kolumn, byråavgränsning
+  och frysning. Kontraktet genereras ur `ENTITY_REGISTRY` — en ny entitet utan
+  fixtur fäller testet.
 
 ### Self-hosted server (server-first, ADR 0016)
 - `src/bin/server-first.ts` → `buildServerFirstApi`: tRPC-over-HTTP (`appRouter`)
