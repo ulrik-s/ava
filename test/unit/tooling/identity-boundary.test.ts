@@ -8,14 +8,13 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import yaml from "js-yaml";
 import { describe, expect, it } from "vitest-compat";
 
 const DOCKER = join(process.cwd(), "tooling/docker");
 const read = (f: string): string => readFileSync(join(DOCKER, f), "utf8");
 
 interface ComposeService { ports?: unknown[]; environment?: Record<string, string> }
-const production = yaml.load(read("docker-compose.production.yml")) as { services: Record<string, ComposeService> };
+const production = Bun.YAML.parse(read("docker-compose.production.yml")) as { services: Record<string, ComposeService> };
 
 describe("produktionsstackens förtroendegräns (#1256)", () => {
   it("bara Caddy publicerar portar — server-first nås inte förbi proxyn", () => {
