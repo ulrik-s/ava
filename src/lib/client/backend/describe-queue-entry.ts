@@ -9,6 +9,8 @@ import { isProcedureCall, type QueueEntry } from "@/lib/server/data-store/in-mem
 const PROCEDURES: Readonly<Record<string, string>> = {
   "matter.create": "Nytt ärende",
   "matter.update": "Ändring av ärende",
+  "matter.checkConflicts": "Jävskontroll",
+  "matter.markConflictsReviewed": "Bedömning av jävsträffar",
   "timeEntry.create": "Ny tidspost",
   "timeEntry.update": "Ändring av tidspost",
   "timeEntry.delete": "Borttagning av tidspost",

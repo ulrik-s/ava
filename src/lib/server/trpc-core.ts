@@ -67,6 +67,13 @@ export type Context = {
   /** Synkläget per enhet (#1267). Bara server-first-runtimen. */
   syncDevices?: SyncDeviceStore;
   /**
+   * Klientens optimistiska körning av ett köat anrop (#1246). Servern kör om
+   * anropet auktoritativt mot byråns alla data; det som bara går att avgöra
+   * där (t.ex. jävskontrollen) lämnas som väntande här. Demo (ingen server) och
+   * serverns omkörning sätter den inte.
+   */
+  provisional?: true;
+  /**
    * Kapabilitets-tier (ADR 0027): vad denna runtime kan. Server-first-contexten
    * annonserar serverns förmågor (probas av klienten via `system.capabilities`);
    * git/demo-contexten defaultar till demo-baslinjen. `undefined` → demo.

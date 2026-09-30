@@ -25,7 +25,7 @@ import type {
 import type { DocumentPartSource } from "@/lib/shared/schemas/document";
 import type {
   BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, InvoiceStatus,
-  InvoiceType, MatterRole, MatterStatus, PaymentMethod, PaymentPlanStatus, ReminderType,
+  ConflictCheckStatus, InvoiceType, MatterRole, MatterStatus, PaymentMethod, PaymentPlanStatus, ReminderType,
   SuggestionStatus, UserRole,
 } from "@/lib/shared/schemas/enums";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
@@ -154,6 +154,10 @@ export const matters = pgTable("matters", {
   rattsskyddBeslutDatum: timestamp("rattsskydd_beslut_datum", { withTimezone: true }),
   /** Rättsskydd (#811): datum då rättsskydd nekades → föreslå rättshjälp. */
   rattsskyddNekadAt: timestamp("rattsskydd_nekad_at", { withTimezone: true }),
+  /** Jävskontrollen (#1246): status, antal träffar och när den kördes. */
+  conflictCheckStatus: text("conflict_check_status").$type<ConflictCheckStatus>(),
+  conflictCheckHits: integer("conflict_check_hits"),
+  conflictCheckedAt: timestamp("conflict_checked_at", { withTimezone: true }),
 }, (t) => [index("matters_org_idx").on(t.organizationId)]);
 
 /**

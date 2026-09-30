@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { orgScopedFields, optionalDateLike } from "./common";
-import { matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enums";
+import { conflictCheckStatusSchema, matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enums";
 import { hourlyRatesSchema } from "./hourly-rates";
 import { matterIdSchema, matterContactIdSchema, contactIdSchema, userIdSchema } from "./ids";
 
@@ -120,6 +120,15 @@ export const matterSchema = z.object({
    * Null = ej registrerad. Styr text-raden på domstolens kostnadsräkning.
    */
   radgivningBetaldAt: optionalDateLike,
+  /**
+   * Jävskontrollen (#1246), satt av servern när ärendet skapas eller kontrollen
+   * körs om. Null = äldre ärende från före uppföljningen.
+   */
+  conflictCheckStatus: conflictCheckStatusSchema.nullish(),
+  /** Antal träffar i senaste kontrollen. */
+  conflictCheckHits: z.number().int().nonnegative().nullish(),
+  /** När kontrollen senast kördes mot byråns alla ärenden. */
+  conflictCheckedAt: optionalDateLike,
 }).passthrough();
 
 export type Matter = z.infer<typeof matterSchema>;

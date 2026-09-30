@@ -16,7 +16,7 @@ import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import {
-  billingActionItems, coverageItems, deadlineItems, failedDispatchItems, overdueInvoiceItems,
+  billingActionItems, conflictCheckItems, coverageItems, deadlineItems, failedDispatchItems, overdueInvoiceItems,
   sortWatchlist, stockholmDay, unbilledItems,
   DEFAULT_THRESHOLDS, type BillingActionMatter, type CoverageMatter, type DeadlineTask, type FailedDispatch,
   type OverdueInvoice, type UnbilledMatter, type WatchlistItem,
@@ -48,6 +48,8 @@ interface MatterRow {
   rattsskyddMaxOre?: number | null;
   rattshjalpMaxTimmar?: number | null;
   responsibleLawyerId?: string | null;
+  conflictCheckStatus?: string | null;
+  conflictCheckHits?: number | null;
 }
 
 /** Täckningsunderlag: ärendets tak + upparbetat, batchat i ETT repo-anrop. */
@@ -224,6 +226,7 @@ export const watchlistRouter = router({
         ...overdueInvoiceItems(overdue.filter((i) => ownInvoice(i.matterId)), now),
         ...failedDispatchItems(failed),
         ...billingActionItems(billing, now),
+        ...conflictCheckItems(matters),
       ], stockholmDay(now));
 
       const scoped = input?.matterId ? items.filter((i) => i.matterId === String(input.matterId)) : items;
