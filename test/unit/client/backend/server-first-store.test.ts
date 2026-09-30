@@ -69,13 +69,14 @@ describe("createServerFirstStore (#2b)", () => {
 
   it("lokal mutation köas och pushas server-auktoritativt vid reconcile", async () => {
     const ds = await makeStore();
-    const m2 = uuidv7();
-    await ds.store.matters.create({ data: { id: m2, organizationId: ORG, title: "Klient-ärende", status: "ACTIVE", matterNumber: "2026-0201" } as never });
+    // En kontakt är ren data och går via radkön (ärendet är procedurägt, #1242).
+    const c2 = uuidv7();
+    await ds.store.contacts.create({ data: { id: c2, organizationId: ORG, name: "Klient-kontakt", contactType: "PERSON" } as never });
     expect(ds.pendingCount()).toBe(1); // köad lokalt, ej synkad
 
     await ds.reconcile();
     expect(ds.pendingCount()).toBe(0); // pushad + ack:ad
-    expect(await repos.matters.getById(asId<"MatterId">(m2))).toMatchObject({ id: m2, title: "Klient-ärende" }); // server fick den
+    expect(await repos.contacts.getById(asId<"ContactId">(c2))).toMatchObject({ id: c2, name: "Klient-kontakt" }); // server fick den
   });
 });
 

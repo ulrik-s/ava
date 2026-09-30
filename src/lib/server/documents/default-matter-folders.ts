@@ -10,7 +10,7 @@
 
 import { DEFAULT_MATTER_FOLDERS, type DefaultFolderNode } from "@/lib/shared/default-matter-folders";
 import type { DocumentFolder } from "@/lib/shared/schemas/document";
-import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
+import { asId, type DocumentFolderId, type MatterId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 
 /** Den del av repona hjälparen behöver. */
@@ -21,6 +21,8 @@ interface FillCtx {
   matterId: MatterId;
   /** `<parentId>\0<namn i gemener>` → mapp-id. */
   index: Map<string, DocumentFolderId>;
+  /** Id för en ny mapp ur dess nyckel (köat anrop, #1242), annars repots. */
+  newId: ((key: string) => string) | undefined;
 }
 
 function folderKey(parentId: DocumentFolderId | null, name: string): string {
@@ -34,8 +36,9 @@ async function folderIdFor(
   const key = folderKey(parentId, node.name);
   const known = ctx.index.get(key);
   if (known !== undefined) return { id: known, created: 0 };
+  const id = ctx.newId?.(`folder:${key}`);
   const folder = await ctx.repos.documentFolders.create(
-    { name: node.name, matterId: ctx.matterId, parentId } satisfies Partial<DocumentFolder>,
+    { ...(id ? { id: asId<"DocumentFolderId">(id) } : {}), name: node.name, matterId: ctx.matterId, parentId } satisfies Partial<DocumentFolder>,
   );
   ctx.index.set(key, folder.id);
   return { id: folder.id, created: 1 };
@@ -54,12 +57,15 @@ async function fillLevel(
 
 /**
  * Säkerställ att ärendet har standardträdet. Returnerar antalet nyskapade
- * mappar (0 om allt redan fanns).
+ * mappar (0 om allt redan fanns). `newId` ger nya mappar id ur deras plats i
+ * trädet — i ett köat anrop (#1242) får klientens körning och serverns
+ * omkörning då samma mappar.
  */
 export async function ensureDefaultMatterFolders(
   repos: FolderRepos, matterId: MatterId, tree: readonly DefaultFolderNode[] = DEFAULT_MATTER_FOLDERS,
+  newId?: (key: string) => string,
 ): Promise<number> {
   const existing = await repos.documentFolders.listByMatter(matterId);
   const index = new Map(existing.map((f) => [folderKey(f.parentId ?? null, f.name), f.id] as const));
-  return fillLevel({ repos, matterId, index }, tree, null);
+  return fillLevel({ repos, matterId, index, newId }, tree, null);
 }

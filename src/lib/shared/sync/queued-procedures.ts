@@ -67,6 +67,11 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "paymentPlan.recordReminder": Object.freeze({ entity: "paymentPlanReminder", idField: "id" }),
   "paymentPlan.scanDueReminders": Object.freeze({ entity: "paymentPlanReminder" }),
   "invoice.markFortnoxBooked": Object.freeze({ entity: "invoice" }),
+  // Ärendena (#1242, steg 3): skapandet (ärendenumret i serverns serie,
+  // standardmapparna) och ändringarna (status, betalningssätt, taxa …) körs
+  // om på servern. En ändring skriver bara fälten användaren ändrade.
+  "matter.create": Object.freeze({ entity: "matter", idField: "id" }),
+  "matter.update": Object.freeze({ entity: "matter" }),
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
   // server-LLM). Klienten kör den inte själv — servern kör om anropet.
   "document.analyze": Object.freeze({ entity: "document" }),

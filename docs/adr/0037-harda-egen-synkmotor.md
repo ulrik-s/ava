@@ -97,8 +97,17 @@ procedurägda entiteterna (`procedure-owned.ts`: tid, utlägg, fakturor,
 körningar, betalningar, avbetalningsplaner och deras påminnelser, kundförluster,
 acontoavdrag, utskick och domstolsfordringar), med ett besked som visas i vyn för
 avvisade ändringar. Radvägens egna regler för dem (låsta poster, fakturanummer
-ur radpushen) behövs inte längre och är borttagna. Kvar: ärendets skapande och
-status (steg 3).
+ur radpushen) behövs inte längre och är borttagna.
+
+**Genomfört (#1242, steg 3):** ärendet är procedurägt. `matter.create` får
+klientens id; ärendenumret tilldelas i serverns serie, för året då anropet
+gjordes; standardmapparna och klientkopplingen får id härledda ur anropet.
+`matter.update` köas i sin helhet — inte bara statusen. Det är en partiell
+ändring: bara fälten användaren ändrade skrivs, så två ändringar av olika fält
+(titel på en enhet, status på en annan) går inte förlorade, vilket radkönens
+hela-raden-LWW inte kunde lova. Skriver ett anrop flera anteckningar får de var
+sitt härlett id i skrivordning (`serviceNote`, `serviceNote:2`, …). Ärendets
+parter (`matterContact`) och kontakterna är ren data och går via radkön.
 
 ## Konsekvenser
 
@@ -124,6 +133,5 @@ status (steg 3).
 
 ## Öppna frågor
 
-- Ska hela ärendet bli procedurägt, eller bara skapandet och statusen (#1242, steg 3)? Förslag: bara skapandet och statusen — titel och beskrivning redigeras ofta offline och tjänar på radkönens konflikthantering.
 - Hur visas preliminära fakturanummer i dokument som skapas offline?
 - Omprövning: om den egna motorn visar sig dyr att hålla korrekt (simuleringstesterna hittar återkommande fel) utvärderas PowerSync eller Electric på nytt mot samma krav.

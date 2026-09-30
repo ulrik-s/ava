@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
+import { DEFAULT_MATTER_FOLDERS } from "@/lib/shared/default-matter-folders";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
   matterRoleSchema,
@@ -24,10 +25,11 @@ import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { logMatterNote, type NoteCtx } from "../billing/matter-note";
 import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
 import { emit } from "../events/emit";
+import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
 
-type MatterCtx = { repos: Repositories; orgId: OrganizationId };
+type MatterCtx = { repos: Repositories; orgId: OrganizationId } & QueuedCallScope;
 
 /**
  * Hjälpare: hämta matter och verifiera att den tillhör anropande org.
@@ -135,7 +137,9 @@ async function lawyerPrefix(ctx: MatterCtx, userId: UserId): Promise<string> {
  * fallback, bakåtkompatibelt).
  */
 async function nextMatterNumber(ctx: MatterCtx, responsibleLawyerId?: string): Promise<string> {
-  const year = new Date().getFullYear();
+  // Serien är året då ärendet skapades — också när servern kör om ett köat
+  // anrop efter nyår (#1242).
+  const year = callTime(ctx).getFullYear();
   const prefix = responsibleLawyerId ? await lawyerPrefix(ctx, asId<"UserId">(responsibleLawyerId)) : "";
 
   const ownMatters = responsibleLawyerId
@@ -199,7 +203,9 @@ function buildMatterData(
 async function linkKlient(ctx: MatterCtx, matterId: MatterId, klientId: ContactId): Promise<void> {
   const contact = await ctx.repos.contacts.getByIdFull(klientId, ctx.orgId);
   if (!contact) throw new TRPCError({ code: "NOT_FOUND" });
-  await ctx.repos.matterContacts.create({ matterId, contactId: klientId, role: "KLIENT" } satisfies Partial<MatterContact>);
+  await ctx.repos.matterContacts.create({
+    id: asId<"MatterContactId">(newRowId(ctx, "klient")), matterId, contactId: klientId, role: "KLIENT",
+  } satisfies Partial<MatterContact>);
 }
 
 export const matterRouter = router({
@@ -251,7 +257,8 @@ export const matterRouter = router({
         const created = await repos.matters.create(
           buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input) satisfies Partial<Matter>,
         );
-        await ensureDefaultMatterFolders(repos, asId<"MatterId">(created.id));
+        // Samma mappar i klientens körning och serverns omkörning (#1242).
+        await ensureDefaultMatterFolders(repos, asId<"MatterId">(created.id), DEFAULT_MATTER_FOLDERS, (key) => newRowId(ctx, key));
         return created;
       });
       await emit.matterCreated(ctx, matter);

@@ -7,6 +7,8 @@ import { isProcedureCall, type QueueEntry } from "@/lib/server/data-store/in-mem
 
 /** Köbara procedurer (`QUEUED_PROCEDURES`) med egna namn. */
 const PROCEDURES: Readonly<Record<string, string>> = {
+  "matter.create": "Nytt ärende",
+  "matter.update": "Ändring av ärende",
   "timeEntry.create": "Ny tidspost",
   "timeEntry.update": "Ändring av tidspost",
   "timeEntry.delete": "Borttagning av tidspost",
