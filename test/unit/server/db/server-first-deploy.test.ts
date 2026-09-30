@@ -87,16 +87,21 @@ describe("server-first deploy (migrerad Postgres, riktig socket)", () => {
       });
       const transport = new TrpcSyncTransport(client);
 
-      // 3. Push en mutation server-auktoritativt; verifiera via pull.
-      const m1 = uuidv7();
+      // 3. Push en rad (ren data — en kontakt) server-auktoritativt; verifiera via pull.
+      const c1 = uuidv7();
       const push = await transport.push({
-        mutationId: uuidv7(), entity: "matter", kind: "create",
-        row: { id: m1, organizationId: org, title: "Deploy-ärende", status: "ACTIVE", matterNumber: "2026-0099" },
+        mutationId: uuidv7(), entity: "contact", kind: "create",
+        row: { id: c1, organizationId: org, name: "Deploy-kontakt", contactType: "PERSON" },
         enqueuedAt: 0,
       });
       expect(push.status).toBe("accepted");
 
+      // Ärendet är procedurägt (#1242): det skapas via routern, inte som rad.
+      const m1 = uuidv7();
+      await client.matter.create.mutate({ id: m1, title: "Deploy-ärende" });
+
       const pulled = await transport.pull(0);
+      expect(pulled.changes.some((c) => c.row.id === c1)).toBe(true);
       expect(pulled.changes.some((c) => c.row.id === m1)).toBe(true);
 
       // 4. Fulltextsökningen (#1215) är wirad: indexerad sidtext hittas via

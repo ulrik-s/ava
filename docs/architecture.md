@@ -251,7 +251,7 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   mutationId, en rad byggd på serverns version); **Kasta** låter serverns läge
   gälla. Ingen avvisad ändring försvinner tyst.
 - **Procedurägda entiteter** (#1242, `src/lib/shared/sync/procedure-owned.ts`):
-  tid, utlägg och all fakturering skrivs bara av procedurkön. Servern tar inte
+  ärenden, tid, utlägg och all fakturering skrivs bara av procedurkön. Servern tar inte
   emot färdiga rader för dem — en sådan radpush avvisas med ett besked (en
   manipulerad klient, eller en post som en äldre version köade).
 - Övriga entiteter är ren data och går via radkön (byrån kontrolleras,

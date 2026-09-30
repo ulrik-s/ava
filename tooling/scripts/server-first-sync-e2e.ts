@@ -73,18 +73,19 @@ async function main(): Promise<void> {
   const transport = makeTransport();
   await waitForServer(transport);
 
-  const m1 = uuidv7();
+  // En kontakt — ren data, som går via radkön (ärendet är procedurägt, #1242).
+  const c1 = uuidv7();
   const push = await transport.push({
     mutationId: uuidv7(),
-    entity: "matter",
+    entity: "contact",
     kind: "create",
-    row: { id: m1, organizationId: ORG, title: "Deploy-E2E-ärende", status: "ACTIVE", matterNumber: "2026-0123" },
+    row: { id: c1, organizationId: ORG, name: "Deploy-E2E-kontakt", contactType: "PERSON" },
     enqueuedAt: 0,
   });
   if (push.status !== "accepted") throw new Error(`push ej accepterad: ${push.status}`);
 
   const pull = await transport.pull(0);
-  if (!pull.changes.some((c) => c.row.id === m1)) throw new Error("pull saknar den pushade raden");
+  if (!pull.changes.some((c) => c.row.id === c1)) throw new Error("pull saknar den pushade raden");
 
   console.log(`✓ server-first deploy-E2E: push accepted, pull cursor ${pull.cursor}, rad synlig`);
 }

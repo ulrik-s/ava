@@ -90,13 +90,13 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
   });
 
   it("push delete → tombstone i pull (deleted: true)", async () => {
-    const m2 = uuidv7();
-    await repos.matters.create({ id: m2, organizationId: ORG, title: "Tas bort", status: "ACTIVE", matterNumber: "2026-0010" } as never);
+    const c2 = uuidv7();
+    await repos.contacts.create({ id: c2, organizationId: ORG, name: "Tas bort", contactType: "PERSON" } as never);
     const cursor = (await sync.pull(ORG, 0)).cursor;
-    await sync.push(ORG, mut("matter", "delete", { id: m2 }));
-    const change = (await sync.pull(ORG, cursor)).changes.find((c) => c.row.id === m2);
-    expect(change).toMatchObject({ entity: "matter", deleted: true });
-    expect(await repos.matters.getById(asId<"MatterId">(m2))).toBeNull();
+    await sync.push(ORG, mut("contact", "delete", { id: c2 }));
+    const change = (await sync.pull(ORG, cursor)).changes.find((c) => c.row.id === c2);
+    expect(change).toMatchObject({ entity: "contact", deleted: true });
+    expect(await repos.contacts.getById(asId<"ContactId">(c2))).toBeNull();
   });
 
   // #528: document/documentFolder saknar org-kolumn → org härleds via ärendet

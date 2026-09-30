@@ -15,11 +15,11 @@ import { QUEUED_PROCEDURES } from "@/lib/shared/sync/queued-procedures";
 const QUEUED_ON_ROW_DATA: ReadonlySet<string> = new Set(["document"]);
 
 describe("procedurägda entiteter", () => {
-  it("tid, utlägg och faktureringen är procedurägda; ren data är det inte", () => {
-    for (const e of ["timeEntry", "expense", "invoice", "billingRun", "payment", "paymentPlanReminder", "invoiceDispatch"]) {
+  it("ärenden, tid, utlägg och faktureringen är procedurägda; ren data är det inte", () => {
+    for (const e of ["matter", "timeEntry", "expense", "invoice", "billingRun", "payment", "paymentPlanReminder", "invoiceDispatch"]) {
       expect(isProcedureOwned(e)).toBe(true);
     }
-    for (const e of ["contact", "task", "calendarEvent", "document", "matter"]) expect(isProcedureOwned(e)).toBe(false);
+    for (const e of ["contact", "matterContact", "task", "calendarEvent", "document", "documentFolder"]) expect(isProcedureOwned(e)).toBe(false);
   });
 
   it("varje procedurägd entitet finns i ENTITY_REGISTRY", () => {
