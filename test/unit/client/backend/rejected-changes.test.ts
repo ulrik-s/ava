@@ -11,6 +11,7 @@ import {
 } from "@/lib/client/backend/rejected-changes";
 import type { QueuedMutation, QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { ConflictRecord } from "@/lib/server/data-store/in-memory/reconcile-engine";
+import { QUEUED_PROCEDURES } from "@/lib/shared/sync/queued-procedures";
 
 const row: QueuedMutation = { mutationId: "r1", entity: "invoice", kind: "update", row: { id: "i1" }, baseVersion: 2, enqueuedAt: 0 };
 const call: QueuedProcedureCall = {
@@ -108,6 +109,11 @@ describe("describeQueueEntry", () => {
   it("köbara procedurer med egna namn; okända med sökvägen", () => {
     expect(describeQueueEntry({ ...call, path: "timeEntry.create" })).toBe("Ny tidspost");
     expect(describeQueueEntry({ ...call, path: "okänd.proc" })).toBe("Ändring (okänd.proc)");
+  });
+
+  it("varje köbar procedur har ett eget namn — ingen visas som sökväg", () => {
+    const unnamed = Object.keys(QUEUED_PROCEDURES).filter((path) => describeQueueEntry({ ...call, path }).startsWith("Ändring ("));
+    expect(unnamed).toEqual([]);
   });
 
   it("radposter: ny/ändring/borttagning av entiteten; okänd entitet med sitt namn", () => {

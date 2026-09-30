@@ -79,6 +79,11 @@ Steg 2c: aconto-, slut-, kredit- och rådgivningsfakturor
 (`billingRun.createAcconto/createFinal`, `invoice.createCredit/createRadgivning`).
 Fakturanumret tilldelas i serverns körning i fakturadatumets serie; de poster
 slutfakturan fryser loggas i change_log (#1319) och följer med i svaret.
+Steg 2d: kostnadsräkningsflödet (`billingRun.createKostnadsrakning`,
+`voidKostnadsrakning`, `recordKostnadsrakningBeslut`, `appealKostnadsrakning`,
+`setVerdict`) och slutregleringen (`settleCoverage`, `recordInsurerPruning`).
+KR-referensens serie är anropets år. Därmed körs hela faktureringen om på
+servern; radkön bär inte längre några faktureringsrader från UI:t.
 
 ## Konsekvenser
 

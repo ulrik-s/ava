@@ -123,10 +123,12 @@ async function resolveSettlementWork(
 }
 
 /** Bokar byråns prutningsförlust (rättshjälp) som icke-debiterbart PRUTNING-utlägg. */
-async function bookFirmLoss(repos: Repositories, userId: UserId, matterId: MatterId, firmLossOre: number): Promise<void> {
+async function bookFirmLoss(repos: Repositories, a: { userId: UserId; matterId: MatterId; firmLossOre: number; scope: QueuedCallScope }): Promise<void> {
+  const { userId, matterId, firmLossOre } = a;
   if (firmLossOre <= 0) return;
   await repos.expenses.create({
-    matterId, userId, date: new Date(),
+    id: asId<"ExpenseId">(newRowId(a.scope, "firmLoss")),
+    matterId, userId, date: callTime(a.scope),
     amount: -firmLossOre, description: "Prutning — byrån bär (rättshjälp)",
     billable: false, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
   });
@@ -135,6 +137,7 @@ async function bookFirmLoss(repos: Repositories, userId: UserId, matterId: Matte
 interface PayerRunInput {
   matterId: MatterId; payerRecipient: BillingRunRecipient; payerInvoiceId: InvoiceId;
   payerGross: number; notes: string | null | undefined; krRun: BillingRunListRow | undefined;
+  scope: QueuedCallScope;
 }
 
 /** Betalar-körningen vid slutreglering (#828): ALLTID en egen FINAL — kostnads-
@@ -142,12 +145,14 @@ interface PayerRunInput {
  *  dokument/beslut). Finns ingen KR (rättsskydd) fryses det ofrysta arbetet nu;
  *  finns en KR är arbetet redan fryst mot den. */
 async function bookPayerRun(repos: Repositories, p: PayerRunInput): Promise<BillingRun> {
+  const at = callTime(p.scope);
   const run = await repos.billingRuns.create({
+    id: asId<"BillingRunId">(newRowId(p.scope, "payerRun")),
     matterId: p.matterId, type: "FINAL", recipient: p.payerRecipient, status: "SENT",
     workValueOreAtRun: p.payerGross, proposedAmountOre: p.payerGross, amountOre: p.payerGross,
-    invoiceId: p.payerInvoiceId, deductedBillingRunIds: [], periodTo: new Date(), notes: p.notes,
+    invoiceId: p.payerInvoiceId, deductedBillingRunIds: [], periodTo: at, notes: p.notes,
   });
-  if (!p.krRun) await freezeWork(repos, p.matterId, run.id);
+  if (!p.krRun) await freezeWork(repos, p.matterId, run.id, at);
   return run;
 }
 
@@ -223,7 +228,7 @@ async function sumPriorAccontos(repos: Repositories, matterId: MatterId): Promis
   return runs.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
 }
 
-async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId: BillingRunId, now: Date = new Date()): Promise<void> {
+async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
   await repos.timeEntries.freezeForMatter(matterId, billingRunId, now);
   await repos.expenses.freezeForMatter(matterId, billingRunId, now);
 }
@@ -243,11 +248,14 @@ async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId:
  */
 async function linkSettlementInvoices(repos: Repositories, a: {
   work: UnfrozenWork; payerInvoiceId: InvoiceId; clientInvoiceId: InvoiceId; deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
+  scope: QueuedCallScope;
 }): Promise<void> {
   await repos.timeEntries.flagBilled(a.work.timeEntries.filter((t) => t.billable).map((t) => t.id), a.payerInvoiceId);
   await repos.expenses.flagBilled(a.work.expenses.filter((e) => e.billable).map((e) => e.id), a.payerInvoiceId);
   for (const r of a.deductedRuns) {
-    if (r.invoiceId) await repos.accontoDeductions.create({ finalInvoiceId: a.clientInvoiceId, accontoInvoiceId: r.invoiceId });
+    if (!r.invoiceId) continue;
+    const id = asId<"AccontoDeductionId">(newRowId(a.scope, `accontoDeduction:${r.invoiceId}`));
+    await repos.accontoDeductions.create({ id, finalInvoiceId: a.clientInvoiceId, accontoInvoiceId: r.invoiceId });
   }
 }
 
@@ -314,14 +322,17 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
 }
 
 
-async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx, orgId: OrganizationId, a: {
+async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx & QueuedCallScope, orgId: OrganizationId, a: {
   matterId: MatterId; clientGrossOre: number; deductionOre: number;
-  clientLines: VatBreakdownLine[]; clientView: SettlementView; method: PaymentMethod; invoiceDate?: Date | string; notes: string | null | undefined;
+  clientLines: VatBreakdownLine[]; clientView: SettlementView; method: PaymentMethod; invoiceDate: Date; notes: string | null | undefined;
 }): Promise<{ invoice: Invoice; creditInvoice: Invoice | null }> {
   const clientNet = a.clientGrossOre - a.deductionOre; // kan vara negativt (överbetald)
   const isCredit = clientNet < 0;
   const feeTerm = a.method === "RATTSHJALP" ? "rättshjälpsavgift" : "självrisk";
-  const base = { matterId: a.matterId, amount: clientNet, ...(await invoiceNumbering(repos, orgId, "KLIENT")), invoiceDate: a.invoiceDate ? new Date(a.invoiceDate) : new Date() };
+  const base = {
+    id: asId<"InvoiceId">(newRowId(ctx, "clientInvoice")),
+    matterId: a.matterId, amount: clientNet, ...(await invoiceNumbering(repos, orgId, "KLIENT", a.invoiceDate)), invoiceDate: a.invoiceDate,
+  };
   // #968 (modell A): acontona har redan bokfört sin intäkt och sin moms, så
   // slutfakturan bär bara det som ÅTERSTÅR — annars bokförs acontot två gånger.
   const rest = deductAcconto(a.clientLines, a.deductionOre);
@@ -455,23 +466,17 @@ async function invoiceNumbering(
   repos: Repositories,
   orgId: OrganizationId,
   recipient: BillingRunRecipient,
-  invoiceDate: Date = new Date(),
+  invoiceDate: Date,
 ): Promise<{ invoiceNumber: string; ocrReference: string | null }> {
   // Serien är fakturadatumets år (ADR 0012) — samma som radkön (#1243).
   const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId, invoiceDate.getFullYear());
   return { invoiceNumber, ocrReference: recipient === "DOMSTOL" ? null : ocrFromInvoiceNumber(invoiceNumber) };
 }
 
-/** ISO-datum → Date, annars nu (#907) — utbruten så settleCoverage/pruning-handlarna
- *  håller sig ≤8 i komplexitet. */
-function toDateOrNow(iso: string | undefined): Date {
-  return iso ? new Date(iso) : new Date();
-}
-
 /** Nästa kostnadsräknings-referens `KR-YYYY-NNNN` (#889) — firmagemensam sekvens
  *  per år, härledd ur befintliga KR-körningars referens. */
-async function nextKrReference(repos: Repositories, orgId: OrganizationId): Promise<string> {
-  const prefix = `KR-${new Date().getFullYear()}-`;
+async function nextKrReference(repos: Repositories, orgId: OrganizationId, year: number): Promise<string> {
+  const prefix = `KR-${year}-`;
   const runs = await repos.billingRuns.listForOrg(orgId);
   const last = runs
     .map((r) => (r as { reference?: string | null }).reference)
@@ -711,24 +716,25 @@ export const billingRunRouter = router({
         // TAXA-ÄRENDEN (#1024): brottmålstaxan + tidsspillan utöver timmen +
         // beredskapen, räknat med SAMMA funktion som dokumentet.
         // Avrundat per rad till hela kronor som kostnadsräkningens dokument (#1218).
-        const now = new Date();
+        const now = callTime(ctx);
         const valuation = valueKrRun(matter, work, input, now);
         if (Object.keys(valuation.matterPatch).length > 0) await tx.matters.update(input.matterId, valuation.matterPatch);
         const grossValue = valuation.kind === "taxa"
           ? valuation.grossOre
           : krGrossOre(work, matterKrArvodeRows({ ...matter, ...valuation.matterPatch }, work, now));
         const run = await tx.billingRuns.create({
+          id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
           status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,
-          reference: await nextKrReference(tx, ctx.orgId),
+          reference: await nextKrReference(tx, ctx.orgId, now.getFullYear()),
           proposedAmountOre: grossValue, amountOre: grossValue,
           invoiceId: null, deductedBillingRunIds: [],
-          periodTo: new Date(), notes: input.notes,
+          periodTo: now, notes: input.notes,
         });
         // Kostnadsräkningen ÄR inskicket — frys arbetet direkt (#806) så det
         // lämnar "Upparbetat ofakturerat". Dom/slutreglering läser raderna via
         // körningen (fetchWorkByRun), inte som ofryst.
-        await freezeWork(tx, input.matterId, run.id);
+        await freezeWork(tx, input.matterId, run.id, now);
         await logMatterNote(tx, ctx, input.matterId, kostnadsrakningSubmittedNote(run.reference, await courtNameOf(tx, ctx.orgId, input.matterId), grossValue));
         return { run };
       });
@@ -866,7 +872,8 @@ export const billingRunRouter = router({
         let prutningExpenseId: ExpenseId | undefined;
         if (prutningOre < 0) {
           const prutning = await tx.expenses.create({
-            matterId: run.matterId, userId: ctx.user.id, date: new Date(),
+            id: asId<"ExpenseId">(newRowId(ctx, "prutning")),
+            matterId: run.matterId, userId: ctx.user.id, date: callTime(ctx),
             amount: prutningOre, description: "Prutning enligt dom",
             billable: true, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
           });
@@ -875,22 +882,24 @@ export const billingRunRouter = router({
         // Posterna frystes redan vid kostnadsräkningens inskick (#806) → läs dem
         // via körningen. PRUTNING (nyss skapad) länkas separat nedan.
         const work = await fetchWorkByRun(tx, run.id);
+        const invoiceDate = callTime(ctx);
         const invoice = await tx.invoices.create({
+          id: asId<"InvoiceId">(newRowId(ctx, "invoice")),
           matterId: run.matterId, amount: finalAmount,
           invoiceType: "FINAL", status: "DRAFT",
           // DOMSTOL → F-nummer (samma format som övriga, #889) men ingen OCR.
-          ...(await invoiceNumbering(tx, ctx.orgId, "DOMSTOL")),
-          invoiceDate: new Date(),
+          ...(await invoiceNumbering(tx, ctx.orgId, "DOMSTOL", invoiceDate)),
+          invoiceDate,
         });
         const next = applyKrTransition(krStateOf(run), "SKAPA_FAKTURA");
         await tx.billingRuns.update(run.id, {
           status: "SENT", invoiceId: invoice.id, amountOre: finalAmount,
           kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt,
         });
-        await freezeWork(tx, run.matterId, run.id);
+        await freezeWork(tx, run.matterId, run.id, invoiceDate);
         // Länka poster + PRUTNING-utlägget → kostnadsräknings-vyn visar uppdelning
         // och totalen (arvode + utlägg − prutning) reconciler mot beloppet (#732).
-        await linkFinalInvoice(tx, invoice.id, work, []);
+        await linkFinalInvoice(tx, invoice.id, work, [], ctx);
         if (prutningExpenseId) await tx.expenses.flagBilled([prutningExpenseId], invoice.id);
         await logMatterNote(tx, ctx, run.matterId, invoiceCreatedNote(invoice.invoiceNumber, "FINAL", invoice.amount, "kostnadsräkning till domstol"));
         await emit.invoiceCreated(ctx, invoice);
@@ -933,7 +942,7 @@ export const billingRunRouter = router({
         const rateOre = await currentArvodeRateOre(tx, ctx.orgId, matter);
         // #891: rättshjälp räknas om på slutregleringsårets normer (retroaktiv höjning
         // över årsskifte + tidsspillan på egen norm); övriga metoder → platt rate.
-        const settleDate = toDateOrNow(input.invoiceDate);
+        const settleDate = dateOrCallTime(ctx, input.invoiceDate);
         const totalArvodeNet = settlementArvodeNet(matter.paymentMethod, work, settleDate);
         // Domstolens beslut avser det kostnadsräkningen YRKADE: arvode + utlägg,
         // inkl moms (#943). Härled nedsättningen som en andel av hela anspråket och
@@ -979,21 +988,23 @@ export const billingRunRouter = router({
           method: matter.paymentMethod, invoiceDate: settleDate, notes: input.notes,
         });
         const payerInvoice = await tx.invoices.create({
+          id: asId<"InvoiceId">(newRowId(ctx, "payerInvoice")),
           matterId: input.matterId, amount: payerGross, vatOre: vatOreOf(payerLines), vatBreakdown: payerLines,
           settlementBreakdown: payerView,
-          invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient)), invoiceDate: settleDate, notes: input.notes,
+          invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient, settleDate)), invoiceDate: settleDate, notes: input.notes,
         });
-        await bookFirmLoss(tx, ctx.user.id, input.matterId, split.firmLossOre + expenseLossNetOre);
+        await bookFirmLoss(tx, { userId: ctx.user.id, matterId: input.matterId, firmLossOre: split.firmLossOre + expenseLossNetOre, scope: ctx });
         const clientRun = await tx.billingRuns.create({
+          id: asId<"BillingRunId">(newRowId(ctx, "clientRun")),
           matterId: input.matterId, type: "FINAL", recipient: "KLIENT", status: "SENT",
           workValueOreAtRun: clientGross, proposedAmountOre: clientGross, amountOre: clientInvoice.amount,
-          invoiceId: clientInvoice.id, deductedBillingRunIds: deductIds, periodTo: new Date(), notes: input.notes,
+          invoiceId: clientInvoice.id, deductedBillingRunIds: deductIds, periodTo: callTime(ctx), notes: input.notes,
         });
         const payerRun = await bookPayerRun(tx, {
           matterId: input.matterId, payerRecipient: input.payerRecipient, payerInvoiceId: payerInvoice.id,
-          payerGross, notes: input.notes, krRun,
+          payerGross, notes: input.notes, krRun, scope: ctx,
         });
-        await linkSettlementInvoices(tx, { work, payerInvoiceId: payerInvoice.id, clientInvoiceId: clientInvoice.id, deductedRuns });
+        await linkSettlementInvoices(tx, { work, payerInvoiceId: payerInvoice.id, clientInvoiceId: clientInvoice.id, deductedRuns, scope: ctx });
         // KR:n förblir en distinkt kostnadsräkning (med sitt dokument/beslut) —
         // konsumeras EJ in i fakturan; markeras FAKTURERAD (#828).
         if (krRun) {
@@ -1047,7 +1058,7 @@ export const billingRunRouter = router({
             message: `Prutningen (${prunedGross / 100} kr inkl moms) är större än försäkringsfakturan (${t.payerInvoice.amount / 100} kr).`,
           });
         }
-        const when = toDateOrNow(input.invoiceDate);
+        const when = dateOrCallTime(ctx, input.invoiceDate);
         const payerInvoice = await tx.invoices.update(t.payerInvoice.id, shiftInvoiceAmount(t.payerInvoice, -input.prunedNetOre, -prunedVat, {
           label: "Avgår försäkringens prutning — faktureras klienten (exkl moms)", kind: "deduct",
         }));
