@@ -34,34 +34,24 @@ function hitLocation(h: Pick<SearchHit, "page" | "part">): string | null {
 }
 
 /**
- * Öppna en träff i ny flik. Använder samma open-document-pipeline som
- * document-row så det funkar för demo (gh-pages-URL) och self-hosted
- * (OPFS-blob) — utan att gå via den borttagna /api/-route:n som tidigare
- * gav 404.
+ * Öppna en träff i ny flik, på träffsidan. Samma väg som ärendets dokumentlista
+ * (`openMatterDocument`): tier-beslutet tas vid körning, och self-hosted läser
+ * byte-cachen först — så en träff offline öppnas ur cachen (#1244).
  */
 async function openHit(hit: SearchHit): Promise<void> {
-  const [{ openDocument }, { loadHandle }, { readFromFsa }] = await Promise.all([
-    import("@/lib/client/firma/open-document"),
-    import("@/lib/client/fsa/handle-store"),
-    import("@/lib/client/fsa/read-from-fsa"),
-  ]);
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
-  await openDocument({
-    doc: {
-      id: hit.documentId,
-      ...omitUndefined({ storagePath: hit.storagePath }),
-      fileName: hit.fileName,
-    },
-    isDemo,
-    ...omitUndefined({ demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO }),
-    loadHandle: () => loadHandle("repo-root"),
-    readFromHandle: readFromFsa,
-    openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),
-    notifyError: (m) => alert(m),
-  });
+  const { openMatterDocument } = await import("@/lib/client/firma/open-matter-document");
+  await openMatterDocument(
+    { id: hit.documentId, ...omitUndefined({ storagePath: hit.storagePath }), fileName: hit.fileName },
+    hit.page ?? undefined,
+  );
 }
 
-function searchColumns(open: (h: SearchHit) => Promise<void>): Column<SearchHit>[] {
+/** Märket på en träff ur enhetens cache — sökningen offline är inte fullständig (#1244). */
+function LocalCacheBadge() {
+  return <span className="mr-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">Lokal cache</span>;
+}
+
+function searchColumns(open: (h: SearchHit) => Promise<void>, fromCache: boolean): Column<SearchHit>[] {
   return [
     { key: "fileName", label: "Fil", sortable: true, sortValue: (h) => h.fileName,
       render: (h) => (
@@ -81,6 +71,7 @@ function searchColumns(open: (h: SearchHit) => Promise<void>): Column<SearchHit>
     { key: "highlight", label: "Träff", sortable: false,
       render: (h) => (
         <span className="text-sm text-gray-600 line-clamp-2">
+          {fromCache ? <LocalCacheBadge /> : null}
           {hitLocation(h) ? <span className="mr-1 text-xs font-medium text-gray-500">{hitLocation(h)}</span> : null}
           <span dangerouslySetInnerHTML={{ __html: h.highlight }} />
         </span>
@@ -148,7 +139,7 @@ function DocTypeFilter({ types, data, searchTerm, selectedTypes, onToggle, onCle
   );
 }
 
-function SearchResults({ searchTerm, data }: { searchTerm: string; data: SearchData }) {
+function SearchResults({ searchTerm, data, fromCache }: { searchTerm: string; data: SearchData; fromCache: boolean }) {
   return (
     <div>
       <p className="text-sm text-gray-500 mb-2">
@@ -159,7 +150,7 @@ function SearchResults({ searchTerm, data }: { searchTerm: string; data: SearchD
       {data.hits.length > 0 && (
         <DataTable
           prefKey="list.doc-search"
-          columns={searchColumns(openHit)}
+          columns={searchColumns(openHit, fromCache)}
           data={data.hits as SearchHit[]}
           rowKey={(h) => h.documentId}
           emptyMessage="Inga träffar."
@@ -203,12 +194,11 @@ function SearchForm(p: SearchFormProps) {
           value={p.query}
           onChange={(e) => p.onQueryChange(e.target.value)}
           placeholder="Sök i dokument..."
-          disabled={offline}
           className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
         />
         <button
           type="submit"
-          disabled={p.isFetching || offline}
+          disabled={p.isFetching}
           className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
         >
           {p.isFetching ? "Söker..." : "Sök"}
@@ -236,7 +226,7 @@ export default function DocumentSearchPage() {
   const [searchedTypes, setSearchedTypes] = useState<string[]>([]);
 
   // Kapabilitets-tierat sök-omfång (ADR 0028 §4c): server (online) / lokalt
-  // i cachen (demo) / offline-notis (server-first utan nät). Gate:as på
+  // i cachen (demo) / enhetens cache (server-first utan nät, #1244). Gate:as på
   // kapabilitet + online — aldrig på `if (isDemo)` (ADR 0027).
   const { sync } = useCapabilities();
   const online = useOnlineStatus();
@@ -276,7 +266,9 @@ export default function DocumentSearchPage() {
         onClearTypes={() => setSelectedTypes([])}
       />
 
-      {searchTerm && results.data && <SearchResults searchTerm={searchTerm} data={results.data as SearchData} />}
+      {searchTerm && results.data && (
+        <SearchResults searchTerm={searchTerm} data={results.data as SearchData} fromCache={scope === "offline"} />
+      )}
 
       {results.error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4">

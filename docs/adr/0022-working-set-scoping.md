@@ -109,3 +109,23 @@ server-side-scoping, men det kräver en `matterId`-koppling i pull-frågan
 - **Delta-pull-scoping:** server-side per ärende-mängd (kräver `matterId` i
   change_log-pull) vs klient-filtrering. Avgör #418:s svårighetsgrad.
 - **Blob-budget** separat från ärende-budget — hur stor på mobil?
+
+## Tillägg: förladdade dokument och lokal sökning (#1244)
+
+Den fastnålade delen av arbetsmängden förladdas nu med **dokumentinnehåll**,
+inte bara metadata. Den fastnålade delen är juristens egna, aktiva ärenden
+(`computeWorkingSet`).
+
+`ActiveMatterPrefetch` (self-hosted) körs vid start och efter varje lyckad
+synk. Den hämtar ärendenas dokument till byte-cachen (`loadDocumentBlob`,
+cache-först) och extraherar texten i webbläsaren (`extractText`). Texten sparas
+i IndexedDB (`LocalDocumentTextStore`) och läses in i den lokala sökningen vid
+nästa start.
+
+Offline söker dokumentsökningen på enheten, i stället för att stängas av. Den
+söker i metadata för alla dokument, och i innehållet i dem som förladdats eller
+öppnats. Träffarna märks "Lokal cache", så att ingen tror att sökningen var
+fullständig. En träff öppnas ur byte-cachen (`openMatterDocument`).
+
+Blob-budgeten (öppen fråga ovan) är fortfarande obegränsad. De fastnålade
+ärendena är få, och cachen är content-adresserad.

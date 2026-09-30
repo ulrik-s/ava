@@ -43,6 +43,7 @@ import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { asId } from "@/lib/shared/schemas/ids";
+import { ActiveMatterPrefetch } from "./active-matter-prefetch";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
@@ -313,6 +314,7 @@ function AuthGatedDemoTree(props: TreeProps) {
               <AutoSync />
               {!isDemoTier && <ServerFirstSync store={cachingSync} />}
               {!isDemoTier && <ServerInvoiceNumbering store={cachingSync} />}
+              {!isDemoTier && <ActiveMatterPrefetch store={cachingSync} />}
             </div>
           </div>
           {status === "loading" && (

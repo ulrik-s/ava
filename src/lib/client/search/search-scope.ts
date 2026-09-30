@@ -7,8 +7,9 @@
  *   - `"local"`  — ingen server (demon, som vi betraktar som offline): sök
  *     lokalt genom dokumenten i cachen (demons in-process-index kör redan så).
  *   - `"offline"` — server finns men nätet är nere: serverns index går inte att
- *     nå och det finns inget lokalt textindex → ytlägg ett offline-meddelande
- *     i st.f. att avfyra en dömd nät-fråga.
+ *     nå. Sök i stället i det som finns på enheten (#1244): metadata för alla
+ *     dokument, och innehållet i dem som förladdats (juristens aktiva ärenden)
+ *     eller öppnats. Träffarna märks, så att ingen tror att sökningen var fullständig.
  *
  * Gate:as på KAPABILITET (`sync`) + online-status — aldrig på `if (isDemo)`
  * (ADR 0027). Ren funktion → trivialt testbar.
@@ -29,6 +30,6 @@ export function searchScopeLabel(scope: SearchScope): string {
     case "local":
       return "Söker lokalt i cachade dokument.";
     case "offline":
-      return "Offline — dokumentsök kräver serveranslutning. Återanslut för att söka.";
+      return "Offline — söker i dokumenten på den här enheten: dina aktiva ärenden och dokument du öppnat. Återanslut för att söka i alla.";
   }
 }

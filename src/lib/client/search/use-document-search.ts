@@ -6,7 +6,8 @@
  *     över sidtexten i alla dokument). Den in-process-routern i webbläsaren
  *     har bara den lokala cachen och inget textindex.
  *   - `"local"`  — demon: in-process-routern skannar cachen.
- *   - `"offline"` — ingen fråga alls (sidan visar en offline-notis).
+ *   - `"offline"` — in-process-routern, som i demon: metadata för alla dokument
+ *     och innehållet i det som finns på enheten (#1244).
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -22,7 +23,7 @@ export interface DocumentSearchInput {
 
 export function useDocumentSearch(input: DocumentSearchInput, scope: SearchScope) {
   const active = input.query.length > 0;
-  const local = trpc.document.search.useQuery(input, { enabled: active && scope === "local" });
+  const local = trpc.document.search.useQuery(input, { enabled: active && scope !== "server" });
   const server = useQuery({
     queryKey: ["server", "document.search", input],
     queryFn: () => serverTrpcClient().document.search.query(input),
