@@ -12,6 +12,7 @@
  *     bubblar så att klienten försöker igen,
  *   - svaret bär de berörda radernas kanoniska läge, och bara inom byrån.
  */
+import { TRPCError } from "@trpc/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildContext } from "@/lib/server/build-context";
@@ -83,6 +84,43 @@ describe("DrizzleProcedureReplayer", () => {
     expect(again.status).toBe("accepted");
     const logged = (await handle.db.select().from(changeLog)).filter((r) => r.rowId === id);
     expect(logged).toHaveLength(1);
+  });
+
+  // #1332: två omkörningar av SAMMA anrop samtidigt (två flikar, två enheter,
+  // ett omförsök medan det första pågår) — proceduren körs ändå en gång.
+  it("samtidiga omkörningar av samma anrop: proceduren körs en gång, båda får samma utfall", async () => {
+    const id = uuidv7();
+    await replayer.replay(call("timeEntry.create", createInput(id), [id]), ctx);
+    const update = call("timeEntry.update", { id, minutes: 45 }, [id]);
+    const [a, b] = await Promise.all([replayer.replay(update, ctx), replayer.replay(update, ctx)]);
+    expect([a.status, b.status]).toEqual(["accepted", "accepted"]);
+    const logged = (await handle.db.select().from(changeLog)).filter((r) => r.rowId === id).map((r) => r.op);
+    expect(logged).toEqual(["create", "update"]);
+    expect((await handle.db.select().from(syncReplays)).filter((r) => r.mutationId === update.mutationId)).toHaveLength(1);
+  });
+
+  it("samtidiga omkörningar som avvisas: samma avvisning, sparad en gång", async () => {
+    const id = uuidv7();
+    const update = call("timeEntry.update", { id, minutes: 10 }, [id]);
+    const [a, b] = await Promise.all([replayer.replay(update, ctx), replayer.replay(update, ctx)]);
+    expect(a).toMatchObject({ status: "rejected", code: "NOT_FOUND" });
+    expect(b).toMatchObject({ status: "rejected", code: "NOT_FOUND" });
+    expect((await handle.db.select().from(syncReplays)).filter((r) => r.mutationId === update.mutationId)).toHaveLength(1);
+  });
+
+  it("en avvisning efter att en samtidig omkörning sparat sitt utfall: det sparade utfallet gäller", async () => {
+    const update = call("timeEntry.update", { id: uuidv7(), minutes: 10 });
+    // Den andra omkörningen hinner spara "accepted" medan den här körs och avvisas.
+    const racing = new DrizzleProcedureReplayer(handle.db, {
+      ...repos,
+      transactionWithDb: async () => {
+        await handle.db.insert(syncReplays).values({
+          mutationId: update.mutationId, organizationId: ORG, userId: USER, path: update.path, codeVersion: "test", status: "accepted",
+        });
+        throw new TRPCError({ code: "CONFLICT", message: "Raden ändrades" });
+      },
+    });
+    expect(await racing.replay(update, ctx)).toMatchObject({ status: "accepted" });
   });
 
   it("affärsregeln gäller på servern: en fryst tidspost avvisas, med regelns eget meddelande", async () => {

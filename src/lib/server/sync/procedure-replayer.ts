@@ -18,12 +18,17 @@
  *     klienten försöker igen — användarens arbete kastas aldrig för ett
  *     serverfel.
  *
+ * Samma anrop körs högst en gång, också när två omkörningar kommer samtidigt
+ * (två flikar, två enheter, ett omförsök medan det första pågår; #1332): ett
+ * transaktionslås per `mutationId`, och kontrollen av `sync_replays` görs
+ * efter låset i samma transaktion.
+ *
  * Svaret bär de berörda radernas kanoniska läge, lästa org-scopat: en rad i
  * en annan byrå blir en tombstone, aldrig data.
  */
 
 import { TRPCError } from "@trpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { OrganizationId } from "@/lib/shared/schemas/ids";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
@@ -83,7 +88,7 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
     if (!isQueuedProcedure(call.path)) {
       return { status: "rejected", code: "BAD_REQUEST", reason: `Proceduren ${call.path} kan inte köas.` };
     }
-    const stored = await this.storedOutcome(call.mutationId, orgId);
+    const stored = await this.storedOutcome(this.db, call.mutationId, orgId);
     if (stored) return stored;
     // Köformatet (#1247): för gammal → avvisad (sparas som utfall); nyare än
     // servern → kastar före allt annat (inget utfall, klienten försöker igen).
@@ -92,32 +97,43 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
     return this.run(admission.entry, ctx, orgId);
   }
 
-  private async rejectOutright(call: QueuedProcedureCall, ctx: Context, orgId: OrganizationId, reason: string): Promise<Outcome> {
-    const rejected: Outcome = { status: "rejected", code: "PRECONDITION_FAILED", reason };
-    await this.record(this.db, call, ctx, orgId, rejected);
-    return rejected;
+  private rejectOutright(call: QueuedProcedureCall, ctx: Context, orgId: OrganizationId, reason: string): Promise<Outcome> {
+    return this.recordOnce(call, ctx, orgId, { status: "rejected", code: "PRECONDITION_FAILED", reason });
   }
 
   private async run(call: QueuedProcedureCall, ctx: Context, orgId: OrganizationId): Promise<Outcome> {
     try {
-      await this.repos.transactionWithDb(async (tx, txDb) => {
+      return await this.repos.transactionWithDb(async (tx, txDb): Promise<Outcome> => {
+        // En omkörning i taget per anrop (#1332); den som kommer sist får
+        // utfallet den första sparade — proceduren körs inte igen.
+        await txDb.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`replay:${call.mutationId}`}))`);
+        const stored = await this.storedOutcome(txDb, call.mutationId, orgId);
+        if (stored) return stored;
         // Samma identitet som klientens körning (#1276): skapade rader får
         // samma id, affärsdatum är när anropet gjordes — inte nu.
         const queued = { mutationId: call.mutationId, at: call.enqueuedAt };
         await resolveProcedure(appRouter.createCaller({ ...ctx, repos: tx, queued }), call.path)(call.input);
         await this.record(txDb, call, ctx, orgId, { status: "accepted" });
+        return { status: "accepted" };
       });
-      return { status: "accepted" };
     } catch (err) {
       const rejected = ruleViolation(err);
       if (!rejected) throw err;
-      await this.record(this.db, call, ctx, orgId, rejected);
-      return rejected;
+      return this.recordOnce(call, ctx, orgId, rejected);
     }
   }
 
-  private async storedOutcome(mutationId: string, orgId: OrganizationId): Promise<Outcome | null> {
-    const [row] = await this.db.select().from(syncReplays)
+  /**
+   * Spara en avvisning. Har en samtidig omkörning hunnit spara ett utfall
+   * gäller det (#1332) — samma mutationId ger alltid samma svar.
+   */
+  private async recordOnce(call: QueuedProcedureCall, ctx: Context, orgId: OrganizationId, outcome: Outcome): Promise<Outcome> {
+    await this.record(this.db, call, ctx, orgId, outcome);
+    return (await this.storedOutcome(this.db, call.mutationId, orgId)) ?? outcome;
+  }
+
+  private async storedOutcome(db: AppDb, mutationId: string, orgId: OrganizationId): Promise<Outcome | null> {
+    const [row] = await db.select().from(syncReplays)
       .where(and(eq(syncReplays.mutationId, mutationId), eq(syncReplays.organizationId, orgId))).limit(1);
     if (!row) return null;
     return row.status === "accepted"

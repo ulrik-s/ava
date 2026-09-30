@@ -52,7 +52,10 @@ billigt, eftersom **klient och server redan kör samma `appRouter`**.
   eller slump för affärsvärden.
 - *Sidoeffekter bara på servern:* jobb, e-post och externa anrop körs endast i
   serverns körning (ADR 0021 kvarstår).
-- *Idempotenta* via `mutationId`.
+- *Idempotenta* via `mutationId`, också vid samtidiga omkörningar (#1332):
+  servern tar ett transaktionslås per `mutationId` och läser det sparade
+  utfallet efter låset. I webbläsaren skickar en flik i taget kön
+  (Web Locks, `withSyncLock`), så dubbla anrop blir sällsynta.
 
 **Det som bara kan vara preliminärt offline** — för att det kräver en gemensam
 sanning — tilldelas i serverns körning: fakturanummer och andra obrutna serier
