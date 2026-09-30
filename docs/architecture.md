@@ -250,7 +250,12 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   svenska. **Försök igen** köar ändringen på nytt (ett anrop med nytt
   mutationId, en rad byggd på serverns version); **Kasta** låter serverns läge
   gälla. Ingen avvisad ändring försvinner tyst.
-- Övriga entiteter går via radkön tills de flyttas.
+- **Procedurägda entiteter** (#1242, `src/lib/shared/sync/procedure-owned.ts`):
+  tid, utlägg och all fakturering skrivs bara av procedurkön. Servern tar inte
+  emot färdiga rader för dem — en sådan radpush avvisas med ett besked (en
+  manipulerad klient, eller en post som en äldre version köade).
+- Övriga entiteter är ren data och går via radkön (byrån kontrolleras,
+  server-ägda fält skrivs aldrig över).
 - **Köformatet** (#1247, `src/lib/shared/sync/queue-format.ts`): varje köpost
   (rad och anrop) stämplas med `format`. Poster utan stämpel skrevs före #1247 i
   format 1. Servern (`queue-admission.ts`) kör dagens format som det är och

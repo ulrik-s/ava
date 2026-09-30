@@ -16,6 +16,7 @@ import { dispatchChannelSchema, dispatchStatusSchema, type DispatchStatus, type 
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { asId, type InvoiceId, invoiceDispatchIdSchema, invoiceIdSchema, type MatterId } from "@/lib/shared/schemas/ids";
 import { logMatterNote } from "../billing/matter-note";
+import { callTime, newRowId } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -69,8 +70,10 @@ export const invoiceDispatchRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const inv = await assertInvoiceInOrg(ctx, input.invoiceId);
-      const now = new Date();
+      // Samma utskick i klientens körning och serverns omkörning (#1242).
+      const now = callTime(ctx);
       const dispatch = await ctx.repos.invoiceDispatches.create({
+        id: asId<"InvoiceDispatchId">(newRowId(ctx, "invoiceDispatch")),
         invoiceId: input.invoiceId,
         channel: input.channel,
         recipient: input.recipient,
@@ -101,8 +104,10 @@ export const invoiceDispatchRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const inv = await assertInvoiceInOrg(ctx, input.invoiceId);
-      const now = new Date();
+      // Samma utskick i klientens körning och serverns omkörning (#1242).
+      const now = callTime(ctx);
       const dispatch = await ctx.repos.invoiceDispatches.create({
+        id: asId<"InvoiceDispatchId">(newRowId(ctx, "invoiceDispatch")),
         invoiceId: input.invoiceId,
         channel: input.channel,
         recipient: input.recipient,
@@ -133,7 +138,7 @@ export const invoiceDispatchRouter = router({
       const tsField = STATUS_TIMESTAMP[input.status];
       return ctx.repos.invoiceDispatches.update(input.dispatchId, {
         status: input.status,
-        ...(tsField ? { [tsField]: new Date() } : {}),
+        ...(tsField ? { [tsField]: callTime(ctx) } : {}),
         ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
         ...(input.error !== undefined ? { error: input.error } : {}),
       } satisfies Partial<InvoiceDispatch>);

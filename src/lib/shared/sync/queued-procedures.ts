@@ -58,6 +58,15 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "billingRun.setVerdict": Object.freeze({ entity: "invoice" }),
   "billingRun.settleCoverage": Object.freeze({ entity: "invoice" }),
   "billingRun.recordInsurerPruning": Object.freeze({ entity: "invoice" }),
+  // De sista anropen som skriver procedurägda entiteter (#1242): utskick,
+  // avbetalningspåminnelser och Fortnox-markeringen. Därefter tar servern inte
+  // emot färdiga rader för dem (`procedure-owned.ts`).
+  "invoiceDispatch.queue": Object.freeze({ entity: "invoiceDispatch" }),
+  "invoiceDispatch.recordManual": Object.freeze({ entity: "invoiceDispatch" }),
+  "invoiceDispatch.updateStatus": Object.freeze({ entity: "invoiceDispatch" }),
+  "paymentPlan.recordReminder": Object.freeze({ entity: "paymentPlanReminder", idField: "id" }),
+  "paymentPlan.scanDueReminders": Object.freeze({ entity: "paymentPlanReminder" }),
+  "invoice.markFortnoxBooked": Object.freeze({ entity: "invoice" }),
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
   // server-LLM). Klienten kör den inte själv — servern kör om anropet.
   "document.analyze": Object.freeze({ entity: "document" }),
@@ -80,10 +89,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Input som ska spelas in: en create utan id får ett klient-genererat UUIDv7,
  * så att servern skapar SAMMA rad när anropet körs om. Övrigt lämnas orört.
- * `null` om input inte är ett objekt (sådant spelas inte in — proceduren
- * avvisar det själv).
+ * Ett anrop utan input (valfri input, t.ex. `scanDueReminders()`) spelas in
+ * med `{}`. `null` om input är något annat än ett objekt (sådant spelas inte
+ * in — proceduren avvisar det själv).
  */
-export function prepareQueuedInput(path: string, input: unknown): Record<string, unknown> | null {
+export function prepareQueuedInput(path: string, raw: unknown): Record<string, unknown> | null {
+  const input = raw === undefined ? {} : raw;
   if (!isRecord(input)) return null;
   const idField = isQueuedProcedure(path) ? QUEUED_PROCEDURES[path]?.idField : undefined;
   if (!idField || input[idField] !== undefined) return input;

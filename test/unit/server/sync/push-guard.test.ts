@@ -1,11 +1,13 @@
 /**
- * Servern validerar synkade rader (#1242, del 1): byråavgränsning och låsta poster.
+ * Servern kontrollerar synkade rader (#1242): byråavgränsning, och rader för
+ * procedurägda entiteter tas inte emot.
  *
  * Synk-push skrev raden som klienten skickade. `applyUpdate`/`applyDelete`
  * slog upp raden på id — utan att kontrollera byrån — och `applyCreate` tog
  * emot rader som pekade på en annan byrås ärende. En klient kunde alltså skriva
- * över eller radera en annan byrås rader genom att skicka deras id, och ändra
- * låsta (fakturerade/frysta) tidsposter och utlägg som routrarna vägrar röra.
+ * över eller radera en annan byrås rader genom att skicka deras id, och skriva
+ * tid, utlägg och fakturor förbi routrarnas regler (belopp, låsta poster,
+ * statusflöden). De entiteterna skrivs nu bara av procedurkön.
  *
  * pglite/Postgres via createTestDb — samma repos och change_log som servern.
  */
@@ -16,6 +18,7 @@ import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repo
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { asId } from "@/lib/shared/schemas/ids";
+import { PROCEDURE_OWNED_REASON } from "@/lib/shared/sync/procedure-owned";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -26,7 +29,7 @@ function mut(entity: string, kind: QueuedMutation["kind"], row: Record<string, u
   return { mutationId: uuidv7(), entity, kind, row, enqueuedAt: 0 };
 }
 
-describe("synk-push: byråavgränsning och låsta poster (#1242)", () => {
+describe("synk-push: byråavgränsning och procedurägda entiteter (#1242)", () => {
   let handle: TestDbHandle;
   let repos: Repositories;
   let sync: DrizzleSyncStore;
@@ -84,8 +87,8 @@ describe("synk-push: byråavgränsning och låsta poster (#1242)", () => {
     });
 
     it("egna rader går igenom: create i eget ärende och update av egen kontakt", async () => {
-      const te = uuidv7();
-      const created = await sync.push(ORG_A, mut("timeEntry", "create", { id: te, matterId: matterA, userId: uuidv7(), date: new Date(), minutes: 45, description: "Eget", billable: true, hourlyRate: 150_000 }));
+      const task = uuidv7();
+      const created = await sync.push(ORG_A, mut("task", "create", { id: task, organizationId: ORG_A, userId: uuidv7(), matterId: matterA, title: "Eget", status: "OPEN" }));
       expect(created.status).toBe("accepted");
       const c = uuidv7();
       await repos.contacts.create({ id: c, organizationId: ORG_A, name: "Före" } as never);
@@ -103,48 +106,43 @@ describe("synk-push: byråavgränsning och låsta poster (#1242)", () => {
     });
   });
 
-  describe("låsta tidsposter och utlägg", () => {
-    async function lockedEntry(): Promise<string> {
+  describe("procedurägda entiteter (tid, utlägg, fakturering)", () => {
+    const entry = async (): Promise<Record<string, unknown>> => {
       const id = uuidv7();
-      await repos.timeEntries.create({ id, matterId: matterA, userId: uuidv7(), date: new Date("2026-06-01"), minutes: 60, description: "Fakturerad", billable: true, hourlyRate: 150_000, frozenAt: new Date("2026-06-30"), frozenByBillingRunId: uuidv7() } as never);
-      return id;
-    }
+      await repos.timeEntries.create({ id, matterId: matterA, userId: uuidv7(), date: new Date("2026-06-01"), minutes: 60, description: "Samtal", billable: true, hourlyRate: 150_000 } as never);
+      return { ...(await repos.timeEntries.getById(asId<"TimeEntryId">(id))) };
+    };
 
-    it("ändrade minuter på en låst tidspost → conflict med serverns rad, posten orörd", async () => {
-      const id = await lockedEntry();
-      const current = await repos.timeEntries.getById(asId<"TimeEntryId">(id));
+    it("en ny tidspost som rad → avvisas med besked, skapas inte", async () => {
+      const id = uuidv7();
+      const res = await sync.push(ORG_A, mut("timeEntry", "create", { id, matterId: matterA, userId: uuidv7(), date: new Date(), minutes: 45, description: "Förbi", billable: true, hourlyRate: 150_000 }));
+      expect(res).toEqual({ status: "conflict", reason: PROCEDURE_OWNED_REASON });
+      expect(await repos.timeEntries.getById(asId<"TimeEntryId">(id))).toBeNull();
+    });
+
+    it("ändrade minuter på en befintlig tidspost → avvisas med serverns rad, posten orörd", async () => {
+      const current = await entry();
       const res = await sync.push(ORG_A, mut("timeEntry", "update", { ...current, minutes: 600 }));
-      expect(res).toMatchObject({ status: "conflict", reason: "låst" });
-      expect(res).toHaveProperty("current");
-      expect((await repos.timeEntries.getById(asId<"TimeEntryId">(id)))?.minutes).toBe(60);
+      expect(res).toMatchObject({ status: "conflict", reason: PROCEDURE_OWNED_REASON, current: { id: current.id, minutes: 60 } });
+      expect((await repos.timeEntries.getById(asId<"TimeEntryId">(String(current.id))))?.minutes).toBe(60);
     });
 
-    it("oförändrad rad (bara låsfälten ändras — körningen tas bort) går igenom", async () => {
-      const id = await lockedEntry();
-      const current = await repos.timeEntries.getById(asId<"TimeEntryId">(id));
-      const res = await sync.push(ORG_A, mut("timeEntry", "update", { ...current, frozenAt: null, frozenByBillingRunId: null }));
-      expect(res.status).toBe("accepted");
+    it("radera en tidspost som rad → avvisas, posten finns kvar", async () => {
+      const current = await entry();
+      expect(await sync.push(ORG_A, mut("timeEntry", "delete", { id: current.id }))).toMatchObject({ status: "conflict", reason: PROCEDURE_OWNED_REASON });
+      expect(await repos.timeEntries.getById(asId<"TimeEntryId">(String(current.id)))).not.toBeNull();
     });
 
-    it("radera en låst tidspost → conflict, posten finns kvar", async () => {
-      const id = await lockedEntry();
-      expect(await sync.push(ORG_A, mut("timeEntry", "delete", { id }))).toMatchObject({ status: "conflict", reason: "låst" });
-      expect(await repos.timeEntries.getById(asId<"TimeEntryId">(id))).not.toBeNull();
-    });
-
-    it("ändrat belopp på ett fakturerat utlägg → conflict", async () => {
+    it("en faktura med påhittat belopp och status → avvisas, skapas inte", async () => {
       const id = uuidv7();
-      await repos.expenses.create({ id, matterId: matterA, userId: uuidv7(), date: new Date("2026-06-01"), amount: 38_000, description: "Resa", billable: true, invoiceId: uuidv7(), frozenAt: new Date("2026-06-30") } as never);
-      const current = await repos.expenses.getById(asId<"ExpenseId">(id));
-      expect(await sync.push(ORG_A, mut("expense", "update", { ...current, amount: 1 }))).toMatchObject({ status: "conflict", reason: "låst" });
+      const res = await sync.push(ORG_A, mut("invoice", "create", { id, matterId: matterA, amount: 1, status: "PAID", invoiceDate: new Date() }));
+      expect(res).toMatchObject({ status: "conflict", reason: PROCEDURE_OWNED_REASON });
+      expect(await repos.invoices.getById(asId<"InvoiceId">(id))).toBeNull();
     });
 
-    it("en olåst tidspost går att ändra och radera som förut", async () => {
-      const id = uuidv7();
-      await repos.timeEntries.create({ id, matterId: matterA, userId: uuidv7(), date: new Date("2026-06-01"), minutes: 30, description: "Öppen", billable: true, hourlyRate: 150_000 } as never);
-      const current = await repos.timeEntries.getById(asId<"TimeEntryId">(id));
-      expect((await sync.push(ORG_A, mut("timeEntry", "update", { ...current, minutes: 45 }))).status).toBe("accepted");
-      expect((await sync.push(ORG_A, mut("timeEntry", "delete", { id }))).status).toBe("accepted");
+    it("byrån prövas först — en annan byrås tidspost ger inget annat besked än \"annan byrå\"", async () => {
+      const current = await entry();
+      expect(await sync.push(ORG_B, mut("timeEntry", "update", { ...current, minutes: 1 }))).toEqual({ status: "conflict", reason: "annan byrå" });
     });
   });
 });

@@ -61,8 +61,9 @@ billigt, eftersom **klient och server redan kör samma `appRouter`**.
 sanning — tilldelas i serverns körning: fakturanummer och andra obrutna serier
 (#1243, ADR 0012), och jävskontroll (#1246).
 
-**Migrering:** entitet för entitet. Radkön finns kvar för procedurer som ännu
-inte flyttats; servern validerar radkön under övergången (#1242).
+**Migrering:** entitet för entitet. Radkön finns kvar för ren data (kontakter,
+uppgifter, kalender, dokumentens metadata …). Den som har affärsregler går via
+procedurkön, och servern tar inte emot färdiga rader för den (#1242).
 
 **Genomfört (#1265):** kärnan (kö-format, `sync.replay`, `sync_replays`,
 exklusiv lokal körning med `touches`) och tidsposterna
@@ -88,6 +89,17 @@ Steg 2d: kostnadsräkningsflödet (`billingRun.createKostnadsrakning`,
 KR-referensens serie är anropets år. Därmed körs hela faktureringen om på
 servern; radkön bär inte längre några faktureringsrader från UI:t.
 
+**Genomfört (#1242, steg 1–2):** de sista anropen som skrev procedurägda
+entiteter köas: fakturautskicken (`invoiceDispatch.queue/recordManual/updateStatus`),
+avbetalningspåminnelserna (`paymentPlan.recordReminder/scanDueReminders`) och
+`invoice.markFortnoxBooked`. Därefter avvisar servern radpushar för de
+procedurägda entiteterna (`procedure-owned.ts`: tid, utlägg, fakturor,
+körningar, betalningar, avbetalningsplaner och deras påminnelser, kundförluster,
+acontoavdrag, utskick och domstolsfordringar), med ett besked som visas i vyn för
+avvisade ändringar. Radvägens egna regler för dem (låsta poster, fakturanummer
+ur radpushen) behövs inte längre och är borttagna. Kvar: ärendets skapande och
+status (steg 3).
+
 ## Konsekvenser
 
 - Affärsreglerna upprätthålls på servern utan att dubbelskrivas — samma kod körs
@@ -112,6 +124,6 @@ servern; radkön bär inte längre några faktureringsrader från UI:t.
 
 ## Öppna frågor
 
-- Hur länge ska radkön finnas kvar under migreringen, och vilka procedurer flyttas först (förslag: tidsposter, därefter fakturering)?
+- Ska hela ärendet bli procedurägt, eller bara skapandet och statusen (#1242, steg 3)? Förslag: bara skapandet och statusen — titel och beskrivning redigeras ofta offline och tjänar på radkönens konflikthantering.
 - Hur visas preliminära fakturanummer i dokument som skapas offline?
 - Omprövning: om den egna motorn visar sig dyr att hålla korrekt (simuleringstesterna hittar återkommande fel) utvärderas PowerSync eller Electric på nytt mot samma krav.

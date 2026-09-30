@@ -5,7 +5,8 @@
  *
  * pull: läs `change_log` (`seq > cursor`, per org), deduppa till senaste op per
  * rad, hämta kanonisk rad via repot (saknad/raderad → tombstone).
- * push: kontrollera byrå och låsta poster (#1242, `push-guard`), applicera sedan
+ * push: kontrollera byrån och avvisa procedurägda entiteter (#1242,
+ * `push-guard` — tid, utlägg och fakturering skrivs bara av procedurkön), applicera sedan
  * en köad mutation per konfliktklass (ADR 0017):
  *   - create  → idempotent (finns id → accepted), annars create.
  *   - update  → surface: stale `baseVersion` ⇒ conflict; annars update
@@ -15,8 +16,6 @@
 
 import { and, asc, eq, gt } from "drizzle-orm";
 import { conflictClassOf } from "@/lib/shared/conflict-policy";
-import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
-import { asId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
 import type { PullResult, PulledChange, PushResult } from "../data-store/in-memory/sync-transport";
@@ -24,7 +23,7 @@ import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
 import { entityRepo, type EntityRepo, type Row } from "./entity-repo";
-import { checkLocked, checkScope, type PushRejection } from "./push-guard";
+import { checkProcedureOwned, checkScope, type PushRejection } from "./push-guard";
 import { admitRow } from "./queue-admission";
 import { withoutServerOwned } from "./server-owned-fields";
 import type { SyncStore } from "./sync-store";
@@ -45,18 +44,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *  lokalt genererat nanoid) kan aldrig lagras → `getById` skulle kasta 22P02 och
  *  abortera hela reconcile-batchen. */
 function isUuidRowId(id: string): boolean { return UUID_RE.test(id); }
-
-/**
- * Fakturanumret sätts av servern (#1243, ADR 0012): klientens nummer är
- * preliminärt (räknat ur de fakturor den kände till). Serien är fakturadatumets
- * år; OCR följer numret, utom där klienten medvetet inte satt någon (domstol).
- */
-async function withServerInvoiceNumber(tx: Repositories, organizationId: OrganizationId, row: Row): Promise<Row> {
-  const date = new Date(typeof row.invoiceDate === "string" || row.invoiceDate instanceof Date ? row.invoiceDate : Date.now());
-  const invoiceNumber = await tx.invoices.nextInvoiceNumber(organizationId, date.getFullYear());
-  const ocrReference = row.ocrReference == null ? null : ocrFromInvoiceNumber(invoiceNumber);
-  return { ...row, invoiceNumber, ocrReference };
-}
 
 function versionOf(row: Row | null): number {
   return row && typeof row.version === "number" ? row.version : 1;
@@ -125,33 +112,25 @@ export class DrizzleSyncStore implements SyncStore {
     const rejected = await this.guard(organizationId, repo, m, existing);
     if (rejected) return { status: "conflict", ...rejected };
     if (m.kind === "delete") return this.applyDelete(repo, m, existing);
-    if (m.kind === "create") return this.applyCreate(organizationId, repo, m, existing);
-    return this.applyUpdate(organizationId, repo, m, existing);
+    if (m.kind === "create") return this.applyCreate(repo, m, existing);
+    return this.applyUpdate(repo, m, existing);
   }
 
-  /** Byrån och låsta poster (#1242): avvisas raden, skrivs ingenting. */
+  /** Byrån och procedurägda entiteter (#1242): avvisas raden, skrivs ingenting. */
   private async guard(organizationId: string, repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushRejection | null> {
     const incoming = m.kind === "delete" ? null : m.row;
     const orgOf = (row: Row): Promise<string | undefined> => repo.organizationOf(row);
     return await checkScope(orgOf, organizationId, m.entity, existing, incoming)
-      ?? checkLocked(m.entity, existing, incoming);
+      ?? checkProcedureOwned(m.entity, existing);
   }
 
-  private async applyCreate(organizationId: string, repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
+  private async applyCreate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
     if (existing) return { status: "accepted", row: existing }; // idempotent replay
-    return { status: "accepted", row: await this.createRow(organizationId, repo, m) };
+    return { status: "accepted", row: await repo.create(m.row) };
   }
 
-  /** Skapa raden; en faktura med nummer får SERVERNS nummer (#1243). */
-  private createRow(organizationId: string, repo: EntityRepo, m: QueuedMutation): Promise<Row> {
-    if (m.entity !== "invoice" || typeof m.row.invoiceNumber !== "string") return repo.create(m.row);
-    return this.repos.transaction(async (tx) => tx.invoices.create(
-      await withServerInvoiceNumber(tx, asId<"OrganizationId">(organizationId), m.row) as never,
-    ));
-  }
-
-  private async applyUpdate(organizationId: string, repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
-    if (!existing) return { status: "accepted", row: await this.createRow(organizationId, repo, m) };
+  private async applyUpdate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
+    if (!existing) return { status: "accepted", row: await repo.create(m.row) };
     const serverVersion = versionOf(existing);
     if (conflictClassOf(m.entity) === "surface" && m.baseVersion != null && serverVersion !== m.baseVersion) {
       return { status: "conflict", reason: "stale", current: existing };

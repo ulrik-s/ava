@@ -2,7 +2,8 @@
  * Reglerna i `push-guard` (#1242) utan databas — gränsfallen.
  */
 import { describe, expect, it } from "vitest-compat";
-import { checkLocked, checkScope, type OrgOf } from "@/lib/server/sync/push-guard";
+import { checkProcedureOwned, checkScope, comparable, type OrgOf } from "@/lib/server/sync/push-guard";
+import { PROCEDURE_OWNED_REASON } from "@/lib/shared/sync/procedure-owned";
 
 const byColumn: OrgOf = async (row) => (typeof row.organizationId === "string" ? row.organizationId : undefined);
 
@@ -24,26 +25,24 @@ describe("checkScope", () => {
   });
 });
 
-describe("checkLocked", () => {
-  const locked = { id: "t", frozenAt: new Date("2026-06-30T00:00:00Z"), minutes: 60, date: new Date("2026-06-01T09:00:00Z") };
-
-  it("samma tidpunkt som ISO-sträng är ingen ändring", () => {
-    expect(checkLocked("timeEntry", locked, { ...locked, date: "2026-06-01T09:00:00.000Z" })).toBeNull();
+describe("checkProcedureOwned", () => {
+  it("procedurägd entitet utan befintlig rad → avvisad, ingen serverrad", () => {
+    expect(checkProcedureOwned("invoice", null)).toEqual({ reason: PROCEDURE_OWNED_REASON });
   });
 
-  it("fält som inte skickas räknas inte som ändrade", () => {
-    expect(checkLocked("timeEntry", locked, { id: "t" })).toBeNull();
+  it("procedurägd entitet med befintlig rad → avvisad med serverns rad", () => {
+    expect(checkProcedureOwned("timeEntry", { id: "t", minutes: 60 })).toEqual({ reason: PROCEDURE_OWNED_REASON, current: { id: "t", minutes: 60 } });
   });
 
-  it("fakturerat utan frysning (invoiceId) är också låst", () => {
-    expect(checkLocked("expense", { id: "e", invoiceId: "inv", amount: 100 }, { amount: 200 })).toMatchObject({ reason: "låst" });
+  it("ren data (kontakter) berörs inte", () => {
+    expect(checkProcedureOwned("contact", { id: "c" })).toBeNull();
   });
+});
 
-  it("andra entiteter berörs inte", () => {
-    expect(checkLocked("contact", { id: "c", frozenAt: new Date() }, null)).toBeNull();
-  });
-
-  it("ny rad (ingen befintlig) är aldrig låst", () => {
-    expect(checkLocked("timeEntry", null, { minutes: 5 })).toBeNull();
+describe("comparable", () => {
+  it("samma tidpunkt som Date och ISO-sträng jämförs lika; saknat blir null", () => {
+    expect(comparable(new Date("2026-06-01T09:00:00Z"))).toBe(comparable("2026-06-01T09:00:00.000Z"));
+    expect(comparable(undefined)).toBeNull();
+    expect(comparable("text")).toBe("text");
   });
 });
