@@ -5,6 +5,8 @@
  * end-to-end mot den deployade artefakten:
  *
  *   1. ONLINE   — skapa ärende + mapp + dokument → push → pull bekräftar.
+ *                 Ärendet är procedurägt (#1242): det skapas och ändras som
+ *                 köade anrop som servern kör om (`sync.replay`), inte som rad.
  *   2. OFFLINE  — köa ändringar (ärende-status, dokument-namn, flytta mapp)
  *                 UTAN att pusha → pull visar fortfarande GAMLA värden.
  *   3. ONLINE   — pusha de köade ändringarna → pull bekräftar NYA värden.
@@ -24,6 +26,7 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import postgres from "postgres";
 import superjson from "superjson";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
+import type { QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { uuidv7 } from "@/lib/shared/uuid";
 
@@ -100,6 +103,19 @@ async function pushAll(t: TrpcSyncTransport, muts: Mutation[]): Promise<void> {
     const res = await t.push(m);
     if (res.status !== "accepted") throw new Error(`push ej accepterad (${m.entity}/${m.kind}): ${res.status}`);
   }
+}
+
+/** Ett köat procedur-anrop för ärendet (#1242). */
+function matterCall(path: "matter.create" | "matter.update", matterId: string, input: Record<string, unknown>): QueuedProcedureCall {
+  return {
+    type: "procedure", mutationId: uuidv7(), path, input: { id: matterId, ...input },
+    codeVersion: "e2e", enqueuedAt: Date.now(), touches: [{ entity: "matter", id: matterId }],
+  };
+}
+
+async function replay(t: TrpcSyncTransport, call: QueuedProcedureCall): Promise<void> {
+  const res = await t.pushProcedure(call);
+  if (res.status !== "accepted") throw new Error(`anropet kördes inte (${call.path}): ${res.status}`);
 }
 
 /** Pollar `pred` tills sann eller timeout. */
@@ -198,8 +214,8 @@ async function main(): Promise<void> {
   };
 
   // ── FAS 1: ONLINE — skapa ärende + två mappar + dokument ─────────
+  await replay(t, matterCall("matter.create", m1, { title: "Offline-E2E" }));
   await pushAll(t, [
-    mut("matter", "create", { id: m1, organizationId: ORG, title: "Offline-E2E", status: "ACTIVE", matterNumber: "2026-9001" }),
     mut("documentFolder", "create", { id: folderA, matterId: m1, name: "Inlagor", parentId: null }),
     mut("documentFolder", "create", { id: folderB, matterId: m1, name: "Bevis", parentId: null }),
     mut("document", "create", { ...docBase, fileName: "stamning.pdf" }),
@@ -216,8 +232,8 @@ async function main(): Promise<void> {
   console.log("✓ FAS 1 (online): ärende + mappar + dokument synkade (+ pull-bara, #528)");
 
   // ── FAS 2: OFFLINE — köa ändringar UTAN att pusha ────────────────
+  const offlineClose = matterCall("matter.update", m1, { status: "CLOSED" });
   const offlineMuts = [
-    mut("matter", "update", { id: m1, organizationId: ORG, title: "Offline-E2E", status: "CLOSED", matterNumber: "2026-9001" }),
     mut("document", "update", { ...docBase, fileName: "stamning-reviderad.pdf", folderId: folderB }),
   ];
   // Servern ska fortfarande visa GAMLA värden (inget pushat).
@@ -228,6 +244,7 @@ async function main(): Promise<void> {
   console.log("✓ FAS 2 (offline): ändringar köade lokalt, servern oförändrad");
 
   // ── FAS 3: ONLINE igen — pusha kö → ändringar synkas ─────────────
+  await replay(t, offlineClose);
   await pushAll(t, offlineMuts);
   assert((await matterStatus(m1)) === "CLOSED", "online: ärende-status synkad (CLOSED)");
   const docNew = await docRow(doc1);
