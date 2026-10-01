@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest-compat";
 import { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { InMemoryMutationQueuePersistence, type QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type {
   ProcedureReplayResult, PulledChange, PullResult, PushResult, RowRef, SyncTransport,
 } from "@/lib/server/data-store/in-memory/sync-transport";
@@ -116,5 +116,42 @@ describe("requeue — Försök igen lägger tillbaka radens lokala läge (#1348)
     expect(h.ds.hasPendingFor("task", a)).toBe(true);
     expect(h.ds.hasPendingFor("task", uuidv7())).toBe(false);
     expect(changed).toBe(2);
+  });
+});
+
+describe("flera flikar — en annan flik skickade flikens ändring (#1402)", () => {
+  /** Två flikar: samma kö och server, var sitt lokala läge. */
+  async function twoTabs() {
+    const server = new Server();
+    const queuePersistence = new InMemoryMutationQueuePersistence();
+    const open = () => CachingSyncDataStore.create({ transport: server, persistence: new InMemoryPersistence(), queuePersistence });
+    const a = await open();
+    const b = await open();
+    const task = (ds: CachingSyncDataStore, id: string) => ds.store.tasks.findUnique({ where: { id } }) as Promise<Record<string, unknown> | null>;
+    return { server, a, b, task };
+  }
+
+  it("avvisad: fliken som gjorde ändringen tar bort sin spökrad vid nästa synk", async () => {
+    const h = await twoTabs();
+    const id = uuidv7();
+    await h.b.store.tasks.create({ data: { id, title: "Optimistisk i B" } as never });
+    h.server.pushImpl = () => ({ status: "conflict", reason: "annan byrå" });
+    await h.a.reconcile(); // A skickar B:s post; avvisningen kommer bara till A
+    expect(await h.task(h.b, id)).not.toBeNull();
+
+    const res = await h.b.reconcile();
+    expect(h.server.rowRequests.at(-1)).toEqual([id]);
+    expect(res.restored).toBe(1);
+    expect(await h.task(h.b, id)).toBeNull();
+  });
+
+  it("godtagen: fliken får serverns rad", async () => {
+    const h = await twoTabs();
+    const id = uuidv7();
+    await h.b.store.tasks.create({ data: { id, title: "Lokal i B" } as never });
+    h.server.rowsById.set(id, { id, title: "Serverns", version: 1 });
+    await h.a.reconcile();
+    await h.b.reconcile();
+    expect(await h.task(h.b, id)).toMatchObject({ title: "Serverns", version: 1 });
   });
 });

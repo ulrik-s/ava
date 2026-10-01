@@ -20,7 +20,7 @@ import { and, eq } from "drizzle-orm";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildContext } from "@/lib/server/build-context";
 import { ENTITY_NAME_BY_SOURCE_KEY } from "@/lib/server/data-store/in-memory/entity-source-keys";
-import { isProcedureCall, type QueueEntry } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { isProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { billingRuns, invoiceNumbers, invoices, matters, syncReplays } from "@/lib/server/db/schema";
 import type { AppDb } from "@/lib/server/db/types";
 import { serverFirstEventLog } from "@/lib/server/http/server-context";
@@ -100,16 +100,6 @@ function diffStates(expected: State, actual: State, skip: ReadonlySet<string>): 
   return out;
 }
 
-/** Raderna en köpost ändrade. */
-function keysOf(entry: QueueEntry): string[] {
-  return isProcedureCall(entry) ? entry.touches.map((t) => `${t.entity}:${t.id}`) : [`${entry.entity}:${String(entry.row.id)}`];
-}
-
-/** Rader som en avvisad ändring rörde, i webbläsarens avvisade ändringar. */
-async function refusedRows(b: SimBrowser): Promise<Set<string>> {
-  return new Set((await b.rejected()).flatMap((change) => keysOf(change.entry)));
-}
-
 /** Resultatet av invarianterna: fel, och fel som beror på en känd, öppen bugg. */
 export interface Verdict {
   violations: string[];
@@ -117,17 +107,23 @@ export interface Verdict {
   known: string[];
 }
 
+/** En känd, öppen bugg: ärendet och hur avvikelsen den ger känns igen. */
+interface KnownBug {
+  issue: string;
+  matches: (d: Divergence) => boolean;
+}
+
 /**
- * Kända, öppna buggar som en avvikelse kan bero på. Ta bort raden när buggen
- * är fixad (`AVA_SIM_STRICT=1` räknar dem som fel redan nu):
- *   - #1402: med flera flikar lämnar en avvisad ändring spökrader i fliken
- *     som gjorde den, när en annan flik skickade den (#1392 återställer bara
- *     i den fliken). Gäller bara webbläsare med flera flikar — i en ensam
- *     flik är samma avvikelse ett fel (#1348).
+ * Kända, öppna buggar som en avvikelse kan bero på — tom just nu (#1397,
+ * #1399 och #1402 är fixade). Hittar simuleringen en bugg som inte fixas
+ * direkt läggs den till här och tas bort med fixen; `AVA_SIM_STRICT=1`
+ * räknar dem som fel redan innan.
  */
-function knownBug(d: Divergence, refusedInSharedQueue: ReadonlySet<string>): string | null {
+const KNOWN_BUGS: readonly KnownBug[] = [];
+
+function knownBug(d: Divergence): string | null {
   if (STRICT) return null;
-  return refusedInSharedQueue.has(`${d.entity}:${d.id}`) ? "#1402" : null;
+  return KNOWN_BUGS.find((bug) => bug.matches(d))?.issue ?? null;
 }
 
 /** Byråernas läge så som en ny klient ser det (org → läge). */
@@ -157,16 +153,14 @@ async function checkNoSilentLoss(server: SimServer, browsers: readonly SimBrowse
 }
 
 /** Varje flik har byråns läge, i alla synkade tabeller. */
-async function checkConvergence(states: States, tabs: readonly SimTab[]): Promise<Verdict> {
+function checkConvergence(states: States, tabs: readonly SimTab[]): Verdict {
   const verdict: Verdict = { violations: [], known: [] };
   for (const t of tabs) {
-    const shared = tabs.filter((other) => other.browser === t.browser).length > 1;
-    const refused = shared ? await refusedRows(t.browser) : new Set<string>();
     const expected = states.get(t.firm.org) ?? new Map();
     const local = localState(t);
     for (const d of diffStates(expected, local, new Set())) {
       const line = `${t.name}: ${d.entity} ${d.id} ${d.what}`;
-      const bug = knownBug(d, refused);
+      const bug = knownBug(d);
       if (bug) verdict.known.push(`${bug} ${line}`);
       else verdict.violations.push(line);
     }
@@ -302,7 +296,7 @@ export async function checkInvariants(server: SimServer, browsers: readonly SimB
   const states: States = new Map();
   for (const firm of FIRMS) states.set(firm.org, await canonicalState(server.sync, firm.org));
   const loss = await checkNoSilentLoss(server, browsers);
-  const convergence = await checkConvergence(states, tabs);
+  const convergence = checkConvergence(states, tabs);
   const series = await Promise.all(FIRMS.map((f) => checkSeries(server.handle.db, f)));
   return {
     violations: [

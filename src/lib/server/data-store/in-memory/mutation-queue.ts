@@ -13,6 +13,11 @@
  * Flera flikar (#1346): lagringen är sanningen. Varje post skrivs och tas bort
  * för sig (aldrig hela kön), och `refresh()` läser om lagringen innan kön
  * spelas upp, så att en flik inte arbetar mot en inaktuell kopia.
+ *
+ * En post som fliken skrev lokalt men som en annan flik skickade och
+ * kvitterade (#1402) samlas i {@link MutationQueue.takeSettledElsewhere}: fliken
+ * vet inte om servern godtog eller avvisade den, så dess rader ska läsas om
+ * från servern — annars lever en avvisad ändrings rader kvar i fliken.
  */
 
 import { z } from "zod";
@@ -201,6 +206,14 @@ export interface EnqueueProcedureOpts {
 
 export class MutationQueue {
   private items: QueueEntry[] = [];
+  /**
+   * Poster vars optimistiska skrivningar kan finnas i flikens lokala läge
+   * (#1402): de som fanns när kön hydrerades (snapshotet kan bära dem) och de
+   * fliken själv köat. En annan fliks nya poster finns bara i dess eget minne.
+   */
+  private local = new Set<string>();
+  /** Flikens poster som en annan flik har kvitterat sedan sist (#1402). */
+  private settledElsewhere: QueueEntry[] = [];
   /** Kedjan som gör att flikens egna köoperationer körs en i taget. */
   private chain: Promise<unknown> = Promise.resolve();
 
@@ -216,6 +229,7 @@ export class MutationQueue {
   static async hydrate(persistence?: MutationQueuePersistence, owner?: QueueOwner): Promise<MutationQueue> {
     const q = new MutationQueue(persistence, owner);
     await q.refresh();
+    q.local = new Set(q.items.map((e) => e.mutationId));
     return q;
   }
 
@@ -225,8 +239,31 @@ export class MutationQueue {
    */
   refresh(): Promise<void> {
     return this.serial(async () => {
-      if (this.persistence) this.items = this.ownEntries(await this.persistence.load());
+      if (!this.persistence) return;
+      const next = this.ownEntries(await this.persistence.load());
+      this.noteSettledElsewhere(next);
+      this.items = next;
     });
+  }
+
+  /** Flikens poster som inte längre finns i lagringen har en annan flik kvitterat (#1402). */
+  private noteSettledElsewhere(next: readonly QueueEntry[]): void {
+    const remaining = new Set(next.map((e) => e.mutationId));
+    for (const entry of this.items) {
+      if (!this.local.has(entry.mutationId) || remaining.has(entry.mutationId)) continue;
+      this.local.delete(entry.mutationId);
+      this.settledElsewhere.push(entry);
+    }
+  }
+
+  /**
+   * Flikens poster som en annan flik har skickat och kvitterat sedan förra
+   * anropet (#1402) — deras rader ska läsas om från servern. Töms av anropet.
+   */
+  takeSettledElsewhere(): QueueEntry[] {
+    const settled = this.settledElsewhere;
+    this.settledElsewhere = [];
+    return settled;
   }
 
   /** Bara ägarens poster (#1347); en annan användares rapporteras och lämnas orörda. */
@@ -324,6 +361,7 @@ export class MutationQueue {
   ack(mutationId: string): Promise<void> {
     return this.serial(async () => {
       this.items = this.items.filter((m) => m.mutationId !== mutationId);
+      this.local.delete(mutationId);
       await this.persistence?.delete(mutationId);
     });
   }
@@ -339,6 +377,7 @@ export class MutationQueue {
       for (const old of this.items) if (!kept.has(old.mutationId)) await this.persistence?.delete(old.mutationId);
       for (const entry of items) await this.persistence?.replace(entry);
       this.items = [...items];
+      this.local = kept;
     });
   }
 
@@ -347,11 +386,13 @@ export class MutationQueue {
     return this.serial(async () => {
       for (const entry of this.items) await this.persistence?.delete(entry.mutationId);
       this.items = [];
+      this.local.clear();
     });
   }
 
   private async append(item: QueueEntry): Promise<void> {
     this.items.push(item);
+    this.local.add(item.mutationId);
     await this.persistence?.add(item);
   }
 
