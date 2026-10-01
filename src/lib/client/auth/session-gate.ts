@@ -7,10 +7,13 @@
  *
  *   - Inloggad, samma identitet → fortsätt (och notera när den verifierades).
  *   - Inloggad, ny/annan identitet → bind principalen (första inloggningen).
- *   - Utloggad → till inloggningen (`/oauth2/start`).
- *   - Servern nås inte (offline, IdP-/proxyavbrott) → arbeta vidare under den
- *     cachade identiteten inom grace-tiden (default 7 dagar). Därefter krävs
- *     uppkoppling — ett återkallat förtroende hålls inte vid liv i veckor.
+ *   - Utloggad eller okänt läge (offline, IdP-/proxyavbrott, captive portal)
+ *     INOM grace-tiden (default 7 dagar) → arbeta vidare under den cachade
+ *     identiteten, med bannern "Logga in igen" (#1351). Ingen hård
+ *     omdirigering: IdP:n kan vara nere, och användaren väljer när.
+ *   - Utloggad utan giltig grace → till inloggningen (`/oauth2/start`).
+ *   - Okänt läge utan giltig grace → besked; uppkoppling krävs — ett
+ *     återkallat förtroende hålls inte vid liv i veckor.
  *   - Ingen OIDC i driften (`/oauth2/userinfo` saknas: basic-auth) → som förut.
  *
  * Servern omvaliderar ändå principalen vid varje synk; grinden är bara den
@@ -19,7 +22,8 @@
 
 import type { OidcClaims } from "@/lib/server/auth/oidc-auth-provider";
 import { DEFAULT_OFFLINE_GRACE_MS } from "@/lib/shared/offline-grace";
-import type { UserinfoProbe } from "../backend/oidc-principal";
+import type { SessionNotice } from "./session-notice";
+import type { SessionProbe } from "./session-probe";
 
 /** Den identitet klienten arbetade under senast (ur firma-config). */
 export interface CachedIdentity {
@@ -32,6 +36,7 @@ export interface CachedIdentity {
 export type GateDecision =
   | { kind: "bind"; claims: OidcClaims }
   | { kind: "proceed"; verifiedNow: boolean }
+  | { kind: "proceed-locally"; notice: Exclude<SessionNotice, "token-expired"> }
   | { kind: "login" }
   | { kind: "offline-expired" }
   | { kind: "offline-unbound" };
@@ -45,19 +50,25 @@ function decideOnline(claims: OidcClaims, cached: CachedIdentity | null): GateDe
   return same ? { kind: "proceed", verifiedNow: true } : { kind: "bind", claims };
 }
 
-function decideOffline(cached: CachedIdentity | null, now: number, graceMs: number): GateDecision {
+/** Okänt läge: inom grace arbetar man lokalt; annars krävs uppkoppling. */
+function decideUnreachable(cached: CachedIdentity | null, now: number, graceMs: number): GateDecision {
   if (!cached) return { kind: "offline-unbound" };
-  return withinGrace(cached, now, graceMs) ? { kind: "proceed", verifiedNow: false } : { kind: "offline-expired" };
+  return withinGrace(cached, now, graceMs) ? { kind: "proceed-locally", notice: "unreachable" } : { kind: "offline-expired" };
+}
+
+/** Bekräftat utloggad: inom grace en banner, annars till inloggningen (#1351). */
+function decideSignedOut(cached: CachedIdentity | null, now: number, graceMs: number): GateDecision {
+  return cached && withinGrace(cached, now, graceMs) ? { kind: "proceed-locally", notice: "signed-out" } : { kind: "login" };
 }
 
 /** Grindens beslut för en start. */
 export function decideSessionGate(
-  probe: UserinfoProbe, cached: CachedIdentity | null, now: number, graceMs: number = DEFAULT_OFFLINE_GRACE_MS,
+  probe: SessionProbe, cached: CachedIdentity | null, now: number, graceMs: number = DEFAULT_OFFLINE_GRACE_MS,
 ): GateDecision {
   switch (probe.kind) {
-    case "ok": return decideOnline(probe.claims, cached);
-    case "unauthenticated": return { kind: "login" };
-    case "unreachable": return decideOffline(cached, now, graceMs);
+    case "authenticated": return decideOnline(probe.claims, cached);
+    case "signed-out": return decideSignedOut(cached, now, graceMs);
+    case "unreachable": return decideUnreachable(cached, now, graceMs);
     case "absent": return { kind: "proceed", verifiedNow: false };
     default: {
       const exhaustive: never = probe;

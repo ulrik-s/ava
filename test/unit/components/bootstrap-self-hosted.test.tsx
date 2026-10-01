@@ -13,6 +13,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { bootstrapSelfHosted } from "@/components/shell/demo-bootstrap";
+import { sessionNotice, setSessionNotice } from "@/lib/client/auth/session-notice";
 import { activeLocalScope, bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
 import type { FirmaConfig } from "@/lib/client/firma/firma-config";
 
@@ -51,8 +52,10 @@ function makeArgs(over: Partial<Parameters<typeof bootstrapSelfHosted>[0]> = {})
 const probeUserinfo = vi.fn(async (): Promise<unknown> => ({ kind: "absent" }));
 const classifyOidcLogin = vi.fn(() => ({ kind: "no-session" }) as unknown);
 vi.mock("@/lib/client/backend/oidc-principal", () => ({
-  probeUserinfo: (...a: unknown[]) => probeUserinfo(...(a as [])),
   classifyOidcLogin: (...a: unknown[]) => classifyOidcLogin(...(a as [])),
+}));
+vi.mock("@/lib/client/auth/session-probe", () => ({
+  probeSession: (...a: unknown[]) => probeUserinfo(...(a as [])),
 }));
 
 const NOW = Date.UTC(2026, 8, 30);
@@ -63,6 +66,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   probeUserinfo.mockResolvedValue({ kind: "absent" });
+  setSessionNotice(null);
   classifyOidcLogin.mockReturnValue({ kind: "no-session" });
 });
 
@@ -96,7 +100,7 @@ describe("bootstrapSelfHosted", () => {
   });
 
   it("OIDC-first-login (ingen principalId): frågar storens user.list", async () => {
-    probeUserinfo.mockResolvedValueOnce({ kind: "ok", claims: lena });
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
     const listQuery = vi.fn(async () => ({ users: [] }));
     const args = makeArgs({
       firmaConfig: noPrincipal as FirmaConfig,
@@ -112,7 +116,7 @@ describe("bootstrapSelfHosted", () => {
   });
 
   it("#628: skickar user.list-ARRAYEN (inte {users}-objektet) till classify", async () => {
-    probeUserinfo.mockResolvedValueOnce({ kind: "ok", claims: { email: "lawyer@ava.test", subject: "", issuer: "", name: "" } });
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: { email: "lawyer@ava.test", subject: "", issuer: "", name: "" } });
     const allowlist = [{ id: "u1", email: "lawyer@ava.test", name: "Lena", role: "LAWYER" }];
     const args = makeArgs({
       firmaConfig: noPrincipal as FirmaConfig,
@@ -124,7 +128,7 @@ describe("bootstrapSelfHosted", () => {
   });
 
   it("#1391: inloggad men saknas i byrån → begripligt fel (inte 'Laddar…'), ingen store till appen", async () => {
-    probeUserinfo.mockResolvedValueOnce({ kind: "ok", claims: lena });
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
     classifyOidcLogin.mockReturnValueOnce({ kind: "denied", email: "a@b.se" });
     const args = makeArgs({ firmaConfig: noPrincipal as FirmaConfig });
     await bootstrapSelfHosted(args);
@@ -135,7 +139,7 @@ describe("bootstrapSelfHosted", () => {
 
   // ── Sessionsgrinden (#1245) ──────────────────────────────────────────────
   it("inloggad med samma identitet: bygger storen och noterar när sessionen verifierades", async () => {
-    probeUserinfo.mockResolvedValueOnce({ kind: "ok", claims: lena });
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
     const args = makeArgs({ gateEnv: gateEnv() });
     await bootstrapSelfHosted(args);
     expect(args.setStatus).toHaveBeenCalledWith("ready");
@@ -143,7 +147,7 @@ describe("bootstrapSelfHosted", () => {
   });
 
   it("utloggad: till inloggningen med tillbaka-länk — ingen store byggs", async () => {
-    probeUserinfo.mockResolvedValueOnce({ kind: "unauthenticated" });
+    probeUserinfo.mockResolvedValueOnce({ kind: "signed-out" });
     const env = gateEnv();
     const args = makeArgs({ gateEnv: env });
     await bootstrapSelfHosted(args);
@@ -151,11 +155,23 @@ describe("bootstrapSelfHosted", () => {
     expect(args.makeStore).not.toHaveBeenCalled();
   });
 
-  it("offline inom grace: arbetar vidare under den cachade identiteten", async () => {
-    probeUserinfo.mockResolvedValueOnce({ kind: "unreachable" });
+  it("offline inom grace: arbetar vidare under den cachade identiteten, med 'Logga in igen'-bannern", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "unreachable", reason: "timeout" });
     const args = makeArgs({ gateEnv: gateEnv(), firmaConfig: { ...baseConfig, sessionVerifiedAt: NOW - 1000 } });
     await bootstrapSelfHosted(args);
     expect(args.setStatus).toHaveBeenCalledWith("ready");
+    expect(sessionNotice()).toBe("unreachable");
+  });
+
+  // #1351: IdP:n kan vara nere — ingen hård omdirigering inom grace.
+  it("utloggad inom grace: arbetar lokalt med bannern, ingen omdirigering", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "signed-out" });
+    const env = gateEnv();
+    const args = makeArgs({ gateEnv: env, firmaConfig: { ...baseConfig, sessionVerifiedAt: NOW - 1000 } });
+    await bootstrapSelfHosted(args);
+    expect(env.redirect).not.toHaveBeenCalled();
+    expect(args.setStatus).toHaveBeenCalledWith("ready");
+    expect(sessionNotice()).toBe("signed-out");
   });
 
   it("utloggning offline som inte avslutade proxyns session (#1347): dit först, ingen grind, ingen store", async () => {
@@ -187,7 +203,7 @@ describe("bootstrapSelfHosted", () => {
   });
 
   it("offline efter grace: tydligt besked, ingen store", async () => {
-    probeUserinfo.mockResolvedValueOnce({ kind: "unreachable" });
+    probeUserinfo.mockResolvedValueOnce({ kind: "unreachable", reason: "network" });
     const args = makeArgs({ gateEnv: gateEnv(), firmaConfig: { ...baseConfig, sessionVerifiedAt: NOW - 30 * 24 * 3600 * 1000 } });
     await bootstrapSelfHosted(args);
     expect(args.setStatus).toHaveBeenCalledWith("error");

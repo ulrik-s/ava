@@ -143,10 +143,17 @@ AVA_IDENTITY=verified
   som `X-Ava-Identity-Token`. Servern hämtar IdP:ns nycklar via OIDC-discovery.
 - Token:en måste bära `email`, eller en e-postadress i `preferred_username`
   (Entras UPN).
-- ID-token gäller ofta bara en timme. Sätt `OAUTH2_PROXY_COOKIE_REFRESH=30m`
-  (och `offline_access` i scope för Entra) så att proxyn förnyar den. Annars
-  skickas användaren till inloggningen när token gått ut — sessionen hos IdP:n
-  gör att det oftast går direkt.
+- ID-token gäller ofta bara en timme. Stacken förnyar den själv (#1351):
+  `OAUTH2_PROXY_COOKIE_REFRESH=30m`, `OAUTH2_PROXY_COOKIE_EXPIRE=168h` och
+  scope `openid email profile offline_access` är default i
+  `docker-compose.production.yml` (åsidosätt med samma namn, resp. `OIDC_SCOPE`,
+  i `ava-server.env`). Entra-appen måste få ge refresh-token: **API
+  permissions → Microsoft Graph → delegated `offline_access`** (+ `openid`,
+  `email`, `profile`) och **Grant admin consent** — annars kan användarna mötas
+  av en godkännandedialog, eller "Need admin approval" om användarmedgivande är
+  avstängt i tenanten. Google (provider `oidc`) godtar inte `offline_access`:
+  sätt `OIDC_SCOPE=openid email profile`. Se
+  [auth.md](auth.md#sessionen-i-klienten-och-idp-avbrott-1245-1351-adr-0018).
 - Felkonfiguration (verified utan issuer eller audience) stoppar serverns start.
 
 ## Övervakning

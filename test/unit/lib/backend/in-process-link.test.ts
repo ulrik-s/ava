@@ -43,7 +43,8 @@ describe("inProcessLink — felvägar", () => {
     const client = rawClient(runtime) as unknown as {
       matter: { list: { query: (i: unknown) => Promise<unknown> } };
     };
-    await expect(client.matter.list.query({})).rejects.toThrow(/UNAUTHORIZED|unauthorized/i);
+    // #1351: meddelandet säger varför (här: ingen identitet alls).
+    await expect(client.matter.list.query({})).rejects.toThrow(/Ingen giltig inloggning/);
   });
 
   it("direkt länk-invokation: okänd path → observer.error (caller-proxyn kastar)", async () => {

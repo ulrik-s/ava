@@ -18,6 +18,7 @@ import { users } from "@/lib/server/db/schema";
 import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { authFailureOf } from "@/lib/shared/auth-failure";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -60,6 +61,12 @@ describe("createServerTrpcHandler (#410)", () => {
 
   it("enforce:ar protectedProcedure server-side — ingen identitet → UNAUTHORIZED", async () => {
     await expect(makeClient(handler).user.current.query()).rejects.toBeInstanceOf(TRPCClientError);
+  });
+
+  it("401:ans skäl följer med till klienten (#1351): ingen identitet vs okänt konto", async () => {
+    const reason = (email?: string) => makeClient(handler, email).user.current.query().then(() => null, (e: unknown) => authFailureOf(e));
+    expect(await reason()).toBe("no-identity");
+    expect(await reason("okand@annan.se")).toBe("account-inactive");
   });
 
   it("enforce:ar orgProcedure server-side — org-scopad query lyckas med principal", async () => {

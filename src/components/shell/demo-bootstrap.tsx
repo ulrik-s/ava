@@ -25,6 +25,7 @@ import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-regis
 import { HelperAutoConfig } from "@/components/shell/helper-auto-config";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 import { decideSessionGate, loginUrl, offlineGateMessage, type CachedIdentity } from "@/lib/client/auth/session-gate";
+import { setSessionNotice } from "@/lib/client/auth/session-notice";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
@@ -54,6 +55,7 @@ import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
 import { LoadingScreen, PendingBootScreen, type BootStatus } from "./boot-screen";
 import { JobsBadge } from "./jobs-badge";
+import { ReauthBanner } from "./reauth-banner";
 import { ServerFirstSync } from "./server-first-sync";
 import { ServerInvoiceNumbering } from "./server-invoice-numbering";
 import { UnsavedWritesGuard } from "./unsaved-writes-guard";
@@ -275,6 +277,17 @@ interface TreeProps {
   children: ReactNode;
 }
 
+/** Server-synkens delar i statusraden — bara när det finns en server (ej demon). */
+function ServerSyncParts({ store }: { store: CachingSyncDataStore | null }) {
+  return (
+    <>
+      <ServerFirstSync store={store} />
+      <ServerInvoiceNumbering store={store} />
+      <ActiveMatterPrefetch store={store} />
+    </>
+  );
+}
+
 function AuthGatedDemoTree(props: TreeProps) {
   const { firmaConfig, trpcClient, queryClient, status, errorMsg, cachingSync, children } = props;
   const auth = useAuthMode();
@@ -300,6 +313,7 @@ function AuthGatedDemoTree(props: TreeProps) {
           {/* Statusraden + appen delar på skärmhöjden — annars skjuts den
               fullhöjds-appen ned och hela sidan scrollar (#1185). */}
           <div className="flex h-full flex-col">
+          {!isDemoTier && <ReauthBanner />}
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white">
             <div className="flex-1 min-w-0">
               <AuthStatusBanner />
@@ -308,9 +322,7 @@ function AuthGatedDemoTree(props: TreeProps) {
               <JobsBadge />
               <AutoSync />
               <UnsavedWritesGuard store={cachingSync} />
-              {!isDemoTier && <ServerFirstSync store={cachingSync} />}
-              {!isDemoTier && <ServerInvoiceNumbering store={cachingSync} />}
-              {!isDemoTier && <ActiveMatterPrefetch store={cachingSync} />}
+              {!isDemoTier && <ServerSyncParts store={cachingSync} />}
             </div>
           </div>
           {status === "loading" && (
@@ -380,18 +392,22 @@ function cachedIdentity(cfg: FirmaConfig): CachedIdentity | null {
  * oauth2-proxy om sessionen — skalet laddas numera utan inloggning.
  * `bind` = första inloggningen (eller en annan identitet): principalen binds
  * efter klon. `halt` = anroparen avbryter (omdirigerad till inloggningen,
- * eller offline utan giltig grace).
+ * eller offline utan giltig grace). `proceed-locally` (#1351) = inom grace
+ * men utan bekräftad session: arbeta lokalt med "Logga in igen"-bannern.
  */
 async function runSessionGate(
   firmaConfig: FirmaConfig, env: GateEnv,
   setStatus: (s: Status) => void, setErrorMsg: (m: string | null) => void,
 ): Promise<GateOutcome> {
-  const { probeUserinfo } = await import("@/lib/client/backend/oidc-principal");
-  const decision = decideSessionGate(await probeUserinfo(), cachedIdentity(firmaConfig), env.now());
+  const { probeSession } = await import("@/lib/client/auth/session-probe");
+  const decision = decideSessionGate(await probeSession(), cachedIdentity(firmaConfig), env.now());
   switch (decision.kind) {
     case "bind": return { kind: "continue", needsOidc: true, oidcClaims: decision.claims };
     case "proceed":
       if (decision.verifiedNow) patchFirmaConfig({ sessionVerifiedAt: env.now() });
+      return { kind: "continue", needsOidc: false, oidcClaims: null };
+    case "proceed-locally":
+      setSessionNotice(decision.notice);
       return { kind: "continue", needsOidc: false, oidcClaims: null };
     case "login":
       env.redirect(loginUrl(env.location()));

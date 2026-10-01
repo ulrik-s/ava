@@ -14,7 +14,7 @@
  * `jwks` injiceras (`JWTVerifyGetKey`) → testas med en lokalt signerad token.
  */
 
-import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
+import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
 import type { OidcClaims } from "@/lib/server/auth/oidc-auth-provider";
 import type { HelperConfigRequest } from "@/lib/shared/helper/protocol";
 import { parseBearerToken } from "./pat";
@@ -29,6 +29,27 @@ export interface BearerVerifyConfig {
 }
 
 /**
+ * Signaturalgoritmer som godtas (#1351). Entra, Keycloak och Google signerar
+ * ID- och access-token med RS256. En fast lista stänger dörren för en token
+ * som påstår en annan algoritm än nyckeln är avsedd för.
+ */
+export const ACCEPTED_ALGORITHMS: readonly string[] = ["RS256"];
+
+/**
+ * Tillåten klockskillnad mot IdP:n, i sekunder (#1351). Utan den avvisas en
+ * token som just utfärdats (`nbf`/`iat` en sekund i framtiden) eller just gått
+ * ut, så fort serverns klocka går lite fel.
+ */
+export const CLOCK_TOLERANCE_S = 60;
+
+/** Utfallet av en verifiering — `expired` skiljs ut så att klienten kan be om ny inloggning (#1351). */
+export type BearerVerification =
+  | { kind: "verified"; claims: OidcClaims }
+  | { kind: "missing" }
+  | { kind: "expired" }
+  | { kind: "invalid" };
+
+/**
  * Verifiera `Authorization: Bearer <jwt>` → `OidcClaims`, eller `null` om
  * headern saknas eller token:en inte validerar (signatur/issuer/audience/exp).
  * Email-only-modellen (#224/ADR 0009): saknas `email`-claim → `null`.
@@ -39,16 +60,25 @@ export async function bearerClaims(headers: Headers, config: BearerVerifyConfig)
 
 /** Verifiera en `Bearer <jwt>`-headers värde → `OidcClaims`, eller `null`. */
 export async function verifyBearerHeader(value: string | null, config: BearerVerifyConfig): Promise<OidcClaims | null> {
+  const result = await verifyBearerToken(value, config);
+  return result.kind === "verified" ? result.claims : null;
+}
+
+/** Verifiera en `Bearer <jwt>`-headers värde, med skälet när den inte godtas. */
+export async function verifyBearerToken(value: string | null, config: BearerVerifyConfig): Promise<BearerVerification> {
   const token = parseBearerToken(value);
-  if (!token) return null;
+  if (!token) return { kind: "missing" };
   try {
     const { payload } = await jwtVerify(token, config.jwks, {
       issuer: config.issuer,
+      algorithms: [...ACCEPTED_ALGORITHMS],
+      clockTolerance: CLOCK_TOLERANCE_S,
       ...(config.audience !== undefined ? { audience: config.audience } : {}),
     });
-    return claimsFromPayload(payload);
-  } catch {
-    return null; // ogiltig signatur/issuer/audience/utgången → anonym (UNAUTHORIZED)
+    const claims = claimsFromPayload(payload);
+    return claims ? { kind: "verified", claims } : { kind: "invalid" };
+  } catch (err) { // ogiltig signatur/issuer/audience → anonym (UNAUTHORIZED); utgången skiljs ut.
+    return { kind: err instanceof errors.JWTExpired ? "expired" : "invalid" };
   }
 }
 

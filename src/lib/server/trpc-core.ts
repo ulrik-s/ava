@@ -17,6 +17,7 @@
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
+import { AuthFailureError, authFailureFromCause, type AuthFailure } from "@/lib/shared/auth-failure";
 import type { Capabilities } from "@/lib/shared/capabilities";
 import { createLogger } from "@/lib/shared/observability/logger";
 import { errorMessage } from "@/lib/shared/observability/redact";
@@ -54,6 +55,13 @@ export type Context = {
    * `Principal` i `auth/principal.ts`.
    */
   user: Principal | null;
+  /**
+   * Varför `user` är null (#1351): saknad/ogiltig token, utgången token eller
+   * ett konto som inte är aktivt. Följer med i UNAUTHORIZED så att klienten
+   * kan skilja "logga in igen" från "kontot är spärrat". Sätts bara av
+   * server-first-contexten.
+   */
+  authFailure?: AuthFailure;
   /**
    * Server-sidans delta-sync-port (ADR 0017). Injiceras BARA i server-first-
    * runtimen (#410); `undefined` i git/demo-vägen → `sync`-routern svarar
@@ -100,6 +108,8 @@ const t = initTRPC.context<Context>().create({
   // i client-bundle:n mot DemoDataStore. tRPC v11 blockar default
   // detta — vi opt:ar in eftersom vi vet vad vi gör.
   allowOutsideOfServer: true,
+  // Skälet till ett 401 (#1351) följer med till klienten som `data.authFailure`.
+  errorFormatter: ({ shape, error }) => ({ ...shape, data: { ...shape.data, authFailure: authFailureFromCause(error.cause) } }),
 });
 
 export const router = t.router;
@@ -147,9 +157,17 @@ const logged = t.middleware(async ({ ctx, path, type, next }) => {
 
 export const publicProcedure = t.procedure.use(logged);
 
+/** Serverns text per skäl — klienten visar sin egen, men loggen ska gå att läsa. */
+const UNAUTHORIZED_MESSAGES: Record<AuthFailure, string> = {
+  "no-identity": "Ingen giltig inloggning.",
+  "token-expired": "Inloggningens token har gått ut.",
+  "account-inactive": "Kontot är inte aktivt i byrån.",
+};
+
 const isAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED" });
+    const reason = ctx.authFailure ?? "no-identity";
+    throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHORIZED_MESSAGES[reason], cause: new AuthFailureError(reason) });
   }
   return next({ ctx: { ...ctx, user: ctx.user } });
 });

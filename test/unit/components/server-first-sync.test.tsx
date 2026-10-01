@@ -6,8 +6,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest-compat";
 import { ServerFirstSync, type SyncableStore } from "@/components/shell/server-first-sync";
+import { SESSION_EXPIRED_MESSAGE, TOKEN_EXPIRED_MESSAGE } from "@/lib/client/auth/revalidate-session";
+import { sessionNotice, setSessionNotice } from "@/lib/client/auth/session-notice";
 import type { StoragePersistence } from "@/lib/client/storage/persistent-storage";
 import { flushServerSync, onServerSynced, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
+import { fetchFake, jsonResponse } from "../../helpers/fetch-fake";
 
 function fakeStore(opts: { pending: number; fail?: boolean; blocked?: Error }) {
   const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void), requeued: [] as unknown[], restored: [] as unknown[], restoreCount: 1 };
@@ -88,6 +91,33 @@ describe("ServerFirstSync", () => {
     expect(state.reconciles).toBeGreaterThanOrEqual(1);
     expect(synced).toBe(0);
     off();
+  });
+
+  // #1351: ett 401 skiljer "token gick ut" från "kontot spärrat" och visar "Logga in igen" — ingen omdirigering.
+  describe("401 vid synk", () => {
+    const unauthorized = (data: Record<string, unknown>) => Object.assign(new Error("UNAUTHORIZED"), { data: { httpStatus: 401, ...data } });
+
+    it("serverns skäl 'token-expired' → token-beskedet och bannern", async () => {
+      setSessionNotice(null);
+      const { store } = fakeStore({ pending: 1, blocked: unauthorized({ authFailure: "token-expired" }) });
+      wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
+      await waitFor(() => expect(screen.getByTestId("sync-pill")).toHaveAttribute("title", TOKEN_EXPIRED_MESSAGE));
+      expect(sessionNotice()).toBe("token-expired");
+    });
+
+    it("utan skäl frågas proxyn: ingen session → 'Logga in igen'", async () => {
+      setSessionNotice(null);
+      const original = globalThis.fetch;
+      globalThis.fetch = fetchFake(async () => jsonResponse(401, {}));
+      try {
+        const { store } = fakeStore({ pending: 1, blocked: unauthorized({}) });
+        wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
+        await waitFor(() => expect(screen.getByTestId("sync-pill")).toHaveAttribute("title", SESSION_EXPIRED_MESSAGE));
+        expect(sessionNotice()).toBe("signed-out");
+      } finally {
+        globalThis.fetch = original;
+      }
+    });
   });
 
   it("synkar köade ändringar direkt vid start och visar att allt är sparat", async () => {

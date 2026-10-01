@@ -18,7 +18,7 @@
  * sväljer tyst (precis som demo/git-vägen). Byts mot en Drizzle-logg vid #408.
  */
 
-import type { AllowlistedUser, OidcClaims } from "@/lib/server/auth/oidc-auth-provider";
+import type { AllowlistedUser } from "@/lib/server/auth/oidc-auth-provider";
 import { OidcAuthProvider } from "@/lib/server/auth/oidc-auth-provider";
 import { buildContext } from "@/lib/server/build-context";
 import type { IEventLog } from "@/lib/server/data-store/IDataStore";
@@ -29,11 +29,12 @@ import type { ProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import type { SyncDeviceStore } from "@/lib/server/sync/sync-device-store";
 import type { SyncStore } from "@/lib/server/sync/sync-store";
 import type { Context } from "@/lib/server/trpc-core";
+import type { AuthFailure } from "@/lib/shared/auth-failure";
 import type { Capabilities } from "@/lib/shared/capabilities";
 import { requestIdFrom } from "@/lib/shared/observability/request-id";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { User } from "@/lib/shared/schemas/user";
-import { bearerClaims, verifyBearerHeader, type BearerVerifyConfig } from "./bearer-claims";
+import { verifyBearerToken, type BearerVerification, type BearerVerifyConfig } from "./bearer-claims";
 import { forwardedClaims, type ForwardedHeaderNames } from "./forwarded-claims";
 import { IDENTITY_TOKEN_HEADER, type IdentityConfig } from "./verified-identity";
 
@@ -126,24 +127,44 @@ function toAllowlist(users: readonly User[]): AllowlistedUser[] {
   }));
 }
 
+/** Klientens egen Bearer (helper/add-in), om den vägen är konfigurerad. */
+function clientBearer(headers: Headers, config: BearerVerifyConfig | undefined): Promise<BearerVerification> {
+  return config ? verifyBearerToken(headers.get("authorization"), config) : Promise.resolve({ kind: "missing" });
+}
+
+/** Proxyns token gick ut och klienten hade ingen egen som gällde → säg att den gick ut (#1351). */
+function preferExpired(proxied: BearerVerification, own: BearerVerification): BearerVerification {
+  return proxied.kind === "expired" && own.kind !== "verified" ? proxied : own;
+}
+
 /**
  * Vem är det? `forwarded`: proxyns headers, annars Bearer. `verified` (#1256):
  * bara signerade tokens — proxyns ID-token, annars klientens egen Bearer.
  */
-async function claimsFor(headers: Headers, deps: ServerContextDeps): Promise<OidcClaims | null> {
-  const bearer = (): Promise<OidcClaims | null> => (deps.bearer ? bearerClaims(headers, deps.bearer) : Promise.resolve(null));
-  if (deps.identity?.mode !== "verified") return forwardedClaims(headers, deps.headerNames) ?? await bearer();
-  return await verifyBearerHeader(headers.get(IDENTITY_TOKEN_HEADER), deps.identity.verify) ?? await bearer();
+async function identityFor(headers: Headers, deps: ServerContextDeps): Promise<BearerVerification> {
+  if (deps.identity?.mode !== "verified") {
+    const forwarded = forwardedClaims(headers, deps.headerNames);
+    return forwarded ? { kind: "verified", claims: forwarded } : clientBearer(headers, deps.bearer);
+  }
+  const proxied = await verifyBearerToken(headers.get(IDENTITY_TOKEN_HEADER), deps.identity.verify);
+  return proxied.kind === "verified" ? proxied : preferExpired(proxied, await clientBearer(headers, deps.bearer));
+}
+
+/** Varför ingen principal (#1351): utgången token, ingen identitet, eller ett konto som inte är aktivt. */
+function authFailureFor(identity: BearerVerification): AuthFailure {
+  if (identity.kind === "verified") return "account-inactive";
+  return identity.kind === "expired" ? "token-expired" : "no-identity";
 }
 
 /** Bygg en server-first-`Context` för en inkommande HTTP-request. */
 export async function createServerContext(req: Request, deps: ServerContextDeps): Promise<Context> {
   // Cookie-vägen (oauth2-proxy forwarded headers) först; annars Bearer-JWT
   // (helper/add-in) om konfigurerad. Båda → samma OidcClaims → samma allowlist.
-  const claims = await claimsFor(req.headers, deps);
+  const identity = await identityFor(req.headers, deps);
+  const claims = identity.kind === "verified" ? identity.claims : null;
   const users = await deps.repos.users.listByOrg(asId<"OrganizationId">(deps.organizationId));
   const principal = new OidcAuthProvider(claims, toAllowlist(users)).getPrincipal();
-  const ctx = buildContext({
+  const built = buildContext({
     eventLog: serverFirstEventLog,
     ports: deps.ports,
     principal,
@@ -155,6 +176,7 @@ export async function createServerContext(req: Request, deps: ServerContextDeps)
     requestId: requestIdFrom(req.headers),
     capabilities: serverCapabilities(),
   });
+  const ctx: Context = principal ? built : { ...built, authFailure: authFailureFor(identity) };
   // Omkörningen sker som DEN HÄR requestens principal (#1265) — aldrig som
   // någon annan än den som skickade anropet.
   const withDevices: Context = deps.syncDevices ? { ...ctx, syncDevices: deps.syncDevices } : ctx;

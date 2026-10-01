@@ -113,12 +113,13 @@ describe("SyncScheduler", () => {
 
   // #1245: ett 401 är inte ett vanligt sparfel — sessionen omvalideras.
   it("401 från servern → sessionens besked i stället för det generiska felet; kön ligger kvar", async () => {
-    let asked = 0;
-    const h = harness({ onUnauthorized: async () => { asked++; return "Ditt konto är inte längre aktivt i byrån."; } });
+    let asked: unknown = null;
+    const h = harness({ onUnauthorized: async (err) => { asked = err; return "Ditt konto är inte längre aktivt i byrån."; } });
     h.setPending(2);
-    h.setReconcile(async () => { throw Object.assign(new Error("UNAUTHORIZED"), { data: { httpStatus: 401 } }); });
+    const unauthorized = Object.assign(new Error("UNAUTHORIZED"), { data: { httpStatus: 401, authFailure: "account-inactive" } });
+    h.setReconcile(async () => { throw unauthorized; });
     await h.scheduler.syncNow();
-    expect(asked).toBe(1);
+    expect(asked).toBe(unauthorized); // #1351: felet (med serverns skäl) följer med
     expect(h.last()).toMatchObject({ error: "Ditt konto är inte längre aktivt i byrån.", pendingCount: 2 });
   });
 

@@ -46,21 +46,25 @@ describe("createServerContext (#410)", () => {
     const ctx = await createServerContext(req({ "X-Auth-Request-Email": "anna@byra.se" }), deps());
     expect(ctx.user).toMatchObject({ id: ANNA, email: "anna@byra.se", role: "LAWYER", organizationId: ORG });
     expect(ctx.repos).toBe(repos);
+    expect(ctx.authFailure).toBeUndefined();
   });
 
   it("ger null-principal utan forwarded identitet (→ UNAUTHORIZED i procedurer)", async () => {
     const ctx = await createServerContext(req({}), deps());
     expect(ctx.user).toBeNull();
+    expect(ctx.authFailure).toBe("no-identity");
   });
 
   it("nekar okänd email (autentisering ≠ auktorisering)", async () => {
     const ctx = await createServerContext(req({ "X-Auth-Request-Email": "okand@annan.se" }), deps());
     expect(ctx.user).toBeNull();
+    expect(ctx.authFailure).toBe("account-inactive");
   });
 
   it("nekar avprovisionerad (inaktiv) användare", async () => {
     const ctx = await createServerContext(req({ "X-Auth-Request-Email": "gamla@byra.se" }), deps());
     expect(ctx.user).toBeNull();
+    expect(ctx.authFailure).toBe("account-inactive"); // #1351: spärrat, inte utloggat
   });
 
   it("matchar email case-insensitivt", async () => {

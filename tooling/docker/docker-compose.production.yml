@@ -60,6 +60,19 @@ services:
       OAUTH2_PROXY_CLIENT_SECRET: "${OAUTH2_PROXY_CLIENT_SECRET:?OAUTH2_PROXY_CLIENT_SECRET krävs}"
       OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET:?OAUTH2_PROXY_COOKIE_SECRET krävs}"
       OAUTH2_PROXY_EMAIL_DOMAINS: "${OIDC_EMAIL_DOMAINS:-*}"
+      # Sessionen förnyas (#1351). ID-token från Entra gäller en timme; utan
+      # förnyelse skickade proxyn en utgången token till servern (401 med fel
+      # besked) och sessionen dog efter en timme. Proxyn förnyar med
+      # refresh-token vid första anropet efter COOKIE_REFRESH — innan den
+      # validerar — så den token servern får har alltid >= 30 min kvar. Ett
+      # misslyckat försök (IdP:n nere) behåller sessionen tills token går ut.
+      # Krav: COOKIE_REFRESH < COOKIE_EXPIRE (proxyn vägrar annars starta) och
+      # < ID-tokenets livstid. COOKIE_EXPIRE = klientens offline-grace (7 dygn).
+      # Entra ger refresh-token bara med `offline_access` i scope — Google
+      # (provider oidc) godtar inte det scopet: sätt OIDC_SCOPE utan det.
+      OAUTH2_PROXY_SCOPE: "${OIDC_SCOPE:-openid email profile offline_access}"
+      OAUTH2_PROXY_COOKIE_REFRESH: "${OAUTH2_PROXY_COOKIE_REFRESH:-30m}"
+      OAUTH2_PROXY_COOKIE_EXPIRE: "${OAUTH2_PROXY_COOKIE_EXPIRE:-168h}"
       OAUTH2_PROXY_REDIRECT_URL: "https://${AVA_DOMAIN}/oauth2/callback"
       OAUTH2_PROXY_UPSTREAMS: "static://202"
       OAUTH2_PROXY_REVERSE_PROXY: "true"

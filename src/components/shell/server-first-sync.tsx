@@ -3,7 +3,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { revalidateSession } from "@/lib/client/auth/revalidate-session";
-import { probeUserinfo } from "@/lib/client/backend/oidc-principal";
+import { setSessionNotice } from "@/lib/client/auth/session-notice";
+import { probeSession } from "@/lib/client/auth/session-probe";
 import { rejectedChanges } from "@/lib/client/backend/rejected-changes";
 import { reportSyncDevice } from "@/lib/client/backend/sync-device-report";
 import { requestPersistentStorageOnce, type StoragePersistence } from "@/lib/client/storage/persistent-storage";
@@ -15,6 +16,7 @@ import { useRejectedChanges } from "@/lib/client/sync/use-rejected-changes";
 import { pluralChanges } from "@/lib/client/utils";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import type { ReconcileResult } from "@/lib/server/data-store/in-memory/reconcile-engine";
+import { authFailureOf } from "@/lib/shared/auth-failure";
 import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import { SyncStatusPill } from "./sync-status-pill";
 
@@ -116,12 +118,8 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
       isOnline: () => navigator.onLine,
       onStatus: setStatus,
       onRemoteChanges: () => { void queryClient.invalidateQueries(); },
-      // 401 (#1245): sessionen gick ut → inloggningen; kontot spärrat → besked.
-      onUnauthorized: () => revalidateSession({
-        probe: () => probeUserinfo(),
-        redirect: (url) => { window.location.assign(url); },
-        location: () => window.location,
-      }),
+      // 401 (#1245, #1351): sessionen/token gick ut → "Logga in igen"; kontot spärrat → besked.
+      onUnauthorized: (err) => revalidateSession({ probe: () => probeSession(), notify: setSessionNotice }, authFailureOf(err)),
     });
     const unsubscribe = store.onLocalChange(() => scheduler.notifyChange());
     const unregister = registerServerSyncFlush(async () => {
