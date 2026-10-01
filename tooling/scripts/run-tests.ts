@@ -228,8 +228,11 @@ function allTestFiles(): string[] {
 // `--timeout` är asynkron och avbryter inte ett `execFileSync`/`spawnSync`, så
 // hela processen lever vidare och HÄNGER jobbet (sågs som 15-min hang, PR #326).
 // En SIGKILL-timeout gör en hang till ett bounded fel → snabb röd + rerun.
-// Generöst tilltaget över normal körtid (pass A ~60s, pass B ~30s).
-const PASS_A_TIMEOUT_MS = 360_000;
+// Tilltaget över normal körtid: pass A låg på ~60s när gränsen sattes men tar
+// nu ~5 min på CI med coverage (≈860 filer, simuleringen ensam ~80s) och
+// dödades vid 360s mitt i en frisk körning — utan häng. Gränsen är ett
+// hängskydd, inte en kvalitetsgrind; jobbets timeout-minutes (15) är taket.
+const PASS_A_TIMEOUT_MS = 540_000;
 const PASS_B_TIMEOUT_MS = 240_000;
 
 interface PassResult { status: number | null; signal: NodeJS.Signals | null; error?: Error | undefined }
