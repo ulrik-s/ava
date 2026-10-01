@@ -99,7 +99,7 @@ describe("change_log.seq i commit-ordning (#1381)", () => {
 
   it("cursorn går inte bakåt för en klient som ligger före gränsen", async () => {
     const ahead = (await readSafeSeq(handle.db)) + 1000;
-    expect(await sync.pull(uuidv7(), ahead)).toEqual({ changes: [], cursor: ahead });
+    expect(await sync.pull(uuidv7(), ahead)).toEqual({ changes: [], cursor: ahead, hasMore: false });
   });
 
   it("en rad som skrivs i en egen sats (autocommit) får också sitt nummer vid commit", async () => {

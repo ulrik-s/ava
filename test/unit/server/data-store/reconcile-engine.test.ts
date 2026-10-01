@@ -72,6 +72,46 @@ describe("ReconcileEngine — pull", () => {
   });
 });
 
+describe("ReconcileEngine — sidindelad pull (#1388)", () => {
+  /** En transport som svarar med sidorna i tur och ordning och minns varifrån den pullades. */
+  function paged(h: ReturnType<typeof harness>, pages: PullResult[]): number[] {
+    const from: number[] = [];
+    h.transport.pull = async (since?: number) => {
+      from.push(since ?? -1);
+      return pages.shift() ?? { changes: [], cursor: since ?? 0 };
+    };
+    return from;
+  }
+
+  it("pullar sida efter sida så länge hasMore, från varje sidas cursor", async () => {
+    const h = harness();
+    const from = paged(h, [
+      { changes: [{ entity: "matter", row: { id: "m1" } }], cursor: 10, hasMore: true },
+      { changes: [{ entity: "matter", row: { id: "m2" } }], cursor: 20, hasMore: true },
+      { changes: [{ entity: "matter", row: { id: "m3" } }], cursor: 25 },
+    ]);
+    const queue = await MutationQueue.hydrate();
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(from).toEqual([0, 10, 20]);
+    expect(res).toMatchObject({ pulled: 3, cursor: 25 });
+    expect(h.applied.map((a) => a.row.id)).toEqual(["m1", "m2", "m3"]);
+    expect(await h.cursor.get()).toBe(25);
+  });
+
+  it("slutar när cursorn inte går framåt, i stället för att snurra", async () => {
+    const h = harness();
+    await h.cursor.set(7);
+    const from = paged(h, [
+      { changes: [], cursor: 7, hasMore: true },
+      { changes: [{ entity: "matter", row: { id: "aldrig" } }], cursor: 99 },
+    ]);
+    const queue = await MutationQueue.hydrate();
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(from).toEqual([7]);
+    expect(res.cursor).toBe(7);
+  });
+});
+
 describe("ReconcileEngine — replay", () => {
   it("accepted → applicerar kanonisk rad, ack:ar kön, räknar pushed", async () => {
     const h = harness();

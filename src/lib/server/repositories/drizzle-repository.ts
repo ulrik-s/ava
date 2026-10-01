@@ -16,7 +16,7 @@
  * tabellnamnet. Bara org-scopade rader loggas (change_log är per-org).
  */
 
-import { and, eq, getTableName, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq, getTableName, inArray, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { ENTITY_NAME_BY_SOURCE_KEY } from "../data-store/in-memory/entity-source-keys";
@@ -73,6 +73,14 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
       .select().from(this.table)
       .where(and(eq(this.table.id, id), isNull(this.table.deletedAt))).limit(1);
     return this.asRow(rows[0]);
+  }
+
+  async getByIds(ids: readonly Row["id"][]): Promise<Row[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select().from(this.table)
+      .where(and(inArray(this.table.id, [...ids]), isNull(this.table.deletedAt)));
+    return this.asRows(rows);
   }
 
   async getByIdOrThrow(id: Row["id"]): Promise<Row> {

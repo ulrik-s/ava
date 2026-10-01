@@ -30,6 +30,12 @@ export interface RowBase<Id extends string = string> {
  */
 export interface Repository<Row extends RowBase, Id extends string = Row["id"]> {
   getById(id: Id): Promise<Row | null>;
+  /**
+   * Flera rader i EN fråga (#1388) — delta-pullen hämtar en sidas ändrade rader
+   * per entitet i stället för en fråga per rad. Saknade och mjukraderade rader
+   * utelämnas; ordningen är inte definierad.
+   */
+  getByIds(ids: readonly Id[]): Promise<Row[]>;
   getByIdOrThrow(id: Id): Promise<Row>;
   create(data: Partial<Row>): Promise<Row>;
   update(id: Id, patch: Partial<Row>): Promise<Row>;

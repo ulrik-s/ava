@@ -33,6 +33,11 @@ export class InMemoryRepository<Row extends RowBase> implements Repository<Row> 
     return row && !row.deletedAt ? row : null;
   }
 
+  async getByIds(ids: readonly Row["id"][]): Promise<Row[]> {
+    const rows: (Row | null)[] = await Promise.all(ids.map((id) => this.getById(id)));
+    return rows.filter((row): row is Row => row !== null);
+  }
+
   async getByIdOrThrow(id: Row["id"]): Promise<Row> {
     const row = await this.getById(id);
     if (!row) throw new Error(`Ingen rad med id ${id}`);

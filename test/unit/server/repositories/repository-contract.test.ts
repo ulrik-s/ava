@@ -208,6 +208,8 @@ for (const backend of BACKENDS) {
         const created = await r.create({ id, ...fx.row(parents) });
         expect(created.id).toBe(id);
         expect((await r.getById(id))?.id).toBe(id);
+        // Flera på en gång (#1388): en saknad rad utelämnas.
+        expect((await r.getByIds([id, uuidv7()])).map((row) => row.id)).toEqual([id]);
 
         const patch = resolvePatch(fx.patch, parents);
         const updated = await r.update(id, patch);
@@ -219,6 +221,8 @@ for (const backend of BACKENDS) {
 
         await r.softDelete(id);
         expect(await r.getById(id)).toBeNull();
+        expect(await r.getByIds([id])).toEqual([]);
+        expect(await r.getByIds([])).toEqual([]);
       });
 
       // Byrån utan egen kolumn: via ärendet/fakturan/dokumentet (#1242). Organisationen är sin egen rot.
