@@ -16,7 +16,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test, expect } from "@playwright/test";
+import { expect, test } from "../_helper-isolation";
 import { login } from "./_selfhosted-login";
 
 interface SeedInfo {

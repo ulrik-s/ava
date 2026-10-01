@@ -10,17 +10,23 @@
  * webbplatsen ("Tillåt"), och fliken försökte aldrig igen.
  *
  * Helpern fejkas i webbläsaren med `page.route`, via bas-overriden
- * `ava.helperBase`, så ingen riktig helper behövs. Första `POST /config`
+ * `ava.helperBase` (`test.use({ helperBase })`, #1368), så ingen riktig helper
+ * behövs — och den riktiga på utvecklarens dator nås aldrig. Första `POST /config`
  * avbryts och andra besvaras. Webbappen ska då försöka igen, med serverns
  * config.
  */
-import { test, expect, type Route } from "@playwright/test";
+import type { Route } from "@playwright/test";
+
+import { expect, test } from "../_helper-isolation";
 import { login } from "./_selfhosted-login";
 
 const FAKE_HELPER = "http://127.0.0.1:48799";
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
 
-test.use({ serviceWorkers: "block" }); // page.route ser inte förfrågningar som går via appens service worker
+test.use({
+  serviceWorkers: "block", // page.route ser inte förfrågningar som går via appens service worker
+  helperBase: FAKE_HELPER,
+});
 
 test("misslyckad config-push till helpern försöks igen — med serverns inloggnings-config", async ({ page }) => {
   test.setTimeout(90_000);
@@ -38,10 +44,6 @@ test("misslyckad config-push till helpern försöks igen — med serverns inlogg
     if (path === "/ping") return route.fulfill({ status: 200, headers: CORS, body: "ava-helper v0.2.0\n" });
     return route.fulfill({ status: 200, headers: { ...CORS, "Content-Type": "application/json" }, body: JSON.stringify({ pending: 0, conflict: 0, total: 0, entries: [] }) });
   });
-  await page.addInitScript((base) => {
-    try { localStorage.setItem("ava.helperBase", base); } catch { /* privat läge */ }
-  }, FAKE_HELPER);
-
   await login(page, "lawyer", "lawyer");
   await expect.poll(() => pushes.length, { timeout: 60_000, message: "webbappen ska försöka igen efter ett misslyckat försök" }).toBe(2);
   expect(pushes[1]).toMatchObject({ oidcIssuer: expect.stringMatching(/\/realms\/ava$/), oidcClientId: "ava-helper" });

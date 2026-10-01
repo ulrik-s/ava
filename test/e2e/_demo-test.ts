@@ -19,7 +19,10 @@
  * (`AVA_DEMO_BASE_URL=https://…`): då är datan same-origin ändå, så kravet är
  * detsamma.
  */
-import { type BrowserContext, type Page, test as base, expect } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
+
+import { demoPort } from "../../tooling/config/demo-e2e-port";
+import { expect, isHelperOrigin, test as base } from "./_helper-isolation";
 
 /**
  * Bas-URL för demo-e2e — lokalt serverad `out/` som default, live bara på
@@ -27,7 +30,7 @@ import { type BrowserContext, type Page, test as base, expect } from "@playwrigh
  * ställe; förr bar varje spec sin egen `?? "https://ulrik-s.github.io/ava"`.
  */
 export const DEMO_BASE_URL = (
-  process.env.AVA_DEMO_BASE_URL ?? `http://localhost:${process.env.DEMO_PORT ?? 8799}/ava`
+  process.env.AVA_DEMO_BASE_URL ?? `http://localhost:${demoPort()}/ava`
 ).replace(/\/+$/, "");
 
 /**
@@ -165,30 +168,31 @@ function isNetworkUrl(url: string): boolean {
 }
 
 /**
- * Den enda tillåtna trafiken utanför sidans origin: AVA Helper-proben, som
- * demon kör för att upptäcka om skrivbordshelpern finns. Den lyssnar på två
- * transporter (ADR 0006) — HTTP på 127.0.0.1 och HTTPS på localhost — och båda
- * är loopback, alltså oförmögna att nå internet.
+ * Den enda trafiken utanför sidans origin som inte räknas här är AVA Helper-
+ * proben. Den går till testets döda helper-bas, och helperns standardport
+ * fångas av `_helper-isolation`:s vakt (#1368) — båda lämnas via
+ * `route.fallback()` till dess context-routes. Förr släpptes standardporten
+ * igenom som "bara loopback", och då nådde e2e:t den riktiga helpern på
+ * utvecklarens dator (Mail.app öppnades av "Generera + öppna mail").
  *
- * Vi släpper igenom exakt de två origins:en, inte loopback i allmänhet: en
- * generös regel hade missat att demon hämtade sin data från
- * `http://localhost:8080/git/firma.git`, vilket är precis vad den här vakten
- * fann. Speglar `HELPER_BASE` / `HELPER_HTTPS_BASE` i
- * `src/lib/shared/helper/protocol.ts` (duplicerat med flit — testet ska inte
- * importera produktionskonstanter det är satt att granska).
+ * Inte loopback i allmänhet: en generös regel hade missat att demon hämtade sin
+ * data från `http://localhost:8080/git/firma.git`, vilket är precis vad den här
+ * vakten fann.
  */
-const HELPER_PROBE_ORIGINS = ["http://127.0.0.1:48761", "https://localhost:48762"];
-
 export const test = base.extend<{ offsiteRequests: string[] }>({
   offsiteRequests: [
-    async ({ page, baseURL }, use) => {
+    async ({ page, baseURL, helperBase }, use) => {
       const offsite: string[] = [];
-      const ownOrigin = new URL(baseURL ?? "http://localhost:8799").origin;
+      const ownOrigin = new URL(baseURL ?? DEMO_BASE_URL).origin;
 
       await page.route("**/*", async (route) => {
         const url = route.request().url();
         const origin = isNetworkUrl(url) ? new URL(url).origin : ownOrigin;
-        if (origin !== ownOrigin && !HELPER_PROBE_ORIGINS.includes(origin)) {
+        if (isHelperOrigin(origin, helperBase)) {
+          await route.fallback(); // till helper-isoleringens context-routes (#1368)
+          return;
+        }
+        if (origin !== ownOrigin) {
           offsite.push(url);
           // `blockedbyclient` speglar vad en offline-miljö gör, så appen ser
           // samma felläge som i CI utan nät.

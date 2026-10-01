@@ -7,7 +7,7 @@
  */
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 import { asId } from "@/lib/shared/schemas/ids";
 
@@ -121,8 +121,15 @@ vi.mock("@/lib/client/trpc", () => ({
   },
 }));
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // Sync-badgarna probar AVA Helper på loopback (useDocSyncStatus). Ingen helper
+  // finns i testet — stubba bort den så proben aldrig når en riktig (#1368).
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("ingen AVA Helper i testet"); }));
   // Tester nedan validerar träd-vyn explicit (+Ny mapp, drag-and-drop osv.);
   // tvinga träd-läget innan varje render (default är annars "list").
   window.localStorage.setItem("ava.documents.viewMode", "tree");

@@ -10,9 +10,9 @@
  *   4. online igen: servern kör kontrollen och hittar kollegans ärende →
  *      "Jävskontroll: 1 träffar att bedöma" i juristens Att bevaka.
  */
-import { test, expect } from "@playwright/test";
 import { asId } from "../../../src/lib/shared/schemas/ids";
 import { clientFor, mintToken } from "../../../tooling/scripts/selfhosted-trpc-client";
+import { expect, test } from "../_helper-isolation";
 import { login } from "./_selfhosted-login";
 
 test("ärende skapat offline: servern kör jävskontrollen och hittar det juristen inte kunde se", async ({ page, context }) => {

@@ -214,10 +214,37 @@ serverad demo navigerade lokalt men hämtade data över nätet. Numera avgör
 
 Vakten i [`test/e2e/_demo-test.ts`](../test/e2e/_demo-test.ts) gör antagandet
 testbart: **varje HTTP-förfrågan utanför testets egen origin blockeras och fäller
-testet**, med hela listan i felmeddelandet. Enda undantaget är AVA Helper-proben
-på loopback (`127.0.0.1:48761` / `localhost:48762`). Lägg nya demo-specar under
-`playwright-demo.config.ts` och importera `test` från `_demo-test` — inte från
-`@playwright/test`.
+testet**, med hela listan i felmeddelandet. AVA Helper-trafiken hanteras av
+helper-isoleringen nedan. Lägg nya demo-specar under `playwright-demo.config.ts`
+och importera `test` från `_demo-test` — inte från `@playwright/test`.
+
+**Egen port per worktree (#1261).** `playwright-demo.config.ts` serverar `out/`
+på en port härledd ur worktreens sökväg (8800–8999, se
+[`tooling/config/demo-e2e-port.ts`](../tooling/config/demo-e2e-port.ts)) och
+startar alltid sin egen server (`reuseExistingServer: false`). Parallella
+worktrees testar därför sina egna byggen; är porten upptagen fälls körningen i
+stället för att tyst testa någon annans `out/`. `DEMO_PORT=<port>` väljer porten
+själv.
+
+### Ingen test når den riktiga AVA Helper (#1368)
+
+Webbappen probar helpern på loopback (`127.0.0.1:48761` / `localhost:48762`). På
+en utvecklardator svarar den RIKTIGA helpern — e2e:t öppnade Mail.app via
+`/compose-mail` och dokument via `/open`. Två spärrar:
+
+- **E2E:** alla specar (demo, konflikt, OIDC, Fortnox) importerar `test` från
+  [`test/e2e/_helper-isolation.ts`](../test/e2e/_helper-isolation.ts) (direkt
+  eller via `_demo-test`). Den skriver `localStorage["ava.helperBase"]` =
+  `http://127.0.0.1:9` (död port) innan appen kör, och avbryter + fäller varje
+  förfrågan till standardportarna. En spec som testar helper-flöden sätter
+  `test.use({ helperBase: "http://127.0.0.1:<port>" })` och fejkar helpern där
+  (se `conflict/helper-config-retry.spec.ts`). `demo-helper-isolation.spec.ts`
+  är skyddstestet.
+- **Enhetstester:** preloaden lindar `fetch`
+  ([`test/setup/helper-network-guard.ts`](../test/setup/helper-network-guard.ts)):
+  ett anrop mot helper-portarna avvisas och fäller testet efteråt, även om
+  produktionskoden sväljer felet. Stubba `fetch` (t.ex. `vi.stubGlobal`) eller
+  mocka `use-helper` i testet.
 
 ### Sårbara beroenden (`bun audit`)
 

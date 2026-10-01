@@ -1,7 +1,7 @@
 import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
-const projectRoot = path.resolve(__dirname, "..", "..");
+import { demoPort, PROJECT_ROOT as projectRoot } from "./demo-e2e-port";
 
 /**
  * Demo-e2e: kör HELA demo-flöden mot den byggda `out/`.
@@ -16,8 +16,13 @@ const projectRoot = path.resolve(__dirname, "..", "..");
  *
  * Sätts `AVA_DEMO_BASE_URL` startas ingen server — då pekar man med flit på
  * något som redan kör.
+ *
+ * Porten är worktreens egen (8800–8999, härledd ur sökvägen — #1261), eller
+ * `DEMO_PORT`. Configen startar ALLTID en egen server (ingen
+ * `reuseExistingServer`): är porten upptagen fälls körningen i stället för att
+ * tyst testa en annan worktrees bygge.
  */
-const DEMO_PORT = Number(process.env.DEMO_PORT ?? 8799);
+const DEMO_PORT = demoPort();
 const LOCAL_BASE_URL = `http://localhost:${DEMO_PORT}/ava`;
 const baseURL = process.env.AVA_DEMO_BASE_URL ?? LOCAL_BASE_URL;
 
@@ -30,7 +35,7 @@ export default defineConfig({
   // utanför tills de slutat hårdkoda seed-id:n; de slår upp sina fixtures i
   // `demo-seed.json` via `fetchDemoSeed`. Lägg inte till en spec här som pekar
   // på ett id den inte slagit upp — det var precis så de tystnade förra gången.
-  testMatch: /(column-menu|chrome-regressions|matter-watch|billing-watch|demo-invoice-document|demo-kostnadsrakning-verdict|demo-kostnadsrakning-void|demo-kostnadsrakning-taxa|demo-login|demo-smoke|kebab-verify|matters-employee-filter|docking-layout|hourly-rates|demo-offline|demo-storage-persistence|demo-hydration|demo-jobs-hung-worker|demo-jobs-fifo|demo-mobile-menu|demo-reports|demo-no-page-scroll|demo-kr-document-folder|demo-display-labels|demo-panels-have-data|demo-sync-devices|demo-conflict-check|demo-time-entry-create)\.spec\.ts$/,
+  testMatch: /(column-menu|demo-helper-isolation|chrome-regressions|matter-watch|billing-watch|demo-invoice-document|demo-kostnadsrakning-verdict|demo-kostnadsrakning-void|demo-kostnadsrakning-taxa|demo-login|demo-smoke|kebab-verify|matters-employee-filter|docking-layout|hourly-rates|demo-offline|demo-storage-persistence|demo-hydration|demo-jobs-hung-worker|demo-jobs-fifo|demo-mobile-menu|demo-reports|demo-no-page-scroll|demo-kr-document-folder|demo-display-labels|demo-panels-have-data|demo-sync-devices|demo-conflict-check|demo-time-entry-create)\.spec\.ts$/,
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
@@ -59,8 +64,9 @@ export default defineConfig({
       command: `bun tooling/scripts/serve-demo-static.ts`,
       url: `${LOCAL_BASE_URL}/login/`,
       cwd: projectRoot,
+      env: { DEMO_PORT: String(DEMO_PORT) },
       timeout: 60_000,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       stdout: "ignore" as const,
       stderr: "pipe" as const,
     },
