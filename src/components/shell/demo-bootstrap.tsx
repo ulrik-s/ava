@@ -156,7 +156,7 @@ async function preloadDocs(firmaConfig: FirmaConfig, store: CachingSyncDataStore
 }
 
 /**
- * Mount-only bootstrap: gate-check → self-hosted-store (server-first) eller
+ * Mount-only bootstrap (diag): gate-check → self-hosted-store (server-first) eller
  * demo/github-store (persisterad offline-first-kärna + GH-Pages-seed).
  */
 function useDemoBootstrap(args: BootstrapArgs) {
