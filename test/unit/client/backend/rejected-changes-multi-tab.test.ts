@@ -14,12 +14,13 @@ import { changeChannelHub, settle } from "../../../helpers/change-channel-hub";
 
 const conflict = (mutationId: string): ConflictRecord => {
   const mutation: QueuedMutation = { mutationId, entity: "invoice", kind: "update", row: { id: "i1" }, enqueuedAt: 0 };
-  return { mutation, conflictClass: "surface", reason: "stale" };
+  return { mutation, conflictClass: "surface", reason: "stale", retryable: false };
 };
 
 async function tab(factory: IDBFactory, dbName: string): Promise<RejectedChanges> {
   const changes = new RejectedChanges();
   await changes.attach(new IndexedDbRejectedChangesPersistence(factory, dbName));
+  changes.setHandlers({ retry: async () => {}, restore: async () => {} });
   return changes;
 }
 

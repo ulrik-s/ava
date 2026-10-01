@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest-compat";
 import { InMemoryCursorStore } from "@/lib/server/data-store/in-memory/cursor-store";
 import { MutationQueue, InMemoryMutationQueuePersistence } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { ReconcileEngine, type ApplyCanonical } from "@/lib/server/data-store/in-memory/reconcile-engine";
-import type { PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
+import type { PulledChange, PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 
 const ev = (entity: string, id: string, extra: Record<string, unknown> = {}): MutationEvent<Record<string, unknown>> => ({
@@ -19,6 +19,11 @@ class FakeTransport implements SyncTransport {
   pulls: PullResult = { changes: [], cursor: 0 };
   pushResults = new Map<string, PushResult>();
   pushed: string[] = [];
+  rowRequests: string[][] = [];
+  async rows(refs: readonly { entity: string; id: string }[]): Promise<PulledChange[]> {
+    this.rowRequests.push(refs.map((r) => `${r.entity}:${r.id}`));
+    return refs.map((r) => ({ entity: r.entity, row: { id: r.id }, deleted: true }));
+  }
   async pushProcedure(): Promise<{ status: "accepted"; rows: [] }> {
     return { status: "accepted", rows: [] };
   }
@@ -91,7 +96,7 @@ describe("ReconcileEngine — replay", () => {
     expect(queue.size()).toBe(0);
   });
 
-  it("conflict (surface) → ej applicerad, ytläggs med conflictClass, ack:as ur kön", async () => {
+  it("conflict (surface) → ytläggs med conflictClass, serverns current återställs lokalt (#1348), ack:as ur kön", async () => {
     const h = harness();
     const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
     await queue.enqueue({ entity: "invoice", kind: "update", row: { id: "i1", status: "SENT" } }, { mutationId: "mc" });
@@ -100,7 +105,10 @@ describe("ReconcileEngine — replay", () => {
     expect(res.conflicts).toHaveLength(1);
     expect(res.conflicts[0]).toMatchObject({ conflictClass: "surface", reason: "redan annullerad" });
     expect(res.conflicts[0]?.current).toMatchObject({ status: "CANCELLED" });
-    expect(h.applied.some((a) => a.entity === "invoice")).toBe(false); // ej applicerad
+    // Ingen spökrad (#1348): serverns läge ersätter den optimistiska raden.
+    expect(h.applied.filter((a) => a.entity === "invoice")).toEqual([{ entity: "invoice", row: { id: "i1", status: "CANCELLED" }, deleted: false }]);
+    expect(res.restored).toBe(1);
+    expect(h.transport.rowRequests).toEqual([]); // läget följde med — inget att hämta
     expect(queue.size()).toBe(0); // ut ur huvudkön (konflikt-låda i resultatet)
   });
 
@@ -115,6 +123,7 @@ describe("ReconcileEngine — replay", () => {
     expect(h.transport.pushed).toEqual(["a", "b"]); // FIFO
     expect(res.pushed).toBe(1);
     expect(res.conflicts).toHaveLength(1);
+    expect(h.transport.rowRequests).toEqual([["invoice:i1"]]); // utan current → hämtas
     expect(queue.size()).toBe(0);
     expect(res.cursor).toBe(99);
   });

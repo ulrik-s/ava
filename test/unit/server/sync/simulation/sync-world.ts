@@ -75,6 +75,7 @@ export class SimServer {
   private loggingSync(inner: SyncStore): SyncStore {
     return {
       pull: (org, cursor) => inner.pull(org, cursor),
+      rows: (org, refs) => inner.rows(org, refs),
       push: async (org, mutation) => {
         const res = await inner.push(org, mutation);
         this.record(mutation.mutationId, { kind: "row", mutation, status: res.status });

@@ -11,7 +11,7 @@ import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-sto
 import {
   InMemoryMutationQueuePersistence, IndexedDbMutationQueuePersistence, MutationQueue, type QueuedMutation,
 } from "@/lib/server/data-store/in-memory/mutation-queue";
-import type { PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
+import type { PulledChange, PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -22,6 +22,16 @@ class FakeTransport implements SyncTransport {
   pullResult: PullResult = { changes: [], cursor: 0 };
   pushImpl: (m: QueuedMutation) => PushResult = (m) => ({ status: "accepted", row: { ...m.row, version: 2 } });
   pushed: QueuedMutation[] = [];
+  /** Serverns rader för `rows` (#1348); saknas en rad blir den en tombstone. */
+  serverRows = new Map<string, Record<string, unknown>>();
+  rowRequests: string[][] = [];
+  async rows(refs: readonly { entity: string; id: string }[]): Promise<PulledChange[]> {
+    this.rowRequests.push(refs.map((r) => `${r.entity}:${r.id}`));
+    return refs.map((r) => {
+      const row = this.serverRows.get(r.id);
+      return row ? { entity: r.entity, row } : { entity: r.entity, row: { id: r.id }, deleted: true };
+    });
+  }
   async pushProcedure(): Promise<{ status: "accepted"; rows: [] }> {
     return { status: "accepted", rows: [] };
   }

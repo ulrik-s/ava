@@ -28,6 +28,7 @@ function setup(onServer: readonly string[]) {
   const pushed: QueuedMutation[] = [];
   const sync: SyncStore = {
     pull: async () => ({ changes: [], cursor: 0 }),
+    rows: async () => [],
     push: async (_org, m): Promise<PushResult> => { pushed.push(m); return { status: "accepted", row: m.row }; },
   };
   const ports = {

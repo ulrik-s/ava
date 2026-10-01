@@ -252,6 +252,16 @@ export class MutationQueue {
     });
   }
 
+  /**
+   * Lägg tillbaka en tidigare köad post sist, oförändrad (#1348 "Försök igen"):
+   * samma mutationId, köformat, kodversion och tidpunkt. Idempotent på `mutationId`.
+   */
+  requeue(entry: QueueEntry): Promise<void> {
+    return this.serial(async () => {
+      if (!this.items.some((m) => m.mutationId === entry.mutationId)) await this.append(entry);
+    });
+  }
+
   /** Köposterna i FIFO-ordning (för uppspelning). */
   pending(): readonly QueueEntry[] {
     return this.items;

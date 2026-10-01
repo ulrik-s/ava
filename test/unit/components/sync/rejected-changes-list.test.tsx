@@ -10,7 +10,7 @@ import { InMemoryRejectedChangesPersistence, rejectedChanges, type RejectedChang
 
 const change: RejectedChange = {
   id: "m1", rejectedAt: Date.UTC(2026, 8, 30, 8), label: "Slutfaktura", reason: "Posterna är redan fakturerade.",
-  entry: { mutationId: "m1", entity: "invoice", kind: "update", row: { id: "i" }, enqueuedAt: 0 },
+  entry: { mutationId: "m1", entity: "invoice", kind: "update", row: { id: "i" }, enqueuedAt: 0 }, retryable: true,
 };
 
 describe("explainReason", () => {
@@ -39,6 +39,15 @@ describe("RejectedChangesList", () => {
     expect(onRetry).toHaveBeenCalledWith("m1");
   });
 
+  it("en ändring som avvisas igen (#1348): ingen Försök igen-knapp, men en förklaring och Kasta", async () => {
+    const onDiscard = vi.fn(async () => {});
+    render(<RejectedChangesList items={[{ ...change, retryable: false }]} onRetry={vi.fn()} onDiscard={onDiscard} />);
+    expect(screen.queryByRole("button", { name: "Försök igen" })).toBeNull();
+    expect(screen.getByText(/Avvisas igen om den skickas på nytt/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Kasta" }));
+    await waitFor(() => expect(onDiscard).toHaveBeenCalledWith("m1"));
+  });
+
   it("ett misslyckat försök syns — sväljs inte", async () => {
     render(<RejectedChangesList items={[change]} onRetry={async () => { throw new Error("Ingen synk mot servern"); }} onDiscard={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Försök igen" }));
@@ -57,11 +66,13 @@ describe("RejectedChangesNotice (Att bevaka)", () => {
     await rejectedChanges.attach(new InMemoryRejectedChangesPersistence());
     const { container } = render(<RejectedChangesNotice />);
     expect(container).toBeEmptyDOMElement();
-    await act(async () => { await rejectedChanges.record([{ mutation: change.entry, conflictClass: "surface", reason: "stale" }]); });
+    await act(async () => { await rejectedChanges.record([{ mutation: change.entry, conflictClass: "surface", reason: "stale", retryable: false }]); });
     expect(screen.getByTestId("rejected-changes-notice")).toHaveAttribute("href", "/sync-conflicts");
     expect(screen.getByTestId("rejected-changes-notice")).toHaveTextContent("1 ändring avvisades");
-    await act(async () => { await rejectedChanges.record([{ mutation: { ...change.entry, mutationId: "m2" }, conflictClass: "surface", reason: "stale" }]); });
+    await act(async () => { await rejectedChanges.record([{ mutation: { ...change.entry, mutationId: "m2" }, conflictClass: "surface", reason: "stale", retryable: false }]); });
     expect(screen.getByTestId("rejected-changes-notice")).toHaveTextContent("2 ändringar avvisades");
+    const off = rejectedChanges.setHandlers({ retry: async () => {}, restore: async () => {} });
     await act(async () => { await rejectedChanges.discard("m1"); await rejectedChanges.discard("m2"); });
+    off();
   });
 });

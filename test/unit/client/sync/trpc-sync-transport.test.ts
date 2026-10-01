@@ -10,6 +10,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { MAX_ROW_REFS } from "@/lib/server/data-store/in-memory/sync-transport";
 import { users } from "@/lib/server/db/schema";
 import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
@@ -81,5 +82,31 @@ describe("TrpcSyncTransport (#sync-bridge, end-to-end)", () => {
     const res = await transport.push(mutation);
     expect(res.status).toBe("accepted");
     expect(await repos.contacts.getById(asId<"ContactId">(c1))).toMatchObject({ id: c1, name: "E2E-kontakt" });
+  });
+
+  it("rows (#1348): byråns rad som den är; saknad, annan byrås och icke-uuid → tombstone; okänd entitet hoppas", async () => {
+    const mine = uuidv7();
+    const theirs = uuidv7();
+    const missing = uuidv7();
+    await repos.contacts.create({ id: mine, organizationId: ORG, name: "Min kontakt" } as never);
+    await repos.contacts.create({ id: theirs, organizationId: uuidv7(), name: "Annan byrås kontakt" } as never);
+    const res = await transport.rows([
+      { entity: "contact", id: mine },
+      { entity: "contact", id: theirs },
+      { entity: "contact", id: missing },
+      { entity: "contact", id: "inte-ett-uuid" },
+      { entity: "widget", id: mine },
+    ]);
+    expect(res).toEqual([
+      { entity: "contact", row: expect.objectContaining({ id: mine, name: "Min kontakt" }) },
+      { entity: "contact", row: { id: theirs }, deleted: true },
+      { entity: "contact", row: { id: missing }, deleted: true },
+      { entity: "contact", row: { id: "inte-ett-uuid" }, deleted: true },
+    ]);
+  });
+
+  it("rows: fler än gränsen avvisas av servern", async () => {
+    const refs = Array.from({ length: MAX_ROW_REFS + 1 }, () => ({ entity: "contact", id: uuidv7() }));
+    await expect(transport.rows(refs)).rejects.toThrow();
   });
 });

@@ -20,6 +20,8 @@ export interface ReconcileOutcome {
   pulled: number;
   /** Rader ur serverns svar på omkörda procedur-anrop (#1265). */
   replayed?: number;
+  /** Rader återställda till serverns läge efter avvisade ändringar (#1348). */
+  restored?: number;
   /**
    * Kön stannade vid en post (#1353) — servern nåddes inte, eller posten ska
    * försökas igen senare. Synken räknas då inte som lyckad.
@@ -32,7 +34,7 @@ export interface SyncSchedulerDeps {
   pendingCount: () => number;
   isOnline: () => boolean;
   onStatus: (status: CachingSyncStatus) => void;
-  /** Lokalt läge ändrat av servern (pull eller omkörda anrop) → UI:t hämtar om sina frågor. */
+  /** Lokalt läge ändrat av servern (pull, omkörda anrop, återställda rader) → UI:t hämtar om sina frågor. */
   onRemoteChanges?: () => void;
   /**
    * Servern svarade 401 (#1245): sessionen gick ut eller kontot är spärrat.
@@ -87,7 +89,7 @@ export class SyncScheduler {
   private async runOnce(): Promise<void> {
     try {
       const result = await this.deps.reconcile();
-      if (result.pulled > 0 || (result.replayed ?? 0) > 0) this.deps.onRemoteChanges?.();
+      if (result.pulled + (result.replayed ?? 0) + (result.restored ?? 0) > 0) this.deps.onRemoteChanges?.();
       if (result.blocked) return await this.failed(result.blocked.error);
       this.lastSyncedAt = (this.deps.now ?? Date.now)();
       this.error = null;

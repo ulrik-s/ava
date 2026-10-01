@@ -10,20 +10,21 @@ import type { StoragePersistence } from "@/lib/client/storage/persistent-storage
 import { flushServerSync, onServerSynced, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
 
 function fakeStore(opts: { pending: number; fail?: boolean; blocked?: Error }) {
-  const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void), requeued: [] as unknown[] };
+  const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void), requeued: [] as unknown[], restored: [] as unknown[], restoreCount: 1 };
   const store: SyncableStore = {
     reconcile: async () => {
       state.reconciles++;
       if (opts.fail) throw new Error("nätverksfel");
       const entry = { mutationId: "m1", entity: "invoice", kind: "update" as const, row: { id: "i1" }, enqueuedAt: 0 };
-      if (opts.blocked) return { pulled: 0, pushed: 0, rebased: 0, replayed: 0, conflicts: [], cursor: 0, blocked: { mutation: entry, error: opts.blocked, attempts: 1 } };
+      if (opts.blocked) return { pulled: 0, pushed: 0, rebased: 0, replayed: 0, restored: 0, conflicts: [], cursor: 0, blocked: { mutation: entry, error: opts.blocked, attempts: 1 } };
       state.pending = 0;
-      return { pulled: 0, pushed: 1, rebased: 0, replayed: 0, conflicts: [], cursor: 1, blocked: null };
+      return { pulled: 0, pushed: 1, rebased: 0, replayed: 0, restored: 0, conflicts: [], cursor: 1, blocked: null };
     },
     pendingCount: () => state.pending,
     oldestPendingAt: () => (state.pending > 0 ? 1 : null),
     onLocalChange: (l: () => void) => { state.listener = l; return () => { state.listener = null; }; },
     requeue: async (entry) => { state.requeued.push(entry); },
+    restore: async (entry) => { state.restored.push(entry); return state.restoreCount; },
   };
   return { state, store };
 }
@@ -210,11 +211,33 @@ describe("ServerFirstSync", () => {
     const entry = { mutationId: "m1", entity: "invoice", kind: "update" as const, row: { id: "i1" }, enqueuedAt: 0 };
     const { state, store } = fakeStore({ pending: 0 });
     wrap(<ServerFirstSync reportDevice={noReport} store={store} requestPersistence={async () => "persisted"} />);
-    await act(async () => { await rejectedChanges.record([{ mutation: entry, conflictClass: "surface", reason: "stale", current: { id: "i1", version: 4 } }]); });
+    await act(async () => { await rejectedChanges.record([{ mutation: entry, conflictClass: "surface", reason: "stale", current: { id: "i1", version: 4 }, retryable: true }]); });
     await waitFor(() => expect(screen.getByTestId("sync-pill")).toHaveTextContent("1 avvisad ändring"));
     expect(screen.getByTestId("sync-pill")).toHaveAttribute("href", "/sync-conflicts");
     await act(async () => { await rejectedChanges.retry("m1"); });
     expect(state.requeued).toEqual([entry]);
+    expect(rejectedChanges.list()).toEqual([]);
+  });
+
+  // #1348: "Kasta" återställer serverns läge via storen; UI:t hämtar om bara när något ändrades.
+  it("kasta: storen återställer raderna och frågorna hämtas om när något återställdes", async () => {
+    const { rejectedChanges, InMemoryRejectedChangesPersistence } = await import("@/lib/client/backend/rejected-changes");
+    await rejectedChanges.attach(new InMemoryRejectedChangesPersistence());
+    const entry = { mutationId: "m9", entity: "task", kind: "create" as const, row: { id: "t9" }, enqueuedAt: 0 };
+    const { state, store } = fakeStore({ pending: 0 });
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    render(<QueryClientProvider client={client}><ServerFirstSync reportDevice={noReport} store={store} requestPersistence={async () => "persisted"} /></QueryClientProvider>);
+    await waitFor(() => expect(state.reconciles).toBeGreaterThanOrEqual(1));
+    invalidate.mockClear();
+    await act(async () => { await rejectedChanges.record([{ mutation: entry, conflictClass: "lww", reason: "annan byrå", retryable: false }]); });
+    await act(async () => { await rejectedChanges.discard("m9"); });
+    expect(state.restored).toEqual([entry]);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    state.restoreCount = 0;
+    await act(async () => { await rejectedChanges.record([{ mutation: { ...entry, mutationId: "m10" }, conflictClass: "lww", reason: "annan byrå", retryable: false }]); });
+    await act(async () => { await rejectedChanges.discard("m10"); });
+    expect(invalidate).toHaveBeenCalledTimes(1);
     expect(rejectedChanges.list()).toEqual([]);
   });
 });

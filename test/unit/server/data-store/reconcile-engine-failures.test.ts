@@ -18,7 +18,7 @@ import { InMemoryCursorStore } from "@/lib/server/data-store/in-memory/cursor-st
 import { InMemoryMutationQueuePersistence, MutationQueue, type QueueEntry } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { ReconcileEngine } from "@/lib/server/data-store/in-memory/reconcile-engine";
 import { ReplayBackoff } from "@/lib/server/data-store/in-memory/replay-backoff";
-import type { ProcedureReplayResult, PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
+import type { ProcedureReplayResult, PulledChange, PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
 
 /** Ett tRPC-klientfel som servern svarat med (formen `TRPCClientError` har). */
 function trpcError(code: string, httpStatus: number, message = code): Error {
@@ -38,6 +38,9 @@ class ScriptedTransport implements SyncTransport {
 
   async pull(): Promise<PullResult> {
     return { changes: [], cursor: this.pullCursor };
+  }
+  async rows(): Promise<PulledChange[]> {
+    return [];
   }
   async push(m: { mutationId: string; row: Record<string, unknown> }): Promise<PushResult> {
     this.next(m.mutationId);
@@ -76,7 +79,7 @@ describe("ReconcileEngine — deterministiska fel avvisas och kön fortsätter (
     await h.row("b");
     h.transport.script.set("a", [trpcError("BAD_REQUEST", 400, "ogiltigt belopp")]);
     const res = await h.engine.reconcile();
-    expect(res.conflicts).toEqual([{ mutation: expect.objectContaining({ mutationId: "a" }), conflictClass: "surface", reason: "Servern avvisade ändringen: ogiltigt belopp" }]);
+    expect(res.conflicts).toEqual([{ mutation: expect.objectContaining({ mutationId: "a" }), conflictClass: "surface", reason: "Servern avvisade ändringen: ogiltigt belopp", retryable: false }]);
     expect(res.pushed).toBe(1);
     expect(res.blocked).toBeNull();
     expect(h.ids()).toEqual([]);
@@ -163,6 +166,7 @@ describe("ReconcileEngine — kanske-tillfälliga fel försöks igen, begränsat
     expect(res.conflicts).toEqual([{
       mutation: expect.objectContaining({ mutationId: "a" }), conflictClass: "append",
       reason: "Ändringen nådde inte servern efter 3 försök: Internal Server Error",
+      retryable: true,
     }]);
     expect(res.blocked).toBeNull();
     expect(h.transport.calls).toEqual(["a", "a", "a", "b"]);

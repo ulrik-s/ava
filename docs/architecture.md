@@ -260,9 +260,21 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
 - **Avvisade ändringar** (#1266) — från procedur-kön och radkön — sparas i
   IndexedDB (`src/lib/client/backend/rejected-changes.ts`) och visas i
   `/sync-conflicts` (länkas från synkpillret och Att bevaka) med orsak på
-  svenska. **Försök igen** köar ändringen på nytt (ett anrop med nytt
-  mutationId, en rad byggd på serverns version); **Kasta** låter serverns läge
-  gälla. Ingen avvisad ändring försvinner tyst.
+  svenska. Ingen avvisad ändring försvinner tyst.
+- **Ingen spökrad efter en avvisning** (#1348,
+  `src/lib/server/data-store/in-memory/canonical-restore.ts`). Raderna en
+  avvisad post ändrade lokalt återställs till serverns läge sist i reconcilen:
+  radkonfliktens `current` när servern skickade det, procedur-svarets rader,
+  och annars hämtade med `sync.rows` (org-scopat, tombstone när raden inte
+  finns) — också för avvisningar klienten själv klassar (#1353). En rad som en
+  kvarvarande köpost ändrat rörs inte; rader pullen hoppade (pending) hämtas
+  när posten avgjorts utan serverns läge. Går läget inte att hämta flyttas inte
+  cursorn och raderna försöks igen. **Kasta** hämtar raderna på samma sätt
+  innan ändringen tas bort. **Försök igen** visas bara där ett nytt försök kan
+  lyckas (`retryable`: tillfälliga fel efter gränsen, och versionskonflikter på
+  rader radkön får skriva — inte deterministiska avvisningar eller
+  procedurägda poster); posten läggs tillbaka oförändrad — samma mutationId
+  (idempotent om den redan körts), köformat, kodversion och `enqueuedAt`.
 - **Procedurägda entiteter** (#1242, `src/lib/shared/sync/procedure-owned.ts`):
   ärenden, tid, utlägg och all fakturering skrivs bara av procedurkön — liksom
   administrationen (#1344): användare, byrån, kontor, byråns standardvyer och

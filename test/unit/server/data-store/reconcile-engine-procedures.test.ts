@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest-compat";
 import { InMemoryCursorStore } from "@/lib/server/data-store/in-memory/cursor-store";
 import { InMemoryMutationQueuePersistence, MutationQueue, type QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { ReconcileEngine, type ApplyCanonical } from "@/lib/server/data-store/in-memory/reconcile-engine";
-import type { ProcedureReplayResult, PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
+import type { ProcedureReplayResult, PulledChange, PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
 
 class FakeTransport implements SyncTransport {
   pulls: PullResult = { changes: [], cursor: 0 };
@@ -19,6 +19,8 @@ class FakeTransport implements SyncTransport {
     status: "accepted", rows: c.touches.map((t) => ({ entity: t.entity, row: { id: t.id, server: true } })),
   });
   async pull(): Promise<PullResult> { return this.pulls; }
+  rowRequests = 0;
+  async rows(): Promise<PulledChange[]> { this.rowRequests++; return []; }
   async push(m: { row: Record<string, unknown> }): Promise<PushResult> { return { status: "accepted", row: m.row }; }
   async pushProcedure(c: QueuedProcedureCall): Promise<ProcedureReplayResult> {
     this.replayed.push(c);
@@ -58,8 +60,10 @@ describe("ReconcileEngine — procedur-anrop", () => {
     await h.queue.enqueueProcedure({ path: "timeEntry.update", input: { id: "t1" }, touches: [touch("t1")] }, { mutationId: "p1" });
     const res = await h.engine.reconcile();
     expect(res.conflicts).toHaveLength(1);
-    expect(res.conflicts[0]).toMatchObject({ reason: "Tidsposten finns inte längre.", conflictClass: "surface" });
+    // Servern har sparat avvisningen: samma anrop avvisas igen (#1348).
+    expect(res.conflicts[0]).toMatchObject({ reason: "Tidsposten finns inte längre.", conflictClass: "surface", retryable: false });
     expect(h.applied).toEqual([{ entity: "timeEntry", row: { id: "t1" }, deleted: true }]);
+    expect(h.transport.rowRequests).toBe(0); // serverns svar bar redan raderna
     expect(res.replayed).toBe(1);
     expect(h.queue.size()).toBe(0);
   });

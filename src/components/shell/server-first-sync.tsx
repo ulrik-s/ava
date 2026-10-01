@@ -19,7 +19,7 @@ import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import { SyncStatusPill } from "./sync-status-pill";
 
 /** Det synken behöver ur server-first-storen — inget mer (smal söm, testbar). */
-export type SyncableStore = Pick<CachingSyncDataStore, "reconcile" | "pendingCount" | "oldestPendingAt" | "onLocalChange" | "requeue">;
+export type SyncableStore = Pick<CachingSyncDataStore, "reconcile" | "pendingCount" | "oldestPendingAt" | "onLocalChange" | "requeue" | "restore">;
 
 /** Periodisk synk: fångar andras ändringar och gör om efter fel. */
 const PERIODIC_SYNC_MS = 30_000;
@@ -88,10 +88,16 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
   const rejected = useRejectedChanges();
 
   // "Försök igen" (#1266): en avvisad ändring köas på nytt mot den här storen.
+  // "Kasta" (#1348): raderna den rörde hämtas från servern; UI:t hämtar om.
   useEffect(() => {
     if (!store) return;
-    return rejectedChanges.setRetryHandler((change) => store.requeue(change.entry, change.current));
-  }, [store]);
+    return rejectedChanges.setHandlers({
+      retry: (change) => store.requeue(change.entry, change.current),
+      restore: async (change) => {
+        if ((await store.restore(change.entry)) > 0) void queryClient.invalidateQueries();
+      },
+    });
+  }, [store, queryClient]);
   const [persistence, setPersistence] = useState<StoragePersistence | null>(null);
 
   useEffect(() => {

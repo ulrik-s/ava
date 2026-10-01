@@ -132,17 +132,21 @@ describe("runQueuedProcedure", () => {
     expect(seen).toMatchObject([{ reason: "Posterna är redan fakturerade.", mutation: { path: "timeEntry.create" } }]);
   });
 
-  it("requeue: ett anrop köas med NYTT mutationId; en rad byggs på serverns version", async () => {
+  it("requeue (#1348): posten läggs tillbaka oförändrad — samma id, format, kodversion och tid; en rad byggs på serverns version", async () => {
     const ds = await store();
-    const call = { type: "procedure" as const, mutationId: "gammal", path: "timeEntry.update", input: { id: "t" }, codeVersion: "v", touches: [], enqueuedAt: 0 };
+    const call = { type: "procedure" as const, mutationId: "gammal", path: "timeEntry.update", input: { id: "t" }, codeVersion: "v-gammal", touches: [], enqueuedAt: 123, format: 1 };
     await ds.requeue(call);
-    const row = { mutationId: "r", entity: "invoice", kind: "update" as const, row: { id: "i1" }, baseVersion: 2, enqueuedAt: 0 };
+    await ds.requeue(call); // idempotent
+    const row = { mutationId: "r", entity: "task", kind: "update" as const, row: { id: "i1" }, baseVersion: 2, enqueuedAt: 456, format: 1 };
     await ds.requeue(row, { id: "i1", version: 5 });
     await ds.requeue({ ...row, mutationId: "r2", row: { id: "i2" } });
-    const [again, rowAgain, rowFallback] = ds.pendingEntries();
-    expect(again).toMatchObject({ path: "timeEntry.update", input: { id: "t" } });
-    expect(again?.mutationId).not.toBe("gammal");
-    expect(rowAgain).toMatchObject({ entity: "invoice", row: { id: "i1" }, baseVersion: 5 });
-    expect(rowFallback).toMatchObject({ row: { id: "i2" }, baseVersion: 2 });
+    const { baseVersion: _ignored, ...unversioned } = row;
+    await ds.requeue({ ...unversioned, mutationId: "r3", row: { id: "i3" } });
+    const [again, rowAgain, rowFallback, rowUnversioned] = ds.pendingEntries();
+    expect(ds.pendingCount()).toBe(4);
+    expect(again).toEqual(call);
+    expect(rowAgain).toEqual({ ...row, baseVersion: 5 });
+    expect(rowFallback).toMatchObject({ mutationId: "r2", row: { id: "i2" }, baseVersion: 2, enqueuedAt: 456, format: 1 });
+    expect(rowUnversioned && "baseVersion" in rowUnversioned).toBe(false);
   });
 });

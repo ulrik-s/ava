@@ -21,11 +21,11 @@ import { and, asc, eq, gt } from "drizzle-orm";
 import { conflictClassOf } from "@/lib/shared/conflict-policy";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
-import type { PullResult, PulledChange, PushResult } from "../data-store/in-memory/sync-transport";
+import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store/in-memory/sync-transport";
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
-import { entityRepo, type EntityRepo, type Row } from "./entity-repo";
+import { canonicalRows, entityRepo, type EntityRepo, type Row } from "./entity-repo";
 import { checkProcedureOwned, checkScope, type PushRejection } from "./push-guard";
 import { admitRow } from "./queue-admission";
 import { checkRowPolicy, immutableOnUpdate, type RowPolicyRejection, type RowPusher } from "./row-push-policy";
@@ -97,6 +97,10 @@ export class DrizzleSyncStore implements SyncStore {
       return { entity: r.entity, row: { id: r.rowId }, deleted: true };
     }
     return { entity: r.entity, row: current };
+  }
+
+  rows(organizationId: string, refs: readonly RowRef[]): Promise<PulledChange[]> {
+    return canonicalRows(this.repos, refs, organizationId);
   }
 
   async push(pusher: RowPusher, queued: QueuedMutation): Promise<PushResult> {

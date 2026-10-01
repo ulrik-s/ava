@@ -10,12 +10,17 @@
  */
 
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
-import type { PullResult, PushResult } from "../data-store/in-memory/sync-transport";
+import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store/in-memory/sync-transport";
 import type { RowPusher } from "./row-push-policy";
 
 export interface SyncStore {
   /** Delta-pull: kanoniska ändringar med `seq > sinceCursor` för org:en. */
   pull(organizationId: string, sinceCursor: number): Promise<PullResult>;
+  /**
+   * Radernas kanoniska läge inom byrån (#1348) — klienten återställer en rad
+   * efter en avvisad ändring. Saknad rad (eller en annan byrås) = tombstone.
+   */
+  rows(organizationId: string, refs: readonly RowRef[]): Promise<PulledChange[]>;
   /** Applicera en köad klient-mutation server-auktoritativt (ADR 0017). */
   push(pusher: RowPusher, mutation: QueuedMutation): Promise<PushResult>;
 }
