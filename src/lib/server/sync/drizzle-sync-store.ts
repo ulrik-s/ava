@@ -12,7 +12,10 @@
  * skrivs bara av procedurkön) och pröva radvägens policy (#1344,
  * `row-push-policy`: neka som standard, referenser inom byrån, vem som skapade
  * raden), applicera sedan en köad mutation per konfliktklass (ADR 0017):
- *   - create  → idempotent (finns id → accepted), annars create.
+ *   - create  → idempotent (finns id och samma skapande → accepted; en annan
+ *               rad med samma id → conflict), annars create. Hinner en samtidig
+ *               push av samma rad före (unikhetsfel, #1380) avgörs posten igen
+ *               mot den raden — aldrig ett 500.
  *   - update  → surface: saknad eller stale `baseVersion` ⇒ conflict; annars
  *               update (server-nyare ⇒ rebased). append/lww applicerar.
  *               När raden skapades och vem som skapade den ändras aldrig.
@@ -24,6 +27,7 @@ import { conflictClassOf } from "@/lib/shared/conflict-policy";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
 import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store/in-memory/sync-transport";
+import { isUniqueViolation } from "../db/pg-error";
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
@@ -31,7 +35,7 @@ import { readSafeSeq } from "./change-log-safe-seq";
 import { canonicalRows, entityRepo, type EntityRepo, type Row } from "./entity-repo";
 import { checkProcedureOwned, checkScope, type PushRejection } from "./push-guard";
 import { admitRow } from "./queue-admission";
-import { checkRowPolicy, immutableOnUpdate, type RowPolicyRejection, type RowPusher } from "./row-push-policy";
+import { checkRowPolicy, immutableOnUpdate, isSameCreation, type RowPolicyRejection, type RowPusher } from "./row-push-policy";
 import { withoutServerOwned } from "./server-owned-fields";
 import type { SyncStore } from "./sync-store";
 
@@ -58,6 +62,12 @@ function versionOf(row: Row | null): number {
 
 /** Beskedet när en ändring av en surface-entitet saknar versionen den byggde på (#1344). */
 export const MISSING_BASE_VERSION_REASON = "saknar basversion";
+
+/** En create vars id redan bär en annan rad (annat skapande) (#1380). */
+export const ID_TAKEN_REASON = "id:t används redan av en annan rad";
+
+/** En skrivning som krockar med en befintlig rad även efter ett nytt försök (#1380). */
+export const DUPLICATE_ROW_REASON = "raden krockar med en befintlig rad (samma id eller unikt värde)";
 
 export class DrizzleSyncStore implements SyncStore {
   constructor(
@@ -123,6 +133,32 @@ export class DrizzleSyncStore implements SyncStore {
     // bara lokalt (dataförlust). "conflict" ackas också (inget 22P02-häng, #879)
     // men syns som konflikt. Klienten reparerar id:n före push (legacy-id-repair).
     if (!isUuidRowId(rowId(m))) return { status: "conflict", reason: `ogiltigt id (inte uuid): ${rowId(m)}` };
+    try {
+      return await this.decide(pusher, repo, m);
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      return this.decideAfterRace(pusher, repo, m);
+    }
+  }
+
+  /**
+   * Samma köpost från flera flikar samtidigt (#1380): alla läste "ingen rad",
+   * en hann skapa den, resten fick unikhetsfel. Avgör en gång till mot raden
+   * som nu finns — byrå, policy och "samma skapande" prövas igen, så svaret
+   * blir detsamma som för en omsändning i följd. Krockar det ändå (raden är
+   * borttagen men id:t finns kvar, eller ett annat unikt värde är taget) blir
+   * det en konflikt, aldrig ett 500.
+   */
+  private async decideAfterRace(pusher: RowPusher, repo: EntityRepo, m: QueuedMutation): Promise<PushResult> {
+    try {
+      return await this.decide(pusher, repo, m);
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      return { status: "conflict", reason: DUPLICATE_ROW_REASON };
+    }
+  }
+
+  private async decide(pusher: RowPusher, repo: EntityRepo, m: QueuedMutation): Promise<PushResult> {
     const existing = await repo.getById(rowId(m));
     const rejected = await this.guard(pusher, repo, m, existing);
     if (rejected) return { status: "conflict", ...rejected };
@@ -151,8 +187,10 @@ export class DrizzleSyncStore implements SyncStore {
   }
 
   private async applyCreate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
-    if (existing) return { status: "accepted", row: existing }; // idempotent replay
-    return { status: "accepted", row: await repo.create(m.row) };
+    if (!existing) return { status: "accepted", row: await repo.create(m.row) };
+    // Omsändning av samma skapande → idempotent; en annan rad med samma id → konflikt (#1380).
+    if (isSameCreation(m.entity, existing, m.row)) return { status: "accepted", row: existing };
+    return { status: "conflict", reason: ID_TAKEN_REASON, current: existing };
   }
 
   private async applyUpdate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {

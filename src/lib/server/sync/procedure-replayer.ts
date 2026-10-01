@@ -39,6 +39,7 @@ import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import type { QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
 import type { ProcedureReplayResult } from "../data-store/in-memory/sync-transport";
+import { causeChain, sqlStateOf } from "../db/pg-error";
 import { syncReplays } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { boundedCallTime } from "../queued-call";
@@ -70,21 +71,11 @@ function resolveProcedure(caller: unknown, path: string): (input: unknown) => Pr
 /** SQLSTATE-klass 22 (data exception) och 23 (integrity constraint violation). */
 const DETERMINISTIC_SQLSTATE = /^2[23][0-9A-Z]{3}$/;
 
-/** Hur djupt `cause`-kedjan följs (tRPC → Drizzle → postgres). */
-const MAX_CAUSE_DEPTH = 5;
-
-/** Felet och dess orsaker: tRPC slår in procedurens fel, Drizzle drivrutinens. */
-function causeChain(err: unknown): unknown[] {
-  const chain: unknown[] = [];
-  for (let cur = err; cur instanceof Error && chain.length < MAX_CAUSE_DEPTH; cur = cur.cause) chain.push(cur);
-  return chain;
-}
-
 /** Ger samma anrop samma fel igen? (zod, eller Postgres data-/integritetsfel) */
 function isDeterministicFailure(err: unknown): boolean {
   if (err instanceof ZodError) return true;
-  const code = err instanceof Error && "code" in err ? err.code : undefined;
-  return typeof code === "string" && DETERMINISTIC_SQLSTATE.test(code);
+  const code = sqlStateOf(err);
+  return code !== undefined && DETERMINISTIC_SQLSTATE.test(code);
 }
 
 /** Ett regelbrott eller deterministiskt fel → avvisning; allt annat → kasta vidare (tekniskt fel, försök igen). */

@@ -159,8 +159,39 @@ export async function checkRowPolicy(input: PolicyInput): Promise<RowPolicyRejec
     ?? await checkRefs(policy, input);
 }
 
+const CREATED_AT = "createdAt";
+
+/** Fält som aldrig ändras efter skapandet: när raden skapades och vem som skapade den. */
+function immutableFields(entity: string): string[] {
+  const actor = policyOf(entity)?.actor;
+  return actor ? [CREATED_AT, actor] : [CREATED_AT];
+}
+
 /** Fält som aldrig ändras av en radpush: när raden skapades och vem som skapade den. */
 export function immutableOnUpdate(entity: string, patch: Row): Row {
-  const actor = policyOf(entity)?.actor;
-  return Object.fromEntries(Object.entries(patch).filter(([k]) => k !== "createdAt" && k !== actor));
+  const fixed = new Set(immutableFields(entity));
+  return Object.fromEntries(Object.entries(patch).filter(([k]) => !fixed.has(k)));
+}
+
+/** Samma tidpunkt? Databasen ger `Date`, klientens kö en ISO-sträng. */
+function sameInstant(a: unknown, b: unknown): boolean {
+  const ms = (v: unknown): number =>
+    v instanceof Date || typeof v === "string" || typeof v === "number" ? new Date(v).getTime() : Number.NaN;
+  return ms(a) === ms(b);
+}
+
+function sameImmutable(field: string, existing: unknown, incoming: unknown): boolean {
+  return field === CREATED_AT ? sameInstant(existing, incoming) : existing === incoming;
+}
+
+/**
+ * Är en create mot en rad servern redan har samma skapande — en omsändning av
+ * samma köpost, t.ex. från flera flikar samtidigt (#1380)? De oföränderliga
+ * fälten (när och av vem) måste stämma där klienten skickat dem. Skiljer de
+ * sig är det en annan rad med samma id.
+ */
+export function isSameCreation(entity: string, existing: Row, incoming: Row): boolean {
+  return immutableFields(entity).every(
+    (field) => incoming[field] == null || sameImmutable(field, existing[field], incoming[field]),
+  );
 }
