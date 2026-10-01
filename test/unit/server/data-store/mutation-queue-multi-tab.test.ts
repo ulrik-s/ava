@@ -165,6 +165,20 @@ describe("MutationQueue — uppgradering från kön under en nyckel (#1346)", ()
     expect(await stored(factory, "ava-queue-upgrade")).toEqual(["01928f3a-0000-7000-8000-000000000011"]);
   });
 
+  it("en flik med gammal kod fortsätter köa under tiden: allt når den nya kön en gång, och en kvitterad post köas inte om", async () => {
+    const factory = new IDBFactory();
+    const [first, second] = fixture.queue;
+    const oldTab = new IdbKv(factory, "ava-queue-live", "queue");
+    await oldTab.put("pending", [first]);
+    const queue = await MutationQueue.hydrate(new IndexedDbMutationQueuePersistence(factory, "ava-queue-live"));
+    await queue.enqueue(ev("ny"), { mutationId: "NY", now: 5 });
+    await queue.ack("01928f3a-0000-7000-8000-000000000010");
+    await oldTab.put("pending", [first, second]); // den gamla fliken skriver hela sin kö igen
+    await queue.refresh();
+    expect(queue.pending().map((e) => e.mutationId)).toEqual(["NY", "01928f3a-0000-7000-8000-000000000011"]);
+    expect(await stored(factory, "ava-queue-live")).toEqual(["NY", "01928f3a-0000-7000-8000-000000000011"]);
+  });
+
   it("två flikar som öppnar den uppgraderade kön samtidigt ser samma poster en gång", async () => {
     const factory = new IDBFactory();
     await new IdbKv(factory, "ava-queue-upgrade-2", "queue").put("pending", fixture.queue);

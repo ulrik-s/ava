@@ -124,8 +124,9 @@ export class InMemoryMutationQueuePersistence implements MutationQueuePersistenc
 }
 
 /**
- * IndexedDB-persistens — en rad per köpost (#1346). Databasen från före #1346
- * (hela kön under nyckeln `pending`) flyttas över vid första öppningen.
+ * IndexedDB-persistens — en rad per köpost (#1346). Raderna ligger i `<dbName>-v2`; den gamla
+ * databasens kö (allt under nyckeln `pending`) flyttas hit vid varje läsning
+ * — utan att den gamla databasen uppgraderas (se `idb-entry-store.ts`).
  */
 export class IndexedDbMutationQueuePersistence implements MutationQueuePersistence {
   private readonly entries: IdbEntryStore<QueueEntry>;

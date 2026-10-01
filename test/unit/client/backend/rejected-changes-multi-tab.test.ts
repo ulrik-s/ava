@@ -87,4 +87,15 @@ describe("RejectedChanges — uppgradering från listan under en nyckel (#1346)"
     await changes.discard("r1");
     expect((await tab(factory, "rej-upgrade")).list().map((c) => c.id)).toEqual(["r2"]);
   });
+
+  it("en flik med gammal kod som skriver om listan: nya avvisningar läses in, en kastad dyker inte upp igen", async () => {
+    const factory = new IDBFactory();
+    const oldTab = new IdbKv(factory, "rej-live", "rejected");
+    const saved = (id: string): RejectedChange => ({ id, rejectedAt: 1, label: "Ändring av faktura", reason: "stale", entry: conflict(id).mutation });
+    await oldTab.put("items", [saved("r1")]);
+    const changes = await tab(factory, "rej-live");
+    await changes.discard("r1");
+    await oldTab.put("items", [saved("r1"), saved("r2")]);
+    expect((await tab(factory, "rej-live")).list().map((c) => c.id)).toEqual(["r2"]);
+  });
 });

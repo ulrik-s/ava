@@ -322,9 +322,13 @@ speglar zod för Postgres.
   unikt index på `mutationId`/id). En flik lägger till och tar bort sina egna
   poster — den skriver aldrig tillbaka sin kopia av hela listan — och läser om
   kön ur lagringen före varje reconcile. En `BroadcastChannel` per databas säger
-  åt de andra flikarna att läsa om (räknare + synk). Databasversion 2 flyttar
-  den gamla listan (allt under en nyckel) till raderna i versionstransaktionen,
-  så att uppgraderingen flyttar allt eller ingenting.
+  åt de andra flikarna att läsa om (räknare + synk). Raderna ligger i en egen
+  databas (`<gammalt namn>-v2`); den gamla databasen uppgraderas aldrig, så en
+  flik som fortfarande kör gammal kod kan inte blockera en versionshöjning.
+  Vid varje läsning (start och före varje reconcile) flyttas den gamla listans
+  poster hit om de inte redan finns eller har kvitterats (`acked`), och den
+  gamla nyckeln tas bort när allt i den har flyttats. Våra anslutningar stänger
+  sig vid `versionchange`, och en blockerad öppning ger upp med ett fel.
 - **demo-seed (CDN):** entiteterna serialiseras till JSON-filer som GH Pages servar
   och klienten bygger `DemoSource` ur. Den fillayouten (kvar från seed-formatet):
 

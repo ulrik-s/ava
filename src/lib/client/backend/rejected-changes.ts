@@ -53,8 +53,9 @@ export interface RejectedChangesPersistence {
 }
 
 /**
- * IndexedDB (webbläsaren) — en rad per avvisning. Databasen från före #1346
- * (hela listan under nyckeln `items`) flyttas över vid första öppningen.
+ * IndexedDB (webbläsaren) — en rad per avvisning. Raderna ligger i `<dbName>-v2`; den gamla
+ * databasens lista (allt under nyckeln `items`) flyttas hit vid varje läsning
+ * — utan att den gamla databasen uppgraderas (se `idb-entry-store.ts`).
  */
 export class IndexedDbRejectedChangesPersistence implements RejectedChangesPersistence {
   private readonly entries: IdbEntryStore<RejectedChange>;
