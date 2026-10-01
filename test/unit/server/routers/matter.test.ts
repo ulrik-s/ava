@@ -12,9 +12,10 @@ import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
 import { asId } from "@/lib/shared/schemas/ids";
+import { stockholmYear } from "@/lib/shared/stockholm-time";
 
 const ORG = "org-a";
-const YEAR = new Date().getFullYear();
+const YEAR = stockholmYear(new Date());
 
 function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG, userId = "user-1", role: Principal["role"] = "LAWYER") {
   const ds = new DemoDataStore({
@@ -124,6 +125,14 @@ describe("matter.create", () => {
       matters: [matter({ id: "m0", matterNumber: `${YEAR}-0042`, responsibleLawyerId: "user-1" })],
     });
     expect((await caller.create({ title: "T" })).matterNumber).toBe(`${YEAR}-0043`);
+  });
+
+  it("efter 9999 kommer 10000 och 10001 — serien börjar inte om på 0001 (#1350)", async () => {
+    const { caller } = makeCaller({
+      matters: [matter({ id: "m0", matterNumber: `${YEAR}-9999`, responsibleLawyerId: "user-1" })],
+    });
+    expect((await caller.create({ title: "T" })).matterNumber).toBe(`${YEAR}-10000`);
+    expect((await caller.create({ title: "T2" })).matterNumber).toBe(`${YEAR}-10001`);
   });
 
   it("persisterar clientShareBips + rattshjalpMaxTimmar vid skapande (#872)", async () => {

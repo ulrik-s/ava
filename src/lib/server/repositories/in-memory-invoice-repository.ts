@@ -6,10 +6,12 @@
 
 import type { Invoice } from "@/lib/shared/schemas/billing";
 import type { InvoiceId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
+import { stockholmYear } from "@/lib/shared/stockholm-time";
 import type { IDataStore } from "../data-store/IDataStore";
+import { nextSeriesNumber } from "../number-series";
 import { InMemoryRepository } from "./in-memory-repository";
 import {
-  invoiceNumberPrefix, nextInvoiceNumberFrom,
+  invoiceNumberPrefix,
   type InvoiceFull, type InvoiceListFilter, type InvoiceListRow, type InvoiceRepository,
   type InvoiceWithLedger, type InvoiceWithRelations,
 } from "./invoice-repository";
@@ -101,13 +103,12 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
     return rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt);
   }
 
-  async nextInvoiceNumber(organizationId: OrganizationId, year: number = this.now().getFullYear()): Promise<string> {
+  async nextInvoiceNumber(organizationId: OrganizationId, year: number = stockholmYear(this.now())): Promise<string> {
     const prefix = invoiceNumberPrefix(year);
-    const last = (await this.store.invoices.findFirst({
+    const rows = (await this.store.invoices.findMany({
       where: { matter: { organizationId }, invoiceNumber: { startsWith: prefix } },
-      orderBy: { invoiceNumber: "desc" },
-    })) as { invoiceNumber?: string | null } | null;
-    return nextInvoiceNumberFrom(prefix, last?.invoiceNumber);
+    })) as ReadonlyArray<{ invoiceNumber?: string | null }>;
+    return nextSeriesNumber(prefix, rows.map((r) => r.invoiceNumber));
   }
 
   async sumCreditNotesFor(invoiceId: InvoiceId, organizationId: OrganizationId): Promise<number> {

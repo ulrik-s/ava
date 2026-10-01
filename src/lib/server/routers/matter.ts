@@ -24,6 +24,7 @@ import {
   type UserId,
 } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
+import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
@@ -32,6 +33,7 @@ import { checkMatterConflicts } from "../conflict/matter-conflict-check";
 import { conflictReviewInput, reviewMatterConflicts } from "../conflict/matter-conflict-review";
 import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
 import { emit } from "../events/emit";
+import { formatSeriesNumber } from "../number-series";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
@@ -97,7 +99,7 @@ const matterCreateInput = z.object({
 type MatterCreateInput = z.infer<typeof matterCreateInput>;
 
 /** Format `<PREFIX?><YYYY>-<NNNN>` — fångar (prefix, år, löpnummer). */
-const MATTER_NUMBER_RE = /^([A-ZÅÄÖ]{1,3})?(\d{4})-(\d{4})$/;
+const MATTER_NUMBER_RE = /^([A-ZÅÄÖ]{1,3})?(\d{4})-(\d{4,})$/;
 
 /** Löpnumret i ett ärendenummer OM det avser `year`, annars 0. */
 /** Det i en matter-uppdatering som loggas som anteckning (#1221). */
@@ -155,8 +157,8 @@ async function lawyerPrefix(ctx: MatterCtx, userId: UserId): Promise<string> {
  */
 async function nextMatterNumber(ctx: MatterCtx, responsibleLawyerId?: string): Promise<string> {
   // Serien är året då ärendet skapades — också när servern kör om ett köat
-  // anrop efter nyår (#1242).
-  const year = callTime(ctx).getFullYear();
+  // anrop efter nyår (#1242). Svenskt år (#1350): servern kör i UTC.
+  const year = stockholmYear(callTime(ctx));
   const prefix = responsibleLawyerId ? await lawyerPrefix(ctx, asId<"UserId">(responsibleLawyerId)) : "";
 
   const ownMatters = responsibleLawyerId
@@ -165,7 +167,7 @@ async function nextMatterNumber(ctx: MatterCtx, responsibleLawyerId?: string): P
   const prefixMatters = await ctx.repos.matters.listByNumberPrefix(ctx.orgId, `${prefix}${year}-`);
 
   const seq = Math.max(maxSeq(ownMatters, year), maxSeq(prefixMatters, year)) + 1;
-  return `${prefix}${year}-${seq.toString().padStart(4, "0")}`;
+  return formatSeriesNumber(`${prefix}${year}-`, seq);
 }
 
 function toDateOrNull(v: string | null | undefined): Date | null | undefined {

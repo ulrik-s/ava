@@ -19,12 +19,14 @@ import { buildContext } from "@/lib/server/build-context";
 import type { QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { changeLog, users } from "@/lib/server/db/schema";
 import { serverFirstEventLog } from "@/lib/server/http/server-context";
+import { MAX_CALL_AGE_MS } from "@/lib/server/queued-call";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import type { Context } from "@/lib/server/trpc-core";
 import { asId } from "@/lib/shared/schemas/ids";
 import { derivedId } from "@/lib/shared/sync/derived-id";
+import { QUEUE_POLICY } from "@/lib/shared/sync/queue-format";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
@@ -33,6 +35,8 @@ const ORG = uuidv7();
 const USER = uuidv7();
 /** Anropet gjordes på nyårsafton 2025 — servern kör om det i januari 2026. */
 const MADE_AT = Date.UTC(2025, 11, 31, 10, 0);
+/** Servern kör om anropet tre dagar senare — inom gränsen för anropstiden (#1350). */
+const REPLAYED_AT = MADE_AT + 3 * 86_400_000;
 
 describe("fakturorna i procedur-kön (#1276, steg 2c)", () => {
   let handle: TestDbHandle;
@@ -44,7 +48,7 @@ describe("fakturorna i procedur-kön (#1276, steg 2c)", () => {
     handle = await createTestDb();
     repos = buildDrizzleRepositories(handle.db);
     enableChangeLogOnAll(repos, createDbChangeLogRecorder(handle.db));
-    replayer = new DrizzleProcedureReplayer(handle.db, repos);
+    replayer = new DrizzleProcedureReplayer(handle.db, repos, QUEUE_POLICY, () => REPLAYED_AT);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await handle.db.insert(users).values({ id: USER, organizationId: ORG, email: "lena@byra.se", name: "Lena", role: "LAWYER", active: true, version: 1 } as any);
     ctx = buildContext({
@@ -87,6 +91,32 @@ describe("fakturorna i procedur-kön (#1276, steg 2c)", () => {
     expect(invoice?.invoiceNumber).toMatch(/^F-2025-/);
     expect(await repos.billingRuns.getById(asId<"BillingRunId">(runId))).toMatchObject({ invoiceId, type: "ACCONTO" });
     expect(res.rows.map((r) => r.entity)).toEqual(["invoice", "billingRun"]);
+  });
+
+  /** En aconto-faktura köad vid `enqueuedAt`, omkörd av servern vid REPLAYED_AT. */
+  async function accontoAt(enqueuedAt: number): Promise<{ invoiceDate: number; invoiceNumber: string | null | undefined }> {
+    const invoiceId = uuidv7();
+    const c = { ...call("billingRun.createAcconto", { id: invoiceId, matterId: await matter("PRIVAT"), clientShareBips: 10000, amountOre: 125_000 }), enqueuedAt };
+    expect((await replayer.replay(c, ctx)).status).toBe("accepted");
+    const invoice = await repos.invoices.getById(asId<"InvoiceId">(invoiceId));
+    return { invoiceDate: new Date(String(invoice?.invoiceDate)).getTime(), invoiceNumber: invoice?.invoiceNumber };
+  }
+
+  it("nyårsnatten 00.30 svensk tid (23.30 UTC på nyårsafton) → det nya årets serie (#1350)", async () => {
+    const newYearsNight = Date.UTC(2025, 11, 31, 23, 30);
+    expect((await accontoAt(newYearsNight)).invoiceNumber).toMatch(/^F-2026-/);
+  });
+
+  it("anropstid i framtiden (klientens klocka går före) → serverns nu, inte nästa års serie (#1350)", async () => {
+    const res = await accontoAt(REPLAYED_AT + 400 * 86_400_000);
+    expect(res.invoiceDate).toBe(REPLAYED_AT);
+    expect(res.invoiceNumber).toMatch(/^F-2026-/);
+  });
+
+  it("anropstid äldre än 30 dagar → nu − 30 dagar, ingen bakdatering in i ett gammalt år (#1350)", async () => {
+    const res = await accontoAt(Date.UTC(2023, 5, 1));
+    expect(res.invoiceDate).toBe(REPLAYED_AT - MAX_CALL_AGE_MS);
+    expect(res.invoiceNumber).toMatch(/^F-2025-/);
   });
 
   it("createFinal: fryser posterna med anropets datum, loggar dem och drar av acontot med härlett id", async () => {

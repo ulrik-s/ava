@@ -1,0 +1,70 @@
+name: Lasttest
+
+# Lasttest mot server-first i docker (#1366, docs/load-testing.md): virtuella
+# användare med den riktiga synk-klienten mot Postgres 16 + pg-boss, med
+# scenarierna vanligt arbete, anslutningsstorm, samtidig fakturering, dokument
+# och samma mutation från flera flikar. INTE ett obligatoriskt PR-krav — det
+# körs nattligt och manuellt, och rapporten laddas upp som artefakt.
+#
+# Återskapa lokalt med samma värden:
+#   LOAD_USERS=<n> LOAD_ORGS=<n> bun run load:test
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # varje natt 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      users:
+        description: Antal samtidiga användare
+        default: "20"
+      orgs:
+        description: Antal byråer (1–3)
+        default: "2"
+      duration:
+        description: Vanligt arbete, sekunder
+        default: "60"
+      soak:
+        description: 30 minuters vanligt arbete (1 = på)
+        default: "0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  load:
+    name: Lasttest (${{ matrix.users }} användare)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        # Nattligt: målet (20) och marginalen (50). Manuellt: det som angavs.
+        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('[{{"users":"{0}","orgs":"{1}"}}]', inputs.users, inputs.orgs) || '[{"users":"20","orgs":"2"},{"users":"50","orgs":"3"}]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/bun-setup
+      - name: Lasttest
+        env:
+          LOAD_USERS: ${{ matrix.users }}
+          LOAD_ORGS: ${{ matrix.orgs }}
+          LOAD_DURATION_S: ${{ inputs.duration || '60' }}
+          LOAD_SOAK: ${{ inputs.soak || '0' }}
+          LOAD_REPORT_DIR: reports/load
+        run: bun run load:test
+      - name: Sammanfattning
+        if: always()
+        run: |
+          if [ -f reports/load/load-report.txt ]; then
+            { echo '```'; cat reports/load/load-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Ladda upp rapporten
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: load-report-${{ matrix.users }}
+          path: reports/load/
+          if-no-files-found: warn

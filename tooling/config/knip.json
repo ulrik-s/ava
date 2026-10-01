@@ -6,6 +6,7 @@
     "src/lib/server/routers/_app.ts",
     "src/lib/client/pwa/sw-entry.ts",
     "tooling/scripts/*.ts",
+    "tooling/load/run.ts",
     "test/e2e/*.spec.ts",
     "test/unit/**/*.test.{ts,tsx}",
     "test/integration/**/*.test.{ts,tsx}",
@@ -25,7 +26,8 @@
   ],
   "project": [
     "src/**/*.{ts,tsx}",
-    "tooling/scripts/**/*.ts"
+    "tooling/scripts/**/*.ts",
+    "tooling/load/**/*.ts"
   ],
   "ignore": [
     "tooling/scripts/oauth-proxy/**"

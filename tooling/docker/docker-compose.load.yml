@@ -1,0 +1,113 @@
+# Lasttest-stack (#1366) — Postgres 16 + en server-first-container per byrå
+# (servern är single-org, ADR 0016), med pg-boss i varje. Samma image och
+# samma runtime som produktionen; skillnaderna är medvetna:
+#
+#   - ingen Caddy/oauth2-proxy framför: klienterna skickar proxyns header
+#     (X-Auth-Request-Email, AVA_IDENTITY=forwarded) direkt, som server-first-E2E:n,
+#   - varje byrå har en egen databas i samma Postgres-instans,
+#   - Postgres loggar låsväntan > 1 s (log_lock_waits) så att lasttestet kan räkna dem,
+#   - CPU och minne begränsas till en VPS-storlek (LOAD_SERVER_CPUS/_MEM, LOAD_PG_CPUS/_MEM).
+#
+# Körs av tooling/load/load-test.sh (som skapar databaserna och migrerar):
+#
+#   bun run load:test
+#
+# Portar och projektnamn är konfigurerbara så att flera worktrees kan köra samtidigt:
+#   LOAD_PG_PORT (55433), LOAD_PORT_BASE (53100 → byrå N på 53100+N), -p <projekt>.
+
+x-server: &server
+  build:
+    context: ../..
+    dockerfile: tooling/docker/server-first/Dockerfile
+  image: ava-server-first:load
+  cpus: "${LOAD_SERVER_CPUS:-2}"
+  mem_limit: "${LOAD_SERVER_MEM:-2g}"
+  depends_on:
+    postgres:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/readyz >/dev/null || exit 1"]
+    interval: 2s
+    timeout: 3s
+    retries: 60
+
+name: ava-load
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    command: ["postgres", "-c", "log_lock_waits=on", "-c", "deadlock_timeout=1s", "-c", "max_connections=${LOAD_PG_MAX_CONNECTIONS:-100}"]
+    cpus: "${LOAD_PG_CPUS:-2}"
+    mem_limit: "${LOAD_PG_MEM:-2g}"
+    environment:
+      POSTGRES_USER: ava
+      POSTGRES_PASSWORD: ava
+      POSTGRES_DB: ava_load_admin
+    ports:
+      - "${LOAD_PG_PORT:-55433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ava -d ava_load_admin"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    # En riktig disk (som produktionens namngivna volym), inte tmpfs:
+    # fsync och WAL ska kosta det de kostar i drift. `down -v` tar bort den.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  server-1:
+    <<: *server
+    environment: &server-env
+      AVA_DATABASE_URL: postgres://ava:ava@postgres:5432/ava_load_1
+      AVA_ORGANIZATION_ID: "00000000-0000-7000-8000-000001366001"
+      AVA_HTTP_HOST: 0.0.0.0
+      AVA_HTTP_PORT: "3001"
+      AVA_CONTENT_DIR: /data/content
+      AVA_EMAIL_DISABLED: "1"
+      # En loggrad per tRPC-anrop: lasttestet läser serverns egen tid per procedur ur den.
+      AVA_LOG_LEVEL: "${LOAD_LOG_LEVEL:-debug}"
+      AVA_LLM_ENDPOINT: "${AVA_LLM_ENDPOINT:-}"
+      AVA_LLM_MODEL: "${AVA_LLM_MODEL:-}"
+    volumes:
+      - content_1:/data/content
+    ports:
+      - "${LOAD_PORT_1:-53101}:3001"
+
+  server-2:
+    <<: *server
+    profiles: ["org2"]
+    environment:
+      <<: *server-env
+      AVA_DATABASE_URL: postgres://ava:ava@postgres:5432/ava_load_2
+      AVA_ORGANIZATION_ID: "00000000-0000-7000-8000-000001366002"
+    volumes:
+      - content_2:/data/content
+    ports:
+      - "${LOAD_PORT_2:-53102}:3001"
+
+  server-3:
+    <<: *server
+    profiles: ["org3"]
+    environment:
+      <<: *server-env
+      AVA_DATABASE_URL: postgres://ava:ava@postgres:5432/ava_load_3
+      AVA_ORGANIZATION_ID: "00000000-0000-7000-8000-000001366003"
+    volumes:
+      - content_3:/data/content
+    ports:
+      - "${LOAD_PORT_3:-53103}:3001"
+
+  # (Valbar) lokal LLM för klassificeringen under last — `COMPOSE_PROFILES=llm`
+  # + AVA_LLM_ENDPOINT=http://ollama:11434/v1 AVA_LLM_MODEL=<modell>.
+  ollama:
+    profiles: ["llm"]
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama
+
+volumes:
+  pgdata:
+  content_1:
+  content_2:
+  content_3:
+  ollama_models:

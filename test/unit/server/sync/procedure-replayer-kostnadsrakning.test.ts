@@ -21,6 +21,7 @@ import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import type { Context } from "@/lib/server/trpc-core";
 import { asId } from "@/lib/shared/schemas/ids";
 import { derivedId } from "@/lib/shared/sync/derived-id";
+import { QUEUE_POLICY } from "@/lib/shared/sync/queue-format";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
@@ -29,6 +30,8 @@ const ORG = uuidv7();
 const USER = uuidv7();
 /** Anropet gjordes på nyårsafton 2025 — servern kör om det i januari 2026. */
 const MADE_AT = Date.UTC(2025, 11, 31, 10, 0);
+/** Servern kör om anropet tre dagar senare — inom gränsen för anropstiden (#1350). */
+const REPLAYED_AT = MADE_AT + 3 * 86_400_000;
 
 describe("kostnadsräkning och slutreglering i procedur-kön (#1276, steg 2d)", () => {
   let handle: TestDbHandle;
@@ -40,7 +43,7 @@ describe("kostnadsräkning och slutreglering i procedur-kön (#1276, steg 2d)", 
     handle = await createTestDb();
     repos = buildDrizzleRepositories(handle.db);
     enableChangeLogOnAll(repos, createDbChangeLogRecorder(handle.db));
-    replayer = new DrizzleProcedureReplayer(handle.db, repos);
+    replayer = new DrizzleProcedureReplayer(handle.db, repos, QUEUE_POLICY, () => REPLAYED_AT);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await handle.db.insert(users).values({ id: USER, organizationId: ORG, email: "lena@byra.se", name: "Lena", role: "LAWYER", active: true, version: 1 } as any);
     ctx = buildContext({
