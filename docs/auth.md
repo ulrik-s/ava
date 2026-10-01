@@ -94,6 +94,30 @@ vägrar starta om `COOKIE_REFRESH` >= `COOKIE_EXPIRE`.
 `test/unit/tooling/session-refresh.test.ts` fäller en stack som saknar
 förnyelse.
 
+**Sessionen ligger i redis, inte i cookien** (#1425). `/api` gat:as med en
+auth-subrequest (Caddys `forward_auth`, nginx `auth_request`) mot
+`/oauth2/auth`. Vid 2xx skickas auth-svarets `Set-Cookie` aldrig till
+browsern — så med sessionen i cookien sparades en förnyelse aldrig, och efter
+`COOKIE_REFRESH` förnyade proxyn mot IdP:n på *varje* API-anrop (latens,
+risk för throttling) tills ett anrop under `/oauth2/*` råkade spara den. Med
+`OAUTH2_PROXY_SESSION_STORE_TYPE=redis` är cookien bara en biljett (id +
+en nyckel per session); förnyelsen skrivs till redis och gäller nästa anrop
+oavsett vägen. Två bonusar: ett lås gör att parallella anrop efter intervallet
+förnyar *en* gång, och cookien blir liten (en Entra-session med tre tokens
+delas annars i `_oauth2_proxy_0`/`_1`).
+
+Avvägt mot alternativen: att i Caddy själv skicka vidare `Set-Cookie`
+(`reverse_proxy` + `handle_response`) går inte rätt — `{rp.header.Set-Cookie}`
+slår ihop flera värden med komma, vilket förstör delade cookies; att låta
+proxyn vara upstream för `/api` flyttar förtroendegränsen och alla uppladdningar
+genom proxyn. Priset för redis: är den nere nekas inloggade anrop (och proxyn
+rensar cookien → ny inloggning). I prod/BYO-IdP kör den med `appendonly` på en
+namngiven volym, så en omstart loggar inte ut någon. Tokens i redis är
+krypterade med nyckeln i cookien — redis-datan ensam ger ingenting.
+`test/e2e/oidc/oidc-session-refresh.spec.ts` (i `bun run e2e:oidc`) kör den
+riktiga prod-Caddyfile:n framför proxyn och Keycloak: efter `COOKIE_REFRESH`
+ger fem API-anrop exakt en förnyelse.
+
 Servern verifierar tokens med `algorithms: ["RS256"]` och `clockTolerance:
 60 s` (`src/lib/server/http/bearer-claims.ts`).
 
@@ -116,7 +140,7 @@ Den cachade identiteten (`principalId`, e-post, `sessionVerifiedAt` i
 `ava.firma`) är ingen hemlighet: den ger ingen åtkomst till servern, bara till
 det som redan finns lokalt på enheten. Sessionshemligheten är proxyns
 HttpOnly-cookie. Refresh-token (`offline_access`) hålls av oauth2-proxy i
-dess krypterade cookie — aldrig i klienten (Option B i ADR 0018, en klient-
+redis, krypterad med nyckeln i cookien (#1425) — aldrig i klienten (Option B i ADR 0018, en klient-
 hållen refresh-token, är inte byggd).
 
 ### Lokal data, byte av användare och utloggning (#1347, advokatsekretess)

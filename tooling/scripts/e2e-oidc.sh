@@ -19,11 +19,14 @@ PROJECT="${OIDC_E2E_PROJECT:-ava-oidc-e2e}"
 # ensamt på en fräsch runner så 8080 är ledig. Keycloak på 8089.
 export AVA_WEB_PORT="${AVA_WEB_PORT:-8080}"
 export KC_PORT="${KC_PORT:-8089}"
+# Prod-Caddyn (#1425) framför samma oauth2-proxy.
+export AVA_CADDY_PORT="${AVA_CADDY_PORT:-8082}"
 HOST="${OIDC_PUBLIC_HOST:-localhost}"
 export AVA_OIDC_BASE_URL="http://${HOST}:${AVA_WEB_PORT}"
 export OIDC_KC_HOSTNAME="http://${HOST}:${KC_PORT}"
 export OIDC_ISSUER_PUBLIC="http://${HOST}:${KC_PORT}/realms/ava"
 export OIDC_REDIRECT_URL="http://${HOST}:${AVA_WEB_PORT}/oauth2/callback"
+export AVA_OIDC_CADDY_URL="http://${HOST}:${AVA_CADDY_PORT}"
 COMPOSE=(docker compose -p "$PROJECT" -f tooling/docker/docker-compose.yml -f tooling/docker/docker-compose.oidc.yml)
 
 cleanup() { "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true; }
@@ -37,9 +40,12 @@ trap cleanup EXIT
 echo "==> [0/4] Bygger appen (out/)…"
 bun run build:demo >/dev/null 2>&1
 
-echo "==> [1/4] Bygger + startar OIDC-stacken (web:${AVA_WEB_PORT}, keycloak:${KC_PORT})…"
+echo "==> [1/4] Bygger + startar OIDC-stacken (web:${AVA_WEB_PORT}, caddy:${AVA_CADDY_PORT}, keycloak:${KC_PORT})…"
 # --wait gatar på container-healthchecks (web blir healthy via /healthz).
-"${COMPOSE[@]}" up -d --build --wait --wait-timeout 180 web oauth2-proxy keycloak
+"${COMPOSE[@]}" up -d --build --wait --wait-timeout 180 web oauth2-proxy keycloak caddy
+# Sessionsförnyelse-specen (#1425) räknar proxyns förnyelser i dess logg.
+OIDC_PROXY_CONTAINER="$("${COMPOSE[@]}" ps -q oauth2-proxy)"
+export OIDC_PROXY_CONTAINER
 
 echo "==> [2/4] Väntar in Keycloak (realm-import + discovery)…"
 kc_ready=""
@@ -57,6 +63,7 @@ echo "==> [3/4] Väntar in host-portar (web + keycloak servar)…"
 web_ready=""
 for _ in $(seq 1 60); do
   if curl -sf "http://${HOST}:${AVA_WEB_PORT}/healthz" >/dev/null 2>&1 \
+     && curl -sf "${AVA_OIDC_CADDY_URL}/healthz" >/dev/null 2>&1 \
      && curl -sf "http://${HOST}:${KC_PORT}/realms/ava/.well-known/openid-configuration" >/dev/null 2>&1; then
     web_ready=1; break
   fi

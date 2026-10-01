@@ -67,3 +67,27 @@ services:
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
       # localhost-dev → http-cookie OK. I skarp drift bakom HTTPS: sätt true.
       OAUTH2_PROXY_COOKIE_SECURE: "${OIDC_COOKIE_SECURE:-false}"
+      # Sessionen i redis (#1425): nginx auth_request skickar inte auth-svarets
+      # Set-Cookie till browsern, så en förnyelse via /oauth2/auth sparas bara
+      # i ett server-side lager. Se docker-compose.production.yml.
+      OAUTH2_PROXY_SESSION_STORE_TYPE: redis
+      OAUTH2_PROXY_REDIS_CONNECTION_URL: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ─── Sessionslagret (#1425): appendonly → sessionerna överlever omstart ──
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis_data:

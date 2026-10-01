@@ -36,6 +36,12 @@
 			# bara på den (verifierad mot IdP:ns nycklar), aldrig på headers.
 			# Omdöpt — inte Authorization — så helperns egen Bearer lämnas orörd.
 			copy_headers X-Auth-Request-Email Authorization>X-Ava-Identity-Token
+			# Auth-svarets Set-Cookie når INTE browsern vid 2xx (bara
+			# copy_headers, och de går till upstream-anropet). Därför har
+			# proxyn sessionen i redis (#1425): en förnyelse här sparas där, och
+			# cookien är bara en biljett som inte ändras. Försök inte skicka
+			# vidare Set-Cookie själv — {rp.header.Set-Cookie} slår ihop flera
+			# värden med komma, vilket förstör delade cookies (_oauth2_proxy_0/_1).
 		}
 		reverse_proxy server-first:3001
 	}
