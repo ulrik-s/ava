@@ -114,10 +114,11 @@ describe("administrationen körs om av servern (#1344)", () => {
     });
 
     it("medlem: kontor läggs inte till, ändras inte och tas inte bort (#1370)", async () => {
+      const before = (await repos.offices.listByOrg(ORG)).length;
+      expect(await replayer.replay(call("organization.addOffice", { name: "Filial" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect(await repos.offices.listByOrg(ORG)).toHaveLength(before);
       const id = asId<"OfficeId">(uuidv7());
-      expect(await replayer.replay(call("organization.addOffice", { id, name: "Filial" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
-      expect(await repos.offices.getById(id)).toBeNull();
-      expect(await replayer.replay(call("organization.addOffice", { id, name: "Filial" }), asAdmin)).toMatchObject({ status: "accepted" });
+      await repos.offices.create({ id, organizationId: ORG, name: "Filial", isMain: false } as never);
       expect(await replayer.replay(call("organization.updateOffice", { id, name: "Kapad" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
       expect(await replayer.replay(call("organization.deleteOffice", { id }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
       expect((await repos.offices.getById(id))?.name).toBe("Filial");
