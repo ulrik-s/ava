@@ -409,6 +409,20 @@ export const billingRuns = pgTable("billing_runs", {
   notes: text("notes"),
 }, (t) => [index("billing_runs_matter_idx").on(t.matterId)]);
 
+/**
+ * Register över utfärdade KR-referenser (#1379) — SERVER-ONLY, synkas aldrig.
+ * Samma mönster som `invoice_numbers`: primärnyckeln (byrå, referens) gör en
+ * dubblett omöjlig även om två kostnadsräkningar skickas in samtidigt.
+ * Körningarna scopas via ärendet (ingen egen org-kolumn), därför registret i
+ * stället för ett unikt index på `billing_runs`.
+ */
+export const krReferences = pgTable("kr_references", {
+  organizationId: uuid("organization_id").notNull(),
+  reference: text("reference").notNull(),
+  billingRunId: uuid("billing_run_id").notNull().$type<BillingRunId>(),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.organizationId, t.reference] })]);
+
 export const expectedReceivables = pgTable("expected_receivables", {
   ...orgScopedColumns,
   matterId: uuid("matter_id").notNull(),

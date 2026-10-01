@@ -6,8 +6,10 @@
 import type { BillingRun } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
-import type {
-  BillingRunDetailRow, BillingRunListRow, BillingRunRepository,
+import { nextSeriesNumber } from "../number-series";
+import {
+  krReferencePrefix,
+  type BillingRunDetailRow, type BillingRunListRow, type BillingRunRepository,
 } from "./billing-run-repository";
 import { InMemoryRepository } from "./in-memory-repository";
 
@@ -50,5 +52,13 @@ export class InMemoryBillingRunRepository
     return (await this.delegate.findMany({
       where: { id: { in: ids }, matterId, type: "ACCONTO" },
     })) as BillingRun[];
+  }
+
+  async nextKrReference(organizationId: OrganizationId, year: number): Promise<string> {
+    const prefix = krReferencePrefix(year);
+    const runs = (await this.delegate.findMany({
+      where: { matter: { organizationId }, reference: { startsWith: prefix } },
+    })) as ReadonlyArray<{ reference?: string | null }>;
+    return nextSeriesNumber(prefix, runs.map((r) => r.reference));
   }
 }

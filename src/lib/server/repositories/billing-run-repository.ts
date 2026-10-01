@@ -10,6 +10,11 @@ import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, InvoiceId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
+/** KR-referensens prefix för ett år (`KR-YYYY-`, #889). Delad mellan repo-impls. */
+export function krReferencePrefix(year: number): string {
+  return `KR-${year}-`;
+}
+
 /** Billing-run + faktura (listvyn). */
 export interface BillingRunListRow extends BillingRun {
   invoice: { id: InvoiceId; invoiceNumber: string | null; status: InvoiceStatus; invoiceDate: Date | string | null } | null;
@@ -30,4 +35,11 @@ export interface BillingRunRepository extends Repository<BillingRun> {
   listAccontoSent(matterId: MatterId): Promise<BillingRun[]>;
   /** ACCONTO-runs i ett ärende med givna id:n (FINAL-avdrag, #60-validering). */
   listAccontoByIds(matterId: MatterId, ids: BillingRunId[]): Promise<BillingRun[]>;
+  /**
+   * Nästa KR-referens (`KR-YYYY-NNNN`, längre efter 9999) för byrån (#889, #1379).
+   * `year` = seriens år (yrkandedagens i svensk tid, #1350). Högsta numret
+   * jämförs numeriskt. Server-impl:en tar ett lås per byrå och serie som hålls
+   * till transaktionens slut, och registret (`kr_references`) vägrar dubbletter.
+   */
+  nextKrReference(organizationId: OrganizationId, year: number): Promise<string>;
 }

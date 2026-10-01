@@ -5,14 +5,18 @@
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { BillingRun } from "@/lib/shared/schemas/billing";
-import type { BillingRunId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
-import { billingRuns, invoices, matters } from "../db/schema";
+import { asId, type BillingRunId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { uuidv7 } from "@/lib/shared/uuid";
+import { billingRuns, invoices, krReferences, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
-import type {
-  BillingRunDetailRow, BillingRunListRow, BillingRunRepository,
+import { formatSeriesNumber } from "../number-series";
+import {
+  krReferencePrefix,
+  type BillingRunDetailRow, type BillingRunListRow, type BillingRunRepository,
 } from "./billing-run-repository";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import { matterOrg } from "./matter-org";
+import { inSeries, lockSeries, maxSeriesSeq } from "./series-sql";
 
 export class DrizzleBillingRunRepository
   extends DrizzleRepository<BillingRun>
@@ -24,6 +28,44 @@ export class DrizzleBillingRunRepository
   /** billing_runs saknar org-kolumn → härled via ärendet (#647). */
   protected override resolveOrg(row: unknown): Promise<string | undefined> {
     return matterOrg(this.db, (row as { matterId?: MatterId }).matterId);
+  }
+
+  /**
+   * Registrera KR-referensen och skapa (#1379). Registret skrivs FÖRST: en
+   * dubblett inom byrån bryter primärnyckeln innan någon körning finns.
+   */
+  override async create(data: Partial<BillingRun>): Promise<BillingRun> {
+    const id = data.id ?? asId<"BillingRunId">(uuidv7());
+    await this.registerReference(id, data.matterId, data.reference);
+    return super.create({ ...data, id });
+  }
+
+  /** KR-referensen sätts bara när körningen skapas (#1379) — en uppdatering skriver aldrig över den. */
+  override async update(id: BillingRunId, patch: Partial<BillingRun>): Promise<BillingRun> {
+    const { reference: _r, ...rest } = patch;
+    return super.update(id, rest);
+  }
+
+  private async registerReference(billingRunId: BillingRunId, matterId: MatterId | undefined, reference: string | null | undefined): Promise<void> {
+    if (!reference) return;
+    const organizationId = await matterOrg(this.db, matterId);
+    if (!organizationId) return;
+    await this.db.insert(krReferences).values({ organizationId, reference, billingRunId });
+  }
+
+  async nextKrReference(organizationId: OrganizationId, year: number): Promise<string> {
+    const prefix = krReferencePrefix(year);
+    // Ett nummer i taget per byrå och serie (#1379) — som fakturanumret (#1243).
+    await lockSeries(this.db, `kr-reference:${organizationId}:${prefix}`);
+    // Körningarna (även borttagna) och registret: en referens återanvänds aldrig.
+    const [fromRuns] = await this.db
+      .select({ seq: maxSeriesSeq(billingRuns.reference, prefix) }).from(billingRuns)
+      .innerJoin(matters, eq(billingRuns.matterId, matters.id))
+      .where(and(eq(matters.organizationId, organizationId), inSeries(billingRuns.reference, prefix)));
+    const [fromRegister] = await this.db
+      .select({ seq: maxSeriesSeq(krReferences.reference, prefix) }).from(krReferences)
+      .where(and(eq(krReferences.organizationId, organizationId), inSeries(krReferences.reference, prefix)));
+    return formatSeriesNumber(prefix, Math.max(Number(fromRuns?.seq ?? 0), Number(fromRegister?.seq ?? 0)) + 1);
   }
 
   async listForOrg(organizationId: OrganizationId, matterId?: MatterId): Promise<BillingRunListRow[]> {
