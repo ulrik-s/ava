@@ -11,9 +11,11 @@ import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import type { QueuedCallIdentity } from "@/lib/server/queued-call";
 import { appRouter } from "@/lib/server/routers/_app";
 import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/radgivning-entry";
 import { asId } from "@/lib/shared/schemas/ids";
+import { derivedId } from "@/lib/shared/sync/derived-id";
 
 const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
@@ -36,7 +38,7 @@ function entry(entryId: string, minutes: number, extra: Record<string, unknown> 
 }
 
 /** Legacy-ärende: rådgivningsfaktura från före #1205, ingen låst post. */
-function makeCaller(opts: SeedOpts = {}, timeEntries: ReturnType<typeof entry>[] = [entry("mote", 45)]) {
+function makeCaller(opts: SeedOpts = {}, timeEntries: ReturnType<typeof entry>[] = [entry("mote", 45)], queued?: QueuedCallIdentity) {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "X" }],
     matters: [{
@@ -53,7 +55,7 @@ function makeCaller(opts: SeedOpts = {}, timeEntries: ReturnType<typeof entry>[]
     expenses: [],
   }, async () => { /* writable: noop write-back */ });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  return appRouter.createCaller({ ...buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }), queued } as any);
 }
 
 type Caller = ReturnType<typeof makeCaller>;
@@ -85,6 +87,14 @@ describe("timeEntry.markAsRadgivning — låser (#1207)", () => {
     expect(res.remainder!.frozenAt ?? null).toBeNull();
     const all = await entriesOf(caller);
     expect(all.map((t) => t.minutes).sort((a, b) => a - b)).toEqual([60, 90]);
+  });
+
+  it("i ett köat anrop (#1349): låstidpunkten är anropets tid och restposten får id härlett ur anropet", async () => {
+    const queued = { mutationId: "01928f3a-1b2c-7d4e-8f00-112233445566", at: Date.UTC(2026, 2, 2, 12, 0) };
+    const caller = makeCaller({}, [entry("mote", 150)], queued);
+    const res = await caller.timeEntry.markAsRadgivning({ id: id("mote") });
+    expect(new Date(String(res.locked.frozenAt)).getTime()).toBe(queued.at);
+    expect(res.remainder?.id).toBe(derivedId(queued.mutationId, "radgivningRemainder"));
   });
 
   it("den låsta posten når inte upparbetat ofakturerat — resten gör det", async () => {

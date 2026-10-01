@@ -16,13 +16,17 @@ describe("isQueuedProcedure", () => {
     expect(isQueuedProcedure("timeEntry.delete")).toBe(true);
   });
 
+  it("Markera som rådgivning köas som anrop — tidsposter är procedurägda (#1349)", () => {
+    expect(isQueuedProcedure("timeEntry.markAsRadgivning")).toBe(true);
+    expect(queuedProcedureEntity("timeEntry.markAsRadgivning")).toBe("timeEntry");
+  });
+
   it("omklassning av ett dokument köas som anrop — servern äger klassificeringen (#1156)", () => {
     expect(isQueuedProcedure("document.analyze")).toBe(true);
     expect(queuedProcedureEntity("document.analyze")).toBe("document");
   });
 
   it("allt annat går via radkön (ännu inte flyttat)", () => {
-    expect(isQueuedProcedure("timeEntry.markAsRadgivning")).toBe(false);
     expect(isQueuedProcedure("contacts.create")).toBe(false);
     expect(isQueuedProcedure("timeEntry.list")).toBe(false);
     expect(isQueuedProcedure("")).toBe(false);

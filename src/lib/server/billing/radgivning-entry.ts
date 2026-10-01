@@ -59,13 +59,23 @@ async function assertMarkable(repos: Repos, orgId: OrganizationId, id: TimeEntry
 }
 
 /**
+ * Anropets identitet (#1349): när det gjordes och restpostens id. Båda kommer
+ * från anroparen — härledda ur det köade anropet (`callTime`/`newRowId`) — så
+ * klientens körning och serverns omkörning ger SAMMA rader.
+ */
+export interface MarkRadgivningCall {
+  now: Date;
+  remainderId: TimeEntryId;
+}
+
+/**
  * Resten (minuter över rådgivningstimmen) som en ny post med samma innehåll.
  * Var posten fryst av en körning (ej debiterbar, #1235) behåller resten den
  * frysningen — körningens underlag rörs inte; annars blir resten olåst.
  */
-function createRemainder(repos: Repos, entry: TimeEntry, minutes: number): Promise<TimeEntry> {
+function createRemainder(repos: Repos, entry: TimeEntry, minutes: number, id: TimeEntryId): Promise<TimeEntry> {
   return repos.timeEntries.create(omitUndefined({
-    matterId: entry.matterId, userId: entry.userId, date: entry.date, minutes,
+    id, matterId: entry.matterId, userId: entry.userId, date: entry.date, minutes,
     description: entry.description, hourlyRate: entry.hourlyRate, kind: entry.kind,
     standardAtgardId: entry.standardAtgardId, billable: entry.billable,
     frozenAt: entry.frozenAt ?? undefined, frozenByBillingRunId: entry.frozenByBillingRunId ?? undefined,
@@ -82,11 +92,11 @@ function createRemainder(repos: Repos, entry: TimeEntry, minutes: number): Promi
  * så ≤ 60 och > 60 går samma väg och den låsta posten behåller sin historik.
  */
 export async function markEntryAsRadgivning(
-  repos: Repos, orgId: OrganizationId, id: TimeEntryId, now: Date,
+  repos: Repos, orgId: OrganizationId, id: TimeEntryId, call: MarkRadgivningCall,
 ): Promise<MarkRadgivningResult> {
   const { entry, invoiceId } = await assertMarkable(repos, orgId, id);
   const { locked, rest } = splitRadgivningMinutes(entry.minutes);
-  const lockedEntry = await repos.timeEntries.update(entry.id, { minutes: locked, frozenAt: entry.frozenAt ?? now, invoiceId } satisfies Partial<TimeEntry>);
-  const remainder = rest > 0 ? await createRemainder(repos, entry, rest) : null;
+  const lockedEntry = await repos.timeEntries.update(entry.id, { minutes: locked, frozenAt: entry.frozenAt ?? call.now, invoiceId } satisfies Partial<TimeEntry>);
+  const remainder = rest > 0 ? await createRemainder(repos, entry, rest, call.remainderId) : null;
   return { locked: lockedEntry, remainder };
 }
