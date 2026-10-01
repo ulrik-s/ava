@@ -120,18 +120,14 @@ export interface Verdict {
 /**
  * Kända, öppna buggar som en avvikelse kan bero på. Ta bort raden när buggen
  * är fixad (`AVA_SIM_STRICT=1` räknar dem som fel redan nu):
- *   - #1397: en radering av en rad som redan är raderad på servern lämnar en
- *     stomrad (bara `id`, ingen `version`) lokalt.
  *   - #1402: med flera flikar lämnar en avvisad ändring spökrader i fliken
  *     som gjorde den, när en annan flik skickade den (#1392 återställer bara
  *     i den fliken). Gäller bara webbläsare med flera flikar — i en ensam
  *     flik är samma avvikelse ett fel (#1348).
  */
-function knownBug(d: Divergence, local: Row | undefined, refusedInSharedQueue: ReadonlySet<string>): string | null {
+function knownBug(d: Divergence, refusedInSharedQueue: ReadonlySet<string>): string | null {
   if (STRICT) return null;
-  if (refusedInSharedQueue.has(`${d.entity}:${d.id}`)) return "#1402";
-  if (local && local.version === undefined) return "#1397";
-  return null;
+  return refusedInSharedQueue.has(`${d.entity}:${d.id}`) ? "#1402" : null;
 }
 
 /** Byråernas läge så som en ny klient ser det (org → läge). */
@@ -170,7 +166,7 @@ async function checkConvergence(states: States, tabs: readonly SimTab[]): Promis
     const local = localState(t);
     for (const d of diffStates(expected, local, new Set())) {
       const line = `${t.name}: ${d.entity} ${d.id} ${d.what}`;
-      const bug = knownBug(d, local.get(d.entity)?.get(d.id), refused);
+      const bug = knownBug(d, refused);
       if (bug) verdict.known.push(`${bug} ${line}`);
       else verdict.violations.push(line);
     }

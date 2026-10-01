@@ -21,7 +21,8 @@
  *               surface: saknad eller stale `baseVersion` ⇒ conflict; annars
  *               update (server-nyare ⇒ rebased). append/lww applicerar.
  *               När raden skapades och vem som skapade den ändras aldrig.
- *   - delete  → softDelete (redan borta ⇒ idempotent accepted).
+ *   - delete  → softDelete (redan borta ⇒ idempotent accepted). Svaret är
+ *               en tombstone (`deleted`, #1397), aldrig en levande rad.
  * Ett data- eller integritetsfel från databasen (SQLSTATE 22/23) blir en
  * konflikt (#1399): samma post ger samma fel igen, och ett 500 skulle hålla
  * klientens kö i omförsök.
@@ -238,8 +239,9 @@ export class DrizzleSyncStore implements SyncStore {
     return serverVersion === m.baseVersion ? null : "stale";
   }
 
+  /** Radera (redan borta ⇒ idempotent). Svaret är en tombstone (#1397). */
   private async applyDelete(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
-    if (!existing) return { status: "accepted", row: { id: rowId(m) } }; // redan borta
-    return { status: "accepted", row: await repo.softDelete(rowId(m)) };
+    if (existing) await repo.softDelete(rowId(m));
+    return { status: "accepted", row: { id: rowId(m) }, deleted: true };
   }
 }

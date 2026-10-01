@@ -22,11 +22,14 @@ export interface PullResult {
 /**
  * Utfall av att pusha en köad mutation (ADR 0017 tre konfliktklasser):
  *   - `accepted` — applicerad; kanonisk rad (version bumpad) returneras.
+ *                  `deleted` = raden är borttagen på servern (en radering, också
+ *                  av en rad som redan var borta, #1397) och `row` är dess
+ *                  tombstone — klienten tar bort raden, skriver den aldrig.
  *   - `rebased`  — LWW: servern hade nyare; kanonisk rad returneras.
  *   - `conflict` — surface: avvisad efter invariant/statemaskin-validering.
  */
 export type PushResult =
-  | { status: "accepted"; row: Record<string, unknown> }
+  | { status: "accepted"; row: Record<string, unknown>; deleted?: true }
   | { status: "rebased"; row: Record<string, unknown> }
   | { status: "conflict"; reason: string; current?: Record<string, unknown> };
 

@@ -8,7 +8,7 @@
  * Förloppet är seedat: samma seed ger samma förlopp, så ett fel går att
  * återskapa med `AVA_SIM_SEED=<seed>`. Invarianterna står i `invariants.ts`.
  *
- * Avvikelser som beror på kända, öppna buggar (#1397, #1402) rapporteras
+ * Avvikelser som beror på kända, öppna buggar (#1402) rapporteras
  * separat och fäller inte testet; `AVA_SIM_STRICT=1` räknar dem som fel.
  *
  * Budget: på varje PR körs ett litet, fast antal seeds (unit-passet är nära
@@ -45,5 +45,4 @@ describe("synksimulering (#1268, #1358)", () => {
   // fel än (se `knownBug` i invariants.ts); `AVA_SIM_STRICT=1` gör det.
   const pending = (): void => undefined;
   it.todo("flera flikar: en avvisad ändring lämnar inga spökrader i fliken som gjorde den (#1402)", pending);
-  it.todo("radering av en rad som redan är raderad lämnar ingen stomrad lokalt (#1397)", pending);
 });
