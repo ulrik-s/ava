@@ -1,9 +1,11 @@
 /**
  * `ConflictCheckRepository` (ADR 0020, #409 fan-out) — jävskontroll-loggen.
- * Bas-CRUD ärvs (`create` loggar en sökning). `listHistory` är medvetet INTE
- * org-scopad — tabellen saknar organizationId (speglar dagens beteende).
+ * Bas-CRUD ärvs (`create` loggar en sökning). Tabellen saknar organizationId:
+ * byrån är den som körde kontrollens (`checkedById`, #1344) — historiken och
+ * synken avgränsas med den.
  */
 
+import type { OrganizationId } from "@/lib/shared/schemas/ids";
 import type { ConflictCheck } from "@/lib/shared/schemas/misc";
 import type { Repository } from "./types";
 
@@ -13,6 +15,6 @@ export interface ConflictCheckRow extends ConflictCheck {
 }
 
 export interface ConflictCheckRepository extends Repository<ConflictCheck> {
-  /** Paginerad historik (createdAt desc) med utförarens namn + totalantal. */
-  listHistory(page: number, pageSize: number): Promise<{ checks: ConflictCheckRow[]; total: number }>;
+  /** Byråns historik (createdAt desc), paginerad, med utförarens namn + totalantal. */
+  listHistory(organizationId: OrganizationId, page: number, pageSize: number): Promise<{ checks: ConflictCheckRow[]; total: number }>;
 }

@@ -78,6 +78,22 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
   // server-LLM). Klienten kör den inte själv — servern kör om anropet.
   "document.analyze": Object.freeze({ entity: "document" }),
+  // Administrationen (#1344): användare, byråinställningar, kontor, byråns
+  // standardvyer och mallar. Rollen läses ur användarraden, så de tas inte
+  // emot som rader — servern kör om routern, där admin-kraven gäller.
+  "user.create": Object.freeze({ entity: "user", idField: "id" }),
+  "user.update": Object.freeze({ entity: "user" }),
+  "user.deactivate": Object.freeze({ entity: "user" }),
+  "user.delete": Object.freeze({ entity: "user" }),
+  "organization.updateSettings": Object.freeze({ entity: "organization" }),
+  "organization.addOffice": Object.freeze({ entity: "office", idField: "id" }),
+  "organization.updateOffice": Object.freeze({ entity: "office" }),
+  "organization.deleteOffice": Object.freeze({ entity: "office" }),
+  "documentTemplate.create": Object.freeze({ entity: "documentTemplate", idField: "id" }),
+  "documentTemplate.update": Object.freeze({ entity: "documentTemplate" }),
+  "documentTemplate.delete": Object.freeze({ entity: "documentTemplate" }),
+  "prefs.setOrgDefault": Object.freeze({ entity: "orgPreference" }),
+  "prefs.clearOrgDefault": Object.freeze({ entity: "orgPreference" }),
 });
 
 /** Är `path` en procedur som köas som anrop? (Egna nycklar — inte `__proto__` o.d.) */

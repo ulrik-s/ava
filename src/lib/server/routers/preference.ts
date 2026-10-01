@@ -11,6 +11,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { asId } from "@/lib/shared/schemas/ids";
+import { newRowId } from "../queued-call";
 import type { OrgPreferenceRow } from "../repositories/org-preference-repository";
 import type { UserPreferenceRow } from "../repositories/user-preference-repository";
 import { router, orgProcedure, protectedProcedure } from "../trpc";
@@ -66,7 +67,9 @@ export const preferenceRouter = router({
       if (existing) {
         return ctx.repos.orgPreferences.update(existing.id, { prefs: input.prefs, createdById: asId<"UserId">(ctx.user.id) } satisfies Partial<OrgPreferenceRow>);
       }
+      // Köat anrop (#1344): samma id i klientens körning och serverns omkörning.
       return ctx.repos.orgPreferences.create({
+        id: asId<"OrgPreferenceId">(newRowId(ctx, "orgPreference")),
         organizationId: asId<"OrganizationId">(ctx.user.organizationId),
         key: input.key, prefs: input.prefs, createdById: asId<"UserId">(ctx.user.id),
       } satisfies Partial<OrgPreferenceRow>);

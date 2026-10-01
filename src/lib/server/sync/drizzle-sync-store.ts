@@ -5,12 +5,15 @@
  *
  * pull: läs `change_log` (`seq > cursor`, per org), deduppa till senaste op per
  * rad, hämta kanonisk rad via repot (saknad/raderad → tombstone).
- * push: kontrollera byrån och avvisa procedurägda entiteter (#1242,
- * `push-guard` — tid, utlägg och fakturering skrivs bara av procedurkön), applicera sedan
- * en köad mutation per konfliktklass (ADR 0017):
+ * push: kontrollera byrån, avvisa procedurägda entiteter (#1242,
+ * `push-guard` — tid, utlägg, fakturering, användare och byråinställningar
+ * skrivs bara av procedurkön) och pröva radvägens policy (#1344,
+ * `row-push-policy`: neka som standard, referenser inom byrån, vem som skapade
+ * raden), applicera sedan en köad mutation per konfliktklass (ADR 0017):
  *   - create  → idempotent (finns id → accepted), annars create.
- *   - update  → surface: stale `baseVersion` ⇒ conflict; annars update
- *               (server-nyare ⇒ rebased). append/lww applicerar.
+ *   - update  → surface: saknad eller stale `baseVersion` ⇒ conflict; annars
+ *               update (server-nyare ⇒ rebased). append/lww applicerar.
+ *               När raden skapades och vem som skapade den ändras aldrig.
  *   - delete  → softDelete (redan borta ⇒ idempotent accepted).
  */
 
@@ -25,6 +28,7 @@ import type { Repositories } from "../repositories/repositories";
 import { entityRepo, type EntityRepo, type Row } from "./entity-repo";
 import { checkProcedureOwned, checkScope, type PushRejection } from "./push-guard";
 import { admitRow } from "./queue-admission";
+import { checkRowPolicy, immutableOnUpdate, type RowPolicyRejection, type RowPusher } from "./row-push-policy";
 import { withoutServerOwned } from "./server-owned-fields";
 import type { SyncStore } from "./sync-store";
 
@@ -48,6 +52,9 @@ function isUuidRowId(id: string): boolean { return UUID_RE.test(id); }
 function versionOf(row: Row | null): number {
   return row && typeof row.version === "number" ? row.version : 1;
 }
+
+/** Beskedet när en ändring av en surface-entitet saknar versionen den byggde på (#1344). */
+export const MISSING_BASE_VERSION_REASON = "saknar basversion";
 
 export class DrizzleSyncStore implements SyncStore {
   constructor(
@@ -92,15 +99,15 @@ export class DrizzleSyncStore implements SyncStore {
     return { entity: r.entity, row: current };
   }
 
-  async push(organizationId: string, queued: QueuedMutation): Promise<PushResult> {
+  async push(pusher: RowPusher, queued: QueuedMutation): Promise<PushResult> {
     // Köformatet (#1247): en för gammal post avvisas med ett besked; en äldre,
     // stödd migreras; en nyare än servern kastar (klienten försöker igen).
     const admission = admitRow(queued, this.queuePolicy);
     if (admission.kind === "reject") return { status: "conflict", reason: admission.reason };
-    return this.pushAdmitted(organizationId, admission.entry);
+    return this.pushAdmitted(pusher, admission.entry);
   }
 
-  private async pushAdmitted(organizationId: string, m: QueuedMutation): Promise<PushResult> {
+  private async pushAdmitted(pusher: RowPusher, m: QueuedMutation): Promise<PushResult> {
     const repo = this.repoFor(m.entity);
     if (!repo) return { status: "conflict", reason: `okänd entitet: ${m.entity}` };
     // Ogiltigt (icke-uuid) rowId: kan aldrig lagras i de uuid-nycklade tabellerna.
@@ -109,19 +116,30 @@ export class DrizzleSyncStore implements SyncStore {
     // men syns som konflikt. Klienten reparerar id:n före push (legacy-id-repair).
     if (!isUuidRowId(rowId(m))) return { status: "conflict", reason: `ogiltigt id (inte uuid): ${rowId(m)}` };
     const existing = await repo.getById(rowId(m));
-    const rejected = await this.guard(organizationId, repo, m, existing);
+    const rejected = await this.guard(pusher, repo, m, existing);
     if (rejected) return { status: "conflict", ...rejected };
     if (m.kind === "delete") return this.applyDelete(repo, m, existing);
     if (m.kind === "create") return this.applyCreate(repo, m, existing);
     return this.applyUpdate(repo, m, existing);
   }
 
-  /** Byrån och procedurägda entiteter (#1242): avvisas raden, skrivs ingenting. */
-  private async guard(organizationId: string, repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushRejection | null> {
+  /**
+   * Byrån, procedurägda entiteter (#1242) och radvägens policy (#1344):
+   * avvisas raden, skrivs ingenting.
+   */
+  private async guard(pusher: RowPusher, repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushRejection | RowPolicyRejection | null> {
     const incoming = m.kind === "delete" ? null : m.row;
     const orgOf = (row: Row): Promise<string | undefined> => repo.organizationOf(row);
-    return await checkScope(orgOf, organizationId, m.entity, existing, incoming)
-      ?? checkProcedureOwned(m.entity, existing);
+    return await checkScope(orgOf, pusher.organizationId, existing, incoming)
+      ?? checkProcedureOwned(m.entity, existing)
+      ?? await checkRowPolicy({ entity: m.entity, kind: m.kind, incoming, existing, pusher, refOrg: (e, id) => this.refOrg(e, id) });
+  }
+
+  /** Byrån en refererad rad hör till; `null` om den inte finns. */
+  private async refOrg(entity: string, id: string): Promise<string | null | undefined> {
+    const repo = this.repoFor(entity);
+    const row = repo ? await repo.getById(id) : null;
+    return repo && row ? repo.organizationOf(row) : null;
   }
 
   private async applyCreate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
@@ -132,13 +150,25 @@ export class DrizzleSyncStore implements SyncStore {
   private async applyUpdate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
     if (!existing) return { status: "accepted", row: await repo.create(m.row) };
     const serverVersion = versionOf(existing);
-    if (conflictClassOf(m.entity) === "surface" && m.baseVersion != null && serverVersion !== m.baseVersion) {
-      return { status: "conflict", reason: "stale", current: existing };
-    }
-    // Server-ägda fält (dokumentets analys, #1280) skrivs aldrig av en radpush.
-    const updated = await repo.update(rowId(m), withoutServerOwned(m.entity, existing, m.row));
+    const surfaceConflict = this.surfaceConflict(m, serverVersion);
+    if (surfaceConflict) return { status: "conflict", reason: surfaceConflict, current: existing };
+    // Server-ägda fält (dokumentets analys, #1280) och radens ursprung (när och
+    // av vem, #1344) skrivs aldrig av en radpush.
+    const patch = immutableOnUpdate(m.entity, withoutServerOwned(m.entity, existing, m.row));
+    const updated = await repo.update(rowId(m), patch);
     const rebased = m.baseVersion != null && serverVersion > m.baseVersion;
     return { status: rebased ? "rebased" : "accepted", row: updated };
+  }
+
+  /**
+   * En surface-entitet ändras bara mot den version klienten byggde på: saknas
+   * den (#1344) kan servern inte se om ändringen är inaktuell — avvisas, i
+   * stället för att tyst skriva över.
+   */
+  private surfaceConflict(m: QueuedMutation, serverVersion: number): string | null {
+    if (conflictClassOf(m.entity) !== "surface") return null;
+    if (m.baseVersion == null) return MISSING_BASE_VERSION_REASON;
+    return serverVersion === m.baseVersion ? null : "stale";
   }
 
   private async applyDelete(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {

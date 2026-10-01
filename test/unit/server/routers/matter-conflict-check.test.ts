@@ -48,7 +48,7 @@ describe("matter.create — jävskontrollen", () => {
     const matter = await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
     expect(matter).toMatchObject({ conflictCheckStatus: "HITS", conflictCheckHits: 1 });
     expect(matter.conflictCheckedAt).toBeInstanceOf(Date);
-    const { checks } = await ctx.repos.conflictChecks.listHistory(1, 10);
+    const { checks } = await ctx.repos.conflictChecks.listHistory(asId<"OrganizationId">(ORG), 1, 10);
     expect(checks.map((c) => c.searchTerm)).toEqual(["Bo Berg 19800101-1234"]);
   });
 
@@ -67,14 +67,14 @@ describe("matter.create — jävskontrollen", () => {
     const { ctx } = setup();
     const offline = appRouter.createCaller({ ...ctx, queued: QUEUED, provisional: true });
     expect(await offline.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT })).toMatchObject({ conflictCheckStatus: "PENDING" });
-    expect((await ctx.repos.conflictChecks.listHistory(1, 10)).total).toBe(0);
+    expect((await ctx.repos.conflictChecks.listHistory(asId<"OrganizationId">(ORG), 1, 10)).total).toBe(0);
   });
 
   it("serverns körning av samma köade anrop avgör — med kontrollens id härlett ur anropet", async () => {
     const { ctx } = setup();
     const server = appRouter.createCaller({ ...ctx, queued: QUEUED });
     expect(await server.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT })).toMatchObject({ conflictCheckStatus: "HITS" });
-    const { checks } = await ctx.repos.conflictChecks.listHistory(1, 10);
+    const { checks } = await ctx.repos.conflictChecks.listHistory(asId<"OrganizationId">(ORG), 1, 10);
     expect(checks).toHaveLength(1);
   });
 });
@@ -129,7 +129,7 @@ describe("checkMatterConflicts", () => {
     const { ctx } = setup();
     await ctx.repos.contacts.create({ id: asId<"ContactId">("019a0000-0000-7000-8000-0000000000c3"), organizationId: asId<"OrganizationId">(ORG), name: "Berg AB", contactType: "COMPANY", orgNumber: "556000-1111" });
     await checkMatterConflicts({ ...ctx, user: PRINCIPAL }, NEW, asId<"ContactId">("019a0000-0000-7000-8000-0000000000c3"));
-    const { checks } = await ctx.repos.conflictChecks.listHistory(1, 10);
+    const { checks } = await ctx.repos.conflictChecks.listHistory(asId<"OrganizationId">(ORG), 1, 10);
     expect(checks[0]?.searchTerm).toBe("Berg AB 556000-1111");
   });
 });

@@ -251,11 +251,21 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   mutationId, en rad byggd på serverns version); **Kasta** låter serverns läge
   gälla. Ingen avvisad ändring försvinner tyst.
 - **Procedurägda entiteter** (#1242, `src/lib/shared/sync/procedure-owned.ts`):
-  ärenden, tid, utlägg och all fakturering skrivs bara av procedurkön. Servern tar inte
+  ärenden, tid, utlägg och all fakturering skrivs bara av procedurkön — liksom
+  administrationen (#1344): användare, byrån, kontor, byråns standardvyer och
+  dokumentmallar, eftersom rollen läses ur användarraden. Servern tar inte
   emot färdiga rader för dem — en sådan radpush avvisas med ett besked (en
-  manipulerad klient, eller en post som en äldre version köade).
-- Övriga entiteter är ren data och går via radkön (byrån kontrolleras,
-  server-ägda fält skrivs aldrig över).
+  manipulerad klient, eller en post som en äldre version köade). Bankgiro,
+  organisationsnummer och kontoplan ändras bara av admin.
+- Övriga entiteter är ren data och går via radkön, under en policy per
+  entitet (#1344, `src/lib/server/sync/row-push-policy.ts`): neka som
+  standard; raden och dess referenser (ärende, kontakt, dokument, mapp,
+  användare …) måste höra till byrån; den som skapar en anteckning, ett
+  dokument eller en jävskontroll är den pushande, och skapare och skapelsetid
+  ändras aldrig; en användares preferenser skrivs bara av den användaren;
+  jävskontrollens logg kan bara läggas till och hör till byrån via den som
+  körde kontrollen. En ändring av en surface-entitet utan basversion avvisas.
+  Server-ägda fält skrivs aldrig över.
 - **Synkläget per enhet** (#1267): efter varje lyckad synk rapporterar
   webbläsaren sitt enhets-id, köns längd och den äldsta osynkade ändringen
   (`sync.reportDevice`, `src/lib/client/backend/sync-device-report.ts`).

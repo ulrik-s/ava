@@ -35,7 +35,7 @@ export const conflictRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const { checks, total } = await ctx.repos.conflictChecks.listHistory(input.page, input.pageSize);
+      const { checks, total } = await ctx.repos.conflictChecks.listHistory(asId<"OrganizationId">(ctx.user.organizationId), input.page, input.pageSize);
       return { checks, total, pages: Math.ceil(total / input.pageSize) };
     }),
 });

@@ -45,6 +45,19 @@ const PROCEDURES: Readonly<Record<string, string>> = {
   "expectedReceivable.settle": "Avprickad domstolsfordran",
   "expectedReceivable.cancel": "Avbruten domstolsfordran",
   "expectedReceivable.update": "Ändring av domstolsfordran",
+  "user.create": "Ny användare",
+  "user.update": "Ändring av användare",
+  "user.deactivate": "Inaktiverad användare",
+  "user.delete": "Borttagning av användare",
+  "organization.updateSettings": "Ändring av byråinställningar",
+  "organization.addOffice": "Nytt kontor",
+  "organization.updateOffice": "Ändring av kontor",
+  "organization.deleteOffice": "Borttagning av kontor",
+  "documentTemplate.create": "Ny dokumentmall",
+  "documentTemplate.update": "Ändring av dokumentmall",
+  "documentTemplate.delete": "Borttagning av dokumentmall",
+  "prefs.setOrgDefault": "Byråns standardvy",
+  "prefs.clearOrgDefault": "Borttagen standardvy för byrån",
 };
 
 /** Entiteter i radkön, i bestämd form efter "av". */

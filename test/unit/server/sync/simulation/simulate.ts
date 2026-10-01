@@ -16,6 +16,7 @@ import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import { asId } from "@/lib/shared/schemas/ids";
 import { type Rng, rng } from "../../../helpers/seeded-rng";
 import { createTestDb } from "../../db/pg-test-db";
+import { pusher } from "../row-pusher";
 import { isProcedure, MATTER, ORG, seedWorld, SimClient, SimServer, userFor } from "./sync-world";
 
 type Op = (c: SimClient, r: Rng, step: number) => Promise<unknown>;
@@ -157,7 +158,7 @@ async function checkSerial(server: SimServer, clients: number): Promise<string[]
     const replayer = new DrizzleProcedureReplayer(fresh.db, repos);
     const sync = new DrizzleSyncStore(fresh.db, repos);
     for (const o of server.applied) {
-      if (o.kind === "row") { await sync.push(ORG, o.mutation); continue; }
+      if (o.kind === "row") { await sync.push(pusher(ORG, userFor(0).id), o.mutation); continue; }
       const u = Array.from({ length: clients }, (_, i) => userFor(i)).find((x) => x.id === o.userId);
       const ctx = buildContext({
         repos, eventLog: serverFirstEventLog, ports: noopPorts,

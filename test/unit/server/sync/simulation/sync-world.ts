@@ -27,6 +27,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { DrizzleProcedureReplayer, type ProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import type { SyncStore } from "@/lib/server/sync/sync-store";
+import type { UserRole } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { createTestDb, type TestDbHandle } from "../../db/pg-test-db";
 
@@ -126,7 +127,7 @@ export class SimClient {
   store!: CachingSyncDataStore;
   api!: TRPCClient<AppRouter>;
 
-  constructor(readonly index: number, private readonly server: SimServer) {}
+  constructor(readonly index: number, private readonly server: SimServer, private readonly role: UserRole = "LAWYER") {}
 
   /** Starta (eller starta om) från det som persisterats. */
   async boot(): Promise<void> {
@@ -138,7 +139,7 @@ export class SimClient {
     const u = userFor(this.index);
     const link = new GitBackendRuntime({
       dataStore: this.store.store,
-      authProvider: new GitAuthProvider({ id: asId<"UserId">(u.id), email: u.email, name: u.name, role: "LAWYER", organizationId: asId<"OrganizationId">(ORG) }),
+      authProvider: new GitAuthProvider({ id: asId<"UserId">(u.id), email: u.email, name: u.name, role: this.role, organizationId: asId<"OrganizationId">(ORG) }),
       recordProcedure: (call, exec) => this.store.runQueuedProcedure(call, exec),
     }).createLink();
     this.api = createTRPCClient<AppRouter>({ links: [link] });

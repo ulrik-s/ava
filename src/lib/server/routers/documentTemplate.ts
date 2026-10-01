@@ -7,6 +7,7 @@ import {
   userIdSchema,
 } from "@/lib/shared/schemas/ids";
 import type { DocumentTemplate } from "@/lib/shared/schemas/misc";
+import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
 import { router, protectedProcedure } from "../trpc";
 
 export const documentTemplateRouter = router({
@@ -37,6 +38,9 @@ export const documentTemplateRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Mallen köas (#1344): skapare och skapad-datum i någon annans namn är
+      // setup-fält — aldrig i kön, och direkt bara för ADMIN (#1345).
+      assertSetupFieldsAllowed(ctx, { createdById: onBehalfOf(ctx, input.createdById), createdAt: input.createdAt });
       return ctx.repos.documentTemplates.create({
         ...omitUndefined({
           id: input.id, // undefined → store genererar
