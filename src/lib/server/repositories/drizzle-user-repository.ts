@@ -3,9 +3,10 @@
  * org-scopar direkt på `users.organizationId`.
  */
 
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { User } from "@/lib/shared/schemas/user";
+import { normalizeLoginEmail } from "../auth/login-email-normalize";
 import { users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -29,6 +30,14 @@ export class DrizzleUserRepository extends DrizzleRepository<User> implements Us
       .select().from(users)
       .where(and(eq(users.organizationId, organizationId), isNull(users.deletedAt)))
       .orderBy(asc(users.name));
+    return this.asRows(rows);
+  }
+
+  async listByLoginEmail(email: string): Promise<User[]> {
+    // Samma uttryck som det unika indexet `users_login_email_uq` (0042).
+    const rows = await this.db
+      .select().from(users)
+      .where(and(sql`lower(btrim(${users.email})) = ${normalizeLoginEmail(email)}`, isNull(users.deletedAt)));
     return this.asRows(rows);
   }
 }

@@ -14,6 +14,7 @@
 
 import {
   OidcAuthProvider,
+  resolveLogin,
   type AllowlistedUser,
   type OidcClaims,
 } from "@/lib/server/auth/oidc-auth-provider";
@@ -37,11 +38,14 @@ export function resolveSelfHostedPrincipal(
  *     callern faller tillbaka på sitt vanliga (icke-OIDC) beteende.
  *   - `denied`      — autentiserad IdP-identitet men INTE i byråns allowlist →
  *     neka (autentisering ≠ auktorisering, #223).
+ *   - `ambiguous`   — adressen hör till flera konton → neka (#1408) i stället
+ *     för att välja det första.
  *   - `authorized`  — allowlistad → principal ur firma.git.
  */
 export type OidcLoginOutcome =
   | { kind: "authorized"; principal: Principal }
   | { kind: "denied"; email: string }
+  | { kind: "ambiguous"; email: string }
   | { kind: "no-session" };
 
 export function classifyOidcLogin(
@@ -49,6 +53,6 @@ export function classifyOidcLogin(
   users: readonly AllowlistedUser[],
 ): OidcLoginOutcome {
   if (!claims) return { kind: "no-session" };
-  const principal = resolveSelfHostedPrincipal(claims, users);
-  return principal ? { kind: "authorized", principal } : { kind: "denied", email: claims.email };
+  const outcome = resolveLogin(claims, users);
+  return outcome.kind === "authorized" ? outcome : { kind: outcome.kind, email: claims.email };
 }

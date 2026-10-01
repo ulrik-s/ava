@@ -14,4 +14,10 @@ export interface UserRepository extends Repository<User> {
   getByIdInOrg(id: UserId, organizationId: OrganizationId): Promise<User | null>;
   /** Alla (icke-raderade) användare i org:en, namn-sorterade. */
   listByOrg(organizationId: OrganizationId): Promise<User[]>;
+  /**
+   * Användarna (i ALLA byråer, icke-raderade) vars e-post är samma inloggning
+   * som `email` — skiftläge och omgivande blanksteg spelar ingen roll (#1408).
+   * Adressen är unik, så fler än en träff är en dubblett från före indexet.
+   */
+  listByLoginEmail(email: string): Promise<User[]>;
 }

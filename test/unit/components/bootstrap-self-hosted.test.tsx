@@ -137,6 +137,16 @@ describe("bootstrapSelfHosted", () => {
     expect(args.onStoreReady).not.toHaveBeenCalled();
   });
 
+  it("#1408: adressen hör till flera konton → nekad med ett eget besked, ingen store till appen", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
+    classifyOidcLogin.mockReturnValueOnce({ kind: "ambiguous", email: "a@b.se" });
+    const args = makeArgs({ firmaConfig: noPrincipal as FirmaConfig });
+    await bootstrapSelfHosted(args);
+    expect(args.setStatus).toHaveBeenCalledWith("error");
+    expect(args.setErrorMsg).toHaveBeenCalledWith(expect.stringMatching(/a@b\.se\) hör till mer än ett konto/));
+    expect(args.onStoreReady).not.toHaveBeenCalled();
+  });
+
   // ── Sessionsgrinden (#1245) ──────────────────────────────────────────────
   it("inloggad med samma identitet: bygger storen och noterar när sessionen verifierades", async () => {
     probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
