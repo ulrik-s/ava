@@ -36,6 +36,9 @@
 			# bara på den (verifierad mot IdP:ns nycklar), aldrig på headers.
 			# Omdöpt — inte Authorization — så helperns egen Bearer lämnas orörd.
 			copy_headers X-Auth-Request-Email Authorization>X-Ava-Identity-Token
+			# Auth-svarets Set-Cookie (en förnyad session efter COOKIE_REFRESH)
+			# når INTE browsern vid 2xx. Klienten sparar förnyelsen genom att
+			# fråga /oauth2/userinfo med jämna mellanrum (#1425, docs/auth.md).
 		}
 		reverse_proxy server-first:3001
 	}

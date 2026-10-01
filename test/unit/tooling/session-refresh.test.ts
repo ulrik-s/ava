@@ -9,6 +9,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
+import { SESSION_KEEPALIVE_INTERVAL_MS } from "@/lib/client/auth/session-keepalive";
 
 interface ComposeService { environment?: Record<string, string> }
 const proxyEnv = (file: string): Record<string, string> => {
@@ -49,6 +50,16 @@ describe("oauth2-proxy förnyar sessionen (#1351)", () => {
       expect(refresh).toBeLessThan(expire);
       expect(expire).toBe(OFFLINE_GRACE_S);
       if (stack.entra) expect(defaultOf(env.OAUTH2_PROXY_SCOPE)).toContain("offline_access");
+    });
+  }
+
+  // Keepalive:n (#1425) sparar förnyelsen via /oauth2/userinfo. Anropen till
+  // /api mellan att sessionen passerat COOKIE_REFRESH och nästa fråga förnyar
+  // utan att spara — intervallet måste vara en liten del av COOKIE_REFRESH.
+  for (const stack of STACKS.filter((s) => s.entra)) {
+    it(`${stack.file}: klientens keepalive frågar väl inom COOKIE_REFRESH (#1425)`, () => {
+      const refreshMs = seconds(defaultOf(proxyEnv(stack.file).OAUTH2_PROXY_COOKIE_REFRESH)) * 1000;
+      expect(SESSION_KEEPALIVE_INTERVAL_MS * 4).toBeLessThanOrEqual(refreshMs);
     });
   }
 

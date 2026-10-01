@@ -18,6 +18,11 @@ test("tre Outlook-speglingar når Graph i den ordning händelserna skapades", as
   const firstHeld = new Promise<void>((r) => { releaseFirst = r; });
   // Registreras efter hermetik-vakten och vinner därför för Graph-origin.
   await page.route("https://graph.microsoft.com/**", async (route) => {
+    // Speglingen slår först upp om händelsen redan finns i Outlook (#1361) — inget hittat.
+    if (route.request().method() === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ value: [] }) });
+      return;
+    }
     const body: unknown = route.request().postDataJSON();
     const subject = typeof body === "object" && body !== null && "subject" in body ? String(body.subject) : "?";
     subjects.push(subject);

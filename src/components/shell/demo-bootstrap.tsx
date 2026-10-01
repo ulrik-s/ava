@@ -60,6 +60,7 @@ import { JobsBadge } from "./jobs-badge";
 import { ReauthBanner } from "./reauth-banner";
 import { ServerFirstSync } from "./server-first-sync";
 import { ServerInvoiceNumbering } from "./server-invoice-numbering";
+import { SessionKeepalive } from "./session-keepalive";
 import { UnsavedWritesGuard } from "./unsaved-writes-guard";
 import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
@@ -316,6 +317,8 @@ function AuthGatedDemoTree(props: TreeProps) {
               fullhöjds-appen ned och hela sidan scrollar (#1185). */}
           <div className="flex h-full flex-col">
           {!isDemoTier && <ReauthBanner />}
+          {/* Proxyns förnyade cookie når webbläsaren bara via /oauth2/* (#1425). Av i demon. */}
+          <SessionKeepalive />
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white">
             <div className="flex-1 min-w-0">
               <AuthStatusBanner />
