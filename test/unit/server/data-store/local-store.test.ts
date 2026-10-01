@@ -52,4 +52,41 @@ describe("LocalStore", () => {
     expect(onMutate).toHaveBeenCalledTimes(2);
     expect(store.currentSource.users).toHaveLength(2);
   });
+
+  describe("onCommit (#1386) — en gång per ändring, efter dess write-back", () => {
+    function tracked() {
+      const calls: string[] = [];
+      const store = new LocalStore(
+        { users: [] },
+        (e) => { calls.push(`mutate:${String(e.row.id)}`); },
+        async () => { calls.push("commit"); },
+      );
+      return { calls, store };
+    }
+
+    it("en enskild mutation: write-back, sedan commit", async () => {
+      const { calls, store } = tracked();
+      await loose(store.users).create({ data: { id: "u1", name: "Anna" } });
+      expect(calls).toEqual(["mutate:u1", "commit"]);
+    });
+
+    it("en transaktion: alla rader, sedan EN commit", async () => {
+      const { calls, store } = tracked();
+      await store.transaction(async (tx) => {
+        await loose(tx.users).create({ data: { id: "u1", name: "Anna" } });
+        await loose(tx.users).create({ data: { id: "u2", name: "Bo" } });
+      });
+      expect(calls).toEqual(["mutate:u1", "mutate:u2", "commit"]);
+    });
+
+    it("en transaktion utan skrivningar, eller som kastar, ger ingen commit", async () => {
+      const { calls, store } = tracked();
+      await store.transaction(async () => "inget");
+      await expect(store.transaction(async (tx) => {
+        await loose(tx.users).create({ data: { id: "u1", name: "Anna" } });
+        throw new Error("boom");
+      })).rejects.toThrow("boom");
+      expect(calls).toEqual([]);
+    });
+  });
 });

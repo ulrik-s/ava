@@ -103,6 +103,12 @@ export class LocalStore implements IDataStore {
      * När `undefined` → delegates är read-only (mutations kastar).
      */
     private onMutate?: (event: MutationEvent<Record<string, unknown>>) => void | Promise<void>,
+    /**
+     * Körs EN gång när en ändring (en enskild mutation, eller alla event i en
+     * lyckad transaktion) flushats till `onMutate` (#1386). Persistensen
+     * skriver här ett snapshot per ändring i stället för ett per rad.
+     */
+    private onCommit?: () => Promise<void>,
   ) {
     // Relations-grafen är extraherad till `relations.ts` (#189). `getSource`
     // läser den AKTUELLA source-referensen så collections ser senaste arrayen.
@@ -221,6 +227,7 @@ export class LocalStore implements IDataStore {
       return;
     }
     await this.onMutate?.(event);
+    await this.onCommit?.();
   }
 
   /**
@@ -241,6 +248,7 @@ export class LocalStore implements IDataStore {
       const result = await fn(this.txView());
       this.txBuffer = null;
       for (const event of buffer) await this.onMutate(event);
+      if (buffer.length > 0) await this.onCommit?.();
       return result;
     } catch (err) {
       this.txBuffer = null;

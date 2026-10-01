@@ -17,14 +17,11 @@ async function createMatterFor(page: Page, title: string, klient: string): Promi
   await page.getByPlaceholder("Namn, personnummer eller organisationsnummer").fill(klient);
   await page.getByRole("list", { name: "Träffar" }).getByRole("button", { name: new RegExp(klient) }).first().click();
   await page.getByRole("button", { name: "Skapa ärende" }).click();
-  await expect(page.getByRole("button", { name: "Skapa ärende" })).toHaveCount(0);
+  // Blanketten stängs när mutationen svarat (knappen heter "Skapar..." under tiden, #1386).
+  await expect(page.getByLabel("Titel *")).toHaveCount(0);
 }
 
-/**
- * Öppna ärendet ur listan via menyn; returnerar dess Att bevaka. Klient-
- * navigering, inte `goto`: demon skriver ändringarna till IndexedDB i
- * efterhand, och en omladdning direkt efter skapandet kan tappa dem.
- */
+/** Öppna ärendet ur listan via menyn; returnerar dess Att bevaka. */
 async function openMatter(page: Page, title: string): Promise<Locator> {
   await page.getByRole("link", { name: /Ärenden/ }).first().click();
   await page.getByText(title).first().click();

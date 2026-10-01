@@ -14,6 +14,7 @@ import {
 import type { PulledChange, PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
+import type { DemoSource } from "@/lib/shared/demo-source";
 import { asId } from "@/lib/shared/schemas/ids";
 import { isUuid, uuidv7 } from "@/lib/shared/uuid";
 import { changeChannelHub, settle } from "../../../helpers/change-channel-hub";
@@ -284,6 +285,63 @@ describe("CachingSyncDataStore (#415)", () => {
       await ds.reconcile();
       expect(saves).toBe(1); // tom poll-reconcile → ingen extra skrivning
     });
+  });
+});
+
+describe("CachingSyncDataStore — en sparad ändring överlever en omladdning (#1386)", () => {
+  /** Persistens vars skrivningar räknas och kan hållas kvar. */
+  function heldPersistence() {
+    const saved: (readonly unknown[])[] = [];
+    let hold: Promise<void> | null = null;
+    return {
+      saved,
+      holdNext(): () => void {
+        let release: () => void = () => undefined;
+        hold = new Promise<void>((resolve) => { release = resolve; });
+        return release;
+      },
+      persistence: {
+        hydrate: async () => null,
+        save: async (s: DemoSource) => {
+          if (hold) { const h = hold; hold = null; await h; }
+          saved.push(structuredClone(s.matters ?? []));
+        },
+      },
+    };
+  }
+
+  it("en transaktion med flera rader skriver ETT snapshot, och mutationen svarar först när det är skrivet", async () => {
+    const p = heldPersistence();
+    const ds = await CachingSyncDataStore.create({ transport: new FakeTransport(), persistence: p.persistence });
+    const [a, b] = [uuidv7(), uuidv7()];
+    const release = p.holdNext();
+    let done = false;
+    const tx = ds.store.transaction(async (t) => {
+      await t.matters.create({ data: matter(a) as never });
+      await t.matters.create({ data: matter(b) as never });
+    }).then(() => { done = true; });
+    await settle();
+    expect(done).toBe(false); // snapshotet skrivs fortfarande → inte klar
+    expect(ds.pendingWrites.busy()).toBe(true);
+    release();
+    await tx;
+    expect(p.saved).toHaveLength(1);
+    expect(p.saved[0]).toHaveLength(2);
+    expect(ds.pendingCount()).toBe(2);
+    expect(ds.pendingWrites.busy()).toBe(false);
+  });
+
+  it("ett procedur-anrop räknas som pågående tills anropet köats och snapshotet skrivits", async () => {
+    const p = heldPersistence();
+    const ds = await CachingSyncDataStore.create({ transport: new FakeTransport(), persistence: p.persistence });
+    const busy: boolean[] = [];
+    ds.pendingWrites.subscribe((b) => busy.push(b));
+    const id = uuidv7();
+    await ds.runQueuedProcedure({ path: "matter.create", input: { id } }, async () => {
+      await ds.store.matters.create({ data: matter(id) as never });
+    });
+    expect(busy).toEqual([true, false]);
+    expect(p.saved).toHaveLength(1);
   });
 });
 
