@@ -123,9 +123,13 @@ services:
       # Med profilen "llm" (COMPOSE_PROFILES=llm): http://ollama:11434/v1 + modell.
       AVA_LLM_ENDPOINT: "${AVA_LLM_ENDPOINT:-}"
       AVA_LLM_MODEL: "${AVA_LLM_MODEL:-}"
-      # Felrapportering till PostHog (#1080): tomt = av. Värden default = US-regionen.
+      # Felrapportering (#1343) till PostHog i EU-regionen (Frankfurt).
+      # Tomt = av. Värd: tomt = eu.i.posthog.com; amerikansk värd vägras.
+      # Kräver biträdesavtal (DPA) med PostHog. Se docs/observability.md.
       AVA_POSTHOG_KEY: "${AVA_POSTHOG_KEY:-}"
       AVA_POSTHOG_HOST: "${AVA_POSTHOG_HOST:-}"
+      AVA_ERROR_ENVIRONMENT: "${AVA_ERROR_ENVIRONMENT:-}"
+      AVA_RELEASE: "${AVA_RELEASE:-}"
       # AVA Helper (ADR 0028/0029): webbappen hämtar helperns inloggnings-config
       # via `system.helperConfig` och pushar den till helpern. Tomt = av (default).
       # Sätts i ava-server.env när Entra är konfigurerat, se docs/self-hosted-entra.md.

@@ -90,31 +90,73 @@ minuter räknas inte, eftersom klienten laddar upp bytes:en efter raden.
 docker logs ava-server 2>&1 | jq -c 'select(.event == "content.integrity.missing") | {count, ids}'
 ```
 
-### Felrapportering till PostHog (#1080)
+## Felrapportering till PostHog EU (#1343)
 
-Med `AVA_POSTHOG_KEY` satt skickar servern varje **fel**post (`level: "error"`)
-till PostHogs felspårning som en `$exception`-händelse
-(`src/lib/server/observability/posthog-sink.ts`). Utan nyckel är den av, och
-loggen till stderr fungerar precis som förut. Båda får samma post (`teeSink`).
+Loggen ovan stannar på byråns server. En felrapport **lämnar** processen, och
+därför gäller strängare regler än för loggen:
+
+- **Av som standard.** Utan `AVA_POSTHOG_KEY` skickas ingenting — loggen till
+  stderr fungerar precis som förut.
+- **EU-regionen.** Mottagaren är PostHog EU Cloud (Frankfurt, AWS
+  eu-central-1): standardvärden är `https://eu.i.posthog.com`. En amerikansk
+  PostHog-värd (`us.i.posthog.com`, `us.posthog.com`) **vägras**, även som
+  uttryckligt val. `AVA_POSTHOG_HOST` finns bara för själv-hostad PostHog.
+- **Personuppgiftsbiträde.** PostHog är ett amerikanskt bolag som behandlar
+  data åt byrån. Teckna PostHogs biträdesavtal (DPA) innan nyckeln sätts.
+  Dataminimeringen nedan gör att rapporterna inte innehåller klientuppgifter.
+- **Bara serverfel.** Ett `TRPCError` med 4xx-status (`BAD_REQUEST`,
+  `FORBIDDEN`, `NOT_FOUND`, valideringsfel …) är ett förväntat utfall och
+  skickas **aldrig**. Bara 5xx och fel som inte är `TRPCError` alls.
+- **Dataminimering.** Rapporten byggs av en tillåtlista, inte genom att
+  maska bort det farliga. Händelsen är `$exception` med konstant
+  `distinct_id` (`ava-server`), utan personprofil (`$process_person_profile:
+  false`) och utan geoIP (`$geoip_disable: true`).
+
+| Skickas | Exempel |
+|---|---|
+| felets klass | `TypeError`, `PostgresError` |
+| maskinläsbar felkod om felet har en (bara `A–Z0–9_`) | `23505`, `ECONNREFUSED` |
+| tRPC-procedurens path (`procedure`) | `invoice.create` |
+| `request_id` | `K7M2Q9XRT4PB` |
+| server-version och miljö | `AVA_RELEASE`, `AVA_ERROR_ENVIRONMENT` |
+| tidpunkt | ISO-8601 |
+| stack trace: fil (projektrelativ), rad, kolumn, funktionsnamn | `src/lib/server/routers/x.ts:42` |
+
+| Skickas ALDRIG | |
+|---|---|
+| felmeddelandet (`message`) — inte ens maskerat | domänregler formulerar sig med klientens namn |
+| användar-id, org-id, e-post, namn | |
+| tRPC-input, request-kroppar, URL:er, headers | |
+| värdnamn, IP, brödsmulor, miljövariabler | |
+| session replay, autocapture, klientsidans händelser | finns inte i AVA |
+
+Meddelandet tas bort ur stacken innan ramarna tolkas, och bara rader som exakt
+har formen `at funktion (fil:rad:kolumn)` blir ramar — ett meddelande som ser ut
+som en ram kan inte smyga med. Implementationen är en ren `fetch` utan SDK mot
+PostHogs capture-API (`POST {värd}/i/v0/e/`):
+`src/lib/server/observability/error-reporter.ts` (vad som får skickas),
+`stack-frames.ts` (ramarna) och `posthog-sink.ts` (protokollet).
+
+**Aldrig i vägen.** Sändningen väntas inte in, har 5 s timeout och högst fyra
+samtidiga sändningar (fler kastas, så en felstorm inte blir en minnesläcka). Ett
+`429` pausar sändningen i `Retry-After` sekunder (default 60). Ett fel mot
+mottagaren sväljs — det loggas inte, eftersom det skulle kunna loopa.
 
 | Variabel | Default | |
 |---|---|---|
-| `AVA_POSTHOG_KEY` | tomt = av | projektets token (`phc_…`) |
-| `AVA_POSTHOG_HOST` | `https://us.i.posthog.com` | regionens ingest-värd; AVA:s projekt (638276) ligger i **US** |
+| `AVA_POSTHOG_KEY` | tomt = **av** | projektets token (`phc_…`), skapas på eu.posthog.com |
+| `AVA_POSTHOG_HOST` | `https://eu.i.posthog.com` | bara för själv-hostad PostHog; amerikansk värd vägras |
+| `AVA_ERROR_ENVIRONMENT` | `production` | t.ex. `staging` (bara `A–Z a–z 0–9 . _ + -`) |
+| `AVA_RELEASE` | — | server-versionen, t.ex. commit-sha |
 
-Det som skickas är bara postens deklarerade fält: `event`, `requestId`,
-`userId`, `orgId`, `path`, `code`, `durationMs`, `count`, `total`, plus det
-redan maskerade `message` som felets text. `ids` och allt annat stannar i
-loggen. `distinct_id` är jurist-id:t (eller `ava-server:<orgId>`), och
-`$process_person_profile: false` gör att PostHog inte skapar någon personprofil.
-Samma `event:code:path` grupperas som ett fel.
+En felaktig nyckel eller värd gör inte servern otillgänglig, men den syns i
+startloggen: `felrapportering: AV — …`. En fungerande ger
+`felrapportering: PostHog eu.i.posthog.com (<miljö>)` — nyckeln skrivs aldrig ut.
 
-**Dataresidens:** med US-värden lämnar felposterna EU. Innehållet är id:n och
-maskerade meddelanden, inte klientdata, men beslutet är ett driftbeslut. Ett
-EU-projekt byts in med `AVA_POSTHOG_HOST=https://eu.i.posthog.com` och dess token.
+### Byta region
 
-Sändningen är bäst-möjligt: timeout 5 s, och ett fel mot PostHog sväljs (det
-loggas inte, eftersom det skulle loopa).
+Ett befintligt PostHog-projekt kan inte byta region. Skapa i stället ett konto
+och ett projekt på **eu.posthog.com** och använd det projektets token.
 
 ## Grinden
 
@@ -127,10 +169,11 @@ UI loggar till konsolen med flit och berörs inte.
 
 ## Det som INTE finns än
 
-**Fel från webbläsaren.** Felrapporteringen ovan täcker servern; klientens
-fel (React, synkmotorn i fliken) når inte PostHog än.
+**Fel från webbläsaren och bakgrundsjobben.** Felrapporteringen ovan täcker
+serverns tRPC-anrop; klientens fel (React, synkmotorn i fliken) och
+bakgrundsjobbens fel rapporteras inte än — de syns i loggen.
 
-**Produktanalys** (PostHog e.d.) — medvetet inte gjort. Beteendedata från en
+**Produktanalys** — medvetet inte gjort. Beteendedata från en
 advokatbyrå kan avslöja vem som arbetar med vad; det är en sekretessfråga, inte
 en produktfråga. #1080 säger uttryckligen att det inte bör göras förrän loggning
 och felrapportering finns, och sannolikt inte utan juridisk genomgång.

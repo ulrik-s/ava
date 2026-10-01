@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
 import {
-  arraySink, createLogger, isEnabled, nullSink, setLogLevel, setLogSink, teeSink,
+  arraySink, createLogger, isEnabled, nullSink, setLogLevel, setLogSink,
   type LogRecord,
 } from "@/lib/shared/observability/logger";
 
@@ -92,13 +92,5 @@ describe("sink:en", () => {
     const mine = arraySink([]);
     const previous = setLogSink(mine);
     expect(setLogSink(previous)).toBe(mine);
-  });
-
-  it("teeSink ger varje destination posten — även om en kastar", () => {
-    const a: LogRecord[] = [];
-    const b: LogRecord[] = [];
-    setLogSink(teeSink(arraySink(a), () => { throw new Error("trasig"); }, arraySink(b)));
-    createLogger().error("e");
-    expect([a.length, b.length]).toEqual([1, 1]);
   });
 });
