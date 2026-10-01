@@ -116,7 +116,11 @@
   (BIGSERIAL per org) → delta-pull; klientens kö replay:as idempotent.
   `seq` delas ut när transaktionen committar och pullen läser bara upp till
   en säker gräns (`change_log_safe_seq()`, #1381, migration 0040), så en
-  cursor aldrig går förbi en rad som committas senare.
+  cursor aldrig går förbi en rad som committas senare. Pullen är sidindelad
+  (#1388): högst 500 loggrader per svar, raderna hämtas med en fråga per
+  entitet (`getByIds`), och finns fler sätts `hasMore` med cursorn på sidans
+  sista seq — klientens reconcile pullar sida för sida och sparar cursorn när
+  hela reconcilen är klar.
 - **pg-boss jobb-kö** (#504): durabel server-sidig kö på samma Postgres (eget
   `pgboss`-schema). Claim/lease (FOR UPDATE SKIP LOCKED), retry/backoff,
   dead-letter. Handlers (t.ex. e-postutskick via smtp-sender) registreras i

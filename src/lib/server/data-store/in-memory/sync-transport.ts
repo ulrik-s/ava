@@ -17,6 +17,11 @@ export interface PullResult {
   changes: PulledChange[];
   /** Serverns nya cursor-position (delta-sync). */
   cursor: number;
+  /**
+   * Fler ändringar väntar (#1388): pullen är sidindelad och `cursor` är sidans
+   * sista position. Klienten pullar igen från den tills `hasMore` uteblir.
+   */
+  hasMore?: boolean;
 }
 
 /**

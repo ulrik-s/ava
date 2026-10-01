@@ -22,6 +22,8 @@ export type Row = Record<string, unknown>;
  */
 export interface EntityRepo {
   getById(id: string): Promise<Row | null>;
+  /** Flera rader i en fråga (#1388); saknade och raderade utelämnas. */
+  getByIds(ids: readonly string[]): Promise<Row[]>;
   create(data: Row): Promise<Row>;
   update(id: string, patch: Row): Promise<Row>;
   softDelete(id: string): Promise<Row>;

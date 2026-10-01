@@ -116,9 +116,8 @@ export class ReconcileEngine {
 
   async reconcile(): Promise<ReconcileResult> {
     const since = await this.deps.cursor.get();
-    const pull = await this.deps.transport.pull(since);
     const plan = new RestorePlan(this.unrestored);
-    const pulled = await this.applyPull(pull.changes, plan);
+    const pull = await this.pullAll(since, plan);
     const replay = await this.replayQueue(plan);
     const restore = await plan.run(pendingKeysOf(this.deps.queue.pending()), this.deps.transport, this.deps.apply);
     this.unrestored = restore.unrestored;
@@ -127,7 +126,25 @@ export class ReconcileEngine {
     const held = replay.blocked !== null || restore.unrestored.length > 0;
     const cursor = held ? since : pull.cursor;
     await this.deps.cursor.set(cursor);
-    return { pulled, ...replay, restored: restore.restored, cursor };
+    return { pulled: pull.pulled, ...replay, restored: restore.restored, cursor };
+  }
+
+  /**
+   * Pulla alla sidor (#1388): servern svarar med högst en sida och `hasMore`,
+   * och nästa sida hämtas från sidans cursor. Cursorn sparas först när hela
+   * reconcilen är klar (som innan). Går cursorn inte framåt stannar loopen i
+   * stället för att snurra.
+   */
+  private async pullAll(since: number, plan: RestorePlan): Promise<{ pulled: number; cursor: number }> {
+    let cursor = since;
+    let pulled = 0;
+    for (;;) {
+      const page = await this.deps.transport.pull(cursor);
+      pulled += await this.applyPull(page.changes, plan);
+      const advanced = page.cursor > cursor;
+      cursor = page.cursor;
+      if (page.hasMore !== true || !advanced) return { pulled, cursor };
+    }
   }
 
   /**
