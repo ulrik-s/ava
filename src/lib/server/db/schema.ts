@@ -158,6 +158,10 @@ export const matters = pgTable("matters", {
   conflictCheckStatus: text("conflict_check_status").$type<ConflictCheckStatus>(),
   conflictCheckHits: integer("conflict_check_hits"),
   conflictCheckedAt: timestamp("conflict_checked_at", { withTimezone: true }),
+  /** Bedömningen av träffarna (#1354): vem, när och motiveringen. */
+  conflictReviewedById: uuid("conflict_reviewed_by_id").$type<UserId>(),
+  conflictReviewedAt: timestamp("conflict_reviewed_at", { withTimezone: true }),
+  conflictReviewNote: text("conflict_review_note"),
 }, (t) => [index("matters_org_idx").on(t.organizationId)]);
 
 /**

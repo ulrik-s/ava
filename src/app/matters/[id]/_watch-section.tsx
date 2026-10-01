@@ -14,6 +14,7 @@ import { useId, useState } from "react";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { ConflictCheckActions } from "@/components/watchlist/conflict-check-actions";
+import { ConflictReviewInfo } from "@/components/watchlist/conflict-review-info";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { trpc } from "@/lib/client/trpc";
 import { isDeadlineDue } from "@/lib/shared/deadline";
@@ -61,6 +62,7 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
         ))}
       </ul>
       <MatterSignals matterId={matterId} />
+      <ConflictReviewInfo matterId={matterId} />
     </section>
   );
 }

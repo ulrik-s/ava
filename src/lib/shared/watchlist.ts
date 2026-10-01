@@ -367,7 +367,7 @@ function conflictCheckItem(m: ConflictCheckMatter): WatchlistItem | null {
     return {
       ...base, severity: "passed",
       title: `Jävskontroll: ${m.conflictCheckHits ?? 0} träffar att bedöma`,
-      detail: "Klienten förekommer i byråns andra ärenden. Bedöm träffarna innan uppdraget tas.",
+      detail: "En part står på andra sidan i ett av byråns andra ärenden. Bedöm träffarna innan uppdraget tas.",
     };
   }
   if (m.conflictCheckStatus !== "PENDING") return null;

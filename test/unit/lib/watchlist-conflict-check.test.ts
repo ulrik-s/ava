@@ -11,7 +11,7 @@ describe("conflictCheckItems", () => {
   it("träffar → passerad post med antalet, som leder till ärendet", () => {
     expect(conflictCheckItems([{ ...M, conflictCheckStatus: "HITS", conflictCheckHits: 2 }])).toEqual([{
       kind: "conflictCheck", severity: "passed", title: "Jävskontroll: 2 träffar att bedöma",
-      detail: "Klienten förekommer i byråns andra ärenden. Bedöm träffarna innan uppdraget tas.",
+      detail: "En part står på andra sidan i ett av byråns andra ärenden. Bedöm träffarna innan uppdraget tas.",
       matterId: "m-1", matterNumber: "2026-0007", at: null, amountOre: null, link: { route: "matters", id: "m-1" },
     }]);
   });

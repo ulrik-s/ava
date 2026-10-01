@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
+import { isCheckedRole } from "@/lib/shared/conflict-roles";
 import { DEFAULT_MATTER_FOLDERS } from "@/lib/shared/default-matter-folders";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
@@ -7,6 +8,7 @@ import {
   contactTypeSchema,
   matterStatusSchema,
   paymentMethodSchema,
+  type MatterRole,
   type PaymentMethod,
 } from "@/lib/shared/schemas/enums";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
@@ -27,6 +29,7 @@ import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
 import { logMatterNote, type NoteCtx } from "../billing/matter-note";
 import { checkMatterConflicts } from "../conflict/matter-conflict-check";
+import { conflictReviewInput, reviewMatterConflicts } from "../conflict/matter-conflict-review";
 import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
 import { emit } from "../events/emit";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
@@ -34,6 +37,25 @@ import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
 
 type MatterCtx = { repos: Repositories; orgId: OrganizationId } & QueuedCallScope;
+
+/** Det jävskontrollen behöver ur en tRPC-context (`checkMatterConflicts`). */
+type ConflictCheckCtx = Parameters<typeof checkMatterConflicts>[0] & MatterCtx;
+
+/**
+ * Kör jävskontrollen för ärendets alla parter igen och spara resultatet
+ * (#1246, #1354) — när en part lagts till eller på begäran.
+ */
+async function recheckMatterConflicts(ctx: ConflictCheckCtx, matterId: MatterId): Promise<Matter> {
+  const matter = await ctx.repos.matters.getByIdWithContacts(matterId, ctx.orgId);
+  if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+  const parties = matter.contacts.map((c) => ({ contactId: asId<"ContactId">(c.contactId), role: c.role }));
+  return ctx.repos.matters.update(matterId, await checkMatterConflicts(ctx, matterId, parties));
+}
+
+/** En ny part på klient- eller motsidan → kontrollera ärendet igen (#1354). */
+async function recheckIfParty(ctx: ConflictCheckCtx, matterId: MatterId, role: MatterRole): Promise<void> {
+  if (isCheckedRole(role)) await recheckMatterConflicts(ctx, matterId);
+}
 
 /**
  * create-input. Optionella fält (paymentMethod, taxa…) tas emot för
@@ -254,7 +276,7 @@ export const matterRouter = router({
       // Jävskontrollen innan uppdraget tas (#1246). Id:t är redan klientens
       // (köade anrop) eller ett nytt — kontrollen utesluter bara ärendets egen koppling.
       const matterId = asId<"MatterId">(input.id ?? uuidv7());
-      const conflict = await checkMatterConflicts(ctx, matterId, klientId);
+      const conflict = await checkMatterConflicts(ctx, matterId, klientId ? [{ contactId: klientId, role: "KLIENT" }] : []);
       const matter = await ctx.repos.transaction(async (repos) => {
         const created = await repos.matters.create({
           ...buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input), id: matterId, ...conflict,
@@ -271,30 +293,20 @@ export const matterRouter = router({
     }),
 
   /**
-   * Kör jävskontrollen igen (#1246) — t.ex. när klienten lagts till efter att
-   * ärendet skapades. Köat: offline väntar kontrollen tills servern kört den.
+   * Kör jävskontrollen för ärendets parter igen (#1246, #1354). Köat: offline
+   * väntar kontrollen tills servern kört den.
    */
   checkConflicts: orgProcedure
     .input(z.object({ id: matterIdSchema }))
-    .mutation(async ({ ctx, input }) => {
-      const matter = await ctx.repos.matters.getByIdWithContacts(input.id, ctx.orgId);
-      if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-      const klient = matter.contacts.find((c) => c.role === "KLIENT");
-      const conflict = await checkMatterConflicts(ctx, input.id, klient ? asId<"ContactId">(klient.contactId) : null);
-      return ctx.repos.matters.update(input.id, conflict);
-    }),
+    .mutation(({ ctx, input }) => recheckMatterConflicts(ctx, input.id)),
 
-  /** Juristen har bedömt träffarna och tar uppdraget (#1246). */
+  /**
+   * Advokaten (eller admin) har bedömt träffarna och tar uppdraget (#1246):
+   * vem, när och motiveringen sparas på ärendet (#1354).
+   */
   markConflictsReviewed: orgProcedure
-    .input(z.object({ id: matterIdSchema }))
-    .mutation(async ({ ctx, input }) => {
-      const matter = await ctx.repos.matters.getByIdInOrg(input.id, ctx.orgId);
-      if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-      if (matter.conflictCheckStatus !== "HITS") {
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Det finns inga träffar att bedöma." });
-      }
-      return ctx.repos.matters.update(input.id, { conflictCheckStatus: "REVIEWED" });
-    }),
+    .input(conflictReviewInput)
+    .mutation(({ ctx, input }) => reviewMatterConflicts(ctx, input)),
 
   update: orgProcedure
     .input(
@@ -374,16 +386,20 @@ export const matterRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Skapad-datumet är ett setup-fält (#1345): bara ADMIN, aldrig via kön.
+      assertSetupFieldsAllowed(ctx, { createdAt: input.createdAt });
       await requireMatterInOrg(ctx, input.matterId);
       const contact = await ctx.repos.contacts.getByIdFull(input.contactId, ctx.orgId);
       if (!contact) throw new TRPCError({ code: "NOT_FOUND" });
       const { createdAt, id, notes, ...rest } = input;
-      return ctx.repos.matterContacts.linkContact(omitUndefined({
+      const link = await ctx.repos.matterContacts.linkContact(omitUndefined({
         ...rest,
-        id,
+        id: id ?? asId<"MatterContactId">(newRowId(ctx, "matterContact")),
         notes,
         ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
       }) satisfies Partial<MatterContact>);
+      await recheckIfParty(ctx, input.matterId, input.role);
+      return link;
     }),
 
   // Create a new contact and link it to the matter in one step
@@ -414,12 +430,16 @@ export const matterRouter = router({
       }
 
       if (!contact) {
-        contact = await ctx.repos.contacts.create({ ...contactData, organizationId: ctx.orgId } as never);
+        // Id ur anropet: serverns omkörning skapar samma kontakt (#1276).
+        contact = await ctx.repos.contacts.create({ ...contactData, id: newRowId(ctx, "contact"), organizationId: ctx.orgId } as never);
       }
 
-      return ctx.repos.matterContacts.linkContact(
-        { matterId, contactId: asId<"ContactId">(contact.id), role, notes } satisfies Partial<MatterContact>,
-      );
+      const link = await ctx.repos.matterContacts.linkContact({
+        id: asId<"MatterContactId">(newRowId(ctx, "matterContact")),
+        matterId, contactId: asId<"ContactId">(contact.id), role, notes,
+      } satisfies Partial<MatterContact>);
+      await recheckIfParty(ctx, matterId, role);
+      return link;
     }),
 
   removeContact: orgProcedure
