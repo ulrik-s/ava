@@ -38,6 +38,8 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
+import { requireUserInOrg } from "../auth/org-scope";
+import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
 import { logMatterNote } from "../billing/matter-note";
 import { emit } from "../events/emit";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
@@ -129,6 +131,17 @@ async function createRadgivningEntry(repos: Repositories, a: {
   } satisfies Partial<TimeEntry>);
 }
 
+/**
+ * Juristen som höll rådgivningsmötet (#1345): anroparen, eller — för ADMIN i
+ * ett direkt anrop — en kollega i samma byrå (`setup-fields.ts`).
+ */
+async function radgivningOwner(
+  ctx: SetupFieldCaller & { orgId: OrganizationId }, repos: Repositories, userId: UserId | undefined,
+): Promise<UserId> {
+  assertSetupFieldsAllowed(ctx, { userId: onBehalfOf(ctx, userId) });
+  return userId ? (await requireUserInOrg({ repos, orgId: ctx.orgId }, userId)).id : ctx.user.id;
+}
+
 export const invoiceRouter = router({
   list: orgProcedure
     .input(
@@ -177,12 +190,14 @@ export const invoiceRouter = router({
       /** Förfallodatum (demo/fixtures) — utelämnat saknar fakturan ett. */
       dueDate: z.string().optional(),
       /** Juristen som höll mötet (tidspostens ägare). Default: inloggad användare.
-       *  Setup-fält för demo-generatorn/fixtures (ADR 0003), jfr timeEntry.create. */
+       *  Setup-fält för demo-generatorn/fixtures (ADR 0003), jfr timeEntry.create:
+       *  bara ADMIN, aldrig via kön (`setup-fields.ts`, #1345). */
       userId: userIdSchema.optional(),
     }))
     // Migrerad till repository-sömmen (ADR 0020): matters + invoices via typade repos.
     .mutation(({ ctx, input }) =>
       ctx.repos.transaction(async (repos) => {
+        const owner = await radgivningOwner(ctx, repos, input.userId);
         const matter = await repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
         if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
         if ((matter as { radgivningBetaldAt?: unknown }).radgivningBetaldAt) {
@@ -211,7 +226,7 @@ export const invoiceRouter = router({
         await logMatterNote(repos, ctx, input.matterId, radgivningInvoicedNote(invoice.invoiceNumber, grossOre), when);
         await emit.invoiceCreated(ctx, invoice);
         const entry = await createRadgivningEntry(repos, {
-          matterId: input.matterId, invoiceId: invoice.id, userId: input.userId ?? asId<"UserId">(ctx.user.id), when, avgift, scope: ctx,
+          matterId: input.matterId, invoiceId: invoice.id, userId: owner, when, avgift, scope: ctx,
         });
         await emit.timeEntryAdded(ctx, entry);
         return { invoice, beloppExclVatOre: netOre };

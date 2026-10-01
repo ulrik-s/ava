@@ -24,10 +24,11 @@ const mockPrisma = {
   organization: { findFirst: vi.fn() },
 };
 
-function makeCaller(orgId = "org-a", userId = "u1") {
+function makeCaller(orgId = "org-a", userId = "u1", extra: { role?: string; queued?: { mutationId: string; at: number } } = {}) {
   const dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
-    user: { id: userId, email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
+    user: { id: userId, email: "a@b.se", name: "T", role: extra.role ?? "LAWYER", organizationId: orgId },
+    ...(extra.queued ? { queued: extra.queued } : {}),
     prisma: mockPrisma, dataStore,
     repos: reposFromMockDataStore(dataStore),
   };
@@ -37,7 +38,8 @@ function makeCaller(orgId = "org-a", userId = "u1") {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockPrisma.matter.findFirst.mockResolvedValue(null);
+  // Default: ärendet finns i anropande byrå (create kräver det, #1345).
+  mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a" });
   mockPrisma.organization.findFirst.mockResolvedValue(null);
   mockPrisma.timeEntry.findMany.mockResolvedValue([]);
   mockPrisma.timeEntry.count.mockResolvedValue(0);
@@ -141,8 +143,9 @@ describe("timeEntry.create", () => {
   it("explicit hourlyRate i input (setup-väg) vinner — utom för beredskap", async () => {
     mockPrisma.user.findFirst.mockResolvedValue({ hourlyRates: { ARBETE: 300000 } });
     mockPrisma.timeEntry.create.mockResolvedValue({});
-    await makeCaller().create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "X", hourlyRate: 123400 });
-    await makeCaller().create({ matterId: "m1", date: "2026-04-18", minutes: 0, description: "Beredskap", kind: "ADVOKATBEREDSKAP", hourlyRate: 123400 });
+    const admin = makeCaller("org-a", "u1", { role: "ADMIN" });
+    await admin.create({ matterId: "m1", date: "2026-04-15", minutes: 60, description: "X", hourlyRate: 123400 });
+    await admin.create({ matterId: "m1", date: "2026-04-18", minutes: 0, description: "Beredskap", kind: "ADVOKATBEREDSKAP", hourlyRate: 123400 });
     expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(123400);
     // Beredskapen bär dagbeloppet, aldrig ett timpris.
     expect(mockPrisma.timeEntry.create.mock.calls[1]![0].data.hourlyRate).not.toBe(123400);
@@ -165,6 +168,70 @@ describe("timeEntry.create", () => {
     await expect(
       makeCaller().create({ matterId: "m1", date: "2026-01-01", minutes: 0, description: "X" }),
     ).rejects.toThrow();
+  });
+});
+
+describe("timeEntry.create — byrå och setup-fält (#1345)", () => {
+  const base = { matterId: "m1", date: "2026-04-15", minutes: 60, description: "Möte" } as const;
+  const queued = { mutationId: "019a0000-0000-7000-8000-000000000002", at: Date.parse("2026-04-15") };
+
+  beforeEach(() => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", hourlyRates: { ARBETE: 3000 } });
+    mockPrisma.timeEntry.create.mockResolvedValue({});
+  });
+
+  it("ärendet slås upp i anroparens byrå — en annan byrås ärende ger NOT_FOUND och ingen post", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue(null);
+    await expect(makeCaller("org-a").create(base)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.matter.findFirst.mock.calls[0]![0].where).toMatchObject({ id: "m1", organizationId: "org-a" });
+    expect(mockPrisma.timeEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("juristen slås upp i byrån — en användare i en annan byrå ger NOT_FOUND", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    await expect(makeCaller("org-a", "u1", { role: "ADMIN" }).create({ ...base, userId: "u-annan" }))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.user.findFirst.mock.calls[0]![0].where).toMatchObject({ id: "u-annan", organizationId: "org-a" });
+    expect(mockPrisma.timeEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("eget userId är inget setup-fält — en jurist får skicka sitt eget id", async () => {
+    await makeCaller("org-a", "u1").create({ ...base, userId: "u1" });
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.userId).toBe("u1");
+  });
+
+  it.each([
+    ["userId (kollega)", { userId: "u-kollega" }],
+    ["hourlyRate", { hourlyRate: 1 }],
+    ["invoiceId", { invoiceId: "inv-1" }],
+    ["createdAt", { createdAt: "2020-01-01T00:00:00.000Z" }],
+  ])("en jurist kan inte sätta %s — FORBIDDEN, ingen post", async (_label, extra) => {
+    await expect(makeCaller().create({ ...base, ...extra })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mockPrisma.timeEntry.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["userId (kollega)", { userId: "u-kollega" }],
+    ["hourlyRate", { hourlyRate: 1 }],
+    ["invoiceId", { invoiceId: "inv-1" }],
+    ["createdAt", { createdAt: "2020-01-01T00:00:00.000Z" }],
+  ])("ett köat anrop får inte bära %s, inte ens från ADMIN", async (_label, extra) => {
+    await expect(makeCaller("org-a", "u1", { role: "ADMIN", queued }).create({ ...base, ...extra }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mockPrisma.timeEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("ett köat anrop utan setup-fält går igenom", async () => {
+    await makeCaller("org-a", "u1", { queued }).create(base);
+    expect(mockPrisma.timeEntry.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("ADMIN registrerar tid åt en kollega i byrån, med kollegans timarvode", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-kollega", hourlyRates: { ARBETE: 4100 } });
+    await makeCaller("org-a", "u1", { role: "ADMIN" }).create({ ...base, userId: "u-kollega", invoiceId: null });
+    const data = mockPrisma.timeEntry.create.mock.calls[0]![0].data;
+    expect(data.userId).toBe("u-kollega");
+    expect(data.hourlyRate).toBe(4100);
   });
 });
 

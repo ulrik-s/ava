@@ -56,6 +56,8 @@ const mockPrisma = {
     findMany: vi.fn(),
     create: vi.fn(),
   },
+  // Rådgivningspostens ägare slås upp i byrån (#1345).
+  user: { findFirst: vi.fn() },
   // Faktureringshändelser loggas som tjänsteanteckning (#1221).
   serviceNote: {
     create: vi.fn(),
@@ -70,10 +72,11 @@ const mockPrisma = {
   $transaction: vi.fn(<T,>(fn: (tx: typeof mockPrisma) => Promise<T>) => fn(mockPrisma)),
 };
 
-function makeCaller(orgId = "org-a", userId = "user-1") {
+function makeCaller(orgId = "org-a", userId = "user-1", extra: { role?: string; queued?: { mutationId: string; at: number } } = {}) {
   const dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
-    user: { id: userId, email: "a@b.com", name: "Test", role: "LAWYER", organizationId: orgId },
+    user: { id: userId, email: "a@b.com", name: "Test", role: extra.role ?? "LAWYER", organizationId: orgId },
+    ...(extra.queued ? { queued: extra.queued } : {}),
     prisma: mockPrisma, dataStore,
     // ADR 0020: markFortnoxBooked är migrerad till ctx.repos → wira in-memory-repos.
     repos: reposFromMockDataStore(dataStore),
@@ -131,12 +134,38 @@ describe("invoice.createRadgivning", () => {
     expect(te.frozenByBillingRunId).toBeUndefined();
   });
 
-  it("tidsposten kan ägas av en annan jurist (setup-fält)", async () => {
+  it("tidsposten kan ägas av en annan jurist i byrån när ADMIN registrerar (setup-fält, #1345)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-lawyer", organizationId: "org-a" });
+
+    await makeCaller("org-a", "user-1", { role: "ADMIN" }).createRadgivning({ matterId: "m1", userId: "u-lawyer" });
+
+    expect(mockPrisma.user.findFirst.mock.calls[0]![0].where).toMatchObject({ id: "u-lawyer", organizationId: "org-a" });
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.userId).toBe("u-lawyer");
+  });
+
+  it("en kollega i en annan byrå → NOT_FOUND, ingen faktura (#1345)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+
+    await expect(makeCaller("org-a", "user-1", { role: "ADMIN" }).createRadgivning({ matterId: "m1", userId: "u-annan-byra" }))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.invoice.create).not.toHaveBeenCalled();
+  });
+
+  it("en icke-admin kan inte registrera mötet i en kollegas namn (#1345)", async () => {
     mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
 
-    await makeCaller().createRadgivning({ matterId: "m1", userId: "u-lawyer" });
+    await expect(makeCaller().createRadgivning({ matterId: "m1", userId: "u-lawyer" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mockPrisma.invoice.create).not.toHaveBeenCalled();
+  });
 
-    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.userId).toBe("u-lawyer");
+  it("ett köat anrop får inte bära någon annans userId, inte ens från ADMIN (#1345)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+    const queued = { mutationId: "019a0000-0000-7000-8000-000000000001", at: Date.parse("2026-03-02") };
+
+    await expect(makeCaller("org-a", "user-1", { role: "ADMIN", queued }).createRadgivning({ matterId: "m1", userId: "u-lawyer" }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("skapar en STANDARD-klientfaktura (SKAPAD, ej skickad) för rådgivningstimmen + märker ärendet (#853)", async () => {

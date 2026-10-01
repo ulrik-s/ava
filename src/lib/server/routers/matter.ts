@@ -23,6 +23,8 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { uuidv7 } from "@/lib/shared/uuid";
+import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
+import { assertSetupFieldsAllowed } from "../auth/setup-fields";
 import { logMatterNote, type NoteCtx } from "../billing/matter-note";
 import { checkMatterConflicts } from "../conflict/matter-conflict-check";
 import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
@@ -34,20 +36,11 @@ import { router, orgProcedure, TRPCError } from "../trpc";
 type MatterCtx = { repos: Repositories; orgId: OrganizationId } & QueuedCallScope;
 
 /**
- * Hjälpare: hämta matter och verifiera att den tillhör anropande org.
- * `matterId` är branded ([[ids]]) — TS hindrar att man råkar skicka en
- * `ContactId` hit. Kastar NOT_FOUND vid mismatch (speglar `requireOrgOwned`).
- */
-async function assertMatterInOrg(ctx: MatterCtx, matterId: MatterId): Promise<Matter> {
-  const m = await ctx.repos.matters.getByIdInOrg(matterId, ctx.orgId);
-  if (!m) throw new TRPCError({ code: "NOT_FOUND" });
-  return m;
-}
-
-/**
- * create-input. Optionella setup-fält (id, matterNumber, status,
- * paymentMethod, taxa…) tas emot för demo-generatorn/provisionering
- * (ADR 0003) — i normalt UI-flöde utelämnas de och defaultas.
+ * create-input. Optionella fält (paymentMethod, taxa…) tas emot för
+ * demo-generatorn/provisionering (ADR 0003) — i normalt UI-flöde utelämnas de
+ * och defaultas. `matterNumber`, `status` och `createdAt` är setup-fält: bara
+ * ADMIN, aldrig via kön (`setup-fields.ts`, #1345) — annars ärendenumret ur
+ * serien, aktiv status och nu.
  */
 const matterCreateInput = z.object({
   id: matterIdSchema.optional(),
@@ -250,7 +243,9 @@ export const matterRouter = router({
   create: orgProcedure
     .input(matterCreateInput)
     .mutation(async ({ ctx, input }) => {
-      // Ansvarig jurist = explicit val, annars skaparen (#174). Styr serien.
+      assertSetupFieldsAllowed(ctx, { matterNumber: input.matterNumber, status: input.status, createdAt: input.createdAt });
+      // Ansvarig jurist = explicit val (i byrån, #1345), annars skaparen (#174). Styr serien.
+      if (input.responsibleLawyerId) await requireUserInOrg(ctx, input.responsibleLawyerId);
       const responsibleLawyerId = input.responsibleLawyerId ?? ctx.user.id;
       const matterNumber = input.matterNumber ?? (await nextMatterNumber(ctx, responsibleLawyerId));
       // Ärendet + standardmapparna (#1228) i SAMMA transaktion — aldrig ett
@@ -335,7 +330,7 @@ export const matterRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const before = await assertMatterInOrg(ctx, asId<"MatterId">(input.id));
+      const before = await requireMatterInOrg(ctx, asId<"MatterId">(input.id));
       const { id, paymentMethodDecidedAt, taxaHufStart, tvistUppkomDatum, rattsskyddBeslutDatum, rattsskyddNekadAt, ...rest } = input;
       const data: Record<string, unknown> = { ...rest };
       // Datumsträngar (yyyy-mm-dd) → Date | null; lämna orörda om utelämnade.
@@ -361,7 +356,7 @@ export const matterRouter = router({
   coverageUsage: orgProcedure
     .input(z.object({ matterId: matterIdSchema }))
     .query(async ({ ctx, input }) => {
-      await assertMatterInOrg(ctx, input.matterId);
+      await requireMatterInOrg(ctx, input.matterId);
       return ctx.repos.timeEntries.coverageUsageForMatter(input.matterId);
     }),
 
@@ -379,7 +374,7 @@ export const matterRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await assertMatterInOrg(ctx, input.matterId);
+      await requireMatterInOrg(ctx, input.matterId);
       const contact = await ctx.repos.contacts.getByIdFull(input.contactId, ctx.orgId);
       if (!contact) throw new TRPCError({ code: "NOT_FOUND" });
       const { createdAt, id, notes, ...rest } = input;
@@ -407,7 +402,7 @@ export const matterRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await assertMatterInOrg(ctx, input.matterId);
+      await requireMatterInOrg(ctx, input.matterId);
       const { matterId, role, notes, ...contactData } = input;
 
       // Återanvänd befintlig kontakt på pnr/orgnr, annars skapa ny.

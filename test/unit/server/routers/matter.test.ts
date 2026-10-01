@@ -16,7 +16,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 const ORG = "org-a";
 const YEAR = new Date().getFullYear();
 
-function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG, userId = "user-1") {
+function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG, userId = "user-1", role: Principal["role"] = "LAWYER") {
   const ds = new DemoDataStore({
     organizations: [{ id: ORG, name: "X" }, { id: "org-b", name: "Y" }],
     users: [{ id: "user-1", organizationId: ORG, email: "a@b.com", name: "Test", role: "LAWYER" }],
@@ -25,7 +25,7 @@ function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG, userId = "user-
     matterContacts: [],
     ...seed,
   } as DemoSource, async () => { /* writable */ });
-  const principal: Principal = { id: asId<"UserId">(userId), email: "a@b.com", name: "Test", role: "LAWYER", organizationId: asId<"OrganizationId">(orgId) };
+  const principal: Principal = { id: asId<"UserId">(userId), email: "a@b.com", name: "Test", role, organizationId: asId<"OrganizationId">(orgId) };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal }) as any);
   return { ds, caller: caller.matter };
@@ -190,6 +190,34 @@ describe("matter.create", () => {
       expect(mine).toHaveLength(10);
       expect(new Set(mine.map((f) => `${String(f.parentId)}/${String(f.name)}`)).size).toBe(10);
     }
+  });
+
+  it.each([
+    ["matterNumber", { matterNumber: "1999-0001" }],
+    ["status", { status: "CLOSED" as const }],
+    ["createdAt", { createdAt: "2020-01-01T00:00:00.000Z" }],
+  ])("en jurist kan inte sätta %s — FORBIDDEN, inget ärende (#1345)", async (_label, extra) => {
+    const { caller, ds } = makeCaller();
+    await expect(caller.create({ title: "T", ...extra })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(src(ds).matters ?? []).toHaveLength(0);
+  });
+
+  it("ADMIN kan sätta ärendenummer, status och skapad-datum direkt (demo-generator/seed, #1345)", async () => {
+    const { caller } = makeCaller({}, ORG, "user-1", "ADMIN");
+    const m = await caller.create({ title: "T", matterNumber: "1999-0001", status: "CLOSED", createdAt: "2020-01-01T00:00:00.000Z" });
+    expect(m).toMatchObject({ matterNumber: "1999-0001", status: "CLOSED" });
+    expect(new Date(m.createdAt).toISOString()).toBe("2020-01-01T00:00:00.000Z");
+  });
+
+  it("ansvarig jurist i en annan byrå → NOT_FOUND, inget ärende (#1345)", async () => {
+    const { caller, ds } = makeCaller({
+      users: [
+        { id: "user-1", organizationId: ORG, email: "a@b.com", name: "Test", role: "LAWYER" },
+        { id: "user-b", organizationId: "org-b", email: "b@b.com", name: "B", role: "LAWYER" },
+      ],
+    });
+    await expect(caller.create({ title: "T", responsibleLawyerId: "user-b" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(src(ds).matters ?? []).toHaveLength(0);
   });
 
   it("kräver title (zod min(1))", async () => {

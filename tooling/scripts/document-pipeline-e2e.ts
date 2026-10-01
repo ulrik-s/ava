@@ -133,7 +133,8 @@ async function main(): Promise<void> {
   const docId = uuidv7();
 
   // ── ANVÄNDARE A, steg 1: ärende + dokument-metadata ──────────────
-  await a.matter.create.mutate({ id: matterId, title: "Dokument-pipeline-E2E", matterNumber: "2026-7001", status: "ACTIVE" });
+  // Numret ur serien och aktiv status — setup-fält får bara ADMIN sätta (#1345).
+  await a.matter.create.mutate({ id: matterId, title: "Dokument-pipeline-E2E" });
   await a.document.register.mutate({
     id: docId, matterId, fileName: FILE_NAME, mimeType: "text/plain",
     sizeBytes: 0, storagePath: "documents/content/placeholder", uploadedById: userAId,
