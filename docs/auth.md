@@ -108,6 +108,53 @@ vägrar starta om `COOKIE_REFRESH` >= `COOKIE_EXPIRE`.
 `test/unit/tooling/session-refresh.test.ts` fäller en stack som saknar
 förnyelse.
 
+**Förnyelsen måste nå webbläsaren — keepalive (#1425).** Proxyn förnyar på
+*vilket* anrop som helst efter `COOKIE_REFRESH`, också auth-subrequesten
+`/oauth2/auth` som Caddys `forward_auth` gör för varje `/api`-anrop. Vid 2xx
+kopierar Caddy bara `copy_headers` in i anropet till servern — auth-svarets
+`Set-Cookie` (den förnyade sessionen) når aldrig webbläsaren. Med sessionen i
+cookien sparades förnyelsen alltså inte, och proxyn förnyade mot IdP:n på
+varje API-anrop (i prod-loggen: `Refreshing session … SessionAge 30m, 31m,
+32m …`, ~2 per minut och användare) tills webbläsaren råkade göra ett anrop
+under `/oauth2/*`. De går via `reverse_proxy` och får med `Set-Cookie`.
+
+Därför frågar appen `/oauth2/userinfo` medan den är öppen
+(`src/lib/client/auth/session-keepalive.ts`, monterad i appträdet, av i
+demon): var femte minut (`SESSION_KEEPALIVE_INTERVAL_MS`), och när fliken
+blir synlig igen eller nätet kommer tillbaka (debounce 2 s). Förnyelsen sker
+då på en väg där den nya cookien sparas. Det är samma fråga som vid start
+(`probeSession()`), och svaret går in i samma sessionsläge: inloggad → inget;
+utloggad → bannern "Logga in igen"; nås inte → inget (nästa fråga försöker
+igen); ingen OIDC i driften → keepalive:n stannar. Aldrig en omdirigering.
+Den stannar också vid utloggning (ingen bunden identitet) och när appen
+stängs.
+
+- **En flik räcker.** Cookien delas av flikarna; Web Locks
+  (`ava-session-keepalive`) väljer den flik som frågar med jämna mellanrum,
+  och stängs den tar nästa över. Utan Web Locks (osäker sida) frågar varje
+  flik. En flik som blir synlig frågar ändå själv — den är på väg att göra
+  API-anrop, och den valda fliken kan vara strypt i bakgrunden.
+- **Kvarvarande fönster.** Proxyn förnyar först när sessionen är äldre än
+  `COOKIE_REFRESH`; API-anrop mellan det och nästa keepalive-fråga förnyar
+  fortfarande utan att spara. Med 5 min av 30 är det högst en sjättedel av
+  tiden, i stället för all tid efter de första 30 minuterna. Intervallet ska
+  ligga väl under `COOKIE_REFRESH` — `session-refresh.test.ts` fäller ett som
+  inte gör det. Kortare intervall krymper fönstret; varje fråga kostar bara
+  ett anrop till proxyn (ingen IdP-trafik utom själva förnyelsen).
+- **Alternativet: sessionen i redis** (`OAUTH2_PROXY_SESSION_STORE_TYPE=redis`,
+  utkastet i PR #1430). Cookien blir bara en biljett, förnyelsen sparas på
+  serversidan oavsett väg, parallella anrop förnyar *en* gång (lås), och
+  cookien blir liten. Priset: en tjänst till att drifta, alla loggas ut en gång
+  vid bytet, och är redis nere nekas inloggade anrop. Välj det om
+  kvarvarande fönster eller proxyns förnyelser blir ett problem (t.ex.
+  IdP-throttling), om cookien växer över gränsen (`_oauth2_proxy_0`/`_1`),
+  eller om andra klienter än webbappen (helpern, add-ins) ska använda
+  proxysessionen utan att kunna köra en keepalive.
+- `test/e2e/oidc/oidc-session-keepalive.spec.ts` (i `bun run e2e:oidc`) kör
+  den riktiga prod-Caddyfile:n framför proxyn och Keycloak: efter
+  `COOKIE_REFRESH` förnyar varje `/api`-anrop utan att spara; efter
+  keepalive:n är cookien ny och fem API-anrop ger ingen förnyelse.
+
 Servern verifierar tokens med `algorithms: ["RS256"]` och `clockTolerance:
 60 s` (`src/lib/server/http/bearer-claims.ts`).
 

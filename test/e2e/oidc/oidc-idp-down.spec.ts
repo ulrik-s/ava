@@ -16,28 +16,14 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "../_helper-isolation";
+import { AUTHORIZE_RE, seedCachedIdentity } from "./oidc-helpers";
 
 const KEYCLOAK_ORIGIN = new URL(process.env.OIDC_KC_HOSTNAME ?? "http://localhost:8089").origin;
-const AUTHORIZE_RE = /realms\/ava\/protocol\/openid-connect\/auth/;
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
 // Service workern får inte gå förbi page.route (den skulle se andra svar än testet styr).
 test.use({ serviceWorkers: "block" });
-
-/** Lägg en cachad identitet i firma-config innan appen kör (som efter en tidigare inloggning). */
-async function seedCachedIdentity(page: Page, verifiedAgoMs: number): Promise<void> {
-  await page.addInitScript((verifiedAt: number) => {
-    localStorage.setItem("ava.firma", JSON.stringify({
-      tier: "self-hosted",
-      organizationId: "00000000-0000-0000-0000-000000000001",
-      principalId: "00000000-0000-0000-0000-0000000000a1",
-      authorEmail: "admin@ava.test",
-      authorName: "Admin",
-      sessionVerifiedAt: verifiedAt,
-    }));
-  }, Date.now() - verifiedAgoMs);
-}
 
 /** IdP:n nere: varje anrop till Keycloak avbryts. Returnerar de försök som gjordes. */
 async function idpDown(page: Page): Promise<string[]> {
