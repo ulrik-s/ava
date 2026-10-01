@@ -23,6 +23,13 @@ export interface GraphEventBody {
   isAllDay?: boolean;
   location?: { displayName: string };
   sensitivity?: "normal" | "personal" | "private" | "confidential";
+  /**
+   * Klientens id för skapandet (#1361): Graph skapar inte eventet en gång till
+   * när samma POST görs om. Kan bara sättas vid skapandet.
+   */
+  transactionId?: string;
+  /** Utökade egenskaper (t.ex. AVA-eventets id) — sökbara med `$filter`. */
+  singleValueExtendedProperties?: Array<{ id: string; value: string }>;
 }
 
 // Zod vid parsegränsen (#187): Graph-svar valideras i expectOk.
@@ -33,6 +40,7 @@ const graphEventResponseSchema = z.object({
   start: graphDateTimeSchema,
   end: graphDateTimeSchema,
 });
+const graphEventListSchema = z.object({ value: z.array(z.object({ id: z.string() })) });
 const graphErrorBodySchema = z.object({ error: z.object({ message: z.string().optional() }).optional() }).passthrough();
 
 export type GraphEventResponse = z.infer<typeof graphEventResponseSchema>;
@@ -90,6 +98,19 @@ export async function createGraphEvent(body: GraphEventBody, opts: GraphOpts): P
     body: JSON.stringify(body),
   }, opts);
   return expectOk(res, "createGraphEvent", graphEventResponseSchema);
+}
+
+/**
+ * GET → id:t för ett event som bär en utökad sträng-egenskap med värdet, eller
+ * `null` (#1361). Filtret gäller hela brevlådan, eller kalendern om den anges.
+ */
+export async function findGraphEventByProperty(propertyId: string, value: string, opts: GraphOpts): Promise<string | null> {
+  const literal = (text: string): string => `'${text.replace(/'/g, "''")}'`;
+  const filter = `singleValueExtendedProperties/Any(ep: ep/id eq ${literal(propertyId)} and ep/value eq ${literal(value)})`;
+  const query = `$filter=${encodeURIComponent(filter)}&$select=id&$top=1`;
+  const res = await graphFetch(`${eventsEndpoint(opts.calendarId)}?${query}`, { method: "GET" }, opts);
+  const list = await expectOk(res, "findGraphEventByProperty", graphEventListSchema);
+  return list.value[0]?.id ?? null;
 }
 
 /** PATCH → uppdatera ett befintligt event. */

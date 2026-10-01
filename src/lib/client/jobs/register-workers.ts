@@ -97,28 +97,19 @@ jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx)
   }
 
   ctx.setProgress(0.4);
-  const graph = await import("@/lib/client/integrations/microsoft-graph");
+  // Idempotent (#1361): ett omförsök hittar en spegling som redan skapats.
+  const mirror = await import("@/lib/client/integrations/outlook-mirror");
+  const opts = graphOpts(token, payload, ctx.signal);
   try {
     if (payload.op === "delete") {
-      if (payload.outlookEventId) {
-        await graph.deleteGraphEvent(payload.outlookEventId, graphOpts(token, payload, ctx.signal));
-      }
+      await mirror.deleteMirror(payload.eventId, payload.outlookEventId, opts);
       // Vid delete på AVA-eventet finns ingen rad att uppdatera — workern
       // slutar bara här. (Calendar-routerns delete tar bort raden helt.)
       ctx.setProgress(1);
       return;
     }
-    // Upsert
     if (!payload.event) throw new Error("MirrorPayload saknar event-data för upsert");
-    const body = graph.toGraphEvent({ ...payload.event });
-    let outlookEventId: string;
-    if (payload.outlookEventId) {
-      const res = await graph.updateGraphEvent(payload.outlookEventId, body, graphOpts(token, payload, ctx.signal));
-      outlookEventId = res.id;
-    } else {
-      const res = await graph.createGraphEvent(body, graphOpts(token, payload, ctx.signal));
-      outlookEventId = res.id;
-    }
+    const outlookEventId = await mirror.upsertMirror(payload.eventId, payload.outlookEventId, { ...payload.event }, opts);
     ctx.setProgress(0.9);
     await dispatchMirrorState({
       eventId: payload.eventId,

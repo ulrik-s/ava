@@ -10,6 +10,7 @@ import {
   createGraphEvent,
   updateGraphEvent,
   deleteGraphEvent,
+  findGraphEventByProperty,
   toGraphEvent,
 } from "@/lib/client/integrations/microsoft-graph";
 import type { GraphEventBody, GraphEventResponse } from "@/lib/client/integrations/microsoft-graph";
@@ -189,5 +190,39 @@ describe("avbrottssignal till fetch (#1286)", () => {
     const pending = createGraphEvent(body, { token: "tok", fetchFn, signal: ac.signal });
     ac.abort();
     await expect(pending).rejects.toThrow(/Avbrutet/);
+  });
+});
+
+// #1361: speglingen söks fram på AVA-id:t (utökad egenskap) innan ett nytt event skapas.
+describe("findGraphEventByProperty (#1361)", () => {
+  const PROP = "String {c7314276-9bc2-40d6-9a33-d056ef4e7efe} Name AvaCalendarEventId";
+
+  it("GET med $filter på egenskapen, bara id, högst ett — svarar med id:t", async () => {
+    const urls: string[] = [];
+    const fetchFn = async (url: string, init: RequestInit): Promise<Response> => {
+      urls.push(url);
+      expect(init.method).toBe("GET");
+      return mockResponse(200, { value: [{ id: "g-7" }] });
+    };
+    expect(await findGraphEventByProperty(PROP, "ev-1", { token: "tok", fetchFn })).toBe("g-7");
+    const [path, query] = (urls[0] ?? "").split("?");
+    expect(path).toBe("https://graph.microsoft.com/v1.0/me/events");
+    const params = new URLSearchParams(query);
+    expect(params.get("$filter")).toBe(`singleValueExtendedProperties/Any(ep: ep/id eq '${PROP}' and ep/value eq 'ev-1')`);
+    expect(params.get("$select")).toBe("id");
+    expect(params.get("$top")).toBe("1");
+  });
+
+  it("inget träff → null; i en angiven kalender; apostrof escapas", async () => {
+    const urls: string[] = [];
+    const fetchFn = async (url: string): Promise<Response> => { urls.push(url); return mockResponse(200, { value: [] }); };
+    expect(await findGraphEventByProperty(PROP, "o'brien", { token: "tok", calendarId: "cal-1", fetchFn })).toBeNull();
+    expect(urls[0]).toMatch(/^https:\/\/graph\.microsoft\.com\/v1\.0\/me\/calendars\/cal-1\/events\?/);
+    expect(new URLSearchParams(urls[0]?.split("?")[1]).get("$filter")).toContain("ep/value eq 'o''brien'");
+  });
+
+  it("Graph-fel → kastar, så att jobbet inte skapar ett event i blindo", async () => {
+    const fetchFn = async (): Promise<Response> => mockResponse(403, { error: { message: "Access denied" } });
+    await expect(findGraphEventByProperty(PROP, "ev-1", { token: "tok", fetchFn })).rejects.toThrow(/findGraphEventByProperty: 403.*Access denied/);
   });
 });
