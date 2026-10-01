@@ -23,6 +23,17 @@ import {
 
 export const SHELL_PARAM = "__shell__";
 
+const shellOnly = (): { id: string }[] => [{ id: SHELL_PARAM }];
+
+/**
+ * Prod-bygget (`AVA_BUILD_TARGET=server`, #1352) pre-renderar BARA
+ * sentinellen: ingen sida per demo-id, så ingen demodata (id:n, RSC-payloads)
+ * hamnar på byråns domän. Shimmen renderar varje riktigt id via `__shell__`.
+ */
+function isServerTarget(): boolean {
+  return process.env.AVA_BUILD_TARGET === "server";
+}
+
 export async function demoStaticParams(pathPrefix: string): Promise<{ id: string }[]> {
   if (process.env.DEMO_BUILD !== "1") return [];
   // invoices/payment-plans skapas av demo-generatorn via API:t med store-
@@ -31,8 +42,8 @@ export async function demoStaticParams(pathPrefix: string): Promise<{ id: string
   // __shell__-shimmen (404.html → /<route>/__shell__/#orig=<path> → useRouteId
   // → getById) renderar VILKET id som helst client-side, så per-id-prerendering
   // är onödig — och skadlig — här. Pre-rendera bara sentinellen.
-  if (pathPrefix === "invoices" || pathPrefix === "payment-plans") {
-    return [{ id: SHELL_PARAM }];
+  if (isServerTarget() || pathPrefix === "invoices" || pathPrefix === "payment-plans") {
+    return shellOnly();
   }
   const ids = await collectDemoIds(pathPrefix);
   return [...ids, SHELL_PARAM].map((id) => ({ id }));
@@ -85,6 +96,7 @@ async function collectBillingIds(prefix: string, matters: Array<{ id?: unknown }
  */
 export async function demoStaticParamsBySeedId(sourceKey: string): Promise<{ id: string }[]> {
   if (process.env.DEMO_BUILD !== "1") return [];
+  if (isServerTarget()) return shellOnly();
   try {
     const { buildSeed } = await import("../../../../tooling/scripts/seed-data");
     const { createIdTranslator, translateSeed } = await import("../../../../tooling/demo-generator/id-translator");
@@ -98,6 +110,6 @@ export async function demoStaticParamsBySeedId(sourceKey: string): Promise<{ id:
     const ids = list.map((x) => x.id).filter((x): x is string => typeof x === "string");
     return [...ids, SHELL_PARAM].map((id) => ({ id }));
   } catch {
-    return [{ id: SHELL_PARAM }];
+    return shellOnly();
   }
 }

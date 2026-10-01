@@ -111,3 +111,29 @@ describe("demoStaticParams", () => {
     expect(ids[ids.length - 1]).toBe(SHELL_PARAM);
   });
 });
+
+describe("prod-bygget (AVA_BUILD_TARGET=server, #1352) — bara sentinellen", () => {
+  beforeEach(() => {
+    process.env.DEMO_BUILD = "1";
+    process.env.AVA_BUILD_TARGET = "server";
+  });
+  afterEach(() => { delete process.env.AVA_BUILD_TARGET; });
+
+  it("demoStaticParams pre-renderar inga demo-id:n", async () => {
+    const { demoStaticParams, SHELL_PARAM } = await import("@/lib/client/demo/static-params");
+    expect(await demoStaticParams("matters/active")).toEqual([{ id: SHELL_PARAM }]);
+    expect(await demoStaticParams("contacts")).toEqual([{ id: SHELL_PARAM }]);
+  });
+
+  it("demoStaticParamsBySeedId pre-renderar inga demo-användare", async () => {
+    const { demoStaticParamsBySeedId, SHELL_PARAM } = await import("@/lib/client/demo/static-params");
+    expect(await demoStaticParamsBySeedId("users")).toEqual([{ id: SHELL_PARAM }]);
+  });
+
+  it("utan DEMO_BUILD gäller fortfarande ingen pre-rendering alls", async () => {
+    delete process.env.DEMO_BUILD;
+    const { demoStaticParams, demoStaticParamsBySeedId } = await import("@/lib/client/demo/static-params");
+    expect(await demoStaticParams("matters/active")).toEqual([]);
+    expect(await demoStaticParamsBySeedId("users")).toEqual([]);
+  });
+});

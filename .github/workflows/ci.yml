@@ -127,7 +127,7 @@ jobs:
   server-first-e2e:
     name: Server-first (deploy E2E)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bun-setup
@@ -250,6 +250,33 @@ jobs:
           AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
         run: bun tooling/scripts/camt-payment-e2e.ts
+      # Prod-klienten genom prod-Caddyn (#1352): klienten byggd EXAKT som
+      # deploy-prod.sh bygger den (AVA_BUILD_TARGET=server, tom base-path),
+      # serverad av den riktiga Caddyfile:n (caddy:2-alpine) framför server-
+      # first ovan, med en låtsas-oauth2-proxy. Demodata (demo-seed.json, .ava/,
+      # documents/content/, *.json) ska ge 404 — även i en release som har den
+      # kvar (rollback) — och en Playwright-smoke kör appen i en browser:
+      # startsida, ärendelista, ett serverärende via shell-rewriten, inga
+      # 404/5xx på samma origin. Körs sist: ärendena kommer från stegen ovan.
+      - name: Bygg klienten som i prod (AVA_BUILD_TARGET=server)
+        env:
+          DEMO_BASE_PATH: ""
+          AVA_BUILD_TARGET: server
+        run: bash tooling/scripts/build-demo.sh
+      - run: bun run e2e:install
+      - name: Prod-klienten genom prod-Caddyn (#1352)
+        env:
+          AVA_CADDY_E2E_OUT: out
+          AVA_CADDY_E2E_NETWORK: ava-server-first_default
+          AVA_CADDY_E2E_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bash tooling/scripts/caddy-e2e/caddy-prod-e2e.sh
+      - name: Upload Playwright report (prod-klienten)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-prod-client-report
+          path: reports/playwright-prod-client/
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
