@@ -5,14 +5,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
-import { users } from "@/lib/server/db/schema";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { Repositories } from "@/lib/server/repositories/repositories";
-import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { DrizzleSyncStore, MISSING_BASE_VERSION_REASON } from "@/lib/server/sync/drizzle-sync-store";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
+import { pusher } from "./row-pusher";
 
 const ORG = uuidv7();
 
@@ -72,28 +72,53 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
   it("push create är idempotent (åter-uppspelning ger accepted, dubbel-skapar ej)", async () => {
     const c1 = uuidv7();
     const row = { id: c1, organizationId: ORG, name: "Köad kontakt" };
-    const first = await sync.push(ORG, mut("contact", "create", row));
+    const first = await sync.push(pusher(ORG), mut("contact", "create", row));
     expect(first.status).toBe("accepted");
-    const again = await sync.push(ORG, mut("contact", "create", row));
+    const again = await sync.push(pusher(ORG), mut("contact", "create", row));
     expect(again.status).toBe("accepted");
     expect(await repos.contacts.getById(asId<"ContactId">(c1))).toMatchObject({ id: c1, name: "Köad kontakt" });
   });
 
+  /** Ett dokumentförslag (en surface-entitet i radkön) i ett eget ärende. */
+  async function suggestion(): Promise<string> {
+    const m = uuidv7(), doc = uuidv7(), sugg = uuidv7();
+    await repos.matters.create({ id: m, organizationId: ORG, title: "Förslag", status: "ACTIVE", matterNumber: `2026-${m.slice(-4)}` } as never);
+    await repos.documents.create({ id: doc, matterId: m, fileName: "k.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: `documents/content/${doc}`, uploadedById: uuidv7() } as never);
+    await repos.documentAnalysisSuggestions.create({ id: sugg, documentId: doc, name: "Karin Holm", role: "VITTNE", contactType: "PERSON", status: "PENDING" } as never);
+    return sugg;
+  }
+
   it("push update på surface-entitet med stale baseVersion → conflict", async () => {
-    // Användaren är en surface-entitet i radkön (fakturor går via procedurkön, #1242).
-    const user = uuidv7();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await handle.db.insert(users).values({ id: user, organizationId: ORG, email: "stale@byra.se", name: "Stale", role: "LAWYER", active: true, version: 1 } as any);
-    const res = await sync.push(ORG, mut("user", "update", { id: user, name: "Ny" }, 99));
-    expect(res.status).toBe("conflict");
-    expect(res).toMatchObject({ reason: "stale" });
+    const sugg = await suggestion();
+    const res = await sync.push(pusher(ORG), mut("documentAnalysisSuggestion", "update", { id: sugg, status: "REJECTED" }, 99));
+    expect(res).toMatchObject({ status: "conflict", reason: "stale", current: { id: sugg, status: "PENDING" } });
+  });
+
+  // #1344: utan basversion kunde servern inte se om ändringen var inaktuell — den skrevs tyst över.
+  it("push update på surface-entitet utan baseVersion → conflict, raden orörd", async () => {
+    const sugg = await suggestion();
+    const res = await sync.push(pusher(ORG), mut("documentAnalysisSuggestion", "update", { id: sugg, status: "REJECTED" }));
+    expect(res).toMatchObject({ status: "conflict", reason: MISSING_BASE_VERSION_REASON, current: { id: sugg } });
+    expect((await repos.documentAnalysisSuggestions.getById(asId<"DocumentAnalysisSuggestionId">(sugg)))?.status).toBe("PENDING");
+  });
+
+  it("push update på surface-entitet med aktuell baseVersion → accepted", async () => {
+    const sugg = await suggestion();
+    const res = await sync.push(pusher(ORG), mut("documentAnalysisSuggestion", "update", { id: sugg, status: "REJECTED" }, 1));
+    expect(res).toMatchObject({ status: "accepted", row: { id: sugg, status: "REJECTED" } });
+  });
+
+  it("lww-entiteter behöver ingen baseVersion (kontakt)", async () => {
+    const c = uuidv7();
+    await repos.contacts.create({ id: c, organizationId: ORG, name: "Före" } as never);
+    expect((await sync.push(pusher(ORG), mut("contact", "update", { id: c, organizationId: ORG, name: "Efter" }))).status).toBe("accepted");
   });
 
   it("push delete → tombstone i pull (deleted: true)", async () => {
     const c2 = uuidv7();
     await repos.contacts.create({ id: c2, organizationId: ORG, name: "Tas bort", contactType: "PERSON" } as never);
     const cursor = (await sync.pull(ORG, 0)).cursor;
-    await sync.push(ORG, mut("contact", "delete", { id: c2 }));
+    await sync.push(pusher(ORG), mut("contact", "delete", { id: c2 }));
     const change = (await sync.pull(ORG, cursor)).changes.find((c) => c.row.id === c2);
     expect(change).toMatchObject({ entity: "contact", deleted: true });
     expect(await repos.contacts.getById(asId<"ContactId">(c2))).toBeNull();
@@ -201,7 +226,7 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
   // "accepted": då trodde klienten att raden sparats fast den bara fanns lokalt
   // (dataförlusten på ava-crm.io). "conflict" ackas också → ingen loop/hang.
   it("push med icke-uuid rowId → conflict, kastar ej, sparar inget (#879)", async () => {
-    const res = await sync.push(ORG, mut("invoice", "create", {
+    const res = await sync.push(pusher(ORG), mut("invoice", "create", {
       id: "mrg6gvmu-gbvt9s", matterId: uuidv7(), amount: 100, invoiceDate: new Date(), status: "DRAFT",
     }));
     expect(res.status).toBe("conflict");
@@ -221,7 +246,7 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     // Serverns jobb klassar dokumentet.
     await repos.documents.updateMetadata(asId<"DocumentId">(doc), { documentType: "STAMNING", analysisStatus: "DONE", analyzedAt: new Date("2026-09-01T10:00:00Z") } as never);
 
-    const res = await sync.push(ORG, mut("document", "update", { ...uploaded, fileName: "stamning-tingsratten.pdf" }));
+    const res = await sync.push(pusher(ORG), mut("document", "update", { ...uploaded, fileName: "stamning-tingsratten.pdf" }));
     expect(res.status).not.toBe("conflict");
     expect(await repos.documents.getById(asId<"DocumentId">(doc))).toMatchObject({
       fileName: "stamning-tingsratten.pdf", documentType: "STAMNING", analysisStatus: "DONE",
@@ -233,9 +258,9 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     const strict = new DrizzleSyncStore(handle.db, repos, { current: 2, min: 2, migrations: {} });
     const m = uuidv7();
     const old = { ...mut("matter", "create", { id: m, organizationId: ORG, title: "Gammal", status: "ACTIVE", matterNumber: "2026-1247" }), format: 1 };
-    const res = await strict.push(ORG, old);
+    const res = await strict.push(pusher(ORG), old);
     expect(res).toMatchObject({ status: "conflict", reason: expect.stringMatching(/för gammal version av AVA/) });
     expect(await repos.matters.getById(asId<"MatterId">(m))).toBeNull();
-    await expect(sync.push(ORG, { ...old, format: 99 })).rejects.toThrow(/Servern kör en äldre version/);
+    await expect(sync.push(pusher(ORG), { ...old, format: 99 })).rejects.toThrow(/Servern kör en äldre version/);
   });
 });

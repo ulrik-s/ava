@@ -159,6 +159,20 @@ nya rader direkt, och valideras bara om tabellen saknar föräldralösa rader;
 annars rapporteras antalet som en NOTICE och raderna lämnas orörda för
 utredning — migreringen fäller aldrig en databas med gamla fel.
 
+**Genomfört (#1344):** administrationen är procedurägd. Rollen läses ur
+användarraden, och radkön tog emot `user`, `organization`, `office`,
+`orgPreference` och `documentTemplate` från alla medlemmar — en färdig rad
+`{ id: jag, role: "ADMIN" }` gjorde en medlem till admin. Anropen
+(`user.*`, `organization.updateSettings/addOffice/updateOffice/deleteOffice`,
+`documentTemplate.*`, `prefs.setOrgDefault/clearOrgDefault`) köas nu och körs
+om på servern, där admin-kraven gäller; bankgiro, organisationsnummer och
+kontoplan ändras bara av admin, och mallens skapare och skapad-datum är
+setup-fält (#1345). Radkön har en policy per entitet
+(`row-push-policy.ts`, neka som standard): referenser inom byrån, den
+pushande som skapare, ägarens egna preferenser och jävskontrollens logg som
+bara kan läggas till (byrån via den som körde kontrollen). En ändring av en
+surface-entitet utan basversion avvisas.
+
 ## Konsekvenser
 
 - Affärsreglerna upprätthålls på servern utan att dubbelskrivas — samma kod körs

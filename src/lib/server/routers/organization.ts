@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ledgerAccountMapSchema } from "@/lib/shared/accounting/account-map";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { orgImageSchema } from "@/lib/shared/org-image";
+import type { UserRole } from "@/lib/shared/schemas/enums";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import type { Office, Organization } from "@/lib/shared/schemas/organization";
@@ -49,6 +50,27 @@ function toOrgSettings(org: Organization) {
   };
 }
 
+/**
+ * Fält som styr vart betalningar går och hur de bokförs (#1344) — bankgiro,
+ * organisationsnummer (på fakturan) och kontoplanen. Bara admin ändrar dem;
+ * en medlem kan spara övriga inställningar så länge de här är oförändrade.
+ */
+const ADMIN_ONLY_SETTINGS = ["bankgiro", "orgNumber", "ledgerAccountMap"] as const;
+
+/** Jämförbart värde: tomt fält och saknat räknas lika. */
+function settingValue(v: unknown): string | null {
+  return v === undefined || v === null || v === "" ? null : JSON.stringify(v);
+}
+
+/** Kasta FORBIDDEN om en icke-admin försöker ändra ett admin-fält. */
+function assertMayChangeSettings(role: UserRole, current: Organization | null, patch: Partial<Organization>): void {
+  if (role === "ADMIN") return;
+  const changed = ADMIN_ONLY_SETTINGS.filter((k) => k in patch && settingValue(patch[k]) !== settingValue(current?.[k]));
+  if (changed.length > 0) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Endast administratörer kan ändra bankgiro, organisationsnummer och bokföringskonton." });
+  }
+}
+
 export const organizationRouter = router({
   // ── Settings ────────────────────────────────────────────────────
 
@@ -87,14 +109,16 @@ export const organizationRouter = router({
         standardAtgarder: z.array(standardAtgardSchema).optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const orgId = asId<"OrganizationId">(ctx.user.organizationId);
       // Normalisera vokabulären: trimma, släng tomma, dedupa (set-semantik).
       const patch = omitUndefined(input);
+      assertMayChangeSettings(ctx.user.role, await ctx.repos.organizations.getById(orgId), patch);
       if (patch.documentTags) {
         patch.documentTags = [...new Set(patch.documentTags.map((t) => t.trim()).filter(Boolean))];
       }
       if (patch.standardAtgarder) patch.standardAtgarder = normalizeStandardAtgarder(patch.standardAtgarder);
-      return ctx.repos.organizations.update(asId<"OrganizationId">(ctx.user.organizationId), patch satisfies Partial<Organization>);
+      return ctx.repos.organizations.update(orgId, patch satisfies Partial<Organization>);
     }),
 
   /**

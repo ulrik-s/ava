@@ -7,8 +7,8 @@
  */
 
 import { eq } from "drizzle-orm";
-import type { DocumentId, InvoiceId, MatterId, OrganizationId, PaymentPlanId } from "@/lib/shared/schemas/ids";
-import { documents, invoices, matters, paymentPlans } from "../db/schema";
+import type { DocumentId, InvoiceId, MatterId, OrganizationId, PaymentPlanId, UserId } from "@/lib/shared/schemas/ids";
+import { documents, invoices, matters, paymentPlans, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 
 export async function matterOrg(db: AppDb, matterId: MatterId | null | undefined): Promise<OrganizationId | undefined> {
@@ -60,4 +60,19 @@ export async function documentOrg(db: AppDb, documentId: DocumentId | null | und
     .where(eq(documents.id, documentId))
     .limit(1);
   return matterOrg(db, doc?.matterId);
+}
+
+/**
+ * Org via användaren (#1344): jävskontrollens logg bär bara `checkedById`.
+ * Utan det här gick loggen inte att byråavgränsa — vilken byrå som helst kunde
+ * skapa eller skriva över rader, och historiken visade alla byråers sökningar.
+ */
+export async function userOrg(db: AppDb, userId: UserId | null | undefined): Promise<OrganizationId | undefined> {
+  if (!userId) return undefined;
+  const [u] = await db
+    .select({ org: users.organizationId })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return u?.org ?? undefined;
 }

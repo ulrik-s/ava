@@ -24,20 +24,14 @@ export type PushRejection =
 export type OrgOf = (row: Row) => Promise<string | undefined>;
 
 /**
- * Entiteter utan byrå i schemat — konfliktkontrollernas logg har varken byrå,
- * ärende eller faktura att härleda den ur. De kan inte avgränsas här.
- */
-const UNSCOPED = new Set(["conflictCheck"]);
-
-/**
  * Raden måste höra till den pushande byrån: den befintliga raden, och raden som
  * blir resultatet (så att en egen rad inte kan flyttas till en annan byrå och
- * en ny rad inte kan läggas i en annan byrås ärende).
+ * en ny rad inte kan läggas i en annan byrås ärende). Varje entitet har en
+ * byrå — jävskontrollens logg via den som körde kontrollen (#1344).
  */
 export async function checkScope(
-  orgOf: OrgOf, org: string, entity: string, existing: Row | null, incoming: Row | null,
+  orgOf: OrgOf, org: string, existing: Row | null, incoming: Row | null,
 ): Promise<PushRejection | null> {
-  if (UNSCOPED.has(entity)) return null;
   if (existing && (await orgOf(existing)) !== org) return { reason: "annan byrå" };
   if (!incoming) return null;
   const target = await orgOf({ ...(existing ?? {}), ...incoming });

@@ -98,14 +98,24 @@ describe("conflict.check", () => {
 });
 
 describe("conflict.history", () => {
-  it("returnerar paginerad historik", async () => {
-    const { caller } = makeCaller({
-      conflictChecks: [
-        { id: "ck1", searchTerm: "a", searchType: "both", results: [], checkedById: "u1", createdAt: new Date() },
-      ],
-    });
-    const res = await caller.history({ page: 1, pageSize: 20 });
-    expect(res.checks).toHaveLength(1);
+  const seed = {
+    users: [{ id: "u1", organizationId: ORG, name: "T" }, { id: "u2", organizationId: "annan-org", name: "Annan" }],
+    conflictChecks: [
+      { id: "ck1", searchTerm: "a", searchType: "both", results: [], checkedById: "u1", createdAt: new Date() },
+      { id: "ck2", searchTerm: "personnummer i annan byrå", searchType: "both", results: [], checkedById: "u2", createdAt: new Date() },
+    ],
+  } as Partial<DemoSource>;
+
+  it("returnerar byråns paginerade historik", async () => {
+    const res = await makeCaller(seed).caller.history({ page: 1, pageSize: 20 });
+    expect(res.checks.map((c: { id: string }) => c.id)).toEqual(["ck1"]);
     expect(res.pages).toBe(1);
+  });
+
+  // #1344: historiken var global — söktermer (personnummer) läckte mellan byråer.
+  it("en annan byrås sökningar syns inte", async () => {
+    const res = await makeCaller(seed, "annan-org", "u2").caller.history({ page: 1, pageSize: 20 });
+    expect(res.checks.map((c: { id: string }) => c.id)).toEqual(["ck2"]);
+    expect(res.total).toBe(1);
   });
 });

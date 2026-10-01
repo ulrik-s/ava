@@ -108,7 +108,7 @@ export const syncRouter = router({
       const sync = requireSync(ctx.sync);
       const m = input as QueuedMutation;
       const before = await storagePathBefore(ctx.repos, m);
-      const result = await sync.push(ctx.orgId, m);
+      const result = await sync.push({ organizationId: ctx.orgId, userId: ctx.user.id }, m);
       await analyzeIfNewContent({ content: ctx.ports.content, analyzer: ctx.ports.documentAnalyzer }, m, before, result);
       return result;
     }),

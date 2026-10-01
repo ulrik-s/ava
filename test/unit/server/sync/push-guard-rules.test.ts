@@ -8,20 +8,20 @@ import { PROCEDURE_OWNED_REASON } from "@/lib/shared/sync/procedure-owned";
 const byColumn: OrgOf = async (row) => (typeof row.organizationId === "string" ? row.organizationId : undefined);
 
 describe("checkScope", () => {
-  it("konfliktkontroller har ingen byrå i schemat — avgränsas inte", async () => {
-    expect(await checkScope(byColumn, "A", "conflictCheck", null, { id: "x" })).toBeNull();
+  it("en ny rad vars byrå inte går att avgöra → okänd byrå (inga undantag, #1344)", async () => {
+    expect(await checkScope(byColumn, "A", null, { id: "x" })).toEqual({ reason: "okänd byrå" });
   });
 
   it("delete av egen rad: bara den befintliga raden prövas", async () => {
-    expect(await checkScope(byColumn, "A", "contact", { id: "c", organizationId: "A" }, null)).toBeNull();
+    expect(await checkScope(byColumn, "A", { id: "c", organizationId: "A" }, null)).toBeNull();
   });
 
   it("en befintlig rad utan byrå räknas inte som den egna", async () => {
-    expect(await checkScope(byColumn, "A", "contact", { id: "c" }, { name: "x" })).toEqual({ reason: "annan byrå" });
+    expect(await checkScope(byColumn, "A", { id: "c" }, { name: "x" })).toEqual({ reason: "annan byrå" });
   });
 
   it("update som bara skickar ändrade fält: byrån tas från den befintliga raden", async () => {
-    expect(await checkScope(byColumn, "A", "contact", { id: "c", organizationId: "A" }, { name: "Nytt" })).toBeNull();
+    expect(await checkScope(byColumn, "A", { id: "c", organizationId: "A" }, { name: "Nytt" })).toBeNull();
   });
 });
 

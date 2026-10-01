@@ -26,7 +26,7 @@ describe("Conflict/MatterContact repos — in-memory", () => {
     const uId = uuidv7();
     const source = prebakeJoins({
       matters: [{ id: mId, organizationId: ORG, matterNumber: "2026-1", title: "X" }],
-      users: [{ id: uId, name: "Jurist" }],
+      users: [{ id: uId, organizationId: ORG, name: "Jurist" }],
       contacts: [
         { id: cMot, organizationId: ORG, name: "Anna", contactType: "PERSON", personalNumber: "19850225-6655" },
         { id: cKli, organizationId: ORG, name: "Klient AB", contactType: "COMPANY" },
@@ -52,9 +52,11 @@ describe("Conflict/MatterContact repos — in-memory", () => {
     expect((await mc.findForConflict(ORG)).length).toBe(2); // MOTPART + KLIENT
     expect(await mc.findForConflict(ORG, "0000")).toHaveLength(0);
 
-    const hist = await cc.listHistory(1, 20);
+    const hist = await cc.listHistory(ORG, 1, 20);
     expect(hist.total).toBe(1);
     expect(hist.checks[0]!.checkedBy?.name).toBe("Jurist");
+    // #1344: en annan byrå ser inte sökningen.
+    expect((await cc.listHistory(asId<"OrganizationId">("org-annan"), 1, 20)).total).toBe(0);
   });
 });
 
@@ -89,9 +91,14 @@ describe("Conflict/MatterContact repos — Drizzle (pglite)", () => {
     expect((await mc.findForConflict(org)).length).toBe(2);
     expect(await mc.findForConflict(org, "0000")).toHaveLength(0);
 
-    const hist = await cc.listHistory(1, 20);
+    const hist = await cc.listHistory(org, 1, 20);
     expect(hist.total).toBe(1);
     expect(hist.checks[0]!.checkedBy?.name).toBe("Jurist");
+    // #1344: historiken är byråns — en annan byrå ser inte sökningen.
+    expect(await cc.listHistory(asId<"OrganizationId">(uuidv7()), 1, 20)).toEqual({ checks: [], total: 0 });
+    // …och loggen får byrån via den som körde kontrollen (change_log, synk-push).
+    expect(await cc.organizationOf({ checkedById: uId })).toBe(org);
+    expect(await cc.organizationOf({})).toBeUndefined();
   });
 });
 

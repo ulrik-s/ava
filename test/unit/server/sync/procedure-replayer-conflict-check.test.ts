@@ -61,7 +61,7 @@ describe("jävskontrollen körs av servern när det köade anropet når den (#12
     const c = call("matter.create", { id, title: "Nytt uppdrag", klientId: KLIENT });
     expect(await replayer.replay(c, ctx)).toMatchObject({ status: "accepted" });
     expect(await repos.matters.getByIdInOrg(id, ORG)).toMatchObject({ conflictCheckStatus: "HITS", conflictCheckHits: 1 });
-    const { checks } = await repos.conflictChecks.listHistory(1, 50);
+    const { checks } = await repos.conflictChecks.listHistory(ORG, 1, 50);
     expect(checks.map((x) => x.id)).toContain(derivedId(c.mutationId, "conflictCheck"));
   });
 
