@@ -13,6 +13,8 @@
  *
  * Skrivflöde (offline): mutation → LocalStore uppdaterar source → `onMutate`
  * → enqueue + persist. Inga nätanrop.
+ * Flera flikar (#1346): kön läses om ur lagringen före varje reconcile, och en
+ * annan fliks ändring i kön meddelas `onLocalChange`-lyssnarna.
  * Reconcile (online): `ReconcileEngine` skriver kanoniska server-rader via
  * `apply` → TYST source-skrivning (ingen re-enqueue) + persist; köade mutationer
  * spelas upp; surface-konflikter ytläggs i resultatet.
@@ -217,7 +219,8 @@ export class CachingSyncDataStore {
   /**
    * Anropas efter varje lokal ändring, när den är köad och persisterad lokalt.
    * Klienten schemalägger en reconcile så ändringen når servern direkt — inte
-   * först vid nästa sidladdning. Returnerar en avregistrering.
+   * först vid nästa sidladdning. Anropas också när en annan flik ändrat kön
+   * (#1346), efter att kön lästs om. Returnerar en avregistrering.
    */
   onLocalChange(listener: () => void): () => void {
     this.hooks.localChangeListeners.add(listener);
@@ -229,7 +232,11 @@ export class CachingSyncDataStore {
     const queue = await MutationQueue.hydrate(deps.queuePersistence);
     const hydrated = deps.persistence ? await deps.persistence.hydrate() : null;
     const source = await repairHydrated(hydrated ?? deps.seed ?? {}, queue, deps.persistence);
-    return CachingSyncDataStore.wire(deps, queue, source);
+    const store = CachingSyncDataStore.wire(deps, queue, source);
+    // En annan flik köade eller kvitterade (#1346): kön är omläst — räkna om
+    // läget och synka (en flik i taget skickar, #1332), ifall den andra fliken stängs.
+    queue.onExternalChange(() => { for (const listener of store.hooks.localChangeListeners) listener(); });
+    return store;
   }
 
   /**
@@ -291,6 +298,9 @@ export class CachingSyncDataStore {
    *  Persisterar snapshotet EN gång efter hela batchen (se `apply` ovan), och
    *  bara om något faktiskt ändrades (tom poll-reconcile → ingen skrivning). */
   async reconcile(): Promise<ReconcileResult> {
+    // Kön ur lagringen, inte flikens kopia (#1346): en annan flik kan ha köat
+    // eller redan skickat poster sedan fliken läste sist.
+    await this.queue.refresh();
     const result = await this.engine.reconcile();
     if (result.conflicts.length > 0) await this.hooks.onConflicts?.(result.conflicts);
     if (result.pulled > 0 || result.pushed > 0 || result.rebased > 0 || result.replayed > 0) {

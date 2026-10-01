@@ -8,56 +8,78 @@
  * varför, och vad som gällde på servern. Juristen kan **försöka igen** (efter
  * att ha ändrat det som stoppade den) eller **kasta** den.
  *
- * Persisteras i IndexedDB (överlever omladdning). En modul-global instans —
- * det finns en server-synk per flik; `ServerFirstSync` registrerar hur ett
- * nytt försök köas (`setRetryHandler`).
+ * Persisteras i IndexedDB (överlever omladdning), en post i taget (#1346):
+ * flera flikar delar lagringen, och ingen flik skriver tillbaka sin kopia av
+ * hela listan. En modul-global instans — det finns en server-synk per flik;
+ * `ServerFirstSync` registrerar hur ett nytt försök köas (`setRetryHandler`).
  */
 
-import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
-import type { QueueEntry } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { z } from "zod";
+import type { ChangeChannel } from "@/lib/server/data-store/in-memory/change-channel";
+import { IdbEntryStore } from "@/lib/server/data-store/in-memory/idb-entry-store";
+import { queueEntrySchema } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { ConflictRecord } from "@/lib/server/data-store/in-memory/reconcile-engine";
 import { describeQueueEntry } from "./describe-queue-entry";
 
-/** En avvisad ändring som väntar på att användaren tar ställning. */
-export interface RejectedChange {
+/** En avvisad ändring så som den sparas: tolkas strikt när den läses ur IndexedDB. */
+const rejectedChangeSchema = z.object({
   /** Köpostens mutationId. */
-  id: string;
+  id: z.string(),
   /** Epoch-ms när servern avvisade den. */
-  rejectedAt: number;
+  rejectedAt: z.number(),
   /** Vad ändringen var, på svenska ("Ny tidspost", "Ändring av faktura"). */
-  label: string;
+  label: z.string(),
   /** Serverns skäl. */
-  reason: string;
+  reason: z.string(),
   /** Köposten — det som skickas igen vid ett nytt försök. */
-  entry: QueueEntry;
+  entry: queueEntrySchema,
   /** Serverns rad när ändringen avvisades (radkonflikter). */
-  current?: Record<string, unknown>;
-}
+  current: z.record(z.string(), z.unknown()).exactOptional(),
+});
 
+/** En avvisad ändring som väntar på att användaren tar ställning. */
+export type RejectedChange = z.infer<typeof rejectedChangeSchema>;
+
+/** Var avvisningarna sparas (#1346): en post i taget, aldrig hela listan. */
 export interface RejectedChangesPersistence {
+  /** Alla avvisningar i den ordning de sparades. */
   load(): Promise<RejectedChange[]>;
-  save(items: readonly RejectedChange[]): Promise<void>;
+  /** Spara avvisningen sist. Finns id:t redan händer ingenting. */
+  add(change: RejectedChange): Promise<void>;
+  /** Ta bort avvisningen (finns den inte händer ingenting). */
+  delete(id: string): Promise<void>;
+  /** Lyssna på andra flikars ändringar. Returnerar avregistreringen. */
+  subscribe?(listener: () => void): () => void;
 }
 
-/** IndexedDB (webbläsaren). */
+/**
+ * IndexedDB (webbläsaren) — en rad per avvisning. Raderna ligger i `<dbName>-v2`; den gamla
+ * databasens lista (allt under nyckeln `items`) flyttas hit vid varje läsning
+ * — utan att den gamla databasen uppgraderas (se `idb-entry-store.ts`).
+ */
 export class IndexedDbRejectedChangesPersistence implements RejectedChangesPersistence {
-  private readonly kv: IdbKv;
-  constructor(factory: IDBFactory = globalThis.indexedDB, dbName = "ava-rejected-changes") {
-    this.kv = new IdbKv(factory, dbName, "rejected");
+  private readonly entries: IdbEntryStore<RejectedChange>;
+  constructor(factory: IDBFactory = globalThis.indexedDB, dbName = "ava-rejected-changes", channel?: ChangeChannel) {
+    this.entries = new IdbEntryStore({
+      factory, dbName, schema: rejectedChangeSchema,
+      legacy: { storeName: "rejected", key: "items", idField: "id" },
+      ...(channel ? { channel } : {}),
+    });
   }
-  async load(): Promise<RejectedChange[]> {
-    return (await this.kv.get<RejectedChange[]>("items")) ?? [];
-  }
-  async save(items: readonly RejectedChange[]): Promise<void> {
-    await this.kv.put("items", [...items]);
-  }
+  load(): Promise<RejectedChange[]> { return this.entries.load(); }
+  add(change: RejectedChange): Promise<void> { return this.entries.add(change.id, change); }
+  delete(id: string): Promise<void> { return this.entries.delete(id); }
+  subscribe(listener: () => void): () => void { return this.entries.subscribe(listener); }
 }
 
 /** Minnet (tester, demo). */
 export class InMemoryRejectedChangesPersistence implements RejectedChangesPersistence {
   private items: RejectedChange[] = [];
   async load(): Promise<RejectedChange[]> { return [...this.items]; }
-  async save(items: readonly RejectedChange[]): Promise<void> { this.items = [...items]; }
+  async add(change: RejectedChange): Promise<void> {
+    if (!this.items.some((i) => i.id === change.id)) this.items.push(change);
+  }
+  async delete(id: string): Promise<void> { this.items = this.items.filter((i) => i.id !== id); }
 }
 
 /** Köar ett nytt försök med en avvisad ändring. */
@@ -80,14 +102,20 @@ export class RejectedChanges {
   private items: RejectedChange[] = [];
   private readonly listeners = new Set<Listener>();
   private retryHandler: RetryHandler | null = null;
+  /** Avregistrerar den nuvarande lagringens signal (om den har någon). */
+  private detach: (() => void) | undefined;
 
   constructor(private persistence: RejectedChangesPersistence = new InMemoryRejectedChangesPersistence()) {}
 
-  /** Byt lagring och läs in det som sparats (vid start). */
+  /**
+   * Byt lagring och läs in det som sparats (vid start). En annan fliks
+   * ändringar i lagringen läses in när de sker (#1346).
+   */
   async attach(persistence: RejectedChangesPersistence): Promise<void> {
+    this.detach?.();
     this.persistence = persistence;
-    this.items = await persistence.load();
-    this.publish();
+    this.detach = persistence.subscribe?.(() => { void this.reload(); });
+    await this.reload();
   }
 
   list(): readonly RejectedChange[] {
@@ -99,12 +127,14 @@ export class RejectedChanges {
     const known = new Set(this.items.map((i) => i.id));
     const fresh = conflicts.filter((c) => !known.has(c.mutation.mutationId)).map((c) => toRejected(c, now));
     if (fresh.length === 0) return;
-    await this.commit([...this.items, ...fresh]);
+    for (const change of fresh) await this.persistence.add(change);
+    await this.reload();
   }
 
   /** Kasta ändringen — serverns läge gäller. */
   async discard(id: string): Promise<void> {
-    await this.commit(this.items.filter((i) => i.id !== id));
+    await this.persistence.delete(id);
+    await this.reload();
   }
 
   /** Försök igen: köa ändringen på nytt och ta bort den härifrån. */
@@ -127,9 +157,9 @@ export class RejectedChanges {
     return () => { this.listeners.delete(listener); };
   }
 
-  private async commit(next: RejectedChange[]): Promise<void> {
-    this.items = next;
-    await this.persistence.save(next);
+  /** Listan ur lagringen, inte flikens kopia (#1346). */
+  private async reload(): Promise<void> {
+    this.items = await this.persistence.load();
     this.publish();
   }
 

@@ -32,13 +32,13 @@ describe("RejectedChanges", () => {
 
   it("samma ändring sparas bara en gång; tomma omgångar ändrar inget", async () => {
     const persistence = new InMemoryRejectedChangesPersistence();
-    const save = vi.spyOn(persistence, "save");
+    const add = vi.spyOn(persistence, "add");
     const store = new RejectedChanges(persistence);
     await store.record([conflict(row)]);
     await store.record([conflict(row)]);
     await store.record([]);
     expect(store.list()).toHaveLength(1);
-    expect(save).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledTimes(1);
   });
 
   it("kasta: ändringen tas bort (serverns läge gäller)", async () => {
