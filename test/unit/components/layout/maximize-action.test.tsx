@@ -96,4 +96,33 @@ describe("MaximizeAction", () => {
       document.removeEventListener("keydown", closeDialog);
     }
   });
+
+  // #1356: Escape i ett fält eller en meny tillhör dem — panelen står kvar.
+  it("Escape i ett inmatningsfält, en textyta, redigerbar text eller en meny återställer inte", () => {
+    const { api } = setup(true);
+    const editable = document.createElement("div");
+    editable.setAttribute("contenteditable", "true");
+    const menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    const item = document.createElement("button");
+    item.setAttribute("role", "menuitem");
+    menu.appendChild(item);
+    const roots: HTMLElement[] = [document.createElement("input"), document.createElement("textarea"), editable, menu];
+    roots.forEach((r) => document.body.appendChild(r));
+    const press = (t: Element): void => {
+      act(() => { t.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    };
+    try {
+      [...roots.slice(0, 3), item].forEach(press);
+      expect(api.exitMaximized).not.toHaveBeenCalled();
+      // Samma Escape från en vanlig knapp återställer.
+      const plain = document.createElement("button");
+      roots.push(plain);
+      document.body.appendChild(plain);
+      press(plain);
+      expect(api.exitMaximized).toHaveBeenCalledTimes(1);
+    } finally {
+      roots.forEach((r) => r.remove());
+    }
+  });
 });

@@ -29,6 +29,7 @@ import { keepProportionsAcrossMaximize } from "./maximize-proportions";
 import { useOverflowTriggerLabels } from "./overflow-trigger";
 import type { PanelDef } from "./panel-def";
 import { PhonePanels } from "./phone-panels";
+import { swallowTabCloseKey } from "./tab-close-keys";
 
 /** Lägg till en panel (via id); standardlayouter bygger med den. `inactive` = lägg till som bakgrundsflik. */
 export type AddPanel = (id: string, opts?: { position?: AddPanelPositionOptions; inactive?: boolean; initialWidth?: number }) => void;
@@ -132,14 +133,16 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { scr
   const defs = useMemo(() => new Map(panels.map((p) => [p.id, p])), [panels]);
   const layout = useLayoutPersistence(key, () => { setGeneration((g) => g + 1); });
   const overflowLabels = useOverflowTriggerLabels();
+  const [maximized, setMaximized] = useState(false);
 
   if (prefs.isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;
   const stored = parseStoredLayout(prefs.data?.user) ?? parseStoredLayout(prefs.data?.org);
 
   return (
-    <div ref={overflowLabels} className="flex h-full min-h-0 flex-col" onPointerDown={layout.markTouched}>
-      <LayoutToolbar hasOrgDefault={prefs.data?.org != null} onReset={layout.reset}
-        onSaveOrg={() => { if (apiRef.current) layout.saveOrgDefault(apiRef.current.toJSON()); }} onClearOrg={layout.clearOrgDefault} />
+    <div ref={overflowLabels} className="flex h-full min-h-0 flex-col" onPointerDown={layout.markTouched} onKeyDownCapture={swallowTabCloseKey}>
+      <LayoutToolbar hasOrgDefault={prefs.data?.org != null} maximized={maximized} onReset={layout.reset}
+        onSaveOrg={() => { if (apiRef.current && !apiRef.current.hasMaximizedGroup()) layout.saveOrgDefault(apiRef.current.toJSON()); }}
+        onClearOrg={layout.clearOrgDefault} />
       <PanelDefs.Provider value={defs}>
         <DockviewReact
           key={generation}
@@ -147,11 +150,14 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { scr
           components={COMPONENTS}
           defaultTabComponent={PanelTab}
           rightHeaderActionsComponent={MaximizeAction}
+          // Shift-drag skapade flytande grupper (#1356) — sidans paneler hör hemma i rutnätet.
+          disableFloatingGroups
           theme={document.documentElement.classList.contains("dark") ? themeDark : themeLight}
           onReady={({ api }) => {
             apiRef.current = api;
             applyLayout(api, stored, defs, () => defaultLayout(adder(api, defs), screen));
             keepProportionsAcrossMaximize(api);
+            api.onDidMaximizedGroupChange(() => setMaximized(api.hasMaximizedGroup()));
             // Under maximering serialiserar dockview de dolda gruppernas gamla
             // pixlar; sparas först när gruppen återställts (#1291).
             api.onDidLayoutChange(() => { if (!api.hasMaximizedGroup()) layout.onChange(api.toJSON()); });
@@ -186,18 +192,24 @@ function useLayoutPersistence(key: string, remount: () => void) {
   };
 }
 
-function LayoutToolbar({ hasOrgDefault, onReset, onSaveOrg, onClearOrg }: {
-  hasOrgDefault: boolean; onReset: () => void; onSaveOrg: () => void; onClearOrg: () => void;
+/**
+ * Verktygsraden. Firmastandarden går inte att spara medan en panel är
+ * maximerad (#1356): dockview serialiserar då de dolda gruppernas gamla
+ * pixlar, och hela byrån hade fått den skeva layouten (jfr #1291).
+ */
+function LayoutToolbar({ hasOrgDefault, maximized, onReset, onSaveOrg, onClearOrg }: {
+  hasOrgDefault: boolean; maximized: boolean; onReset: () => void; onSaveOrg: () => void; onClearOrg: () => void;
 }) {
   const me = trpc.user.current.useQuery();
-  const btn = "rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100";
+  const btn = "rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50";
   return (
     <div className="flex shrink-0 items-center justify-end gap-1 pb-1 text-xs text-gray-500">
       <span className="mr-auto">Dra flikarna för att ordna panelerna.</span>
       <button type="button" className={btn} onClick={onReset}>Återställ layout</button>
       {me.data?.role === "ADMIN" && (
         <>
-          <button type="button" className={btn} onClick={onSaveOrg}>Spara som firmastandard</button>
+          <button type="button" className={btn} onClick={onSaveOrg} disabled={maximized}
+            title={maximized ? "Återställ den maximerade panelen först" : undefined}>Spara som firmastandard</button>
           {hasOrgDefault && <button type="button" className={btn} onClick={onClearOrg}>Ta bort firmastandard</button>}
         </>
       )}
