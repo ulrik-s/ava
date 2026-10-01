@@ -8,9 +8,9 @@
  * fri-formig så vi inte behöver schema-ändra när vi lägger till nya vyer.
  */
 
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { asId } from "@/lib/shared/schemas/ids";
+import { assertAdmin } from "../auth/assert-admin";
 import { newRowId } from "../queued-call";
 import type { OrgPreferenceRow } from "../repositories/org-preference-repository";
 import type { UserPreferenceRow } from "../repositories/user-preference-repository";
@@ -62,7 +62,7 @@ export const preferenceRouter = router({
   setOrgDefault: orgProcedure
     .input(z.object({ key: z.string().min(1), prefs: prefsPayloadSchema }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx.user.role);
+      assertAdmin(ctx);
       const existing = await ctx.repos.orgPreferences.getByOrgKey(ctx.user.organizationId, input.key);
       if (existing) {
         return ctx.repos.orgPreferences.update(existing.id, { prefs: input.prefs, createdById: asId<"UserId">(ctx.user.id) } satisfies Partial<OrgPreferenceRow>);
@@ -79,7 +79,7 @@ export const preferenceRouter = router({
   clearOrgDefault: orgProcedure
     .input(z.object({ key: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx.user.role);
+      assertAdmin(ctx);
       const existing = await ctx.repos.orgPreferences.getByOrgKey(ctx.user.organizationId, input.key);
       if (!existing) return { ok: true };
       await ctx.repos.orgPreferences.hardDelete(existing.id);
@@ -88,13 +88,7 @@ export const preferenceRouter = router({
 
   /** Lista alla nycklar som har en org-default (för admin-UI:t). */
   listOrgDefaults: orgProcedure.query(({ ctx }) => {
-    requireAdmin(ctx.user.role);
+    assertAdmin(ctx);
     return ctx.repos.orgPreferences.listByOrg(ctx.user.organizationId);
   }),
 });
-
-function requireAdmin(role: string | undefined): void {
-  if (role !== "ADMIN") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Endast administratörer kan sätta org-defaults." });
-  }
-}

@@ -6,10 +6,10 @@ import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock
 // ─── Helpers ─────────────────────────────────────────────────────
 
 /** Build a caller with a given org context. */
-function makeCaller(orgId = "org-a") {
+function makeCaller(orgId = "org-a", role: "ADMIN" | "LAWYER" | "ASSISTANT" = "ADMIN") {
   const dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
-    user: { id: "user-1", email: "a@b.com", name: "Test", role: "ADMIN", organizationId: orgId },
+    user: { id: "user-1", email: "a@b.com", name: "Test", role, organizationId: orgId },
     prisma: mockPrisma, dataStore,
     repos: reposFromMockDataStore(dataStore),
   };
@@ -205,5 +205,24 @@ describe("documentTemplate.delete", () => {
     await expect(makeCaller().delete({ id: "tpl-999" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+});
+
+/** Mallarna blir byråns dokument — bara admin skapar, ändrar och tar bort (#1370). */
+describe("documentTemplate — behörighet för icke-admin (#1370)", () => {
+  it.each(["LAWYER", "ASSISTANT"] as const)("%s: create, update och delete nekas (FORBIDDEN) utan skrivning", async (role) => {
+    const caller = makeCaller("org-a", role);
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue(TEMPLATE_A);
+    await expect(caller.create({ name: "Fullmakt", content: "…" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.update({ id: "tpl-1" as never, name: "Kapad" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.delete({ id: "tpl-1" as never })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mockPrisma.documentTemplate.create).not.toHaveBeenCalled();
+    expect(mockPrisma.documentTemplate.update).not.toHaveBeenCalled();
+    expect(mockPrisma.documentTemplate.delete).not.toHaveBeenCalled();
+  });
+
+  it("LAWYER: läsning är fortfarande tillåten", async () => {
+    mockPrisma.documentTemplate.findMany.mockResolvedValue([TEMPLATE_A]);
+    expect(await makeCaller("org-a", "LAWYER").list()).toHaveLength(1);
   });
 });
