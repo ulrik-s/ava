@@ -92,4 +92,25 @@ describe("jävskontrollen körs av servern när det köade anropet når den (#12
     expect(await repos.matterContacts.getByIdInOrg(link, ORG)).toMatchObject({ contactId: RETURNING, role: "MOTPART" });
     expect(await repos.matters.getByIdInOrg(id, ORG)).toMatchObject({ conflictCheckStatus: "HITS", conflictCheckHits: 1 });
   });
+
+  // #1383: ett accepterat dokumentförslag kopplar också en part — samma kontroll.
+  it("ett accepterat dokumentförslag: servern kör om kopplingen och kontrollen", async () => {
+    expect(isQueuedProcedure("document.acceptSuggestion") && isQueuedProcedure("document.acceptSuggestionGroup")).toBe(true);
+    const id = asId<"MatterId">(uuidv7());
+    const other = asId<"ContactId">(uuidv7());
+    await repos.contacts.create({ id: other, organizationId: ORG, name: "Fjärde Klienten", contactType: "PERSON" });
+    await replayer.replay(call("matter.create", { id, title: "Fjärde uppdraget", klientId: other }), ctx);
+    expect(await repos.matters.getByIdInOrg(id, ORG)).toMatchObject({ conflictCheckStatus: "CLEAR" });
+    const doc = asId<"DocumentId">(uuidv7());
+    await repos.documents.create({ id: doc, matterId: id, fileName: "stamning.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: `documents/content/${doc}`, uploadedById: USER } as never);
+    const sugg = asId<"DocumentAnalysisSuggestionId">(uuidv7());
+    await repos.documentAnalysisSuggestions.create({
+      id: sugg, documentId: doc, name: "Dag Dahl", role: "MOTPART", contactType: "PERSON", personalNumber: "19700101-1111", status: "PENDING",
+    } as never);
+    const accept = call("document.acceptSuggestion", { suggestionId: sugg });
+    expect(await replayer.replay(accept, ctx)).toMatchObject({ status: "accepted" });
+    const link = await repos.matterContacts.findLink(id, RETURNING, "MOTPART");
+    expect(link?.id).toBe(derivedId(accept.mutationId, "matterContact:MOTPART"));
+    expect(await repos.matters.getByIdInOrg(id, ORG)).toMatchObject({ conflictCheckStatus: "HITS", conflictCheckHits: 1 });
+  });
 });
