@@ -51,7 +51,10 @@ describe("ProfilePage", () => {
     render(<ProfilePage />);
     expect(screen.getByText("Min profil")).toBeInTheDocument();
     expect(await screen.findByDisplayValue("Anna Advokat")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("anna@firma.se")).toBeInTheDocument();
+    // E-posten visas men går inte att redigera (#1371).
+    expect(screen.getByText("anna@firma.se")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("anna@firma.se")).not.toBeInTheDocument();
+    expect(screen.getByText(/används för inloggningen/)).toBeInTheDocument();
   });
 
   it("renderar anslutna tjänster (IntegrationsSection)", () => {
@@ -73,7 +76,7 @@ describe("ProfilePage", () => {
     expect(screen.queryByText(/Publika nycklar/)).not.toBeInTheDocument();
   });
 
-  it("Spara → update.mutate med formulärvärdena", async () => {
+  it("Spara → update.mutate med formulärvärdena, utan e-post (#1371)", async () => {
     render(<ProfilePage />);
     await screen.findByDisplayValue("Anna Advokat");
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
@@ -81,7 +84,6 @@ describe("ProfilePage", () => {
       id: "u1",
       name: "Anna Advokat",
       title: "Advokat",
-      email: "anna@firma.se",
     });
   });
 });

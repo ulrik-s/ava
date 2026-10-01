@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { userRouter } from "@/lib/server/routers/user";
+import { arraySink, setLogSink, type LogRecord } from "@/lib/shared/observability/logger";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {
@@ -257,5 +258,69 @@ describe("user.current", () => {
     const me = await makeCallerWithRole("LAWYER", "u1").current();
     expect(me.id).toBe("u1");
     expect(me.hourlyRates).toEqual({ ARBETE: 250000 });
+  });
+});
+
+/**
+ * E-posten är inloggningens identitet (#1371): OIDC matchar på den, så den som
+ * byter den pekar om kontot. Bara admin byter den, och bytet loggas.
+ */
+describe("user.update — e-post ändras bara av admin (#1371)", () => {
+  const STORED = { id: "u1", organizationId: "org-a", email: "anna@firma.se", name: "Anna", role: "LAWYER" };
+
+  function adminWithEvents() {
+    const dataStore = dataStoreFromMockPrisma(mockPrisma);
+    const ctx = {
+      user: { id: "admin-1", email: "admin@firma.se", name: "Admin", role: "ADMIN", organizationId: "org-a" },
+      prisma: mockPrisma, dataStore, repos: reposFromMockDataStore(dataStore),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { caller: userRouter.createCaller(ctx as any), events: dataStore.events };
+  }
+
+  it.each(["LAWYER", "ASSISTANT"] as const)("%s: byte av sin egen e-post nekas (FORBIDDEN) och inget skrivs", async (role) => {
+    mockPrisma.user.findFirst.mockResolvedValue(STORED);
+    await expect(makeCallerWithRole(role, "u1").update({ id: "u1", email: "kapad@annan.se" }))
+      .rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringMatching(/inloggningen/) });
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("LAWYER: samma adress i annat skiftläge räknas som oförändrad — profilen sparas", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(STORED);
+    mockPrisma.user.update.mockResolvedValue({ ...STORED, name: "Anna Ny" });
+    await makeCallerWithRole("LAWYER", "u1").update({ id: "u1", name: "Anna Ny", email: "Anna@Firma.se" });
+    expect(mockPrisma.user.update).toHaveBeenCalled();
+  });
+
+  it("ADMIN: byter en kollegas e-post — skrivs, loggas (bara id:n) och blir en händelse", async () => {
+    const records: LogRecord[] = [];
+    const restore = setLogSink(arraySink(records));
+    try {
+      mockPrisma.user.findFirst.mockResolvedValue(STORED);
+      mockPrisma.user.update.mockResolvedValue({ ...STORED, email: "anna.ny@firma.se" });
+      const { caller, events } = adminWithEvents();
+      await caller.update({ id: "u1", email: "anna.ny@firma.se" });
+      expect(mockPrisma.user.update.mock.calls[0]![0].data.email).toBe("anna.ny@firma.se");
+      expect(records).toContainEqual(expect.objectContaining({ event: "user.email_changed", userId: "admin-1", orgId: "org-a", ids: ["u1"] }));
+      expect(JSON.stringify(records)).not.toContain("anna.ny@firma.se");
+      expect(events.emit).toHaveBeenCalledWith(expect.objectContaining({
+        type: "user.action", payload: { action: "user.email_changed", targetUserId: "u1" },
+      }));
+    } finally {
+      setLogSink(restore);
+    }
+  });
+
+  it("ADMIN: oförändrad e-post loggas inte som byte", async () => {
+    const records: LogRecord[] = [];
+    const restore = setLogSink(arraySink(records));
+    try {
+      mockPrisma.user.findFirst.mockResolvedValue(STORED);
+      mockPrisma.user.update.mockResolvedValue(STORED);
+      await adminWithEvents().caller.update({ id: "u1", name: "Anna", email: "anna@firma.se" });
+      expect(records.some((r) => r.event === "user.email_changed")).toBe(false);
+    } finally {
+      setLogSink(restore);
+    }
   });
 });

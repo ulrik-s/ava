@@ -22,6 +22,7 @@
 
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
+import { sameLoginEmail } from "./login-email";
 import type { AuthProvider, Principal } from "./principal";
 
 /** Claims oauth2-proxy/IdP:n levererar (#222 fyller dessa ur headers/userinfo). */
@@ -51,10 +52,6 @@ export interface AllowlistedUser {
   active?: boolean;
 }
 
-function emailEq(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
-}
-
 /** Är en (ev. redan bunden) rad konsistent med dessa claims? Obunden = OK. */
 function bindingOk(user: AllowlistedUser, claims: OidcClaims): boolean {
   if (!user.oidcSubject) return true; // obunden → första login binder via email
@@ -80,7 +77,7 @@ export class OidcAuthProvider implements AuthProvider {
   getPrincipal(): Principal | null {
     const claims = this.claims;
     if (!claims?.email) return null;
-    const user = this.users.find((u) => emailEq(u.email, claims.email));
+    const user = this.users.find((u) => sameLoginEmail(u.email, claims.email));
     if (!user || user.active === false || !bindingOk(user, claims)) return null;
     return toPrincipal(user, claims);
   }
