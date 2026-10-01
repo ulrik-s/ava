@@ -141,6 +141,24 @@ hela-raden-LWW inte kunde lova. Skriver ett anrop flera anteckningar får de var
 sitt härlett id i skrivordning (`serviceNote`, `serviceNote:2`, …). Ärendets
 parter (`matterContact`) och kontakterna är ren data och går via radkön.
 
+**Genomfört (#1345):** omkörningen litar inte på fält som servern annars
+bestämmer. Skapa-procedurerna (`timeEntry.create`, `expense.create`,
+`matter.create`, `invoice.createRadgivning`) tar emot några *setup-fält* för
+demo-generatorn, seed-skripten och E2E-riggarna: någon annans `userId`, ett eget
+`hourlyRate`, `invoiceId`, `createdAt`, `matterNumber` och `status`. En gemensam
+regel (`src/lib/server/auth/setup-fields.ts`) gäller för dem: i ett köat anrop
+avvisas de alltid (FORBIDDEN, även för en administratör — kön bär bara det
+användaren gör i UI:t, och UI:t skickar dem aldrig), och i ett direkt anrop får
+bara ADMIN sätta dem. Demo-generatorn och seed-skripten kör som ADMIN, och
+E2E-riggens fixturanvändare är ADMIN. Det egna id:t som `userId` räknas inte som
+setup-fält. Ärendet, juristen och ansvarig jurist slås upp i anroparens byrå
+(`org-scope.ts`, NOT_FOUND annars). Migration 0035 lägger en främmande nyckel
+från `time_entries.matter_id` och `expenses.matter_id` mot `matters.id`
+(ärenden raderas bara mjukt). Den läggs till `NOT VALID`, så att den gäller för
+nya rader direkt, och valideras bara om tabellen saknar föräldralösa rader;
+annars rapporteras antalet som en NOTICE och raderna lämnas orörda för
+utredning — migreringen fäller aldrig en databas med gamla fel.
+
 ## Konsekvenser
 
 - Affärsreglerna upprätthålls på servern utan att dubbelskrivas — samma kod körs
