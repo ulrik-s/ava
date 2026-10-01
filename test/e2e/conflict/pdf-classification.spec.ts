@@ -17,10 +17,10 @@
  * Servern (den kompilerade binären i docker, utan LLM) läser texten och klassar
  * båda ur rubriken på första sidan.
  */
-import { test, expect } from "@playwright/test";
 import { asId } from "../../../src/lib/shared/schemas/ids";
 import { clientFor, mintToken } from "../../../tooling/scripts/selfhosted-trpc-client";
 import { flatePdf } from "../../helpers/flate-pdf";
+import { expect, test } from "../_helper-isolation";
 import { login } from "./_selfhosted-login";
 
 const PDF = Buffer.from(flatePdf([

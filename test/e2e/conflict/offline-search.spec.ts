@@ -9,10 +9,12 @@
  *   3. förladdningen hämtar dokumentet och indexerar texten,
  *   4. offline: sökningen hittar ett ord ur dokumentet, märkt "Lokal cache".
  */
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
 import { asId } from "../../../src/lib/shared/schemas/ids";
 import { uuidv7 } from "../../../src/lib/shared/uuid";
 import { clientFor, mintToken } from "../../../tooling/scripts/selfhosted-trpc-client";
+import { expect, test } from "../_helper-isolation";
 import { login } from "./_selfhosted-login";
 
 /** Dokument-id:n med sparad text i enhetens textlager (`LocalDocumentTextStore`). */

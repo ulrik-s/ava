@@ -13,7 +13,9 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+import { expect, test } from "../_helper-isolation";
 
 interface UiState {
   bookingDate: string;

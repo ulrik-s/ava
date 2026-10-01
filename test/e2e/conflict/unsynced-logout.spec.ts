@@ -11,7 +11,9 @@
  * Webbläsarens svar på `persist()` är heuristiskt, så det låses här med ett
  * init-skript (nekat) för att varningen ska kunna provas deterministiskt.
  */
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+import { expect, test } from "../_helper-isolation";
 import { login } from "./_selfhosted-login";
 
 async function denyPersistentStorage(page: Page): Promise<void> {

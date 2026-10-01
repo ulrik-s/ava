@@ -15,9 +15,9 @@
  *   4. online igen: servern ger juristens faktura N+1, och fakturadokumentet
  *      skapas först nu — med serverns nummer, aldrig det preliminära.
  */
-import { test, expect } from "@playwright/test";
 import { asId } from "../../../src/lib/shared/schemas/ids";
 import { clientFor, mintToken } from "../../../tooling/scripts/selfhosted-trpc-client";
+import { expect, test } from "../_helper-isolation";
 import { login } from "./_selfhosted-login";
 
 type Admin = ReturnType<typeof clientFor>;

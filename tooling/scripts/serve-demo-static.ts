@@ -5,7 +5,7 @@
  * Används av demo-e2e:t i CI (`bun run e2e:demo` mot en serverad out/) utan
  * att dra in docker/nginx (demo-serve.sh kräver docker).
  *
- *   bun tooling/scripts/serve-demo-static.ts            # port 8799
+ *   bun tooling/scripts/serve-demo-static.ts            # port 8799 (e2e:demo sätter worktreens port, #1261)
  *   DEMO_PORT=8080 bun tooling/scripts/serve-demo-static.ts
  *
  * Öppna http://localhost:8799/ava/. Avsiktligt ZERO beroenden (node:http).

@@ -3,7 +3,7 @@
  * Tjänar också som mall för ytterligare E2E-tester.
  */
 
-import { test, expect } from "@playwright/test";
+import { expect, test } from "./_helper-isolation";
 
 test.describe("Smoke", () => {
   test("loginsida laddas och visar rätt rubrik", async ({ page }) => {

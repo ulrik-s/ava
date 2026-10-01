@@ -13,9 +13,11 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
 import { asId } from "../../../src/lib/shared/schemas/ids";
 import { clientFor, mintToken } from "../../../tooling/scripts/selfhosted-trpc-client";
+import { expect, test } from "../_helper-isolation";
 import { login } from "./_selfhosted-login";
 
 const seed = JSON.parse(
