@@ -21,7 +21,7 @@ export default function ProfilePage() {
   const updateUser = trpc.user.update.useMutation({ onSuccess: () => utils.user.current.invalidate() });
   const integrationsAvailable = useIntegrationsAvailable();
 
-  const [form, setForm] = useState({ name: "", title: "", email: "" });
+  const [form, setForm] = useState({ name: "", title: "" });
   const [formReady, setFormReady] = useState(false);
 
   useEffect(() => {
@@ -31,7 +31,6 @@ export default function ProfilePage() {
         setForm({
           name: me.data.name ?? "",
           title: me.data.title ?? "",
-          email: me.data.email ?? "",
         });
         setFormReady(true);
       });
@@ -44,12 +43,13 @@ export default function ProfilePage() {
   const u = me.data;
 
   const saveProfile = () => {
-    updateUser.mutate({ id: u.id, name: form.name, title: form.title || null, email: form.email });
+    // E-posten skickas inte: den är inloggningens identitet och ändras bara av admin (#1371).
+    updateUser.mutate({ id: u.id, name: form.name, title: form.title || null });
   };
 
   const panels = [
     { id: "basics", title: "Uppgifter", render: () => (
-      <ProfileBasicsSection form={form} setForm={setForm} role={u.role} onSave={saveProfile} saving={updateUser.isPending} saveError={updateUser.error?.message ?? null} />
+      <ProfileBasicsSection form={form} setForm={setForm} email={u.email} role={u.role} onSave={saveProfile} saving={updateUser.isPending} saveError={updateUser.error?.message ?? null} />
     ) },
     // Anslutna tjänster (O365, Google, …) — bara när något går att ansluta (#1213).
     ...(integrationsAvailable ? [{ id: "integrations", title: "Anslutna tjänster", render: () => <IntegrationsSection /> }] : []),
@@ -70,11 +70,12 @@ export default function ProfilePage() {
   );
 }
 
-type ProfileForm = { name: string; title: string; email: string };
+type ProfileForm = { name: string; title: string };
 
-function ProfileBasicsSection({ form, setForm, role, onSave, saving, saveError }: {
+function ProfileBasicsSection({ form, setForm, email, role, onSave, saving, saveError }: {
   form: ProfileForm;
   setForm: React.Dispatch<React.SetStateAction<ProfileForm>>;
+  email: string;
   role: string;
   onSave: () => void;
   saving: boolean;
@@ -102,12 +103,9 @@ function ProfileBasicsSection({ form, setForm, role, onSave, saving, saveError }
           />
         </Field>
         <Field label="E-post">
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-          />
+          <div className="text-sm text-gray-700">{email}
+            <span className="text-xs text-gray-400 ml-2">(används för inloggningen — ändras av admin)</span>
+          </div>
         </Field>
         <Field label="Roll">
           <div className="text-sm text-gray-700">{role}

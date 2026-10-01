@@ -77,6 +77,17 @@ describe("administrationen körs om av servern (#1344)", () => {
       expect(await replayer.replay(call("user.deactivate", { id: ADMIN }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
     });
 
+    it("medlem: byt sin egen e-post (inloggningens identitet) → avvisad, adressen orörd (#1371)", async () => {
+      expect(await replayer.replay(call("user.update", { id: MEMBER, email: "kapad@annan.se" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect((await repos.users.getById(MEMBER))?.email).toBe("medlem@a.se");
+    });
+
+    it("admin: byt en kollegas e-post → accepterad (#1371)", async () => {
+      expect(await replayer.replay(call("user.update", { id: MEMBER, email: "medlem.ny@a.se" }), asAdmin)).toMatchObject({ status: "accepted" });
+      expect((await repos.users.getById(MEMBER))?.email).toBe("medlem.ny@a.se");
+      expect(await replayer.replay(call("user.update", { id: MEMBER, email: "medlem@a.se" }), asAdmin)).toMatchObject({ status: "accepted" });
+    });
+
     it("medlem: ändra sitt eget namn → accepterad", async () => {
       expect(await replayer.replay(call("user.update", { id: MEMBER, name: "Medlem Ny" }), asMember)).toMatchObject({ status: "accepted" });
       expect((await repos.users.getById(MEMBER))?.name).toBe("Medlem Ny");

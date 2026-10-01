@@ -5,6 +5,7 @@ import { hourlyRatesSchema, type HourlyRates } from "@/lib/shared/schemas/hourly
 import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { matterNumberPrefixSchema, type User } from "@/lib/shared/schemas/user";
 import { assertAdmin } from "../auth/assert-admin";
+import { assertMayChangeLoginEmail, auditLoginEmailChange, changesLoginEmail } from "../auth/login-email";
 import { router, protectedProcedure } from "../trpc";
 
 /** Projektion till listvyns fält (utan passwordHash). */
@@ -37,6 +38,20 @@ export interface UserProfile {
   mileageRate: number | null;
   matterNumberPrefix: string | null;
   createdAt: Date;
+}
+
+/**
+ * En icke-admin ändrar bara sin egen profil och aldrig sin roll. (E-posten
+ * prövas efter uppslaget, mot den lagrade adressen.)
+ */
+function assertMayUpdateUser(caller: { id: string; role: string }, input: { id: string; role?: string | undefined }): void {
+  if (caller.role === "ADMIN") return;
+  if (input.id !== caller.id) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Du kan bara ändra din egen profil." });
+  }
+  if (input.role) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Endast administratörer kan ändra roller." });
+  }
 }
 
 export const userRouter = router({
@@ -121,8 +136,8 @@ export const userRouter = router({
 
   /**
    * Uppdatera en användare. Användaren kan ändra sina EGNA fält
-   * (namn, titel, sats). Endast ADMIN kan ändra role eller annan
-   * användares data.
+   * (namn, titel, sats). Endast ADMIN kan ändra role, e-post (inloggningens
+   * identitet, #1371) eller annan användares data.
    */
   update: protectedProcedure
     .input(z.object({
@@ -139,21 +154,19 @@ export const userRouter = router({
       password: z.string().min(6).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const isSelf = input.id === ctx.user.id;
-      const isAdmin = ctx.user.role === "ADMIN";
-      if (!isSelf && !isAdmin) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Du kan bara ändra din egen profil." });
-      }
-      if (input.role && !isAdmin) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Endast administratörer kan ändra roller." });
-      }
+      assertMayUpdateUser(ctx.user, input);
       const { id, password, ...data } = input;
       // Org-scope: verifiera ägarskap (motsvarar gamla where:{id,organizationId}).
       const owned = await ctx.repos.users.getByIdInOrg(id, ctx.user.organizationId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      // E-posten är inloggningens identitet (#1371) — bara admin byter den.
+      const emailChanged = changesLoginEmail(owned.email, input.email);
+      if (emailChanged) assertMayChangeLoginEmail(ctx);
       const updateData: Record<string, unknown> = { ...data };
       if (password) updateData.passwordHash = await hashPassword(password);
-      return ctx.repos.users.update(id, updateData satisfies Partial<User>);
+      const updated = await ctx.repos.users.update(id, updateData satisfies Partial<User>);
+      if (emailChanged) await auditLoginEmailChange(ctx, id);
+      return updated;
     }),
 
   /**
