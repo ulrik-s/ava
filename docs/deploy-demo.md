@@ -31,6 +31,11 @@ extern data-repo, ingen CORS, ingen tredje-parts auth.
 6. cleanup-trap restaurerar app-träd
 ```
 
+Steg 3–5 körs bara i demo-bygget (default). Prod (`deploy-prod.sh`) bygger med
+`AVA_BUILD_TARGET=server`: samma skal utan demodata och utan förrenderade
+demo-id-sidor, kontrollerat av `check-no-demo-data.ts` (#1352). Se
+[deploy-server-first.md](deploy-server-first.md).
+
 Resultat (typiskt):
 - 20 HTML-filer (statiska pages)
 - 248 JSON-entiteter i manifest

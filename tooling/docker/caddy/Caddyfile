@@ -61,6 +61,16 @@
 		# releases/current -> <tid>-<sha>: deploy-prod.sh byter länken atomärt (#1369).
 		root * /srv/releases/current
 		route {
+			# Demodata (#1352): prod byggs utan den (AVA_BUILD_TARGET=server),
+			# men en release byggd före #1352 — t.ex. efter --rollback — har
+			# den kvar, och skalet är oskyddat. Samma lista som
+			# DEMO_DATA_PATHS i tooling/scripts/check-no-demo-data.ts (testat);
+			# /manifest.json är PWA-manifestet och får passera.
+			@demodata {
+				path /demo-seed.json /.ava/* /documents/* *.json
+				not path /manifest.json
+			}
+			respond @demodata 404
 			@shell {
 				path_regexp shell ^/(matters|contacts|invoices|payment-plans|users|templates)/([^/]+)(/edit)?/?$
 				not file /{re.shell.1}/{re.shell.2}{re.shell.3}/index.html

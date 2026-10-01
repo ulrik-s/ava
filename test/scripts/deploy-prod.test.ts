@@ -96,7 +96,9 @@ beforeEach(() => {
   bin = join(root, "bin");
   log = join(root, "log");
   const gitconfig = join(root, "gitconfig");
-  writeFileSync(gitconfig, "[user]\n\tname = t\n\temail = t@t\n[init]\n\tdefaultBranch = main\n[core]\n\thooksPath = /dev/null\n[commit]\n\tgpgsign = false\n");
+  // maintenance/gc av: en push startar annars underhåll i bakgrunden som packar
+  // om lösa objekt medan `git clone` kopierar dem ("No such file", flaky).
+  writeFileSync(gitconfig, "[user]\n\tname = t\n\temail = t@t\n[init]\n\tdefaultBranch = main\n[core]\n\thooksPath = /dev/null\n[commit]\n\tgpgsign = false\n[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n");
   gitEnv = { GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: "1" };
 
   sh(`git init -q --bare origin.git && git init -q dev`, root);
@@ -153,6 +155,8 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     const up = at(calls, "up -d --build");
     expect(backup).toBeGreaterThan(-1);
     expect(backup).toBeLessThan(build);
+    // Prod-klienten byggs utan demodata (#1352) och på roten.
+    expect(calls[build]).toContain("-e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server oven/bun:1");
     expect(build).toBeLessThan(migrate);
     expect(migrate).toBeLessThan(up);
     expect(up).toBeLessThan(at(calls, "exec -T caddy wget"));

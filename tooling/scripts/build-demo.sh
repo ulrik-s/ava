@@ -9,7 +9,15 @@
 #   4. Återställ flyttade filer (oavsett om bygget lyckades)
 #
 # Env-variabler:
-#   DEMO_BASE_PATH  Bas-sökväg för GH Pages (default: "/ava")
+#   DEMO_BASE_PATH    Bas-sökväg för GH Pages (default: "/ava")
+#   AVA_BUILD_TARGET  demo (default) = GH Pages-demon, med demodata;
+#                     server = prod (deploy-prod.sh, #1352): samma skal men
+#                     UTAN demodata — ingen seed, inget manifest över datan,
+#                     ingen demo-seed.json, inga demo-PDF:er och inga
+#                     förrenderade demo-id-sidor (bara __shell__). Skalet är
+#                     oskyddat på byråns domän (#1245), så allt i out/ är publikt.
+#                     Sist kör check-no-demo-data.ts och fäller bygget om
+#                     något ändå följt med.
 #
 # Demo-data hämtas från en separat GH Pages-publicerad repo
 # (default `https://<user>.github.io/<demo-repo>`). Inga CORS-proxyn,
@@ -21,6 +29,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+
+BUILD_TARGET="${AVA_BUILD_TARGET:-demo}"
+case "$BUILD_TARGET" in
+  demo | server) ;;
+  *) echo "[build-demo] okänt AVA_BUILD_TARGET=$BUILD_TARGET (demo|server)" >&2; exit 2 ;;
+esac
 
 STASH_DIR="$ROOT/.demo-stash"
 APP_DIR="$ROOT/src/app"
@@ -109,30 +123,36 @@ export default function PlaceholderPage() {
 EOFTSX
 done
 
-echo "[build-demo] Kör next build (DEMO_BUILD=1)..."
+echo "[build-demo] Kör next build (DEMO_BUILD=1, AVA_BUILD_TARGET=$BUILD_TARGET)..."
 DEMO_BUILD=1 \
 NEXT_PUBLIC_DEMO_BUILD=1 \
+AVA_BUILD_TARGET="$BUILD_TARGET" \
 DEMO_BASE_PATH="${DEMO_BASE_PATH-/ava}" \
   bunx next build
 
-# ─── Seed: kör samma buildSeed som docker-firma:n men med demo-args ─────
-# Resultatet (JSON + PDF/DOCX) skrivs direkt in i `out/` så pages-sajten
-# serverar både app:en och datan från samma origin. Då slipper vi en
-# separat data-repo + slipper CORS.
-echo "[build-demo] Seedar demo-data direkt i out/..."
-bun tooling/scripts/build-demo-repo.ts --dir "$ROOT/out"
+# ─── Demodata: bara i demo-bygget (#1352) ───────────────────────────────
+if [[ "$BUILD_TARGET" == demo ]]; then
+  # ─── Seed: kör samma buildSeed som docker-firma:n men med demo-args ─────
+  # Resultatet (JSON + PDF/DOCX) skrivs direkt in i `out/` så pages-sajten
+  # serverar både app:en och datan från samma origin. Då slipper vi en
+  # separat data-repo + slipper CORS.
+  echo "[build-demo] Seedar demo-data direkt i out/..."
+  bun tooling/scripts/build-demo-repo.ts --dir "$ROOT/out"
 
-echo "[build-demo] Genererar manifest.json över out/..."
-bun tooling/scripts/generate-demo-manifest.ts "$ROOT/out"
+  echo "[build-demo] Genererar manifest.json över out/..."
+  bun tooling/scripts/generate-demo-manifest.ts "$ROOT/out"
 
-# demo-seed.json (#544, ADR 0025): EN bundlad seed som klienten hämtar i st.f.
-# manifest + N filer → hydrerar cachen via den riktiga reconcile/pull-vägen.
-echo "[build-demo] Genererar demo-seed.json över out/..."
-bun tooling/scripts/generate-demo-seed.ts "$ROOT/out"
+  # demo-seed.json (#544, ADR 0025): EN bundlad seed som klienten hämtar i st.f.
+  # manifest + N filer → hydrerar cachen via den riktiga reconcile/pull-vägen.
+  echo "[build-demo] Genererar demo-seed.json över out/..."
+  bun tooling/scripts/generate-demo-seed.ts "$ROOT/out"
 
-# .nojekyll: utan denna fil ignorerar GitHub Pages alla dotfile-mappar
-# (t.ex. /.ava/users/) → users + org-data skulle 404:a.
-touch "$ROOT/out/.nojekyll"
+  # .nojekyll: utan denna fil ignorerar GitHub Pages alla dotfile-mappar
+  # (t.ex. /.ava/users/) → users + org-data skulle 404:a.
+  touch "$ROOT/out/.nojekyll"
+else
+  echo "[build-demo] AVA_BUILD_TARGET=server: ingen demodata (seed, manifest, demo-seed.json, .nojekyll)"
+fi
 
 # SPA-fallback: GH Pages serverar 404.html för okända URL:er. Att bara
 # kopiera index.html funkar INTE för runtime-skapade id:n: index.html:s
@@ -187,10 +207,17 @@ F="$ROOT/out/404.html" bun -e 'const f=process.env.F,fs=require("fs");fs.writeFi
 echo "[build-demo] Bygger service worker (out/sw.js)..."
 bun tooling/scripts/build-service-worker.ts "$ROOT/out"
 
+# Prod: fäll bygget om demodata ändå hamnat i out/ (#1352).
+if [[ "$BUILD_TARGET" == server ]]; then
+  bun tooling/scripts/check-no-demo-data.ts "$ROOT/out"
+fi
+
 echo "[build-demo] Klar. Output: $ROOT/out/"
 echo "  • App: $(find "$ROOT/out" -name '*.html' | wc -l | tr -d ' ') HTML-filer"
-echo "  • Data: $(grep -c '"' "$ROOT/out/manifest.json" 2>/dev/null || echo 0) entiteter i manifest"
-echo "  • Binärer: $(find "$ROOT/out/documents/content" -type f 2>/dev/null | wc -l | tr -d ' ') PDF/DOCX"
+if [[ "$BUILD_TARGET" == demo ]]; then
+  echo "  • Data: $(grep -c '"' "$ROOT/out/manifest.json" 2>/dev/null || echo 0) entiteter i manifest"
+  echo "  • Binärer: $(find "$ROOT/out/documents/content" -type f 2>/dev/null | wc -l | tr -d ' ') PDF/DOCX"
+fi
 
 # Auto-heal den lokala self-hosted-stacken (#847): `next build` återskapar out/
 # med ett NYTT inode → Docker Desktops bind-mount (../../out) blir då inaktuell

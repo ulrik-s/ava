@@ -48,13 +48,22 @@ kommer att få från sina klienter, inte en teknikdetalj.
 ```bash
 git clone https://github.com/ulrik-s/ava && cd ava
 # Bygg i en container — hosten behöver bara docker + git, ingen bun/node.
-docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= oven/bun:1 sh -c \
+docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server oven/bun:1 sh -c \
   'bun install --frozen-lockfile && bun run server-first:build && bash tooling/scripts/build-demo.sh'
 ```
 
 Det ger server-binären (`dist/`) och appen (`out/`). `bun run build:demo` bygger
 under `/ava` (GH Pages) — Caddy serverar appen på roten, så base-pathen måste
 vara tom.
+
+`AVA_BUILD_TARGET=server` (#1352) bygger skalet **utan demodata**: ingen
+`demo-seed.json`, inga `.ava/`-användare, inget datamanifest, inga demo-PDF:er
+och inga förrenderade demo-ärenden (bara `__shell__`-sidorna). Skalet laddas
+utan inloggning (#1245), så allt i `out/` är publikt på byråns domän — utan
+flaggan låg demons fiktiva byrå öppet där. Bygget fälls om något ändå följt med
+(`check-no-demo-data.ts`), och Caddy svarar 404 på samma sökvägar
+(`demo-seed.json`, `.ava/*`, `documents/*`, `*.json` utom PWA-manifestet) ifall
+en äldre release med demodata blir aktiv igen, t.ex. efter `--rollback`.
 
 Caddy serverar inte `out/` direkt utan `releases/current`, en symlänk till en
 release (se *Uppgradering*). Gör den första releasen av bygget:

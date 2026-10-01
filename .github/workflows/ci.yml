@@ -250,6 +250,12 @@ jobs:
           AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
         run: bun tooling/scripts/camt-payment-e2e.ts
+      # Prod-Caddyn (#1352): demodata (demo-seed.json, .ava/, documents/, *.json)
+      # ger 404 även i en release som har den kvar (rollback till ett bygge från
+      # före AVA_BUILD_TARGET=server); skalet, PWA-manifestet och shell-
+      # rewriten fungerar. Riktig Caddyfile i caddy:2-alpine, som i prod.
+      - name: Caddy nekar demodata (#1352)
+        run: bash tooling/scripts/caddy-demo-data-e2e.sh
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v

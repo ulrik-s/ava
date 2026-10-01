@@ -16,7 +16,8 @@
 #   5. (en gång) flytta Caddy från out/ till releases/current
 #   6. TÖM .next/cache — en gammal byggcache gav en gång gammal CSS i prod
 #   7. bygg server + klient i oven/bun (hosten har bara docker + git) till
-#      out/, som INTE serveras
+#      out/, som INTE serveras. Klienten byggs UTAN demodata
+#      (AVA_BUILD_TARGET=server, #1352) — skalet är publikt
 #   8. kontrollera att den byggda CSS:en har allt ur globals.css
 #   9. lägg bygget i releases/<tid>-<sha> (inte aktivt än)
 #  10. kör databasmigrationerna — ALLTID: db-migrate kör bara filer som saknas
@@ -171,7 +172,7 @@ step "tömmer Next byggcache (.next/cache) och byggrester (out/)"
 run rm -rf .next/cache out
 
 step "bygger server + klient (oven/bun) till out/ — Caddy serverar releases/current, inte out/"
-run docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= oven/bun:1 sh -c \
+run docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server oven/bun:1 sh -c \
   'bun install --frozen-lockfile >/dev/null && bun run server-first:build >/dev/null && bash tooling/scripts/build-demo.sh >/tmp/build.log 2>&1 || { tail -30 /tmp/build.log; exit 1; }'
 
 step "kontrollerar byggd CSS mot globals.css"
