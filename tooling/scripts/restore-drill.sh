@@ -18,6 +18,9 @@
 #   6. återställ databasen ur backupen och dokumenten ur den krypterade
 #      exporten, med runbookens kommandon (docs/runbook-aterstallning.md)
 #   7. bekräfta att ärendet och dokumentet är tillbaka, och att tjänsten är frisk
+#   8. bekräfta att synkepoken bytts (#1360): change_log har gått tillbaka till
+#      backupens läge, och klienterna ska synka om från 0 i stället för att
+#      tyst missa ändringar efter sina gamla cursorer
 #
 # Steg 5 är det som gör övningen ärlig. Utan det skulle en återställning som
 # inte gjorde någonting alls se ut att lyckas.
@@ -71,6 +74,12 @@ AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" \
   bun tooling/scripts/restore-drill-seed.ts > "$WORK/marker.txt"
 MARKER="$(cat "$WORK/marker.txt")"
 echo "  Markör: $MARKER"
+
+psql_value() {
+  docker compose "${COMPOSE_ARGS[@]}" exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "$1"
+}
+EPOCH_BEFORE=$(psql_value "SELECT epoch FROM sync_epoch")
+[ -n "$EPOCH_BEFORE" ] || { echo "✗ ingen synkepok före backupen (migration 0041?)." >&2; exit 1; }
 
 echo "▸ Tar backup …"
 bash tooling/scripts/backup-db.sh "$WORK"
@@ -139,7 +148,16 @@ if [ "$BACK" != "1" ]; then
   exit 1
 fi
 
+echo "▸ Bekräftar att synkepoken bytts (klienterna synkar om från 0, #1360) …"
+EPOCH_AFTER=$(psql_value "SELECT epoch FROM sync_epoch")
+if [ -z "$EPOCH_AFTER" ] || [ "$EPOCH_AFTER" = "$EPOCH_BEFORE" ]; then
+  echo "✗ Synkepoken bytte inte ($EPOCH_BEFORE → ${EPOCH_AFTER:-ingen}) — klienter före den återställda servern skulle missa ändringar." >&2
+  exit 1
+fi
+echo "  ✓ $EPOCH_BEFORE → $EPOCH_AFTER"
+
 echo
 echo "✓ Återställningsövning klar: ärendet $MARKER och dess dokument förstördes och"
 echo "  återskapades — databasen ur dumpen, dokumenten ur den krypterade exporten —"
-echo "  och tjänsten är frisk efteråt (/readyz svarade ok)."
+echo "  och tjänsten är frisk efteråt (/readyz svarade ok). Synkepoken byttes, så"
+echo "  klienterna synkar om från 0."

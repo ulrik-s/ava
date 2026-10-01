@@ -113,6 +113,23 @@ function writeCanonical(store: LocalStore, entity: string, row: Record<string, u
 }
 
 /**
+ * Omsynk efter en återställd server (#1360): ta bort lokala rader i synkade
+ * entiteter vars nyckel (`entitet:id`) inte finns i `keep`. Svarar med antalet.
+ */
+function pruneLocal(store: LocalStore, keep: ReadonlySet<string>): number {
+  const src = store.currentSource as Record<string, Record<string, unknown>[] | undefined>;
+  let pruned = 0;
+  for (const [entity, key] of Object.entries(SOURCE_KEY_BY_ENTITY)) {
+    const rows = src[key];
+    if (!rows) continue;
+    const kept = rows.filter((row) => keep.has(keyOf(entity, row)));
+    pruned += rows.length - kept.length;
+    src[key] = kept;
+  }
+  return pruned;
+}
+
+/**
  * Rader med icke-uuid-id (skapade innan klienten genererade uuid) nådde aldrig
  * servern. Ge dem deterministiska uuid:n, skriv om alla referenser, köa dem som
  * create och persistera — innan första reconcile. No-op när allt redan är uuid.
@@ -349,7 +366,8 @@ export class CachingSyncDataStore {
       writeCanonical(store, entity, row, deleted);
     };
 
-    const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply });
+    const prune = (keep: ReadonlySet<string>): number => pruneLocal(store, keep);
+    const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply, prune });
     return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile, onConflicts: deps.onConflicts, capture, writes });
   }
 
@@ -365,7 +383,7 @@ export class CachingSyncDataStore {
     this.engine.restoreLater(this.queue.takeSettledElsewhere().flatMap(refsOf));
     const result = await this.engine.reconcile();
     if (result.conflicts.length > 0) await this.hooks.onConflicts?.(result.conflicts);
-    if (result.pulled + result.pushed + result.rebased + result.replayed + result.restored > 0) {
+    if (result.pulled + result.pushed + result.rebased + result.replayed + result.restored + result.pruned > 0) {
       this.rebakeJoins();
       await this.persistSnapshot();
     }

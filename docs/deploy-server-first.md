@@ -288,9 +288,14 @@ ger `ava-<datum>.sql.gz` (→ `restore-db.sh`) och `content.tar.gz` (packas upp 
 
 En enda dator på kontoret är fortfarande en enda plats: brand, stöld och
 ransomware på den datorn tar alla kopior. `backup-pull.sh` kopierar därför de
-verifierade exporterna till en **andra plats** när `AVA_BACKUP_MIRROR` är satt:
-en extern disk, en NAS eller en molnsynkad mapp, helst hos en annan leverantör
-eller på en annan adress.
+verifierade exporterna till en **andra plats**, `AVA_BACKUP_MIRROR`: en extern
+disk, en NAS eller en molnsynkad mapp, helst på en annan adress.
+
+**Den krävs (#1360).** Utan `AVA_BACKUP_MIRROR` gör hämtaren sitt jobb
+(hämtar, verifierar, gallrar, kontrollerar åldern) men avslutar sedan med
+larm (exit 1 + macOS-notis): *ingen andra backupplats*. Det enda
+uttryckliga undantaget är `AVA_BACKUP_MIRROR=none`, som bara ska användas när
+en andra hämtare på en annan plats redan finns (se nedan).
 
 ```bash
 AVA_BACKUP_HOST=avabackup@ava.byra.se AVA_BACKUP_KEY=~/.config/ava-backup/age.key \
@@ -298,6 +303,11 @@ AVA_BACKUP_MIRROR=/Volumes/AVA-NAS/backup \
   bash tooling/scripts/backup-pull.sh ~/AVA-backup
 ```
 
+- **Välj en svensk eller EU-baserad mottagare.** Byråns egen NAS på en annan
+  adress (en delägares hem, ett andra kontor), eller en molnmapp hos en
+  leverantör med datacenter i Sverige eller EU/EES och personuppgiftsbiträdes-
+  avtal. Kopiorna är krypterade, men var de ligger ska ändå kunna redovisas
+  för klienterna och IMY.
 - Katalogen måste **finnas**. En omonterad volym larmar i stället för att
   tyst bli en lokal katalog på samma disk.
 - Kopiorna kontrolleras mot sina checksummor vid varje körning, så en

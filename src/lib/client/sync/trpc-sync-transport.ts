@@ -19,8 +19,8 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 export class TrpcSyncTransport implements SyncTransport {
   constructor(private readonly client: TRPCClient<AppRouter>) {}
 
-  pull(sinceCursor: number): Promise<PullResult> {
-    return this.client.sync.pull.query({ sinceCursor }) as Promise<PullResult>;
+  pull(sinceCursor: number, epoch?: string): Promise<PullResult> {
+    return this.client.sync.pull.query({ sinceCursor, ...(epoch !== undefined ? { epoch } : {}) }) as Promise<PullResult>;
   }
 
   /** Radernas kanoniska läge (#1348) — återställning efter en avvisad ändring. */

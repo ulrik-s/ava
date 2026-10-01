@@ -120,10 +120,14 @@ export const syncRouter = router({
       return { ok: true as const };
     }),
 
-  /** Delta-pull: kanoniska ändringar med `seq > sinceCursor` för org:en. */
+  /**
+   * Delta-pull: kanoniska ändringar med `seq > sinceCursor` för org:en.
+   * `epoch` (#1360) är synkepoken klienten fick senast — skiljer den sig från
+   * databasens har databasen återställts, och pullen börjar om från 0.
+   */
   pull: orgProcedure
-    .input(z.object({ sinceCursor: z.number().int().nonnegative() }))
-    .query(({ ctx, input }) => requireSync(ctx.sync).pull(ctx.orgId, input.sinceCursor)),
+    .input(z.object({ sinceCursor: z.number().int().nonnegative(), epoch: z.string().uuid().optional() }))
+    .query(({ ctx, input }) => requireSync(ctx.sync).pull(ctx.orgId, input.sinceCursor, input.epoch)),
 
   /**
    * Radernas kanoniska läge (#1348): klienten återställer raderna en avvisad

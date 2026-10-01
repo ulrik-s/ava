@@ -66,6 +66,12 @@ echo "▸ Lägger tillbaka dumpen …"
 gunzip -c "$DUMP" | docker compose -f "$COMPOSE" exec -T postgres \
   psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 --quiet
 
+# Ny synkepok (#1360): klienterna synkar om från 0 vid nästa pull — köade,
+# ej synkade ändringar ligger kvar och spelas upp. Se rotate-sync-epoch.sql.
+echo "▸ Byter synkepok (klienterna synkar om från 0) …"
+docker compose -f "$COMPOSE" exec -T postgres psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 --quiet \
+  < "$(dirname "$0")/../db/rotate-sync-epoch.sql" >/dev/null
+
 echo "▸ Startar server-first …"
 docker compose -f "$COMPOSE" start server-first >/dev/null
 

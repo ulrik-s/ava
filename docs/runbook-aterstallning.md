@@ -86,9 +86,47 @@ docker compose -f tooling/docker/docker-compose.production.yml up -d --wait
     psql -U ava -d ava -tAc "SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM matters), (SELECT count(*) FROM documents WHERE deleted_at IS NULL)"
   ```
 - Allt som skrevs efter exporten är borta. Meddela byrån vilken tidpunkt som
-  gäller (exportens datum och klockslag). Klienter som var offline har
-  eventuellt osynkade ändringar lokalt, och de synkas när klienterna kommer
-  online mot den nya servern.
+  gäller (exportens datum och klockslag). Vad som händer i klienterna står i
+  nästa avsnitt.
+- `SELECT epoch, rotated_at FROM sync_epoch` ska visa en `rotated_at` från
+  återställningen. `restore-db.sh` byter epoken; har du återställt på något
+  annat sätt (en volym-snapshot, `psql` för hand), kör
+  `tooling/db/rotate-sync-epoch.sql` mot databasen innan server-first startas.
+
+## 5b. Klienterna efter återställningen (#1360)
+
+Webbläsarna har en egen kopia av datan och en synk-cursor: numret på den
+senaste ändringen de hämtat från servern. Efter en återställning har servern
+gått tillbaka till backupens läge, så klienternas cursor ligger *före*
+servern, och nya ändringar får nummer som klienterna redan passerat. Utan
+åtgärd skulle de tyst missa dem.
+
+Därför har databasen en **synkepok** (`sync_epoch`), ett id för dess
+ändringshistorik. Klienten skickar sin epok med varje hämtning. Är den en
+annan än databasens, eller ligger klientens cursor före serverns, svarar
+servern med **hela historiken från början** (`resync`), i sidor om 500
+ändringar som klienten hämtar efter varandra. Klienten gör då så här:
+
+1. Den skriver in serverns rader, som vid en vanlig hämtning.
+2. När **alla** sidor är hämtade, och först då:
+   den **tar bort lokala rader som inte finns i den återställda databasen**,
+   det vill säga sådant som skrevs efter exporten och redan hade synkats.
+   Så ser klienten samma sak som en ny enhet skulle göra.
+3. **Kön rörs inte.** Ändringar som inte hunnit synkas (gjorda offline eller
+   strax före haveriet) ligger kvar lokalt och skickas till den återställda
+   servern. Nyskapade poster godtas. En ändring av en post som inte finns i
+   backupen avvisas och hamnar under *Avvisade ändringar*, där användaren
+   kan se den.
+4. Cursorn börjar om från den nya historiken, och epoken sparas.
+
+Ingenting behöver göras i klienterna. Be ändå användarna öppna AVA och
+vänta tills synken visar *Synkat* innan de arbetar vidare, och gå igenom
+*Avvisade ändringar*.
+
+**Begränsning:** det som skrevs efter exporten, och som klienterna redan
+hade synkat, tas bort även ur klienternas kopior. Servern är källan till
+sanning, och en klient kan inte avgöra om en sådan rad ska tillbaka. Att
+rädda den datan ur klienternas cache följs upp i #1426.
 
 ## 6. Backupen igen
 
@@ -99,7 +137,9 @@ Den nya servern har ingen backup förrän du lägger tillbaka den:
    Första `deploy-prod.sh` därefter installerar `.path`-enheten för "Ta backup
    nu" i Inställningar.
 2. Uppdatera `AVA_BACKUP_HOST` hos hämtaren om adressen ändrades, och kör
-   `backup-pull.sh` en gång manuellt.
+   `backup-pull.sh` en gång manuellt. Den ska sluta med `✓ senaste: …` och
+   utan larm. Larmar den om *ingen andra backupplats*, sätt
+   `AVA_BACKUP_MIRROR` ([Andra backupplatsen](./deploy-server-first.md#andra-backupplatsen)).
 3. `rm -rf /root/restore` på servern.
 
 ## Övning

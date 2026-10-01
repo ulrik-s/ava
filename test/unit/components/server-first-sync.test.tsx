@@ -19,9 +19,9 @@ function fakeStore(opts: { pending: number; fail?: boolean; blocked?: Error; err
       state.reconciles++;
       if (opts.fail) throw opts.error ?? new Error("nätverksfel");
       const entry = { mutationId: "m1", entity: "invoice", kind: "update" as const, row: { id: "i1" }, enqueuedAt: 0 };
-      if (opts.blocked) return { pulled: 0, pushed: 0, rebased: 0, replayed: 0, restored: 0, conflicts: [], cursor: 0, blocked: { mutation: entry, error: opts.blocked, attempts: 1 } };
+      if (opts.blocked) return { pulled: 0, pushed: 0, rebased: 0, replayed: 0, restored: 0, pruned: 0, conflicts: [], cursor: 0, blocked: { mutation: entry, error: opts.blocked, attempts: 1 } };
       state.pending = 0;
-      return { pulled: 0, pushed: 1, rebased: 0, replayed: 0, restored: 0, conflicts: [], cursor: 1, blocked: null };
+      return { pulled: 0, pushed: 1, rebased: 0, replayed: 0, restored: 0, pruned: 0, conflicts: [], cursor: 1, blocked: null };
     },
     pendingCount: () => state.pending,
     oldestPendingAt: () => (state.pending > 0 ? 1 : null),

@@ -22,6 +22,18 @@ export interface PullResult {
    * sista position. Klienten pullar igen från den tills `hasMore` uteblir.
    */
   hasMore?: boolean;
+  /**
+   * Databasens synkepok (#1360) — id:t för dess change_log-historik. Klienten
+   * sparar den med cursorn och skickar den i nästa pull.
+   */
+  epoch?: string;
+  /**
+   * Servern började om från 0 (#1360): databasen har återställts ur en backup
+   * sedan klienten senast pullade. Svaret (och sidorna efter det) är hela
+   * historiken; när alla sidor är hämtade tar klienten bort lokala rader som
+   * inte finns i den (utom rader med köade ändringar).
+   */
+  resync?: true;
 }
 
 /**
@@ -62,7 +74,8 @@ export interface RowRef {
 export const MAX_ROW_REFS = 100;
 
 export interface SyncTransport {
-  pull(sinceCursor: number): Promise<PullResult>;
+  /** Ändringar efter cursorn; `epoch` är den klienten fick senast (#1360). */
+  pull(sinceCursor: number, epoch?: string): Promise<PullResult>;
   /**
    * Radernas kanoniska läge just nu (#1348) — för att återställa en rad efter
    * en avvisad ändring när servern inte skickade sitt läge med avvisningen.
