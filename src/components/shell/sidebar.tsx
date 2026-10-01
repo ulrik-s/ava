@@ -6,35 +6,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { z } from "zod";
 import { loadFromStorage } from "@/lib/client/load-from-storage";
-import { confirmSignOutIfUnsynced } from "@/lib/client/sync/confirm-sign-out";
 import { cn } from "@/lib/client/utils";
+import { useSignOutFlow } from "./sign-out-flow";
 import { ThemeToggle } from "./theme-toggle";
-
-/**
- * Pure git-modell — ingen NextAuth-session. "Logga ut" rensar
- * firma-config (token + principalId) och navigerar till /login så
- * användaren kan välja konto igen. Måste rensa principalId — annars
- * tolkar demo-bootstrap reload:en som "redan inloggad".
- */
-export function signOutLocally(): void {
-  try {
-    // Zod vid parsegränsen (#187): validera som objekt; trasigt → {} (utloggning rensar ändå).
-    const cfg = loadFromStorage("ava.firma", z.record(z.string(), z.unknown()).catch({}), {});
-    delete cfg.token;
-    delete cfg.principalId;
-    localStorage.setItem("ava.firma", JSON.stringify(cfg));
-  } catch { /* ignorera */ }
-  const basePath = process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
-  window.location.replace(`${basePath}/login/`);
-}
-
-/**
- * "Logga ut" från UI:t (#1241): synka en sista gång och fråga om ändringar
- * ändå inte nått servern. Nej → ingenting händer, sessionen står kvar.
- */
-export async function signOutWithSyncCheck(): Promise<void> {
-  if (await confirmSignOutIfUnsynced()) signOutLocally();
-}
 
 const navigation = [
   // Jävskontroll överst — första steget i ärendehantering, mest framträdande (#89).
@@ -98,27 +72,28 @@ function NavLinks({ pathname, onNavigate, py = "py-2", iconOnly = false }: { pat
   );
 }
 
-/** "Logga ut" — textknapp, eller ikonknapp i hopfällt läge. */
+/** "Logga ut" — textknapp, eller ikonknapp i hopfällt läge (#1347: synka, fråga, rensa). */
 function LogoutButton({ iconOnly = false }: IconOnlyProp) {
-  if (iconOnly) {
-    return (
-      <button
-        onClick={() => void signOutWithSyncCheck()}
-        aria-label="Logga ut"
-        title="Logga ut"
-        className="flex w-full justify-center rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-      >
-        <LogOut className="h-5 w-5" aria-hidden="true" />
-      </button>
-    );
-  }
+  const { requestSignOut, busy, dialog } = useSignOutFlow();
   return (
-    <button
-      onClick={() => void signOutWithSyncCheck()}
-      className="text-sm text-gray-500 hover:text-gray-700"
-    >
-      Logga ut
-    </button>
+    <>
+      {iconOnly ? (
+        <button
+          onClick={requestSignOut}
+          disabled={busy}
+          aria-label="Logga ut"
+          title="Logga ut"
+          className="flex w-full justify-center rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+        >
+          <LogOut className="h-5 w-5" aria-hidden="true" />
+        </button>
+      ) : (
+        <button onClick={requestSignOut} disabled={busy} className="text-sm text-gray-500 hover:text-gray-700">
+          Logga ut
+        </button>
+      )}
+      {dialog}
+    </>
   );
 }
 

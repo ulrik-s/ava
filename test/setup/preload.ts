@@ -7,13 +7,21 @@
  *   - Rensar renderad DOM mellan tester.
  *   - Spärrar fetch mot AVA Helper-portarna och fäller testet som försökte
  *     (#1368) — se helper-network-guard.ts.
+ *   - Binder de lokala databasernas namnrymd (#1347).
  */
 
 import * as matchers from "@testing-library/jest-dom/matchers";
 import { cleanup } from "@testing-library/react";
 import { afterEach, expect } from "bun:test";
 
+import { bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
+
 import { assertNoHelperTraffic, guardFetch } from "./helper-network-guard";
+
+// Lokala databaser (#1347): i webbläsaren binder bootstrappen namnrymden innan
+// något öppnas. Testerna öppnar dem under demons gemensamma namn om inte
+// testet självt binder en användare (eller släpper bindningen).
+bindLocalNamespace(SHARED_NAMESPACE);
 
 expect.extend(matchers as unknown as Parameters<typeof expect.extend>[0]);
 

@@ -6,7 +6,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest-compat";
 import { z } from "zod";
-import { IdbEntryStore } from "@/lib/server/data-store/in-memory/idb-entry-store";
+import { EntryStoreLegacy, IdbEntryStore, v2Location } from "@/lib/server/data-store/in-memory/idb-entry-store";
 import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
 import { LegacyList } from "@/lib/server/data-store/in-memory/legacy-list";
 import { changeChannelHub } from "../../../helpers/change-channel-hub";
@@ -16,7 +16,7 @@ type Item = z.infer<typeof item>;
 const LEGACY = { storeName: "list", key: "items", idField: "id" };
 
 function store<T = Item>(factory: IDBFactory, dbName: string, schema: z.ZodType<T>): IdbEntryStore<T> {
-  return new IdbEntryStore({ factory, dbName, schema, legacy: LEGACY, channel: changeChannelHub()() });
+  return new IdbEntryStore({ factory, location: v2Location(factory, dbName, LEGACY), schema, channel: changeChannelHub()() });
 }
 
 const itemStore = (factory: IDBFactory, dbName: string): IdbEntryStore<Item> => store(factory, dbName, item);
@@ -95,8 +95,8 @@ describe("IdbEntryStore — andra flikar", () => {
   it("varje skrivning når de andra flikarnas lyssnare, inte den egna", async () => {
     const factory = new IDBFactory();
     const hub = changeChannelHub();
-    const a = new IdbEntryStore({ factory, dbName: "e-signal", schema: item, legacy: LEGACY, channel: hub() });
-    const b = new IdbEntryStore({ factory, dbName: "e-signal", schema: item, legacy: LEGACY, channel: hub() });
+    const a = new IdbEntryStore({ factory, location: v2Location(factory, "e-signal", LEGACY), schema: item, channel: hub() });
+    const b = new IdbEntryStore({ factory, location: v2Location(factory, "e-signal", LEGACY), schema: item, channel: hub() });
     const heard: string[] = [];
     a.subscribe(() => heard.push("a"));
     b.subscribe(() => heard.push("b"));
@@ -107,7 +107,8 @@ describe("IdbEntryStore — andra flikar", () => {
   });
 
   it("utan injicerad kanal används en BroadcastChannel per databas", async () => {
-    const s = new IdbEntryStore({ factory: new IDBFactory(), dbName: "e-default", schema: item, legacy: LEGACY });
+    const factory = new IDBFactory();
+    const s = new IdbEntryStore({ factory, location: v2Location(factory, "e-default", LEGACY), schema: item });
     const off = s.subscribe(() => undefined);
     await s.add("x", { id: "x", n: 1 });
     off();
@@ -211,6 +212,37 @@ describe("LegacyList.clearIfMoved", () => {
     await legacy.clearIfMoved(new Set(["x", "y"]));
     expect(await legacy.read()).toEqual([]);
     await expect(new LegacyList(factory, { dbName: "e-clear-none", ...LEGACY }).clearIfMoved(new Set())).resolves.toBeUndefined();
+  });
+});
+
+describe("IdbEntryStore som äldre lagring (#1347)", () => {
+  it("en annan IdbEntryStore flyttas in post för post och glömmer det flyttade; en kvitterad kommer inte tillbaka", async () => {
+    const factory = new IDBFactory();
+    const old = new IdbEntryStore({ factory, location: v2Location(factory, "e-old", LEGACY), schema: z.unknown(), channel: changeChannelHub()() });
+    await old.add("x", { id: "x", n: 1 });
+    await old.add("y", { id: "y", n: 2 });
+    const mine = new IdbEntryStore({
+      factory, location: { name: "e-mine", legacy: [new EntryStoreLegacy(old)] }, schema: item, channel: changeChannelHub()(),
+    });
+    expect((await mine.load()).map((i) => i.id)).toEqual(["x", "y"]);
+    expect(await old.records()).toEqual([]);
+    await mine.delete("x");
+    await old.add("x", { id: "x", n: 1 }); // en gammal flik skriver tillbaka den
+    expect((await mine.load()).map((i) => i.id)).toEqual(["y"]);
+  });
+
+  it("records() ger raderna otolkade; en trasig rad hoppas över", async () => {
+    const factory = new IDBFactory();
+    const s = new IdbEntryStore({ factory, location: { name: "e-records", legacy: [] }, schema: item, channel: changeChannelHub()() });
+    await s.add("a", { id: "a", n: 1 });
+    const db = await openExisting(factory, "e-records");
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction("entries", "readwrite");
+      tx.objectStore("entries").add({ value: "utan id" });
+      tx.oncomplete = () => resolve();
+    });
+    db.close();
+    expect(await s.records()).toEqual([{ id: "a", value: { id: "a", n: 1 } }]);
   });
 });
 

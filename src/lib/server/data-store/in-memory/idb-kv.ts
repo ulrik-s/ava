@@ -40,6 +40,20 @@ export class IdbKv {
     }
   }
 
+  /** Alla nycklar (för rensning, #1347). */
+  async keys(): Promise<string[]> {
+    const db = await this.open();
+    try {
+      return await new Promise<string[]>((resolve, reject) => {
+        const req = db.transaction(this.storeName, "readonly").objectStore(this.storeName).getAllKeys();
+        req.onsuccess = () => resolve(req.result.filter((k): k is string => typeof k === "string"));
+        req.onerror = () => reject(req.error ?? new Error("indexedDB getAllKeys misslyckades"));
+      });
+    } finally {
+      db.close();
+    }
+  }
+
   async put<V>(key: string, value: V): Promise<void> {
     const db = await this.open();
     try {

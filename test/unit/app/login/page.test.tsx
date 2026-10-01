@@ -14,6 +14,7 @@ let tier = "demo";
 vi.mock("@/lib/client/firma/firma-config", () => ({
   loadFirmaConfig: () => ({ tier, repo: "ulrik-s/ava-demo" }),
   patchFirmaConfig: vi.fn(),
+  forgetSignedInIdentity: vi.fn(),
 }));
 
 vi.mock("@/lib/client/demo/demo-meta", () => ({
@@ -29,6 +30,8 @@ vi.mock("@/lib/client/demo/demo-meta", () => ({
 
 beforeEach(() => {
   tier = "demo";
+  window.history.replaceState({}, "", "/login/");
+  localStorage.clear();
 });
 
 describe("/login", () => {
@@ -50,5 +53,15 @@ describe("/login", () => {
     expect(screen.queryByText(/ännu ej implementerad/)).toBeNull();
     // Ingen användarväljare i self-hosted.
     expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("self-hosted efter utloggning (#1347): 'Du är utloggad' + Logga in igen; den väntande utloggningen avslutas", async () => {
+    tier = "self-hosted";
+    localStorage.setItem("ava.pendingSignOut", "1");
+    window.history.replaceState({}, "", "/login/?signedOut=1");
+    render(<LoginPage />);
+    await waitFor(() => expect(screen.getByText(/Du är utloggad/)).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Logga in igen" })).toBeInTheDocument();
+    expect(localStorage.getItem("ava.pendingSignOut")).toBeNull();
   });
 });

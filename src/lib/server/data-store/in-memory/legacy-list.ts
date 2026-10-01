@@ -53,7 +53,19 @@ function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-export class LegacyList {
+/**
+ * En äldre lagring vars poster flyttas in i en `IdbEntryStore` (#1346/#1347):
+ * den gamla listan, eller en äldre `IdbEntryStore` (t.ex. de gemensamma
+ * databaserna från före #1347, som flyttas in i användarens egna).
+ */
+export interface LegacySource {
+  /** Posterna med id, i ordning (tom om lagringen saknas). */
+  read(): Promise<LegacyRecord[]>;
+  /** Glöm posterna i `moved` — de finns nu (eller har kvitterats) i den nya lagringen. */
+  clearIfMoved(moved: ReadonlySet<string>): Promise<void>;
+}
+
+export class LegacyList implements LegacySource {
   constructor(private readonly factory: IDBFactory, private readonly at: LegacyListLocation) {}
 
   /** Den gamla listans poster (tom om databasen, storen eller nyckeln saknas). */

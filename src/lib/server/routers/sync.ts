@@ -20,6 +20,24 @@ import type { SyncDeviceStore } from "../sync/sync-device-store";
 import type { SyncStore } from "../sync/sync-store";
 import { orgProcedure, router } from "../trpc";
 
+/**
+ * Vem som köade posten (#1347). Klienten stämplar sina poster; servern kör
+ * ändå alltid som den inloggade (`ctx.user`) och vägrar en post som en annan
+ * användare köade — A:s osynkade ändringar får aldrig sparas i B:s namn.
+ */
+const queueOwnerSchema = z.object({ principalId: z.string(), organizationId: z.string() }).optional();
+
+/** Beskedet när en köpost är en annan användares. */
+export const FOREIGN_QUEUE_ENTRY_MESSAGE =
+  "Ändringen köades av en annan användare och sparas inte i ditt namn. Logga in som den användaren för att synka den.";
+
+/** Kasta om posten köades av någon annan än den inloggade (poster före #1347 saknar ägare). */
+function assertOwnEntry(userId: string, owner: z.infer<typeof queueOwnerSchema>): void {
+  if (owner && owner.principalId !== userId) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: FOREIGN_QUEUE_ENTRY_MESSAGE });
+  }
+}
+
 const queuedMutationSchema = z.object({
   mutationId: z.string(),
   entity: z.string(),
@@ -30,6 +48,7 @@ const queuedMutationSchema = z.object({
   enqueuedAt: z.number(),
   /** Köformatet (#1247) — saknas på poster köade före stämplingen. */
   format: z.number().int().positive().optional(),
+  owner: queueOwnerSchema,
 });
 
 /** En utpekad rad: entitet + id (procedur-anropens `touches`, #1348:s `rows`). */
@@ -46,6 +65,7 @@ const queuedProcedureCallSchema = z.object({
   enqueuedAt: z.number(),
   /** Köformatet (#1247) — saknas på poster köade före stämplingen. */
   format: z.number().int().positive().optional(),
+  owner: queueOwnerSchema,
 });
 
 function requireSync(sync: SyncStore | undefined): SyncStore {
@@ -123,7 +143,9 @@ export const syncRouter = router({
     .input(queuedMutationSchema)
     .mutation(async ({ ctx, input }) => {
       const sync = requireSync(ctx.sync);
-      const m = input as QueuedMutation;
+      const { owner, ...entry } = input;
+      assertOwnEntry(ctx.user.id, owner);
+      const m = entry as QueuedMutation;
       const before = await storagePathBefore(ctx.repos, m);
       const result = await sync.push({ organizationId: ctx.orgId, userId: ctx.user.id }, m);
       await analyzeIfNewContent({ content: ctx.ports.content, analyzer: ctx.ports.documentAnalyzer }, m, before, result);
@@ -140,6 +162,8 @@ export const syncRouter = router({
       if (!ctx.replayProcedure) {
         throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "Omkörning av köade anrop finns inte i denna backend." });
       }
-      return ctx.replayProcedure(input);
+      const { owner, ...call } = input;
+      assertOwnEntry(ctx.user.id, owner);
+      return ctx.replayProcedure(call);
     }),
 });

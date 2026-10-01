@@ -9,7 +9,7 @@
 
 import { Database } from "lucide-react";
 import { useEffect, useState } from "react";
-import { signOutWithSyncCheck } from "@/components/shell/sidebar";
+import { useSignOutFlow } from "@/components/shell/sign-out-flow";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import type { FirmaConfig } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
@@ -64,6 +64,7 @@ export function DatasourceSection() {
  *  self-hosted) + erbjuder utloggning (rensar lokal session → /login). */
 export function LoginStatus() {
   const me = trpc.user.current.useQuery(undefined, { retry: false });
+  const { requestSignOut, busy, dialog } = useSignOutFlow();
 
   return (
     <div className="mt-4 border-t border-gray-100 pt-4">
@@ -78,11 +79,13 @@ export function LoginStatus() {
           </p>
           <button
             type="button"
-            onClick={() => void signOutWithSyncCheck()}
+            onClick={requestSignOut}
+            disabled={busy}
             className="text-xs text-red-600 hover:underline shrink-0"
           >
             Logga ut
           </button>
+          {dialog}
         </div>
       ) : (
         <p className="text-xs text-gray-400">Inte inloggad.</p>

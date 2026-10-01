@@ -27,3 +27,8 @@ export function serverTrpcClient(baseUrl?: string) {
 export function loadServerHelperConfig(): Promise<HelperConfigRequest | null> {
   return serverTrpcClient().system.helperConfig.query();
 }
+
+/** IdP:ns utloggnings-URL (#1347), läst AV SERVERN (env:en finns bara där). */
+export async function loadServerEndSessionUrl(): Promise<string | null> {
+  return (await serverTrpcClient().system.signOutConfig.query()).endSessionUrl;
+}

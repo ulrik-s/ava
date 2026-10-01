@@ -8,6 +8,7 @@
  */
 
 import { DEMO_CAPABILITIES } from "@/lib/shared/capabilities";
+import { signOutConfig } from "../auth/sign-out-config";
 import { helperOidcConfig } from "../http/bearer-claims";
 import { publicProcedure, router } from "../trpc-core";
 
@@ -19,4 +20,10 @@ export const systemRouter = router({
    * helper-auth (demon). `publicProcedure` — behövs innan helper-login.
    */
   helperConfig: publicProcedure.query(() => helperOidcConfig()),
+  /**
+   * Var utloggningen avslutas hos IdP:n (#1347); `endSessionUrl: null` = bara
+   * proxyns cookie. `publicProcedure` — ingen hemlighet, och utloggningen ska
+   * fungera även om sessionen redan gått ut.
+   */
+  signOutConfig: publicProcedure.query(() => signOutConfig()),
 });

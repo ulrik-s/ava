@@ -19,7 +19,7 @@ function setup(over: Partial<StartActiveMatterPrefetchDeps> = {}) {
       documents: [{ id: "d1", matterId: "m1", fileName: "a.pdf" }],
     }),
     loadBlob,
-    texts: { has: async () => false, put: async () => undefined, loadAll: async () => [["old", "sparad text"]] },
+    texts: { has: async () => false, put: async () => undefined, reconcile: async () => undefined, loadAll: async () => [["old", "sparad text"]] },
     extract: async () => "text",
     publish: (id, t) => published.push([id, t]),
     onSynced: (fn) => { synced = fn; return unsubscribe; },
@@ -54,7 +54,7 @@ describe("startActiveMatterPrefetch", () => {
 
   it("ett fel i sparad text eller i textlagret stoppar inte förladdningen", async () => {
     const s = setup({
-      texts: { has: async () => { throw new Error("idb"); }, put: async () => undefined, loadAll: async () => { throw new Error("idb"); } },
+      texts: { has: async () => { throw new Error("idb"); }, put: async () => undefined, reconcile: async () => undefined, loadAll: async () => { throw new Error("idb"); } },
     });
     startActiveMatterPrefetch(s.deps);
     await flush();
