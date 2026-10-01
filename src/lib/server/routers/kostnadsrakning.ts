@@ -13,8 +13,10 @@
  */
 
 import { z } from "zod";
+import { documentStoragePathSchema, foreignStoragePath } from "@/lib/shared/document-storage-path";
 import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
 import { asId, billingRunIdSchema, documentIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
+import { assertSetupFieldsAllowed } from "../auth/setup-fields";
 import { emit } from "../events/emit";
 import { router, orgProcedure } from "../trpc";
 
@@ -33,7 +35,8 @@ export const kostnadsrakningRouter = router({
       fileName: z.string(),
       mimeType: z.string(),
       sizeBytes: z.number(),
-      storagePath: z.string(),
+      /** Rätt form och dokumentets eget innehåll (#1372). */
+      storagePath: documentStoragePathSchema,
       /** Total summa i öre (inkl moms) att fakturera staten — för event-payload. */
       totalInclVat: z.number().int(),
       /** HUF-tid i minuter — bra att ha i auditen. */
@@ -43,6 +46,7 @@ export const kostnadsrakningRouter = router({
       billingRunId: billingRunIdSchema.optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      assertSetupFieldsAllowed(ctx, { storagePath: foreignStoragePath(input.storagePath, input.id) });
       // 1. Registrera dokumentet (samma som document.register-flödet)
       const docData = {
         id: asId<"DocumentId">(input.id),

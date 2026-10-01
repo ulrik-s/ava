@@ -22,12 +22,14 @@
  *     bun tooling/scripts/server-first-offline-e2e.ts
  */
 
+import { createHash } from "node:crypto";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import postgres from "postgres";
 import superjson from "superjson";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import type { QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { contentStoragePath } from "@/lib/shared/content-address";
 import { uuidv7 } from "@/lib/shared/uuid";
 
 const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:3001";
@@ -128,6 +130,11 @@ async function waitUntil(pred: () => Promise<boolean>, label: string, timeoutMs:
   throw new Error(`timeout: ${label} (${timeoutMs}ms)`);
 }
 
+/** Innehållsadresserad sökväg för en etikett — radvägen tar bara emot dokumentets eget innehåll (#1372). */
+function shaPath(label: string): string {
+  return contentStoragePath(createHash("sha256").update(label).digest("hex"));
+}
+
 function docMut(kind: "create" | "update", base: Record<string, unknown>, fileName: string, storagePath: string, sizeBytes: number): Mutation {
   return mut("document", kind, { ...base, fileName, storagePath, sizeBytes });
 }
@@ -140,14 +147,14 @@ function docMut(kind: "create" | "update", base: Record<string, unknown>, fileNa
 async function tenChangesFiveDocs(t: TrpcSyncTransport, matterId: string, folderId: string, userId: string): Promise<void> {
   const ids = Array.from({ length: 5 }, () => uuidv7());
   const base = (id: string) => ({ id, matterId, mimeType: "application/pdf", uploadedById: userId, folderId });
-  await pushAll(t, ids.map((id, i) => docMut("create", base(id), `dok${i}.pdf`, `documents/content/d${i}-v0`, 100 + i)));
+  await pushAll(t, ids.map((id, i) => docMut("create", base(id), `dok${i}.pdf`, shaPath(`d${i}-v0`), 100 + i)));
 
   // OFFLINE: 10 ändringar (2/dok) — köas, INTE pushade.
   const finalName = (i: number) => `dok${i}-final.pdf`;
-  const finalPath = (i: number) => `documents/content/d${i}-v2`;
+  const finalPath = (i: number) => shaPath(`d${i}-v2`);
   const queued: Mutation[] = [];
   ids.forEach((id, i) => {
-    queued.push(docMut("update", base(id), `dok${i}-tmp.pdf`, `documents/content/d${i}-v1`, 200 + i));
+    queued.push(docMut("update", base(id), `dok${i}-tmp.pdf`, shaPath(`d${i}-v1`), 200 + i));
     queued.push(docMut("update", base(id), finalName(i), finalPath(i), 300 + i));
   });
   assert(queued.length === 10, "10 offline-ändringar köade");
@@ -182,22 +189,22 @@ async function tenChangesFiveDocs(t: TrpcSyncTransport, matterId: string, folder
 async function revertVersions(t: TrpcSyncTransport, matterId: string, folderId: string, userId: string): Promise<void> {
   const id = uuidv7();
   const base = { id, matterId, mimeType: "application/pdf", uploadedById: userId, folderId };
-  await pushAll(t, [docMut("create", base, "avtal-v1.pdf", "documents/content/sha-v1", 10)]);
-  await pushAll(t, [docMut("update", base, "avtal-v2.pdf", "documents/content/sha-v2", 20)]);
+  await pushAll(t, [docMut("create", base, "avtal-v1.pdf", shaPath("sha-v1"), 10)]);
+  await pushAll(t, [docMut("update", base, "avtal-v2.pdf", shaPath("sha-v2"), 20)]);
   const v2 = await docFull(id);
-  assert(v2?.file_name === "avtal-v2.pdf" && v2?.storage_path === "documents/content/sha-v2", "v2 på servern");
+  assert(v2?.file_name === "avtal-v2.pdf" && v2?.storage_path === shaPath("sha-v2"), "v2 på servern");
 
   // Backa till v1 (ny version som pekar på v1:s content-hash).
-  await pushAll(t, [docMut("update", base, "avtal-v1.pdf", "documents/content/sha-v1", 10)]);
+  await pushAll(t, [docMut("update", base, "avtal-v1.pdf", shaPath("sha-v1"), 10)]);
   const reverted = await docFull(id);
-  assert(reverted?.storage_path === "documents/content/sha-v1", "revert: servern pekar på v1-content");
+  assert(reverted?.storage_path === shaPath("sha-v1"), "revert: servern pekar på v1-content");
   assert(reverted!.version > v2!.version, "revert skapar en NY version (version bumpad)");
 
   // Gör ändringar och spara (offline → online).
-  await pushAll(t, [docMut("update", base, "avtal-v1-redigerad.pdf", "documents/content/sha-v3", 33)]);
+  await pushAll(t, [docMut("update", base, "avtal-v1-redigerad.pdf", shaPath("sha-v3"), 33)]);
   const final = await docFull(id);
   assert(final?.file_name === "avtal-v1-redigerad.pdf", "final: rätt namn på servern");
-  assert(final?.storage_path === "documents/content/sha-v3", "final: rätt content-pekare på servern");
+  assert(final?.storage_path === shaPath("sha-v3"), "final: rätt content-pekare på servern");
   assert(final!.version > reverted!.version, "ändring efter revert = ytterligare version");
   console.log(`✓ FAS 5: backa till v1 → ändra → spara; servern har rätt data (version ${final!.version})`);
 }
@@ -210,7 +217,7 @@ async function main(): Promise<void> {
   const m1 = uuidv7(), folderA = uuidv7(), folderB = uuidv7(), doc1 = uuidv7();
   const docBase = {
     id: doc1, matterId: m1, mimeType: "application/pdf", sizeBytes: 1234,
-    storagePath: "documents/content/aaa", uploadedById: userId, folderId: folderA,
+    storagePath: shaPath("aaa"), uploadedById: userId, folderId: folderA,
   };
 
   // ── FAS 1: ONLINE — skapa ärende + två mappar + dokument ─────────

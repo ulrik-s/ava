@@ -24,6 +24,8 @@ import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 import { pusher } from "./row-pusher";
 
+/** En innehållsadresserad sökväg (sha256) — dokumentets eget innehåll (#1372). */
+const SHA_PATH = `documents/content/${"a".repeat(64)}`;
 const ORG_A = uuidv7();
 const ORG_B = uuidv7();
 const ADMIN_A = uuidv7();
@@ -149,7 +151,7 @@ describe("radvägens behörighet (#1344)", () => {
       ["serviceNote i B:s ärende", { id: uuidv7(), organizationId: ORG_A, matterId: MATTER_B, authorId: MEMBER_A, date: "2026-10-01", time: "10:00", text: "x" }],
       ["contact med B:s kontakt som förälder", { id: uuidv7(), organizationId: ORG_A, name: "Dotterbolag", parentId: CONTACT_B }],
       ["matterContact som kopplar B:s kontakt", { id: uuidv7(), matterId: MATTER_A, contactId: CONTACT_B, role: "MOTPART" }],
-      ["document i B:s mapp", { id: uuidv7(), matterId: MATTER_A, folderId: FOLDER_B, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "documents/content/a", uploadedById: MEMBER_A }],
+      ["document i B:s mapp", { id: uuidv7(), matterId: MATTER_A, folderId: FOLDER_B, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: SHA_PATH, uploadedById: MEMBER_A }],
       ["documentFolder under B:s mapp", { id: uuidv7(), matterId: MATTER_A, name: "Mapp", parentId: FOLDER_B }],
       ["documentPart av B:s dokument", { id: uuidv7(), matterId: MATTER_A, documentId: DOC_B, ordinal: 0, kind: "OVRIGT", fromPage: 1, toPage: 1, source: "MANUAL" }],
     ];
@@ -191,9 +193,50 @@ describe("radvägens behörighet (#1344)", () => {
     });
 
     it("ett dokument laddas upp i eget namn", async () => {
-      const doc = { matterId: MATTER_A, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "documents/content/a2" };
+      const doc = { matterId: MATTER_A, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: SHA_PATH };
       expect(await sync.push(member, mut("document", "create", { id: uuidv7(), ...doc, uploadedById: ADMIN_A }))).toEqual({ status: "conflict", reason: ROW_POLICY_REASONS.actor });
       expect(await sync.push(member, mut("document", "create", { id: uuidv7(), ...doc, uploadedById: MEMBER_A }))).toMatchObject({ status: "accepted" });
+    });
+  });
+
+  /**
+   * Sökvägen till innehållet (#1372): content-store:n delas av alla byråer, så
+   * en fritt vald sökväg kunde läsa `.git` (alla byråers hashar och innehåll)
+   * eller en annan byrås fil.
+   */
+  describe("sökvägen till dokumentets innehåll", () => {
+    const docRow = (id: string, storagePath: string): Record<string, unknown> => ({
+      id, matterId: MATTER_A, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath, uploadedById: MEMBER_A,
+    });
+
+    it.each([
+      [".git-internt", "documents/content/../.git/index"],
+      ["utanför katalogen", "../../etc/passwd"],
+      ["git-objekt", ".git/objects/ab/cdef"],
+      ["undermapp", "documents/content/sub/x.pdf"],
+      ["dold fil", "documents/content/.git"],
+      ["absolut", "/documents/content/x"],
+      ["B:s dokuments fil", `documents/content/${DOC_B}.pdf`],
+      ["ett annat namn", "documents/content/doc-pdf-01.pdf"],
+    ])("ny rad med %s → avvisad, ingen rad", async (_label, storagePath) => {
+      const id = uuidv7();
+      expect(await sync.push(member, mut("document", "create", docRow(id, storagePath)))).toEqual({ status: "conflict", reason: ROW_POLICY_REASONS.contentPath });
+      expect(await repos.documents.getById(asId<"DocumentId">(id))).toBeNull();
+    });
+
+    it("dokumentets eget innehåll (sha256, pending-<id>, <id>.<ext>) → accepterat", async () => {
+      for (const make of [() => SHA_PATH, (id: string) => `documents/content/pending-${id}`, (id: string) => `documents/content/${id}.pdf`]) {
+        const id = uuidv7();
+        expect(await sync.push(member, mut("document", "create", docRow(id, make(id))))).toMatchObject({ status: "accepted" });
+      }
+    });
+
+    it("en ändring som pekar om till B:s fil → avvisad; ett namnbyte med en äldre sökväg orörd → accepterat", async () => {
+      const id = uuidv7();
+      await repos.documents.create({ ...docRow(id, "documents/content/doc-pdf-01.pdf"), organizationId: ORG_A } as never);
+      expect(await sync.push(member, mut("document", "update", { id, storagePath: `documents/content/${DOC_B}.pdf` }))).toEqual({ status: "conflict", reason: ROW_POLICY_REASONS.contentPath });
+      expect(await sync.push(member, mut("document", "update", { id, fileName: "b.pdf", storagePath: "documents/content/doc-pdf-01.pdf" }))).toMatchObject({ status: "accepted" });
+      expect(await repos.documents.getById(asId<"DocumentId">(id))).toMatchObject({ fileName: "b.pdf", storagePath: "documents/content/doc-pdf-01.pdf" });
     });
   });
 

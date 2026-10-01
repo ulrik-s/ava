@@ -137,7 +137,7 @@ async function main(): Promise<void> {
   await a.matter.create.mutate({ id: matterId, title: "Dokument-pipeline-E2E" });
   await a.document.register.mutate({
     id: docId, matterId, fileName: FILE_NAME, mimeType: "text/plain",
-    sizeBytes: 0, storagePath: "documents/content/placeholder", uploadedById: userAId,
+    sizeBytes: 0, storagePath: `documents/content/pending-${docId}`, uploadedById: userAId,
   });
   console.log("✓ steg 1: ärende + dokument registrerat (användare A)");
 

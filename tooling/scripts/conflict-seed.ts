@@ -73,7 +73,7 @@ async function main(): Promise<void> {
   await lawyer.document.register.mutate({
     id: asId<"DocumentId">(DOC_ID), matterId: asId<"MatterId">(MATTER_ID),
     fileName: FILE_NAME, mimeType: "text/plain", sizeBytes: 0,
-    storagePath: "documents/content/placeholder", uploadedById: asId<"UserId">(lawyerMe!.id),
+    storagePath: `documents/content/pending-${DOC_ID}`, uploadedById: asId<"UserId">(lawyerMe!.id),
   });
   const v1 = await lawyer.document.uploadContent.mutate({
     documentId: asId<"DocumentId">(DOC_ID), contentBase64: b64(ORIGINAL_TEXT),
