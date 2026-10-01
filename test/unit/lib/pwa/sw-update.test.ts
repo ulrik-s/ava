@@ -8,6 +8,7 @@
 import { describe, expect, it, vi } from "vitest-compat";
 import {
   activateUpdate,
+  watchForTakeover,
   watchForUpdate,
   type SwContainerLike,
   type SwRegistrationLike,
@@ -114,5 +115,26 @@ describe("activateUpdate", () => {
     container.fireControllerChange();
     container.fireControllerChange();
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("watchForTakeover (#1355)", () => {
+  it("en annan flik lät en ny version ta över en styrd sida → varje gång meddelas", () => {
+    const container = Object.assign(new FakeContainer(), { controller: {} as unknown });
+    const onTakeover = vi.fn();
+    watchForTakeover(container, onTakeover);
+    container.fireControllerChange();
+    container.fireControllerChange();
+    expect(onTakeover).toHaveBeenCalledTimes(2);
+  });
+
+  it("första installationens claim (ingen styrde sidan) är ingen ny version; nästa byte är det", () => {
+    const container = Object.assign(new FakeContainer(), { controller: null as unknown });
+    const onTakeover = vi.fn();
+    watchForTakeover(container, onTakeover);
+    container.fireControllerChange();
+    expect(onTakeover).not.toHaveBeenCalled();
+    container.fireControllerChange();
+    expect(onTakeover).toHaveBeenCalledTimes(1);
   });
 });

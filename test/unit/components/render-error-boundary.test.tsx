@@ -27,6 +27,25 @@ describe("RenderErrorBoundary", () => {
     expect(screen.getAllByText(/Boom/).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("ett chunk som inte längre finns (#1355) laddar om fliken en gång; ett vanligt fel gör det inte", () => {
+    sessionStorage.clear();
+    const reload = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", { configurable: true, value: { ...original, reload } });
+    function ChunkCrash(): never {
+      throw Object.assign(new Error("Failed to load chunk /_next/static/chunks/x.js"), { name: "ChunkLoadError" });
+    }
+    try {
+      render(<RenderErrorBoundary><Crash /></RenderErrorBoundary>);
+      expect(reload).not.toHaveBeenCalled();
+      render(<RenderErrorBoundary><ChunkCrash /></RenderErrorBoundary>);
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: original });
+      sessionStorage.clear();
+    }
+  });
+
   it("loggar fel till console.error", () => {
     render(<RenderErrorBoundary><Crash /></RenderErrorBoundary>);
     expect(errSpy).toHaveBeenCalled();

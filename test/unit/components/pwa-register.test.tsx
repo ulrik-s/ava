@@ -92,6 +92,47 @@ describe("PwaRegister", () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
+  it("en annan flik bytte version (#1355) → den här fliken får frågan, och 'Ladda om' laddar om direkt", async () => {
+    const reload = vi.fn();
+    render(<PwaRegister enabled basePath="" reload={reload} />);
+    await waitFor(() => expect(register).toHaveBeenCalled());
+    act(() => { for (const cb of controllerCbs) cb(); });
+    expect(await screen.findByText(/AVA har uppdaterats i en annan flik/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ladda om/ }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("första installationen (ingen styrde sidan) → ingen fråga om ny version", async () => {
+    controller = null;
+    render(<PwaRegister enabled basePath="" />);
+    await waitFor(() => expect(register).toHaveBeenCalled());
+    act(() => { for (const cb of controllerCbs) cb(); });
+    expect(screen.queryByRole("button", { name: /Ladda om/ })).toBeNull();
+  });
+
+  it("ett chunk som inte längre finns (#1355) → omladdning; igen direkt → besked i stället för en loop", async () => {
+    sessionStorage.clear();
+    const reload = vi.fn();
+    render(<PwaRegister enabled basePath="" reload={reload} />);
+    const chunkError = Object.assign(new Error("Failed to load chunk /_next/static/chunks/x.js"), { name: "ChunkLoadError" });
+    act(() => { window.dispatchEvent(new ErrorEvent("error", { error: chunkError })); });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("status")).toBeNull();
+    act(() => { window.dispatchEvent(new ErrorEvent("error", { error: chunkError })); });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/Delar av AVA kunde inte laddas/)).toBeInTheDocument();
+    sessionStorage.clear();
+  });
+
+  it("i utvecklingsläge lyssnar den inte efter chunk-fel", async () => {
+    sessionStorage.clear();
+    const reload = vi.fn();
+    render(<PwaRegister enabled={false} basePath="" reload={reload} />);
+    const chunkError = Object.assign(new Error("x"), { name: "ChunkLoadError" });
+    act(() => { window.dispatchEvent(new ErrorEvent("error", { error: chunkError })); });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it("misslyckad registrering → ingen krasch, ingen fråga", async () => {
     register = vi.fn(async () => { throw new Error("SecurityError"); });
     stubServiceWorker();

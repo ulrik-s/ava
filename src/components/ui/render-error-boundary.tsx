@@ -4,9 +4,13 @@
  * `RenderErrorBoundary` — fångar render-fel och visar dem inline
  * istället för att låta renderer-processen krascha. Används i
  * demo-builden för felsökning.
+ *
+ * Ett chunk som inte längre finns på servern (fliken kör ett äldre bygge än
+ * den senaste deployen, #1355) laddar om fliken en gång i stället.
  */
 
 import { Component, type ReactNode } from "react";
+import { isChunkLoadError, recoverFromChunkError } from "@/lib/client/pwa/chunk-reload";
 
 interface State { error: Error | null; componentStack: string | null }
 
@@ -14,6 +18,7 @@ export class RenderErrorBoundary extends Component<{ children: ReactNode }, Stat
   override state: State = { error: null, componentStack: null };
   static getDerivedStateFromError(error: Error): State { return { error, componentStack: null }; }
   override componentDidCatch(error: Error, info: { componentStack: string }) {
+    if (isChunkLoadError(error)) recoverFromChunkError();
     console.error("[render-error]", error.message, "\nComponentStack:", info.componentStack);
     this.setState({ componentStack: info.componentStack });
   }

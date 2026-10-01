@@ -207,14 +207,28 @@ sist i `build-demo.sh` och förcachar skalet: sidorna utan id (+ RSC-payloads),
   (4 s timeout, 5xx → cache). Allt annat — `/api`, `/git`, `/oauth2`, demo-data,
   dokument-bytes — rörs aldrig.
 - **Runtime-id:n offline** får `/<route>/__shell__/` ur cachen, precis som
-  Caddy/nginx skriver om dem online; okända sidor får roten.
+  Caddy/nginx skriver om dem online; okända sidor får roten. Detaljsidor per id
+  (`/matters/<id>/…`) sparas därför inte i runtime-cachen (#1355), som annars
+  växte med en post per öppnat ärende.
 - **Omdirigeringar cachas aldrig** — en utgången session (302 till IdP:n) får
   inte bli "sidan" offline.
-- **Versioner**: cache-namnet är `ava-app-<innehållshash>`. En ny version väntar
-  tills användaren klickar "Ladda om" (`PwaRegister`), och activate städar bara
-  gamla `ava-app-*`.
+- **Versioner**: cache-namnet är `ava-app-<hash>`, en hash över skalets filer
+  OCH den bundlade workern (ändrad worker-kod ger alltså ny version, #1355). En
+  ny version väntar tills användaren klickar "Ladda om" (`PwaRegister`).
+- **Deploy med öppna flikar (#1355)**: prod byter release atomärt och raderar
+  den förra vid nästa deploy. Activate behåller därför förra generationens
+  `ava-app-*` (äldre städas), och cache-first svarar ur den när en flik med det
+  gamla skalet ber om sina chunks. När en flik klickar "Ladda om" får alla andra
+  flikar frågan "AVA har uppdaterats i en annan flik". Ett chunk som ändå inte
+  går att ladda (`ChunkLoadError`, misslyckad dynamisk import, också i
+  `RenderErrorBoundary`) laddar om fliken en gång per minut; kommer felet igen
+  visas ett besked i stället för en loop (`src/lib/client/pwa/chunk-reload.ts`).
+- **Tolerant förcache**: en fil som inte går att hämta vid install hoppas över
+  (hämtas vid behov); bara roten, offline-fallbacken, måste lyckas.
 - **E2E**: `test/e2e/demo-offline.spec.ts` (omladdning, ny flik, ärende och okänt
-  id offline + kontrolltest utan service worker + versionsbytet).
+  id offline + kontrolltest utan service worker + versionsbytet) och
+  `test/e2e/demo-deploy-resilience.spec.ts` (två flikar vid versionsbyte,
+  chunk som försvunnit efter en deploy).
 
 ## Osynkade ändringar och lokal lagring (#1241)
 
