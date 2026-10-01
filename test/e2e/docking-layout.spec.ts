@@ -233,3 +233,28 @@ test("maximerad panel: synlig Återställ-knapp, och Escape stänger dialogen f�
   await page.keyboard.press("Escape");
   await expect(restore).toHaveCount(0);
 });
+
+// #1356: dockview stängde en fokuserad flik med Delete/Backspace trots att
+// stängknappen är dold, och shift-klick/-drag i flikraden skapade en flytande
+// grupp som låg ovanpå panelerna.
+test("Delete/Backspace stänger inte en flik, och flytande grupper går inte att skapa", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  const tabs = await page.getByRole("tab").count();
+  const tid = page.getByRole("tab", { name: /^Tid/ });
+  await tid.focus();
+  await page.keyboard.press("Delete");
+  await page.keyboard.press("Backspace");
+  await expect(page.getByRole("tab")).toHaveCount(tabs);
+  await expect(tid).toBeFocused(); // fokus står kvar på fliken
+  await page.keyboard.press("ArrowRight"); // flikraden går fortfarande att navigera
+  await expect(tid).not.toBeFocused();
+
+  // Shift-klick i flikradens tomma yta (och shift-drag av en flik) gör inget flytande.
+  await groupOf(page, "Tid").locator(".dv-void-container").click({ modifiers: ["Shift"] });
+  await page.keyboard.down("Shift");
+  await page.getByRole("tab", { name: /^Utlägg/ }).dragTo(page.locator(".dv-groupview").last(), { targetPosition: { x: 200, y: 200 } });
+  await page.keyboard.up("Shift");
+  await expect(page.locator(".dv-resize-container")).toHaveCount(0);
+  await expect(page.getByRole("tab")).toHaveCount(tabs);
+});
