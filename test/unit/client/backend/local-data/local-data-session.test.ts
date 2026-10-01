@@ -14,7 +14,7 @@ import { DocumentContentCache } from "@/lib/client/backend/content-cache";
 import { IndexedDbListStore } from "@/lib/client/backend/idb-list-store";
 import { LEGACY_OWNER_KEY } from "@/lib/client/backend/local-data/legacy-owner";
 import { queueLocation, rejectedLocation, type LocalDataPlace } from "@/lib/client/backend/local-data/local-data-locations";
-import { boundScope, openLocalDataSession, workingScope } from "@/lib/client/backend/local-data/local-data-session";
+import { boundEmail, boundScope, openLocalDataSession, workingScope } from "@/lib/client/backend/local-data/local-data-session";
 import {
   activeLocalScope, bindLocalNamespace, dbNameIn, LOCAL_DB, localScopeSchema, SHARED_NAMESPACE, userNamespace,
 } from "@/lib/client/backend/local-data/local-namespace";
@@ -67,6 +67,11 @@ describe("boundScope / workingScope", () => {
     expect(boundScope({ ...annaCfg, principalId: "" })).toBeNull();
     expect(boundScope({ ...annaCfg, organizationId: "" })).toBeNull();
     expect(workingScope({ organizationId: ORG, authorEmail: "" })).toEqual({ organizationId: ORG, principalId: "current-user" });
+  });
+
+  it("den bundnas e-post (#1404) — null när ingen är bunden", () => {
+    expect(boundEmail(annaCfg)).toBe("anna@byra.se");
+    expect(boundEmail({ ...annaCfg, principalId: "" })).toBeNull();
   });
 });
 

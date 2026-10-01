@@ -31,7 +31,7 @@ import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { inProcessPorts } from "@/lib/client/backend/in-process-ports";
 import type { LocalDataPlace } from "@/lib/client/backend/local-data/local-data-locations";
-import { openLocalDataSession, type IdentityConfig } from "@/lib/client/backend/local-data/local-data-session";
+import { boundEmail, openLocalDataSession, type IdentityConfig } from "@/lib/client/backend/local-data/local-data-session";
 import { bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
 import { onSignedOutElsewhere } from "@/lib/client/backend/local-data/session-channel";
 import { pendingSignOutRedirect } from "@/lib/client/backend/local-data/sign-out";
@@ -278,10 +278,10 @@ interface TreeProps {
 }
 
 /** Server-synkens delar i statusraden — bara när det finns en server (ej demon). */
-function ServerSyncParts({ store }: { store: CachingSyncDataStore | null }) {
+function ServerSyncParts({ store, boundEmail }: { store: CachingSyncDataStore | null; boundEmail: string | null }) {
   return (
     <>
-      <ServerFirstSync store={store} />
+      <ServerFirstSync store={store} boundEmail={boundEmail} />
       <ServerInvoiceNumbering store={store} />
       <ActiveMatterPrefetch store={store} />
     </>
@@ -322,7 +322,7 @@ function AuthGatedDemoTree(props: TreeProps) {
               <JobsBadge />
               <AutoSync />
               <UnsavedWritesGuard store={cachingSync} />
-              {!isDemoTier && <ServerSyncParts store={cachingSync} />}
+              {!isDemoTier && <ServerSyncParts store={cachingSync} boundEmail={boundEmail(firmaConfig)} />}
             </div>
           </div>
           {status === "loading" && (

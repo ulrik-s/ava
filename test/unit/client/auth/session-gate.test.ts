@@ -3,7 +3,7 @@
  * klienten avgör vid varje start om användaren får arbeta.
  */
 import { describe, expect, it } from "vitest-compat";
-import { decideSessionGate, loginUrl, offlineGateMessage, type CachedIdentity } from "@/lib/client/auth/session-gate";
+import { decideSessionGate, loginUrl, offlineGateMessage, sameIdentity, type CachedIdentity } from "@/lib/client/auth/session-gate";
 import { DEFAULT_OFFLINE_GRACE_MS } from "@/lib/shared/offline-grace";
 
 const NOW = Date.UTC(2026, 8, 30, 8, 0);
@@ -65,5 +65,15 @@ describe("loginUrl / offlineGateMessage", () => {
   it("beskeden säger vad användaren ska göra", () => {
     expect(offlineGateMessage({ kind: "offline-expired" })).toMatch(/Anslut till nätet.*lokala ändringar finns kvar/);
     expect(offlineGateMessage({ kind: "offline-unbound" })).toMatch(/uppkopplad första gången/);
+  });
+});
+
+describe("sameIdentity — grinden och omvalideringen avgör identiteten lika (#1404)", () => {
+  it("samma e-post oavsett skiftläge och omgivande blanksteg", () => {
+    expect(sameIdentity(" lena@byra.se ", claims)).toBe(true);
+  });
+
+  it("en annan e-post är en annan identitet", () => {
+    expect(sameIdentity("bo@byra.se", claims)).toBe(false);
   });
 });
