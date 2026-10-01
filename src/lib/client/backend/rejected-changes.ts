@@ -4,21 +4,24 @@
  *
  * När servern avvisar en köad ändring (en kollega hann fakturera posterna, en
  * låst post, en rad någon annan ändrat) kvitteras den i kön och serverns läge
- * ersätter det lokala. Här sparas den i stället för att glömmas: vad det var,
- * varför, och vad som gällde på servern. Juristen kan **försöka igen** (efter
- * att ha ändrat det som stoppade den) eller **kasta** den.
+ * ersätter det lokala (#1348). Här sparas den i stället för att glömmas: vad
+ * det var, varför, och vad som gällde på servern. Juristen kan **kasta** den —
+ * raderna den rörde hämtas då från servern igen — eller **försöka igen**, men
+ * bara när ett nytt försök kan lyckas (`retryable`): en deterministisk
+ * avvisning avvisas likadant igen.
  *
  * Persisteras i IndexedDB (överlever omladdning), en post i taget (#1346):
  * flera flikar delar lagringen, och ingen flik skriver tillbaka sin kopia av
  * hela listan. En modul-global instans — det finns en server-synk per flik;
- * `ServerFirstSync` registrerar hur ett nytt försök köas (`setRetryHandler`).
+ * `ServerFirstSync` registrerar hur ett nytt försök köas och hur serverns
+ * läge återställs (`setHandlers`).
  */
 
 import { z } from "zod";
 import type { ChangeChannel } from "@/lib/server/data-store/in-memory/change-channel";
 import { IdbEntryStore } from "@/lib/server/data-store/in-memory/idb-entry-store";
 import { queueEntrySchema } from "@/lib/server/data-store/in-memory/mutation-queue";
-import type { ConflictRecord } from "@/lib/server/data-store/in-memory/reconcile-engine";
+import { rowConflictRetryable, type ConflictRecord } from "@/lib/server/data-store/in-memory/reconcile-engine";
 import { describeQueueEntry } from "./describe-queue-entry";
 
 /** En avvisad ändring så som den sparas: tolkas strikt när den läses ur IndexedDB. */
@@ -35,6 +38,8 @@ const rejectedChangeSchema = z.object({
   entry: queueEntrySchema,
   /** Serverns rad när ändringen avvisades (radkonflikter). */
   current: z.record(z.string(), z.unknown()).exactOptional(),
+  /** Kan ett nytt försök lyckas (#1348)? Saknas på avvisningar sparade före fältet. */
+  retryable: z.boolean().exactOptional(),
 });
 
 /** En avvisad ändring som väntar på att användaren tar ställning. */
@@ -82,8 +87,23 @@ export class InMemoryRejectedChangesPersistence implements RejectedChangesPersis
   async delete(id: string): Promise<void> { this.items = this.items.filter((i) => i.id !== id); }
 }
 
-/** Köar ett nytt försök med en avvisad ändring. */
-export type RetryHandler = (change: RejectedChange) => Promise<void>;
+/**
+ * Kan ett nytt försök med ändringen lyckas? En avvisning sparad före #1348
+ * saknar svaret — då bara en versionskonflikt på en rad radkön får skriva.
+ */
+export function canRetry(change: RejectedChange): boolean {
+  return change.retryable ?? rowConflictRetryable(change.entry, change.current);
+}
+
+/** Det synken gör med en avvisad ändring (registreras av `ServerFirstSync`). */
+export interface RejectedChangeHandlers {
+  /** Köa ändringen på nytt. */
+  retry: (change: RejectedChange) => Promise<void>;
+  /** Återställ raderna ändringen rörde till serverns läge (#1348). */
+  restore: (change: RejectedChange) => Promise<void>;
+}
+
+const NO_SYNC = "Ingen synk mot servern — försök igen när du är ansluten.";
 
 type Listener = (items: readonly RejectedChange[]) => void;
 
@@ -95,13 +115,14 @@ function toRejected(c: ConflictRecord, now: number): RejectedChange {
     reason: c.reason,
     entry: c.mutation,
     ...(c.current ? { current: c.current } : {}),
+    retryable: c.retryable,
   };
 }
 
 export class RejectedChanges {
   private items: RejectedChange[] = [];
   private readonly listeners = new Set<Listener>();
-  private retryHandler: RetryHandler | null = null;
+  private handlers: RejectedChangeHandlers | null = null;
   /** Avregistrerar den nuvarande lagringens signal (om den har någon). */
   private detach: (() => void) | undefined;
 
@@ -131,30 +152,57 @@ export class RejectedChanges {
     await this.reload();
   }
 
-  /** Kasta ändringen — serverns läge gäller. */
+  /**
+   * Kasta ändringen — serverns läge gäller (#1348): raderna den rörde hämtas
+   * från servern och ersätter det lokala, och först sedan tas den bort härifrån.
+   * Nås inte servern ligger den kvar.
+   */
   async discard(id: string): Promise<void> {
-    await this.persistence.delete(id);
-    await this.reload();
+    const change = this.items.find((i) => i.id === id);
+    if (!change) return;
+    await this.requireHandlers().restore(change);
+    await this.remove(id);
   }
 
-  /** Försök igen: köa ändringen på nytt och ta bort den härifrån. */
+  /**
+   * Försök igen: ta bort ändringen härifrån och köa den på nytt. Den tas bort
+   * FÖRST — samma mutationId kan avvisas igen innan kön hunnit svara, och då
+   * ska den nya avvisningen sparas. Misslyckas köandet läggs den tillbaka.
+   */
   async retry(id: string): Promise<void> {
     const change = this.items.find((i) => i.id === id);
     if (!change) return;
-    if (!this.retryHandler) throw new Error("Ingen synk mot servern — försök igen när du är ansluten.");
-    await this.retryHandler(change);
-    await this.discard(id);
+    if (!canRetry(change)) throw new Error("Ändringen avvisas igen om den skickas på nytt. Kasta den och gör om ändringen i AVA.");
+    const handlers = this.requireHandlers();
+    await this.remove(id);
+    try {
+      await handlers.retry(change);
+    } catch (err) {
+      await this.persistence.add(change);
+      await this.reload();
+      throw err;
+    }
   }
 
-  /** Registrera hur ett nytt försök köas; returnerar avregistreringen. */
-  setRetryHandler(handler: RetryHandler): () => void {
-    this.retryHandler = handler;
-    return () => { if (this.retryHandler === handler) this.retryHandler = null; };
+  /** Registrera vad synken gör med en avvisad ändring; returnerar avregistreringen. */
+  setHandlers(handlers: RejectedChangeHandlers): () => void {
+    this.handlers = handlers;
+    return () => { if (this.handlers === handlers) this.handlers = null; };
   }
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
+  }
+
+  private requireHandlers(): RejectedChangeHandlers {
+    if (!this.handlers) throw new Error(NO_SYNC);
+    return this.handlers;
+  }
+
+  private async remove(id: string): Promise<void> {
+    await this.persistence.delete(id);
+    await this.reload();
   }
 
   /** Listan ur lagringen, inte flikens kopia (#1346). */

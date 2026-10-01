@@ -3,10 +3,11 @@
 /**
  * Avvisade ändringar (#1266) — varje rad: vad det var, varför servern sa nej,
  * och knapparna Försök igen / Kasta. Ingen avvisad ändring försvinner tyst.
+ * Försök igen visas bara när ett nytt försök kan lyckas (#1348).
  */
 
 import { useState } from "react";
-import type { RejectedChange } from "@/lib/client/backend/rejected-changes";
+import { canRetry, type RejectedChange } from "@/lib/client/backend/rejected-changes";
 
 /** Serverns skäl på svenska — tekniska koder översätts, egna besked står kvar. */
 export function explainReason(reason: string): string {
@@ -23,6 +24,7 @@ interface Props {
 
 function Row({ change, onRetry, onDiscard }: { change: RejectedChange } & Omit<Props, "items">) {
   const [error, setError] = useState<string | null>(null);
+  const retryable = canRetry(change);
   const run = (fn: (id: string) => Promise<void>) => () => {
     setError(null);
     void fn(change.id).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
@@ -34,11 +36,14 @@ function Row({ change, onRetry, onDiscard }: { change: RejectedChange } & Omit<P
           <div className="font-medium text-gray-900">{change.label}</div>
           <div className="text-sm text-gray-700">{explainReason(change.reason)}</div>
           <div className="text-xs text-gray-500">Avvisad {new Date(change.rejectedAt).toLocaleString("sv-SE")}</div>
+          {!retryable && <div className="text-xs text-gray-500">Avvisas igen om den skickas på nytt — gör om ändringen i AVA om den fortfarande behövs.</div>}
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={run(onRetry)} className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700">
-            Försök igen
-          </button>
+          {retryable && (
+            <button type="button" onClick={run(onRetry)} className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700">
+              Försök igen
+            </button>
+          )}
           <button type="button" onClick={run(onDiscard)} className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 hover:bg-gray-50">
             Kasta
           </button>

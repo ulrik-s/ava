@@ -12,7 +12,7 @@
 import type { TRPCClient } from "@trpc/client";
 import type { QueuedMutation, QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type {
-  ProcedureReplayResult, PullResult, PushResult, SyncTransport,
+  ProcedureReplayResult, PulledChange, PullResult, PushResult, RowRef, SyncTransport,
 } from "@/lib/server/data-store/in-memory/sync-transport";
 import type { AppRouter } from "@/lib/server/routers/_app";
 
@@ -21,6 +21,11 @@ export class TrpcSyncTransport implements SyncTransport {
 
   pull(sinceCursor: number): Promise<PullResult> {
     return this.client.sync.pull.query({ sinceCursor }) as Promise<PullResult>;
+  }
+
+  /** Radernas kanoniska läge (#1348) — återställning efter en avvisad ändring. */
+  rows(refs: readonly RowRef[]): Promise<PulledChange[]> {
+    return this.client.sync.rows.mutate({ refs: [...refs] }) as Promise<PulledChange[]>;
   }
 
   push(mutation: QueuedMutation): Promise<PushResult> {

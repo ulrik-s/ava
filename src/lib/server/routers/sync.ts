@@ -14,6 +14,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { assertAdmin } from "../auth/assert-admin";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
+import { MAX_ROW_REFS } from "../data-store/in-memory/sync-transport";
 import { analyzeIfNewContent, storagePathBefore } from "../sync/classify-new-content";
 import type { SyncDeviceStore } from "../sync/sync-device-store";
 import type { SyncStore } from "../sync/sync-store";
@@ -31,6 +32,9 @@ const queuedMutationSchema = z.object({
   format: z.number().int().positive().optional(),
 });
 
+/** En utpekad rad: entitet + id (procedur-anropens `touches`, #1348:s `rows`). */
+const rowRefSchema = z.object({ entity: z.string().max(100), id: z.string().max(100) });
+
 /** Ett köat procedur-anrop (#1265, ADR 0037). Fälten i `input` valideras av proceduren själv. */
 const queuedProcedureCallSchema = z.object({
   type: z.literal("procedure"),
@@ -38,7 +42,7 @@ const queuedProcedureCallSchema = z.object({
   path: z.string().min(1).max(200),
   input: z.record(z.string(), z.unknown()),
   codeVersion: z.string().max(200),
-  touches: z.array(z.object({ entity: z.string().max(100), id: z.string().max(100) })).max(100),
+  touches: z.array(rowRefSchema).max(MAX_ROW_REFS),
   enqueuedAt: z.number(),
   /** Köformatet (#1247) — saknas på poster köade före stämplingen. */
   format: z.number().int().positive().optional(),
@@ -100,6 +104,16 @@ export const syncRouter = router({
   pull: orgProcedure
     .input(z.object({ sinceCursor: z.number().int().nonnegative() }))
     .query(({ ctx, input }) => requireSync(ctx.sync).pull(ctx.orgId, input.sinceCursor)),
+
+  /**
+   * Radernas kanoniska läge (#1348): klienten återställer raderna en avvisad
+   * ändring rörde. Org-scopat — en rad som inte finns hos byrån (eller hör
+   * till en annan) blir en tombstone. Samma rader som pullen visar; en läsning,
+   * men POST (mutation): hundra id:n ryms inte säkert i en GET-URL.
+   */
+  rows: orgProcedure
+    .input(z.object({ refs: z.array(rowRefSchema).max(MAX_ROW_REFS) }))
+    .mutation(({ ctx, input }) => requireSync(ctx.sync).rows(ctx.orgId, input.refs)),
 
   /**
    * Pusha en köad klient-mutation server-auktoritativt. Fick ett dokument nytt

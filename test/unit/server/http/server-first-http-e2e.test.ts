@@ -17,7 +17,9 @@ import superjson from "superjson";
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
+import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
+import { InMemoryMutationQueuePersistence, type QueuedMutation, type QueueEntry } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { users } from "@/lib/server/db/schema";
 import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
@@ -26,6 +28,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import { DrizzleSyncDevices } from "@/lib/server/sync/drizzle-sync-devices";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
+import type { DemoSource } from "@/lib/shared/demo-source";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -146,6 +149,53 @@ describe("server-first E2E över riktig HTTP-socket (#470)", () => {
     expect(res.status).toBe("accepted");
     expect(res.rows[0]).toMatchObject({ entity: "timeEntry", row: { id, minutes: 45 } });
     expect(await repos.timeEntries.getById(asId<"TimeEntryId">(id))).toMatchObject({ userId: ANNA });
+  });
+
+  describe("avvisad ändring lämnar ingen spökrad (#1348)", () => {
+    /** En klient med en egen lokal kopia (seed) och kö, mot den riktiga servern. */
+    async function client(seed: DemoSource, queued: QueueEntry[] = []) {
+      const persistence = new InMemoryPersistence(seed);
+      return CachingSyncDataStore.create({ transport, persistence, queuePersistence: new InMemoryMutationQueuePersistence(queued) });
+    }
+
+    it("radkonflikt med serverns rad: den lokala tidsposten blir serverns", async () => {
+      const matterId = uuidv7();
+      await repos.matters.create({ id: matterId, organizationId: ORG, title: "Spök-ärende", status: "ACTIVE", matterNumber: "2026-1348" } as never);
+      const entry = await repos.timeEntries.create({ id: uuidv7(), matterId, userId: ANNA, date: new Date("2026-09-30"), minutes: 30, description: "Serverns", hourlyRate: 1500 } as never);
+      const ds = await client({});
+      await ds.reconcile(); // serverns läge lokalt
+      // En äldre klient köade tidsposten som en rad (procedurägd → avvisas, #1242).
+      await ds.store.timeEntries.update({ where: { id: entry.id }, data: { minutes: 600, description: "Spöke" } as never });
+      const res = await ds.reconcile();
+      expect(res.conflicts).toMatchObject([{ retryable: false, current: { id: entry.id } }]);
+      const local = await ds.store.timeEntries.findUnique({ where: { id: entry.id } });
+      expect(local).toMatchObject({ minutes: 30, description: "Serverns" });
+    });
+
+    it("avvisat skapande utan serverns rad: den lokala kontakten försvinner", async () => {
+      const id = uuidv7();
+      const ds = await client({});
+      // En kontakt i en annan byrå avvisas ("annan byrå") — servern har ingen sådan rad.
+      await ds.store.contacts.create({ data: { id, organizationId: uuidv7(), name: "Spökkontakt" } as never });
+      const res = await ds.reconcile();
+      expect(res.conflicts).toMatchObject([{ reason: "annan byrå", retryable: false }]);
+      expect(await ds.store.contacts.findUnique({ where: { id } })).toBeNull();
+      expect(await repos.contacts.getById(asId<"ContactId">(id))).toBeNull();
+    });
+
+    it("avvisning som klienten klassar (servern kastar BAD_REQUEST): raden hämtas och blir serverns", async () => {
+      const id = uuidv7();
+      await repos.contacts.create({ id, organizationId: ORG, name: "Serverns namn" } as never);
+      const server = await repos.contacts.getById(asId<"ContactId">(id));
+      // Köposten har ett köformat servern inte tar emot (zod) — den avvisas deterministiskt.
+      const broken: QueueEntry = { mutationId: uuidv7(), entity: "contact", kind: "update", row: { id, organizationId: ORG, name: "Lokalt namn" }, enqueuedAt: 0, format: 0 };
+      const ds = await client({ contacts: [{ id, organizationId: ORG, name: "Lokalt namn" }] }, [broken]);
+      const res = await ds.reconcile();
+      expect(res.conflicts).toMatchObject([{ reason: expect.stringMatching(/^Servern avvisade ändringen/), retryable: false }]);
+      expect(res.restored).toBeGreaterThanOrEqual(1);
+      const local = await ds.store.contacts.findUnique({ where: { id } });
+      expect(local).toMatchObject({ id, name: "Serverns namn", version: server?.version });
+    });
   });
 
   it("orgProcedure-grind: ingen forwarded identitet → klienten kastar", async () => {

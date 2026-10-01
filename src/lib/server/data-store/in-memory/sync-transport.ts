@@ -44,8 +44,24 @@ export type ProcedureReplayResult =
   | { status: "accepted"; rows: PulledChange[] }
   | { status: "rejected"; code: string; reason: string; rows: PulledChange[] };
 
+/** En rad, utpekad med entitet och id (#1348). */
+export interface RowRef {
+  entity: string;
+  id: string;
+}
+
+/** Hur många rader ett {@link SyncTransport.rows}-anrop högst frågar efter. */
+export const MAX_ROW_REFS = 100;
+
 export interface SyncTransport {
   pull(sinceCursor: number): Promise<PullResult>;
+  /**
+   * Radernas kanoniska läge just nu (#1348) — för att återställa en rad efter
+   * en avvisad ändring när servern inte skickade sitt läge med avvisningen.
+   * En rad som inte finns hos byrån kommer tillbaka som tombstone. Högst
+   * {@link MAX_ROW_REFS} rader per anrop.
+   */
+  rows(refs: readonly RowRef[]): Promise<PulledChange[]>;
   push(mutation: QueuedMutation): Promise<PushResult>;
   /** Låt servern köra om ett köat procedur-anrop (#1265). */
   pushProcedure(call: QueuedProcedureCall): Promise<ProcedureReplayResult>;

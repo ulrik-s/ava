@@ -115,10 +115,10 @@ describe("avvisningar och byråer", () => {
     const rejected = new RejectedChanges();
     const users = [{ rejected }];
     const entry = { mutationId: "m1", entity: "contact", kind: "create" as const, row: { id: "c1" }, enqueuedAt: 0 };
-    await rejected.record([{ mutation: entry, conflictClass: "surface", reason: "gammal" }]);
+    await rejected.record([{ mutation: entry, conflictClass: "surface", reason: "gammal", retryable: false }]);
     const before = rejectedCounts(users);
     expect(rejectionsSince(users, before)).toEqual({ count: 0, examples: [] });
-    await rejected.record([{ mutation: { ...entry, mutationId: "m2" }, conflictClass: "surface", reason: "stale" }]);
+    await rejected.record([{ mutation: { ...entry, mutationId: "m2" }, conflictClass: "surface", reason: "stale", retryable: false }]);
     expect(rejectionsSince(users, before)).toEqual({ count: 1, examples: [expect.stringContaining("stale")] });
     expect(rejectionsSince(users, [])).toMatchObject({ count: 2 });
   });

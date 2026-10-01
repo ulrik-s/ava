@@ -37,15 +37,15 @@ import type { OrganizationId } from "@/lib/shared/schemas/ids";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
-import type { ProcedureTouch, QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
-import type { ProcedureReplayResult, PulledChange } from "../data-store/in-memory/sync-transport";
+import type { QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
+import type { ProcedureReplayResult } from "../data-store/in-memory/sync-transport";
 import { syncReplays } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { boundedCallTime } from "../queued-call";
 import type { DrizzleRepositories } from "../repositories/drizzle-repositories";
 import { appRouter } from "../routers/_app";
 import type { Context } from "../trpc-core";
-import { entityRepo, getInOrg } from "./entity-repo";
+import { canonicalRows } from "./entity-repo";
 import { admitProcedure } from "./queue-admission";
 
 /** tRPC-koder som betyder "anropet bryter mot en regel" — permanenta, inte tekniska. */
@@ -111,7 +111,10 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
     const orgId = ctx.user?.organizationId;
     if (!orgId) throw new TRPCError({ code: "UNAUTHORIZED" });
     const outcome = await this.outcomeFor(call, ctx, orgId);
-    return { ...outcome, rows: await this.currentRows(call, orgId) };
+    // De berörda radernas kanoniska läge, bara inom byrån — alla berörda
+    // entiteter (en procedur kan skriva flera, #1276). En rad som inte finns
+    // blir en tombstone: klientens optimistiska rad tas bort.
+    return { ...outcome, rows: await canonicalRows(this.repos, call.touches, orgId) };
   }
 
   private async outcomeFor(call: QueuedProcedureCall, ctx: Context, orgId: OrganizationId): Promise<Outcome> {
@@ -183,19 +186,5 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
       code: outcome.status === "rejected" ? outcome.code : null,
       reason: outcome.status === "rejected" ? outcome.reason : null,
     }).onConflictDoNothing({ target: [syncReplays.organizationId, syncReplays.mutationId] });
-  }
-
-  /**
-   * De berörda radernas kanoniska läge, bara inom byrån. Alla berörda entiteter
-   * — en procedur kan skriva flera (faktureringen, #1276). En rad som inte finns
-   * (eller tillhör en annan byrå) blir en tombstone: klientens optimistiska rad
-   * tas bort, och serverns rad (om någon) kommer med pull.
-   */
-  private async currentRows(call: QueuedProcedureCall, orgId: OrganizationId): Promise<PulledChange[]> {
-    const readable = call.touches.filter((t: ProcedureTouch) => entityRepo(this.repos, t.entity) !== null);
-    return Promise.all(readable.map(async (t): Promise<PulledChange> => {
-      const row = await getInOrg(this.repos, t.entity, t.id, orgId);
-      return row ? { entity: t.entity, row } : { entity: t.entity, row: { id: t.id }, deleted: true };
-    }));
   }
 }

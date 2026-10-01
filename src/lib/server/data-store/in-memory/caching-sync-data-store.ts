@@ -27,6 +27,7 @@
 import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
 import { uuidv7 } from "@/lib/shared/uuid";
 import type { QueuedCallIdentity } from "../../queued-call";
+import { pendingKeysOf, refKey, refsOf, type ApplyCanonical } from "./canonical-restore";
 import type { CursorStore } from "./cursor-store";
 import { InMemoryCursorStore } from "./cursor-store";
 import { SOURCE_KEY_BY_ENTITY } from "./entity-source-keys";
@@ -36,7 +37,7 @@ import type { LocalStorePersistence } from "./local-store-persistence";
 import {
   isProcedureCall, MutationQueue, type MutationQueuePersistence, type ProcedureTouch, type QueueEntry, type QueuedMutation,
 } from "./mutation-queue";
-import { ReconcileEngine, type ApplyCanonical, type ConflictRecord, type ReconcileResult } from "./reconcile-engine";
+import { ReconcileEngine, type ConflictRecord, type ReconcileResult } from "./reconcile-engine";
 import type { SyncTransport } from "./sync-transport";
 import type { MutationEvent } from "./writable-delegate";
 
@@ -73,6 +74,8 @@ export interface CachingSyncDeps {
 /** No-op-transport: ingen synk (demon = degenerat-fallet, ADR 0016 — inget synk-mål). */
 export const noSyncTransport: SyncTransport = {
   pull: () => Promise.resolve({ changes: [], cursor: 0 }),
+  // Inget synk-mål avvisar något — inget att återställa.
+  rows: () => Promise.resolve([]),
   push: (mutation) => Promise.resolve({ status: "accepted", row: mutation.row }),
   pushProcedure: () => Promise.resolve({ status: "accepted", rows: [] }),
 };
@@ -189,26 +192,51 @@ export class CachingSyncDataStore {
   }
 
   /**
-   * Köa en avvisad ändring på nytt (#1266, "Försök igen"). Ett anrop får ett
-   * NYTT mutationId — servern har redan sparat utfallet för det gamla, och
-   * samma id gav samma avvisning. En rad byggs på serverns aktuella version
-   * (`current`), så att den inte avvisas som inaktuell igen.
+   * Köa en avvisad ändring på nytt (#1266, "Försök igen") — bara de som kan
+   * lyckas (`ConflictRecord.retryable`, #1348). Posten läggs tillbaka OFÖRÄNDRAD:
+   * samma köformat (servern migrerar input efter det formatet; ett nytt format
+   * på gammal input hoppade över migreringen), samma kodversion och samma
+   * `enqueuedAt` (anropets affärsdatum och skapade id:n härleds ur den, #1276).
+   * Också samma mutationId: ett anrop som aldrig nådde fram kan ha körts utan att
+   * svaret kom tillbaka, och då ger samma id det sparade utfallet i stället för
+   * en andra körning. En rad byggs på serverns aktuella version (`current`), så
+   * att den inte avvisas som inaktuell igen, och dess lokala läge läggs tillbaka
+   * (det återställdes till serverns när den avvisades).
    */
   async requeue(entry: QueueEntry, current?: Record<string, unknown>): Promise<void> {
-    if (isProcedureCall(entry)) {
-      await this.queue.enqueueProcedure({ path: entry.path, input: entry.input, touches: entry.touches });
-    } else {
-      const version = typeof current?.version === "number" ? current.version : entry.baseVersion;
-      await this.queue.enqueue({ entity: entry.entity, kind: entry.kind, row: entry.row }, version !== undefined ? { baseVersion: version } : {});
-    }
+    if (isProcedureCall(entry)) await this.queue.requeue(entry);
+    else await this.requeueRow(entry, current);
     for (const listener of this.hooks.localChangeListeners) listener();
+  }
+
+  private async requeueRow(entry: QueuedMutation, current: Record<string, unknown> | undefined): Promise<void> {
+    const version = typeof current?.version === "number" ? current.version : entry.baseVersion;
+    await this.queue.requeue(version === undefined ? entry : { ...entry, baseVersion: version });
+    writeCanonical(this.store, entry.entity, entry.row, entry.kind === "delete");
+    await this.persistSnapshot();
+  }
+
+  /**
+   * Återställ raderna en avvisad ändring rörde till serverns läge just nu
+   * (#1348, "Kasta"). Rader med en ny, ej synkad ändring rörs inte — den
+   * ändringen gäller lokalt tills den spelats upp. Kastar när servern inte nås
+   * (ändringen ligger då kvar bland de avvisade). Returnerar antalet rader.
+   */
+  async restore(entry: QueueEntry): Promise<number> {
+    const pending = pendingKeysOf(this.queue.pending());
+    const refs = refsOf(entry).filter((ref) => !pending.has(refKey(ref)));
+    const changes = await this.engine.canonical(refs);
+    for (const ch of changes) writeCanonical(this.store, ch.entity, ch.row, ch.deleted ?? false);
+    if (changes.length > 0) {
+      this.rebakeJoins();
+      await this.persistSnapshot();
+    }
+    return changes.length;
   }
 
   /** Ligger en ej synkad ändring för raden kvar i kön? (rader + anropens touches) */
   hasPendingFor(entity: string, id: string): boolean {
-    return this.queue.pending().some((e) => (isProcedureCall(e)
-      ? e.touches.some((t) => t.entity === entity && t.id === id)
-      : e.entity === entity && e.row.id === id));
+    return pendingKeysOf(this.queue.pending()).has(refKey({ entity, id }));
   }
 
   /** Köposterna i ordning (rader och procedur-anrop) — för diagnostik och tester. */
@@ -303,7 +331,7 @@ export class CachingSyncDataStore {
     await this.queue.refresh();
     const result = await this.engine.reconcile();
     if (result.conflicts.length > 0) await this.hooks.onConflicts?.(result.conflicts);
-    if (result.pulled > 0 || result.pushed > 0 || result.rebased > 0 || result.replayed > 0) {
+    if (result.pulled + result.pushed + result.rebased + result.replayed + result.restored > 0) {
       this.rebakeJoins();
       await this.persistSnapshot();
     }

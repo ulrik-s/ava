@@ -19,7 +19,7 @@ export default function SyncConflictsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Avvisade ändringar</h1>
           <p className="text-sm text-gray-500">
             Ändringar du gjorde som servern inte godtog. Det som gäller på servern visas redan i AVA.
-            Rätta det som stoppade ändringen och välj <strong>Försök igen</strong>, eller <strong>Kasta</strong> den.
+            Välj <strong>Kasta</strong> för att släppa ändringen, eller <strong>Försök igen</strong> där ett nytt försök kan lyckas.
           </p>
         </div>
       )}

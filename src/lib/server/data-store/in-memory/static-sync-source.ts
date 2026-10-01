@@ -65,6 +65,11 @@ export class StaticSyncSource implements SyncTransport {
     return Promise.resolve({ status: "accepted", row: mutation.row });
   }
 
+  /** Loopback: demon avvisar ingenting (push godtar allt) — inget att återställa. */
+  rows(): Promise<PulledChange[]> {
+    return Promise.resolve([]);
+  }
+
   /** Loopback: demon har ingen server som kör om anrop — det lokala resultatet gäller. */
   pushProcedure(): Promise<ProcedureReplayResult> {
     return Promise.resolve({ status: "accepted", rows: [] });
