@@ -28,7 +28,7 @@ describe("Caddyfile nekar demodata (#1352)", () => {
   it("svarar 404 innan shell-rewriten och file_server", () => {
     const respond = staticHandle.indexOf("respond @demodata 404");
     expect(respond).toBeGreaterThan(-1);
-    expect(respond).toBeLessThan(staticHandle.indexOf("rewrite @shell"));
+    expect(respond).toBeLessThan(staticHandle.indexOf("route @shell"));
     expect(respond).toBeLessThan(staticHandle.indexOf("file_server"));
     // Inuti `route` — där körs direktiven i skriven ordning.
     expect(respond).toBeGreaterThan(staticHandle.indexOf("route {"));

@@ -47,7 +47,7 @@ if [ -n "$OUT_DIR" ]; then
 else
   mkdir -p "$RELEASE/matters/__shell__"
   printf 'skal' > "$RELEASE/index.html"
-  printf 'shell' > "$RELEASE/matters/__shell__/index.html"
+  printf '__shell__' > "$RELEASE/matters/__shell__/index.html"
   printf '{"name":"AVA"}' > "$RELEASE/manifest.json"
 fi
 plant() { mkdir -p "$(dirname "$RELEASE/$1")" && printf '{}' > "$RELEASE/$1"; }
@@ -94,6 +94,19 @@ expect_code() {
   fi
 }
 
+# Shell-rewriten ska ge __shell__-sidan, inte startsidan (som också svarar 200).
+# Den pre-renderade shellen bär segmentet i sin RSC-payload; startsidan inte.
+expect_shell() {
+  local body
+  body="$(curl -s "$BASE$1")"
+  if [[ "$body" == *__shell__* ]]; then
+    echo "ok   shell $1"
+  else
+    echo "FEL  $1 gav inte __shell__-sidan" >&2
+    FAILS=$((FAILS + 1))
+  fi
+}
+
 expect_code 404 /demo-seed.json
 expect_code 404 /.ava/meta.json
 expect_code 404 /.ava/users/anna@ava.demo.json
@@ -104,6 +117,7 @@ expect_code 404 /documents/content/stamning.pdf
 expect_code 200 /
 expect_code 200 /manifest.json
 expect_code 200 /matters/0fb22dd8-566b-566e-9dfc-4238f1941b67/
+expect_shell /matters/0fb22dd8-566b-566e-9dfc-4238f1941b67/
 expect_code 200 /oauth2/userinfo
 
 if [ -n "$OUT_DIR" ] && [ "$FAILS" -eq 0 ]; then

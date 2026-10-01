@@ -72,11 +72,15 @@
 				not path /manifest.json /_next/*
 			}
 			respond @demodata 404
-			@shell {
-				path_regexp shell ^/(matters|contacts|invoices|payment-plans|users|templates)/([^/]+)(/edit)?/?$
-				not file /{re.shell.1}/{re.shell.2}{re.shell.3}/index.html
+			# Som nginx-selfhosted.conf: en pre-renderad sida för id:t, annars
+			# __shell__. Fil-kontrollen ligger INNANFÖR `route @shell` — en
+			# `not file` i samma matcher-set kan utvärderas före path_regexp,
+			# med tomma {re.shell.*} (/index.html finns → ingen rewrite →
+			# startsidan i stället för ärendet).
+			@shell path_regexp shell ^/(matters|contacts|invoices|payment-plans|users|templates)/([^/]+)(/edit)?/?$
+			route @shell {
+				try_files /{re.shell.1}/{re.shell.2}{re.shell.3}/index.html /{re.shell.1}/__shell__{re.shell.3}/index.html
 			}
-			rewrite @shell /{re.shell.1}/__shell__{re.shell.3}/index.html
 			try_files {path} {path}.html {path}/index.html /index.html
 			file_server
 		}
