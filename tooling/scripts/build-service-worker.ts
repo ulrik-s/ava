@@ -9,16 +9,18 @@
  *    RSC-payloads), `__shell__`-sidorna, `_next/static` utan källkartor, och
  *    favicon. Seedade id-sidor, 404-sidor och ALL data (`.ava/`, demo-seed,
  *    dokument) lämnas utanför — datan bor i IndexedDB.
- * 2. Versionen är en hash över de förcachade filernas innehåll: samma bygge
- *    ger samma version (ingen onödig "ny version"-fråga), ändrat skal ger ny.
- * 3. Bundlar `src/lib/client/pwa/sw-entry.ts` med version och lista inbakade.
+ * 2. Bundlar `src/lib/client/pwa/sw-entry.ts` med listan inbakad och en
+ *    platshållare för versionen.
+ * 3. Versionen är en hash över de förcachade filernas innehåll OCH den
+ *    bundlade workern (#1355): samma bygge ger samma version (ingen onödig
+ *    "ny version"-fråga); ändrat skal eller ändrad worker-kod ger ny.
  *
  * Körs av `build-demo.sh` (demo och prod bygger båda den statiska exporten).
  */
 
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -80,8 +82,8 @@ function diskPath(outDir: string, urlPath: string): string {
   return join(outDir, urlPath.endsWith("/") ? `${urlPath}index.html` : urlPath);
 }
 
-/** 16 hex-tecken sha256 över sökvägar + innehåll. */
-export async function precacheVersion(outDir: string, paths: readonly string[]): Promise<string> {
+/** 16 hex-tecken sha256 över sökvägar + innehåll, och workerns egen kod (#1355). */
+export async function precacheVersion(outDir: string, paths: readonly string[], workerCode = ""): Promise<string> {
   const hash = createHash("sha256");
   for (const p of paths) {
     hash.update(p);
@@ -89,7 +91,32 @@ export async function precacheVersion(outDir: string, paths: readonly string[]):
     hash.update(await readFile(diskPath(outDir, p)));
     hash.update("\0");
   }
+  hash.update(workerCode);
   return hash.digest("hex").slice(0, 16);
+}
+
+/** Står i den bundlade workern tills versionen (som beror på koden) är känd. */
+const VERSION_PLACEHOLDER = "__AVA_SW_VERSION_PLACEHOLDER__";
+
+/** Bundla workern till en temporär fil och returnera koden. */
+async function bundleWorker(entry: string, paths: readonly string[], tmpFile: string): Promise<string> {
+  // `bun build` som barnprocess, inte `Bun.build` in-process: den senare
+  // förgiftar modulupplösningen för resten av processen (sågs som "Cannot find
+  // module" i efterföljande testfiler i samma bun test-worker).
+  try {
+    await promisify(execFile)(process.execPath, [
+      "build", entry,
+      "--target=browser", "--format=iife", "--minify",
+      "--define", `__AVA_SW_VERSION__=${JSON.stringify(VERSION_PLACEHOLDER)}`,
+      "--define", `__AVA_SW_PRECACHE__=${JSON.stringify(paths)}`,
+      "--outfile", tmpFile,
+    ]);
+    return await readFile(tmpFile, "utf8");
+  } catch (e) {
+    throw new Error(`[sw] bundling misslyckades: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    await rm(tmpFile, { force: true });
+  }
 }
 
 /** Resultatet av ett bygge. */
@@ -102,21 +129,10 @@ export interface ServiceWorkerBuild {
 /** Bygg `<outDir>/sw.js`. `entry` är injicerbar för tester. */
 export async function buildServiceWorker(outDir: string, entry: string = ENTRY): Promise<ServiceWorkerBuild> {
   const paths = await collectPrecache(outDir);
-  const version = await precacheVersion(outDir, paths);
-  // `bun build` som barnprocess, inte `Bun.build` in-process: den senare
-  // förgiftar modulupplösningen för resten av processen (sågs som "Cannot find
-  // module" i efterföljande testfiler i samma bun test-worker).
-  try {
-    await promisify(execFile)(process.execPath, [
-      "build", entry,
-      "--target=browser", "--format=iife", "--minify",
-      "--define", `__AVA_SW_VERSION__=${JSON.stringify(version)}`,
-      "--define", `__AVA_SW_PRECACHE__=${JSON.stringify(paths)}`,
-      "--outfile", join(outDir, "sw.js"),
-    ]);
-  } catch (e) {
-    throw new Error(`[sw] bundling misslyckades: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  const code = await bundleWorker(entry, paths, join(outDir, "sw.js.tmp"));
+  if (!code.includes(VERSION_PLACEHOLDER)) throw new Error("[sw] versionens platshållare saknas i den bundlade workern");
+  const version = await precacheVersion(outDir, paths, code);
+  await writeFile(join(outDir, "sw.js"), code.replaceAll(VERSION_PLACEHOLDER, version));
   let bytes = 0;
   for (const p of paths) bytes += (await stat(diskPath(outDir, p))).size;
   return { version, count: paths.length, bytes };

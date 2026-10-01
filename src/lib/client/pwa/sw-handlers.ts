@@ -8,9 +8,15 @@
  * Versionsbyte: en ny version installeras i bakgrunden och VÄNTAR tills
  * användaren väljer "Ladda om" (SKIP_WAITING). Att byta ut skalet under en
  * öppen flik kan annars blanda gamla och nya chunks mitt i en ifylld blankett.
+ *
+ * Efter en deploy (#1355): förra versionens cache behålls en generation, och
+ * dess chunks serveras till flikar som fortfarande kör det gamla skalet —
+ * servern har då redan bytt release, och den gamla raderas vid nästa deploy.
+ * Förcachningen är tolerant: en fil som inte går att hämta hoppas över (den
+ * hämtas när den behövs); bara roten, offline-fallbacken, måste finnas.
  */
 
-import { offlineFallbackPath, routeRequest, withoutSearch, type SwScope } from "./sw-routing";
+import { appRelativePath, isPerIdPath, offlineFallbackPath, routeRequest, withoutSearch, type SwScope } from "./sw-routing";
 
 /** Den del av `Cache` som används. */
 export interface SwCache {
@@ -56,6 +62,8 @@ export interface SwHandlers {
 const CACHE_PREFIX = "ava-app-";
 const DEFAULT_NETWORK_TIMEOUT_MS = 4_000;
 const PRECACHE_ATTEMPTS = 3;
+/** Utan roten finns ingen offline-fallback — den, och bara den, måste förcachas. */
+const REQUIRED_PRECACHE = "/";
 
 /** Cache-namnet för en version. */
 export function cacheNameFor(version: string): string {
@@ -89,6 +97,20 @@ function raceTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
   return Promise.race([p, expired]).finally(() => clearTimeout(timer));
 }
 
+/** Våra cacher utom `current`, äldst först (CacheStorage.keys() är i skapandeordning). */
+async function otherVersions(caches: SwCacheStorage, current: string): Promise<string[]> {
+  return (await caches.keys()).filter((k) => k.startsWith(CACHE_PREFIX) && k !== current);
+}
+
+/** Förra generationens kopia (#1355) — chunks som en flik med det gamla skalet fortfarande ber om. */
+async function matchPrevious(caches: SwCacheStorage, current: string, request: Request): Promise<Response | undefined> {
+  for (const key of (await otherVersions(caches, current)).reverse()) {
+    const hit = await (await caches.open(key)).match(request, { ignoreSearch: true });
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 /** Bygg handlers för en version av skalet. */
 export function createSwHandlers(config: SwConfig, deps: SwDeps): SwHandlers {
   const name = cacheNameFor(config.version);
@@ -117,20 +139,32 @@ export function createSwHandlers(config: SwConfig, deps: SwDeps): SwHandlers {
     throw lastError;
   }
 
+  /**
+   * Förcacha skalet. En enskild fil som inte går att hämta fäller inte hela
+   * versionen (#1355) — den hämtas vid behov. Misslyckas roten tas den halva
+   * cachen bort, så att den inte misstas för förra generationen.
+   */
   async function install(): Promise<void> {
     const cache = await openCache();
-    await Promise.all(config.precache.map((rel) => precacheOne(cache, rel)));
+    const results = await Promise.allSettled(config.precache.map((rel) => precacheOne(cache, rel)));
+    const failed = config.precache.filter((_, i) => results[i]?.status === "rejected");
+    if (failed.includes(REQUIRED_PRECACHE)) {
+      await deps.caches.delete(name);
+      throw new Error(`[sw] skalets rot (${REQUIRED_PRECACHE}) kunde inte förcachas`);
+    }
+    if (failed.length > 0) console.warn(`[sw] ${failed.length} filer förcachades inte (hämtas vid behov):`, failed);
   }
 
+  /** Städa äldre versioner men behåll den närmast föregående (#1355). */
   async function activate(): Promise<void> {
-    const stale = (await deps.caches.keys()).filter((k) => k.startsWith(CACHE_PREFIX) && k !== name);
+    const stale = (await otherVersions(deps.caches, name)).slice(0, -1);
     await Promise.all(stale.map((k) => deps.caches.delete(k)));
     await deps.claimClients();
   }
 
   async function cacheFirst(request: Request): Promise<Response> {
     const cache = await openCache();
-    const hit = await cache.match(request, { ignoreSearch: true });
+    const hit = (await cache.match(request, { ignoreSearch: true })) ?? (await matchPrevious(deps.caches, name, request));
     if (hit) return hit;
     const res = await deps.fetch(request);
     if (isCacheable(res)) await cache.put(withoutSearch(request.url), res.clone());
@@ -146,10 +180,16 @@ export function createSwHandlers(config: SwConfig, deps: SwDeps): SwHandlers {
     return cache.match(absolute(offlineFallbackPath(rel)), { ignoreSearch: true });
   }
 
+  /** Sparas sidan? Inte detaljsidor per id (#1355) — offline svarar `__shell__`. */
+  function storesPage(url: string): boolean {
+    const rel = appRelativePath(new URL(url), config);
+    return rel !== null && !isPerIdPath(rel);
+  }
+
   /** Nätets svar när det kom: spara om det går, falla till cache vid 5xx. */
   async function fromNetwork(request: Request, res: Response): Promise<Response> {
     if (isCacheable(res)) {
-      await (await openCache()).put(withoutSearch(request.url), res.clone());
+      if (storesPage(request.url)) await (await openCache()).put(withoutSearch(request.url), res.clone());
       return res;
     }
     if (res.status >= 500) return (await cachedPage(request)) ?? res;

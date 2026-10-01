@@ -100,6 +100,17 @@ export function offlineFallbackPath(relPath: string): string {
   return `/${route}/${SHELL_PARAM}/${tail}`;
 }
 
+/**
+ * En detaljsida under en skal-rutt (`/matters/<id>/…`, även dess RSC-payload).
+ * Sådana sparas inte per id i runtime-cachen (#1355): det blev en post per
+ * öppnat ärende utan tak, och offline svarar `__shell__`-sidan ändå för dem.
+ */
+export function isPerIdPath(relPath: string): boolean {
+  const [route, id] = relPath.split("/").filter(Boolean);
+  if (route === undefined || id === undefined || !SHELL_ROUTES.has(route)) return false;
+  return id !== SHELL_PARAM && !isRscPayload(id);
+}
+
 /** URL utan query och hash — cache-nyckeln för sidor (`?_rsc=` varierar per navigering). */
 export function withoutSearch(url: string): string {
   const u = new URL(url);

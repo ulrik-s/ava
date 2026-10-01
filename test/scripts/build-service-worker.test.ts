@@ -7,7 +7,8 @@
  *     förcachas,
  *   - källkartor, seedade id-sidor och ALL data (.ava, demo-seed, dokument)
  *     gör det inte,
- *   - versionen byts när innehållet byts — och bara då.
+ *   - versionen byts när innehållet byts — och bara då; ändrad worker-kod
+ *     räknas också (#1355).
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -108,6 +109,12 @@ describe("precacheVersion", () => {
     expect(await precacheVersion(out, paths)).not.toBe(before);
   });
 
+  it("ändrad worker-kod → ny version, även när skalet är detsamma (#1355)", async () => {
+    const paths = await collectPrecache(out);
+    expect(await precacheVersion(out, paths, "kod v1")).not.toBe(await precacheVersion(out, paths, "kod v2"));
+    expect(await precacheVersion(out, paths, "kod v1")).toBe(await precacheVersion(out, paths, "kod v1"));
+  });
+
   it("ändrad data (inte app-skal) → samma version", async () => {
     const paths = await collectPrecache(out);
     const before = await precacheVersion(out, paths);
@@ -120,6 +127,14 @@ describe("buildServiceWorker", () => {
   it("bundlingsfel → tydligt fel, och ingen halvbyggd sw.js", async () => {
     await expect(buildServiceWorker(out, join(out, "finns-inte.ts"))).rejects.toThrow(/bundling misslyckades/);
     expect(await readFile(join(out, "sw.js"), "utf8")).toBe("gammal kill-switch");
+  });
+
+  it("en worker som inte använder versionen → tydligt fel, ingen halvbyggd sw.js och ingen kvarlämnad temporär fil", async () => {
+    const entry = join(out, "utan-version.ts");
+    await writeFile(entry, "console.log('ingen version här');\n");
+    await expect(buildServiceWorker(out, entry)).rejects.toThrow(/platshållare/);
+    expect(await readFile(join(out, "sw.js"), "utf8")).toBe("gammal kill-switch");
+    await expect(readFile(join(out, "sw.js.tmp"), "utf8")).rejects.toThrow();
   });
 
   it("CLI:t skriver sw.js och rapporterar version och antal", async () => {
@@ -142,6 +157,7 @@ describe("buildServiceWorker", () => {
     const source = await readFile(join(out, "sw.js"), "utf8");
     expect(source).not.toContain("kill-switch");
     expect(source).toContain(result.version);
+    expect(source).not.toContain("__AVA_SW_VERSION_PLACEHOLDER__");
 
     // Kör den byggda filen i en fejkad service worker-global och kontrollera
     // att den faktiskt kopplar in sig — ett bundlingsfel syns här, inte först

@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest-compat";
 import {
   appRelativePath,
+  isPerIdPath,
   offlineFallbackPath,
   routeRequest,
   scopeBasePath,
@@ -116,6 +117,23 @@ describe("offlineFallbackPath", () => {
   it("okänd sida → roten (som try_files /index.html)", () => {
     expect(offlineFallbackPath("/nagot/okant/")).toBe("/");
     expect(offlineFallbackPath("/documents/abc/")).toBe("/");
+  });
+});
+
+describe("isPerIdPath (#1355)", () => {
+  it("detaljsidor och deras RSC-payloads under skal-rutter är per id", () => {
+    expect(isPerIdPath("/matters/0190a1b2-aaaa-7000-8000-000000000009/")).toBe(true);
+    expect(isPerIdPath("/matters/0190a1b2-aaaa-7000-8000-000000000009/edit/")).toBe(true);
+    expect(isPerIdPath("/contacts/abc/index.txt")).toBe(true);
+  });
+
+  it("listor, skalet, deras payloads och andra rutter är det inte", () => {
+    expect(isPerIdPath("/matters/")).toBe(false);
+    expect(isPerIdPath("/matters/__shell__/")).toBe(false);
+    expect(isPerIdPath("/matters/index.txt")).toBe(false);
+    expect(isPerIdPath("/matters/__next.matters.txt")).toBe(false);
+    expect(isPerIdPath("/settings/datakalla/")).toBe(false);
+    expect(isPerIdPath("/")).toBe(false);
   });
 });
 

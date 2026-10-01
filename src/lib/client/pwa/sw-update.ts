@@ -6,6 +6,9 @@
  * `activateUpdate` ber den väntande workern ta över och laddar om sidan EN gång
  * när den gjort det — omladdningen sker först när nya skalet styr, så sidan
  * aldrig laddas om mot det gamla.
+ * `watchForTakeover` (#1355) berättar för ALLA flikar att en ny version tagit
+ * över (användaren klickade "Ladda om" i en annan flik), så att de också kan
+ * laddas om i stället för att fortsätta på det gamla skalet.
  */
 
 /** Den del av `ServiceWorker` som används. */
@@ -25,6 +28,11 @@ export interface SwRegistrationLike {
 /** Den del av `ServiceWorkerContainer` som används. */
 export interface SwContainerLike {
   addEventListener(type: "controllerchange", listener: () => void): void;
+}
+
+/** Containern med vem som styr sidan just nu. */
+export interface SwControlledContainerLike extends SwContainerLike {
+  readonly controller: unknown;
 }
 
 /**
@@ -55,4 +63,17 @@ export function activateUpdate(worker: SwWorkerLike, container: SwContainerLike,
     reload();
   });
   worker.postMessage({ type: "SKIP_WAITING" });
+}
+
+/**
+ * Anropa `onTakeover` när en ny worker tar över en sida som redan styrdes av en
+ * äldre. Första installationens `clients.claim()` (ingen styrde sidan förut)
+ * är ingen ny version och räknas inte.
+ */
+export function watchForTakeover(container: SwControlledContainerLike, onTakeover: () => void): void {
+  let controlled = container.controller !== null;
+  container.addEventListener("controllerchange", () => {
+    if (controlled) onTakeover();
+    controlled = true;
+  });
 }

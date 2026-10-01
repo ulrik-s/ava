@@ -3,10 +3,12 @@
  * en fejkad Cache Storage och ett fejkat nät.
  *
  * Det som skyddas:
- *   - install förcachar HELA app-skalet eller misslyckas (hellre ingen ny
- *     version än en halv som inte startar offline),
+ *   - install förcachar app-skalet; en enskild fil som inte går att hämta
+ *     fäller inte versionen (#1355), men utan roten (offline-fallbacken)
+ *     misslyckas den,
  *   - en omdirigering (utgången session → IdP) cachas aldrig som en sida,
- *   - activate städar bara våra egna gamla versioner,
+ *   - activate städar bara våra egna gamla versioner och behåller förra
+ *     generationen, vars chunks en flik med det gamla skalet får (#1355),
  *   - offline serveras skalet ur cache; runtime-id:n får __shell__-sidan,
  *   - data (/api, demo-seed) rörs aldrig.
  */
@@ -118,9 +120,21 @@ describe("install", () => {
     expect(firstReq.redirect).toBe("manual");
   });
 
-  it("misslyckas om någon sökväg inte svarar 200 (ingen halv version)", async () => {
-    const h = harness({ respond: async (url) => (url.endsWith("/matters/") ? new Response("", { status: 404 }) : html("ok")) });
-    await expect(h.handlers.install()).rejects.toThrow(/matters/);
+  it("en fil som inte går att hämta (404) hoppas över — resten förcachas, versionen installeras (#1355)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const h = harness({ respond: async (url) => (url.endsWith("/a.js") ? new Response("", { status: 404 }) : html("ok")) });
+    await h.handlers.install();
+    const cached = [...h.storage.caches.get("ava-app-v1")!.entries.keys()];
+    expect(cached).toHaveLength(3);
+    expect(cached).not.toContain(`${ORIGIN}/_next/static/chunks/a.js`);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("1 filer"), ["/_next/static/chunks/a.js"]);
+    warn.mockRestore();
+  });
+
+  it("utan roten (offline-fallbacken) misslyckas installationen, och den halva cachen tas bort", async () => {
+    const h = harness({ respond: async (url) => (url === `${ORIGIN}/` ? new Response("", { status: 404 }) : html("ok")) });
+    await expect(h.handlers.install()).rejects.toThrow(/rot/);
+    expect(await h.storage.keys()).toEqual([]);
   });
 
   it("misslyckas på omdirigering (utgången session → IdP) i stället för att cacha inloggningssidan", async () => {
@@ -146,7 +160,7 @@ describe("install", () => {
 
   it("ett bestående fel ger upp efter tre försök", async () => {
     const h = harness({ precache: ["/"], respond: async () => new Response("", { status: 503 }) });
-    await expect(h.handlers.install()).rejects.toThrow(/503/);
+    await expect(h.handlers.install()).rejects.toThrow(/rot/);
     expect(h.fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -158,14 +172,22 @@ describe("install", () => {
 });
 
 describe("activate", () => {
-  it("raderar gamla ava-app-versioner men lämnar främmande cacher", async () => {
-    const h = harness({ version: "v2" });
+  it("raderar äldre ava-app-versioner, behåller förra generationen och lämnar främmande cacher", async () => {
+    const h = harness({ version: "v3" });
     await h.storage.open("ava-app-v1");
-    await h.storage.open("ava-app-v2");
     await h.storage.open("annan-cache");
+    await h.storage.open("ava-app-v2");
+    await h.storage.open("ava-app-v3");
     await h.handlers.activate();
-    expect((await h.storage.keys()).sort()).toEqual(["annan-cache", "ava-app-v2"]);
+    expect((await h.storage.keys()).sort()).toEqual(["annan-cache", "ava-app-v2", "ava-app-v3"]);
     expect(h.deps.claimClients).toHaveBeenCalledTimes(1);
+  });
+
+  it("första versionen: ingenting att städa", async () => {
+    const h = harness();
+    await h.storage.open("ava-app-v1");
+    await h.handlers.activate();
+    expect(await h.storage.keys()).toEqual(["ava-app-v1"]);
   });
 });
 
@@ -226,6 +248,15 @@ describe("handleFetch — cache-first (_next/static)", () => {
     expect(res.status).toBe(404);
     expect(await (await h.storage.open("ava-app-v1")).match(`${ORIGIN}/_next/static/chunks/x.js`)).toBeUndefined();
   });
+  it("en flik med förra skalet får sina chunks ur förra generationen när servern redan bytt release (#1355)", async () => {
+    const h = harness({ version: "v2", respond: async () => new Response("", { status: 404 }) });
+    await (await h.storage.open("ava-app-v1")).put(`${ORIGIN}/_next/static/chunks/gammal.js`, new Response("gammal chunk"));
+    await h.storage.open("ava-app-v2");
+    const res = await h.handlers.handleFetch(new Request(`${ORIGIN}/_next/static/chunks/gammal.js`))!;
+    expect(await res.text()).toBe("gammal chunk");
+    expect(h.fetchMock).not.toHaveBeenCalled();
+  });
+
   it("miss + offline → felet bubblar (inget att servera)", async () => {
     const h = harness({ respond: offline });
     await expect(h.handlers.handleFetch(new Request(`${ORIGIN}/_next/static/chunks/x.js`))!).rejects.toThrow(/Failed to fetch/);
@@ -239,6 +270,17 @@ describe("handleFetch — network-first (sidor)", () => {
     expect(await res.text()).toBe("färsk");
     const cached = await (await h.storage.open("ava-app-v1")).match(`${ORIGIN}/matters/`);
     expect(await cached!.text()).toBe("färsk");
+  });
+
+  it("en detaljsida per id sparas inte (#1355) — listan och skalet gör det", async () => {
+    const h = harness({ respond: async () => html("sida") });
+    const id = "0190a1b2-aaaa-7000-8000-000000000009";
+    await h.handlers.handleFetch(navRequest(`/matters/${id}/`))!;
+    await h.handlers.handleFetch(new Request(`${ORIGIN}/matters/${id}/index.txt?_rsc=1`))!;
+    await h.handlers.handleFetch(navRequest("/matters/__shell__/"))!;
+    await h.handlers.handleFetch(new Request(`${ORIGIN}/matters/index.txt?_rsc=1`))!;
+    const cached = [...(await h.storage.open("ava-app-v1")).entries.keys()].sort();
+    expect(cached).toEqual([`${ORIGIN}/matters/__shell__/`, `${ORIGIN}/matters/index.txt`]);
   });
 
   it("offline → cachad sida", async () => {
