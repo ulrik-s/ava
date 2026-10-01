@@ -16,7 +16,7 @@ import type { AppDb } from "@/lib/server/db/types";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { Repositories } from "@/lib/server/repositories/repositories";
-import { DUPLICATE_ROW_REASON, DrizzleSyncStore, ID_TAKEN_REASON } from "@/lib/server/sync/drizzle-sync-store";
+import { DUPLICATE_ROW_REASON, DrizzleSyncStore, ID_TAKEN_REASON, ROW_GONE_REASON } from "@/lib/server/sync/drizzle-sync-store";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createPooledTestDb, createTestDb, type TestDbHandle } from "../db/pg-test-db";
@@ -91,13 +91,31 @@ describe("radpush vid kapplöpning (#1380, pglite)", () => {
       .toMatchObject({ status: "conflict", reason: ID_TAKEN_REASON });
   });
 
-  it("en ändring av en rad som ännu inte fanns, där en annan flik hann skapa den → ändringen tillämpas", async () => {
+  it("en ändring av en rad som tagits bort → konflikt utan serverns rad, ingen ny rad och inget i change_log (#1399)", async () => {
     const id = uuidv7();
     await sync.push(pusher(ORG), mut("create", contactRow(id)));
+    await sync.push(pusher(ORG), mut("delete", { id }));
+    const createSpy = vi.spyOn(repos.contacts, "create");
 
-    staleFirstRead();
-    const updated = await sync.push(pusher(ORG), mut("update", { ...contactRow(id), name: "Ändrad" }));
-    expect(updated).toMatchObject({ status: "accepted", row: { id, name: "Ändrad" } });
+    expect(await sync.push(pusher(ORG), mut("update", { ...contactRow(id), name: "Ändrad" })))
+      .toEqual({ status: "conflict", reason: ROW_GONE_REASON });
+    expect(createSpy).not.toHaveBeenCalled();
+    expect(await repos.contacts.getById(asId<"ContactId">(id))).toBeNull();
+    expect(await changeLogOps(handle.db, id)).toEqual(["create", "delete"]);
+  });
+
+  it("en ändring av ett id som aldrig funnits → samma konflikt, raden skapas inte (#1399)", async () => {
+    const id = uuidv7();
+    expect(await sync.push(pusher(ORG), mut("update", contactRow(id))))
+      .toEqual({ status: "conflict", reason: ROW_GONE_REASON });
+    expect(await changeLogOps(handle.db, id)).toEqual([]);
+  });
+
+  it("ett annat data-/integritetsfel från databasen → konflikt med felet, inte 500 (#1399)", async () => {
+    const id = uuidv7();
+    const res = await sync.push(pusher(ORG), mut("create", { ...contactRow(id), name: null }));
+    expect(res).toMatchObject({ status: "conflict" });
+    expect(res.status === "conflict" ? res.reason : "").toStartWith("Ändringen gick inte att spara: ");
   });
 
   it("skapa ett id som tagits bort (raden finns kvar som tombstone) → konflikt, inte 500", async () => {

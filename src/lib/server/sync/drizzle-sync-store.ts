@@ -16,18 +16,24 @@
  *               rad med samma id → conflict), annars create. Hinner en samtidig
  *               push av samma rad före (unikhetsfel, #1380) avgörs posten igen
  *               mot den raden — aldrig ett 500.
- *   - update  → surface: saknad eller stale `baseVersion` ⇒ conflict; annars
+ *   - update  → finns inte raden (borttagen, #1399) ⇒ conflict utan `current`
+ *               (klienten hämtar tombstonen), aldrig en ny rad med samma id.
+ *               surface: saknad eller stale `baseVersion` ⇒ conflict; annars
  *               update (server-nyare ⇒ rebased). append/lww applicerar.
  *               När raden skapades och vem som skapade den ändras aldrig.
  *   - delete  → softDelete (redan borta ⇒ idempotent accepted).
+ * Ett data- eller integritetsfel från databasen (SQLSTATE 22/23) blir en
+ * konflikt (#1399): samma post ger samma fel igen, och ett 500 skulle hålla
+ * klientens kö i omförsök.
  */
 
 import { and, asc, eq, gt, lte } from "drizzle-orm";
 import { conflictClassOf } from "@/lib/shared/conflict-policy";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
+import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
 import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store/in-memory/sync-transport";
-import { isUniqueViolation } from "../db/pg-error";
+import { deterministicPgCause, isUniqueViolation } from "../db/pg-error";
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
@@ -68,6 +74,20 @@ export const ID_TAKEN_REASON = "id:t används redan av en annan rad";
 
 /** En skrivning som krockar med en befintlig rad även efter ett nytt försök (#1380). */
 export const DUPLICATE_ROW_REASON = "raden krockar med en befintlig rad (samma id eller unikt värde)";
+
+/** En ändring av en rad som inte finns på servern — borttagen, eller aldrig skapad (#1399). */
+export const ROW_GONE_REASON = "raden finns inte längre på servern (borttagen)";
+
+/**
+ * Ett fel som samma post ger igen (SQLSTATE 22/23) → konflikt; allt annat
+ * (nätet, databasen nere) kastas vidare så att klienten försöker igen.
+ */
+function deterministicConflict(err: unknown): PushResult {
+  const cause = deterministicPgCause(err);
+  if (cause === undefined) throw err;
+  const reason = isUniqueViolation(cause) ? DUPLICATE_ROW_REASON : `Ändringen gick inte att spara: ${syncErrorMessage(cause)}`;
+  return { status: "conflict", reason };
+}
 
 export class DrizzleSyncStore implements SyncStore {
   constructor(
@@ -136,7 +156,7 @@ export class DrizzleSyncStore implements SyncStore {
     try {
       return await this.decide(pusher, repo, m);
     } catch (err) {
-      if (!isUniqueViolation(err)) throw err;
+      if (!isUniqueViolation(err)) return deterministicConflict(err);
       return this.decideAfterRace(pusher, repo, m);
     }
   }
@@ -153,17 +173,19 @@ export class DrizzleSyncStore implements SyncStore {
     try {
       return await this.decide(pusher, repo, m);
     } catch (err) {
-      if (!isUniqueViolation(err)) throw err;
-      return { status: "conflict", reason: DUPLICATE_ROW_REASON };
+      return deterministicConflict(err);
     }
   }
 
   private async decide(pusher: RowPusher, repo: EntityRepo, m: QueuedMutation): Promise<PushResult> {
     const existing = await repo.getById(rowId(m));
+    // Raden är borttagen (eller fanns aldrig): en ändring skapar den inte igen
+    // (#1399). Ingen `current` — klienten hämtar tombstonen med `sync.rows`.
+    if (!existing && m.kind === "update") return { status: "conflict", reason: ROW_GONE_REASON };
     const rejected = await this.guard(pusher, repo, m, existing);
     if (rejected) return { status: "conflict", ...rejected };
     if (m.kind === "delete") return this.applyDelete(repo, m, existing);
-    if (m.kind === "create") return this.applyCreate(repo, m, existing);
+    if (m.kind === "create" || !existing) return this.applyCreate(repo, m, existing);
     return this.applyUpdate(repo, m, existing);
   }
 
@@ -193,8 +215,7 @@ export class DrizzleSyncStore implements SyncStore {
     return { status: "conflict", reason: ID_TAKEN_REASON, current: existing };
   }
 
-  private async applyUpdate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
-    if (!existing) return { status: "accepted", row: await repo.create(m.row) };
+  private async applyUpdate(repo: EntityRepo, m: QueuedMutation, existing: Row): Promise<PushResult> {
     const serverVersion = versionOf(existing);
     const surfaceConflict = this.surfaceConflict(m, serverVersion);
     if (surfaceConflict) return { status: "conflict", reason: surfaceConflict, current: existing };
