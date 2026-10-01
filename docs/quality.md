@@ -302,6 +302,19 @@ ingen låsväntan > 1 s, inga deadlocks) ger exit 1 när de bryts. Inte ett
 PR-krav: workflow:et **Lasttest** kör 20 och 50 användare nattligt och
 manuellt, med rapporten som artefakt. Se [`docs/load-testing.md`](load-testing.md).
 
+### Synksimulering (`bun run test:sim`, #1268/#1358)
+
+Seedade förlopp in-process (pglite + den riktiga tRPC-handlern): två byråer,
+roller (också en degraderad användare med ADMIN cachat), webbläsare med flera
+flikar över samma IndexedDB, samtidiga steg i seedad ordning, avbrott, tappade
+svar, omstarter och manipulerade köposter. Invarianterna: ingen tyst förlust,
+konvergens över alla synkade tabeller, byråavgränsning, roller, obrutna
+nummerserier och seriell ekvivalens. Unit-passet kör sex seeds (budget: inte
+långsammare än före #1358); `test:sim` och det nattliga workflow:et
+**Synksimulering** kör den tunga varianten (`AVA_SIM_HEAVY=1`, många seeds).
+Återskapa ett fel med `AVA_SIM_SEED=<seed>`. Avvikelser från kända, öppna
+buggar rapporteras separat; `AVA_SIM_STRICT=1` räknar dem som fel.
+
 ### Arkitektur (`bun run deps:check`)
 
 Hårda regler (severity `error`):

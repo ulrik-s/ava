@@ -10,7 +10,14 @@
  *   - uppdatera → fältet ändras och versionen höjs (optimistisk concurrency),
  *   - mjuk borttagning → raden syns inte längre,
  *   - byrån ur radens egen kolumn (`organizationOf`),
- *   - byråavgränsning (`getByIdInOrg`) och frysning av poster.
+ *   - byråavgränsning (`getByIdInOrg`) och frysning av poster,
+ *   - byrån för ärende-/faktura-/dokumentavgränsade rader (#1358): Drizzle
+ *     härleder den via föräldern, minnesvägen (en byrå, ingen synk-push)
+ *     svarar bara ur radens egen kolumn,
+ *   - paritet change_log ↔ MutationEvent (#1358): samma skrivning ger samma
+ *     entitet, rad, operation och version i båda — det är vad pull och kön
+ *     bygger på,
+ *   - hård radering: raden är borta och loggas som `delete`.
  *
  * Kontraktet genereras ur `ENTITY_REGISTRY`: en ny synkad entitet utan
  * fixtur här fäller testet, så nästa repo-par inte kan glida isär otestat.
@@ -18,6 +25,10 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import { ENTITY_NAME_BY_SOURCE_KEY } from "@/lib/server/data-store/in-memory/entity-source-keys";
+import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
+import type { ChangeLogEntry } from "@/lib/server/repositories/change-log-recorder";
+import { enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import type { Repositories } from "@/lib/server/repositories/repositories";
@@ -90,7 +101,8 @@ const FIXTURES: Readonly<Record<RepoKey, Fixture>> = {
   calendarEvents: { row: (p) => ({ organizationId: p.org, userId: p.user, title: "Möte", startAt: at }), patch: { title: "Möte 2" }, orgColumn: true },
   tasks: { row: (p) => ({ organizationId: p.org, userId: p.user, title: "Ring klienten" }), patch: { title: "Mejla klienten" }, orgColumn: true },
   serviceNotes: { row: (p) => ({ organizationId: p.org, matterId: p.matter, authorId: p.user, date: "2026-09-30", time: "10:00", text: "Samtal" }), patch: { text: "Samtal 2" }, orgColumn: true },
-  userPreferences: { row: (p) => ({ userId: p.user, key: `k-${uuidv7()}`, prefs: { a: 1 } }), patch: { prefs: { a: 2 } } },
+  // Som routern skapar den: med byrån (annars når raden aldrig change_log).
+  userPreferences: { row: (p) => ({ userId: p.user, organizationId: p.org, key: `k-${uuidv7()}`, prefs: { a: 1 } }), patch: { prefs: { a: 2 } }, orgColumn: true },
   orgPreferences: { row: (p) => ({ organizationId: p.org, key: `k-${uuidv7()}`, prefs: { a: 1 } }), patch: { prefs: { a: 2 } }, orgColumn: true },
   documentTemplates: { row: (p) => ({ organizationId: p.org, name: "Fullmakt", content: "Text", createdById: p.user }), patch: { name: "Fullmakt 2" }, orgColumn: true },
   conflictChecks: { row: (p) => ({ organizationId: p.org, searchTerm: "Anna", searchType: "NAME", checkedById: p.user }), patch: { searchTerm: "Anna A" } },
@@ -103,6 +115,25 @@ function resolvePatch(patch: Row, p: Parents): Row {
 /** Repot för en nyckel, typat mot sync-bryggans strukturella form (ingen cast). */
 function repo(repos: Repositories, key: RepoKey): EntityRepo {
   return repos[key];
+}
+
+/** Hård radering (medvetet ADR 0017-undantag) i strukturell form. */
+interface HardDeletable { hardDelete(id: string): Promise<void> }
+function hardRepo(repos: Repositories, key: RepoKey): HardDeletable {
+  return repos[key];
+}
+
+/** En skrivning så som synken ser den: entitet, rad, operation och version. */
+interface Change { entity: string; rowId: string; op: "create" | "update" | "delete"; version: number }
+
+/** Minnesvägens händelse → samma form. En mjuk borttagning är en update med `deletedAt`. */
+function fromEvent(e: MutationEvent<Record<string, unknown>>): Change {
+  const op = e.kind === "update" && e.row.deletedAt != null ? "delete" : e.kind;
+  return { entity: e.entity, rowId: String(e.row.id), op, version: Number(e.row.version ?? 0) };
+}
+
+function fromLog(e: ChangeLogEntry): Change {
+  return { entity: e.entity, rowId: e.rowId, op: e.op, version: e.version };
 }
 
 async function makeParents(repos: Repositories): Promise<Parents> {
@@ -122,15 +153,26 @@ async function makeParents(repos: Repositories): Promise<Parents> {
   return p;
 }
 
-interface Backend { name: string; open: () => Promise<{ repos: Repositories; close: () => Promise<void> }> }
+interface Backend {
+  name: string;
+  /** Härleder repona byrån via föräldern (ärendet, fakturan, dokumentet)? */
+  derivesOrg: boolean;
+  /** Öppna backenden; varje skrivning rapporteras till `sink` (MutationEvent resp. change_log). */
+  open: (sink: (c: Change) => void) => Promise<{ repos: Repositories; close: () => Promise<void> }>;
+}
 
 const BACKENDS: Backend[] = [
-  { name: "in-memory", open: async () => ({ repos: buildInMemoryRepositories(new DemoDataStore({}, () => {})), close: async () => {} }) },
   {
-    name: "Drizzle (pglite)",
-    open: async () => {
+    name: "in-memory", derivesOrg: false,
+    open: async (sink) => ({ repos: buildInMemoryRepositories(new DemoDataStore({}, (e) => { sink(fromEvent(e)); })), close: async () => {} }),
+  },
+  {
+    name: "Drizzle (pglite)", derivesOrg: true,
+    open: async (sink) => {
       const handle: TestDbHandle = await createTestDb();
-      return { repos: buildDrizzleRepositories(handle.db), close: () => handle.close() };
+      const repos = buildDrizzleRepositories(handle.db);
+      enableChangeLogOnAll(repos, { record: async (entry) => { sink(fromLog(entry)); } });
+      return { repos, close: () => handle.close() };
     },
   },
 ];
@@ -148,9 +190,13 @@ for (const backend of BACKENDS) {
     let repos: Repositories;
     let parents: Parents;
     let close: () => Promise<void> = async () => {};
+    const changes: Change[] = [];
+    /** Skrivningarna för en rad sedan `from`. */
+    const changesOf = (id: string, from: number): Array<Omit<Change, "rowId">> =>
+      changes.slice(from).filter((c) => c.rowId === id).map(({ rowId: _r, ...rest }) => rest);
 
     beforeAll(async () => {
-      ({ repos, close } = await backend.open());
+      ({ repos, close } = await backend.open((c) => { changes.push(c); }));
       parents = await makeParents(repos);
     });
     afterAll(async () => { await close(); });
@@ -173,6 +219,45 @@ for (const backend of BACKENDS) {
 
         await r.softDelete(id);
         expect(await r.getById(id)).toBeNull();
+      });
+
+      // Byrån utan egen kolumn: via ärendet/fakturan/dokumentet (#1242). Organisationen är sin egen rot.
+      if (key !== "organizations") {
+        it(`${key}: organizationOf ${fx.orgColumn ? "ur radens kolumn" : "via föräldern"}`, async () => {
+          const r = repo(repos, key);
+          const row = fx.row(parents);
+          const created = await r.create({ id: uuidv7(), ...row });
+          // Minnesvägen läser bara radens egen kolumn; Drizzle härleder också via föräldern.
+          const expected = "organizationId" in row || backend.derivesOrg ? parents.org : undefined;
+          expect(await r.organizationOf(created)).toBe(expected);
+        });
+      }
+
+      it(`${key}: change_log ↔ MutationEvent — samma entitet, operation och version`, async () => {
+        const r = repo(repos, key);
+        const id = uuidv7();
+        const from = changes.length;
+        await r.create({ id, ...fx.row(parents) });
+        await r.update(id, resolvePatch(fx.patch, parents));
+        await r.softDelete(id);
+        const entity = ENTITY_NAME_BY_SOURCE_KEY[key];
+        // Drizzle loggar bara rader vars byrå går att avgöra (change_log är per byrå).
+        if (key === "organizations" && backend.derivesOrg) return;
+        expect(changesOf(id, from)).toEqual([
+          { entity, op: "create", version: 1 },
+          { entity, op: "update", version: 2 },
+          { entity, op: "delete", version: 3 },
+        ]);
+      });
+
+      it(`${key}: hård radering — raden är borta och loggas som delete`, async () => {
+        const r = repo(repos, key);
+        const id = uuidv7();
+        await r.create({ id, ...fx.row(parents) });
+        const from = changes.length;
+        await hardRepo(repos, key).hardDelete(id);
+        expect(await r.getById(id)).toBeNull();
+        expect(changesOf(id, from).map((c) => c.op)).toEqual(["delete"]);
       });
     }
 

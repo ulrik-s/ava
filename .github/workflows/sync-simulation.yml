@@ -1,10 +1,11 @@
 name: Synksimulering
 
-# Nattlig synksimulering (#1268, ADR 0037). PR-körningen (Unit-jobbet) prövar
-# ett fast antal seeds; här prövas många fler, med längre förlopp. Ett fel
+# Nattlig synksimulering (#1268, #1358, ADR 0037). PR-körningen (Unit-jobbet)
+# prövar ett litet, fast antal seeds; här prövas många fler, med längre förlopp
+# och den tunga världen (AVA_SIM_HEAVY=1: fler webbläsare och flikar). Ett fel
 # går att återskapa lokalt med seeden i utskriften:
 #
-#   AVA_SIM_SEED=<seed> AVA_SIM_STEPS=<steg> bun test test/unit/server/sync/simulation/
+#   AVA_SIM_HEAVY=1 AVA_SIM_SEED=<seed> AVA_SIM_STEPS=<steg> bun run test:sim
 
 on:
   schedule:
@@ -35,6 +36,7 @@ jobs:
       - uses: ./.github/actions/bun-setup
       - name: Simulera
         env:
+          AVA_SIM_HEAVY: "1"
           AVA_SIM_SEEDS: ${{ inputs.seeds || '200' }}
           AVA_SIM_STEPS: ${{ inputs.steps || '80' }}
         run: bun test --timeout 600000 test/unit/server/sync/simulation/

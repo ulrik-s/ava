@@ -16,7 +16,12 @@ import { isProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queu
 import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/radgivning-entry";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
-import { ORG, SimClient, SimServer, userFor } from "./simulation/sync-world";
+import { SimBrowser, SimTab } from "./simulation/sim-browser";
+import { SimNetwork } from "./simulation/sim-network";
+import { FIRM_A, SimServer } from "./simulation/sync-world";
+
+const ORG = FIRM_A.org;
+const LAWYER = FIRM_A.users[1];
 
 const MATTER = asId<"MatterId">(uuidv7());
 const INVOICE = asId<"InvoiceId">(uuidv7());
@@ -36,25 +41,26 @@ function shape(rows: readonly unknown[]): Array<z.infer<typeof entryShape>> {
 
 describe("Markera som rådgivning från webbläsaren (#1349)", () => {
   let server: SimServer;
-  let lawyer: SimClient;
+  let lawyer: SimTab;
   const prevIdb = Reflect.get(globalThis, "indexedDB");
 
   beforeAll(async () => {
     Reflect.set(globalThis, "indexedDB", new IDBFactory());
-    server = await SimServer.start(1);
+    if (!LAWYER) throw new Error("juristen saknas i världen");
+    server = await SimServer.start();
     // Rättshjälpsärende vars rådgivningsfaktura skapades före #1205: ingen låst post.
     await server.repos.matters.create({
       id: MATTER, organizationId: ORG, title: "Vårdnad", status: "ACTIVE", matterNumber: "2026-1349",
-      paymentMethod: "RATTSHJALP", radgivningBetaldAt: new Date("2026-03-01"), responsibleLawyerId: userFor(0).id,
+      paymentMethod: "RATTSHJALP", radgivningBetaldAt: new Date("2026-03-01"), responsibleLawyerId: LAWYER.id,
     } as never);
     await server.repos.invoices.create({
       id: INVOICE, matterId: MATTER, amount: 203_250, invoiceType: "STANDARD", status: "SENT", invoiceDate: new Date("2026-03-01"), notes: RADGIVNING_INVOICE_NOTES,
     } as never);
     await server.repos.timeEntries.create({
-      id: MEETING, matterId: MATTER, userId: userFor(0).id, date: new Date("2026-03-02"), minutes: 90,
+      id: MEETING, matterId: MATTER, userId: LAWYER.id, date: new Date("2026-03-02"), minutes: 90,
       description: "Första möte", hourlyRate: 150_000, billable: true, kind: "ARBETE",
     } as never);
-    lawyer = new SimClient(0, server);
+    lawyer = new SimTab("jurist", new SimBrowser("jurist", LAWYER, LAWYER.role, true), server, new SimNetwork(null));
     await lawyer.boot();
     expect(await lawyer.sync()).toBe("ok");
   });
@@ -72,7 +78,7 @@ describe("Markera som rådgivning från webbläsaren (#1349)", () => {
     const local = shape(lawyer.rows("timeEntries").filter((r) => r.matterId === MATTER));
 
     expect(await lawyer.sync()).toBe("ok");
-    expect(lawyer.rejected.list()).toEqual([]);
+    expect(await lawyer.browser.rejected()).toEqual([]);
     const remainderId = asId<"TimeEntryId">(String(res.remainder?.id));
     const onServer = shape([await server.repos.timeEntries.getById(MEETING), await server.repos.timeEntries.getById(remainderId)]);
 
