@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest-compat";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { watchlistRouter } from "@/lib/server/routers/watchlist";
-import { stockholmDay } from "@/lib/shared/watchlist";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 const inDays = (n: number): Date => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
 

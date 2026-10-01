@@ -41,6 +41,7 @@ import type { QueuedProcedureCall } from "../data-store/in-memory/mutation-queue
 import type { ProcedureReplayResult } from "../data-store/in-memory/sync-transport";
 import { syncReplays } from "../db/schema";
 import type { AppDb } from "../db/types";
+import { boundedCallTime } from "../queued-call";
 import type { DrizzleRepositories } from "../repositories/drizzle-repositories";
 import { appRouter } from "../routers/_app";
 import type { Context } from "../trpc-core";
@@ -102,6 +103,8 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
     private readonly repos: DrizzleRepositories,
     /** Köformatets gränser + migreringar (#1247); injicerbar i tester. */
     private readonly queuePolicy: QueuePolicy = QUEUE_POLICY,
+    /** Serverns klocka (epoch-ms) som anropstiden begränsas mot (#1350); injicerbar i tester. */
+    private readonly now: () => number = Date.now,
   ) {}
 
   async replay(call: QueuedProcedureCall, ctx: Context): Promise<ProcedureReplayResult> {
@@ -140,8 +143,9 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
         const stored = await this.storedOutcome(txDb, call.mutationId, orgId);
         if (stored) return stored;
         // Samma identitet som klientens körning (#1276): skapade rader får
-        // samma id, affärsdatum är när anropet gjordes — inte nu.
-        const queued = { mutationId: call.mutationId, at: call.enqueuedAt };
+        // samma id, affärsdatum är när anropet gjordes — inte nu. Klientens
+        // klocka begränsas till [nu − 30 dagar, nu] (#1350, `boundedCallTime`).
+        const queued = { mutationId: call.mutationId, at: boundedCallTime(call.enqueuedAt, this.now()) };
         await resolveProcedure(appRouter.createCaller({ ...ctx, repos: tx, queued }), call.path)(call.input);
         await this.record(txDb, call, ctx, orgId, { status: "accepted" });
         return { status: "accepted" };

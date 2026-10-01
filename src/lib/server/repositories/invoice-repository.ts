@@ -75,14 +75,6 @@ export function invoiceNumberPrefix(year: number): string {
   return `F-${year}-`;
 }
 
-/** Nästa nummer givet prefix + senaste numret (öka sekvensen, annars 0001). */
-export function nextInvoiceNumberFrom(prefix: string, lastNumber: string | null | undefined): string {
-  const seq = lastNumber && lastNumber.startsWith(prefix)
-    ? parseInt(lastNumber.slice(prefix.length), 10) + 1
-    : 1;
-  return `${prefix}${seq.toString().padStart(4, "0")}`;
-}
-
 export interface InvoiceRepository extends Repository<Invoice> {
   /** Faktura by id, org-scopad via ärendet (null om saknas/annan org/raderad). */
   getByIdInOrg(id: InvoiceId, organizationId: OrganizationId): Promise<Invoice | null>;
@@ -95,9 +87,10 @@ export interface InvoiceRepository extends Repository<Invoice> {
   /** Org-bred fakturalista (listvyns include), nyaste först, valfritt filtrerad. */
   listForOrg(organizationId: OrganizationId, filter?: InvoiceListFilter): Promise<InvoiceListRow[]>;
   /**
-   * Nästa lediga fakturanummer (`F-YYYY-NNNN`) för org:en. `year` = seriens år
-   * (fakturadatumets, #1243); default året från repots klocka. Server-impl:en
-   * tar ett lås per byrå som hålls till transaktionens slut.
+   * Nästa lediga fakturanummer (`F-YYYY-NNNN`, längre efter 9999) för org:en.
+   * `year` = seriens år (fakturadatumets i svensk tid, #1243/#1350); default
+   * det svenska året från repots klocka. Högsta numret jämförs numeriskt.
+   * Server-impl:en tar ett lås per byrå som hålls till transaktionens slut.
    */
   nextInvoiceNumber(organizationId: OrganizationId, year?: number): Promise<string>;
   /** Summa krediterat på en faktura: |belopp| av dess kreditnotor, org-scopat (öre). */

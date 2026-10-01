@@ -9,19 +9,32 @@
  * helper när vi fan-out:ar entiteterna; pilotens korrekthet bevisas av pglite-testerna.
  */
 
-import { and, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { Invoice } from "@/lib/shared/schemas/billing";
 import { asId, type InvoiceId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { accontoDeductions, invoiceNumbers, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
+import { formatSeriesNumber, seriesPattern } from "../number-series";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import {
-  invoiceNumberPrefix, nextInvoiceNumberFrom,
+  invoiceNumberPrefix,
   type InvoiceFull, type InvoiceListFilter, type InvoiceListRow, type InvoiceRepository,
   type InvoiceWithLedger, type InvoiceWithRelations,
 } from "./invoice-repository";
 import { matterOrg } from "./matter-org";
+
+/**
+ * Högsta löpnumret i serien `prefix` som TAL (#1350). Raderna filtreras med
+ * `seriesPattern` först, så bara prefix + siffror castas. Drivrutinen ger
+ * bigint som sträng (postgres-js) eller tal/bigint (pglite) — `Number()` vid läsning.
+ * `::int` på startpositionen är nödvändig: som otypad parameter tolkas den som
+ * text, och `substring(text from text)` är regex-varianten (gav alltid null).
+ */
+function maxSeq(column: AnyColumn, prefix: string): SQL<string | number | bigint | null> {
+  return sql<string | number | bigint | null>`max(substring(${column} from ${prefix.length + 1}::int)::bigint)`;
+}
 
 export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> implements InvoiceRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
@@ -44,18 +57,15 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
   }
 
   /**
-   * Ett utfärdat fakturanummer är oföränderligt (#1243): en uppdatering som bär
-   * ett (t.ex. gammalt preliminärt) nummer skriver inte över det. Sätts ett
-   * nummer på en faktura som saknade det registreras det.
+   * Fakturanumret sätts BARA när fakturan skapas, ur serien (#1243, #1350):
+   * en uppdatering som bär ett nummer (och OCR:en som härleds ur det) skriver
+   * aldrig över det. Förr registrerades ett nummer som kom med en uppdatering
+   * av en faktura utan nummer — då kunde ett klientvalt nummer ta en plats i
+   * serien. Ingen procedur sätter numret i efterhand.
    */
   override async update(id: InvoiceId, patch: Partial<Invoice>): Promise<Invoice> {
-    const current = await this.getByIdOrThrow(id);
-    if (current.invoiceNumber) {
-      const { invoiceNumber: _n, ocrReference: _o, ...rest } = patch;
-      return super.update(id, rest);
-    }
-    await this.registerNumber({ id, matterId: patch.matterId ?? current.matterId, invoiceNumber: patch.invoiceNumber });
-    return super.update(id, patch);
+    const { invoiceNumber: _n, ocrReference: _o, ...rest } = patch;
+    return super.update(id, rest);
   }
 
   private async registerNumber(inv: { id: InvoiceId; matterId?: MatterId | undefined; invoiceNumber?: string | null | undefined }): Promise<void> {
@@ -165,24 +175,23 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
     }));
   }
 
-  async nextInvoiceNumber(organizationId: OrganizationId, year: number = this.now().getFullYear()): Promise<string> {
+  async nextInvoiceNumber(organizationId: OrganizationId, year: number = stockholmYear(this.now())): Promise<string> {
     const prefix = invoiceNumberPrefix(year);
     // Ett nummer i taget per byrå (#1243): låset hålls till transaktionens slut,
     // så två samtidiga faktureringar inte läser samma "senaste" nummer.
     await this.db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`invoice-number:${organizationId}`}))`);
     // Både fakturorna och registret: ett nummer som registrerats men vars
     // fakturarad aldrig skrevs (avbrott utanför transaktion) återanvänds inte.
+    // Högsta löpnumret NUMERISKT (#1350) — textuellt är 9999 > 10000.
+    const pattern = seriesPattern(prefix);
     const [fromInvoices] = await this.db
-      .select({ invoiceNumber: invoices.invoiceNumber }).from(invoices)
+      .select({ seq: maxSeq(invoices.invoiceNumber, prefix) }).from(invoices)
       .innerJoin(matters, eq(invoices.matterId, matters.id))
-      .where(and(eq(matters.organizationId, organizationId), like(invoices.invoiceNumber, `${prefix}%`)))
-      .orderBy(desc(invoices.invoiceNumber)).limit(1);
+      .where(and(eq(matters.organizationId, organizationId), sql`${invoices.invoiceNumber} ~ ${pattern}`));
     const [fromRegister] = await this.db
-      .select({ invoiceNumber: invoiceNumbers.invoiceNumber }).from(invoiceNumbers)
-      .where(and(eq(invoiceNumbers.organizationId, organizationId), like(invoiceNumbers.invoiceNumber, `${prefix}%`)))
-      .orderBy(desc(invoiceNumbers.invoiceNumber)).limit(1);
-    const last = [fromInvoices?.invoiceNumber, fromRegister?.invoiceNumber].filter((n): n is string => !!n).sort().pop();
-    return nextInvoiceNumberFrom(prefix, last);
+      .select({ seq: maxSeq(invoiceNumbers.invoiceNumber, prefix) }).from(invoiceNumbers)
+      .where(and(eq(invoiceNumbers.organizationId, organizationId), sql`${invoiceNumbers.invoiceNumber} ~ ${pattern}`));
+    return formatSeriesNumber(prefix, Math.max(Number(fromInvoices?.seq ?? 0), Number(fromRegister?.seq ?? 0)) + 1);
   }
 
   async sumCreditNotesFor(invoiceId: InvoiceId, organizationId: OrganizationId): Promise<number> {
