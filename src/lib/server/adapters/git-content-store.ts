@@ -11,13 +11,26 @@
  * Demo/web rör aldrig detta — de använder `noopContentStore`.
  *
  * `storagePath` saneras mot path-traversal (måste lösa sig UNDER rot-dir:t).
+ *
+ * **Samtidighet (#1378):** git har ETT index per repo. Två samtidiga `git add`/
+ * `commit` krockar på `.git/index.lock` ("File exists" → 500). Server-first är
+ * en enda process per `AVA_CONTENT_DIR`, så skrivningarna serialiseras per repo
+ * med en async-mutex i processen (`repoWriteLock`, delad av alla instanser).
+ * Ett kvarlämnat lås efter en krasch och ett lås från en annan git-process
+ * hanteras i `git-index-lock.ts`.
  */
 
 import { execFile } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { promisify } from "node:util";
+import { KeyedMutex } from "../concurrency/mutex";
 import type { IContentStore } from "../ports";
+import {
+  type IndexLockRetryPolicy,
+  removeStaleIndexLock,
+  withIndexLockRetry,
+} from "./git-index-lock";
 
 const exec = promisify(execFile);
 
@@ -52,10 +65,20 @@ export const gitCommit: GitCommitter = async (repoDir, relPath, message) => {
   ]);
 };
 
+/**
+ * Skrivlås per content-repo (nyckel = absolut repo-sökväg). Modulnivå, så att
+ * två `GitContentStore` mot samma katalog också serialiseras mot varandra.
+ */
+const repoWriteLock = new KeyedMutex<string>();
+
 export class GitContentStore implements IContentStore {
   private readonly root: string;
 
-  constructor(rootDir: string, private readonly committer: GitCommitter = gitCommit) {
+  constructor(
+    rootDir: string,
+    private readonly committer: GitCommitter = gitCommit,
+    private readonly lockRetry?: IndexLockRetryPolicy,
+  ) {
     this.root = resolve(rootDir);
   }
 
@@ -70,9 +93,18 @@ export class GitContentStore implements IContentStore {
   async write(storagePath: string, bytes: Uint8Array): Promise<void> {
     const abs = this.safeResolve(storagePath);
     if (!abs) throw new Error(`GitContentStore: ogiltig storagePath "${storagePath}"`);
-    await mkdir(dirname(abs), { recursive: true });
-    await writeFile(abs, bytes);
-    await this.committer(this.root, relative(this.root, abs), `content: ${storagePath}`);
+    // Filen skrivs också under låset: två samtidiga skrivningar av SAMMA
+    // content-adresserade sökväg får inte låta `git add` stagea en halvskriven fil.
+    await repoWriteLock.runExclusive(this.root, async () => {
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, bytes);
+      // Vi håller repo-mutexen → inget lås kan vara vårt eget; ett gammalt är kvarlämnat.
+      await removeStaleIndexLock(this.root);
+      await withIndexLockRetry(
+        () => this.committer(this.root, relative(this.root, abs), `content: ${storagePath}`),
+        this.lockRetry,
+      );
+    });
   }
 
   async read(storagePath: string): Promise<Uint8Array | null> {

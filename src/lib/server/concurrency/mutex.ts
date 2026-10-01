@@ -39,3 +39,25 @@ export class Mutex {
     });
   }
 }
+
+/**
+ * `KeyedMutex` — ett `Mutex` per nyckel (#1378). Anrop med samma nyckel körs
+ * strikt en i taget; olika nycklar blockerar inte varandra. Används för att
+ * serialisera skrivningar per git-repo på disk (nyckel = repo-sökväg).
+ *
+ * Mutexen per nyckel lever lika länge som instansen — avsett för ett fåtal,
+ * långlivade nycklar (en per content-repo), inte en per anrop.
+ */
+export class KeyedMutex<K> {
+  private readonly locks = new Map<K, Mutex>();
+
+  /** Kör `fn` exklusivt mot alla andra anrop med samma `key`. */
+  runExclusive<T>(key: K, fn: () => Promise<T> | T): Promise<T> {
+    let lock = this.locks.get(key);
+    if (!lock) {
+      lock = new Mutex();
+      this.locks.set(key, lock);
+    }
+    return lock.runExclusive(fn);
+  }
+}
