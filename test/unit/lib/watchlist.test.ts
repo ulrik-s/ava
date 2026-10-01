@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest-compat";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
   coverageItems, dagar, deadlineItems, failedDispatchItems, overdueInvoiceItems,
-  sortWatchlist, stockholmDay, unbilledItems, daysBetween,
+  sortWatchlist, unbilledItems, daysBetween,
   DEFAULT_THRESHOLDS, type WatchlistItem,
 } from "@/lib/shared/watchlist";
 
@@ -27,13 +28,6 @@ describe("daysBetween", () => {
 
   it("vintertid (UTC+1) räknas också rätt", () => {
     expect(daysBetween(new Date("2026-12-05T22:59:00Z"), new Date("2026-12-05T23:01:00Z"))).toBe(1);
-  });
-});
-
-describe("stockholmDay", () => {
-  it("svensk kalenderdag, inte UTC", () => {
-    expect(stockholmDay(new Date("2026-09-24T22:00:00Z"))).toBe("2026-09-25"); // svensk midnatt
-    expect(stockholmDay(new Date("2026-09-24T21:59:00Z"))).toBe("2026-09-24");
   });
 });
 

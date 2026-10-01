@@ -22,6 +22,15 @@ describe("timkostnadsnorm per år (#891)", () => {
     expect(timkostnadsnormFtaxForDate("2030-01-01")).toBe(162_600);
   });
 
+  it("året räknas i svensk tid (#1350): 00.30 på nyårsdagen (23.30 UTC) följer det nya årets norm", () => {
+    expect(timkostnadsnormFtaxForDate(new Date("2025-12-31T23:30:00Z"))).toBe(162_600);
+    expect(timkostnadsnormFtaxForDate(new Date("2025-12-31T22:30:00Z"))).toBe(158_600);
+  });
+
+  it("ogiltigt datum → senaste kända normen", () => {
+    expect(timkostnadsnormFtaxForDate("inte ett datum")).toBe(162_600);
+  });
+
   it("rådgivningsavgiften värderas på mötesdagens norm (#897)", () => {
     // Möte nov 2025 → 2025 års norm (1 586 kr), inte innevarande års (1 626 kr).
     expect(computeRadgivningsavgift({ date: "2025-11-03" }).beloppExclVatOre).toBe(158_600);

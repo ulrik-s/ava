@@ -15,9 +15,10 @@ import { isRadgivningInvoice } from "@/lib/shared/radgivning-entry";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
   billingActionItems, conflictCheckItems, coverageItems, deadlineItems, failedDispatchItems, overdueInvoiceItems,
-  sortWatchlist, stockholmDay, unbilledItems,
+  sortWatchlist, unbilledItems,
   DEFAULT_THRESHOLDS, type BillingActionMatter, type CoverageMatter, type DeadlineTask, type FailedDispatch,
   type OverdueInvoice, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";

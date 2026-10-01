@@ -29,6 +29,7 @@ import {
 import { coverageStatus, type CoverageCapInput } from "./coverage-cap";
 import { formatKr } from "./format-kr";
 import type { InvoiceStatus, PaymentMethod } from "./schemas/enums";
+import { stockholmDay } from "./stockholm-time";
 
 // ─── Trösklar ──────────────────────────────────────────────────────────────
 
@@ -138,16 +139,6 @@ export function sortWatchlist(items: readonly WatchlistItem[], today?: string): 
 // ─── Härledning per signal ─────────────────────────────────────────────────
 
 const DAY_MS = 86_400_000;
-
-/**
- * Kalenderdagen i byråns tidszon, "YYYY-MM-DD" (#1167). Servern kör i UTC:
- * räknat i UTC blev en frist på svensk midnatt (25/9 00:00 = 24/9 22:00 UTC)
- * gårdagens datum — fristen "passerade" ett dygn för tidigt.
- */
-const DAY_FMT = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" });
-export function stockholmDay(d: Date): string {
-  return DAY_FMT.format(d);
-}
 
 /** Hela kalenderdagar (svensk tid) mellan två tidpunkter (b − a). Negativt = b ligger före a. */
 export function daysBetween(from: Date, to: Date): number {

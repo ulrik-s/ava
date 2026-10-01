@@ -38,6 +38,7 @@
  */
 
 import type { TimeEntryKind } from "./schemas/enums";
+import { stockholmYear } from "./stockholm-time";
 
 export type TaxaLevel = 1 | 2 | 3 | 4;
 
@@ -131,10 +132,14 @@ const NO_FTAX_QUOTIENT_BY_YEAR: Readonly<Record<number, { num: number; den: numb
   2026: { num: 1237, den: 1626 },
 };
 
-/** Året ur ett datum (ISO-sträng eller Date). Ogiltigt → senaste kända året. */
+/**
+ * Året ur ett datum (ISO-sträng eller Date), i svensk tid (#1350): ett yrkande
+ * 00.30 på nyårsdagen följer det nya årets norm även på en server i UTC.
+ * Ogiltigt → senaste kända året.
+ */
 function yearOf(date: Date | string): number {
-  const y = new Date(date).getFullYear();
-  return Number.isFinite(y) ? y : 2026;
+  const d = new Date(date);
+  return Number.isNaN(d.getTime()) ? 2026 : stockholmYear(d);
 }
 
 /** Timkostnadsnormen (F-skatt) som gäller ett givet datum (#891). Okänt år →

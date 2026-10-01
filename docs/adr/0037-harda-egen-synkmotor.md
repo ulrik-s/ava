@@ -88,7 +88,13 @@ rader behöver inte ta alla id:n i input: anropet har en identitet
 delar. `newRowId(ctx, roll)` härleder radens id ur `mutationId` och rollen
 (`derived-id.ts`, ett UUIDv7 med anropets tidsstämpel), och `callTime(ctx)` ger
 när anropet gjordes. Affärsdatum som saknas i input (avskrivningsdag,
-anteckningens datum) blir därmed samma i båda körningarna. Svaret läser alla
+anteckningens datum) blir därmed samma i båda körningarna. Anropstiden kommer
+från klientens klocka, så servern begränsar den till [nu − 30 dagar, nu]
+(`boundedCallTime`, #1350): en klocka som går före kan inte datera en faktura in
+i nästa års serie, och ett anrop kan inte bakdateras in i ett avslutat år. Den
+kläms i stället för att avvisas — arbetet kastas aldrig för ett klockfel, och
+utfallet sparas en gång per anrop så samma anrop aldrig körs om med annan klocka.
+Serieår och normår räknas i svensk tid (`stockholmYear`). Svaret läser alla
 berörda rader via entitetens repo, avgränsat till byrån (`entity-repo.ts`).
 Steg 2c: aconto-, slut-, kredit- och rådgivningsfakturor
 (`billingRun.createAcconto/createFinal`, `invoice.createCredit/createRadgivning`).

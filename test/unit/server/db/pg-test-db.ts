@@ -41,12 +41,15 @@ async function createPgliteTestDb(): Promise<TestDbHandle> {
   return { db: db, close: () => client.close() };
 }
 
-/** Mot riktig Postgres: isolerat schema per handle (parallell-säkert), droppas på close. */
-async function createRealPgTestDb(url: string): Promise<TestDbHandle> {
+/**
+ * Mot riktig Postgres: isolerat schema per handle (parallell-säkert), droppas
+ * på close. `search_path` skickas som startparameter, så den gäller VARJE
+ * anslutning i poolen — `connections` > 1 ger äkta samtidiga transaktioner (#1350).
+ */
+async function createRealPgTestDb(url: string, connections: number): Promise<TestDbHandle> {
   const schemaName = `t_${uuidv7().replace(/-/g, "")}`;
-  // max:1 → en enda connection så search_path persisterar genom hela handle:n.
-  const client = postgres(url, { max: 1, onnotice: () => {} });
-  await client.unsafe(`CREATE SCHEMA "${schemaName}"; SET search_path TO "${schemaName}"`);
+  const client = postgres(url, { max: connections, onnotice: () => {}, connection: { search_path: schemaName } });
+  await client.unsafe(`CREATE SCHEMA "${schemaName}"`);
   for (const sql of migrationSql()) await client.unsafe(sql);
   const db = drizzlePostgres(client, { schema });
   return {
@@ -60,5 +63,15 @@ async function createRealPgTestDb(url: string): Promise<TestDbHandle> {
 
 export async function createTestDb(): Promise<TestDbHandle> {
   const url = process.env.PG_TEST_URL;
-  return url ? createRealPgTestDb(url) : createPgliteTestDb();
+  return url ? createRealPgTestDb(url, 1) : createPgliteTestDb();
+}
+
+/**
+ * Riktig Postgres med en pool om `connections` anslutningar (#1350) — för
+ * tester av samtidighet (lås, unika nummer). Null utan `PG_TEST_URL`: pglite
+ * har bara en anslutning, så samtidigheten kan inte prövas där.
+ */
+export async function createPooledTestDb(connections: number): Promise<TestDbHandle | null> {
+  const url = process.env.PG_TEST_URL;
+  return url ? createRealPgTestDb(url, connections) : null;
 }
