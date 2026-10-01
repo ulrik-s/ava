@@ -3,6 +3,7 @@
 # den exponerade porten) — binären bär ingen migrations-SQL.
 #
 #   bun run server-first:build
+#   mkdir -p .e2e-backup/exports .e2e-backup/requests   # backup på begäran (#1431)
 #   docker compose -f tooling/docker/docker-compose.server-first.yml up -d --build --wait
 #   AVA_DATABASE_URL=postgres://ava:ava@localhost:5433/ava_test bun run db:migrate
 #   # → server-first lyssnar på localhost:3001 (X-Auth-Request-Email-grindat)
@@ -41,8 +42,14 @@ services:
       # (annars faller jobbet tillbaka på filnamns-heuristik). Pekar på ollama nedan.
       AVA_LLM_ENDPOINT: "${AVA_LLM_ENDPOINT:-}"
       AVA_LLM_MODEL: "${AVA_LLM_MODEL:-}"
+      # Backup på begäran (#1431) — som i prod, men katalogerna ligger i repot
+      # (.e2e-backup/, skapa dem före `up`): backup-button-e2e.ts spelar hosten.
+      AVA_BACKUP_EXPORT_DIR: /data/backup-exports
+      AVA_BACKUP_REQUEST_DIR: /data/backup-requests
     volumes:
       - content_repo:/data/content
+      - ../../.e2e-backup/exports:/data/backup-exports:ro
+      - ../../.e2e-backup/requests:/data/backup-requests
     ports:
       - "3001:3001"
     depends_on:

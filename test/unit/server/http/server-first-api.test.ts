@@ -24,6 +24,16 @@ describe("buildServerFirstApi", () => {
     expect(api.pageIndex).toBeInstanceOf(PostgresSearchIndex);
     await expect(api.close()).resolves.toBeUndefined();
   });
+
+  it("backupnedladdningen (#1431) ligger före tRPC och verifierar principalen mot databasen", async () => {
+    const api = buildServerFirstApi({ databaseUrl: "postgres://ava:ava@127.0.0.1:1/ava_test", organizationId: "org-1", maxConnections: 1 });
+    const url = "http://ava.test/api/backup/download?name=ava-2026-10-01-0300.tar.age";
+    expect((await api.handler(new Request(url, { method: "POST" }))).status).toBe(405);
+    expect((await api.handler(new Request("http://ava.test/healthz"))).status).toBe(200);
+    // GET slår upp principalen (allowlisten i Postgres) — här finns ingen databas.
+    await expect(api.handler(new Request(url))).rejects.toThrow();
+    await api.close();
+  });
 });
 
 describe("loadServerFirstConfig", () => {

@@ -1,4 +1,5 @@
 import { router } from "../trpc";
+import { backupRouter } from "./backup";
 import { billingRunRouter } from "./billingRun";
 import { calendarRouter } from "./calendar";
 import { conflictRouter } from "./conflict";
@@ -53,6 +54,7 @@ export const appRouter = router({
   mail: mailRouter,
   sync: syncRouter,
   system: systemRouter,
+  backup: backupRouter,
 });
 
 export type AppRouter = typeof appRouter;

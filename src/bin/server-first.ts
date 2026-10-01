@@ -19,6 +19,10 @@
  *                         lagring; krävs för dokumentklassificering, #518)
  *   AVA_FORTNOX_CLIENT_ID/_CLIENT_SECRET/_REDIRECT_URI + AVA_SECRETS_KEY/_FILE
  *                         (valfria) Fortnox-bokföring från appen (#1172)
+ *   AVA_BACKUP_EXPORT_DIR + AVA_BACKUP_REQUEST_DIR
+ *                         (valfria) backup på begäran från Inställningar (#1431):
+ *                         exportkatalogen (read-only) + katalogen hostens
+ *                         ava-backup-request.path bevakar
  *   AVA_LOG_LEVEL         (default info)  debug|info|warn|error — strukturerad
  *                         JSON-logg till stderr (#1080). `debug` ger en rad per
  *                         tRPC-anrop; `info` bara fel.
@@ -30,6 +34,7 @@
 
 import { loadContentDirFromEnv, makeContentStore } from "@/lib/server/adapters/git-content-store";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
+import { backupDirsFromEnv, FsBackupStore } from "@/lib/server/backup/fs-backup-store";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { emailStatusLine } from "@/lib/server/integrations/email/disabled-email-sender";
 import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-service";
@@ -41,7 +46,7 @@ import { buildServerFirstJobHandlers, loadActiveSmtpConfig } from "@/lib/server/
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { startErrorReporting } from "@/lib/server/observability/posthog-sink";
-import type { ILedgerService } from "@/lib/server/ports";
+import type { IBackupStore, ILedgerService } from "@/lib/server/ports";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { createLogger, jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -76,6 +81,13 @@ function ledgerPort(): { ledger?: ILedgerService } {
   const ledger = fortnoxLedgerFromEnv();
   log(ledger ? "fortnox: konfigurerad" : "fortnox: av (AVA_FORTNOX_* / AVA_SECRETS_* saknas)");
   return ledger ? { ledger } : {};
+}
+
+/** Backup på begäran (#1431): kräver båda backupkatalogerna. Annars av. */
+function backupPort(): { backup?: IBackupStore } {
+  const dirs = backupDirsFromEnv();
+  log(dirs ? `backup på begäran: ${dirs.exportDir} (begäran i ${dirs.requestDir})` : "backup på begäran: av (AVA_BACKUP_* saknas)");
+  return dirs ? { backup: new FsBackupStore(dirs) } : {};
 }
 
 function main(): void {
@@ -116,6 +128,7 @@ function main(): void {
     // en omstart löper ut alla leases (korrekt). Ett enda objekt delas av alla requests.
     lease: new InMemoryLeaseStore(),
     ...ledgerPort(),
+    ...backupPort(),
   };
 
   const api = buildServerFirstApi({

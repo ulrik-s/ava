@@ -13,6 +13,8 @@
 #      ändrats startas det om i den nya versionen
 #   3. läs ava-server.env
 #   4. backup (systemd-tjänsten ava-backup, annars backup-db.sh)
+#   4b. backup på begäran (#1431): installera/uppdatera hostens
+#      ava-backup-request.path/.service (bara om ava-backup.service finns)
 #   5. (en gång) flytta Caddy från out/ till releases/current
 #   6. TÖM .next/cache — en gammal byggcache gav en gång gammal CSS i prod
 #   7. bygg server + klient i oven/bun (hosten har bara docker + git) till
@@ -37,6 +39,8 @@ cd "$(dirname "$0")/../.."
 . tooling/scripts/lib/release.sh
 
 COMPOSE="tooling/docker/docker-compose.production.yml"
+SYSTEMD_DIR="${AVA_SYSTEMD_DIR:-/etc/systemd/system}"
+BACKUP_UNITS="ava-backup-request.path ava-backup-request.service"
 CADDYFILE="tooling/docker/caddy/Caddyfile"
 READY_TRIES="${AVA_DEPLOY_READY_TRIES:-30}"
 READY_PAUSE="${AVA_DEPLOY_READY_PAUSE:-2}"
@@ -113,6 +117,20 @@ caddyfile_stale() {
   ! dc exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null | cmp -s - "$CADDYFILE"
 }
 
+# Backup på begäran (#1431): enhetsfilerna ur repot till systemd — bara de som
+# ändrats, och daemon-reload bara då. `enable --now` är idempotent.
+install_backup_units() {
+  local unit changed=0
+  for unit in $BACKUP_UNITS; do
+    if ! cmp -s "tooling/systemd/$unit" "$SYSTEMD_DIR/$unit"; then
+      run install -m 644 "tooling/systemd/$unit" "$SYSTEMD_DIR/$unit"
+      changed=1
+    fi
+  done
+  [ "$changed" = 0 ] || run systemctl daemon-reload
+  run systemctl enable --now ava-backup-request.path
+}
+
 step "kontrollerar att inget annat bygge kör"
 if [ -n "$(docker ps -q --filter ancestor=oven/bun:1)" ]; then
   echo "ett annat bygge (oven/bun) kör redan — avbryter" >&2
@@ -154,6 +172,13 @@ if systemctl cat ava-backup.service >/dev/null 2>&1; then
   echo "backup: $(systemctl show -p Result --value ava-backup.service)"
 else
   run bash tooling/scripts/backup-db.sh backup
+fi
+
+step "backup på begäran: hostens .path-enhet (#1431)"
+if systemctl cat ava-backup.service >/dev/null 2>&1; then
+  install_backup_units
+else
+  echo "ingen ava-backup.service — \"Ta backup nu\" fungerar först när nattjobbet finns (docs/deploy-server-first.md, Backup)"
 fi
 
 if [ -z "$(release_current)" ] && [ -d out ]; then

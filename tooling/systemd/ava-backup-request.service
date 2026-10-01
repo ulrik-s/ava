@@ -1,0 +1,17 @@
+# Backup på begäran (#1431): startas av ava-backup-request.path och startar i
+# sin tur nattjobbets ava-backup.service (backup-db.sh + backup-export.sh) —
+# samma backup, samma krypterade export i /srv/backup-chroot/ava.
+#
+# Hostens egen spärr, oberoende av containern: skrevs en export de senaste
+# fem minuterna körs ingenting (servern vägrar själv inom tio). En kapad
+# container kan alltså inte köra backupjobbet i en loop och fylla disken.
+# Pågår backupjobbet redan är `systemctl start` en no-op.
+
+[Unit]
+Description=AVA: starta backupjobbet på begäran från Inställningar
+
+[Service]
+Type=oneshot
+NoNewPrivileges=yes
+ExecCondition=/bin/sh -c 'test -z "$$(find /srv/backup-chroot/ava -maxdepth 1 -name "ava-*.tar.age" -mmin -5 -print -quit 2>/dev/null)"'
+ExecStart=/bin/systemctl start --no-block ava-backup.service

@@ -135,6 +135,14 @@ describe("DockWorkspace — vilken layout", () => {
     expect(fake.titles).toMatchObject({ a: "Alfa", b: "Beta" });
   });
 
+  it("en panel som tillkommer efter start läggs till som inaktiv flik (#1431)", () => {
+    const { rerender } = renderWs();
+    const late = [...PANELS, { id: "d", title: "Delta", render: () => <p>delta-innehåll</p> }];
+    rerender(<DockWorkspace page="matter" panels={late} defaultLayout={defaultLayout} />);
+    expect(fake.added.filter((p) => p.id === "d")).toEqual([expect.objectContaining({ id: "d", inactive: true })]);
+    expect(fake.added.filter((p) => p.id === "a")).toHaveLength(1);
+  });
+
   it("firmastandard när användaren inte har någon egen", () => {
     prefsData.org = stored(SAVED);
     renderWs();
