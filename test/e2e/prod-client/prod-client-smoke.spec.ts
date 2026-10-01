@@ -5,8 +5,8 @@
  * demosökvägarna får inte ta något appen själv behöver. Smoken kör den
  * self-hostade appen som i prod — startsidan, ärendelistan och ett riktigt
  * ärende från servern via shell-rewriten (hård navigering till ett runtime-id)
- * — och fäller på varje svar ≥ 400 från den egna originen och varje okastat
- * fel i sidan.
+ * — och fäller på varje svar ≥ 400 från den egna originen (utom tRPC:s
+ * domän-NOT_FOUND) och varje okastat fel i sidan.
  *
  * Stacken (Caddy + låtsas-oauth2-proxy + server-first med data) startas av
  * `tooling/scripts/caddy-e2e/caddy-prod-e2e.sh`.
@@ -38,11 +38,23 @@ async function serverMatter(request: APIRequestContext): Promise<z.infer<typeof 
   return matterSchema.parse(row);
 }
 
+/**
+ * Ett felsvar från den egna originen som testet ska fälla på. tRPC:s
+ * NOT_FOUND (404 under /api/trpc/) är ett domänsvar, inte en saknad fil:
+ * ärendesidan förladdar dokumentinnehåll, och dokument som tidigare E2E-steg
+ * skapat utan innehåll svarar så. Allt annat ≥ 400 räknas — även 401/403/5xx
+ * från /api.
+ */
+function isProblemResponse(url: string, status: number, origin: string): boolean {
+  if (!url.startsWith(origin) || status < 400) return false;
+  return !(status === 404 && new URL(url).pathname.startsWith("/api/trpc/"));
+}
+
 /** Felsvar och sidfel under testet, som läsbara rader. */
 function watch(page: Page, origin: string): string[] {
   const problems: string[] = [];
   page.on("response", (res) => {
-    if (res.url().startsWith(origin) && res.status() >= 400) problems.push(`${res.status()} ${res.url()}`);
+    if (isProblemResponse(res.url(), res.status(), origin)) problems.push(`${res.status()} ${res.url()}`);
   });
   page.on("pageerror", (err) => problems.push(`pageerror: ${err.message}`));
   return problems;
