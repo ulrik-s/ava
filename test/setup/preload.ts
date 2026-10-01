@@ -5,11 +5,15 @@
  *
  *   - Kopplar in @testing-library/jest-dom-matchers (toBeInTheDocument …).
  *   - Rensar renderad DOM mellan tester.
+ *   - Spärrar fetch mot AVA Helper-portarna och fäller testet som försökte
+ *     (#1368) — se helper-network-guard.ts.
  */
 
 import * as matchers from "@testing-library/jest-dom/matchers";
 import { cleanup } from "@testing-library/react";
 import { afterEach, expect } from "bun:test";
+
+import { assertNoHelperTraffic, guardFetch } from "./helper-network-guard";
 
 expect.extend(matchers as unknown as Parameters<typeof expect.extend>[0]);
 
@@ -22,6 +26,11 @@ for (const Ctor of [HTMLFormElement, HTMLInputElement, HTMLSelectElement, HTMLTe
   proto.reportValidity = () => true;
 }
 
+/** Helper-anrop som vakten spärrat sedan förra testet (exporteras för vaktens eget test). */
+export const helperTraffic: string[] = [];
+globalThis.fetch = guardFetch(globalThis.fetch, helperTraffic);
+
 afterEach(() => {
   cleanup();
+  assertNoHelperTraffic(helperTraffic);
 });
