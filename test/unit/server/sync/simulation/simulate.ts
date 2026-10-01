@@ -56,7 +56,7 @@ export interface SimulationResult {
   seed: number;
   steps: string[];
   violations: string[];
-  /** Avvikelser som beror på en känd, öppen bugg (#1397, #1399, #1402). */
+  /** Avvikelser som beror på en känd, öppen bugg (#1397, #1402). */
   known: string[];
   stats: Record<string, unknown>;
 }

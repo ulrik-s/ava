@@ -126,9 +126,6 @@ export interface Verdict {
  *     som gjorde den, när en annan flik skickade den (#1392 återställer bara
  *     i den fliken). Gäller bara webbläsare med flera flikar — i en ensam
  *     flik är samma avvikelse ett fel (#1348).
- *   - #1399: en radändring av en rad som servern har raderat ger ett
- *     serverfel (dubblettnyckel) och kön står still i minuter — allt i den
- *     webbläsarens kö och dess flikars läge räknas då som känt.
  */
 function knownBug(d: Divergence, local: Row | undefined, refusedInSharedQueue: ReadonlySet<string>): string | null {
   if (STRICT) return null;
@@ -139,13 +136,6 @@ function knownBug(d: Divergence, local: Row | undefined, refusedInSharedQueue: R
 
 /** Byråernas läge så som en ny klient ser det (org → läge). */
 type States = Map<string, State>;
-
-/** #1399: står webbläsarens kö still vid en radändring av en rad som servern har raderat? */
-async function blockedByDeletedRow(b: SimBrowser, states: States): Promise<boolean> {
-  const [head] = await b.storedQueue();
-  if (STRICT || !head || isProcedureCall(head) || head.kind !== "update") return false;
-  return !states.get(b.firm.org)?.get(head.entity)?.has(String(head.row.id));
-}
 
 /** Ingen ändring försvinner tyst. */
 function silentLoss(server: SimServer, b: SimBrowser, left: number, rejected: ReadonlySet<string>): string[] {
@@ -164,18 +154,14 @@ function silentLoss(server: SimServer, b: SimBrowser, left: number, rejected: Re
   return out;
 }
 
-async function checkNoSilentLoss(server: SimServer, browsers: readonly SimBrowser[], blocked: ReadonlySet<string>): Promise<Verdict> {
-  const verdict: Verdict = { violations: [], known: [] };
-  for (const b of browsers) {
-    const lines = silentLoss(server, b, (await b.storedQueue()).length, await b.rejectedIds());
-    if (blocked.has(b.name)) verdict.known.push(...lines.map((l) => `#1399 ${l}`));
-    else verdict.violations.push(...lines);
-  }
-  return verdict;
+async function checkNoSilentLoss(server: SimServer, browsers: readonly SimBrowser[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const b of browsers) out.push(...silentLoss(server, b, (await b.storedQueue()).length, await b.rejectedIds()));
+  return out;
 }
 
 /** Varje flik har byråns läge, i alla synkade tabeller. */
-async function checkConvergence(states: States, tabs: readonly SimTab[], blocked: ReadonlySet<string>): Promise<Verdict> {
+async function checkConvergence(states: States, tabs: readonly SimTab[]): Promise<Verdict> {
   const verdict: Verdict = { violations: [], known: [] };
   for (const t of tabs) {
     const shared = tabs.filter((other) => other.browser === t.browser).length > 1;
@@ -184,7 +170,7 @@ async function checkConvergence(states: States, tabs: readonly SimTab[], blocked
     const local = localState(t);
     for (const d of diffStates(expected, local, new Set())) {
       const line = `${t.name}: ${d.entity} ${d.id} ${d.what}`;
-      const bug = blocked.has(t.browser.name) ? "#1399" : knownBug(d, local.get(d.entity)?.get(d.id), refused);
+      const bug = knownBug(d, local.get(d.entity)?.get(d.id), refused);
       if (bug) verdict.known.push(`${bug} ${line}`);
       else verdict.violations.push(line);
     }
@@ -319,14 +305,12 @@ async function checkStoredReplays(server: SimServer): Promise<string[]> {
 export async function checkInvariants(server: SimServer, browsers: readonly SimBrowser[], tabs: readonly SimTab[], forged: ReadonlySet<string>): Promise<Verdict> {
   const states: States = new Map();
   for (const firm of FIRMS) states.set(firm.org, await canonicalState(server.sync, firm.org));
-  const blocked = new Set<string>();
-  for (const b of browsers) if (await blockedByDeletedRow(b, states)) blocked.add(b.name);
-  const loss = await checkNoSilentLoss(server, browsers, blocked);
-  const convergence = await checkConvergence(states, tabs, blocked);
+  const loss = await checkNoSilentLoss(server, browsers);
+  const convergence = await checkConvergence(states, tabs);
   const series = await Promise.all(FIRMS.map((f) => checkSeries(server.handle.db, f)));
   return {
     violations: [
-      ...loss.violations,
+      ...loss,
       ...convergence.violations,
       ...checkIsolation(states, tabs),
       ...checkRoles(server),
@@ -335,6 +319,6 @@ export async function checkInvariants(server: SimServer, browsers: readonly SimB
       ...(await checkStoredReplays(server)),
       ...(await checkSerial(server)),
     ],
-    known: [...loss.known, ...convergence.known],
+    known: convergence.known,
   };
 }

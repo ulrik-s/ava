@@ -39,7 +39,7 @@ import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import type { QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
 import type { ProcedureReplayResult } from "../data-store/in-memory/sync-transport";
-import { causeChain, sqlStateOf } from "../db/pg-error";
+import { causeChain, isDeterministicSqlState } from "../db/pg-error";
 import { syncReplays } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { boundedCallTime } from "../queued-call";
@@ -68,14 +68,9 @@ function resolveProcedure(caller: unknown, path: string): (input: unknown) => Pr
   return cur as (input: unknown) => Promise<unknown>;
 }
 
-/** SQLSTATE-klass 22 (data exception) och 23 (integrity constraint violation). */
-const DETERMINISTIC_SQLSTATE = /^2[23][0-9A-Z]{3}$/;
-
 /** Ger samma anrop samma fel igen? (zod, eller Postgres data-/integritetsfel) */
 function isDeterministicFailure(err: unknown): boolean {
-  if (err instanceof ZodError) return true;
-  const code = sqlStateOf(err);
-  return code !== undefined && DETERMINISTIC_SQLSTATE.test(code);
+  return err instanceof ZodError || isDeterministicSqlState(err);
 }
 
 /** Ett regelbrott eller deterministiskt fel → avvisning; allt annat → kasta vidare (tekniskt fel, försök igen). */
