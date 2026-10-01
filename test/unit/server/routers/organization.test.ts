@@ -22,10 +22,10 @@ const mockPrisma = {
   },
 };
 
-function makeCaller(orgId = "org-a") {
+function makeCaller(orgId = "org-a", role: "ADMIN" | "LAWYER" | "ASSISTANT" = "ADMIN") {
   const dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
-    user: { id: "user-1", email: "a@b.com", name: "Test", role: "ADMIN", organizationId: orgId },
+    user: { id: "user-1", email: "a@b.com", name: "Test", role, organizationId: orgId },
     prisma: mockPrisma, dataStore,
     repos: reposFromMockDataStore(dataStore),
   };
@@ -414,5 +414,82 @@ describe("organization.updateSettings", () => {
       }],
     })).rejects.toThrow();
     expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Behörighet (#1370): byråns uppgifter, kontor och uppläggning av byråer är
+ * admin-only. En medlem får bara ändra dokument-etiketterna, och får skicka
+ * hela formuläret så länge övriga fält är oförändrade.
+ */
+describe("organization — behörighet för icke-admin (#1370)", () => {
+  const CURRENT = {
+    id: "org-a", name: "Advokat AB", address: "Storgatan 1", website: "https://byra.se",
+    bankgiro: "123-4567", hourlyRates: { ARBETE: 250000, TIDSSPILLAN: 150000 },
+  };
+
+  it.each(["LAWYER", "ASSISTANT"] as const)("%s: addOffice, updateOffice och deleteOffice nekas (FORBIDDEN) utan skrivning", async (role) => {
+    const caller = makeCaller("org-a", role);
+    mockPrisma.office.findFirst.mockResolvedValue(MAIN_OFFICE);
+    await expect(caller.addOffice({ name: "Filial", isMain: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.updateOffice({ id: "off-main" as never, name: "Kapat" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.deleteOffice({ id: "off-main" as never })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mockPrisma.office.create).not.toHaveBeenCalled();
+    expect(mockPrisma.office.update).not.toHaveBeenCalled();
+    expect(mockPrisma.office.updateMany).not.toHaveBeenCalled();
+    expect(mockPrisma.office.delete).not.toHaveBeenCalled();
+  });
+
+  it("LAWYER: create (uppläggning av en byrå) nekas", async () => {
+    await expect(makeCaller("org-a", "LAWYER").create({ id: "00000000-0000-7000-8000-000000000001" as never, name: "Ny byrå" }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mockPrisma.organization.create).not.toHaveBeenCalled();
+  });
+
+  it("ADMIN: create lägger upp byrån", async () => {
+    mockPrisma.organization.create.mockResolvedValue({ id: "org-new", name: "Ny byrå" });
+    await makeCaller("org-a", "ADMIN").create({ id: "00000000-0000-7000-8000-000000000001" as never, name: "Ny byrå" });
+    expect(mockPrisma.organization.create).toHaveBeenCalled();
+  });
+
+  it.each([
+    ["byrånamnet", { name: "Kapad AB" }],
+    ["adressen", { address: "Annan väg 2" }],
+    ["telefon", { phone: "070-000 00 00" }],
+    ["e-post", { email: "kapad@example.se" }],
+    ["webbplatsen", { website: "https://kapad.se" }],
+    ["logotypen", { logo: TINY_PNG }],
+    ["sidfotsmärket", { footerSeal: TINY_PNG }],
+    ["bankgirot", { bankgiro: "999-9999" }],
+    ["organisationsnumret", { orgNumber: "556999-9999" }],
+    ["timpriserna", { hourlyRates: { ARBETE: 1 } }],
+    ["aconto-gränsen", { accontoThresholdOre: 1 }],
+    ["standardåtgärderna", { standardAtgarder: [] as never[] }],
+  ])("LAWYER: ändring av %s nekas (FORBIDDEN) och inget skrivs", async (_label, patch) => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ ...CURRENT, standardAtgarder: [{ id: "x" }] });
+    await expect(makeCaller("org-a", "LAWYER").updateSettings(patch)).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringMatching(/Endast administratörer/) });
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
+
+  it("LAWYER: dokument-etiketter sparas, även när formulärets övriga fält skickas oförändrade", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue(CURRENT);
+    mockPrisma.organization.update.mockResolvedValue(CURRENT);
+    await makeCaller("org-a", "LAWYER").updateSettings({
+      documentTags: ["Avtal"], name: "Advokat AB", address: "Storgatan 1", website: "https://byra.se", bankgiro: "123-4567",
+      // Samma karta i annan nyckelordning är oförändrad.
+      hourlyRates: { TIDSSPILLAN: 150000, ARBETE: 250000 },
+      // Tomt fält och saknat räknas lika.
+      phone: "",
+    });
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ documentTags: ["Avtal"] }) }),
+    );
+  });
+
+  it("LAWYER: tom timpriskarta mot en byrå utan timpriser räknas som oförändrad", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB" });
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
+    await makeCaller("org-a", "LAWYER").updateSettings({ hourlyRates: {}, documentTags: [] });
+    expect(mockPrisma.organization.update).toHaveBeenCalled();
   });
 });

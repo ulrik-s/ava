@@ -114,6 +114,27 @@ describe("administrationen körs om av servern (#1344)", () => {
       expect(await repos.organizations.getById(ORG)).toMatchObject({ bankgiro: "111-1111", orgNumber: "556000-0001" });
     });
 
+    it.each([
+      ["byrånamnet", { name: "Kapad AB" }],
+      ["adressen", { address: "Annan väg 2" }],
+      ["webbplatsen", { website: "https://kapad.se" }],
+      ["timpriserna", { hourlyRates: { ARBETE: 1 } }],
+    ])("medlem: byte av %s → avvisat (#1370)", async (_label, patch) => {
+      expect(await replayer.replay(call("organization.updateSettings", patch), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect(await repos.organizations.getById(ORG)).toMatchObject({ name: "Byrån" });
+    });
+
+    it("medlem: kontor läggs inte till, ändras inte och tas inte bort (#1370)", async () => {
+      const before = (await repos.offices.listByOrg(ORG)).length;
+      expect(await replayer.replay(call("organization.addOffice", { name: "Filial" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect(await repos.offices.listByOrg(ORG)).toHaveLength(before);
+      const id = asId<"OfficeId">(uuidv7());
+      await repos.offices.create({ id, organizationId: ORG, name: "Filial", isMain: false } as never);
+      expect(await replayer.replay(call("organization.updateOffice", { id, name: "Kapad" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect(await replayer.replay(call("organization.deleteOffice", { id }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect((await repos.offices.getById(id))?.name).toBe("Filial");
+    });
+
     it("medlem: övriga inställningar med oförändrat bankgiro → accepterade", async () => {
       const res = await replayer.replay(call("organization.updateSettings", { documentTags: ["Avtal"], bankgiro: "111-1111" }), asMember);
       expect(res).toMatchObject({ status: "accepted" });
@@ -145,20 +166,30 @@ describe("administrationen körs om av servern (#1344)", () => {
       expect(await repos.orgPreferences.getByOrgKey(ORG, "list.matters")).toBeNull();
     });
 
-    it("mall: skapas med klientens id, ändras och tas bort", async () => {
+    it("mall: admin skapar med klientens id, ändrar och tar bort", async () => {
       const id = asId<"DocumentTemplateId">(uuidv7());
-      expect(await replayer.replay(call("documentTemplate.create", { id, name: "Fullmakt", content: "…" }), asMember)).toMatchObject({ status: "accepted" });
-      expect(await repos.documentTemplates.getById(id)).toMatchObject({ organizationId: ORG, createdById: MEMBER });
-      expect(await replayer.replay(call("documentTemplate.update", { id, name: "Fullmakt v2" }), asMember)).toMatchObject({ status: "accepted" });
-      expect(await replayer.replay(call("documentTemplate.delete", { id }), asMember)).toMatchObject({ status: "accepted" });
+      expect(await replayer.replay(call("documentTemplate.create", { id, name: "Fullmakt", content: "…" }), asAdmin)).toMatchObject({ status: "accepted" });
+      expect(await repos.documentTemplates.getById(id)).toMatchObject({ organizationId: ORG, createdById: ADMIN });
+      expect(await replayer.replay(call("documentTemplate.update", { id, name: "Fullmakt v2" }), asAdmin)).toMatchObject({ status: "accepted" });
+      expect(await replayer.replay(call("documentTemplate.delete", { id }), asAdmin)).toMatchObject({ status: "accepted" });
       expect(await repos.documentTemplates.getById(id)).toBeNull();
+    });
+
+    it("mall: medlem skapar, ändrar och tar inte bort (#1370)", async () => {
+      const id = asId<"DocumentTemplateId">(uuidv7());
+      expect(await replayer.replay(call("documentTemplate.create", { id, name: "Fullmakt", content: "…" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect(await repos.documentTemplates.getById(id)).toBeNull();
+      expect(await replayer.replay(call("documentTemplate.create", { id, name: "Fullmakt", content: "…" }), asAdmin)).toMatchObject({ status: "accepted" });
+      expect(await replayer.replay(call("documentTemplate.update", { id, name: "Kapad" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect(await replayer.replay(call("documentTemplate.delete", { id }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect((await repos.documentTemplates.getById(id))?.name).toBe("Fullmakt");
     });
 
     it("mall i en kollegas namn eller med historiskt datum → avvisad i kön, även för admin (#1345)", async () => {
       const base = { id: uuidv7(), name: "Fullmakt", content: "…" };
-      expect(await replayer.replay(call("documentTemplate.create", { ...base, createdById: ADMIN }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
+      expect(await replayer.replay(call("documentTemplate.create", { ...base, createdById: MEMBER }), asAdmin)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
       expect(await replayer.replay(call("documentTemplate.create", { ...base, createdAt: "2020-01-01" }), asAdmin)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
-      expect(await replayer.replay(call("documentTemplate.create", { ...base, createdById: MEMBER }), asMember)).toMatchObject({ status: "accepted" });
+      expect(await replayer.replay(call("documentTemplate.create", { ...base, createdById: ADMIN }), asAdmin)).toMatchObject({ status: "accepted" });
     });
 
     it("mall: setup-fälten direkt (utan kö) bara för admin", async () => {

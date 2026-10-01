@@ -186,6 +186,15 @@ pushande som skapare, ägarens egna preferenser och jävskontrollens logg som
 bara kan läggas till (byrån via den som körde kontrollen). En ändring av en
 surface-entitet utan basversion avvisas.
 
+**Genomfört (#1370):** byråinställningarna är admin-only utom
+dokument-etiketternas vokabulär — allt annat syns på dokument och fakturor
+eller styr betalningar, bokföring och priser (byrånamn, adress, telefon,
+e-post, webbplats, logotyp, sidfotsmärke, timpriser, aconto-gräns,
+standardåtgärder). En medlem får skicka hela formuläret så länge de fälten är
+oförändrade. Kontor (`addOffice/updateOffice/deleteOffice`), dokumentmallar
+(`documentTemplate.create/update/delete`) och uppläggning av en byrå
+(`organization.create`) kräver admin, direkt och i kön.
+
 ## Konsekvenser
 
 - Affärsreglerna upprätthålls på servern utan att dubbelskrivas — samma kod körs
