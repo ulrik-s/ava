@@ -58,7 +58,8 @@
 	# bakom /api, som kräver session. Hårda navigeringar till runtime-id:n →
 	# shell-routing-shimmen, som i nginx-selfhosted.conf.
 	handle {
-		root * /srv/ava
+		# releases/current -> <tid>-<sha>: deploy-prod.sh byter länken atomärt (#1369).
+		root * /srv/releases/current
 		route {
 			@shell {
 				path_regexp shell ^/(matters|contacts|invoices|payment-plans|users|templates)/([^/]+)(/edit)?/?$

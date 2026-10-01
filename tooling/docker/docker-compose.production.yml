@@ -32,7 +32,12 @@ services:
       AVA_DOMAIN: "${AVA_DOMAIN:?AVA_DOMAIN krävs (t.ex. ava.byra.se)}"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../../out:/srv/ava:ro
+      # HELA releases/ (inte en enskild release, inte out/): Caddyfile har
+      # `root /srv/releases/current`, en relativ symlänk som följs vid varje
+      # request. Ett klientbyte i deploy-prod.sh är då ett atomärt rename av
+      # länken — ingen omstart. En bind-mount av out/ pekade på katalogens
+      # inode, som `next build` ersätter: 404 under bygget (#1369).
+      - ../../releases:/srv/releases:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
