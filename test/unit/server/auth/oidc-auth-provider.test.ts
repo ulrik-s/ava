@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest-compat";
 import {
   OidcAuthProvider,
+  resolveLogin,
   type AllowlistedUser,
   type OidcClaims,
 } from "@/lib/server/auth/oidc-auth-provider";
+import { arraySink, setLogSink, type LogRecord } from "@/lib/shared/observability/logger";
 
 const ORG = "org-1";
 
@@ -94,5 +96,29 @@ describe("OidcAuthProvider.getPrincipal", () => {
     const users = [user({ id: "u-1", email: "anna@byra.se" }), user({ id: "u-2", email: "bo@byra.se" })];
     const p = new OidcAuthProvider(claims({ email: "bo@byra.se" }), users).getPrincipal();
     expect(p?.id).toBe("u-2");
+  });
+});
+
+// #1408: adressen var inte unik — inloggningen tog första träffen. Nu nekas
+// en tvetydig adress (fail closed): fel konto är värre än ingen inloggning.
+describe("tvetydig e-post (#1408)", () => {
+  const twins = [user(), user({ id: "u-2", email: " Anna@Byra.se ", organizationId: "org-2" })];
+
+  it("adressen matchar två konton → ingen principal, och en varning med kontonas id:n (aldrig adressen)", () => {
+    const records: LogRecord[] = [];
+    const restore = setLogSink(arraySink(records));
+    try {
+      expect(new OidcAuthProvider(claims(), twins).getPrincipal()).toBeNull();
+      expect(records).toContainEqual(expect.objectContaining({ event: "auth.ambiguous_login_email", count: 2, ids: ["u-1", "u-2"] }));
+      expect(JSON.stringify(records)).not.toContain("anna@byra.se");
+    } finally {
+      setLogSink(restore);
+    }
+  });
+
+  it("resolveLogin skiljer på tvetydig, nekad och behörig", () => {
+    expect(resolveLogin(claims(), twins)).toEqual({ kind: "ambiguous", userIds: ["u-1", "u-2"] });
+    expect(resolveLogin(claims({ email: "okand@byra.se" }), twins)).toEqual({ kind: "denied" });
+    expect(resolveLogin(claims(), [user()])).toMatchObject({ kind: "authorized", principal: { id: "u-1" } });
   });
 });

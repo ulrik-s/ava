@@ -32,6 +32,20 @@ describe("UserRepository — in-memory", () => {
     expect(list).toHaveLength(2);
     expect(list.map((u) => u.name)).toEqual(["Alfa", "Beta"]); // namn-sorterat
   });
+
+  it("listByLoginEmail: alla byråer, skiftläge/blanksteg spelar ingen roll, raderade räknas inte (#1408)", async () => {
+    const u1 = asId<"UserId">(uuidv7());
+    const store = new LocalStore({
+      users: [
+        { id: u1, organizationId: "org-1", email: "Anna@Byra.se", name: "Anna" },
+        { id: asId<"UserId">(uuidv7()), organizationId: "org-2", email: "anna@byra.se", name: "Anna B" },
+        { id: asId<"UserId">(uuidv7()), organizationId: "org-2", email: "anna@byra.se", name: "Raderad", deletedAt: new Date() },
+        { id: asId<"UserId">(uuidv7()), organizationId: "org-1", email: "bo@byra.se", name: "Bo" },
+      ],
+    }, async () => {});
+    const found = await new InMemoryUserRepository(store).listByLoginEmail(" ANNA@byra.se ");
+    expect(found.map((u) => u.name).sort()).toEqual(["Anna", "Anna B"]);
+  });
 });
 
 describe("UserRepository — Drizzle (pglite)", () => {
@@ -55,5 +69,20 @@ describe("UserRepository — Drizzle (pglite)", () => {
     const list = await repo.listByOrg(org);
     expect(list).toHaveLength(2);
     expect(list.map((u) => u.name)).toEqual(["Alfa", "Beta"]);
+  });
+
+  it("listByLoginEmail: över alla byråer, samma normalisering som det unika indexet (#1408)", async () => {
+    const db = handle.db;
+    const anna = asId<"UserId">(uuidv7());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(users).values(v({ id: anna, organizationId: uuidv7(), email: "Anna@Byra.se", name: "Anna" }));
+    await db.insert(users).values(v({ id: uuidv7(), organizationId: uuidv7(), email: "gone@byra.se", name: "Raderad", deletedAt: new Date() }));
+    const repo = new DrizzleUserRepository(handle.db);
+    expect((await repo.listByLoginEmail(" anna@BYRA.se ")).map((u) => u.id)).toEqual([anna]);
+    expect(await repo.listByLoginEmail("gone@byra.se")).toEqual([]);
+    // Indexet vägrar samma inloggning i en annan byrå.
+    const copy = async (): Promise<unknown> => db.insert(users).values(v({ id: uuidv7(), organizationId: uuidv7(), email: "ANNA@byra.se", name: "Kopia" }));
+    await expect(copy()).rejects.toThrow();
   });
 });

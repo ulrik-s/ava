@@ -9,15 +9,26 @@
 import { log } from "@/lib/shared/observability/logger";
 import type { UserId } from "@/lib/shared/schemas/ids";
 import { emit, type EmitCtx } from "../events/emit";
+import type { UserRepository } from "../repositories/user-repository";
 import { TRPCError } from "../trpc-core";
+import { sameLoginEmail } from "./login-email-normalize";
 
-/** Samma inloggning? Skiftläge och omgivande blanksteg spelar ingen roll. */
-export function sameLoginEmail(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+/** Beskedet när adressen redan är ett annat kontos inloggning (#1408). Röjer inte vilken byrå. */
+export const LOGIN_EMAIL_TAKEN_MESSAGE =
+  "E-postadressen används redan av ett annat konto. Adressen är inloggningen och måste vara unik.";
+
+/**
+ * Kasta CONFLICT om `email` redan är inloggningen för en annan användare — i
+ * vilken byrå som helst (#1408). `self` = användaren som byter adress (hon
+ * får behålla sin egen). Databasens unika index fångar samtidiga anrop.
+ */
+export async function assertLoginEmailFree(users: Pick<UserRepository, "listByLoginEmail">, email: string, self?: UserId): Promise<void> {
+  const taken = (await users.listByLoginEmail(email)).some((u) => u.id !== self);
+  if (taken) throw new TRPCError({ code: "CONFLICT", message: LOGIN_EMAIL_TAKEN_MESSAGE });
 }
 
-/** Byter anropet e-postadressen? Utelämnad eller samma inloggning = nej. */
-export function changesLoginEmail(current: string, next: string | undefined): boolean {
+/** Byter anropet e-postadressen? Utelämnad eller samma inloggning = nej. (Ja ⇒ `next` är satt.) */
+export function changesLoginEmail(current: string, next: string | undefined): next is string {
   return next !== undefined && !sameLoginEmail(current, next);
 }
 

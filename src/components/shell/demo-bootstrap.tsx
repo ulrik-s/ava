@@ -24,6 +24,7 @@ import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-t
 import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-registrar";
 import { HelperAutoConfig } from "@/components/shell/helper-auto-config";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
+import { loginDeniedMessage } from "@/lib/client/auth/login-denied";
 import { decideSessionGate, loginUrl, offlineGateMessage, type CachedIdentity } from "@/lib/client/auth/session-gate";
 import { setSessionNotice } from "@/lib/client/auth/session-notice";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
@@ -448,9 +449,9 @@ function applyOidcOutcome(
   setStatus: (s: Status) => void,
   setErrorMsg: (m: string | null) => void,
 ): boolean {
-  if (outcome.kind === "denied") {
+  if (outcome.kind === "denied" || outcome.kind === "ambiguous") {
     setStatus("error");
-    setErrorMsg(`Inte behörig: ditt konto (${outcome.email}) finns inte i byrån — kontakta administratören.`);
+    setErrorMsg(loginDeniedMessage(outcome));
     return true;
   }
   if (outcome.kind === "authorized") {

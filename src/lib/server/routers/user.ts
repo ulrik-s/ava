@@ -2,10 +2,13 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { hourlyRatesSchema, type HourlyRates } from "@/lib/shared/schemas/hourly-rates";
-import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
+import { userIdSchema, asId, type UserId } from "@/lib/shared/schemas/ids";
 import { matterNumberPrefixSchema, type User } from "@/lib/shared/schemas/user";
 import { assertAdmin } from "../auth/assert-admin";
-import { assertMayChangeLoginEmail, auditLoginEmailChange, changesLoginEmail } from "../auth/login-email";
+import {
+  assertLoginEmailFree, assertMayChangeLoginEmail, auditLoginEmailChange, changesLoginEmail, type LoginEmailCtx,
+} from "../auth/login-email";
+import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
 
 /** Projektion till listvyns fält (utan passwordHash). */
@@ -52,6 +55,15 @@ function assertMayUpdateUser(caller: { id: string; role: string }, input: { id: 
   if (input.role) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Endast administratörer kan ändra roller." });
   }
+}
+
+/**
+ * Ett byte av e-postadress (#1371, #1408): bara admin, och adressen får inte
+ * vara ett annat kontos inloggning.
+ */
+async function assertMayTakeLoginEmail(ctx: LoginEmailCtx & { repos: Pick<Repositories, "users"> }, id: UserId, email: string): Promise<void> {
+  assertMayChangeLoginEmail(ctx);
+  await assertLoginEmailFree(ctx.repos.users, email, id);
 }
 
 export const userRouter = router({
@@ -119,6 +131,9 @@ export const userRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx);
+      // E-posten är inloggningen: ett konto per adress, i alla byråer (#1408).
+      // (En omkörning av samma köade anrop har samma id — den är inte en dubblett.)
+      await assertLoginEmailFree(ctx.repos.users, input.email, input.id);
       const passwordHash = input.password ? await hashPassword(input.password) : null;
       return ctx.repos.users.create({
         ...(input.id ? { id: input.id } : {}),
@@ -159,13 +174,14 @@ export const userRouter = router({
       // Org-scope: verifiera ägarskap (motsvarar gamla where:{id,organizationId}).
       const owned = await ctx.repos.users.getByIdInOrg(id, ctx.user.organizationId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      // E-posten är inloggningens identitet (#1371) — bara admin byter den.
-      const emailChanged = changesLoginEmail(owned.email, input.email);
-      if (emailChanged) assertMayChangeLoginEmail(ctx);
+      // E-posten är inloggningens identitet (#1371) — bara admin byter den,
+      // och bara till en adress som inget annat konto har (#1408).
+      const newEmail = changesLoginEmail(owned.email, input.email) ? input.email : null;
+      if (newEmail !== null) await assertMayTakeLoginEmail(ctx, id, newEmail);
       const updateData: Record<string, unknown> = { ...data };
       if (password) updateData.passwordHash = await hashPassword(password);
       const updated = await ctx.repos.users.update(id, updateData satisfies Partial<User>);
-      if (emailChanged) await auditLoginEmailChange(ctx, id);
+      if (newEmail !== null) await auditLoginEmailChange(ctx, id);
       return updated;
     }),
 

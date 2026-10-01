@@ -42,6 +42,13 @@ docker compose -f tooling/docker/docker-compose.yml \
   (`src/lib/client/auth/session-probe.ts`) och auktoriserar mot
   användar-allowlisten i firma.git via `OidcAuthProvider` (#223). Okänd email
   nekas (autentisering ≠ auktorisering).
+- **En adress = ett konto (#1408):** e-postadressen är inloggningen, så den är
+  unik över alla byråer (skiftläge och blanksteg spelar ingen roll). Databasens
+  index `users_login_email_uq` (migrering 0042) och `user.create`/`user.update`
+  (CONFLICT) håller den unik. Matchar en adress ändå flera konton (en dubblett
+  från före indexet) nekas inloggningen med ett besked i stället för att den
+  tar första träffen. Migreringen skapar inte indexet om dubbletter redan
+  finns — den listar dem i en NOTICE; rätta dem och skapa indexet för hand.
 
 ### Sessionen i klienten och IdP-avbrott (#1245, #1351, ADR 0018)
 

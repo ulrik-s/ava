@@ -13,7 +13,7 @@
 
 import { relations, sql } from "drizzle-orm";
 import {
-  bigint, bigserial, boolean, customType, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid,
+  bigint, bigserial, boolean, customType, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 import type { DocumentKind } from "@/lib/shared/document-kind";
 import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
@@ -103,7 +103,13 @@ export const users = pgTable("users", {
   oidcSubject: text("oidc_subject"),
   oidcIssuer: text("oidc_issuer"),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-}, (t) => [index("users_org_idx").on(t.organizationId)]);
+}, (t) => [
+  index("users_org_idx").on(t.organizationId),
+  // E-postadressen är inloggningen (ADR 0009, #1371): ett konto per adress,
+  // över alla byråer (#1408). Samma normalisering som `sameLoginEmail`.
+  // Migreringen 0042 skapar indexet bara om befintliga rader tillåter det.
+  uniqueIndex("users_login_email_uq").on(sql`lower(btrim(${t.email}))`).where(sql`${t.deletedAt} IS NULL`),
+]);
 
 export const contacts = pgTable("contacts", {
   ...orgScopedColumns,

@@ -81,7 +81,7 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
-    await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
+    await db.insert(users).values(v({ id: userId, organizationId: org, email: `${userId}@x`, name: "Anna" }));
     await db.insert(expenses).values(v({ id: e1, userId, matterId: mId, date: new Date(), amount: 50_000, description: "x" }));
     await db.insert(expenses).values(v({ id: e2, userId, matterId: mId, date: new Date(), amount: 30_000, description: "y" }));
     const repo = new DrizzleExpenseRepository(handle.db);
@@ -99,7 +99,7 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
-    await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
+    await db.insert(users).values(v({ id: userId, organizationId: org, email: `${userId}@x`, name: "Anna" }));
     await db.insert(expenses).values(v({ id: uuidv7(), userId, matterId: mId, date: new Date("2026-06-02"), amount: 50_000, description: "a" }));
     await db.insert(expenses).values(v({ id: uuidv7(), userId, matterId: mId, date: new Date("2026-06-01"), amount: 30_000, description: "b" }));
     const repo = new DrizzleExpenseRepository(handle.db);
@@ -120,7 +120,7 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
-    await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
+    await db.insert(users).values(v({ id: userId, organizationId: org, email: `${userId}@x`, name: "Anna" }));
     await db.insert(expenses).values(v({ id: eId, userId, matterId: mId, date: new Date(), amount: 1, description: "x" }));
     const repo = new DrizzleExpenseRepository(handle.db);
     expect(await repo.getByIdInOrg(asId<"ExpenseId">(eId), asId<"OrganizationId">(org))).toMatchObject({ id: eId });
@@ -198,7 +198,7 @@ describe("ExpenseRepository — frysning + perLawyer-period (Drizzle/pglite)", (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T", paymentMethod: "PRIVAT" }));
-    await db.insert(users).values(v({ id: uId, organizationId: org, email: "a@x", name: "Anna" }));
+    await db.insert(users).values(v({ id: uId, organizationId: org, email: `${uId}@x`, name: "Anna" }));
     await db.insert(contacts).values(v({ id: cKli, organizationId: org, name: "Klient AB", contactType: "COMPANY" }));
     await db.insert(matterContacts).values(v({ id: uuidv7(), matterId: mId, contactId: cKli, role: "KLIENT" }));
     await db.insert(expenses).values(v({ id: eLate, userId: uId, matterId: mId, amount: 200, date: new Date("2026-06-10"), description: "sen" }));
