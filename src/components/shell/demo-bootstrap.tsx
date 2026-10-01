@@ -52,13 +52,14 @@ import { ActiveMatterPrefetch } from "./active-matter-prefetch";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
+import { LoadingScreen, PendingBootScreen, type BootStatus } from "./boot-screen";
 import { JobsBadge } from "./jobs-badge";
 import { ServerFirstSync } from "./server-first-sync";
 import { ServerInvoiceNumbering } from "./server-invoice-numbering";
 import { UnsavedWritesGuard } from "./unsaved-writes-guard";
 import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
-type Status = "loading" | "ready" | "error";
+type Status = BootStatus;
 
 type GateDecision = "continue" | "skip-ready" | "redirect-login" | "skip-loading";
 
@@ -231,16 +232,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   });
 
   // Hydrerings-grind: identisk markup på server + klientens första render.
-  if (!mounted) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="text-lg font-medium text-gray-900 mb-2">AVA</div>
-          <div className="text-sm text-gray-500">Laddar…</div>
-        </div>
-      </div>
-    );
-  }
+  if (!mounted) return <LoadingScreen />;
 
   // Skip-auth-sidor (/login, /demo) bygger ALDRIG en demo-store/trpc-klient
   // (skip-ready-gaten i useDemoBootstrap returnerar tidigt). De renderar sitt
@@ -251,17 +243,10 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  // Data-sidor väntar på att storen byggts.
-  if (!trpcClient) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="text-lg font-medium text-gray-900 mb-2">AVA</div>
-          <div className="text-sm text-gray-500">Laddar…</div>
-        </div>
-      </div>
-    );
-  }
+  // Data-sidor väntar på att storen byggts. Ett fel innan dess (eller en
+  // uppstart som aldrig blir klar) visas här — appträdets felskärm kräver
+  // tRPC-klienten (#1391).
+  if (!trpcClient) return <PendingBootScreen status={status} errorMsg={errorMsg} />;
 
   return (
     <AuthProvider token={firmaConfig.token} repoUrl={firmaConfig.repo}>
@@ -449,7 +434,7 @@ function applyOidcOutcome(
 ): boolean {
   if (outcome.kind === "denied") {
     setStatus("error");
-    setErrorMsg(`Inte behörig: ${outcome.email} finns inte i byråns användarlista.`);
+    setErrorMsg(`Inte behörig: ditt konto (${outcome.email}) finns inte i byrån — kontakta administratören.`);
     return true;
   }
   if (outcome.kind === "authorized") {
