@@ -89,3 +89,33 @@ services:
       - "${KC_PORT:-8089}:8080"
     volumes:
       - ./keycloak/realm-ava.json:/opt/keycloak/data/import/realm-ava.json:ro
+
+  # ─── Prod-Caddyn framför den riktiga proxyn (#1425) ────────────────────
+  # Den RIKTIGA tooling/docker/caddy/Caddyfile (som prod), så OIDC-E2E:n prövar
+  # prod-vägen `/api` → forward_auth → oauth2-proxy med en riktig Keycloak-
+  # session — även efter COOKIE_REFRESH, då forward_auth tappar proxyns
+  # förnyade Set-Cookie och klientens keepalive måste spara den. Samma host som
+  # web (localhost), så browserns proxy-cookie följer med (cookies bryr sig
+  # inte om port).
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      AVA_DOMAIN: ":80"
+    ports:
+      - "${AVA_CADDY_PORT:-8082}:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - oauth2-proxy
+      - api-echo
+
+  # Står där prod-Caddyfile:n letar efter server-first och ekar den e-post
+  # forward_auth kopierade in (caddy/api-echo.Caddyfile).
+  api-echo:
+    image: caddy:2-alpine
+    volumes:
+      - ./caddy/api-echo.Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      default:
+        aliases:
+          - server-first
