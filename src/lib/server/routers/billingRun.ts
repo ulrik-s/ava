@@ -72,7 +72,6 @@ import { valueKrRun } from "../billing/kr-run-valuation";
 import { logMatterNote } from "../billing/matter-note";
 import { removeVoidedKrDocuments } from "../billing/void-kr-documents";
 import { emit, type EmitCtx } from "../events/emit";
-import { nextSeriesNumber } from "../number-series";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
 import type { Repositories } from "../repositories/repositories";
@@ -514,14 +513,6 @@ async function invoiceNumbering(
   return { invoiceNumber, ocrReference: recipient === "DOMSTOL" ? null : ocrFromInvoiceNumber(invoiceNumber) };
 }
 
-/** Nästa kostnadsräknings-referens `KR-YYYY-NNNN` (#889) — firmagemensam sekvens
- *  per år, härledd ur befintliga KR-körningars referens. */
-async function nextKrReference(repos: Repositories, orgId: OrganizationId, year: number): Promise<string> {
-  const runs = await repos.billingRuns.listForOrg(orgId);
-  // Numeriskt högsta (#1350): textuellt är KR-…-9999 större än KR-…-10000.
-  return nextSeriesNumber(`KR-${year}-`, runs.map((r) => (r as { reference?: string | null }).reference));
-}
-
 /**
  * Valfritt klient-id + datum (paritet med legacy `invoice.createFinal` så demo-
  * generatorn/fixtures kan styra dem). Default-invoiceDate = nu. Tomma → store
@@ -762,7 +753,7 @@ export const billingRunRouter = router({
           id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
           status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,
-          reference: await nextKrReference(tx, ctx.orgId, stockholmYear(now)),
+          reference: await tx.billingRuns.nextKrReference(ctx.orgId, stockholmYear(now)),
           proposedAmountOre: grossValue, amountOre: grossValue,
           invoiceId: null, deductedBillingRunIds: [],
           periodTo: now, notes: input.notes,
