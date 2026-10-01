@@ -4,7 +4,9 @@
  * `createServerContext`, ALDRIG i den delade routern/klient-bundeln.
  *
  * pull: läs `change_log` (`seq > cursor`, per org), deduppa till senaste op per
- * rad, hämta kanonisk rad via repot (saknad/raderad → tombstone).
+ * rad, hämta kanonisk rad via repot (saknad/raderad → tombstone). Bara upp
+ * till den säkra gränsen (#1381, `readSafeSeq`): rader under den committas
+ * aldrig senare, så cursorn kan sättas till gränsen.
  * push: kontrollera byrån, avvisa procedurägda entiteter (#1242,
  * `push-guard` — tid, utlägg, fakturering, användare och byråinställningar
  * skrivs bara av procedurkön) och pröva radvägens policy (#1344,
@@ -17,7 +19,7 @@
  *   - delete  → softDelete (redan borta ⇒ idempotent accepted).
  */
 
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, lte } from "drizzle-orm";
 import { conflictClassOf } from "@/lib/shared/conflict-policy";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
@@ -25,6 +27,7 @@ import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
+import { readSafeSeq } from "./change-log-safe-seq";
 import { canonicalRows, entityRepo, type EntityRepo, type Row } from "./entity-repo";
 import { checkProcedureOwned, checkScope, type PushRejection } from "./push-guard";
 import { admitRow } from "./queue-admission";
@@ -69,19 +72,20 @@ export class DrizzleSyncStore implements SyncStore {
   }
 
   async pull(organizationId: string, sinceCursor: number): Promise<PullResult> {
+    // Gränsen läses FÖRE raderna (egen sats → raderna läses i en senare
+    // ögonblicksbild, där allt ≤ gränsen redan syns).
+    const safe = await readSafeSeq(this.db);
     const rows: ChangeRow[] = await this.db
       .select({ seq: changeLog.seq, entity: changeLog.entity, rowId: changeLog.rowId, op: changeLog.op })
       .from(changeLog)
-      .where(and(eq(changeLog.organizationId, organizationId), gt(changeLog.seq, sinceCursor)))
+      .where(and(eq(changeLog.organizationId, organizationId), gt(changeLog.seq, sinceCursor), lte(changeLog.seq, safe)))
       .orderBy(asc(changeLog.seq));
 
     // Deduppa: senaste op per (entity,rowId) räcker (kanonisk rad hämtas ändå).
     const latest = new Map<string, ChangeRow>();
-    let cursor = sinceCursor;
-    for (const r of rows) {
-      latest.set(`${r.entity}:${r.rowId}`, r);
-      if (r.seq > cursor) cursor = r.seq;
-    }
+    for (const r of rows) latest.set(`${r.entity}:${r.rowId}`, r);
+    // Cursorn går aldrig bakåt (en klient från en annan databas behåller sin).
+    const cursor = Math.max(sinceCursor, safe);
 
     const changes: PulledChange[] = [];
     for (const r of latest.values()) {

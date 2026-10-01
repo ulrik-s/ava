@@ -183,6 +183,9 @@ export const matterContacts = pgTable("matter_contacts", {
  * Global change-log (ADR 0019 beslut 4) — driver delta-sync: en monoton
  * `seq` per org. Klientens pull = rader där `seq > cursor AND org_id = :org`.
  * `op` = create | update | delete (tombstone). En rad per accepterad skrivning.
+ * `seq` får sitt slutliga värde när transaktionen committar, och pullen läser
+ * bara upp till `change_log_safe_seq()` (#1381, migration 0040) — en cursor
+ * kan inte gå förbi en rad som committas senare.
  */
 export const changeLog = pgTable("change_log", {
   seq: bigserial("seq", { mode: "number" }).primaryKey(),

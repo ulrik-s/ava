@@ -114,6 +114,9 @@
   forwarded headers (ADR 0009). Sitter bakom nginx + oauth2-proxy (loopback).
 - **Sync** (ADR 0017): varje accepterad skrivning loggas i `change_log`
   (BIGSERIAL per org) → delta-pull; klientens kö replay:as idempotent.
+  `seq` delas ut när transaktionen committar och pullen läser bara upp till
+  en säker gräns (`change_log_safe_seq()`, #1381, migration 0040), så en
+  cursor aldrig går förbi en rad som committas senare.
 - **pg-boss jobb-kö** (#504): durabel server-sidig kö på samma Postgres (eget
   `pgboss`-schema). Claim/lease (FOR UPDATE SKIP LOCKED), retry/backoff,
   dead-letter. Handlers (t.ex. e-postutskick via smtp-sender) registreras i

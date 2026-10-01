@@ -23,9 +23,19 @@ import { uuidv7 } from "@/lib/shared/uuid";
 
 const MIGRATIONS_DIR = "tooling/db/migrations";
 
+/** En egen anslutning mot samma databas (för tester med samtidiga transaktioner). */
+export interface TestDbSession {
+  db: AppDb;
+  /** Rå SQL på sessionens enda anslutning (`BEGIN`, `COMMIT` …). */
+  exec: (sql: string) => Promise<unknown>;
+  close: () => Promise<void>;
+}
+
 export interface TestDbHandle {
   db: AppDb;
   close: () => Promise<void>;
+  /** Bara mot riktig Postgres: pglite har en enda anslutning. */
+  openSession?: () => Promise<TestDbSession>;
 }
 
 function migrationSql(): string[] {
@@ -52,8 +62,18 @@ async function createRealPgTestDb(url: string, connections: number): Promise<Tes
   await client.unsafe(`CREATE SCHEMA "${schemaName}"`);
   for (const sql of migrationSql()) await client.unsafe(sql);
   const db = drizzlePostgres(client, { schema });
+  const openSession = async (): Promise<TestDbSession> => {
+    const session = postgres(url, { max: 1, onnotice: () => {} });
+    await session.unsafe(`SET search_path TO "${schemaName}"`);
+    return {
+      db: drizzlePostgres(session, { schema }),
+      exec: (sql) => session.unsafe(sql),
+      close: () => session.end({ timeout: 5 }),
+    };
+  };
   return {
     db: db,
+    openSession,
     close: async () => {
       await client.unsafe(`DROP SCHEMA "${schemaName}" CASCADE`);
       await client.end({ timeout: 5 });
