@@ -11,13 +11,17 @@
  *     kan inte ändras efteråt;
  *   - ägaren (`owner`): en användares egna rader (preferenserna) kan bara
  *     den användaren skriva;
- *   - loggar (`appendOnly`): jävskontrollens logg kan bara läggas till.
+ *   - loggar (`appendOnly`): jävskontrollens logg kan bara läggas till;
+ *   - sökvägen till innehållet (`contentPath`, #1372): rätt form och
+ *     dokumentets eget innehåll (`document-storage-path.ts`) när den sätts
+ *     eller ändras.
  *
  * Användare, byrån, kontor, byråns standardvyer och mallar tas inte emot här:
  * de är procedurägda (`procedure-owned.ts`) och skrivs bara genom att servern
  * kör om routern — där gäller rollen (admin) och vilka fält som får ändras.
  */
 
+import { isDocumentStoragePath, isOwnStoragePath } from "@/lib/shared/document-storage-path";
 import type { OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import { isUuid } from "@/lib/shared/uuid";
 
@@ -39,6 +43,8 @@ interface RowPolicy {
   readonly owner?: string;
   /** Raden kan bara skapas, aldrig ändras eller tas bort. */
   readonly appendOnly?: true;
+  /** Fältet med sökvägen till radens innehåll i content-store:n. */
+  readonly contentPath?: string;
 }
 
 const USER = "user";
@@ -54,6 +60,7 @@ export const ROW_PUSH_POLICY: Readonly<Record<string, RowPolicy>> = Object.freez
   document: {
     refs: { matterId: MATTER, folderId: "documentFolder", invoiceId: "invoice", billingRunId: "billingRun" },
     actor: "uploadedById",
+    contentPath: "storagePath",
   },
   documentFolder: { refs: { matterId: MATTER, parentId: "documentFolder" } },
   documentPart: { refs: { matterId: MATTER, documentId: DOCUMENT } },
@@ -72,6 +79,7 @@ export const ROW_POLICY_REASONS = {
   actor: "Raden måste skapas i ditt eget namn.",
   badRef: "ogiltig referens",
   otherOrg: "annan byrå",
+  contentPath: "Sökvägen till dokumentets innehåll är ogiltig.",
 } as const;
 
 /** En avvisning från policyn. */
@@ -146,6 +154,23 @@ async function checkRefs(policy: RowPolicy, input: PolicyInput): Promise<RowPoli
   return null;
 }
 
+/** Sökvägen klienten sätter eller ändrar till, annars `undefined` (oförändrad eller inte skickad). */
+function changedContentPath(field: string, input: PolicyInput): unknown {
+  const value = input.incoming?.[field];
+  return value === input.existing?.[field] ? undefined : value;
+}
+
+/**
+ * Sökvägen till innehållet (#1372) prövas när den sätts eller ändras: rätt form
+ * och dokumentets eget innehåll. En oförändrad sökväg (t.ex. seedens) går igenom.
+ */
+function checkContentPath(policy: RowPolicy, input: PolicyInput): RowPolicyRejection | null {
+  const value = policy.contentPath === undefined ? undefined : changedContentPath(policy.contentPath, input);
+  if (value === undefined) return null;
+  const id = String(input.incoming?.id ?? input.existing?.id);
+  return isDocumentStoragePath(value) && isOwnStoragePath(value, id) ? null : reject(ROW_POLICY_REASONS.contentPath);
+}
+
 /**
  * Får raden skrivas via radkön? `null` = ja. Byråavgränsningen av själva raden
  * (`checkScope`) och de procedurägda entiteterna prövas före.
@@ -156,6 +181,7 @@ export async function checkRowPolicy(input: PolicyInput): Promise<RowPolicyRejec
   return checkAppendOnly(policy, input.kind)
     ?? checkOwner(policy, input)
     ?? checkActor(policy, input)
+    ?? checkContentPath(policy, input)
     ?? await checkRefs(policy, input);
 }
 

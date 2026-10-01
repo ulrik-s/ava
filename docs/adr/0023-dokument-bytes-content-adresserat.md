@@ -56,3 +56,13 @@ Två sorters data kräver två cache-strategier:
   öppna-flödet är på plats.
 - **Ej:** ingen klient-Postgres, ingen två-Postgres-replikering (se cache-
   resonemanget — `change_log`-sömmen är enklare och redan byggd).
+- **Sökvägen är inte fri (#1372):** content-store:n är ett repo som delas av
+  alla byråer, så en klientvald `storagePath` kunde peka på `.git/index`,
+  `.git/objects/…` eller en annan byrås fil. `document.register`,
+  `kostnadsrakning.record` och radvägen (`row-push-policy.ts`) tar bara emot
+  ett filnamn direkt under `documents/content/` (`document-storage-path.ts`,
+  branded `DocumentStoragePath`) som är dokumentets eget innehåll: sha256 —
+  den som känner hashen har innehållet, och hashar lämnar aldrig byrån — eller
+  `<id>`, `pending-<id>`, `<id>.<ext>`. Andra namn (seedens) är setup-fält:
+  bara admin, direkt. `downloadContent` läser aldrig en rad med fel form, och
+  `missingContent` tar inte emot sådana sökvägar.

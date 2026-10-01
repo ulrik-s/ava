@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { conflictCopyName } from "@/lib/shared/conflict-copy";
 import { base64ToBytes, bytesToBase64, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
+import { documentStoragePathSchema, foreignStoragePath, isDocumentStoragePath } from "@/lib/shared/document-storage-path";
 import { isJunkFileName } from "@/lib/shared/junk-files";
 import { log } from "@/lib/shared/observability/logger";
 import { errorMessage } from "@/lib/shared/observability/redact";
@@ -14,6 +15,7 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { documentAnalysisStatusSchema, documentDirectionSchema, documentRecipientSchema, type Document } from "@/lib/shared/schemas/document";
 import { asId, billingRunIdSchema, documentFolderIdSchema, documentIdSchema, invoiceIdSchema, matterIdSchema, userIdSchema, type BillingRunId, type InvoiceId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
+import { assertSetupFieldsAllowed } from "../../auth/setup-fields";
 import { removeDocument } from "../../documents/remove-document";
 import { writeSuggestionsFromText } from "../../documents/suggest-from-text";
 import { orgProcedure } from "../../trpc";
@@ -121,7 +123,8 @@ export const coreProcedures = {
       fileName: z.string(),
       mimeType: z.string(),
       sizeBytes: z.number(),
-      storagePath: z.string(),
+      /** Rätt form och dokumentets eget innehåll (#1372) — annars bara admin, direkt. */
+      storagePath: documentStoragePathSchema,
       folderId: documentFolderIdSchema.nullable().optional(),
       // Valfri AI-analys-metadata + setup-fält (demo-generator/fixtures,
       // ADR 0003). I appens upload-flöde sätts analysen async av `analyze`.
@@ -141,6 +144,9 @@ export const coreProcedures = {
       billingRunId: billingRunIdSchema.nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      // En sökväg till något annat än dokumentets eget innehåll (#1372) är ett
+      // setup-fält: seedens filnamn, aldrig från appen.
+      assertSetupFieldsAllowed(ctx, { storagePath: foreignStoragePath(input.storagePath, input.id) });
       // Verifiera matter:n tillhör org:n
       const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
@@ -256,7 +262,8 @@ export const coreProcedures = {
     .query(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
       const doc = (await ctx.repos.documents.getById(input.documentId)) as Document | null;
-      if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+      // En rad med en sökväg av fel form (skriven före #1372) läses aldrig.
+      if (!doc || !isDocumentStoragePath(doc.storagePath)) throw new TRPCError({ code: "NOT_FOUND" });
       const bytes = await ctx.ports.content.read(doc.storagePath);
       if (!bytes) throw new TRPCError({ code: "NOT_FOUND", message: "Innehåll saknas på servern." });
       // `version` = basversion klienten bär in i uploadContent (ADR 0033 §1).
@@ -308,7 +315,7 @@ export const coreProcedures = {
    * upp blobbar servern inte redan har (dedup på sha).
    */
   missingContent: orgProcedure
-    .input(z.object({ storagePaths: z.array(z.string()).max(500) }))
+    .input(z.object({ storagePaths: z.array(documentStoragePathSchema).max(500) }))
     .query(async ({ ctx, input }) => {
       const checks = await Promise.all(
         input.storagePaths.map(async (p) => ({ p, has: await ctx.ports.content.exists(p) })),
