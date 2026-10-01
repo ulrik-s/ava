@@ -29,6 +29,11 @@ import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { inProcessPorts } from "@/lib/client/backend/in-process-ports";
+import type { LocalDataPlace } from "@/lib/client/backend/local-data/local-data-locations";
+import { openLocalDataSession, type IdentityConfig } from "@/lib/client/backend/local-data/local-data-session";
+import { bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
+import { onSignedOutElsewhere } from "@/lib/client/backend/local-data/session-channel";
+import { pendingSignOutRedirect } from "@/lib/client/backend/local-data/sign-out";
 import type { OidcLoginOutcome, OidcClaims } from "@/lib/client/backend/oidc-principal";
 import { loadServerHelperConfig } from "@/lib/client/backend/server-trpc-client";
 import { CapabilitiesProvider } from "@/lib/client/capabilities/use-capabilities";
@@ -161,12 +166,16 @@ function useDemoBootstrap(args: BootstrapArgs) {
     // ── Self-hosted-tier: server-first (ADR 0016, cutover #420–#422) ──
     if (firmaConfig.tier === "self-hosted") {
       void bootstrapSelfHosted({ firmaConfig, queryClient, setStatus, setErrorMsg, onStoreReady, isCancelled: () => cancelled });
-      return () => { cancelled = true; };
+      // En annan flik loggade ut (#1347): ladda om, i stället för att arbeta vidare i den utloggades databaser.
+      const offSignedOut = onSignedOutElsewhere();
+      return () => { cancelled = true; offSignedOut(); };
     }
 
     // ── demo/github-tier: persisterad offline-first-kärna utan synk-mål ──
     // `createDemoStore` hydrerar IndexedDB-cachen om den finns, annars laddas
-    // den bundlade `demo-seed.json` in via reconcile/pull (ADR 0025).
+    // den bundlade `demo-seed.json` in via reconcile/pull (ADR 0025). Demons
+    // påhittade data delas medvetet av demoanvändarna (#1347: gemensamma namn).
+    bindLocalNamespace(SHARED_NAMESPACE);
     void (async () => {
       try {
         const store = await createDemoStore(firmaConfig);
@@ -466,10 +475,23 @@ interface SelfHostedBootstrapArgs {
   onStoreReady: (store: CachingSyncDataStore, client: SelfHostedClient) => void;
   isCancelled: () => boolean;
   /** Injicerbara för test; default = riktiga server-first-storen + in-process-klienten. */
-  makeStore?: () => Promise<CachingSyncDataStore>;
+  makeStore?: (local: LocalDataPlace | "binding") => Promise<CachingSyncDataStore>;
   /** Webbläsaren för sessionsgrinden (#1245). */
   gateEnv?: GateEnv;
   makeClient?: (store: CachingSyncDataStore) => SelfHostedClient;
+  /** Förbered den inloggades lokala databaser (#1347); `null` = bindningsfasen. */
+  openLocal?: (cfg: IdentityConfig, args: { binding: boolean }) => Promise<LocalDataPlace | null>;
+  /** Proxyns utloggning, om en utloggning offline inte hann avsluta den (#1347). */
+  pendingSignOut?: () => string | null;
+}
+
+/** Webbläsarens lokala databaser (#1347). */
+function browserOpenLocal(cfg: IdentityConfig, args: { binding: boolean }): Promise<LocalDataPlace | null> {
+  return openLocalDataSession({ factory: globalThis.indexedDB, storage: window.localStorage }, cfg, args);
+}
+
+function browserPendingSignOut(): string | null {
+  return pendingSignOutRedirect(window.localStorage, process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "", navigator.onLine);
 }
 
 /**
@@ -479,9 +501,9 @@ interface SelfHostedBootstrapArgs {
  * signalera redo. Ersätter den gamla iso-git-OPFS-clonen. Exporterad +
  * dep-injicerbar för enhetstest (bootstrap-effekten är annars effekt-tung).
  */
-async function defaultServerFirstStore(): Promise<CachingSyncDataStore> {
+async function defaultServerFirstStore(local: LocalDataPlace | "binding"): Promise<CachingSyncDataStore> {
   const { createServerFirstStore } = await import("@/lib/client/backend/server-first-store");
-  return createServerFirstStore();
+  return createServerFirstStore({ local });
 }
 
 /** OIDC-first-login-bindning för server-first: läs allowlisten ur storens klient
@@ -500,14 +522,23 @@ async function bindOidcFirstLogin(a: {
   return finishOidcLogin({ needsOidc: a.needsOidc, oidcClaims: a.oidcClaims, users, setStatus: a.setStatus, setErrorMsg: a.setErrorMsg });
 }
 
+/**
+ * Storen i den inloggades lokala databaser (#1347). Ny/annan identitet →
+ * bindningsfasen: storen ligger i minnet tills principalen är bunden (sidan
+ * laddas då om).
+ */
+async function openSelfHostedStore(a: SelfHostedBootstrapArgs, binding: boolean): Promise<CachingSyncDataStore> {
+  const place = await (a.openLocal ?? browserOpenLocal)(a.firmaConfig, { binding });
+  return (a.makeStore ?? defaultServerFirstStore)(place ?? "binding");
+}
+
 /** Efter grinden: bygg store + klient, bind ev. principal, signalera redo. */
 async function loadSelfHosted(a: SelfHostedBootstrapArgs, oidc: { needsOidc: boolean; oidcClaims: OidcClaims | null }): Promise<void> {
   const { firmaConfig, queryClient, setStatus, setErrorMsg, onStoreReady, isCancelled } = a;
-  const makeStore = a.makeStore ?? defaultServerFirstStore;
   // Procedur-kön (#1265, ADR 0037): servern kör om köbara anrop auktoritativt.
   const makeClient = a.makeClient ?? ((store: CachingSyncDataStore) =>
     createDemoTrpcClient(store.store, firmaConfig, (call, exec) => store.runQueuedProcedure(call, exec)));
-  const store = await makeStore();
+  const store = await openSelfHostedStore(a, oidc.needsOidc);
   if (isCancelled()) return;
   const client = makeClient(store);
   if (await bindOidcFirstLogin({ ...oidc, client, setStatus, setErrorMsg })) return;
@@ -521,7 +552,11 @@ async function loadSelfHosted(a: SelfHostedBootstrapArgs, oidc: { needsOidc: boo
 
 export async function bootstrapSelfHosted(a: SelfHostedBootstrapArgs): Promise<void> {
   try {
-    const gate = await runSessionGate(a.firmaConfig, a.gateEnv ?? browserGateEnv, a.setStatus, a.setErrorMsg);
+    const env = a.gateEnv ?? browserGateEnv;
+    // En utloggning offline (#1347): proxyns session avslutas innan grinden kan binda om den.
+    const signOut = (a.pendingSignOut ?? browserPendingSignOut)();
+    if (signOut) { env.redirect(signOut); return; }
+    const gate = await runSessionGate(a.firmaConfig, env, a.setStatus, a.setErrorMsg);
     if (gate.kind === "halt") return;
     await loadSelfHosted(a, gate);
   } catch (err) {

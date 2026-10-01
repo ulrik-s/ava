@@ -12,7 +12,8 @@ export interface ListStore<T> {
   save(items: readonly T[]): Promise<void>;
 }
 
-const KEY = "items";
+/** Nyckeln listan ligger under. */
+export const LIST_STORE_KEY = "items";
 
 /** `ListStore` i IndexedDB. `IDBFactory` injiceras (fake-indexeddb i tester). */
 export class IndexedDbListStore<T> implements ListStore<T> {
@@ -23,10 +24,10 @@ export class IndexedDbListStore<T> implements ListStore<T> {
   }
 
   async load(): Promise<T[]> {
-    return (await this.kv.get<T[]>(KEY)) ?? [];
+    return (await this.kv.get<T[]>(LIST_STORE_KEY)) ?? [];
   }
 
   async save(items: readonly T[]): Promise<void> {
-    await this.kv.put(KEY, [...items]);
+    await this.kv.put(LIST_STORE_KEY, [...items]);
   }
 }

@@ -1,73 +1,41 @@
 /**
- * `confirmSignOutIfUnsynced` (#1241) — utloggning när ändringar inte nått
+ * `syncBeforeSignOut` (#1241, #1347) — utloggning när ändringar inte nått
  * servern.
  *
- * Först görs ett sista försök att synka. Når allt fram loggas man ut utan
- * fråga; annars får användaren välja, med antalet osynkade ändringar i
- * frågan — en utloggning mitt i ett avbrott ska vara ett medvetet val.
+ * Först görs ett sista försök att synka; svaret är antalet ändringar som ändå
+ * inte nått fram. Är det noll loggas man ut utan fråga; annars frågar dialogen.
  */
 import { describe, expect, it, vi } from "vitest-compat";
-import { confirmSignOutIfUnsynced, unsyncedSignOutMessage } from "@/lib/client/sync/confirm-sign-out";
+import { syncBeforeSignOut, unsyncedSignOutMessage } from "@/lib/client/sync/confirm-sign-out";
 
-describe("confirmSignOutIfUnsynced", () => {
-  it("allt synkat → ut direkt, ingen fråga", async () => {
-    const confirm = vi.fn(() => true);
+describe("syncBeforeSignOut", () => {
+  it("synkar en gång och svarar med det som är kvar", async () => {
     const flush = vi.fn(async () => undefined);
-    expect(await confirmSignOutIfUnsynced({ flush, pendingCount: () => 0, confirm })).toBe(true);
+    expect(await syncBeforeSignOut({ flush, pendingCount: () => 0 })).toBe(0);
     expect(flush).toHaveBeenCalledTimes(1);
-    expect(confirm).not.toHaveBeenCalled();
   });
 
-  it("sista synken lyckas → ingen fråga", async () => {
+  it("sista synken lyckas → inget kvar", async () => {
     let pending = 2;
-    const confirm = vi.fn(() => false);
-    const ok = await confirmSignOutIfUnsynced({ flush: async () => { pending = 0; }, pendingCount: () => pending, confirm });
-    expect(ok).toBe(true);
-    expect(confirm).not.toHaveBeenCalled();
+    expect(await syncBeforeSignOut({ flush: async () => { pending = 0; }, pendingCount: () => pending })).toBe(0);
   });
 
-  it("synken misslyckas (offline) → frågar med antalet; nej → stannar kvar", async () => {
-    const confirm = vi.fn(() => false);
-    const ok = await confirmSignOutIfUnsynced({
-      flush: async () => { throw new Error("offline"); },
-      pendingCount: () => 2,
-      confirm,
-    });
-    expect(ok).toBe(false);
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("2 ändringar"));
+  it("synken misslyckas (offline) → antalet som inte nått fram", async () => {
+    expect(await syncBeforeSignOut({ flush: async () => { throw new Error("offline"); }, pendingCount: () => 2 })).toBe(2);
   });
 
-  it("… ja → loggas ut ändå", async () => {
-    const ok = await confirmSignOutIfUnsynced({
-      flush: async () => { throw new Error("offline"); },
-      pendingCount: () => 1,
-      confirm: () => true,
-    });
-    expect(ok).toBe(true);
+  it("en synk som aldrig svarar väntas inte ut", async () => {
+    expect(await syncBeforeSignOut({ flush: () => new Promise<void>(() => {}), pendingCount: () => 1, flushTimeoutMs: 10 })).toBe(1);
   });
-});
 
-describe("confirmSignOutIfUnsynced — hängande server", () => {
-  it("en synk som aldrig svarar väntas inte ut: frågan kommer efter tidsgränsen", async () => {
-    const confirm = vi.fn(() => false);
-    const ok = await confirmSignOutIfUnsynced({
-      flush: () => new Promise<void>(() => {}),
-      pendingCount: () => 1,
-      confirm,
-      flushTimeoutMs: 10,
-    });
-    expect(ok).toBe(false);
-    expect(confirm).toHaveBeenCalledTimes(1);
+  it("utan injicerade beroenden: ingen server-synk → noll", async () => {
+    expect(await syncBeforeSignOut()).toBe(0);
   });
 });
 
 describe("unsyncedSignOutMessage", () => {
   it("singular och plural", () => {
-    expect(unsyncedSignOutMessage(1)).toMatch(/^1 ändring har inte nått servern/);
-    expect(unsyncedSignOutMessage(3)).toMatch(/^3 ändringar har inte nått servern/);
-  });
-  it("förklarar risken och vad man kan göra", () => {
-    expect(unsyncedSignOutMessage(1)).toMatch(/kan gå förlorad/);
-    expect(unsyncedSignOutMessage(1)).toMatch(/Logga ut ändå\?/);
+    expect(unsyncedSignOutMessage(1)).toBe("Du har 1 osynkad ändring.");
+    expect(unsyncedSignOutMessage(3)).toBe("Du har 3 osynkade ändringar.");
   });
 });

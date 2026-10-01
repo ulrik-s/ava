@@ -69,6 +69,12 @@ const STORAGE_KEY = "ava.firma";
  */
 export const DEMO_REPO = process.env.NEXT_PUBLIC_DEMO_REPO || "ulrik-s/ava-demo";
 
+/**
+ * Platshållar-adresserna i default-configen — de pekar inte ut någon person
+ * (#1347: kan inte avgöra vem de lokala data från före #1347 tillhör).
+ */
+export const PLACEHOLDER_AUTHOR_EMAILS: ReadonlySet<string> = new Set(["demo@ava.local", "user@firma.local"]);
+
 const DEMO_DEFAULT: FirmaConfig = {
   tier: "demo",
   repo: DEMO_REPO,
@@ -188,6 +194,22 @@ export function patchFirmaConfig(patch: Partial<FirmaConfig>): FirmaConfig {
   const next = { ...loadFirmaConfig(), ...patch };
   saveFirmaConfig(next);
   return next;
+}
+
+/** Fälten i `ava.firma` som pekar ut den inloggade (#1347). */
+const IDENTITY_FIELDS = ["token", "principalId", "sessionVerifiedAt", "authorEmail", "authorName"] as const;
+
+/**
+ * Glöm den inloggade (utloggning, #1347): token, principal, e-post och namn
+ * tas bort — tier, byrå och övriga inställningar ligger kvar. Måste rensa
+ * principalId — annars tolkar bootstrappen omladdningen som "redan inloggad".
+ */
+export function forgetSignedInIdentity(): void {
+  if (typeof window === "undefined") return;
+  // Zod vid parsegränsen (#187): validera som objekt; trasigt → {} (utloggning rensar ändå).
+  const cfg = loadFromStorage(STORAGE_KEY, z.record(z.string(), z.unknown()).catch({}), {});
+  for (const field of IDENTITY_FIELDS) delete cfg[field];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
 }
 
 export function resetToDemo(): void {

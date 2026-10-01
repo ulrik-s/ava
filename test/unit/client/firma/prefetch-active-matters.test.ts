@@ -12,6 +12,7 @@ function deps(over: Partial<ActiveMatterPrefetchDeps> = {}) {
   const stored = new Map<string, string>();
   const published: Array<[string, string]> = [];
   const loaded: string[] = [];
+  const reconciled: Array<{ existing: string[]; used: string[] }> = [];
   const base: ActiveMatterPrefetchDeps = {
     userId: "me",
     matters: [
@@ -21,15 +22,25 @@ function deps(over: Partial<ActiveMatterPrefetchDeps> = {}) {
     ],
     documents: [doc("d1", "mine"), doc("d2", "closed"), doc("d3", "theirs"), doc("d4", "mine", null)],
     loadBlob: async (d) => { loaded.push(d.id); return new Blob(["x"]); },
-    texts: { has: async (id) => stored.has(id), put: async (id, t) => { stored.set(id, t); } },
+    texts: {
+      has: async (id) => stored.has(id),
+      put: async (id, t) => { stored.set(id, t); },
+      reconcile: async (existing, used) => { reconciled.push({ existing: [...existing].sort(), used: [...used].sort() }); },
+    },
     extract: async ({ fileName }) => `text i ${fileName}`,
     publish: (id, t) => published.push([id, t]),
     ...over,
   };
-  return { base, stored, published, loaded };
+  return { base, stored, published, loaded, reconciled };
 }
 
 describe("prefetchActiveMatters", () => {
+  it("efteråt får textcachen veta vilka dokument som finns och vilka som används (#1347)", async () => {
+    const { base, reconciled } = deps();
+    await prefetchActiveMatters(base);
+    expect(reconciled).toEqual([{ existing: ["d1", "d2", "d3", "d4"], used: ["d1", "d4"] }]);
+  });
+
   it("hämtar och indexerar bara juristens egna, aktiva ärenden", async () => {
     const { base, stored, published, loaded } = deps();
     expect(await prefetchActiveMatters(base)).toEqual({ matters: 1, cached: 2, indexed: 2 });

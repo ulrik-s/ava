@@ -121,6 +121,11 @@ services:
       AVA_IDENTITY: "${AVA_IDENTITY:-forwarded}"
       AVA_IDENTITY_ISSUER: "${OIDC_ISSUER_URL:-}"
       AVA_IDENTITY_AUDIENCE: "${AVA_IDENTITY_AUDIENCE:-${OAUTH2_PROXY_CLIENT_ID:-}}"
+      # Utloggning hos IdP:n (#1347): end_session_endpoint som klienten skickar
+      # `/oauth2/sign_out?rd=` vidare till. Tomt = bara proxyns cookie tas bort.
+      # Kräver att IdP:ns domän läggs i oauth2-proxys OAUTH2_PROXY_WHITELIST_DOMAINS,
+      # se docs/auth.md "Lokal data, byte av användare och utloggning".
+      AVA_OIDC_END_SESSION_URL: "${AVA_OIDC_END_SESSION_URL:-}"
       AVA_CONTENT_DIR: /data/content
       # "1" = inga mejl köas eller skickas (test-/pilotserver), se deploy-server-first.md.
       AVA_EMAIL_DISABLED: "${AVA_EMAIL_DISABLED:-}"

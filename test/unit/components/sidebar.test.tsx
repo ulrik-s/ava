@@ -14,16 +14,15 @@ vi.mock("next/navigation", () => ({
   usePathname: () => pathnameMock(),
 }));
 
-// signOutLocally använder window.location.replace för att navigera till
-// /login (efter ändringen som fixar "knappen gör inget"-buggen). Mockar
-// både replace + reload för bakåtkompatibilitet.
-const replaceMock = vi.fn();
+// Utloggningen (#1347) navigerar med window.location.assign: demon till
+// /login, self-hosted till oauth2-proxys /oauth2/sign_out.
+const assignMock = vi.fn();
 const reloadMock = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   pathnameMock.mockReturnValue("/");
   Object.defineProperty(window, "location", {
-    value: { ...window.location, reload: reloadMock, replace: replaceMock },
+    value: { ...window.location, reload: reloadMock, assign: assignMock },
     configurable: true,
   });
   localStorage.clear();
@@ -79,32 +78,49 @@ describe("Sidebar", () => {
     render(<Sidebar />);
     const logout = screen.getAllByText("Logga ut")[0]!;
     fireEvent.click(logout);
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
     const stored = JSON.parse(localStorage.getItem("ava.firma") ?? "{}");
     expect(stored.token).toBeUndefined();
     expect(stored.principalId).toBeUndefined();
   });
 
-  it("osynkade ändringar (#1241): frågar först; 'Avbryt' → kvar, inloggad", async () => {
+  it("osynkade ändringar (#1241, #1347): dialogen frågar; 'Avbryt' → kvar, inloggad", async () => {
     localStorage.setItem("ava.firma", JSON.stringify({ tier: "self-hosted", principalId: "u-uuid" }));
     const unregister = registerServerSyncFlush(async () => { throw new Error("offline"); }, () => 2);
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<Sidebar />);
     fireEvent.click(screen.getAllByText("Logga ut")[0]!);
-    await waitFor(() => expect(confirm).toHaveBeenCalledWith(expect.stringContaining("2 ändringar har inte nått servern")));
-    expect(replaceMock).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("sign-out-unsynced")).toHaveTextContent("Du har 2 osynkade ändringar.");
+    fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
+    await waitFor(() => expect(screen.queryByTestId("sign-out-unsynced")).toBeNull());
+    expect(assignMock).not.toHaveBeenCalled();
     expect(JSON.parse(localStorage.getItem("ava.firma") ?? "{}").principalId).toBe("u-uuid");
-    confirm.mockRestore();
     unregister();
   });
 
-  it("osynkade ändringar: 'OK' → loggas ut ändå", async () => {
+  it("osynkade ändringar: 'Logga ut ändå' → proxyns utloggning (self-hosted)", async () => {
+    localStorage.setItem("ava.firma", JSON.stringify({ tier: "self-hosted", principalId: "u-uuid" }));
     const unregister = registerServerSyncFlush(async () => { throw new Error("offline"); }, () => 1);
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<Sidebar />);
     fireEvent.click(screen.getAllByText("Logga ut")[0]!);
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
-    confirm.mockRestore();
+    fireEvent.click(await screen.findByRole("button", { name: "Logga ut ändå" }));
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith(expect.stringMatching(/^\/oauth2\/sign_out\?rd=/)));
+    expect(JSON.parse(localStorage.getItem("ava.firma") ?? "{}").principalId).toBeUndefined();
+    unregister();
+  });
+
+  it("osynkade ändringar: 'Synka' → synkar igen; når allt fram loggas man ut", async () => {
+    let pending = 1;
+    let online = false;
+    const unregister = registerServerSyncFlush(async () => {
+      if (!online) throw new Error("offline");
+      pending = 0;
+    }, () => pending);
+    render(<Sidebar />);
+    fireEvent.click(screen.getAllByText("Logga ut")[0]!);
+    await screen.findByTestId("sign-out-unsynced");
+    online = true;
+    fireEvent.click(screen.getByRole("button", { name: "Synka" }));
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
     unregister();
   });
 
@@ -267,7 +283,7 @@ describe("Sidebar — hopfällt ikon-läge (#1198)", () => {
     const logout = within(desktop()).getByRole("button", { name: "Logga ut" });
     expect(logout.getAttribute("title")).toBe("Logga ut");
     fireEvent.click(logout);
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
     const stored = JSON.parse(localStorage.getItem("ava.firma") ?? "{}");
     expect(stored.token).toBeUndefined();
   });

@@ -19,7 +19,8 @@
  * som `fsa/handle-store`) så inget server-lager importeras (dep-cruiser-gräns).
  */
 
-const DB_NAME = "ava-generated-docs";
+import { LOCAL_DB, localDbName } from "@/lib/client/backend/local-data/local-namespace";
+
 const STORE = "blobs";
 
 export interface StoredDocBlob {
@@ -32,7 +33,8 @@ export interface StoredDocBlob {
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    // Den inloggades egen databas (#1347); demon delar de gamla namnen.
+    const req = indexedDB.open(localDbName(LOCAL_DB.generatedDocs), 1);
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: "id" });
     };

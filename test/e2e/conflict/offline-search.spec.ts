@@ -17,16 +17,20 @@ import { clientFor, mintToken } from "../../../tooling/scripts/selfhosted-trpc-c
 import { expect, test } from "../_helper-isolation";
 import { login } from "./_selfhosted-login";
 
-/** Dokument-id:n med sparad text i enhetens textlager (`LocalDocumentTextStore`). */
+/**
+ * Dokument-id:n med sparad text i enhetens textlager (`LocalDocumentTextStore`)
+ * — den inloggades egen databas (#1347), indexet med en post per dokument.
+ */
 function indexedDocIds(page: Page): Promise<string[]> {
   return page.evaluate(() => new Promise<string[]>((resolve) => {
-    const open = indexedDB.open("ava-doc-text");
+    const cfg = JSON.parse(localStorage.getItem("ava.firma") ?? "{}") as Record<string, string>;
+    const open = indexedDB.open(`ava-doc-text@${cfg.organizationId}:${cfg.principalId}`);
     open.onerror = () => resolve([]);
     open.onsuccess = () => {
       const db = open.result;
       if (!db.objectStoreNames.contains("kv")) { resolve([]); return; }
       const get = db.transaction("kv", "readonly").objectStore("kv").get("__index__");
-      get.onsuccess = () => resolve(Array.isArray(get.result) ? get.result as string[] : []);
+      get.onsuccess = () => resolve(Array.isArray(get.result) ? (get.result as Array<{ id: string }>).map((e) => e.id) : []);
       get.onerror = () => resolve([]);
     };
   }));

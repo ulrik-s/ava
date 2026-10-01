@@ -4,7 +4,7 @@
  * och svaret alltid blev null).
  */
 import { afterEach, describe, expect, it, vi } from "vitest-compat";
-import { loadServerHelperConfig } from "@/lib/client/backend/server-trpc-client";
+import { loadServerEndSessionUrl, loadServerHelperConfig } from "@/lib/client/backend/server-trpc-client";
 
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
@@ -25,5 +25,14 @@ describe("loadServerHelperConfig", () => {
   it("servern utan helper-inloggning → null", async () => {
     global.fetch = vi.fn(async () => trpcResponse(null));
     expect(await loadServerHelperConfig()).toBeNull();
+  });
+});
+
+describe("loadServerEndSessionUrl (#1347)", () => {
+  it("frågar serverns system.signOutConfig och ger IdP:ns utloggnings-URL", async () => {
+    const fetchMock = vi.fn(async () => trpcResponse({ endSessionUrl: "https://idp.example/logout" }));
+    global.fetch = fetchMock;
+    expect(await loadServerEndSessionUrl()).toBe("https://idp.example/logout");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/api\/trpc\/system\.signOutConfig/);
   });
 });

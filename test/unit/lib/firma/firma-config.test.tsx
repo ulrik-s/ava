@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest-compat";
 import {
-  loadFirmaConfig, saveFirmaConfig, resetToDemo,
+  loadFirmaConfig, saveFirmaConfig, resetToDemo, forgetSignedInIdentity,
   defaultConfigForHost,
   type FirmaConfig,
 } from "@/lib/client/firma/firma-config";
@@ -121,4 +121,21 @@ describe("firma-config", () => {
     });
   });
 
+
+  describe("forgetSignedInIdentity (#1347)", () => {
+    it("glömmer den inloggade men behåller tier, byrå och övrigt", () => {
+      localStorage.setItem(KEY, JSON.stringify({
+        tier: "self-hosted", organizationId: "o", repo: "r", principalId: "u", token: "t",
+        sessionVerifiedAt: 1, authorEmail: "a@b.se", authorName: "A",
+      }));
+      forgetSignedInIdentity();
+      expect(JSON.parse(localStorage.getItem(KEY) ?? "{}")).toEqual({ tier: "self-hosted", organizationId: "o", repo: "r" });
+    });
+
+    it("trasig config → tom", () => {
+      localStorage.setItem(KEY, "{ trasig");
+      forgetSignedInIdentity();
+      expect(localStorage.getItem(KEY)).toBe("{}");
+    });
+  });
 });

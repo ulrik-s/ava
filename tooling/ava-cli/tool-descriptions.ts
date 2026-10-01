@@ -218,6 +218,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   // ── System ───────────────────────────────────────────────────────
   "system.capabilities": "Vad den här installationen kan (demo, self-hosted eller serverdrift) — styr vilka funktioner som är tillgängliga.",
   "system.helperConfig": "Inloggningskonfiguration som webbappen pushar till den lokala hjälpprocessen. Null i demon.",
+  "system.signOutConfig": "Var utloggningen avslutas hos identitetsleverantören (IdP:ns utloggningsadress), eller null om bara proxyns session avslutas.",
 
   // ── Uppgifter ────────────────────────────────────────────────────
   "task.list": "Lista uppgifter, valfritt filtrerat på status eller ärende.",

@@ -36,6 +36,7 @@ import { LocalStore } from "./local-store";
 import type { LocalStorePersistence } from "./local-store-persistence";
 import {
   isProcedureCall, MutationQueue, type MutationQueuePersistence, type ProcedureTouch, type QueueEntry, type QueuedMutation,
+  type QueueOwner,
 } from "./mutation-queue";
 import { ReconcileEngine, type ConflictRecord, type ReconcileResult } from "./reconcile-engine";
 import type { SyncTransport } from "./sync-transport";
@@ -56,6 +57,11 @@ export interface CachingSyncDeps {
   writeBack?: (event: MutationEvent<Record<string, unknown>>) => void | Promise<void>;
   /** Persistens för mutations-kön (IndexedDB i browsern). */
   queuePersistence?: MutationQueuePersistence;
+  /**
+   * Användaren storen arbetar som (#1347): nya köposter stämplas med henne,
+   * och en annan användares poster i lagringen spelas aldrig upp.
+   */
+  owner?: QueueOwner;
   /** Delta-sync-cursor-lagring. Default: in-memory. */
   cursor?: CursorStore;
   /**
@@ -257,7 +263,7 @@ export class CachingSyncDataStore {
 
   /** Hydrera (kö + source ur persistens) och komponera klossarna (server-vägen). */
   static async create(deps: CachingSyncDeps): Promise<CachingSyncDataStore> {
-    const queue = await MutationQueue.hydrate(deps.queuePersistence);
+    const queue = await MutationQueue.hydrate(deps.queuePersistence, deps.owner);
     const hydrated = deps.persistence ? await deps.persistence.hydrate() : null;
     const source = await repairHydrated(hydrated ?? deps.seed ?? {}, queue, deps.persistence);
     const store = CachingSyncDataStore.wire(deps, queue, source);

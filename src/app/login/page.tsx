@@ -17,11 +17,12 @@ import { useEffect, useState } from "react";
 import { loadDemoMeta, type DemoMeta, type DemoMetaUser } from "@/lib/client/demo/demo-meta";
 import { loadFirmaConfig, patchFirmaConfig } from "@/lib/client/firma/firma-config";
 import { DEMO_PASSWORD } from "../../../tooling/demo-config";
+import { selfHostedInfo, type LoginInfo } from "./_self-hosted-info";
 
 type State =
   | { kind: "loading" }
   | { kind: "ready"; meta: DemoMeta }
-  | { kind: "info"; message: string }
+  | LoginInfo
   | { kind: "error"; message: string };
 
 async function initLogin(
@@ -30,13 +31,7 @@ async function initLogin(
 ): Promise<void> {
   const cfg = loadFirmaConfig();
   if (cfg.tier !== "demo") {
-    setState({
-      kind: "info",
-      message:
-        "Self-hosted: inloggning sker via din identitetsleverantör (OIDC). " +
-        "oauth2-proxy dirigerar dig dit automatiskt — den här sidan används " +
-        "bara i demo-läget.",
-    });
+    setState(selfHostedInfo(new URLSearchParams(window.location.search).has("signedOut")));
     return;
   }
   try {
@@ -109,7 +104,7 @@ export default function LoginPage() {
               href={`${process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? ""}/`}
               className="inline-block w-full text-center rounded-md bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium"
             >
-              Till startsidan
+              {state.action}
             </a>
           </div>
         )}

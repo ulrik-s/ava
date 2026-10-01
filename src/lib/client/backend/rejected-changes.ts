@@ -19,7 +19,9 @@
 
 import { z } from "zod";
 import type { ChangeChannel } from "@/lib/server/data-store/in-memory/change-channel";
-import { IdbEntryStore } from "@/lib/server/data-store/in-memory/idb-entry-store";
+import {
+  IdbEntryStore, v2Location, type EntryStoreLocation, type LegacyListPlace,
+} from "@/lib/server/data-store/in-memory/idb-entry-store";
 import { queueEntrySchema } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { rowConflictRetryable, type ConflictRecord } from "@/lib/server/data-store/in-memory/reconcile-engine";
 import { describeQueueEntry } from "./describe-queue-entry";
@@ -57,17 +59,26 @@ export interface RejectedChangesPersistence {
   subscribe?(listener: () => void): () => void;
 }
 
+/** Var avvisningarna låg före #1346: en array under nyckeln `items`. */
+export const REJECTED_LEGACY_LIST: LegacyListPlace = { storeName: "rejected", key: "items", idField: "id" };
+
 /**
- * IndexedDB (webbläsaren) — en rad per avvisning. Raderna ligger i `<dbName>-v2`; den gamla
- * databasens lista (allt under nyckeln `items`) flyttas hit vid varje läsning
- * — utan att den gamla databasen uppgraderas (se `idb-entry-store.ts`).
+ * IndexedDB (webbläsaren) — en rad per avvisning. Med ett databasnamn ligger
+ * raderna i `<dbName>-v2` och den gamla databasens lista (allt under nyckeln
+ * `items`) flyttas hit vid varje läsning — utan att den gamla databasen
+ * uppgraderas (se `idb-entry-store.ts`). Användarens egen lista (#1347) ges
+ * som en `EntryStoreLocation`.
  */
 export class IndexedDbRejectedChangesPersistence implements RejectedChangesPersistence {
   private readonly entries: IdbEntryStore<RejectedChange>;
-  constructor(factory: IDBFactory = globalThis.indexedDB, dbName = "ava-rejected-changes", channel?: ChangeChannel) {
+  constructor(
+    factory: IDBFactory = globalThis.indexedDB,
+    at: string | EntryStoreLocation = "ava-rejected-changes",
+    channel?: ChangeChannel,
+  ) {
     this.entries = new IdbEntryStore({
-      factory, dbName, schema: rejectedChangeSchema,
-      legacy: { storeName: "rejected", key: "items", idField: "id" },
+      factory, schema: rejectedChangeSchema,
+      location: typeof at === "string" ? v2Location(factory, at, REJECTED_LEGACY_LIST) : at,
       ...(channel ? { channel } : {}),
     });
   }

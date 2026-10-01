@@ -23,8 +23,10 @@ import type { LocalStorePersistence } from "@/lib/server/data-store/in-memory/lo
 import {
   IndexedDbMutationQueuePersistence,
   type MutationQueuePersistence,
+  type QueueOwner,
 } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { asId, type DocumentId } from "@/lib/shared/schemas/ids";
 import { isUuid } from "@/lib/shared/uuid";
 import { uuidv5 } from "@/lib/shared/uuid-derive";
@@ -32,6 +34,8 @@ import { loadAllGeneratedDocBlobs } from "../demo/generated-doc-idb";
 import { DocumentContentCache } from "./content-cache";
 import { queueLocalGeneratedDocs, syncDocumentContent } from "./content-sync";
 import { serverTrpcEndpoint } from "./http-backend-runtime";
+import { queueLocation, rejectedLocation, type LocalDataPlace } from "./local-data/local-data-locations";
+import { activeLocalNamespace, dbNameIn, LOCAL_DB } from "./local-data/local-namespace";
 import {
   IndexedDbRejectedChangesPersistence, InMemoryRejectedChangesPersistence, rejectedChanges,
   type RejectedChanges, type RejectedChangesPersistence,
@@ -52,11 +56,46 @@ export interface ServerFirstStoreDeps {
   skipInitialReconcile?: boolean;
   /** Var avvisade ändringar sparas (#1266). Default: flikens, i IndexedDB. */
   rejected?: { changes: RejectedChanges; persistence: RejectedChangesPersistence };
+  /**
+   * Vems lokala databaser (#1347). Default: den bundna namnrymdens.
+   * `"binding"` = bindningsfasen (ny eller annan identitet): allt i minnet —
+   * ingenting sparas lokalt, ingen räddning och ingen byte-synk, förrän det
+   * är avgjort vem som loggar in.
+   */
+  local?: LocalDataPlace | "binding";
+}
+
+/** Storens lokala lagring för en plats (#1347). */
+interface LocalParts {
+  persistence?: LocalStorePersistence;
+  queuePersistence?: MutationQueuePersistence;
+  rejected: RejectedChangesPersistence;
+  owner?: QueueOwner;
+  /** Sparas något lokalt (räddning + byte-synk), eller är allt i minnet? */
+  persistent: boolean;
 }
 
 /** IndexedDB i webbläsaren; i minnet där den saknas (tester, äldre miljöer). */
-function defaultRejectedPersistence(): RejectedChangesPersistence {
-  return typeof globalThis.indexedDB === "undefined" ? new InMemoryRejectedChangesPersistence() : new IndexedDbRejectedChangesPersistence();
+function rejectedPersistence(place: LocalDataPlace): RejectedChangesPersistence {
+  return typeof place.factory === "undefined"
+    ? new InMemoryRejectedChangesPersistence()
+    : new IndexedDbRejectedChangesPersistence(place.factory, rejectedLocation(place));
+}
+
+/** Platsens databaser; köposterna stämplas med användaren (#1347). */
+function placeParts(place: LocalDataPlace): LocalParts {
+  return {
+    persistence: new IndexedDbPersistence(place.factory, dbNameIn(place.ns, LOCAL_DB.localStore)),
+    queuePersistence: new IndexedDbMutationQueuePersistence(place.factory, queueLocation(place)),
+    rejected: rejectedPersistence(place),
+    ...(place.ns.kind === "user" ? { owner: place.ns.scope } : {}),
+    persistent: true,
+  };
+}
+
+function localParts(local: ServerFirstStoreDeps["local"]): LocalParts {
+  if (local === "binding") return { rejected: new InMemoryRejectedChangesPersistence(), persistent: false };
+  return placeParts(local ?? { factory: globalThis.indexedDB, ns: activeLocalNamespace(), adoptsLegacy: false });
 }
 
 /** Lokalt dokument-id → serverns id (samma översättning som legacy-id-reparationen, #1124). */
@@ -75,13 +114,23 @@ async function rescueLocalGeneratedDocs(): Promise<void> {
   }
 }
 
+/** Storens lagring: testets överstyrning, annars platsens (#1347). */
+function storageOf(deps: ServerFirstStoreDeps, local: LocalParts) {
+  return omitUndefined({
+    persistence: deps.persistence ?? local.persistence,
+    queuePersistence: deps.queuePersistence ?? local.queuePersistence,
+    owner: local.owner,
+  });
+}
+
 /**
  * Bygg + hydrera self-hosted-klientens server-first-store och gör en initial
  * reconcile (pull) mot servern. Returnerar `CachingSyncDataStore` — `.store` är
  * `ctx.dataStore`, `.reconcile()` driver löpande synk.
  */
 export async function createServerFirstStore(deps: ServerFirstStoreDeps = {}): Promise<CachingSyncDataStore> {
-  const rejected = deps.rejected ?? { changes: rejectedChanges, persistence: defaultRejectedPersistence() };
+  const local = localParts(deps.local);
+  const rejected = deps.rejected ?? { changes: rejectedChanges, persistence: local.rejected };
   await rejected.changes.attach(rejected.persistence);
   const client = createTRPCClient<AppRouter>({
     links: [
@@ -94,15 +143,15 @@ export async function createServerFirstStore(deps: ServerFirstStoreDeps = {}): P
   });
   const cachingSync = await CachingSyncDataStore.create({
     transport: new TrpcSyncTransport(client),
-    persistence: deps.persistence ?? new IndexedDbPersistence(),
-    queuePersistence: deps.queuePersistence ?? new IndexedDbMutationQueuePersistence(),
+    ...storageOf(deps, local),
     // Byte-synk (#518/#1143): varje reconcile laddar upp dokument-bytes servern
-    // saknar — inte bara vid sidladdning.
-    afterReconcile: () => syncDocumentContent(client).catch((e: unknown) => console.warn("[server-first] byte-synk misslyckades:", e)),
+    // saknar — inte bara vid sidladdning. Bindningsfasen har inga lokala bytes.
+    afterReconcile: () => (local.persistent ? syncDocumentContent(client) : Promise.resolve())
+      .catch((e: unknown) => console.warn("[server-first] byte-synk misslyckades:", e)),
     // Avvisade ändringar sparas (#1266) — ingen försvinner tyst.
     onConflicts: (conflicts) => rejected.changes.record(conflicts),
   });
-  await rescueLocalGeneratedDocs();
+  if (local.persistent) await rescueLocalGeneratedDocs();
   if (!deps.skipInitialReconcile) {
     // Best-effort (#879): reconcile kör pull→apply→replay, så pullad data är redan
     // hydrerad i in-memory-storen innan en ev. replay-throw. Ett sync-fel (t.ex. en

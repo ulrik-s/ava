@@ -17,13 +17,26 @@
 
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { organizationIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
 import { QUEUE_FORMAT_VERSION } from "@/lib/shared/sync/queue-format";
 import { uuidv7 } from "@/lib/shared/uuid";
 import type { ChangeChannel } from "./change-channel";
-import { IdbEntryStore } from "./idb-entry-store";
+import { IdbEntryStore, v2Location, type EntryStoreLocation, type LegacyListPlace } from "./idb-entry-store";
+import { reportIdbProblem } from "./idb-open";
 import type { MutationEvent } from "./writable-delegate";
 
 const rowRecord = z.record(z.string(), z.unknown());
+
+/**
+ * Vem som köade posten (#1347): användaren och byrån. Kön spelar bara upp sin
+ * egen användares poster, och servern vägrar en post som inte är den
+ * inloggades. Saknas på poster köade före #1347 — de ligger i användarens
+ * egen databas och är därmed hennes.
+ */
+export const queueOwnerSchema = z.object({ principalId: userIdSchema, organizationId: organizationIdSchema }).strict();
+
+/** Vem som köade posten. */
+export type QueueOwner = z.infer<typeof queueOwnerSchema>;
 
 /** En radpost (radkön), så som den sparas i IndexedDB. */
 const queuedMutationSchema = z.object({
@@ -42,6 +55,7 @@ const queuedMutationSchema = z.object({
   enqueuedAt: z.number(),
   /** Köformatet posten skrevs i (#1247). Saknas på poster från före stämplingen = 1. */
   format: z.number().optional(),
+  owner: queueOwnerSchema.exactOptional(),
 });
 
 /** En rad som ett köat procedur-anrop skrev lokalt (för att läsa tillbaka serverns läge). */
@@ -64,6 +78,7 @@ const queuedProcedureCallSchema = z.object({
   enqueuedAt: z.number(),
   /** Köformatet posten skrevs i (#1247). Saknas på poster från före stämplingen = 1. */
   format: z.number().optional(),
+  owner: queueOwnerSchema.exactOptional(),
 });
 
 /** En köpost så som den sparas (#1346): tolkas strikt när den läses ur IndexedDB. */
@@ -77,6 +92,12 @@ export type ProcedureTouch = z.infer<typeof procedureTouchSchema>;
 export type QueuedProcedureCall = z.infer<typeof queuedProcedureCallSchema>;
 /** En post i kön: en färdig rad eller ett procedur-anrop. */
 export type QueueEntry = z.infer<typeof queueEntrySchema>;
+
+/** Köades posten av `owner`? En post utan ägare (före #1347) hör till databasens användare. */
+export function isOwnedBy(entry: QueueEntry, owner: QueueOwner): boolean {
+  return !entry.owner
+    || (entry.owner.principalId === owner.principalId && entry.owner.organizationId === owner.organizationId);
+}
 
 /** Är posten ett procedur-anrop (och inte en rad)? */
 export function isProcedureCall(entry: QueueEntry): entry is QueuedProcedureCall {
@@ -123,21 +144,26 @@ export class InMemoryMutationQueuePersistence implements MutationQueuePersistenc
   }
 }
 
+/** Var kön låg före #1346: en array under nyckeln `pending`. */
+export const QUEUE_LEGACY_LIST: LegacyListPlace = { storeName: "queue", key: "pending", idField: "mutationId" };
+
 /**
- * IndexedDB-persistens — en rad per köpost (#1346). Raderna ligger i `<dbName>-v2`; den gamla
- * databasens kö (allt under nyckeln `pending`) flyttas hit vid varje läsning
- * — utan att den gamla databasen uppgraderas (se `idb-entry-store.ts`).
+ * IndexedDB-persistens — en rad per köpost (#1346). Med ett databasnamn ligger
+ * raderna i `<dbName>-v2` och den gamla databasens kö (allt under nyckeln
+ * `pending`) flyttas hit vid varje läsning — utan att den gamla databasen
+ * uppgraderas (se `idb-entry-store.ts`). Användarens egen kö (#1347) ges som
+ * en `EntryStoreLocation`.
  */
 export class IndexedDbMutationQueuePersistence implements MutationQueuePersistence {
   private readonly entries: IdbEntryStore<QueueEntry>;
   constructor(
     factory: IDBFactory = globalThis.indexedDB,
-    dbName = "ava-mutation-queue",
+    at: string | EntryStoreLocation = "ava-mutation-queue",
     channel?: ChangeChannel,
   ) {
     this.entries = new IdbEntryStore({
-      factory, dbName, schema: queueEntrySchema,
-      legacy: { storeName: "queue", key: "pending", idField: "mutationId" },
+      factory, schema: queueEntrySchema,
+      location: typeof at === "string" ? v2Location(factory, at, QUEUE_LEGACY_LIST) : at,
       ...(channel ? { channel } : {}),
     });
   }
@@ -178,11 +204,17 @@ export class MutationQueue {
   /** Kedjan som gör att flikens egna köoperationer körs en i taget. */
   private chain: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly persistence?: MutationQueuePersistence) {}
+  /**
+   * @param owner Användaren kön arbetar som (#1347). Hennes nya poster stämplas
+   *   med henne, och en annan användares poster läses aldrig in — de spelas
+   *   inte upp, kvitteras inte och tas inte bort. Utan ägare (demon, tester)
+   *   läses allt.
+   */
+  constructor(private readonly persistence?: MutationQueuePersistence, private readonly owner?: QueueOwner) {}
 
   /** Skapa en kö och hydrera den ur persistensen (om någon). */
-  static async hydrate(persistence?: MutationQueuePersistence): Promise<MutationQueue> {
-    const q = new MutationQueue(persistence);
+  static async hydrate(persistence?: MutationQueuePersistence, owner?: QueueOwner): Promise<MutationQueue> {
+    const q = new MutationQueue(persistence, owner);
     await q.refresh();
     return q;
   }
@@ -193,8 +225,19 @@ export class MutationQueue {
    */
   refresh(): Promise<void> {
     return this.serial(async () => {
-      if (this.persistence) this.items = await this.persistence.load();
+      if (this.persistence) this.items = this.ownEntries(await this.persistence.load());
     });
+  }
+
+  /** Bara ägarens poster (#1347); en annan användares rapporteras och lämnas orörda. */
+  private ownEntries(entries: QueueEntry[]): QueueEntry[] {
+    const owner = this.owner;
+    if (!owner) return entries;
+    const own = entries.filter((e) => isOwnedBy(e, owner));
+    if (own.length < entries.length) {
+      reportIdbProblem(new Error(`${entries.length - own.length} köade ändringar tillhör en annan användare och spelas inte upp.`));
+    }
+    return own;
   }
 
   /**
@@ -222,6 +265,7 @@ export class MutationQueue {
         baseVersion: opts.baseVersion,
         enqueuedAt: opts.now ?? Date.now(),
         format: QUEUE_FORMAT_VERSION,
+        owner: this.owner,
       }) as QueuedMutation;
       await this.append(item);
       return item;
@@ -246,6 +290,7 @@ export class MutationQueue {
         touches: call.touches,
         enqueuedAt: opts.now ?? Date.now(),
         format: QUEUE_FORMAT_VERSION,
+        ...(this.owner ? { owner: this.owner } : {}),
       };
       await this.append(item);
       return item;

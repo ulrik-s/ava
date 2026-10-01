@@ -10,8 +10,10 @@
  *   - fel i store-bygget → error-status
  *   - avbruten (unmount) innan klar → ingen onStoreReady
  */
+import { IDBFactory } from "fake-indexeddb";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { bootstrapSelfHosted } from "@/components/shell/demo-bootstrap";
+import { activeLocalScope, bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
 import type { FirmaConfig } from "@/lib/client/firma/firma-config";
 
 const baseConfig: FirmaConfig = {
@@ -24,6 +26,8 @@ const { principalId: _omit, ...noPrincipal } = baseConfig;
 // `user.list` returnerar router-formen `{ users }` (INTE en naken array) —
 // matchar produktionen så bind-shapen testas på riktigt.
 const fakeStore = { store: {} } as never;
+/** Den inloggades lokala databaser (#1347) — en fejk-plats; `openLocal` testas för sig. */
+const place = { factory: {} as IDBFactory, ns: { kind: "shared" as const }, adoptsLegacy: false };
 function clientReturning(users: unknown[]) {
   return vi.fn(() => ({ user: { list: { query: vi.fn(async () => ({ users })) } } }) as never);
 }
@@ -37,6 +41,8 @@ function makeArgs(over: Partial<Parameters<typeof bootstrapSelfHosted>[0]> = {})
     isCancelled: () => false,
     makeStore: vi.fn(async () => fakeStore),
     makeClient: clientReturning([]),
+    openLocal: vi.fn(async (_cfg: unknown, args: { binding: boolean }) => (args.binding ? null : place)),
+    pendingSignOut: () => null,
     ...over,
   };
 }
@@ -65,6 +71,9 @@ describe("bootstrapSelfHosted", () => {
     const args = makeArgs();
     await bootstrapSelfHosted(args);
     expect(args.makeStore).toHaveBeenCalledTimes(1);
+    // Samma identitet → den inloggades egna databaser (#1347).
+    expect(args.openLocal).toHaveBeenCalledWith(baseConfig, { binding: false });
+    expect(args.makeStore).toHaveBeenCalledWith(place);
     expect(args.makeClient).toHaveBeenCalledWith(fakeStore);
     expect(args.onStoreReady).toHaveBeenCalledWith(fakeStore, expect.anything());
     expect(args.setStatus).toHaveBeenCalledWith("ready");
@@ -94,6 +103,9 @@ describe("bootstrapSelfHosted", () => {
       makeClient: vi.fn(() => ({ user: { list: { query: listQuery } } }) as never),
     });
     await bootstrapSelfHosted(args);
+    // Ny identitet → bindningsfasen: storen i minnet, inget sparas lokalt (#1347).
+    expect(args.openLocal).toHaveBeenCalledWith(noPrincipal, { binding: true });
+    expect(args.makeStore).toHaveBeenCalledWith("binding");
     expect(listQuery).toHaveBeenCalledTimes(1);
     expect(args.onStoreReady).toHaveBeenCalled();
     expect(args.setStatus).toHaveBeenCalledWith("ready");
@@ -134,6 +146,34 @@ describe("bootstrapSelfHosted", () => {
     const args = makeArgs({ gateEnv: gateEnv(), firmaConfig: { ...baseConfig, sessionVerifiedAt: NOW - 1000 } });
     await bootstrapSelfHosted(args);
     expect(args.setStatus).toHaveBeenCalledWith("ready");
+  });
+
+  it("utloggning offline som inte avslutade proxyns session (#1347): dit först, ingen grind, ingen store", async () => {
+    const env = gateEnv();
+    const args = makeArgs({ gateEnv: env, pendingSignOut: () => "/oauth2/sign_out?rd=x" });
+    await bootstrapSelfHosted(args);
+    expect(env.redirect).toHaveBeenCalledWith("/oauth2/sign_out?rd=x");
+    expect(probeUserinfo).not.toHaveBeenCalled();
+    expect(args.makeStore).not.toHaveBeenCalled();
+  });
+
+  it("webbläsarens defaults (#1347): den inloggades egna databaser binds, ingen väntande utloggning", async () => {
+    const prevIdb = Reflect.get(globalThis, "indexedDB");
+    Reflect.set(globalThis, "indexedDB", new IDBFactory());
+    const { openLocal: _o, pendingSignOut: _p, ...defaults } = makeArgs();
+    await bootstrapSelfHosted(defaults);
+    Reflect.set(globalThis, "indexedDB", prevIdb);
+    expect(defaults.makeStore).toHaveBeenCalledWith(expect.objectContaining({ ns: { kind: "user", scope: { organizationId: "org", principalId: "p1" } } }));
+    expect(activeLocalScope()).toEqual({ organizationId: "org", principalId: "p1" });
+    bindLocalNamespace(SHARED_NAMESPACE);
+  });
+
+  it("webbläsarens default: en väntande utloggning (online) går till proxyns utloggning", async () => {
+    localStorage.setItem("ava.pendingSignOut", "1");
+    const env = gateEnv();
+    const { pendingSignOut: _p, ...args } = makeArgs({ gateEnv: env });
+    await bootstrapSelfHosted(args);
+    expect(env.redirect).toHaveBeenCalledWith(expect.stringMatching(/^\/oauth2\/sign_out\?rd=/));
   });
 
   it("offline efter grace: tydligt besked, ingen store", async () => {

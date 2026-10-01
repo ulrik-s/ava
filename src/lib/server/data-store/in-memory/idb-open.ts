@@ -82,3 +82,19 @@ export function openExistingDatabase(factory: IDBFactory, name: string): Promise
     };
   });
 }
+
+/**
+ * Radera databasen `name` (#1347). Väntar medan en annan anslutning håller den
+ * öppen (våra stänger sig vid `versionchange`), men högst `timeoutMs`.
+ * `true` = raderad (eller fanns inte); `false` = blockerad eller fel — då
+ * ligger raderingen kvar som begäran och anroparen får försöka igen.
+ */
+export function deleteDatabase(factory: IDBFactory, name: string, timeoutMs: number = BLOCKED_TIMEOUT_MS): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    const done = (ok: boolean) => { clearTimeout(timer); resolve(ok); };
+    const req = factory.deleteDatabase(name);
+    req.onsuccess = () => done(true);
+    req.onerror = () => done(false);
+  });
+}

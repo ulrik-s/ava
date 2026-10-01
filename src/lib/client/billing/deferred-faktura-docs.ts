@@ -5,6 +5,7 @@
  */
 
 import { IndexedDbListStore, type ListStore } from "@/lib/client/backend/idb-list-store";
+import { LOCAL_DB, localDbName } from "@/lib/client/backend/local-data/local-namespace";
 import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import type { InvoiceSpecification } from "@/lib/shared/invoice-specification";
 import type { MatterId } from "@/lib/shared/schemas/ids";
@@ -35,7 +36,8 @@ let defaultStore: DeferredFakturaStore | null = null;
 /** Den aktiva lagringen (testets, annars IndexedDB). */
 export function deferredFakturaStore(): DeferredFakturaStore {
   if (override) return override;
-  defaultStore ??= new IndexedDbListStore<DeferredFakturaDoc>("ava-deferred-faktura-docs");
+  // Den inloggades egen databas (#1347).
+  defaultStore ??= new IndexedDbListStore<DeferredFakturaDoc>(localDbName(LOCAL_DB.deferredFakturaDocs));
   return defaultStore;
 }
 

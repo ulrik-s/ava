@@ -222,9 +222,13 @@ sist i `build-demo.sh` och förcachar skalet: sidorna utan id (+ RSC-payloads),
   `navigator.storage.persist()` när server-synken startar och när /settings
   öppnas. Svaret visas (`StorageStatus` under Datakälla); nekat + osynkade
   ändringar → varningen "Lokal lagring kan rensas" bredvid statuspillen.
-- **Utloggning**: `signOutWithSyncCheck` synkar en sista gång och frågar om
-  ändringar ändå inte nått servern (`unsyncedChangeCount()` via
-  `registerServerSyncFlush`).
+- **Utloggning** (#1347): `useSignOutFlow` synkar en sista gång och frågar i
+  en dialog om ändringar ändå inte nått servern (`unsyncedChangeCount()` via
+  `registerServerSyncFlush`): synka / logga ut ändå / avbryt. Sedan rensas
+  den lokala datan och proxyns session avslutas — se
+  [auth.md](./auth.md#lokal-data-byte-av-användare-och-utloggning-1347-advokatsekretess).
+- **Lokala databaser per användare och byrå** (#1347): namnen bär byrå +
+  användare (`local-data/local-namespace.ts`); köposter bär sin ägare.
 - **Offline-mutationer**: `makeAppQueryClient` kör `networkMode: "always"` —
   TanStacks standard pausade varje mutation så fort webbläsaren gick offline.
 - **E2E**: `demo-storage-persistence.spec.ts`, `demo-offline.spec.ts` (kontakt

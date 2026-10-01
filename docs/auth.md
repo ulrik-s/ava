@@ -78,6 +78,89 @@ det som redan finns lokalt på enheten. Sessionshemligheten är proxyns
 HttpOnly-cookie. Option B i ADR 0018 (`offline_access`-refresh-token) är inte
 byggd.
 
+### Lokal data, byte av användare och utloggning (#1347, advokatsekretess)
+
+**Lokala databaser per användare och byrå.** Allt klienten sparar om byråns
+data i webbläsaren ligger i IndexedDB-databaser vars namn bär byråns och
+användarens id (`<namn>@<byrå>:<användare>`,
+`src/lib/client/backend/local-data/local-namespace.ts`). Inventariet
+(`LOCAL_DB`):
+
+| Databas | Innehåll | Vid utloggning |
+|---|---|---|
+| `ava-local-store` | cachen av byråns data (hela snapshotet) | raderas |
+| `ava-doc-text` | dokumenttext för den lokala sökningen | raderas |
+| `ava-doc-content` | dokumentbytes + dokument som väntar på uppladdning | läs-cachen raderas; väntande uppladdningar behålls |
+| `ava-generated-docs` | räddningskopior av lokalt genererade dokument | behålls bara om uppladdningar väntar |
+| `ava-mutation-queue` | osynkade ändringar (rader + procedur-anrop) | behålls om den inte är tom |
+| `ava-rejected-changes` | ändringar servern avvisade, som väntar på ställningstagande | behålls om den inte är tom |
+| `ava-deferred-faktura-docs` | fakturadokument som väntar på fakturanummer | behålls om den inte är tom |
+
+Övrigt i webbläsaren: `ava.firma` (identiteten glöms vid utloggning — tier,
+byrå och inställningar ligger kvar), `ava.calendar.selectedUsers` och
+`ava.outlookToken` (tas bort), hela `sessionStorage` (Microsoft-inloggningens
+tokens; töms), service workerns `ava-app-*`-cache (bara appens skal, aldrig
+byråns data eller dokument). Demon (GitHub Pages) använder de gamla,
+gemensamma namnen: påhittad, publik data som demoanvändarna medvetet delar.
+
+**Beslutet om utloggning.** Webbläsarprofilen är gemensam för alla som
+använder datorn — det som ligger kvar efter en utloggning kan nästa person
+läsa (utvecklarverktygen räcker), oavsett vilket namn databasen har. Därför
+raderas allt som bara är en kopia av serverns data. Det enda som ligger kvar
+är användarens eget **osynkade arbete**, i hennes egna databaser, tills hon
+loggar in igen som samma användare (då synkas det). Att radera det vore att
+kasta advokatens arbete; att behålla det är en medveten avvägning — och
+dialogen säger det: *"Du har N osynkade ändringar"* → **Synka** / **Logga ut
+ändå** (ändringarna sparas till nästa inloggning som samma användare) /
+**Avbryt**. Finns inget osynkat raderas allt.
+
+**Utloggningen** (`sign-out.ts`): synka → fråga → rensa lokal data → glöm
+identiteten → andra flikar laddar om (`ava-session`-kanalen) →
+`/oauth2/sign_out?rd=…`. oauth2-proxys `sign_out` tar bara bort proxyns egen
+HttpOnly-cookie (den går inte att ta bort från JavaScript); IdP:ns session
+(Entra) lever kvar, och nästa inloggning i samma webbläsare går då tyst
+igenom som samma person. För RP-initierad utloggning hos IdP:n:
+
+```
+# server-first (ava-server.env): IdP:ns end_session_endpoint, med retur till landningssidan
+AVA_OIDC_END_SESSION_URL=https://login.microsoftonline.com/<tenant>/oauth2/v2.0/logout?post_logout_redirect_uri=https%3A%2F%2F<din-host>%2Flogin%2F%3FsignedOut%3D1
+# oauth2-proxy: rd följs bara till vitlistade domäner
+OAUTH2_PROXY_WHITELIST_DOMAINS=login.microsoftonline.com
+```
+
+`post_logout_redirect_uri` måste också vara registrerad som en av
+app-registreringens redirect-URI:er i Entra. Utan konfigurationen landar
+utloggningen på `/login/?signedOut=1` ("Du är utloggad"). Utloggning offline:
+allt lokalt görs ändå, och nästa start online går via `/oauth2/sign_out`
+först (`ava.pendingSignOut`) — annars skulle cookien släppa in nästa person.
+
+**Byte av användare.** Ser sessionsgrinden en annan identitet än den bundna
+(`bind`) är den förra användarens session i webbläsaren slut: hennes lokala
+data rensas som vid en utloggning (hennes osynkade arbete ligger kvar åt
+henne). Bindningsfasen kör storen helt i minnet — inget sparas lokalt förrän
+det är avgjort vem som loggar in — och sidan laddas om under den nya
+användarens egna databaser.
+
+**A:s kö spelas aldrig upp som B.** Köposter stämplas med användare och byrå
+(`owner`). Klienten läser bara in den inloggades poster (en annan användares
+spelas inte upp, kvitteras inte och tas inte bort), och servern (`sync.push`,
+`sync.replay`) vägrar en post vars ägare inte är den inloggade (UNAUTHORIZED
+— kön stannar, inget avvisas). Servern kör ändå alltid som `ctx.user`.
+
+**Migrering från före #1347.** De gemensamma databaserna tillhör den användare
+som var bunden när den nya koden kördes första gången (`principalId`, annars
+e-postadressen om hon loggat ut med gammal kod); ägaren avgörs en gång och
+sparas (`ava.localData.legacyOwner`). Bara hon tar över dem: kön och de
+avvisade ändringarna flyttas post för post vid varje läsning (som #1346:
+idempotent, kvitterade poster kommer inte tillbaka, de gamla databaserna
+uppgraderas aldrig), övriga kopieras och raderas. En annan användare tar
+aldrig över dem — för henne raderas bara deras cache-kopior.
+
+**Textcachen** (`ava-doc-text`) glömmer texten för ett borttaget dokument vid
+nästa synk (eller start) och hålls under 50 MB (räknat som UTF-16); den text
+som använts längst sedan går först. Dokument i juristens aktiva ärenden räknas
+som använda vid varje förladdning.
+
 **Skarp drift (env, ur valvet):**
 
 ```

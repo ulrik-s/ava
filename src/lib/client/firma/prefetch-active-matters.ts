@@ -33,7 +33,12 @@ export interface ActiveMatterPrefetchDeps {
   documents: readonly ActiveMatterDoc[];
   /** Cache-först: hämtar och cachar bytes, null om det inte gick. */
   loadBlob: (doc: { id: DocumentId; storagePath: string | null; fileName: string }) => Promise<Blob | null>;
-  texts: { has(id: string): Promise<boolean>; put(id: string, text: string): Promise<void> };
+  /** Textcachen (#1244); `reconcile` glömmer borttagna dokument och håller budgeten (#1347). */
+  texts: {
+    has(id: string): Promise<boolean>;
+    put(id: string, text: string): Promise<void>;
+    reconcile(existing: ReadonlySet<string>, used: ReadonlySet<string>): Promise<void>;
+  };
   extract: (input: { bytes: Uint8Array; mimeType?: string; fileName?: string }) => Promise<string>;
   /** Gör texten sökbar direkt (den lokala sökningens innehållskarta). */
   publish: (id: string, text: string) => void;
@@ -64,5 +69,6 @@ export async function prefetchActiveMatters(deps: ActiveMatterPrefetchDeps): Pro
     return blob;
   };
   const cached = await prefetchMatterDocuments(docs, loadAndIndex);
+  await deps.texts.reconcile(new Set(deps.documents.map((d) => d.id)), new Set(docs.map((d) => d.id)));
   return { matters: pinned.size, cached, indexed };
 }
