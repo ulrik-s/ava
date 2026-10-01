@@ -24,6 +24,7 @@ import { pageEnvelope } from "@/lib/shared/paginate";
 import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/radgivning-entry";
 import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/rattshjalp";
 import type { Invoice, Payment, PaymentPlan, TimeEntry, WriteOff } from "@/lib/shared/schemas/billing";
+import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
 import { invoiceStatusSchema, invoiceTypeSchema, type InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   asId,
@@ -187,9 +188,11 @@ export const invoiceRouter = router({
    */
   createRadgivning: orgProcedure
     .input(z.object({
-      matterId: matterIdSchema, hasFTax: z.boolean().optional(), invoiceDate: z.string().optional(),
-      /** Förfallodatum (demo/fixtures) — utelämnat saknar fakturan ett. */
-      dueDate: z.string().optional(),
+      matterId: matterIdSchema, hasFTax: z.boolean().optional(),
+      /** Mötesdagen; en dag eller tidpunkt som går att tolka (#1362). */
+      invoiceDate: isoDateOrDateTimeInput.optional(),
+      /** Förfallodatum (demo/fixtures) — utelämnat saknar fakturan ett. Aldrig `Invalid Date` (#1362). */
+      dueDate: isoDateOrDateTimeInput.optional(),
       /** Juristen som höll mötet (tidspostens ägare). Default: inloggad användare.
        *  Setup-fält för demo-generatorn/fixtures (ADR 0003), jfr timeEntry.create:
        *  bara ADMIN, aldrig via kön (`setup-fields.ts`, #1345). */
@@ -458,7 +461,7 @@ export const invoiceRouter = router({
         invoiceId: invoiceIdSchema,
         amount: z.number().int().min(1).optional(),
         reason: z.string().optional(),
-        writtenOffAt: z.string().optional(),
+        writtenOffAt: isoDateOrDateTimeInput.optional(),
       }),
     )
     // Migrerad till repository-sömmen (ADR 0020). Ledger-läsningarna är typade

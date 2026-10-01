@@ -46,6 +46,7 @@ import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { isRadgivningInvoiced } from "@/lib/shared/rattshjalp";
 import { settlementBreakdownSchema, type BillingRun, type Invoice } from "@/lib/shared/schemas/billing";
+import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
 import { BILLING_RUN_RECIPIENT_LABELS, billingRunRecipientSchema, type BillingRunRecipient, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
@@ -615,8 +616,8 @@ export const billingRunRouter = router({
       amountOre: z.number().int().nonnegative(),
       // Valfri paritet med legacy (demo/fixtures): klient-id + datum.
       id: invoiceIdSchema.optional(),
-      invoiceDate: z.string().optional(),
-      dueDate: z.string().optional(),
+      invoiceDate: isoDateOrDateTimeInput.optional(),
+      dueDate: isoDateOrDateTimeInput.optional(),
       notes: z.string().nullish(),
       /** Valfri nedbrytning (#880) — simuleringen skickar det upparbetade arbetet
        *  (tidsspec) så klienten ser vad acontot avser. Utelämnas → default nedan. */
@@ -679,8 +680,8 @@ export const billingRunRouter = router({
       expenseIds: z.array(expenseIdSchema).optional(),
       // Valfri paritet med legacy (demo/fixtures): klient-id + datum.
       id: invoiceIdSchema.optional(),
-      invoiceDate: z.string().optional(),
-      dueDate: z.string().optional(),
+      invoiceDate: isoDateOrDateTimeInput.optional(),
+      dueDate: isoDateOrDateTimeInput.optional(),
       notes: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -951,7 +952,7 @@ export const billingRunRouter = router({
       insurerPrutningOre: z.number().int().nonnegative().optional(),
       deductedBillingRunIds: z.array(billingRunIdSchema).default([]),
       /** Fakturadatum (demo/fixtures) — annars idag. Även slutregleringsårets norm (#907). */
-      invoiceDate: z.string().optional(),
+      invoiceDate: isoDateOrDateTimeInput.optional(),
       notes: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1057,7 +1058,7 @@ export const billingRunRouter = router({
       /** Prutat arvode NETTO (öre) — den del försäkringen inte ersätter. */
       prunedNetOre: z.number().int().positive(),
       /** Bokföringsdatum för omfördelningen (demo/fixtures) — annars idag. */
-      invoiceDate: z.string().optional(),
+      invoiceDate: isoDateOrDateTimeInput.optional(),
       notes: z.string().nullish(),
     }))
     .mutation(({ ctx, input }) =>

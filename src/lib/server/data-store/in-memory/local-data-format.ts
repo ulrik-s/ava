@@ -43,6 +43,12 @@ export class LocalDataTooNewError extends Error {
   }
 }
 
+/** Kasta `LocalDataTooNewError` om det lagrade formatet är nyare än koden (ett saknat format = 1). */
+export function assertNotNewer(stored: unknown, current: number): void {
+  const from = typeof stored === "number" ? stored : 1;
+  if (from > current) throw new LocalDataTooNewError(from, current);
+}
+
 export interface MigratedSnapshot {
   source: DemoSource;
   /** Lyftes snapshotet (då ska det sparas i dagens format)? */
@@ -56,8 +62,8 @@ export function migrateLocalSnapshot(
   migrations: Readonly<Record<number, LocalDataMigration>> = LOCAL_DATA_MIGRATIONS,
   current: number = LOCAL_DATA_VERSION,
 ): MigratedSnapshot {
+  assertNotNewer(storedVersion, current);
   const from = storedVersion ?? 1;
-  if (from > current) throw new LocalDataTooNewError(from, current);
   let next = source;
   for (let v = from; v < current; v++) {
     const step = migrations[v];

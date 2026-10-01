@@ -9,6 +9,8 @@ import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas
 import type { Office, Organization } from "@/lib/shared/schemas/organization";
 import { normalizeStandardAtgarder, standardAtgardSchema } from "@/lib/shared/standard-atgard";
 import { assertAdmin } from "../auth/assert-admin";
+import { assertSetupFieldsAllowed } from "../auth/setup-fields";
+import { newRowId } from "../queued-call";
 import { router, protectedProcedure } from "../trpc";
 
 /** Nullbara org-fält (nullish → null). Utbruten så komplexiteten (många `??`)
@@ -177,7 +179,7 @@ export const organizationRouter = router({
   addOffice: protectedProcedure
     .input(
       z.object({
-        /** Valfritt setup-id (demo-generatorn, ADR 0003) — utelämnat genererar store:n. */
+        /** Setup-id (demo-generatorn, ADR 0003): bara admin, direkt, aldrig i kön (#1362). */
         id: officeIdSchema.optional(),
         name: z.string().min(1),
         address: z.string().optional(),
@@ -189,10 +191,14 @@ export const organizationRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Kontoren syns på dokument och fakturor (#1370).
       assertAdmin(ctx);
+      // Id:t bestäms av servern (#1362): härlett ur anropet (samma i klientens
+      // körning och serverns omkörning), aldrig valt av klienten.
+      assertSetupFieldsAllowed(ctx, { id: input.id });
       // If new office is main, demote existing main first
       if (input.isMain) await ctx.repos.offices.demoteMains(ctx.user.organizationId);
       return ctx.repos.offices.create(omitUndefined({
         ...input,
+        id: input.id ?? asId<"OfficeId">(newRowId(ctx, "office")),
         organizationId: asId<"OrganizationId">(ctx.user.organizationId),
       }) satisfies Partial<Office>);
     }),

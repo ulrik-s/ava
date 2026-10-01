@@ -17,6 +17,7 @@ import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
 import { expectedReceivableStatusSchema } from "@/lib/shared/schemas/billing";
+import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
 import { asId, expectedReceivableIdSchema, matterIdSchema, type ExpectedReceivableId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { dateOrCallTime, newRowId } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
@@ -96,7 +97,7 @@ export const expectedReceivableRouter = router({
     .input(z.object({
       id: expectedReceivableIdSchema,
       settledAmount: z.number().int().nonnegative(),
-      settledAt: z.string().optional(),
+      settledAt: isoDateOrDateTimeInput.optional(),
       paymentReference: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {

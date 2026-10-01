@@ -9,6 +9,12 @@
 
 const DB_VERSION = 1;
 
+/** Villkor för en skrivning: `check` får det lagrade värdet för `key` och kastar för att avbryta. */
+export interface KvWriteGuard {
+  readonly key: string;
+  readonly check: (stored: unknown) => void;
+}
+
 export class IdbKv {
   constructor(
     private readonly factory: IDBFactory,
@@ -55,14 +61,31 @@ export class IdbKv {
   }
 
   async put<V>(key: string, value: V): Promise<void> {
+    await this.putAll([[key, value]]);
+  }
+
+  /**
+   * Skriv flera nycklar i EN transaktion — allt eller inget (#1362). Med
+   * `guard` läses `guard.key` först i samma transaktion; kastar `guard.check`
+   * avbryts transaktionen, ingenting skrivs och felet kastas vidare.
+   */
+  async putAll(entries: ReadonlyArray<readonly [string, unknown]>, guard?: KvWriteGuard): Promise<void> {
     const db = await this.open();
     try {
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(this.storeName, "readwrite");
-        tx.objectStore(this.storeName).put(value, key);
+        const store = tx.objectStore(this.storeName);
+        let refused: unknown = null;
+        const write = (): void => { for (const [key, value] of entries) store.put(value, key); };
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("indexedDB put misslyckades"));
-        tx.onabort = () => reject(tx.error ?? new Error("indexedDB-transaktion avbröts"));
+        tx.onabort = () => reject(refused ?? tx.error ?? new Error("indexedDB-transaktion avbröts"));
+        if (!guard) { write(); return; }
+        const req = store.get(guard.key);
+        req.onsuccess = () => {
+          try { guard.check(req.result); } catch (e) { refused = e; tx.abort(); return; }
+          write();
+        };
       });
     } finally {
       db.close();

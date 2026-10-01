@@ -52,10 +52,15 @@ export function bodyOf(t: DocTemplate, v: BodyVars): string | undefined {
   return typeof t.body === "function" ? t.body(v) : t.body;
 }
 
+/**
+ * Vittnen i demotexterna. Personnumren är Skatteverkets testpersonnummer
+ * (öppna data, spärrade för tilldelning) — aldrig ett nummer som kan tillhöra
+ * en verklig person (#1362).
+ */
 const WITNESSES: ReadonlyArray<readonly [string, string]> = [
-  ["Karin Holm", "780415-2231"], ["Per Sandberg", "690921-4412"], ["Lena Ek", "810303-5520"],
-  ["Mats Berglund", "750612-3318"], ["Sara Lind", "880130-6624"], ["Jonas Wikström", "720818-1137"],
-  ["Eva Nyström", "660505-2249"],
+  ["Karin Holm", "800426-2385"], ["Per Sandberg", "810822-2384"], ["Lena Ek", "820421-2396"],
+  ["Mats Berglund", "830817-2397"], ["Sara Lind", "840415-2392"], ["Jonas Wikström", "850812-2382"],
+  ["Eva Nyström", "861209-2380"],
 ];
 const COUNSEL = ["Helena Kjellberg", "Johan Ahlström", "Maria Ferm", "Olof Tegnér", "Ingrid Palm"];
 const PROSECUTORS = ["Anders Frid", "Cecilia Wahl", "Magnus Öberg"];
@@ -135,7 +140,7 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
     // respektive organisationsnummer, precis som i en riktig ansökan.
     body: [
       "STÄMNINGSANSÖKAN",
-      "Kärande: Anna Andersson 850312-4567",
+      "Kärande: Anna Andersson 880420-2383",
       "Ombud: Advokat Erik Lundqvist",
       "Svarande: Byggfirma Stenhammar AB 556677-8899",
       "Motpartens ombud: Advokat Sofia Grip",
@@ -159,7 +164,7 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
       "SVAROMÅL",
       "Svarande: Byggfirma Stenhammar AB 556677-8899",
       "Motpartens ombud: Advokat Sofia Grip",
-      "Vittne: Karl Nilsson 720801-1234",
+      "Vittne: Karl Nilsson 870815-2387",
       "",
       "Svaranden bestrider käromålet i dess helhet och åberopar egen bevisning.",
     ].join("\n"),
@@ -175,7 +180,7 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
     body: [
       "DOM",
       "Huvudförhandling hölls den 12 maj 2026 kl. 09.00.",
-      "Kärande: Anna Andersson 850312-4567",
+      "Kärande: Anna Andersson 880420-2383",
       "Svarande: Byggfirma Stenhammar AB 556677-8899",
       "",
       "Tingsrätten förpliktar svaranden att utge skadestånd till käranden.",

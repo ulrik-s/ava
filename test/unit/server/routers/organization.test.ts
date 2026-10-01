@@ -22,12 +22,13 @@ const mockPrisma = {
   },
 };
 
-function makeCaller(orgId = "org-a", role: "ADMIN" | "LAWYER" | "ASSISTANT" = "ADMIN") {
+function makeCaller(orgId = "org-a", role: "ADMIN" | "LAWYER" | "ASSISTANT" = "ADMIN", queued = false) {
   const dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
     user: { id: "user-1", email: "a@b.com", name: "Test", role, organizationId: orgId },
     prisma: mockPrisma, dataStore,
     repos: reposFromMockDataStore(dataStore),
+    ...(queued ? { queued: { mutationId: "0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b", at: Date.UTC(2026, 9, 1) } } : {}),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return organizationRouter.createCaller(ctx as any);
@@ -107,12 +108,26 @@ describe("organization.addOffice — registrera huvudkontor och filial", () => {
     expect(mockPrisma.office.create).toHaveBeenCalled();
   });
 
-  it("setup-id (demo-generatorn) följer med till repot; utelämnat skickas inget id", async () => {
+  it("setup-id (demo-generatorn) följer med till repot från admin direkt", async () => {
     mockPrisma.office.create.mockResolvedValue(MAIN_OFFICE);
     await makeCaller("org-a").addOffice({ id: "o-sthlm", name: "Stockholm" });
     expect(mockPrisma.office.create.mock.calls.at(-1)?.[0].data.id).toBe("o-sthlm");
-    await makeCaller("org-a").addOffice({ name: "Göteborg" });
-    expect("id" in mockPrisma.office.create.mock.calls.at(-1)?.[0].data).toBe(false);
+  });
+
+  /** Id:t bestäms av servern (#1362): härlett ur anropet, aldrig valt av klienten. */
+  it("utan id härleds det ur anropet — samma id i klientens körning och serverns omkörning", async () => {
+    mockPrisma.office.create.mockResolvedValue(BRANCH_OFFICE);
+    await makeCaller("org-a", "ADMIN", true).addOffice({ name: "Göteborg" });
+    const first = mockPrisma.office.create.mock.calls.at(-1)?.[0].data.id;
+    await makeCaller("org-a", "ADMIN", true).addOffice({ name: "Göteborg" });
+    expect(first).toMatch(/^[0-9a-f-]{36}$/);
+    expect(mockPrisma.office.create.mock.calls.at(-1)?.[0].data.id).toBe(first);
+  });
+
+  it("ett eget id: nekas i kön (även för admin) och för icke-admin direkt (FORBIDDEN)", async () => {
+    await expect(makeCaller("org-a", "ADMIN", true).addOffice({ id: "o-x", name: "X" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(makeCaller("org-a", "LAWYER").addOffice({ id: "o-x", name: "X" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mockPrisma.office.create).not.toHaveBeenCalled();
   });
 
   it("registrerar en filial (isMain: false) utan att påverka huvudkontor", async () => {
