@@ -25,7 +25,7 @@ function stubRepos(): RadgivningRepos {
 
 describe("markEntryAsRadgivning", () => {
   it("postens ärende saknas i organisationen → NOT_FOUND", async () => {
-    await expect(markEntryAsRadgivning(stubRepos(), asId<"OrganizationId">("org-1"), ENTRY.id, new Date()))
+    await expect(markEntryAsRadgivning(stubRepos(), asId<"OrganizationId">("org-1"), ENTRY.id, { now: new Date(), remainderId: asId<"TimeEntryId">("rest") }))
       .rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

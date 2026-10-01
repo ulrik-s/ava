@@ -4,6 +4,7 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { type TimeEntry } from "@/lib/shared/schemas/billing";
 import { timeEntryKindSchema, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import {
+  asId,
   matterIdSchema,
   userIdSchema,
   timeEntryIdSchema,
@@ -12,9 +13,10 @@ import {
 } from "@/lib/shared/schemas/ids";
 import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
-import { loadRadgivningStatus, markEntryAsRadgivning } from "../billing/radgivning-entry";
+import { loadRadgivningStatus, markEntryAsRadgivning, type MarkRadgivningCall } from "../billing/radgivning-entry";
 import { entryRateOre } from "../billing/time-entry-rate";
 import { emit } from "../events/emit";
+import { callTime, newRowId } from "../queued-call";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 import type { Context } from "../trpc-core";
 
@@ -217,12 +219,16 @@ export const timeEntryRouter = router({
    * "Markera som rådgivning" (#1207): låser en befintlig post mot ärendets
    * rådgivningsfaktura — för rättshjälpsärenden vars rådgivningsfaktura skapades
    * före #1205 och därför saknar den låsta posten. Över 60 min delas posten.
+   * Köas som anrop (#1349) och körs om på servern — tidsposter är procedurägda.
    * Regler + delning: `markEntryAsRadgivning`.
    */
   markAsRadgivning: orgProcedure
     .input(z.object({ id: timeEntryIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      const res = await ctx.repos.transaction((repos) => markEntryAsRadgivning(repos, ctx.orgId, input.id, new Date()));
+      // Köad procedur (#1349): låstidpunkten och restpostens id härleds ur
+      // anropet, så serverns omkörning ger samma rader som klientens körning.
+      const call: MarkRadgivningCall = { now: callTime(ctx), remainderId: asId<"TimeEntryId">(newRowId(ctx, "radgivningRemainder")) };
+      const res = await ctx.repos.transaction((repos) => markEntryAsRadgivning(repos, ctx.orgId, input.id, call));
       await emit.timeEntryUpdated(ctx, { id: res.locked.id, matterId: res.locked.matterId });
       if (res.remainder) await emit.timeEntryAdded(ctx, res.remainder);
       return res;
