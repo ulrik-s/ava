@@ -3,6 +3,9 @@
  * rad i den globala `change_log` per accepterad server-skrivning. Det är den
  * som driver delta-sync:ens `pull` (rader där `seq > cursor AND org_id = :org`).
  *
+ * `seq` sätts om vid commit (#1381, migration 0040), så att en rad från en
+ * lång transaktion inte hamnar under en klients cursor.
+ *
  * Bara den Drizzle-backade (server-)repo-vägen loggar — in-memory-vägen
  * (demo/offline) har ingen change_log. Loggning är opt-in via
  * `DrizzleRepository.enableChangeLog` så befintliga paritetstester inte påverkas.

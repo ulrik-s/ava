@@ -32,6 +32,17 @@ reconcile (ADR 0017) kräver. `IDataStore` är Prisma-format och används tungt
    `(seq BIGSERIAL, org_id uuid, entity text, row_id uuid, version int, op, at)`.
    Delta-pull = rader där `seq > cursor AND org_id = :org`. Cursor = senaste sedda
    `seq`. Org = isoleringsgräns (ADR 0017 öppen fråga → per-org valt).
+   *Tillägg (#1381):* en bigserial tilldelas när raden skrivs men syns först
+   vid commit, så en transaktion med lägre seq kunde committa efter att en
+   klient sett ett högre och hamna under cursorn. Migration 0040 numrerar om
+   raderna vid commit medan transaktionen håller ett publiceringslås delat
+   (släpps först när commiten syns), och pullen läser bara upp till
+   `change_log_safe_seq()`: sekvensens värde, läst under samma lås exklusivt
+   — allt under den gränsen är redan synligt, allt som committar senare
+   hamnar över den. Committande transaktioner väntar inte på varandra. Ett
+   xid-vattenmärke (`xid < pg_snapshot_xmin`) räcker inte — transaktions-id
+   och seq kan gå åt olika håll — och skulle låta varje lång transaktion i
+   klustret hålla tillbaka alla klienters pull.
 5. **Smalna IDataStore-arg-ytan till en dokumenterad delmängd.** PostgresStore
    stödjer EXAKT den subset som `in-memory/query-engine.ts` redan dokumenterar +
    de include/select-former routrarna använder — inte godtycklig Prisma-semantik.
