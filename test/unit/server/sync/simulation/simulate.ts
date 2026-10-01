@@ -56,7 +56,7 @@ export interface SimulationResult {
   seed: number;
   steps: string[];
   violations: string[];
-  /** Avvikelser som beror på en känd, öppen bugg (#1402). */
+  /** Avvikelser som beror på en känd, öppen bugg (`KNOWN_BUGS` i invariants.ts). */
   known: string[];
   stats: Record<string, unknown>;
 }

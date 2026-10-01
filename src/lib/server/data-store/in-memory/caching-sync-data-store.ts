@@ -335,6 +335,9 @@ export class CachingSyncDataStore {
     // Kön ur lagringen, inte flikens kopia (#1346): en annan flik kan ha köat
     // eller redan skickat poster sedan fliken läste sist.
     await this.queue.refresh();
+    // Flikens ändringar som en annan flik skickade (#1402): svaret — godtagen
+    // eller avvisad — kom bara dit, så raderna läses om från servern här.
+    this.engine.restoreLater(this.queue.takeSettledElsewhere().flatMap(refsOf));
     const result = await this.engine.reconcile();
     if (result.conflicts.length > 0) await this.hooks.onConflicts?.(result.conflicts);
     if (result.pulled + result.pushed + result.rebased + result.replayed + result.restored > 0) {

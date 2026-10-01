@@ -191,3 +191,58 @@ describe("MutationQueue — uppgradering från kön under en nyckel (#1346)", ()
     expect(await stored(factory, "ava-queue-upgrade-2")).toHaveLength(2);
   });
 });
+
+describe("MutationQueue — flikens poster som en annan flik avgjorde (#1402)", () => {
+  const ids = (entries: readonly { mutationId: string }[]): string[] => entries.map((e) => e.mutationId);
+
+  it("en annan flik kvitterar flikens post → takeSettledElsewhere ger den, en gång", async () => {
+    const persistence = new InMemoryMutationQueuePersistence();
+    const a = await MutationQueue.hydrate(persistence);
+    const b = await MutationQueue.hydrate(persistence);
+    await a.enqueue(ev("x"), { mutationId: "X", now: 1 });
+    await b.refresh();
+    await b.ack("X");
+    await a.refresh();
+    expect(ids(a.takeSettledElsewhere())).toEqual(["X"]);
+    expect(a.takeSettledElsewhere()).toEqual([]);
+    expect(b.takeSettledElsewhere()).toEqual([]); // B kvitterade själv
+  });
+
+  it("en annan fliks post (köad efter hydreringen) räknas inte — den finns bara i den flikens minne", async () => {
+    const persistence = new InMemoryMutationQueuePersistence();
+    const a = await MutationQueue.hydrate(persistence);
+    const b = await MutationQueue.hydrate(persistence);
+    await a.enqueue(ev("x"), { mutationId: "X", now: 1 });
+    await b.refresh();
+    await a.ack("X");
+    await b.refresh();
+    expect(b.takeSettledElsewhere()).toEqual([]);
+  });
+
+  it("poster som fanns när kön hydrerades räknas (snapshotet kan bära deras rader)", async () => {
+    const persistence = new InMemoryMutationQueuePersistence();
+    const a = await MutationQueue.hydrate(persistence);
+    await a.enqueue(ev("x"), { mutationId: "X", now: 1 });
+    const reopened = await MutationQueue.hydrate(persistence);
+    await a.ack("X");
+    await reopened.refresh();
+    expect(ids(reopened.takeSettledElsewhere())).toEqual(["X"]);
+  });
+
+  it("efter replaceAll är posterna flikens; clear glömmer dem", async () => {
+    const persistence = new InMemoryMutationQueuePersistence();
+    const a = await MutationQueue.hydrate(persistence);
+    const b = await MutationQueue.hydrate(persistence);
+    await a.enqueue(ev("x"), { mutationId: "X", now: 1 });
+    await a.replaceAll([{ mutationId: "Y", entity: "matter", kind: "update", row: { id: "y" }, enqueuedAt: 2 }]);
+    await b.refresh();
+    await b.ack("Y");
+    await a.refresh();
+    expect(ids(a.takeSettledElsewhere())).toEqual(["Y"]);
+
+    await a.enqueue(ev("z"), { mutationId: "Z", now: 3 });
+    await a.clear();
+    await a.refresh();
+    expect(a.takeSettledElsewhere()).toEqual([]);
+  });
+});

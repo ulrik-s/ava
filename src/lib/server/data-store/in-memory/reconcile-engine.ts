@@ -130,6 +130,14 @@ export class ReconcileEngine {
     return { pulled, ...replay, restored: restore.restored, cursor };
   }
 
+  /**
+   * Rader vars lokala läge ska ersättas med serverns i nästa reconcile (#1402):
+   * en annan flik avgjorde ändringen som skrev dem här, och svaret kom bara dit.
+   */
+  restoreLater(refs: readonly RowRef[]): void {
+    this.unrestored.push(...refs);
+  }
+
   /** Radernas kanoniska läge just nu (#1348, "Kasta") — samma hämtning som efter en avvisning. */
   canonical(refs: readonly RowRef[]): Promise<PulledChange[]> {
     return fetchCanonical(this.deps.transport, refs);
