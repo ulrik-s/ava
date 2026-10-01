@@ -123,6 +123,16 @@ describe("bootstrapSelfHosted", () => {
     expect(classifyOidcLogin).toHaveBeenCalledWith(expect.anything(), allowlist);
   });
 
+  it("#1391: inloggad men saknas i byrån → begripligt fel (inte 'Laddar…'), ingen store till appen", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "ok", claims: lena });
+    classifyOidcLogin.mockReturnValueOnce({ kind: "denied", email: "a@b.se" });
+    const args = makeArgs({ firmaConfig: noPrincipal as FirmaConfig });
+    await bootstrapSelfHosted(args);
+    expect(args.setStatus).toHaveBeenCalledWith("error");
+    expect(args.setErrorMsg).toHaveBeenCalledWith("Inte behörig: ditt konto (a@b.se) finns inte i byrån — kontakta administratören.");
+    expect(args.onStoreReady).not.toHaveBeenCalled();
+  });
+
   // ── Sessionsgrinden (#1245) ──────────────────────────────────────────────
   it("inloggad med samma identitet: bygger storen och noterar när sessionen verifierades", async () => {
     probeUserinfo.mockResolvedValueOnce({ kind: "ok", claims: lena });

@@ -112,7 +112,9 @@ AVA_ORG_NAME="Byrån AB" AVA_ADMIN_EMAIL=anna@byra.se AVA_ADMIN_NAME="Anna" \
 Det finns ingen JIT-provisionering: bara emailadresser i byråns användarlista
 släpps in, även om IdP:n godkänner inloggningen. Admin lägger till fler
 användare i appen (`/users`). Seeden går via repo-lagret så användarna får
-`change_log`-rader — rå-SQL hade gett en klient som hänger på "Laddar…".
+`change_log`-rader. En användare som bara finns i tabellen (rå-SQL) syns inte
+för klienten, som då visar "Inte behörig: ditt konto finns inte i byrån —
+kontakta administratören" (#1391; förut hängde den på "Laddar…").
 
 ## Identitet: hur servern vet vem som anropar (#1256)
 
