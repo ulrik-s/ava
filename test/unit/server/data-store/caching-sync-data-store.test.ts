@@ -4,15 +4,19 @@
  * en fejk-`SyncTransport` (ingen körande server behövs — server-impl är #410/#411).
  */
 
+import { IDBFactory } from "fake-indexeddb";
 import { describe, it, expect } from "vitest-compat";
 import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import {
+  InMemoryMutationQueuePersistence, IndexedDbMutationQueuePersistence, MutationQueue, type QueuedMutation,
+} from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { asId } from "@/lib/shared/schemas/ids";
 import { isUuid, uuidv7 } from "@/lib/shared/uuid";
+import { changeChannelHub, settle } from "../../../helpers/change-channel-hub";
 
 class FakeTransport implements SyncTransport {
   pullResult: PullResult = { changes: [], cursor: 0 };
@@ -365,5 +369,35 @@ describe("CachingSyncDataStore.onLocalChange — driver synk-efter-spara", () =>
     off();
     await ds.store.matters.create({ data: matter(uuidv7()) as never });
     expect(calls).toBe(1);
+  });
+});
+
+describe("CachingSyncDataStore — flera flikar (#1346)", () => {
+  it("reconcile läser kön ur lagringen: en annan fliks köade ändring skickas också", async () => {
+    const transport = new FakeTransport();
+    const queuePersistence = new InMemoryMutationQueuePersistence();
+    const ds = await CachingSyncDataStore.create({ transport, persistence: new InMemoryPersistence(), queuePersistence });
+    const otherTab = await MutationQueue.hydrate(queuePersistence);
+    const id = uuidv7();
+    await otherTab.enqueue({ entity: "matter", kind: "create", row: matter(id) }, { mutationId: uuidv7() });
+    expect(ds.pendingCount()).toBe(0);
+    await ds.reconcile();
+    expect(transport.pushed.map((m) => m.row.id)).toEqual([id]);
+    expect(await queuePersistence.load()).toEqual([]);
+  });
+
+  it("en annan fliks ändring i kön → kön läses om och onLocalChange-lyssnarna anropas", async () => {
+    const factory = new IDBFactory();
+    const hub = changeChannelHub();
+    const ds = await CachingSyncDataStore.create({
+      transport: new FakeTransport(), persistence: new InMemoryPersistence(),
+      queuePersistence: new IndexedDbMutationQueuePersistence(factory, "caching-tabs", hub()),
+    });
+    const pending: number[] = [];
+    ds.onLocalChange(() => pending.push(ds.pendingCount()));
+    const otherTab = await MutationQueue.hydrate(new IndexedDbMutationQueuePersistence(factory, "caching-tabs", hub()));
+    await otherTab.enqueue({ entity: "matter", kind: "create", row: matter(uuidv7()) });
+    await settle();
+    expect(pending).toEqual([1]);
   });
 });

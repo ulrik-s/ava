@@ -317,6 +317,14 @@ speglar zod för Postgres.
   utan att något skrivs över. Kön migreras inte lokalt — den bär köformatet och
   servern migrerar eller avvisar med besked (#1247); inget tas bort tyst.
   `test/fixtures/local-data/` håller data i föregående releases format.
+  **Flera flikar (#1346):** kön och listan över avvisade ändringar ligger i
+  IndexedDB med en rad per post (`idb-entry-store.ts`: stigande nyckel = FIFO,
+  unikt index på `mutationId`/id). En flik lägger till och tar bort sina egna
+  poster — den skriver aldrig tillbaka sin kopia av hela listan — och läser om
+  kön ur lagringen före varje reconcile. En `BroadcastChannel` per databas säger
+  åt de andra flikarna att läsa om (räknare + synk). Databasversion 2 flyttar
+  den gamla listan (allt under en nyckel) till raderna i versionstransaktionen,
+  så att uppgraderingen flyttar allt eller ingenting.
 - **demo-seed (CDN):** entiteterna serialiseras till JSON-filer som GH Pages servar
   och klienten bygger `DemoSource` ur. Den fillayouten (kvar från seed-formatet):
 

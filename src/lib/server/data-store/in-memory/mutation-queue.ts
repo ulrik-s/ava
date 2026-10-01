@@ -9,59 +9,74 @@
  *
  * Kön är persistens-agnostisk (`MutationQueuePersistence`-port) → IndexedDB i
  * browsern, in-memory i tester/demo.
+ *
+ * Flera flikar (#1346): lagringen är sanningen. Varje post skrivs och tas bort
+ * för sig (aldrig hela kön), och `refresh()` läser om lagringen innan kön
+ * spelas upp, så att en flik inte arbetar mot en inaktuell kopia.
  */
 
+import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { QUEUE_FORMAT_VERSION } from "@/lib/shared/sync/queue-format";
 import { uuidv7 } from "@/lib/shared/uuid";
-import { IdbKv } from "./idb-kv";
-import type { MutationEvent, MutationKind } from "./writable-delegate";
+import type { ChangeChannel } from "./change-channel";
+import { IdbEntryStore } from "./idb-entry-store";
+import type { MutationEvent } from "./writable-delegate";
 
-export interface QueuedMutation {
+const rowRecord = z.record(z.string(), z.unknown());
+
+/** En radpost (radkön), så som den sparas i IndexedDB. */
+const queuedMutationSchema = z.object({
   /** Radpost (radkön). Saknas på poster persisterade före #1265 — de är rader. */
-  type?: "row";
+  type: z.literal("row").exactOptional(),
   /** Klient-genererat UUIDv7 — dedupe-nyckel + idempotent uppspelning. */
-  mutationId: string;
-  entity: string;
-  kind: MutationKind;
+  mutationId: z.string(),
+  entity: z.string(),
+  kind: z.enum(["create", "update", "delete"]),
   /** Raden efter mutationen (bär sitt eget UUIDv7 `id` → server-upsert). */
-  row: Record<string, unknown>;
+  row: rowRecord,
   /** Föregående rad (update/delete) — för rollback/konflikt. */
-  previous?: Record<string, unknown>;
+  previous: rowRecord.exactOptional(),
   /** Observerad `version` vid mutationen (ADR 0017 optimistisk concurrency). */
-  baseVersion?: number;
-  enqueuedAt: number;
+  baseVersion: z.number().exactOptional(),
+  enqueuedAt: z.number(),
   /** Köformatet posten skrevs i (#1247). Saknas på poster från före stämplingen = 1. */
-  format?: number | undefined;
-}
+  format: z.number().optional(),
+});
 
 /** En rad som ett köat procedur-anrop skrev lokalt (för att läsa tillbaka serverns läge). */
-export interface ProcedureTouch {
-  entity: string;
-  id: string;
-}
+const procedureTouchSchema = z.object({ entity: z.string(), id: z.string() });
 
 /**
  * Ett köat procedur-anrop (#1265, ADR 0037): servern kör om `path(input)`
  * auktoritativt med samma `appRouter`. Klientens lokala resultat är bara
  * optimistiskt — `touches` säger vilka rader som ska ersättas av serverns läge.
  */
-export interface QueuedProcedureCall {
-  type: "procedure";
-  mutationId: string;
+const queuedProcedureCallSchema = z.object({
+  type: z.literal("procedure"),
+  mutationId: z.string(),
   /** tRPC-sökvägen, t.ex. `timeEntry.create` (se `QUEUED_PROCEDURES`). */
-  path: string;
-  input: Record<string, unknown>;
+  path: z.string(),
+  input: rowRecord,
   /** Klientkodens version när anropet köades (för migrering, #1247/#1269). */
-  codeVersion: string;
-  touches: ProcedureTouch[];
-  enqueuedAt: number;
+  codeVersion: z.string(),
+  touches: z.array(procedureTouchSchema),
+  enqueuedAt: z.number(),
   /** Köformatet posten skrevs i (#1247). Saknas på poster från före stämplingen = 1. */
-  format?: number | undefined;
-}
+  format: z.number().optional(),
+});
 
+/** En köpost så som den sparas (#1346): tolkas strikt när den läses ur IndexedDB. */
+export const queueEntrySchema = z.union([queuedProcedureCallSchema, queuedMutationSchema]);
+
+/** En radpost i kön. */
+export type QueuedMutation = z.infer<typeof queuedMutationSchema>;
+/** En rad som ett köat procedur-anrop skrev lokalt. */
+export type ProcedureTouch = z.infer<typeof procedureTouchSchema>;
+/** Ett köat procedur-anrop. */
+export type QueuedProcedureCall = z.infer<typeof queuedProcedureCallSchema>;
 /** En post i kön: en färdig rad eller ett procedur-anrop. */
-export type QueueEntry = QueuedMutation | QueuedProcedureCall;
+export type QueueEntry = z.infer<typeof queueEntrySchema>;
 
 /** Är posten ett procedur-anrop (och inte en rad)? */
 export function isProcedureCall(entry: QueueEntry): entry is QueuedProcedureCall {
@@ -71,9 +86,22 @@ export function isProcedureCall(entry: QueueEntry): entry is QueuedProcedureCall
 /** Klientkodens version — deploy-sha:n när den finns (samma som demo-cachens nyckel). */
 export const SYNC_CODE_VERSION = process.env.NEXT_PUBLIC_DEMO_VERSION || "dev";
 
+/**
+ * Var kön sparas (#1346): en post i taget, inte hela kön. Flera flikar delar
+ * lagringen — en flik får bara lägga till, ersätta och ta bort sina egna
+ * poster, aldrig skriva tillbaka sin (kanske inaktuella) kopia av hela kön.
+ */
 export interface MutationQueuePersistence {
+  /** Alla poster i köordning (FIFO). */
   load(): Promise<QueueEntry[]>;
-  save(items: readonly QueueEntry[]): Promise<void>;
+  /** Lägg posten sist. Finns `mutationId` redan händer ingenting. */
+  add(entry: QueueEntry): Promise<void>;
+  /** Ersätt posten på sin plats (finns den inte läggs den sist). */
+  replace(entry: QueueEntry): Promise<void>;
+  /** Ta bort posten (finns den inte händer ingenting). */
+  delete(mutationId: string): Promise<void>;
+  /** Lyssna på andra flikars ändringar i kön. Returnerar avregistreringen. */
+  subscribe?(listener: () => void): () => void;
 }
 
 /** In-memory-persistens (tester/demo) — djupkopierar för att undvika delad referens. */
@@ -82,25 +110,50 @@ export class InMemoryMutationQueuePersistence implements MutationQueuePersistenc
   async load(): Promise<QueueEntry[]> {
     return structuredClone(this.items);
   }
-  async save(items: readonly QueueEntry[]): Promise<void> {
-    this.items = structuredClone([...items]);
+  async add(entry: QueueEntry): Promise<void> {
+    if (!this.items.some((e) => e.mutationId === entry.mutationId)) this.items.push(structuredClone(entry));
+  }
+  async replace(entry: QueueEntry): Promise<void> {
+    const index = this.items.findIndex((e) => e.mutationId === entry.mutationId);
+    if (index < 0) this.items.push(structuredClone(entry));
+    else this.items[index] = structuredClone(entry);
+  }
+  async delete(mutationId: string): Promise<void> {
+    this.items = this.items.filter((e) => e.mutationId !== mutationId);
   }
 }
 
-/** IndexedDB-persistens — hela kön under en nyckel via `IdbKv`. */
+/**
+ * IndexedDB-persistens — en rad per köpost (#1346). Databasen från före #1346
+ * (hela kön under nyckeln `pending`) flyttas över vid första öppningen.
+ */
 export class IndexedDbMutationQueuePersistence implements MutationQueuePersistence {
-  private readonly kv: IdbKv;
+  private readonly entries: IdbEntryStore<QueueEntry>;
   constructor(
     factory: IDBFactory = globalThis.indexedDB,
     dbName = "ava-mutation-queue",
+    channel?: ChangeChannel,
   ) {
-    this.kv = new IdbKv(factory, dbName, "queue");
+    this.entries = new IdbEntryStore({
+      factory, dbName, schema: queueEntrySchema,
+      legacy: { storeName: "queue", key: "pending", idField: "mutationId" },
+      ...(channel ? { channel } : {}),
+    });
   }
-  async load(): Promise<QueueEntry[]> {
-    return (await this.kv.get<QueueEntry[]>("pending")) ?? [];
+  load(): Promise<QueueEntry[]> {
+    return this.entries.load();
   }
-  async save(items: readonly QueueEntry[]): Promise<void> {
-    await this.kv.put("pending", [...items]);
+  add(entry: QueueEntry): Promise<void> {
+    return this.entries.add(entry.mutationId, entry);
+  }
+  replace(entry: QueueEntry): Promise<void> {
+    return this.entries.put(entry.mutationId, entry);
+  }
+  delete(mutationId: string): Promise<void> {
+    return this.entries.delete(mutationId);
+  }
+  subscribe(listener: () => void): () => void {
+    return this.entries.subscribe(listener);
   }
 }
 
@@ -121,57 +174,81 @@ export interface EnqueueProcedureOpts {
 
 export class MutationQueue {
   private items: QueueEntry[] = [];
+  /** Kedjan som gör att flikens egna köoperationer körs en i taget. */
+  private chain: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly persistence?: MutationQueuePersistence) {}
 
   /** Skapa en kö och hydrera den ur persistensen (om någon). */
   static async hydrate(persistence?: MutationQueuePersistence): Promise<MutationQueue> {
     const q = new MutationQueue(persistence);
-    if (persistence) q.items = await persistence.load();
+    await q.refresh();
     return q;
   }
 
+  /**
+   * Läs om kön ur lagringen (#1346). Andra flikar kan ha köat eller kvitterat
+   * poster sedan fliken läste sist; lagringen är sanningen, inte flikens kopia.
+   */
+  refresh(): Promise<void> {
+    return this.serial(async () => {
+      if (this.persistence) this.items = await this.persistence.load();
+    });
+  }
+
+  /**
+   * Lyssna på andra flikars ändringar i kön (#1346): kön läses om och sedan
+   * anropas `listener`. Returnerar avregistreringen.
+   */
+  onExternalChange(listener: () => void): () => void {
+    const persistence = this.persistence;
+    if (!persistence?.subscribe) return () => undefined;
+    return persistence.subscribe(() => { void this.refresh().then(listener); });
+  }
+
   /** Köa en mutation sist. Idempotent på `mutationId` (re-enqueue → no-op). */
-  async enqueue(event: MutationEvent<Record<string, unknown>>, opts: EnqueueOpts = {}): Promise<QueuedMutation> {
-    const mutationId = opts.mutationId ?? uuidv7(opts.now);
-    const existing = this.items.find((m): m is QueuedMutation => m.mutationId === mutationId && !isProcedureCall(m));
-    if (existing) return existing;
-    const item = omitUndefined({
-      mutationId,
-      entity: event.entity,
-      kind: event.kind,
-      row: event.row,
-      previous: event.previous,
-      baseVersion: opts.baseVersion,
-      enqueuedAt: opts.now ?? Date.now(),
-      format: QUEUE_FORMAT_VERSION,
-    }) as QueuedMutation;
-    this.items.push(item);
-    await this.persist();
-    return item;
+  enqueue(event: MutationEvent<Record<string, unknown>>, opts: EnqueueOpts = {}): Promise<QueuedMutation> {
+    return this.serial(async () => {
+      const mutationId = opts.mutationId ?? uuidv7(opts.now);
+      const existing = this.items.find((m): m is QueuedMutation => m.mutationId === mutationId && !isProcedureCall(m));
+      if (existing) return existing;
+      const item = omitUndefined({
+        mutationId,
+        entity: event.entity,
+        kind: event.kind,
+        row: event.row,
+        previous: event.previous,
+        baseVersion: opts.baseVersion,
+        enqueuedAt: opts.now ?? Date.now(),
+        format: QUEUE_FORMAT_VERSION,
+      }) as QueuedMutation;
+      await this.append(item);
+      return item;
+    });
   }
 
   /** Köa ett procedur-anrop sist (#1265). Idempotent på `mutationId`. */
-  async enqueueProcedure(
+  enqueueProcedure(
     call: Pick<QueuedProcedureCall, "path" | "input" | "touches">,
     opts: EnqueueProcedureOpts = {},
   ): Promise<QueuedProcedureCall> {
-    const mutationId = opts.mutationId ?? uuidv7(opts.now);
-    const existing = this.items.find((m): m is QueuedProcedureCall => m.mutationId === mutationId && isProcedureCall(m));
-    if (existing) return existing;
-    const item: QueuedProcedureCall = {
-      type: "procedure",
-      mutationId,
-      path: call.path,
-      input: call.input,
-      codeVersion: opts.codeVersion ?? SYNC_CODE_VERSION,
-      touches: call.touches,
-      enqueuedAt: opts.now ?? Date.now(),
-      format: QUEUE_FORMAT_VERSION,
-    };
-    this.items.push(item);
-    await this.persist();
-    return item;
+    return this.serial(async () => {
+      const mutationId = opts.mutationId ?? uuidv7(opts.now);
+      const existing = this.items.find((m): m is QueuedProcedureCall => m.mutationId === mutationId && isProcedureCall(m));
+      if (existing) return existing;
+      const item: QueuedProcedureCall = {
+        type: "procedure",
+        mutationId,
+        path: call.path,
+        input: call.input,
+        codeVersion: opts.codeVersion ?? SYNC_CODE_VERSION,
+        touches: call.touches,
+        enqueuedAt: opts.now ?? Date.now(),
+        format: QUEUE_FORMAT_VERSION,
+      };
+      await this.append(item);
+      return item;
+    });
   }
 
   /** Köposterna i FIFO-ordning (för uppspelning). */
@@ -187,26 +264,45 @@ export class MutationQueue {
     return this.items.some((m) => m.mutationId === mutationId);
   }
 
-  /** Ta bort en post efter server-bekräftelse. */
-  async ack(mutationId: string): Promise<void> {
-    const before = this.items.length;
-    this.items = this.items.filter((m) => m.mutationId !== mutationId);
-    if (this.items.length !== before) await this.persist();
+  /** Ta bort en post efter server-bekräftelse — bara den posten, i lagringen också. */
+  ack(mutationId: string): Promise<void> {
+    return this.serial(async () => {
+      this.items = this.items.filter((m) => m.mutationId !== mutationId);
+      await this.persistence?.delete(mutationId);
+    });
   }
 
-  /** Ersätt hela kön (id-reparation vid uppstart, se legacy-id-repair.ts). */
-  async replaceAll(items: readonly QueueEntry[]): Promise<void> {
-    this.items = [...items];
-    await this.persist();
+  /**
+   * Ersätt kön (id-reparation vid uppstart, se legacy-id-repair.ts). Poster med
+   * samma `mutationId` ersätts på sin plats; bara poster den här fliken kände
+   * till och som inte finns kvar tas bort — en annan fliks nya poster rörs inte.
+   */
+  replaceAll(items: readonly QueueEntry[]): Promise<void> {
+    return this.serial(async () => {
+      const kept = new Set(items.map((e) => e.mutationId));
+      for (const old of this.items) if (!kept.has(old.mutationId)) await this.persistence?.delete(old.mutationId);
+      for (const entry of items) await this.persistence?.replace(entry);
+      this.items = [...items];
+    });
   }
 
-  async clear(): Promise<void> {
-    if (this.items.length === 0) return;
-    this.items = [];
-    await this.persist();
+  /** Töm de poster fliken känner till. */
+  clear(): Promise<void> {
+    return this.serial(async () => {
+      for (const entry of this.items) await this.persistence?.delete(entry.mutationId);
+      this.items = [];
+    });
   }
 
-  private async persist(): Promise<void> {
-    await this.persistence?.save(this.items);
+  private async append(item: QueueEntry): Promise<void> {
+    this.items.push(item);
+    await this.persistence?.add(item);
+  }
+
+  /** Kör `fn` efter flikens tidigare köoperationer (en omläsning blandas aldrig med en skrivning). */
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.chain.then(fn);
+    this.chain = next.catch(() => undefined);
+    return next;
   }
 }
