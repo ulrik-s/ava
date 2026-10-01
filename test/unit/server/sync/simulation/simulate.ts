@@ -1,61 +1,54 @@
 /**
- * Ett seedat simuleringsförlopp (#1268): slumpade ändringar, avbrott,
- * omstarter och omordning — och sedan invarianterna.
+ * Ett seedat simuleringsförlopp (#1268, #1358): flera byråer, roller,
+ * webbläsare med flera flikar, samtidiga steg, avbrott, tappade svar,
+ * omstarter och manipulerade köposter — och sedan invarianterna.
  *
- * Samma seed ger samma förlopp (vilka klienter, vilka operationer, när nätet
- * går ned). Id:n och tidsstämplar är riktiga, men påverkar inte förloppet.
+ * Samma seed ger samma förlopp: vilka flikar som finns, vilka steg som körs
+ * samtidigt, vilka operationer, när nätet går ned och i vilken ordning
+ * anropen når servern (`SimNetwork`). Id:n och tidsstämplar är riktiga, men
+ * påverkar inte förloppet.
  */
-import { and, eq, isNull } from "drizzle-orm";
-import { noopPorts } from "@/lib/server/adapters/noop-ports";
-import { buildContext } from "@/lib/server/build-context";
-import { contacts, invoices, syncReplays, timeEntries } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
-import { serverFirstEventLog } from "@/lib/server/http/server-context";
-import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
-import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { UserRole } from "@/lib/shared/schemas/enums";
 import { type Rng, rng } from "../../../helpers/seeded-rng";
-import { createTestDb } from "../../db/pg-test-db";
-import { pusher } from "../row-pusher";
-import { isProcedure, MATTER, ORG, seedWorld, SimClient, SimServer, userFor } from "./sync-world";
+import { checkInvariants } from "./invariants";
+import { SimBrowser, SimTab } from "./sim-browser";
+import { SimNetwork } from "./sim-network";
+import { chooseOp, type StepContext } from "./sim-ops";
+import { FIRM_A, FIRM_B, SimServer, type Firm, type ServerOutcome, type SimUser } from "./sync-world";
 
-type Op = (c: SimClient, r: Rng, step: number) => Promise<unknown>;
+/** En webbläsare i förloppet: vems, vilken roll den har cachad och hur många flikar. */
+interface BrowserSpec {
+  readonly user: SimUser;
+  readonly cachedRole: UserRole;
+  readonly tabs: number;
+}
 
-const DAY = "2026-09-15";
+/** Hur stort förloppet är. */
+export interface SimOptions {
+  readonly steps: number;
+  /** Högst så många steg körs samtidigt (på olika flikar). */
+  readonly concurrency: number;
+  /** Fler webbläsare och flikar (nattlig körning). */
+  readonly heavy?: boolean;
+}
 
-const ids = (rows: Array<Record<string, unknown>>): string[] => rows.map((row) => String(row.id));
+/** Användare `index` i byrån (världen är fast — saknas den är världen fel). */
+function userOf(firm: Firm, index: number): SimUser {
+  const u = firm.users[index];
+  if (!u) throw new Error(`byrå ${firm.key} saknar användare ${index}`);
+  return u;
+}
 
-/** Operationerna och deras vikter. En lokal regel som säger nej är ett giltigt utfall. */
-const OPS: ReadonlyArray<[number, string, Op]> = [
-  [6, "tidspost", (c, r, n) => c.api.timeEntry.create.mutate({ matterId: MATTER, date: DAY, minutes: r.int(1, 12) * 15, description: `Post ${c.index}.${n}` })],
-  [6, "ändra tidspost", (c, r) => {
-    const id = r.pick(ids(c.rows("timeEntries")));
-    return id ? c.api.timeEntry.update.mutate({ id, minutes: r.int(1, 12) * 15 }) : Promise.resolve();
-  }],
-  [3, "ta bort tidspost", (c, r) => {
-    const id = r.pick(ids(c.rows("timeEntries")));
-    return id ? c.api.timeEntry.delete.mutate({ id }) : Promise.resolve();
-  }],
-  [3, "kontakt", (c, _r, n) => c.api.contacts.create.mutate({ name: `Kontakt ${c.index}.${n}`, contactType: "PERSON" })],
-  [2, "byt namn på kontakt", (c, r, n) => {
-    const id = r.pick(ids(c.rows("contacts")));
-    return id ? c.api.contacts.update.mutate({ id, name: `Omdöpt ${c.index}.${n}` }) : Promise.resolve();
-  }],
-  [2, "acontofaktura", (c, r) => c.api.billingRun.createAcconto.mutate({ matterId: MATTER, clientShareBips: 10000, amountOre: r.int(1, 20) * 10_000 })],
-  [4, "nät av/på", async (c) => { c.online = !c.online; }],
-  [4, "synka", (c) => c.sync()],
-  [1, "avbrott mitt i synken", async (c, r) => { c.online = true; c.dropAfter = r.int(0, 3); await c.sync(); }],
-  [1, "omstart", (c) => c.boot()],
-];
-
-function chooseOp(r: Rng): [string, Op] {
-  const total = OPS.reduce((sum, [w]) => sum + w, 0);
-  let x = r.next() * total;
-  for (const [w, name, op] of OPS) {
-    if ((x -= w) < 0) return [name, op];
-  }
-  const last = OPS[OPS.length - 1]!;
-  return [last[1], last[2]];
+/** Webbläsarna: A:s administratör, jurist (två flikar) och assistent; B:s degraderade jurist (+ assistent). */
+function browserSpecs(heavy: boolean): BrowserSpec[] {
+  const specs: BrowserSpec[] = [
+    { user: userOf(FIRM_A, 0), cachedRole: "ADMIN", tabs: 1 },
+    { user: userOf(FIRM_A, 1), cachedRole: "LAWYER", tabs: heavy ? 3 : 2 },
+    { user: userOf(FIRM_A, 2), cachedRole: "ASSISTANT", tabs: 1 },
+    // Degraderad medan den var offline: webbläsaren tror fortfarande att den är administratör.
+    { user: userOf(FIRM_B, 0), cachedRole: "ADMIN", tabs: 1 },
+  ];
+  return heavy ? [...specs, { user: userOf(FIRM_B, 1), cachedRole: "ASSISTANT", tabs: 1 }] : specs;
 }
 
 /** Resultatet av en körning: fel per invariant (tomt = allt höll). */
@@ -63,127 +56,70 @@ export interface SimulationResult {
   seed: number;
   steps: string[];
   violations: string[];
+  /** Avvikelser som beror på en känd, öppen bugg (#1397, #1399, #1402). */
+  known: string[];
+  stats: Record<string, unknown>;
 }
 
-export async function simulate(seed: number, opts: { clients: number; steps: number }): Promise<SimulationResult> {
+/** `k` olika flikar, valda med seeden. */
+function pickTabs(r: Rng, tabs: readonly SimTab[], k: number): SimTab[] {
+  const pool = [...tabs];
+  const out: SimTab[] = [];
+  while (out.length < k && pool.length > 0) out.push(...pool.splice(r.int(0, pool.length - 1), 1));
+  return out;
+}
+
+const debug = (name: string, e: unknown): void => {
+  if (process.env.AVA_SIM_DEBUG) console.log("STEGFEL", name, e instanceof Error ? e.message.slice(0, 200) : e);
+};
+
+/** En rad i serverns logg (felsökning med `AVA_SIM_DEBUG`). */
+function describeOutcome(o: ServerOutcome): string {
+  const who = o.kind === "row" ? o.pusher.userId : o.userId;
+  const what = o.kind === "row" ? `${o.mutation.entity}/${o.mutation.kind} ${String(o.mutation.row.id)}` : `${o.call.path} ${JSON.stringify(o.call.input)}`;
+  const why = o.kind === "row" ? o.reason ?? "" : o.code ?? "";
+  return `${o.kind === "row" ? o.mutation.mutationId : o.call.mutationId} ${who.slice(-3)} ${what.slice(0, 160)} → ${o.status} ${why}`;
+}
+
+/** Alla online; synka runt tills köerna är tomma och alla sett allas ändringar. */
+async function settleAll(net: SimNetwork, tabs: readonly SimTab[]): Promise<void> {
+  for (const t of tabs) { t.online = true; t.dropAfter = null; t.loseNextResponse = false; }
+  for (let round = 0; round < 3; round++) {
+    for (const t of tabs) await net.wave([{ actor: t.name, run: () => t.sync() }]);
+  }
+}
+
+export async function simulate(seed: number, opts: SimOptions): Promise<SimulationResult> {
   const r = rng(seed);
-  const server = await SimServer.start(opts.clients);
-  const clients = Array.from({ length: opts.clients }, (_, i) => new SimClient(i, server));
+  const net = new SimNetwork(r);
+  const server = await SimServer.start();
+  const browsers = browserSpecs(opts.heavy ?? false).map((s, i) => new SimBrowser(`w${i}`, s.user, s.cachedRole, r.next() < 0.75));
+  const tabs = browserSpecs(opts.heavy ?? false).flatMap((s, i) => {
+    const browser = browsers[i];
+    return browser ? Array.from({ length: s.tabs }, (_, j) => new SimTab(`${browser.name}.${j}`, browser, server, net)) : [];
+  });
+  for (const b of browsers) net.watch(b.lock);
   const steps: string[] = [];
+  const forged = new Set<string>();
   try {
-    for (const c of clients) { await c.boot(); await c.sync(); }
+    for (const t of tabs) await t.boot();
+    await settleAll(net, tabs);
     for (let n = 0; n < opts.steps; n++) {
-      const c = clients[r.int(0, clients.length - 1)]!;
-      const [name, op] = chooseOp(r);
-      steps.push(`${c.index}:${name}`);
-      await op(c, r, n).catch((e: unknown) => { if (process.env.AVA_SIM_DEBUG) console.log("OPFEL", name, e instanceof Error ? e.message.slice(0, 200) : e); });
-      c.observeQueue();
+      const ctx: StepContext = { r, n, forged };
+      const wave = pickTabs(r, tabs, r.int(1, opts.concurrency)).map((t) => {
+        const [name, op] = chooseOp(r);
+        steps.push(`${n} ${t.name}:${name}`);
+        return { actor: t.name, run: () => op(t, ctx).catch((e: unknown) => debug(name, e)) };
+      });
+      await net.wave(wave);
     }
-    // Alla online; synka runt tills köerna är tomma och alla sett allas ändringar.
-    for (const c of clients) { c.online = true; c.dropAfter = null; }
-    for (let round = 0; round < 3; round++) for (const c of clients) await c.sync();
-    const outcomeCounts: Record<string, number> = {};
-    for (const o of server.outcomes.values()) outcomeCounts[`${o.kind}:${o.status}`] = (outcomeCounts[`${o.kind}:${o.status}`] ?? 0) + 1;
-    const stats = { outcomes: outcomeCounts, applied: server.applied.length, rejected: clients.map((c) => c.rejected.list().length), seen: clients.map((c) => c.seen.size), entries: clients.map((c) => c.rows("timeEntries").length), invoices: clients.map((c) => c.rows("invoices").length) };
-    return { seed, steps, violations: await checkInvariants(server, clients), stats } as SimulationResult;
+    await settleAll(net, tabs);
+    const verdict = await checkInvariants(server, browsers, tabs, forged);
+    if (process.env.AVA_SIM_DEBUG) for (const o of server.log) console.log("UTFALL", describeOutcome(o));
+    const outcomes: Record<string, number> = {};
+    for (const o of server.outcomes.values()) outcomes[`${o.kind}:${o.status}`] = (outcomes[`${o.kind}:${o.status}`] ?? 0) + 1;
+    return { seed, steps, ...verdict, stats: { outcomes, applied: server.applied.length, delivered: net.delivered, forged: forged.size } };
   } finally {
     await server.handle.close();
   }
-}
-
-type Key = Record<string, unknown>;
-
-async function serverState(db: AppDb): Promise<{ entries: Key[]; contactRows: Key[]; invoiceRows: Key[] }> {
-  const entries = await db.select({ id: timeEntries.id, minutes: timeEntries.minutes, description: timeEntries.description })
-    .from(timeEntries).where(and(eq(timeEntries.matterId, asId<"MatterId">(MATTER)), isNull(timeEntries.deletedAt)));
-  const contactRows = await db.select({ id: contacts.id, name: contacts.name }).from(contacts)
-    .where(and(eq(contacts.organizationId, asId<"OrganizationId">(ORG)), isNull(contacts.deletedAt)));
-  const invoiceRows = await db.select({ id: invoices.id, amount: invoices.amount, invoiceNumber: invoices.invoiceNumber })
-    .from(invoices).where(and(eq(invoices.matterId, asId<"MatterId">(MATTER)), isNull(invoices.deletedAt)));
-  const byId = (a: Key, b: Key): number => String(a.id).localeCompare(String(b.id));
-  return { entries: entries.sort(byId), contactRows: contactRows.sort(byId), invoiceRows: invoiceRows.sort(byId) };
-}
-
-function project(rows: Array<Record<string, unknown>>, fields: readonly string[]): Key[] {
-  return rows.map((row) => Object.fromEntries(fields.map((f) => [f, row[f] ?? null])))
-    .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-}
-
-const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
-
-/** Ingen ändring försvinner tyst: varje köpost fick ett utfall, och en avvisning syns hos klienten. */
-function checkNoSilentLoss(server: SimServer, clients: readonly SimClient[]): string[] {
-  const out: string[] = [];
-  for (const c of clients) {
-    if (c.store.pendingCount() > 0) out.push(`klient ${c.index}: ${c.store.pendingCount()} ändringar kvar i kön efter slutsynken`);
-    const rejectedIds = new Set(c.rejected.list().map((x) => x.id));
-    for (const [id, entry] of c.seen) {
-      const outcome = server.outcomes.get(id);
-      const what = isProcedure(entry) ? entry.path : `${entry.entity}/${entry.kind}`;
-      if (!outcome) { out.push(`klient ${c.index}: ${what} (${id}) nådde aldrig servern`); continue; }
-      const refused = outcome.status === "rejected" || outcome.status === "conflict";
-      if (refused && !rejectedIds.has(id)) out.push(`klient ${c.index}: ${what} avvisades men syns inte i avvisade ändringar`);
-    }
-  }
-  return out;
-}
-
-/** Klienterna konvergerar mot serverns läge. */
-function checkConvergence(state: Awaited<ReturnType<typeof serverState>>, clients: readonly SimClient[]): string[] {
-  const out: string[] = [];
-  for (const c of clients) {
-    const local = {
-      entries: project(c.rows("timeEntries").filter((e) => e.matterId === MATTER), ["id", "minutes", "description"]),
-      contactRows: project(c.rows("contacts"), ["id", "name"]),
-      invoiceRows: project(c.rows("invoices").filter((i) => i.matterId === MATTER), ["id", "amount", "invoiceNumber"]),
-    };
-    for (const k of ["entries", "contactRows", "invoiceRows"] as const) {
-      if (!same(local[k], state[k])) out.push(`klient ${c.index}: ${k} skiljer sig från servern`);
-    }
-  }
-  return out;
-}
-
-/** Inga dubbla fakturanummer. */
-function checkInvoiceNumbers(state: Awaited<ReturnType<typeof serverState>>): string[] {
-  const numbers = state.invoiceRows.map((i) => i.invoiceNumber).filter((n) => n != null);
-  return new Set(numbers).size === numbers.length ? [] : [`dubbla fakturanummer: ${numbers.join(", ")}`];
-}
-
-/** Slutligt serverläge = seriell körning av de accepterade ändringarna, i serverns ordning. */
-async function checkSerial(server: SimServer, clients: number): Promise<string[]> {
-  const fresh = await createTestDb();
-  try {
-    const repos = await seedWorld(fresh, clients);
-    const replayer = new DrizzleProcedureReplayer(fresh.db, repos);
-    const sync = new DrizzleSyncStore(fresh.db, repos);
-    for (const o of server.applied) {
-      if (o.kind === "row") { await sync.push(pusher(ORG, userFor(0).id), o.mutation); continue; }
-      const u = Array.from({ length: clients }, (_, i) => userFor(i)).find((x) => x.id === o.userId);
-      const ctx = buildContext({
-        repos, eventLog: serverFirstEventLog, ports: noopPorts,
-        principal: { id: asId<"UserId">(o.userId), email: u?.email ?? "", name: u?.name ?? "", role: "LAWYER", organizationId: asId<"OrganizationId">(ORG) },
-      });
-      await replayer.replay(o.call, ctx);
-    }
-    const serial = await serverState(fresh.db);
-    const actual = await serverState(server.handle.db);
-    return same(serial, actual) ? [] : ["serverläget skiljer sig från en seriell körning av de accepterade ändringarna"];
-  } finally {
-    await fresh.close();
-  }
-}
-
-async function checkInvariants(server: SimServer, clients: readonly SimClient[]): Promise<string[]> {
-  const state = await serverState(server.handle.db);
-  const replays = await server.handle.db.select({ id: syncReplays.mutationId }).from(syncReplays);
-  const stored = new Set(replays.map((x) => x.id));
-  const unstored = [...server.outcomes.values()].filter((o) => o.kind === "procedure" && !stored.has(o.call.mutationId));
-  return [
-    ...checkNoSilentLoss(server, clients),
-    ...checkConvergence(state, clients),
-    ...checkInvoiceNumbers(state),
-    ...(unstored.length > 0 ? [`${unstored.length} omkörda anrop saknar sparat utfall`] : []),
-    ...(await checkSerial(server, clients.length)),
-  ];
 }
