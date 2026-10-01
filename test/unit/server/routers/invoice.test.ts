@@ -134,6 +134,16 @@ describe("invoice.createRadgivning", () => {
     expect(te.frozenByBillingRunId).toBeUndefined();
   });
 
+  it("förfallodatum: en dag eller tidpunkt sparas; ett ogiltigt avvisas i stället för Invalid Date (#1362)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+    await makeCaller().createRadgivning({ matterId: "m1", invoiceDate: "2026-03-02T09:00:00.000Z", dueDate: "2026-04-01" });
+    expect(mockPrisma.invoice.create.mock.calls[0]![0].data.dueDate).toEqual(new Date("2026-04-01"));
+    for (const bad of [{ dueDate: "2026-13-45" }, { dueDate: "nästa vecka" }, { invoiceDate: "2026-02-30" }]) {
+      await expect(makeCaller().createRadgivning({ matterId: "m1", ...bad })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    }
+    expect(mockPrisma.invoice.create).toHaveBeenCalledTimes(1);
+  });
+
   it("tidsposten kan ägas av en annan jurist i byrån när ADMIN registrerar (setup-fält, #1345)", async () => {
     mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
     mockPrisma.user.findFirst.mockResolvedValue({ id: "u-lawyer", organizationId: "org-a" });

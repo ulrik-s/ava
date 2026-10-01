@@ -10,7 +10,9 @@
 
 import type { DemoSource } from "@/lib/shared/demo-source";
 import { IdbKv } from "./idb-kv";
-import { LOCAL_DATA_MIGRATIONS, LOCAL_DATA_VERSION, migrateLocalSnapshot, type LocalDataMigration } from "./local-data-format";
+import {
+  assertNotNewer, LOCAL_DATA_MIGRATIONS, LOCAL_DATA_VERSION, migrateLocalSnapshot, type LocalDataMigration,
+} from "./local-data-format";
 import type { LocalStorePersistence } from "./local-store-persistence";
 
 const DB_NAME = "ava-local-store";
@@ -46,8 +48,17 @@ export class IndexedDbPersistence implements LocalStorePersistence {
     return source;
   }
 
+  /**
+   * Snapshot och formatversion skrivs i EN transaktion (#1362): ett avbrott
+   * mellan dem lämnade förr ett migrerat snapshot märkt med det gamla formatet.
+   * Har en nyare version av appen (en annan flik) hunnit spara sitt format
+   * skrivs ingenting över — `LocalDataTooNewError` i stället.
+   */
   async save(source: DemoSource): Promise<void> {
-    await this.kv.put(KEY, source);
-    await this.kv.put(VERSION_KEY, this.format.version);
+    const version = this.format.version;
+    await this.kv.putAll([[KEY, source], [VERSION_KEY, version]], {
+      key: VERSION_KEY,
+      check: (stored) => assertNotNewer(stored, version),
+    });
   }
 }

@@ -23,6 +23,7 @@ import {
   type PlanForScan,
 } from "@/lib/shared/payment-reminders";
 import { paymentPlanStatusSchema, reminderTypeSchema, type Invoice, type PaymentPlan } from "@/lib/shared/schemas";
+import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
 import { asId, paymentPlanIdSchema, paymentPlanReminderIdSchema, type MatterId } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import { dateOrCallTime, newRowId } from "../queued-call";
@@ -141,7 +142,7 @@ export const paymentPlanRouter = router({
         planId: paymentPlanIdSchema,
         dueMonth: z.string().regex(/^\d{4}-\d{2}$/),
         type: reminderTypeSchema,
-        sentAt: z.string().optional(),
+        sentAt: isoDateOrDateTimeInput.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

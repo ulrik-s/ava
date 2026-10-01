@@ -16,6 +16,22 @@ export const dateLike = z.union([z.date(), z.string()]).transform((v) => (v inst
 /** Optional date (null/undefined OK). */
 export const optionalDateLike = dateLike.nullish();
 
+/**
+ * Indata (#1362): en kalenderdag "YYYY-MM-DD" som finns — 2026-13-45 och
+ * 2026-02-30 avvisas. Bara för router-indata; lagrade rader läses med de
+ * tillåtande schemana ovan (en strikt läsning tappar rader tyst).
+ */
+export const isoDayInput = z.iso.date();
+
+/** Indata (#1362): ett klockslag "HH:mm", 00:00–23:59. */
+export const clockTimeInput = z.iso.time({ precision: -1 });
+
+/**
+ * Indata (#1362): en dag ("YYYY-MM-DD") eller en tidpunkt (ISO 8601, med eller
+ * utan tidszon) som går att tolka — aldrig `Invalid Date` i `new Date(...)`.
+ */
+export const isoDateOrDateTimeInput = z.union([z.iso.date(), z.iso.datetime({ offset: true, local: true })]);
+
 /** cuid()-style sträng eller annan opaque ID. Inte UUID-strikt — godtar valfri non-empty. */
 export const idSchema = z.string().min(1);
 

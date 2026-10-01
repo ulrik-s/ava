@@ -93,7 +93,8 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "user.deactivate": Object.freeze({ entity: "user" }),
   "user.delete": Object.freeze({ entity: "user" }),
   "organization.updateSettings": Object.freeze({ entity: "organization" }),
-  "organization.addOffice": Object.freeze({ entity: "office", idField: "id" }),
+  // Kontorets id härleds ur anropet (#1362) — klienten väljer det inte.
+  "organization.addOffice": Object.freeze({ entity: "office" }),
   "organization.updateOffice": Object.freeze({ entity: "office" }),
   "organization.deleteOffice": Object.freeze({ entity: "office" }),
   "documentTemplate.create": Object.freeze({ entity: "documentTemplate", idField: "id" }),

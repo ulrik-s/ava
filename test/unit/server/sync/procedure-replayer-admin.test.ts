@@ -146,12 +146,19 @@ describe("administrationen körs om av servern (#1344)", () => {
       expect((await repos.organizations.getById(ORG))?.bankgiro).toBe("222-2222");
     });
 
-    it("kontor: läggs till med klientens id, ändras och tas bort", async () => {
-      const id = asId<"OfficeId">(uuidv7());
-      expect(await replayer.replay(call("organization.addOffice", { id, name: "Filial" }), asAdmin)).toMatchObject({ status: "accepted" });
+    it("kontor: läggs till med id härlett ur anropet, ändras och tas bort", async () => {
+      const add = call("organization.addOffice", { name: "Filial" });
+      const id = asId<"OfficeId">(derivedId(add.mutationId, "office"));
+      expect(await replayer.replay(add, asAdmin)).toMatchObject({ status: "accepted" });
       expect(await replayer.replay(call("organization.updateOffice", { id, name: "Filialen" }), asAdmin)).toMatchObject({ status: "accepted" });
       expect((await repos.offices.getById(id))?.name).toBe("Filialen");
       expect(await replayer.replay(call("organization.deleteOffice", { id }), asAdmin)).toMatchObject({ status: "accepted", rows: [] });
+      expect(await repos.offices.getById(id)).toBeNull();
+    });
+
+    it("kontor med ett klientvalt id → avvisat i kön, även för admin (#1362)", async () => {
+      const id = asId<"OfficeId">(uuidv7());
+      expect(await replayer.replay(call("organization.addOffice", { id, name: "Filial" }), asAdmin)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
       expect(await repos.offices.getById(id)).toBeNull();
     });
   });

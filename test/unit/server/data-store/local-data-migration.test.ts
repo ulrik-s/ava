@@ -65,6 +65,38 @@ describe("snapshot från förra releasen (#1269)", () => {
   });
 });
 
+describe("spara snapshotet (#1362)", () => {
+  it("snapshot och formatversion skrivs i samma transaktion", async () => {
+    const factory = new IDBFactory();
+    const p = new IndexedDbPersistence(factory, "ava-atomic");
+    await p.save(fixture.snapshot);
+    const kv = new IdbKv(factory, "ava-atomic", "source");
+    expect(await kv.get("current")).toEqual(fixture.snapshot);
+    expect(await kv.get("format")).toBe(LOCAL_DATA_VERSION);
+  });
+
+  it("en flik med äldre kod skriver inte över en nyare versions data — LocalDataTooNewError", async () => {
+    const factory = new IDBFactory();
+    await writePreviousRelease(factory, "ava-older-tab");
+    const kv = new IdbKv(factory, "ava-older-tab", "source");
+    await kv.put("format", LOCAL_DATA_VERSION + 1);
+    await expect(new IndexedDbPersistence(factory, "ava-older-tab").save({ users: [] })).rejects.toThrow(LocalDataTooNewError);
+    expect(await kv.get("current")).toEqual(fixture.snapshot);
+    expect(await kv.get("format")).toBe(LOCAL_DATA_VERSION + 1);
+  });
+});
+
+describe("IdbKv.putAll (#1362)", () => {
+  it("allt eller inget: ett villkor som kastar avbryter hela skrivningen", async () => {
+    const kv = new IdbKv(new IDBFactory(), "ava-putall", "s");
+    await kv.putAll([["a", 1], ["b", 2]], { key: "a", check: () => undefined });
+    expect([await kv.get("a"), await kv.get("b")]).toEqual([1, 2]);
+    const refusal = new Error("nej");
+    await expect(kv.putAll([["a", 9], ["b", 9]], { key: "a", check: (stored) => { if (stored === 1) throw refusal; } })).rejects.toBe(refusal);
+    expect([await kv.get("a"), await kv.get("b")]).toEqual([1, 2]);
+  });
+});
+
 describe("migrateLocalSnapshot", () => {
   it("beskedet säger vad användaren ska göra", () => {
     expect(() => migrateLocalSnapshot({}, 9, {}, 1)).toThrow(/Ladda om sidan.*ingenting har raderats/);
