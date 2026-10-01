@@ -172,8 +172,10 @@ OAUTH2_PROXY_WHITELIST_DOMAINS=login.microsoftonline.com
 `post_logout_redirect_uri` måste också vara registrerad som en av
 app-registreringens redirect-URI:er i Entra. Utan konfigurationen landar
 utloggningen på `/login/?signedOut=1` ("Du är utloggad"). Utloggning offline:
-allt lokalt görs ändå, och nästa start online går via `/oauth2/sign_out`
-först (`ava.pendingSignOut`) — annars skulle cookien släppa in nästa person.
+allt lokalt görs ändå, och nästa start går via `/oauth2/sign_out` först
+(`ava.pendingSignOut`) om proxyns session fortfarande lever — annars skulle
+cookien släppa in nästa person. Är sessionen redan slut tas nyckeln bort och
+inloggningen sker som vanligt (#1418).
 
 **Byte av användare.** Ser sessionsgrinden en annan identitet än den bundna
 (`bind`) är den förra användarens session i webbläsaren slut: hennes lokala

@@ -124,16 +124,30 @@ describe("signOut", () => {
 });
 
 describe("pendingSignOutRedirect / completeSignOut", () => {
-  it("online + väntande utloggning → proxyns utloggning, en gång", () => {
+  it("väntande utloggning och proxyns session lever → proxyns utloggning, en gång", () => {
     localStorage.setItem(PENDING_SIGN_OUT_KEY, "1");
-    expect(pendingSignOutRedirect(localStorage, "/ava", true)).toBe(proxySignOutUrl("/ava", null));
-    expect(pendingSignOutRedirect(localStorage, "/ava", true)).toBeNull();
+    expect(pendingSignOutRedirect(localStorage, "/ava", "authenticated")).toBe(proxySignOutUrl("/ava", null));
+    expect(pendingSignOutRedirect(localStorage, "/ava", "authenticated")).toBeNull();
   });
 
-  it("offline → väntar till nästa start", () => {
+  // #1418: landningssidan hann inte ta bort nyckeln (navigerade bort innan den
+  // laddats klart) — nästa inloggning skickades då till utloggningen igen.
+  it("väntande utloggning men proxyns session är redan slut → inget att avsluta, nyckeln tas bort", () => {
+    for (const probe of ["signed-out", "absent"] as const) {
+      localStorage.setItem(PENDING_SIGN_OUT_KEY, "1");
+      expect(pendingSignOutRedirect(localStorage, "/ava", probe)).toBeNull();
+      expect(localStorage.getItem(PENDING_SIGN_OUT_KEY)).toBeNull();
+    }
+  });
+
+  it("proxyn nås inte (offline) → väntar till nästa start", () => {
     localStorage.setItem(PENDING_SIGN_OUT_KEY, "1");
-    expect(pendingSignOutRedirect(localStorage, "", false)).toBeNull();
+    expect(pendingSignOutRedirect(localStorage, "", "unreachable")).toBeNull();
     expect(localStorage.getItem(PENDING_SIGN_OUT_KEY)).toBe("1");
+  });
+
+  it("ingen väntande utloggning → inget", () => {
+    expect(pendingSignOutRedirect(localStorage, "", "authenticated")).toBeNull();
   });
 
   it("landningssidan avslutar den väntande utloggningen", () => {

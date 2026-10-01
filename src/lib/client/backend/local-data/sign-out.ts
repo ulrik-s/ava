@@ -16,10 +16,12 @@
  *
  * Utloggning offline: allt lokalt görs ändå och sidan går till appens rot
  * (som utan bunden identitet ber om uppkoppling). `PENDING_SIGN_OUT_KEY` gör
- * att nästa start online går via `/oauth2/sign_out` först — annars skulle
- * cookien släppa in nästa person som den utloggade.
+ * att nästa start går via `/oauth2/sign_out` först om proxyns session
+ * fortfarande lever — annars skulle cookien släppa in nästa person som den
+ * utloggade.
  */
 
+import type { SessionProbe } from "@/lib/client/auth/session-probe";
 import { forgetSignedInIdentity, type FirmaTier } from "@/lib/client/firma/firma-config";
 import { reportIdbProblem } from "@/lib/server/data-store/in-memory/idb-open";
 import { activeLocalScope, unbindLocalNamespace, userNamespace } from "./local-namespace";
@@ -84,17 +86,26 @@ export async function signOut(env: SignOutEnv): Promise<void> {
 }
 
 /**
- * Vid start (self-hosted, online): avslutades inte proxyns session förra
- * gången (utloggning offline)? Då går vi via `/oauth2/sign_out` först.
- * Nyckeln tas bort direkt, så att en felkonfigurerad IdP-återkomst aldrig blir
- * en loop. Offline ligger den kvar till nästa start.
+ * Vid start (self-hosted): avslutades inte proxyns session förra gången
+ * (utloggning offline, eller ett avbrott på vägen)? Proxyns svar på
+ * sessionsfrågan avgör (`probe`), inte om landningssidan hann köra
+ * `completeSignOut` — en navigering bort från den innan den laddats klart
+ * lämnade annars nyckeln kvar, och nästa inloggning skickades till
+ * utloggningen i stället för till IdP:n (#1418):
+ *
+ *   - inloggad (`authenticated`) → proxyns session lever: via `/oauth2/sign_out` först,
+ *   - utloggad, eller ingen OIDC i driften → inget att avsluta,
+ *   - nås inte (offline) → nyckeln ligger kvar till nästa start.
+ *
+ * Nyckeln tas bort så fort proxyn svarat, så att en felkonfigurerad
+ * IdP-återkomst aldrig blir en loop.
  */
 export function pendingSignOutRedirect(
-  storage: Pick<Storage, "getItem" | "removeItem">, basePath: string, online: boolean,
+  storage: Pick<Storage, "getItem" | "removeItem">, basePath: string, probe: SessionProbe["kind"],
 ): string | null {
-  if (!online || storage.getItem(PENDING_SIGN_OUT_KEY) === null) return null;
+  if (probe === "unreachable" || storage.getItem(PENDING_SIGN_OUT_KEY) === null) return null;
   storage.removeItem(PENDING_SIGN_OUT_KEY);
-  return proxySignOutUrl(basePath, null);
+  return probe === "authenticated" ? proxySignOutUrl(basePath, null) : null;
 }
 
 /** Landningssidan nåddes: proxyns session är avslutad. */
