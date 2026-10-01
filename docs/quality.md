@@ -292,6 +292,16 @@ Den fäller på:
 Ta nästa lediga nummer när du skriver en migration. Om kontrollen säger att
 `main` redan har ditt nummer, byt nummer på din fil.
 
+### Lasttest (`bun run load:test`, #1366)
+
+Många samtidiga användare mot server-first i docker (Postgres 16 + pg-boss),
+genom den riktiga synk-klienten: vanligt arbete, anslutningsstorm, samtidig
+fakturering, dokument och samma mutation från flera flikar. Kraven (p95 < 500
+ms, inga 5xx, köerna tomma inom 2/5 min, obrutna nummerserier, konvergens,
+ingen låsväntan > 1 s, inga deadlocks) ger exit 1 när de bryts. Inte ett
+PR-krav: workflow:et **Lasttest** kör 20 och 50 användare nattligt och
+manuellt, med rapporten som artefakt. Se [`docs/load-testing.md`](load-testing.md).
+
 ### Arkitektur (`bun run deps:check`)
 
 Hårda regler (severity `error`):
@@ -382,7 +392,8 @@ bun-versionen där, gäller alla workflows. `ci.yml` har `concurrency`
 Jobben laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-report).
 
 Övriga workflows: **`deploy-demo.yml`** (GH Pages på push till `main`),
-**`helper-ui-ci.yml`** (Electron-helperns logik + motor), **`security.yml`**
+**`helper-ui-ci.yml`** (Electron-helperns logik + motor), **`load-test.yml`**
+(lasttestet, nattligt + manuellt, [`load-testing.md`](load-testing.md)), **`security.yml`**
 (CodeQL/SAST + `bun audit`-grinden på push/PR + veckovis schema) och
 **`release.yml`**
 (tag-triggad paket-release). Beroenden hålls uppdaterade av

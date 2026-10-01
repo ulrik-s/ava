@@ -77,6 +77,8 @@
     "diagnose-ui": "bun tooling/scripts/diagnose-ui.ts",
     "smoke:tier3": "bash tooling/scripts/test-tier3-smoke.sh",
     "test:all": "bash tooling/scripts/test-all.sh",
+    "load:test": "bash tooling/load/load-test.sh",
+    "load:test:50": "LOAD_USERS=50 LOAD_ORGS=3 bash tooling/load/load-test.sh",
     "duplicates": "jscpd --config tooling/config/jscpd.json src",
     "lint:complexity-strict": "bun tooling/scripts/check-complexity-strict.ts",
     "deps:check": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type err src test helper-ui office-addin tooling/ava-cli",
