@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { AVA_EVENT_ID_PROPERTY } from "@/lib/client/integrations/outlook-mirror";
 import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
 import {
   setOutlookTokenProvider,
@@ -23,6 +24,7 @@ const graph = vi.hoisted(() => ({
   createGraphEvent: vi.fn(),
   updateGraphEvent: vi.fn(),
   deleteGraphEvent: vi.fn(),
+  findGraphEventByProperty: vi.fn(),
   toGraphEvent: vi.fn((ev: { title: string }) => ({ subject: ev.title })),
 }));
 vi.mock("@/lib/client/integrations/microsoft-graph", () => graph);
@@ -58,6 +60,8 @@ beforeEach(() => {
   });
   jobQueue.clearFinished();
   vi.clearAllMocks();
+  // Ingen tidigare spegling i Outlook, om inte testet säger annat (#1361).
+  graph.findGraphEventByProperty.mockResolvedValue(null);
   setOutlookTokenProvider(null);
   setMirrorStateDispatcher(null);
 });
@@ -221,7 +225,7 @@ describe("mirror-to-outlook worker", () => {
     );
   });
 
-  it("delete utan outlookEventId → ingen Graph-anrop (eventet aldrig mirrorat)", async () => {
+  it("delete utan outlookEventId och utan spegling i Outlook → inget tas bort", async () => {
     const dispatch = vi.fn().mockResolvedValue(undefined);
     setOutlookTokenProvider(async () => "tok");
     setMirrorStateDispatcher(dispatch);
@@ -232,6 +236,7 @@ describe("mirror-to-outlook worker", () => {
     });
     const job = await waitForFinish(id);
     expect(job.status).toBe("done");
+    expect(graph.findGraphEventByProperty).toHaveBeenCalledWith(AVA_EVENT_ID_PROPERTY, "ev-no-id", expect.objectContaining({ token: "tok" }));
     expect(graph.deleteGraphEvent).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
   });
@@ -319,5 +324,85 @@ describe("mirror-to-outlook worker", () => {
     expect(WORKER_TIMEOUTS_MS["mirror-to-outlook"]).toBe(60_000);
     expect(Object.keys(WORKER_TIMEOUTS_MS).sort()).toEqual(["classify-document", "extract-text", "mirror-to-outlook"]);
     for (const ms of Object.values(WORKER_TIMEOUTS_MS)) expect(ms).toBeGreaterThan(0);
+  });
+});
+
+// ── #1361: ett avbrutet speglingsjobb får inte ge dubbletter i Outlook ──
+
+interface FakeEvent { avaId?: string; transactionId?: string; subject: string }
+interface CreateBody { subject: string; transactionId?: string; singleValueExtendedProperties?: Array<{ id: string; value: string }> }
+
+/**
+ * En fejkad Outlook-kalender: skapade event minns sin utökade egenskap
+ * (AVA-id:t) och sitt transactionId, och kan sökas fram på AVA-id:t.
+ */
+function fakeOutlook(): Map<string, FakeEvent> {
+  const events = new Map<string, FakeEvent>();
+  graph.createGraphEvent.mockImplementation(async (body: CreateBody) => {
+    const id = `g-${events.size + 1}`;
+    const avaId = body.singleValueExtendedProperties?.find((p) => p.id === AVA_EVENT_ID_PROPERTY)?.value;
+    events.set(id, { subject: body.subject, ...(avaId ? { avaId } : {}), ...(body.transactionId ? { transactionId: body.transactionId } : {}) });
+    return { id };
+  });
+  graph.updateGraphEvent.mockImplementation(async (id: string) => ({ id }));
+  graph.deleteGraphEvent.mockImplementation(async (id: string) => { events.delete(id); });
+  graph.findGraphEventByProperty.mockImplementation(async (prop: string, value: string) =>
+    [...events].find(([, ev]) => prop === AVA_EVENT_ID_PROPERTY && ev.avaId === value)?.[0] ?? null);
+  return events;
+}
+
+describe("mirror-to-outlook — idempotent vid omförsök (#1361)", () => {
+  const event = { title: "Förhandling", startAt: "2026-04-01T09:00:00Z", allDay: false, visibility: "normal", kind: "appointment" };
+
+  it("skapandet märks med AVA-id:t och ett transactionId som är detsamma vid omförsök", async () => {
+    const outlook = fakeOutlook();
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(vi.fn().mockResolvedValue(undefined));
+    await waitForFinish(jobQueue.enqueue("mirror-to-outlook", "test", { eventId: "ev-tx", op: "upsert", event }));
+    expect([...outlook.values()]).toEqual([{ subject: "Förhandling", avaId: "ev-tx", transactionId: "ava-calendar-ev-tx" }]);
+  });
+
+  it("avbrott efter skapandet men innan id:t sparats → Försök igen uppdaterar samma event, ingen dubblett", async () => {
+    const outlook = fakeOutlook();
+    setOutlookTokenProvider(async () => "tok");
+    const patches: UpdateMirrorStateArgs["patch"][] = [];
+    let lost = true;
+    setMirrorStateDispatcher(async (args) => {
+      // Första sparandet av "synced" går inte fram (fliken stängs, tidsgränsen slår till).
+      if (args.patch.mirrorStatus === "synced" && lost) { lost = false; throw new Error("nätet försvann"); }
+      patches.push(args.patch);
+    });
+    const payload = { eventId: "ev-retry", op: "upsert", event };
+
+    expect((await waitForFinish(jobQueue.enqueue("mirror-to-outlook", "första", payload))).status).toBe("failed");
+    expect(patches.at(-1)).toMatchObject({ mirrorStatus: "failed" });
+    expect(outlook.size).toBe(1);
+
+    // "Försök igen": samma payload, fortfarande utan outlookEventId.
+    expect((await waitForFinish(jobQueue.enqueue("mirror-to-outlook", "igen", payload))).status).toBe("done");
+    expect(outlook.size).toBe(1);
+    expect(graph.createGraphEvent).toHaveBeenCalledTimes(1);
+    expect(graph.updateGraphEvent).toHaveBeenCalledWith("g-1", expect.anything(), expect.anything());
+    expect(patches.at(-1)).toMatchObject({ mirrorStatus: "synced", outlookEventId: "g-1" });
+  });
+
+  it("borttagning utan sparat id tar bort speglingen som skapades före avbrottet", async () => {
+    const outlook = fakeOutlook();
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(async (args) => { if (args.patch.mirrorStatus === "synced") throw new Error("avbrutet"); });
+    await waitForFinish(jobQueue.enqueue("mirror-to-outlook", "skapa", { eventId: "ev-orphan", op: "upsert", event }));
+    expect(outlook.size).toBe(1);
+
+    await waitForFinish(jobQueue.enqueue("mirror-to-outlook", "ta bort", { eventId: "ev-orphan", op: "delete" }));
+    expect(outlook.size).toBe(0);
+  });
+
+  it("ett känt outlookEventId används direkt, utan sökning", async () => {
+    fakeOutlook();
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(vi.fn().mockResolvedValue(undefined));
+    await waitForFinish(jobQueue.enqueue("mirror-to-outlook", "test", { eventId: "ev-known", op: "upsert", outlookEventId: "g-9", event }));
+    expect(graph.findGraphEventByProperty).not.toHaveBeenCalled();
+    expect(graph.updateGraphEvent).toHaveBeenCalledWith("g-9", expect.anything(), expect.anything());
   });
 });
