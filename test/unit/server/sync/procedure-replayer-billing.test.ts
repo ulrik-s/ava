@@ -25,6 +25,7 @@ import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import type { Context } from "@/lib/server/trpc-core";
 import { asId } from "@/lib/shared/schemas/ids";
 import { derivedId } from "@/lib/shared/sync/derived-id";
+import { QUEUE_POLICY } from "@/lib/shared/sync/queue-format";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
@@ -34,6 +35,8 @@ const OTHER_ORG = uuidv7();
 const USER = uuidv7();
 /** När anropet gjordes — långt före omkörningen. */
 const MADE_AT = Date.UTC(2026, 0, 15, 10, 0);
+/** Servern kör om anropet tre dagar senare — inom gränsen för anropstiden (#1350). */
+const REPLAYED_AT = MADE_AT + 3 * 86_400_000;
 
 describe("faktureringen i procedur-kön (#1276, steg 2a)", () => {
   let handle: TestDbHandle;
@@ -46,7 +49,7 @@ describe("faktureringen i procedur-kön (#1276, steg 2a)", () => {
     handle = await createTestDb();
     repos = buildDrizzleRepositories(handle.db);
     enableChangeLogOnAll(repos, createDbChangeLogRecorder(handle.db));
-    replayer = new DrizzleProcedureReplayer(handle.db, repos);
+    replayer = new DrizzleProcedureReplayer(handle.db, repos, QUEUE_POLICY, () => REPLAYED_AT);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await handle.db.insert(users).values({ id: USER, organizationId: ORG, email: "lena@byra.se", name: "Lena", role: "LAWYER", active: true, version: 1 } as any);
     matterId = uuidv7();

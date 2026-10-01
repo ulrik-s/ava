@@ -66,14 +66,15 @@ import {
   buildClientArvodeLines, buildCreditView, buildSettlementViews, creditPayload, radgivningOre,
   type SettlementBreakdown, type SettlementRowKind, type SettlementView,
 } from "@/lib/shared/settlement-view";
+import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { valueKrRun } from "../billing/kr-run-valuation";
 import { logMatterNote } from "../billing/matter-note";
 import { removeVoidedKrDocuments } from "../billing/void-kr-documents";
 import { emit, type EmitCtx } from "../events/emit";
+import { nextSeriesNumber } from "../number-series";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
-import { nextInvoiceNumberFrom } from "../repositories/invoice-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -508,22 +509,17 @@ async function invoiceNumbering(
   recipient: BillingRunRecipient,
   invoiceDate: Date,
 ): Promise<{ invoiceNumber: string; ocrReference: string | null }> {
-  // Serien är fakturadatumets år (ADR 0012) — samma som radkön (#1243).
-  const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId, invoiceDate.getFullYear());
+  // Serien är fakturadatumets år i svensk tid (ADR 0012, #1243, #1350).
+  const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId, stockholmYear(invoiceDate));
   return { invoiceNumber, ocrReference: recipient === "DOMSTOL" ? null : ocrFromInvoiceNumber(invoiceNumber) };
 }
 
 /** Nästa kostnadsräknings-referens `KR-YYYY-NNNN` (#889) — firmagemensam sekvens
  *  per år, härledd ur befintliga KR-körningars referens. */
 async function nextKrReference(repos: Repositories, orgId: OrganizationId, year: number): Promise<string> {
-  const prefix = `KR-${year}-`;
   const runs = await repos.billingRuns.listForOrg(orgId);
-  const last = runs
-    .map((r) => (r as { reference?: string | null }).reference)
-    .filter((ref): ref is string => !!ref && ref.startsWith(prefix))
-    .sort()
-    .pop();
-  return nextInvoiceNumberFrom(prefix, last);
+  // Numeriskt högsta (#1350): textuellt är KR-…-9999 större än KR-…-10000.
+  return nextSeriesNumber(`KR-${year}-`, runs.map((r) => (r as { reference?: string | null }).reference));
 }
 
 /**
@@ -766,7 +762,7 @@ export const billingRunRouter = router({
           id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
           status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,
-          reference: await nextKrReference(tx, ctx.orgId, now.getFullYear()),
+          reference: await nextKrReference(tx, ctx.orgId, stockholmYear(now)),
           proposedAmountOre: grossValue, amountOre: grossValue,
           invoiceId: null, deductedBillingRunIds: [],
           periodTo: now, notes: input.notes,

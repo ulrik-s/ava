@@ -13,7 +13,7 @@
 
 import { formatKr } from "./format-kr";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, PAYMENT_METHOD_LABELS, type InvoiceStatus, type InvoiceType, type PaymentMethod } from "./schemas/enums";
-import { stockholmDay } from "./watchlist";
+import { stockholmDay } from "./stockholm-time";
 
 const TIME_FMT = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit" });
 

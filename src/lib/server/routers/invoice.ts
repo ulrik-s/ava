@@ -37,6 +37,7 @@ import {
   type UserId,
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
+import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
 import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
@@ -213,7 +214,7 @@ export const invoiceRouter = router({
         const netOre = avgift.beloppExclVatOre;
         const grossOre = arvodeInclVatOre(netOre);
         const vatOre = grossOre - netOre;
-        const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId, when.getFullYear());
+        const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId, stockholmYear(when));
         const invoice = await repos.invoices.create({
           id: asId<"InvoiceId">(newRowId(ctx, "invoice")),
           matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
@@ -289,7 +290,7 @@ export const invoiceRouter = router({
           id: input.id, // undefined → store genererar
           notes: input.notes,
           matterId: original.matterId,
-          invoiceNumber: await repos.invoices.nextInvoiceNumber(ctx.orgId, creditDate.getFullYear()),
+          invoiceNumber: await repos.invoices.nextInvoiceNumber(ctx.orgId, stockholmYear(creditDate)),
           amount: -original.amount,
           // Kreditnotan speglar originalet POST FÖR POST (#977): samma konton och
           // momssatser, omvända tecken. Förr bar den bara ett negativt belopp, så

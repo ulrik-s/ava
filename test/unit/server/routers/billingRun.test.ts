@@ -14,6 +14,7 @@ import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
 import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { asId } from "@/lib/shared/schemas/ids";
+import { stockholmYear } from "@/lib/shared/stockholm-time";
 
 const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
@@ -248,6 +249,19 @@ describe("billingRun.createKostnadsrakning", () => {
     const { caller } = makeCaller({ workMinutes: 180, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     expect((res.run as { reference?: string }).reference).toMatch(/^KR-\d{4}-\d{4}$/);
+  });
+
+  it("KR-referensen räknas numeriskt: efter KR-…-9999 kommer KR-…-10000, i svenskt år (#1350)", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 180, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const year = stockholmYear(new Date());
+    // Serien är byrågemensam: KR 9999 ligger i ett annat ärende i byrån.
+    await ds.matters.create({ data: { id: asId<"MatterId">("m-2"), organizationId: asId<"OrganizationId">("org-1"), matterNumber: "2026-0002", title: "Annat", status: "ACTIVE", createdAt: new Date() } });
+    await ds.billingRuns.create({ data: {
+      id: asId<"BillingRunId">("br-9999"), matterId: asId<"MatterId">("m-2"), type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
+      status: "PENDING_VERDICT", reference: `KR-${year}-9999`, amountOre: 0, deductedBillingRunIds: [],
+    } });
+    const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect((res.run as { reference?: string }).reference).toBe(`KR-${year}-10000`);
   });
 
   it("fryser raderna vid inskick mot körningen (#806 — lämnar 'upparbetat ofakturerat')", async () => {
