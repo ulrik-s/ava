@@ -84,6 +84,27 @@ describe("ReconcileEngine — replay", () => {
     expect(h.applied.find((a) => a.entity === "timeEntry")?.row).toMatchObject({ version: 1 });
   });
 
+  it("accepted radering → tombstone lokalt, också när servern svarar med en rad (#1397)", async () => {
+    const h = harness();
+    const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
+    await queue.enqueue({ entity: "document", kind: "delete", row: { id: "d1", title: "Borta" } }, { mutationId: "md" });
+    // Äldre server: svarar `{ id }` utan markering — får inte bli en stomrad.
+    h.transport.pushResults.set("md", { status: "accepted", row: { id: "d1" } });
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(h.applied).toEqual([{ entity: "document", row: { id: "d1" }, deleted: true }]);
+    expect(res.pushed).toBe(1);
+    expect(queue.size()).toBe(0);
+  });
+
+  it("accepted med serverns tombstone-markering → raden tas bort lokalt (#1397)", async () => {
+    const h = harness();
+    const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
+    await queue.enqueue({ entity: "document", kind: "update", row: { id: "d2" } }, { mutationId: "mu" });
+    h.transport.pushResults.set("mu", { status: "accepted", row: { id: "d2" }, deleted: true });
+    await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(h.applied).toEqual([{ entity: "document", row: { id: "d2" }, deleted: true }]);
+  });
+
   it("rebased (LWW) → applicerar serverns kanoniska rad, räknar rebased", async () => {
     const h = harness();
     const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());

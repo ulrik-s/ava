@@ -124,6 +124,17 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     expect(await repos.contacts.getById(asId<"ContactId">(c2))).toBeNull();
   });
 
+  it("push delete svarar med en tombstone, också när raden redan är borta (#1397)", async () => {
+    const c = uuidv7();
+    await repos.contacts.create({ id: c, organizationId: ORG, name: "Raderas två gånger", contactType: "PERSON" } as never);
+    const tombstone = { status: "accepted", row: { id: c }, deleted: true };
+    expect(await sync.push(pusher(ORG), mut("contact", "delete", { id: c, name: "Raderas två gånger" }))).toEqual(tombstone);
+    const cursor = (await sync.pull(ORG, 0)).cursor;
+    // En kollega hann radera samma rad: ingen ny skrivning, samma tombstone.
+    expect(await sync.push(pusher(ORG), mut("contact", "delete", { id: c }))).toEqual(tombstone);
+    expect((await sync.pull(ORG, cursor)).changes.some((ch) => ch.row.id === c)).toBe(false);
+  });
+
   // #528: document/documentFolder saknar org-kolumn → org härleds via ärendet
   // (resolveOrg-override) så de loggas i change_log och delta-synkas via pull.
   it("document + documentFolder delta-synkas via pull (org härledd ur ärendet, #528)", async () => {

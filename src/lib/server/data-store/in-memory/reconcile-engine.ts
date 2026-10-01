@@ -34,7 +34,7 @@ import { fetchCanonical, pendingKeysOf, refKey, refsOf, RestorePlan, type ApplyC
 import type { CursorStore } from "./cursor-store";
 import { isProcedureCall, type MutationQueue, type QueueEntry, type QueuedMutation, type QueuedProcedureCall } from "./mutation-queue";
 import { ReplayBackoff } from "./replay-backoff";
-import type { PulledChange, RowRef, SyncTransport } from "./sync-transport";
+import type { PulledChange, PushResult, RowRef, SyncTransport } from "./sync-transport";
 
 export type { ApplyCanonical } from "./canonical-restore";
 
@@ -213,7 +213,9 @@ export class ReconcileEngine {
       this.rowConflict(m, res, tally, plan);
       return;
     }
-    await this.deps.apply(m.entity, res.row, false);
+    // En godtagen radering är en tombstone (#1397) — också när servern svarar
+    // med en rad: raden tas bort lokalt, den skrivs aldrig som levande.
+    await this.deps.apply(m.entity, res.row, m.kind === "delete" || isTombstone(res));
     plan.settled(refOf(m.entity, m.row));
     if (res.status === "rebased") tally.rebased++;
     else tally.pushed++;
@@ -248,6 +250,9 @@ export class ReconcileEngine {
     tally.conflicts.push({ mutation: m, conflictClass: "surface", reason: res.reason, retryable: false });
   }
 }
+
+/** Svarade servern med en tombstone (`deleted`, #1397)? */
+const isTombstone = (res: PushResult): boolean => res.status === "accepted" && res.deleted === true;
 
 interface Tally {
   pushed: number;
