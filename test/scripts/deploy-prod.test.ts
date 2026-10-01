@@ -20,6 +20,8 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest-compat";
 
 const REPO = process.cwd();
+/** Databaslösenordet i testets ava-server.env — får aldrig synas i utskrift eller anrop. */
+const PASSWORD = "hemligt-pw-1369";
 const COPIED = [
   "tooling/scripts/deploy-prod.sh",
   "tooling/scripts/lib/release.sh",
@@ -66,7 +68,10 @@ case "$1" in
         css=".bg-canvas{a:b}.x>span:before{a:b}"
         printf "%s" "\${FAKE_CSS:-\$css}" > out/_next/static/chunks/a.css
         echo "klient $(git rev-parse --short HEAD)" > out/index.html ;;
-      *db-migrate.ts*) [ -z "\${FAKE_MIGRATE_FAIL:-}" ] || exit 1 ;;
+      *db-migrate.ts*)
+        # "-e AVA_DATABASE_URL" utan värde: docker läser URL:en ur sin miljö.
+        [ "\${AVA_DATABASE_URL:-}" != "postgres://ava:\${FAKE_PASSWORD}@postgres:5432/ava" ] || echo "db-url via miljön" >> "$FAKE_LOG"
+        [ -z "\${FAKE_MIGRATE_FAIL:-}" ] || exit 1 ;;
     esac ;;
   compose)
     case "$*" in
@@ -103,7 +108,7 @@ beforeEach(() => {
   write(dev, "tooling/scripts/backup-db.sh", 'echo "backup $*" >> "$FAKE_LOG"\n[ -z "${FAKE_BACKUP_FAIL:-}" ]\n', 0o755);
   sh(`git remote add origin ../origin.git && git add -A && git commit -qm init && git push -q origin main`, dev);
   sh(`git clone -q origin.git srv`, root);
-  writeFileSync(join(srv, "ava-server.env"), "POSTGRES_PASSWORD=hemligt\n");
+  writeFileSync(join(srv, "ava-server.env"), `POSTGRES_PASSWORD=${PASSWORD}\n`);
 
   mkdirSync(bin);
   write(bin, "docker", FAKE_DOCKER, 0o755);
@@ -117,7 +122,7 @@ function deploy(args: string[] = [], env: Record<string, string> = {}): { status
   const r = spawnSync("bash", [join(srv, "tooling/scripts/deploy-prod.sh"), ...args], {
     encoding: "utf8",
     env: {
-      ...process.env, ...gitEnv, PATH: `${bin}:${process.env.PATH ?? ""}`, FAKE_LOG: log,
+      ...process.env, ...gitEnv, PATH: `${bin}:${process.env.PATH ?? ""}`, FAKE_LOG: log, FAKE_PASSWORD: PASSWORD,
       AVA_DEPLOY_READY_TRIES: "2", AVA_DEPLOY_READY_PAUSE: "0", ...env,
     },
   });
@@ -157,12 +162,27 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
 
   it("första deployen med releases/: nuvarande out/ blir en release och Caddy flyttas dit FÖRE bygget", () => {
     write(srv, "out/index.html", "gammal klient\n");
+    // Som i prod: koden hämtades för hand först → HEAD är redan den NYA sha:n
+    // när skriptet körs, och out/ är byggd från en okänd, äldre version.
+    const sha = pushCommit();
+    sh("git fetch -q origin && git merge -q --ff-only origin/main", srv);
     const { status, out, calls } = deploy();
     expect(status, out).toBe(0);
+    expect(link("previous")).toMatch(/^\d{8}T\d{6}Z-bootstrap$/);
+    expect(link("previous")).not.toContain(sha);
     expect(readFileSync(join(srv, "releases", link("previous"), "index.html"), "utf8")).toBe("gammal klient\n");
     expect(served()).toBe(`klient ${head()}`);
     expect(at(calls, "up -d --no-deps caddy")).toBeGreaterThan(-1);
     expect(at(calls, "up -d --no-deps caddy")).toBeLessThan(at(calls, "build-demo.sh"));
+  });
+
+  it("databaslösenordet syns aldrig på kommandoraden — migreringen får URL:en via miljön", () => {
+    const { status, out, calls } = deploy();
+    expect(status, out).toBe(0);
+    expect(calls).toContain("db-url via miljön");
+    expect(calls.find((c) => c.includes("db-migrate.ts"))).toContain("-e AVA_DATABASE_URL oven/bun:1");
+    expect(calls.join("\n")).not.toContain(PASSWORD);
+    expect(out).not.toContain(PASSWORD);
   });
 
   it("migrationerna körs vid VARJE deploy, även utan nya commits", () => {
@@ -298,6 +318,10 @@ describe("deploy-prod.sh — --dry-run, --rollback och argument", () => {
     expect(out).toContain("[dry-run] git merge --ff-only");
     expect(out).toContain(`[dry-run] release_activate `);
     expect(out).toContain(sha);
+    // Utskriften hamnar i terminaler och loggar: inga hemligheter (#1369-uppföljning).
+    expect(out).toContain("[dry-run] docker run --rm --network ava_default");
+    expect(out).not.toContain(PASSWORD);
+    expect(calls.join("\n")).not.toContain(PASSWORD);
   });
 
   it("--rollback byter till förra klienten — och en andra rollback ångrar den", () => {
