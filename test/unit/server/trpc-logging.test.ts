@@ -8,20 +8,26 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
 import { z } from "zod";
+import { setErrorReporter, type ErrorReport } from "@/lib/server/observability/error-reporter";
 import { publicProcedure, router, TRPCError, type Context } from "@/lib/server/trpc-core";
 import { arraySink, setLogLevel, setLogSink, type LogRecord } from "@/lib/shared/observability/logger";
 import { mockStoreAndRepos } from "./helpers/mock-data-store";
 
 let records: LogRecord[] = [];
+let reports: ErrorReport[] = [];
 let restore: ReturnType<typeof setLogSink>;
+let restoreReporter: ReturnType<typeof setErrorReporter>;
 
 beforeEach(() => {
   records = [];
+  reports = [];
   restore = setLogSink(arraySink(records));
+  restoreReporter = setErrorReporter((r) => void reports.push(r));
   setLogLevel("debug");
 });
 afterEach(() => {
   setLogSink(restore);
+  setErrorReporter(restoreReporter);
   setLogLevel("info");
 });
 
@@ -34,6 +40,11 @@ const testRouter = router({
     .input(z.object({ personnummer: z.string() }))
     .query(({ input }) => {
       throw new TRPCError({ code: "BAD_REQUEST", message: `Klienten ${input.personnummer} saknar fullmakt` });
+    }),
+  crash: publicProcedure
+    .input(z.object({ personnummer: z.string() }))
+    .query(({ input }): never => {
+      throw new TypeError(`Klienten ${input.personnummer} kraschade`);
     }),
 });
 
@@ -105,5 +116,32 @@ describe("fallerat anrop", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- avsiktligt fel form
     await expect(caller().ok({ fel: "form" } as any)).rejects.toThrow();
     expect(records[0]).toMatchObject({ outcome: "error", code: "BAD_REQUEST" });
+  });
+});
+
+describe("felrapporteringen (#1343)", () => {
+  const user = { id: "u-1", email: "a@b.se", name: "A", role: "LAWYER", organizationId: "org-1" };
+
+  it("ett klientfel (4xx) rapporteras inte", async () => {
+    await expect(caller().boom(HEMLIGT)).rejects.toThrow();
+    expect(reports).toHaveLength(0);
+  });
+
+  it("ett valideringsfel rapporteras inte", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- avsiktligt fel form
+    await expect(caller().ok({ fel: "form" } as any)).rejects.toThrow();
+    expect(reports).toHaveLength(0);
+  });
+
+  it("ett oväntat serverfel rapporteras med klass, path och samma requestId som loggen", async () => {
+    await expect(caller(user as Context["user"]).crash(HEMLIGT)).rejects.toThrow();
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({ type: "TypeError", path: "crash", requestId: records[0]?.requestId });
+  });
+
+  it("rapporten bär varken meddelande, input eller användarens och orgens id", async () => {
+    await expect(caller(user as Context["user"]).crash(HEMLIGT)).rejects.toThrow();
+    const json = JSON.stringify(reports);
+    for (const secret of [HEMLIGT.personnummer, "kraschade", "u-1", "org-1", "a@b.se"]) expect(json).not.toContain(secret);
   });
 });

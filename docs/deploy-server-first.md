@@ -461,14 +461,19 @@ annars saknar helperns token det oauth2-proxy verifierar mot — se
 docker compose -f tooling/docker/docker-compose.production.yml up -d oauth2-proxy server-first
 ```
 
-## Felrapportering till PostHog (valfritt)
+## Felrapportering till PostHog EU (valfritt)
 
-Servern skickar sina felposter till PostHogs felspårning när en projekt-token
-finns. I `ava-server.env`:
+Ingen felrapportering är påslagen som standard. Med en PostHog-nyckel skickas
+serverns oväntade fel (5xx, aldrig 4xx) till PostHog **EU Cloud (Frankfurt)** —
+standardvärden är `eu.i.posthog.com` och en amerikansk värd vägras. Teckna
+PostHogs biträdesavtal (DPA) innan nyckeln sätts. Vad som skickas: se
+`docs/observability.md`. I `ava-server.env`:
 
 ```bash
-AVA_POSTHOG_KEY=phc_uerix3kvxaE8FB5oprSEnEDpxPVmsJZtmn4rQqDQJsrL   # AVA:s projekt (638276, US)
-# AVA_POSTHOG_HOST=https://eu.i.posthog.com                     # bara för ett EU-projekt
+AVA_POSTHOG_KEY=phc_<byråns-projekt-token>   # skapas på eu.posthog.com
+# AVA_POSTHOG_HOST=https://posthog.byran.se   # bara vid själv-hostad PostHog
+# AVA_ERROR_ENVIRONMENT=staging               # default production
+# AVA_RELEASE=<commit-sha>                    # server-versionen
 ```
 
 ```bash
@@ -476,8 +481,9 @@ docker compose -f tooling/docker/docker-compose.production.yml up -d server-firs
 docker compose -f tooling/docker/docker-compose.production.yml logs server-first | grep felrapportering
 ```
 
-Vad som skickas (bara id:n, koder och maskerade meddelanden) och vad det betyder
-för dataresidens står i [observability.md](observability.md#felrapportering-till-posthog-1080).
+Exakt vad som skickas (felklass, felkod, procedur, requestId, version, miljö,
+tid och `fil:rad`-ramar — aldrig meddelanden, användare eller indata) står i
+[observability.md](observability.md#felrapportering-till-posthog-eu-1343).
 
 ## Dokumentklassificering med lokal LLM (valfritt)
 

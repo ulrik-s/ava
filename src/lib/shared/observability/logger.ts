@@ -25,8 +25,9 @@
  * ## Sink:en injiceras
  *
  * Modulen skriver inte själv. `setLogSink` byter destination — JSON till
- * stdout i drift, en array i tester, och senare en fel-rapportör vid sidan av.
- * Utan det hade varje test som råkar logga spammat testutskriften.
+ * stdout i drift, en array i tester. Felrapporteringen till byråns egen
+ * mottagare går INTE via loggen utan via `server/observability/error-reporter`
+ * (#1343), som skickar mindre än en loggpost bär. Utan det hade varje test som råkar logga spammat testutskriften.
  */
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -88,23 +89,6 @@ export const jsonSink: LogSink = (record) => {
    
   console.error(JSON.stringify(record));
 };
-
-/**
- * Skicka varje post till flera destinationer — t.ex. JSON till stderr och
- * felen till en felrapportör (#1080). En destination som kastar stoppar inte
- * de andra: loggningen får aldrig fälla det den loggar.
- */
-export function teeSink(...sinks: readonly LogSink[]): LogSink {
-  return (record) => {
-    for (const s of sinks) {
-      try {
-        s(record);
-      } catch {
-        // En trasig destination får inte ta de andra med sig.
-      }
-    }
-  };
-}
 
 /** Kastar bort allt. Default i tester och i browser-bundlen. */
 export const nullSink: LogSink = () => {};
