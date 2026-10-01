@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
-import { isCheckedRole } from "@/lib/shared/conflict-roles";
 import { DEFAULT_MATTER_FOLDERS } from "@/lib/shared/default-matter-folders";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
@@ -8,7 +7,6 @@ import {
   contactTypeSchema,
   matterStatusSchema,
   paymentMethodSchema,
-  type MatterRole,
   type PaymentMethod,
 } from "@/lib/shared/schemas/enums";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
@@ -30,6 +28,7 @@ import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
 import { logMatterNote, type NoteCtx } from "../billing/matter-note";
 import { checkMatterConflicts } from "../conflict/matter-conflict-check";
+import { recheckIfParty, recheckMatterConflicts } from "../conflict/matter-conflict-recheck";
 import { conflictReviewInput, reviewMatterConflicts } from "../conflict/matter-conflict-review";
 import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
 import { emit } from "../events/emit";
@@ -39,25 +38,6 @@ import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
 
 type MatterCtx = { repos: Repositories; orgId: OrganizationId } & QueuedCallScope;
-
-/** Det jävskontrollen behöver ur en tRPC-context (`checkMatterConflicts`). */
-type ConflictCheckCtx = Parameters<typeof checkMatterConflicts>[0] & MatterCtx;
-
-/**
- * Kör jävskontrollen för ärendets alla parter igen och spara resultatet
- * (#1246, #1354) — när en part lagts till eller på begäran.
- */
-async function recheckMatterConflicts(ctx: ConflictCheckCtx, matterId: MatterId): Promise<Matter> {
-  const matter = await ctx.repos.matters.getByIdWithContacts(matterId, ctx.orgId);
-  if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-  const parties = matter.contacts.map((c) => ({ contactId: asId<"ContactId">(c.contactId), role: c.role }));
-  return ctx.repos.matters.update(matterId, await checkMatterConflicts(ctx, matterId, parties));
-}
-
-/** En ny part på klient- eller motsidan → kontrollera ärendet igen (#1354). */
-async function recheckIfParty(ctx: ConflictCheckCtx, matterId: MatterId, role: MatterRole): Promise<void> {
-  if (isCheckedRole(role)) await recheckMatterConflicts(ctx, matterId);
-}
 
 /**
  * create-input. Optionella fält (paymentMethod, taxa…) tas emot för
@@ -400,7 +380,7 @@ export const matterRouter = router({
         notes,
         ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
       }) satisfies Partial<MatterContact>);
-      await recheckIfParty(ctx, input.matterId, input.role);
+      await recheckIfParty(ctx, input.matterId, [input.role]);
       return link;
     }),
 
@@ -440,7 +420,7 @@ export const matterRouter = router({
         id: asId<"MatterContactId">(newRowId(ctx, "matterContact")),
         matterId, contactId: asId<"ContactId">(contact.id), role, notes,
       } satisfies Partial<MatterContact>);
-      await recheckIfParty(ctx, matterId, role);
+      await recheckIfParty(ctx, matterId, [role]);
       return link;
     }),
 

@@ -6,15 +6,15 @@
  */
 import { once } from "node:events";
 import { request, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
+import { connect, type AddressInfo } from "node:net";
 import { describe, it, expect, afterEach } from "vitest-compat";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 
 let server: Server | undefined;
 afterEach(() => { server?.close(); server = undefined; });
 
-async function start(handler: (req: Request) => Promise<Response>): Promise<number> {
-  server = serveFetchHandler(handler, { port: 0 });
+async function start(handler: (req: Request) => Promise<Response>, extra: { stallTimeoutMs?: number } = {}): Promise<number> {
+  server = serveFetchHandler(handler, { port: 0, ...extra });
   await once(server, "listening");
   return (server.address() as AddressInfo).port;
 }
@@ -86,5 +86,90 @@ describe("serveFetchHandler", () => {
     await once(second, "error");
     expect(captured).toBeInstanceOf(Error);
     second.close();
+  });
+});
+
+describe("serveFetchHandler — strömmande svar (#1431)", () => {
+  it("en body i många bitar kommer fram hel", async () => {
+    const chunks = Array.from({ length: 50 }, (_, i) => `del-${i};`);
+    const port = await start(async () => new Response(new ReadableStream<Uint8Array>({
+      start(c) { for (const s of chunks) c.enqueue(new TextEncoder().encode(s)); c.close(); },
+    })));
+    expect((await call(port, "/x")).body).toBe(chunks.join(""));
+  });
+
+  it("stor body med mottryck kommer fram hel", async () => {
+    const big = new Uint8Array(8 * 1024 * 1024).fill(65);
+    const port = await start(async () => new Response(big));
+    expect((await call(port, "/x")).body.length).toBe(big.length);
+  });
+
+  it("svar utan body (204)", async () => {
+    const port = await start(async () => new Response(null, { status: 204 }));
+    const res = await call(port, "/x");
+    expect(res.status).toBe(204);
+    expect(res.body).toBe("");
+  });
+
+  /** En källa som (som en fil) läser asynkront, `total` bitar, och säger när den är klar eller avbruten. */
+  function slowSource(total: number) {
+    const state = { pulls: 0, cancelled: false, finished: false };
+    const chunk = new Uint8Array(256 * 1024);
+    const body = new ReadableStream<Uint8Array>({
+      async pull(c) {
+        await new Promise((r) => setTimeout(r, 1));
+        if (++state.pulls > total) { state.finished = true; c.close(); return; }
+        c.enqueue(chunk);
+      },
+      cancel() { state.cancelled = true; },
+    });
+    return { state, body };
+  }
+
+  async function until(cond: () => boolean): Promise<void> {
+    for (let i = 0; i < 150 && !cond(); i++) await new Promise((r) => setTimeout(r, 20));
+  }
+
+  it("klienten slutar läsa: strömmen ges upp efter tidsgränsen och källan avbryts", async () => {
+    const src = slowSource(10_000);
+    const port = await start(async () => new Response(src.body), { stallTimeoutMs: 200 });
+    // En rå socket som skickar en request och sedan aldrig läser svaret.
+    const sock = connect(port, "127.0.0.1", () => { sock.write("GET /x HTTP/1.1\r\nHost: x\r\n\r\n"); sock.pause(); });
+    sock.on("error", () => undefined);
+    await until(() => src.state.cancelled);
+    expect(src.state.cancelled).toBe(true);
+    sock.destroy();
+  });
+
+  it("klienten går mitt i: servern hänger inte (källan avbryts eller läses klart)", async () => {
+    const src = slowSource(40);
+    const port = await start(async () => new Response(src.body), { stallTimeoutMs: 200 });
+    await new Promise<void>((resolve) => {
+      const req = request({ host: "127.0.0.1", port, path: "/x" }, (res) => {
+        res.once("data", () => { req.destroy(); resolve(); });
+      });
+      req.on("error", () => resolve());
+      req.end();
+    });
+    await until(() => src.state.cancelled || src.state.finished);
+    expect(src.state.cancelled || src.state.finished).toBe(true);
+  });
+
+  it("källan fallerar mitt i: anslutningen bryts i stället för en till synes hel fil", async () => {
+    const port = await start(async () => new Response(new ReadableStream<Uint8Array>({
+      start(c) { c.enqueue(new TextEncoder().encode("början")); },
+      pull(c) { c.error(new Error("disken")); },
+    })));
+    const outcome = await new Promise<string>((resolve) => {
+      const req = request({ host: "127.0.0.1", port, path: "/x" }, (res) => {
+        res.on("data", () => undefined);
+        res.on("end", () => resolve("end"));
+        res.on("error", () => resolve("aborted"));
+        res.on("aborted", () => resolve("aborted"));
+      });
+      req.on("error", () => resolve("aborted"));
+      req.end();
+    });
+    expect(outcome).toBe("aborted");
   });
 });

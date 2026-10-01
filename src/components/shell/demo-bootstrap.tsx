@@ -24,14 +24,16 @@ import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-t
 import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-registrar";
 import { HelperAutoConfig } from "@/components/shell/helper-auto-config";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
+import { loginDeniedMessage } from "@/lib/client/auth/login-denied";
 import { decideSessionGate, loginUrl, offlineGateMessage, type CachedIdentity } from "@/lib/client/auth/session-gate";
 import { setSessionNotice } from "@/lib/client/auth/session-notice";
+import type { SessionProbe } from "@/lib/client/auth/session-probe";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { inProcessPorts } from "@/lib/client/backend/in-process-ports";
 import type { LocalDataPlace } from "@/lib/client/backend/local-data/local-data-locations";
-import { openLocalDataSession, type IdentityConfig } from "@/lib/client/backend/local-data/local-data-session";
+import { boundEmail, openLocalDataSession, type IdentityConfig } from "@/lib/client/backend/local-data/local-data-session";
 import { bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
 import { onSignedOutElsewhere } from "@/lib/client/backend/local-data/session-channel";
 import { pendingSignOutRedirect } from "@/lib/client/backend/local-data/sign-out";
@@ -58,6 +60,7 @@ import { JobsBadge } from "./jobs-badge";
 import { ReauthBanner } from "./reauth-banner";
 import { ServerFirstSync } from "./server-first-sync";
 import { ServerInvoiceNumbering } from "./server-invoice-numbering";
+import { SessionKeepalive } from "./session-keepalive";
 import { UnsavedWritesGuard } from "./unsaved-writes-guard";
 import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
@@ -278,10 +281,10 @@ interface TreeProps {
 }
 
 /** Server-synkens delar i statusraden — bara när det finns en server (ej demon). */
-function ServerSyncParts({ store }: { store: CachingSyncDataStore | null }) {
+function ServerSyncParts({ store, boundEmail }: { store: CachingSyncDataStore | null; boundEmail: string | null }) {
   return (
     <>
-      <ServerFirstSync store={store} />
+      <ServerFirstSync store={store} boundEmail={boundEmail} />
       <ServerInvoiceNumbering store={store} />
       <ActiveMatterPrefetch store={store} />
     </>
@@ -314,6 +317,8 @@ function AuthGatedDemoTree(props: TreeProps) {
               fullhöjds-appen ned och hela sidan scrollar (#1185). */}
           <div className="flex h-full flex-col">
           {!isDemoTier && <ReauthBanner />}
+          {/* Proxyns förnyade cookie når webbläsaren bara via /oauth2/* (#1425). Av i demon. */}
+          <SessionKeepalive />
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white">
             <div className="flex-1 min-w-0">
               <AuthStatusBanner />
@@ -322,7 +327,7 @@ function AuthGatedDemoTree(props: TreeProps) {
               <JobsBadge />
               <AutoSync />
               <UnsavedWritesGuard store={cachingSync} />
-              {!isDemoTier && <ServerSyncParts store={cachingSync} />}
+              {!isDemoTier && <ServerSyncParts store={cachingSync} boundEmail={boundEmail(firmaConfig)} />}
             </div>
           </div>
           {status === "loading" && (
@@ -389,18 +394,18 @@ function cachedIdentity(cfg: FirmaConfig): CachedIdentity | null {
 
 /**
  * Sessionsgrinden (#1245, ADR 0018): varje self-hosted-start frågar
- * oauth2-proxy om sessionen — skalet laddas numera utan inloggning.
+ * oauth2-proxy om sessionen (`probe`, frågad en gång av anroparen) — skalet
+ * laddas numera utan inloggning.
  * `bind` = första inloggningen (eller en annan identitet): principalen binds
  * efter klon. `halt` = anroparen avbryter (omdirigerad till inloggningen,
  * eller offline utan giltig grace). `proceed-locally` (#1351) = inom grace
  * men utan bekräftad session: arbeta lokalt med "Logga in igen"-bannern.
  */
-async function runSessionGate(
-  firmaConfig: FirmaConfig, env: GateEnv,
+function runSessionGate(
+  firmaConfig: FirmaConfig, probe: SessionProbe, env: GateEnv,
   setStatus: (s: Status) => void, setErrorMsg: (m: string | null) => void,
-): Promise<GateOutcome> {
-  const { probeSession } = await import("@/lib/client/auth/session-probe");
-  const decision = decideSessionGate(await probeSession(), cachedIdentity(firmaConfig), env.now());
+): GateOutcome {
+  const decision = decideSessionGate(probe, cachedIdentity(firmaConfig), env.now());
   switch (decision.kind) {
     case "bind": return { kind: "continue", needsOidc: true, oidcClaims: decision.claims };
     case "proceed":
@@ -448,9 +453,9 @@ function applyOidcOutcome(
   setStatus: (s: Status) => void,
   setErrorMsg: (m: string | null) => void,
 ): boolean {
-  if (outcome.kind === "denied") {
+  if (outcome.kind === "denied" || outcome.kind === "ambiguous") {
     setStatus("error");
-    setErrorMsg(`Inte behörig: ditt konto (${outcome.email}) finns inte i byrån — kontakta administratören.`);
+    setErrorMsg(loginDeniedMessage(outcome));
     return true;
   }
   if (outcome.kind === "authorized") {
@@ -484,8 +489,8 @@ interface SelfHostedBootstrapArgs {
   makeClient?: (store: CachingSyncDataStore) => SelfHostedClient;
   /** Förbered den inloggades lokala databaser (#1347); `null` = bindningsfasen. */
   openLocal?: (cfg: IdentityConfig, args: { binding: boolean }) => Promise<LocalDataPlace | null>;
-  /** Proxyns utloggning, om en utloggning offline inte hann avsluta den (#1347). */
-  pendingSignOut?: () => string | null;
+  /** Proxyns utloggning, om en utloggning inte hann avsluta den (#1347) — avgjort av proxyns svar (#1418). */
+  pendingSignOut?: (probe: SessionProbe["kind"]) => string | null;
 }
 
 /** Webbläsarens lokala databaser (#1347). */
@@ -493,8 +498,8 @@ function browserOpenLocal(cfg: IdentityConfig, args: { binding: boolean }): Prom
   return openLocalDataSession({ factory: globalThis.indexedDB, storage: window.localStorage }, cfg, args);
 }
 
-function browserPendingSignOut(): string | null {
-  return pendingSignOutRedirect(window.localStorage, process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "", navigator.onLine);
+function browserPendingSignOut(probe: SessionProbe["kind"]): string | null {
+  return pendingSignOutRedirect(window.localStorage, process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "", probe);
 }
 
 /**
@@ -556,10 +561,13 @@ async function loadSelfHosted(a: SelfHostedBootstrapArgs, oidc: { needsOidc: boo
 export async function bootstrapSelfHosted(a: SelfHostedBootstrapArgs): Promise<void> {
   try {
     const env = a.gateEnv ?? browserGateEnv;
-    // En utloggning offline (#1347): proxyns session avslutas innan grinden kan binda om den.
-    const signOut = (a.pendingSignOut ?? browserPendingSignOut)();
+    const { probeSession } = await import("@/lib/client/auth/session-probe");
+    const probe = await probeSession();
+    // En utloggning som inte avslutade proxyns session (#1347): dit innan
+    // grinden kan binda om den. Lever ingen session gör grinden som vanligt (#1418).
+    const signOut = (a.pendingSignOut ?? browserPendingSignOut)(probe.kind);
     if (signOut) { env.redirect(signOut); return; }
-    const gate = await runSessionGate(a.firmaConfig, env, a.setStatus, a.setErrorMsg);
+    const gate = runSessionGate(a.firmaConfig, probe, env, a.setStatus, a.setErrorMsg);
     if (gate.kind === "halt") return;
     await loadSelfHosted(a, gate);
   } catch (err) {

@@ -207,6 +207,7 @@ const SERIAL_FILES = [
   "test/scripts/pg-ready.test.ts", // wait_for_pg med falsk docker (#1305)
   "test/scripts/build-demo.test.ts", // build-demo.sh med falska bun/bunx (#1352)
   "test/scripts/check-no-demo-data.test.ts", // CLI:t som barnprocess (#1352)
+  "test/scripts/backup-request-units.test.ts", // spärren i ava-backup-request.service körs i sh (#1431)
 ];
 
 /** Matchar ett SYNKRONT child-spawn-anrop (regressionsvakt, #327). */

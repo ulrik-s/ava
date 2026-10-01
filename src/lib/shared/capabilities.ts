@@ -24,16 +24,25 @@ export interface Capabilities {
   mailSync: boolean;
   /** Server-OIDC-auth (annars demo-principal). */
   oidc: boolean;
+  /**
+   * Backup på begäran (#1431): servern når hostens backupjobb (backup-
+   * katalogerna är monterade). Bara servern vet — av tills proben säger på.
+   */
+  backup: boolean;
 }
 
 /** Demon: ingen server → alla server-beroende förmågor av. */
 export const DEMO_CAPABILITIES: Capabilities = {
-  sync: false, llm: false, jobs: false, ledger: false, mailSync: false, oidc: false,
+  sync: false, llm: false, jobs: false, ledger: false, mailSync: false, oidc: false, backup: false,
 };
 
-/** Self-hosted: en server finns → alla förmågor på (förfinas av probe i nästa slice). */
+/**
+ * Self-hosted: en server finns → förmågorna på (förfinas av proben). Backup
+ * på begäran kräver hostens backupjobb, som bara servern vet om → av tills
+ * proben säger annat.
+ */
 export const SELF_HOSTED_CAPABILITIES: Capabilities = {
-  sync: true, llm: true, jobs: true, ledger: true, mailSync: true, oidc: true,
+  sync: true, llm: true, jobs: true, ledger: true, mailSync: true, oidc: true, backup: false,
 };
 
 /** Härled kapabiliteterna ur deploy-tiern (slice 1; ersätts av server-probe). */

@@ -82,6 +82,10 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   // servern. Kopplingen och kontrollen körs därför om där, som anrop.
   "matter.addContact": Object.freeze({ entity: "matterContact", idField: "id" }),
   "matter.addNewContact": Object.freeze({ entity: "matterContact" }),
+  // Ett accepterat dokumentförslag kopplar också en part till ärendet (#1383):
+  // samma omkontroll, så även den körs om på servern.
+  "document.acceptSuggestion": Object.freeze({ entity: "matterContact" }),
+  "document.acceptSuggestionGroup": Object.freeze({ entity: "matterContact" }),
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
   // server-LLM). Klienten kör den inte själv — servern kör om anropet.
   "document.analyze": Object.freeze({ entity: "document" }),

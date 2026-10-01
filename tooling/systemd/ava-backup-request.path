@@ -1,0 +1,25 @@
+# Backup på begäran (#1431) — hostens halva av knappen "Ta backup nu".
+#
+# AVA:s server lägger en begäran (request.json) i /srv/ava/backup-requests,
+# som är bind-mountad i server-first-containern, när en administratör klickar
+# i Inställningar. Ändras katalogen startas ava-backup-request.service.
+#
+# Säkerheten: containern får ingen docker- eller host-åtkomst. Den kan bara
+# ändra en fil i en egen katalog, och vad som då körs står HÄR — filens
+# innehåll läses aldrig av hosten och kan inte styra något.
+#
+# Installeras och uppdateras av deploy-prod.sh (idempotent):
+#   install -m 644 tooling/systemd/ava-backup-request.* /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now ava-backup-request.path
+
+[Unit]
+Description=AVA: backup på begäran (bevakar /srv/ava/backup-requests)
+
+[Path]
+PathChanged=/srv/ava/backup-requests
+MakeDirectory=yes
+DirectoryMode=0700
+Unit=ava-backup-request.service
+
+[Install]
+WantedBy=multi-user.target

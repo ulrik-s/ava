@@ -6,6 +6,7 @@
 
 import type { Buffer } from "node:buffer";
 import type { LedgerAccountMap } from "@/lib/shared/accounting/account-map";
+import type { BackupExport, BackupFileName } from "@/lib/shared/backup";
 import type { DocumentId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import type { LedgerConnector } from "./integrations/ledger/port";
 
@@ -239,6 +240,40 @@ export interface ILedgerService {
  * de ports de behöver via property-access; oanvända ports kostar
  * inget eftersom de wir:as som no-ops i demo-bootstrappen.
  */
+// ─── Backup på begäran (#1431) ─────────────────────────────────────
+
+/**
+ * En begäran om backup. Bara serverns egna värden — inget användaren skrivit —
+ * eftersom filen läses av hosten (som bara reagerar på att den ändrats).
+ */
+export interface BackupRequest {
+  /** Serverns id för begäran (loggas). */
+  requestId: string;
+  /** När begäran gjordes (ms). */
+  requestedAt: number;
+}
+
+/** En öppnad export, redo att strömmas. */
+export interface BackupExportStream {
+  sizeBytes: number;
+  body: ReadableStream<Uint8Array>;
+}
+
+/**
+ * Hostens backupjobb sett från servern: exportkatalogen (read-only) och
+ * begärandekatalogen som en systemd-`.path`-enhet på hosten bevakar.
+ */
+export interface IBackupStore {
+  /** Den nyaste krypterade exporten, eller null. */
+  latestExport(): Promise<BackupExport | null>;
+  /** Den senaste begäran, eller null. */
+  readRequest(): Promise<BackupRequest | null>;
+  /** Lägg en begäran (atomärt) — hosten startar backupjobbet. */
+  writeRequest(request: BackupRequest): Promise<void>;
+  /** Öppna en export för strömning; null om den inte finns. */
+  openExport(name: BackupFileName): Promise<BackupExportStream | null>;
+}
+
 export interface IPorts {
   email: IEmailSender;
   documentAnalyzer: IDocumentAnalyzer;
@@ -247,6 +282,8 @@ export interface IPorts {
   content: IContentStore;
   lease: ILeaseStore;
   ledger: ILedgerService;
+  /** Backup på begäran (#1431) — bara server-first med backupkatalogerna monterade. */
+  backup?: IBackupStore;
 }
 
 // Buffer-typen exporteras så impl:erna kan importera utan Node:

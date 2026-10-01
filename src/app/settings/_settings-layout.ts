@@ -5,7 +5,8 @@ import { addGroup, type DefaultLayout } from "@/components/layout/dock-workspace
  * sätter upp för alla till höger. Stor skärm: tre kolumner.
  */
 export const settingsLayout: DefaultLayout = (add, screen) => {
-  addGroup(add, ["org", "offices", "datasource", "devices"]);
+  // "backup" finns bara för administratörer mot en server med backup (#1431).
+  addGroup(add, ["org", "offices", "datasource", "devices", "backup"]);
   if (screen === "large") {
     addGroup(add, ["ledger", "tags"], { referencePanel: "org", direction: "right" });
     addGroup(add, ["atgarder", "views", "external"], { referencePanel: "ledger", direction: "right" });

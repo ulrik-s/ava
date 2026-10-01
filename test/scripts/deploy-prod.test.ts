@@ -27,6 +27,8 @@ const COPIED = [
   "tooling/scripts/lib/release.sh",
   "tooling/scripts/check-built-css.sh",
   "tooling/docker/caddy/Caddyfile",
+  "tooling/systemd/ava-backup-request.path",
+  "tooling/systemd/ava-backup-request.service",
 ];
 
 let root = "";
@@ -34,6 +36,8 @@ let srv = "";
 let dev = "";
 let bin = "";
 let log = "";
+/** Testets /etc/systemd/system. */
+let systemd = "";
 let gitEnv: Record<string, string> = {};
 
 function sh(cmd: string, cwd: string): string {
@@ -95,6 +99,8 @@ beforeEach(() => {
   dev = join(root, "dev");
   bin = join(root, "bin");
   log = join(root, "log");
+  systemd = join(root, "systemd");
+  mkdirSync(systemd);
   const gitconfig = join(root, "gitconfig");
   // maintenance/gc av: en push startar annars underhåll i bakgrunden som packar
   // om lösa objekt medan `git clone` kopierar dem ("No such file", flaky).
@@ -125,7 +131,7 @@ function deploy(args: string[] = [], env: Record<string, string> = {}): { status
     encoding: "utf8",
     env: {
       ...process.env, ...gitEnv, PATH: `${bin}:${process.env.PATH ?? ""}`, FAKE_LOG: log, FAKE_PASSWORD: PASSWORD,
-      AVA_DEPLOY_READY_TRIES: "2", AVA_DEPLOY_READY_PAUSE: "0", ...env,
+      AVA_DEPLOY_READY_TRIES: "2", AVA_DEPLOY_READY_PAUSE: "0", AVA_SYSTEMD_DIR: systemd, ...env,
     },
   });
   const calls = readFileSync(log, "utf8").split("\n").filter(Boolean);
@@ -216,6 +222,44 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     expect(status).toBe(0);
     expect(calls).toContain("systemctl start ava-backup.service");
     expect(at(calls, "backup backup")).toBe(-1);
+  });
+
+  it("backup på begäran (#1431): enheterna installeras, och en omkörning rör bara det som ändrats", () => {
+    const first = deploy([], { FAKE_SYSTEMD: "1" });
+    expect(first.status, first.out).toBe(0);
+    for (const unit of ["ava-backup-request.path", "ava-backup-request.service"]) {
+      expect(readFileSync(join(systemd, unit), "utf8")).toBe(readFileSync(join(REPO, "tooling/systemd", unit), "utf8"));
+    }
+    expect(first.calls).toContain("systemctl daemon-reload");
+    expect(first.calls).toContain("systemctl enable --now ava-backup-request.path");
+    // Före omstarten: compose monterar katalogen enheten bevakar.
+    expect(at(first.calls, "enable --now ava-backup-request.path")).toBeLessThan(at(first.calls, "compose -f tooling/docker/docker-compose.production.yml up -d --build"));
+
+    const again = deploy([], { FAKE_SYSTEMD: "1" });
+    expect(again.status, again.out).toBe(0);
+    expect(again.calls).not.toContain("systemctl daemon-reload");
+    expect(again.calls).toContain("systemctl enable --now ava-backup-request.path");
+
+    writeFileSync(join(systemd, "ava-backup-request.service"), "gammal\n");
+    const changed = deploy([], { FAKE_SYSTEMD: "1" });
+    expect(changed.calls).toContain("systemctl daemon-reload");
+    expect(readFileSync(join(systemd, "ava-backup-request.service"), "utf8")).not.toBe("gammal\n");
+  });
+
+  it("backup på begäran med --dry-run: enheterna visas men installeras inte", () => {
+    const { status, out } = deploy(["--dry-run"], { FAKE_SYSTEMD: "1" });
+    expect(status, out).toBe(0);
+    expect(out).toContain("[dry-run] install -m 644 tooling/systemd/ava-backup-request.path");
+    expect(out).toContain("[dry-run] systemctl enable --now ava-backup-request.path");
+    expect(readdirSync(systemd)).toEqual([]);
+  });
+
+  it("backup på begäran utan nattjobbet: inga enheter, och det sägs", () => {
+    const { status, out, calls } = deploy();
+    expect(status, out).toBe(0);
+    expect(readdirSync(systemd)).toEqual([]);
+    expect(calls.some((c) => c.includes("ava-backup-request"))).toBe(false);
+    expect(out).toContain("ingen ava-backup.service");
   });
 
   it("deploy-skriptet ändrat i origin/main → deployen körs med den nya versionen", () => {
@@ -319,6 +363,7 @@ describe("deploy-prod.sh — --dry-run, --rollback och argument", () => {
     expect(head()).toBe(oldHead);
     expect(link("current")).toBe(before);
     expect(calls.filter((c) => !c.startsWith("docker ps") && !c.startsWith("systemctl cat"))).toEqual([]);
+    expect(readdirSync(systemd)).toEqual([]);
     expect(out).toContain("[dry-run] git merge --ff-only");
     expect(out).toContain(`[dry-run] release_activate `);
     expect(out).toContain(sha);

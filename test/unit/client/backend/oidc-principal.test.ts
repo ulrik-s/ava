@@ -44,4 +44,10 @@ describe("classifyOidcLogin", () => {
     const out = classifyOidcLogin({ email: "intrang@annan.se", subject: "", issuer: "", name: "" }, USERS);
     expect(out).toEqual({ kind: "denied", email: "intrang@annan.se" });
   });
+
+  it("adressen hör till två konton → ambiguous (#1408), aldrig det första", () => {
+    const twins = [...USERS, { ...USERS[0]!, id: "u-twin" }];
+    const out = classifyOidcLogin({ email: USERS[0]!.email, subject: "", issuer: "", name: "" }, twins);
+    expect(out).toEqual({ kind: "ambiguous", email: USERS[0]!.email });
+  });
 });

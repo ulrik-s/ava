@@ -12,12 +12,12 @@ import type { StoragePersistence } from "@/lib/client/storage/persistent-storage
 import { flushServerSync, onServerSynced, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
 import { fetchFake, jsonResponse } from "../../helpers/fetch-fake";
 
-function fakeStore(opts: { pending: number; fail?: boolean; blocked?: Error }) {
+function fakeStore(opts: { pending: number; fail?: boolean; blocked?: Error; error?: unknown }) {
   const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void), requeued: [] as unknown[], restored: [] as unknown[], restoreCount: 1 };
   const store: SyncableStore = {
     reconcile: async () => {
       state.reconciles++;
-      if (opts.fail) throw new Error("nätverksfel");
+      if (opts.fail) throw opts.error ?? new Error("nätverksfel");
       const entry = { mutationId: "m1", entity: "invoice", kind: "update" as const, row: { id: "i1" }, enqueuedAt: 0 };
       if (opts.blocked) return { pulled: 0, pushed: 0, rebased: 0, replayed: 0, restored: 0, pruned: 0, conflicts: [], cursor: 0, blocked: { mutation: entry, error: opts.blocked, attempts: 1 } };
       state.pending = 0;
@@ -142,6 +142,31 @@ describe("ServerFirstSync", () => {
     const e = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(e);
     expect(e.defaultPrevented).toBe(true);
+  });
+
+  // #1404: någon annan loggade in i en annan flik — proxyns cookie byttes och
+  // servern vägrar den bundnas köposter (401). Det är ett identitetsbyte, inte
+  // ett spärrat konto: sidan laddas om (utan lämna-varningen), och grinden
+  // binder den nya användaren och rensar den förras lokala data.
+  it("401 och proxyn svarar med en annan e-post än den bundna → sidan laddas om utan lämna-varning", async () => {
+    const { store } = fakeStore({ pending: 1, fail: true, error: { data: { httpStatus: 401 } } });
+    const reloadPage = vi.fn();
+    const probe = vi.fn(async () => ({ kind: "authenticated" as const, claims: { email: "bo@byra.se", subject: "", issuer: "", name: "" } }));
+    wrap(<ServerFirstSync reportDevice={noReport} store={store} boundEmail="anna@byra.se" session={{ probe, reloadPage }} />);
+    await waitFor(() => expect(reloadPage).toHaveBeenCalledTimes(1));
+    const e = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false);
+  });
+
+  it("401 och proxyn svarar med den bundna → ingen omladdning ('Logga in igen')", async () => {
+    const { store } = fakeStore({ pending: 1, fail: true, error: { data: { httpStatus: 401 } } });
+    const reloadPage = vi.fn();
+    const probe = vi.fn(async () => ({ kind: "authenticated" as const, claims: { email: "anna@byra.se", subject: "", issuer: "", name: "" } }));
+    const { unmount } = wrap(<ServerFirstSync reportDevice={noReport} store={store} boundEmail="anna@byra.se" session={{ probe, reloadPage }} />);
+    await waitFor(() => expect(probe).toHaveBeenCalled());
+    expect(reloadPage).not.toHaveBeenCalled();
+    unmount();
   });
 
   it("ingen varning när allt är synkat", async () => {

@@ -320,6 +320,54 @@ Alternativet är en andra hämtare på en annan plats: samma `backup-pull.sh` p�
 en annan dator, med egen ssh-nyckel i `authorized_keys`. Servern påverkas inte
 av hur många som hämtar.
 
+#### Ta backup nu (från Inställningar, #1431)
+
+En administratör kan ta en backup när som helst och få den direkt till datorn
+hon sitter vid: **Inställningar → Backup → "Ta backup nu"**. Det är samma
+backup som nattjobbet (`ava-backup.service`: `backup-db.sh` + `backup-export.sh`),
+samma krypterade `ava-<datum>.tar.age` i `/srv/backup-chroot/ava`, och när den
+är klar laddar webbläsaren ner den (med sha256-summan visad bredvid). Panelen
+syns bara för administratörer och bara när servern har backup på begäran.
+
+```
+browser  "Ta backup nu" ─► backup.request (admin, max en per 10 min)
+server   skriver /data/backup-requests/request.json   (= /srv/ava/backup-requests)
+host     ava-backup-request.path ─► ava-backup-request.service ─► ava-backup.service
+server   ser en ny export i /data/backup-exports (read-only) ─► läget "klar"
+browser  GET /api/backup/download?name=… ─► filen strömmas till datorn
+```
+
+- **Filen är krypterad.** Servern har bara den publika age-nyckeln; filen går
+  bara att öppna med den privata (`age.key` i lösenordshanteraren). Återställ
+  enligt [`runbook-aterstallning.md`](./runbook-aterstallning.md).
+- **Containern får ingen host-åtkomst.** Den kan bara ändra en fil i
+  `/srv/ava/backup-requests`; vad som körs står i enhetsfilerna
+  ([`tooling/systemd/`](../tooling/systemd/)), filens innehåll läses aldrig av
+  hosten. `ava-backup-request.service` kör ingenting om en export skrevs de
+  senaste fem minuterna — en kapad container kan inte köra backupjobbet i en
+  loop och fylla disken.
+- **Granskning:** varje begäran (`backup.requested`) och nedladdning
+  (`backup.downloaded`) loggas med användarens id — `docker compose … logs server-first`.
+- Nedladdningen går under `/api`, så Caddy kräver en inloggad session innan
+  servern ser anropet, och servern kräver sedan en administratör.
+- Blev en begärd backup inte klar inom en timme visar panelen det: titta i
+  `journalctl -u ava-backup -u ava-backup-request`.
+
+**Engångssteg på hosten:** inget, om nattjobbet körs som `ava-backup.service`
+— `deploy-prod.sh` installerar och uppdaterar `.path`-enheten själv (bara när
+filerna ändrats) och compose monterar katalogerna. Saknas `ava-backup.service`
+(cron i stället) säger deployen det, och knappen ger då "inte klar inom en
+timme" tills nattjobbet läggs som en systemd-tjänst. För hand:
+
+```bash
+install -m 644 tooling/systemd/ava-backup-request.* /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now ava-backup-request.path
+```
+
+Ligger exporterna någon annanstans än `/srv/backup-chroot/ava`, sätt
+`AVA_BACKUP_EXPORT_HOST_DIR` i `ava-server.env` (och rätta sökvägen i
+`ava-backup-request.service`).
+
 #### Provåterställning (varje vecka)
 
 Hämtningen provdekrypterar varje natt. Det bevisar att filen går att *öppna*.

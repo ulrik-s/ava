@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { revalidateSession } from "@/lib/client/auth/revalidate-session";
 import { setSessionNotice } from "@/lib/client/auth/session-notice";
-import { probeSession } from "@/lib/client/auth/session-probe";
+import { probeSession, type SessionProbe } from "@/lib/client/auth/session-probe";
 import { rejectedChanges } from "@/lib/client/backend/rejected-changes";
 import { reportSyncDevice } from "@/lib/client/backend/sync-device-report";
 import { requestPersistentStorageOnce, type StoragePersistence } from "@/lib/client/storage/persistent-storage";
@@ -52,6 +52,40 @@ interface ServerFirstSyncProps {
    * en misslyckad, med felet som stoppade den (#1353). Injicerbar för tester.
    */
   reportDevice?: (store: SyncableStore, lastError: string | null) => Promise<void>;
+  /**
+   * E-posten för den bundna användaren (#1404) — loggar någon annan in i en
+   * annan flik laddas sidan om vid nästa 401. `null` = ingen bunden (utan OIDC).
+   */
+  boundEmail?: string | null;
+  /** Proxyfrågan och omladdningen vid 401 (#1351, #1404). Injicerbara för tester. */
+  session?: SessionSeams;
+}
+
+/** Det omvalideringen vid 401 gör mot webbläsaren. */
+export interface SessionSeams {
+  /** Fråga proxyn om sessionen. */
+  probe: () => Promise<SessionProbe>;
+  /** Ladda om sidan — sessionsgrinden tar över. */
+  reloadPage: () => void;
+}
+
+const BROWSER_SESSION: SessionSeams = { probe: () => probeSession(), reloadPage: () => { window.location.reload(); } };
+
+/**
+ * 401 (#1245, #1351): sessionen/token gick ut → "Logga in igen"; kontot
+ * spärrat → besked; någon annan loggade in (#1404) → ladda om. `beforeReload`
+ * tar bort lämna-varningen först: den förras kö ligger kvar i hennes egna
+ * databaser.
+ */
+function revalidateOn401(
+  err: unknown, session: SessionSeams, boundEmail: string | null | undefined, beforeReload: () => void,
+): Promise<string | null> {
+  return revalidateSession({
+    probe: session.probe,
+    notify: setSessionNotice,
+    boundEmail: boundEmail ?? null,
+    reload: () => { beforeReload(); session.reloadPage(); },
+  }, authFailureOf(err));
 }
 
 const reportToServer = (store: SyncableStore, lastError: string | null): Promise<void> =>
@@ -84,7 +118,9 @@ async function syncAndReport(store: SyncableStore, report: (store: SyncableStore
  * varnas om man stänger fliken innan allt nått servern — eller om osynkade
  * ändringar ligger i en lagring webbläsaren får rensa (#1241).
  */
-export function ServerFirstSync({ store, requestPersistence = requestPersistentStorageOnce, reportDevice = reportToServer }: ServerFirstSyncProps) {
+export function ServerFirstSync({
+  store, requestPersistence = requestPersistentStorageOnce, reportDevice = reportToServer, boundEmail, session = BROWSER_SESSION,
+}: ServerFirstSyncProps) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<CachingSyncStatus | null>(null);
   const rejected = useRejectedChanges();
@@ -118,8 +154,7 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
       isOnline: () => navigator.onLine,
       onStatus: setStatus,
       onRemoteChanges: () => { void queryClient.invalidateQueries(); },
-      // 401 (#1245, #1351): sessionen/token gick ut → "Logga in igen"; kontot spärrat → besked.
-      onUnauthorized: (err) => revalidateSession({ probe: () => probeSession(), notify: setSessionNotice }, authFailureOf(err)),
+      onUnauthorized: (err) => revalidateOn401(err, session, boundEmail, () => { window.removeEventListener("beforeunload", onBeforeUnload); }),
     });
     const unsubscribe = store.onLocalChange(() => scheduler.notifyChange());
     const unregister = registerServerSyncFlush(async () => {
@@ -142,7 +177,7 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
       window.removeEventListener("online", onOnline);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
-  }, [store, queryClient, reportDevice]);
+  }, [store, queryClient, reportDevice, boundEmail, session]);
 
   if (!status) return null;
   const atRisk = persistence === "not-persisted" && status.pendingCount > 0;

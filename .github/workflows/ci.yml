@@ -134,11 +134,23 @@ jobs:
       - name: Bygg server-first-binär
         run: bun run server-first:build
       - name: Starta Postgres + server-first (docker)
-        run: docker compose -f tooling/docker/docker-compose.server-first.yml up -d --build --wait --wait-timeout 120
+        # Backupkatalogerna (#1431) skapas av runnern före `up` — annars skapar
+        # docker dem som root och skriptet kan inte spela hostens roll.
+        run: |
+          mkdir -p .e2e-backup/exports .e2e-backup/requests
+          docker compose -f tooling/docker/docker-compose.server-first.yml up -d --build --wait --wait-timeout 120
       - name: Applicera schema (db:migrate)
         env:
           AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
         run: bun run db:migrate
+      # Backup på begäran (#1431): begäran → (skriptet som host) låtsasexport →
+      # läget "klar" → strömmad nedladdning; jurist/oinloggad/sökväg vägras.
+      - name: Backup på begäran-E2E (Ta backup nu → nedladdning)
+        env:
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/backup-button-e2e.ts
       - name: Server-sync deploy-E2E
         env:
           SERVER_URL: http://localhost:3001
@@ -270,6 +282,8 @@ jobs:
           AVA_CADDY_E2E_NETWORK: ava-server-first_default
           AVA_CADDY_E2E_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+          # "Ta backup nu" i browsern (#1431): värdens sida av server-firsts backupkataloger.
+          AVA_BACKUP_E2E_DIR: .e2e-backup
         run: bash tooling/scripts/caddy-e2e/caddy-prod-e2e.sh
       - name: Upload Playwright report (prod-klienten)
         if: failure()

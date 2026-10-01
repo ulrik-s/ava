@@ -20,6 +20,7 @@
 
 import type { AllowlistedUser } from "@/lib/server/auth/oidc-auth-provider";
 import { OidcAuthProvider } from "@/lib/server/auth/oidc-auth-provider";
+import { backupDirsFromEnv } from "@/lib/server/backup/fs-backup-store";
 import { buildContext } from "@/lib/server/build-context";
 import type { IEventLog } from "@/lib/server/data-store/IDataStore";
 import type { AvaEvent, EmitInput, EventFilter } from "@/lib/server/events/schema";
@@ -41,12 +42,14 @@ import { IDENTITY_TOKEN_HEADER, type IdentityConfig } from "./verified-identity"
 /**
  * Serverns annonserade kapabiliteter (ADR 0027) — vad DENNA deploy faktiskt kan.
  * sync/jobs/oidc är alltid på server-side; `llm` gate:as på att en LLM-endpoint
- * är konfigurerad (annars döljer klienten AI-affordanser, lika konsekvent som
+ * är konfigurerad och `backup` på att backupkatalogerna är monterade (annars döljer klienten AI-affordanser, lika konsekvent som
  * demon); ledger/mailSync annonseras tillgängliga (per-byrå-koppling sker sen).
  */
 export function serverCapabilities(): Capabilities {
   const llm = Boolean(process.env.AVA_LLM_ENDPOINT ?? process.env.AVA_LLM_MODEL);
-  return { sync: true, jobs: true, oidc: true, ledger: true, mailSync: true, llm };
+  // Backup på begäran (#1431): bara när backupkatalogerna är monterade.
+  const backup = backupDirsFromEnv() !== null;
+  return { sync: true, jobs: true, oidc: true, ledger: true, mailSync: true, llm, backup };
 }
 
 /**

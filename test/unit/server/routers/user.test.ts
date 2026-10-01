@@ -38,7 +38,11 @@ function makeCallerWithRole(role: "ADMIN" | "LAWYER" | "ASSISTANT", userId = "u1
   return callerFor(role, userId, orgId);
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Ingen annan användare har adressen (#1408) — testerna nedan sätter dubbletter själva.
+  mockPrisma.user.findMany.mockResolvedValue([]);
+});
 
 describe("user.list", () => {
   it("returnerar bara användare i samma org", async () => {
@@ -322,5 +326,31 @@ describe("user.update — e-post ändras bara av admin (#1371)", () => {
     } finally {
       setLogSink(restore);
     }
+  });
+});
+
+// #1408: e-postadressen är inloggningen — ett konto per adress, i alla byråer.
+describe("e-postadressen är unik över alla byråer (#1408)", () => {
+  const TAKEN = { id: "other", organizationId: "org-b", email: "anna@firma.se", name: "Anna i byrå B", role: "LAWYER" };
+
+  it("create: adressen finns redan (i en annan byrå, annat skiftläge) → CONFLICT och inget skapas", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([TAKEN]);
+    await expect(makeCaller().create({ email: "Anna@Firma.se", name: "Anna" }))
+      .rejects.toMatchObject({ code: "CONFLICT", message: expect.stringMatching(/används redan av ett annat konto/) });
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("create: en omkörning av samma köade anrop (samma id) är ingen dubblett", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([{ ...TAKEN, id: "u-new" }]);
+    mockPrisma.user.create.mockResolvedValue({ id: "u-new" });
+    await makeCaller().create({ id: "u-new", email: "anna@firma.se", name: "Anna" });
+    expect(mockPrisma.user.create).toHaveBeenCalled();
+  });
+
+  it("update: admin byter till en adress som ett annat konto har → CONFLICT och inget skrivs", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a", email: "bo@firma.se", name: "Bo", role: "LAWYER" });
+    mockPrisma.user.findMany.mockResolvedValue([TAKEN]);
+    await expect(makeCaller("admin-1").update({ id: "u1", email: "anna@firma.se" })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
   });
 });

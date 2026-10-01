@@ -4,7 +4,8 @@
  * Maximera/återställ en panelgrupp (#1263). Juristen gör t.ex. Dokument-panelen
  * tillfälligt helbild medan hon ordnar filer och återställer den sedan. Knappen
  * sitter i varje grupps flikrad; maximerad visar den texten "Återställ". Escape
- * återställer (när ingen dialog är öppen — där tillhör Escape dialogen).
+ * återställer (när ingen dialog är öppen och fokus inte står i ett fält eller
+ * en meny — där tillhör Escape dem).
  * Maximeringen sparas aldrig (`withoutMaximized`).
  */
 
@@ -13,7 +14,23 @@ import { Maximize2, Minimize2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /**
- * Escape återställer — men inte när en dialog är öppen (den äger Escape).
+ * Där Escape tillhör något annat (#1356): ett inmatningsfält (Escape rensar
+ * eller avbryter där), en meny eller lista som stängs med Escape.
+ */
+const OWNS_ESCAPE = [
+  "input", "textarea", "select", '[contenteditable]:not([contenteditable="false"])',
+  '[role="menu"]', '[role="menuitem"]', '[role="listbox"]', '[role="option"]', '[role="combobox"]',
+].join(", ");
+
+/** Escape tillhör en öppen dialog, eller elementet som har fokus. */
+function escapeBelongsElsewhere(target: EventTarget | null): boolean {
+  if (document.querySelector('[role="dialog"]')) return true;
+  return target instanceof Element && target.closest(OWNS_ESCAPE) !== null;
+}
+
+/**
+ * Escape återställer — men inte när en dialog är öppen (den äger Escape), och
+ * inte när fokus står i ett fält eller en meny (#1356).
  * Lyssnar i capture-fasen på window, alltså FÖRE dialogens egen lyssnare
  * (på document). Annars hade dialogen redan stängts när vi kontrollerade, och
  * samma Escape hade både stängt dialogen och återställt panelen (#1293).
@@ -22,7 +39,7 @@ function useEscapeRestores(active: boolean, restore: () => void): void {
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape" && !document.querySelector('[role="dialog"]')) restore();
+      if (e.key === "Escape" && !escapeBelongsElsewhere(e.target)) restore();
     };
     window.addEventListener("keydown", onKey, { capture: true });
     return () => window.removeEventListener("keydown", onKey, { capture: true });

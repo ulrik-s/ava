@@ -61,8 +61,9 @@ billigt, eftersom **klient och server redan kör samma `appRouter`**.
 sanning — tilldelas i serverns körning: fakturanummer och andra obrutna serier
 (#1243, ADR 0012), och jävskontroll (#1246).
 
-**Jävskontrollen (#1246, #1354):** `matter.create` kör kontrollen för klienten
-mot byråns alla andra ärenden, och `matter.addContact`/`addNewContact` kör om
+**Jävskontrollen (#1246, #1354, #1383):** `matter.create` kör kontrollen för klienten
+mot byråns alla andra ärenden, och `matter.addContact`/`addNewContact` — liksom
+ett accepterat dokumentförslag (`document.acceptSuggestion[Group]`) — kör om
 den för ärendets alla parter när en klient, motpart eller ett motpartsombud
 läggs till (de köas därför som anrop). En träff räknas bara när personen står
 på andra sidan i det andra ärendet (`src/lib/shared/conflict-roles.ts`): klient

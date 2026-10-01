@@ -5,6 +5,12 @@
  * Dedup-beslutet (matcha befintlig kontakt på pnr / orgNr / namn-i-ärende)
  * sker i den rena funktionen `findExistingContactForSuggestion` i
  * `@/lib/shared/contact-dedup`. Routern sköter IO och transaktionsflöde.
+ *
+ * Att acceptera ett förslag kopplar en part till ärendet, precis som
+ * `matter.addContact` — och kör därför om jävskontrollen (#1383). Acceptansen
+ * köas som anrop (`QUEUED_PROCEDURES`) så att servern kör kontrollen mot
+ * byråns alla ärenden; raderna anropet skapar får id härlett ur anropet
+ * (`newRowId`), så klientens och serverns körning ger samma rader.
  */
 
 import { TRPCError } from "@trpc/server";
@@ -14,20 +20,22 @@ import {
   type ContactCandidate,
 } from "@/lib/shared/contact-dedup";
 import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
-import { matterRoleSchema, contactTypeSchema, type SuggestionStatus } from "@/lib/shared/schemas/enums";
+import { matterRoleSchema, contactTypeSchema, type MatterRole, type SuggestionStatus } from "@/lib/shared/schemas/enums";
 import {
-  asId, documentAnalysisSuggestionIdSchema, matterIdSchema,
-  type ContactId, type DocumentAnalysisSuggestionId, type MatterId, type OrganizationId,
+  asId, contactIdSchema, documentAnalysisSuggestionIdSchema, matterIdSchema,
+  type ContactId, type DocumentAnalysisSuggestionId, type MatterId,
 } from "@/lib/shared/schemas/ids";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import { groupSuggestions } from "@/lib/shared/suggestion-grouping";
-import type { Repositories } from "../../repositories/repositories";
+import { recheckIfParty, type ConflictRecheckCtx } from "../../conflict/matter-conflict-recheck";
+import { newRowId, type QueuedCallScope } from "../../queued-call";
 import { orgProcedure } from "../../trpc";
 
 // ─── Helpers för acceptSuggestion ─────────────────────────────────────────
 
 // Migrerad till repository-sömmen (ADR 0020): all IO går via ctx.repos.
-type Ctx = { repos: Repositories; orgId: OrganizationId };
+// Jävskontrollen (#1383) och anropets id (#1276) kommer också ur contexten.
+type Ctx = ConflictRecheckCtx & QueuedCallScope;
 type SuggOverride = {
   name?: string | undefined;
   role?: string | undefined;
@@ -40,7 +48,7 @@ type SuggOverride = {
 type Suggestion = {
   id: DocumentAnalysisSuggestionId;
   status: SuggestionStatus;
-  role: string;
+  role: MatterRole;
   name: string;
   contactType: string;
   email: string | null;
@@ -123,22 +131,25 @@ async function resolveOrCreateContact(
 ): Promise<ContactId> {
   const existing = await findContactByNumberOrName(ctx, sugg, o, matterId);
   if (existing) return asId<"ContactId">(existing.id);
+  // Id ur anropet: serverns omkörning skapar samma kontakt (#1276).
   const created = (await ctx.repos.contacts.create(
-    { ...applyOverride(sugg, o), organizationId: ctx.orgId } as never,
+    { ...applyOverride(sugg, o), id: newRowId(ctx, "contact"), organizationId: ctx.orgId } as never,
   )) as { id: ContactId };
   return created.id;
 }
 
+/** Koppla kontakten till ärendet i rollen, om kopplingen inte redan finns. Id:t ur anropet (en per roll). */
 async function ensureMatterContactLink(
   ctx: Ctx,
   matterId: MatterId,
   contactId: ContactId,
-  role: string,
+  role: MatterRole,
   notes: string | null,
 ): Promise<void> {
   const existing = await ctx.repos.matterContacts.findLink(matterId, contactId, role);
   if (!existing) {
-    await ctx.repos.matterContacts.create({ matterId, contactId, role, notes } as Partial<MatterContact>);
+    const id = asId<"MatterContactId">(newRowId(ctx, `matterContact:${role}`));
+    await ctx.repos.matterContacts.create({ id, matterId, contactId, role, notes } satisfies Partial<MatterContact>);
   }
 }
 
@@ -185,6 +196,7 @@ async function resolveOrCreateGroupContact(
   const existing = await findGroupContact(ctx, suggs, matterId, personalNumber, orgNumber);
   if (existing) return asId<"ContactId">(existing.id);
   const created = (await ctx.repos.contacts.create({
+    id: newRowId(ctx, "contact"),
     name: first.name,
     contactType: first.contactType,
     email: pickFirstFromGroup(suggs, "email"),
@@ -232,7 +244,7 @@ async function linkGroupRoles(
   suggs: Suggestion[],
   matterId: MatterId,
   contactId: ContactId,
-): Promise<string[]> {
+): Promise<MatterRole[]> {
   const distinctRoles = Array.from(new Set(suggs.map((s) => s.role)));
   for (const role of distinctRoles) {
     const notesForRole = Array.from(
@@ -272,7 +284,7 @@ export const suggestionProcedures = {
       z.object({
         suggestionId: documentAnalysisSuggestionIdSchema,
         /** Om satt — länka till denna kontakt istället för att skapa ny. */
-        existingContactId: z.string().optional(),
+        existingContactId: contactIdSchema.optional(),
         /** User-overrides innan accept. */
         override: z
           .object({
@@ -294,13 +306,14 @@ export const suggestionProcedures = {
       const finalRole = o.role ?? sugg.role;
 
       const contactId = input.existingContactId
-        ? await resolveExistingContact(ctx, asId<"ContactId">(input.existingContactId))
+        ? await resolveExistingContact(ctx, input.existingContactId)
         : await resolveOrCreateContact(ctx, sugg, o, matterId);
 
       await ensureMatterContactLink(ctx, matterId, contactId, finalRole, sugg.notes);
       await ctx.repos.documentAnalysisSuggestions.update(
         sugg.id, { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
       );
+      await recheckIfParty(ctx, matterId, [finalRole]);
       return { contactId };
     }),
 
@@ -324,7 +337,7 @@ export const suggestionProcedures = {
       z.object({
         suggestionIds: z.array(documentAnalysisSuggestionIdSchema).min(1),
         /** Om satt — återanvänd befintlig kontakt istället för att skapa ny. */
-        existingContactId: z.string().optional(),
+        existingContactId: contactIdSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -334,7 +347,7 @@ export const suggestionProcedures = {
       const matterId = first.document.matterId;
 
       const contactId = input.existingContactId
-        ? await resolveExistingContact(ctx, asId<"ContactId">(input.existingContactId))
+        ? await resolveExistingContact(ctx, input.existingContactId)
         : await resolveOrCreateGroupContact(ctx, suggs, matterId);
 
       const distinctRoles = await linkGroupRoles(ctx, suggs, matterId, contactId);
@@ -342,6 +355,7 @@ export const suggestionProcedures = {
         suggs.map((s) => s.id),
         { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
       );
+      await recheckIfParty(ctx, matterId, distinctRoles);
       return { contactId, acceptedRoles: distinctRoles };
     }),
 

@@ -215,6 +215,10 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "sync.devices": "Lista byråns enheter och deras synkläge (senaste synk, osynkade ändringar). Bara för admin.",
   "sync.forgetDevice": "Glöm en utrangerad enhet i synkuppföljningen. Bara för admin.",
 
+  // ── Backup ───────────────────────────────────────────────────────
+  "backup.status": "Visa om en backup pågår och vilken den senaste krypterade backupen är (tid, storlek, sha256). Bara för admin, bara på servern.",
+  "backup.request": "Starta en krypterad backup av databasen och dokumenten nu (samma som nattjobbet). Vägras om en pågår eller om förra togs för mindre än tio minuter sedan. Bara för admin.",
+
   // ── System ───────────────────────────────────────────────────────
   "system.capabilities": "Vad den här installationen kan (demo, self-hosted eller serverdrift) — styr vilka funktioner som är tillgängliga.",
   "system.helperConfig": "Inloggningskonfiguration som webbappen pushar till den lokala hjälpprocessen. Null i demon.",

@@ -35,7 +35,7 @@ export default defineConfig({
   // utanför tills de slutat hårdkoda seed-id:n; de slår upp sina fixtures i
   // `demo-seed.json` via `fetchDemoSeed`. Lägg inte till en spec här som pekar
   // på ett id den inte slagit upp — det var precis så de tystnade förra gången.
-  testMatch: /(column-menu|demo-helper-isolation|chrome-regressions|matter-watch|billing-watch|demo-invoice-document|demo-kostnadsrakning-verdict|demo-kostnadsrakning-void|demo-kostnadsrakning-taxa|demo-login|demo-smoke|kebab-verify|matters-employee-filter|docking-layout|hourly-rates|demo-offline|demo-storage-persistence|demo-hydration|demo-jobs-hung-worker|demo-jobs-fifo|demo-mobile-menu|demo-reports|demo-no-page-scroll|demo-kr-document-folder|demo-display-labels|demo-panels-have-data|demo-sync-devices|demo-conflict-check|demo-time-entry-create|demo-reload-durability|demo-boot-error|demo-deploy-resilience)\.spec\.ts$/,
+  testMatch: /(column-menu|demo-helper-isolation|chrome-regressions|matter-watch|billing-watch|demo-invoice-document|demo-kostnadsrakning-verdict|demo-kostnadsrakning-void|demo-kostnadsrakning-taxa|demo-login|demo-smoke|kebab-verify|matters-employee-filter|docking-layout|hourly-rates|demo-offline|demo-storage-persistence|demo-hydration|demo-jobs-hung-worker|demo-jobs-fifo|demo-mobile-menu|demo-reports|demo-no-page-scroll|demo-kr-document-folder|demo-display-labels|demo-panels-have-data|demo-sync-devices|demo-backup-gating|demo-conflict-check|demo-time-entry-create|demo-reload-durability|demo-boot-error|demo-deploy-resilience)\.spec\.ts$/,
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,

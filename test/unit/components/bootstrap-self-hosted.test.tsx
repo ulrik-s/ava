@@ -137,6 +137,35 @@ describe("bootstrapSelfHosted", () => {
     expect(args.onStoreReady).not.toHaveBeenCalled();
   });
 
+  it("#1408: adressen hör till flera konton → nekad med ett eget besked, ingen store till appen", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
+    classifyOidcLogin.mockReturnValueOnce({ kind: "ambiguous", email: "a@b.se" });
+    const args = makeArgs({ firmaConfig: noPrincipal as FirmaConfig });
+    await bootstrapSelfHosted(args);
+    expect(args.setStatus).toHaveBeenCalledWith("error");
+    expect(args.setErrorMsg).toHaveBeenCalledWith(expect.stringMatching(/a@b\.se\) hör till mer än ett konto/));
+    expect(args.onStoreReady).not.toHaveBeenCalled();
+  });
+
+  // #1435: den bundna appen (statusraden med synkpillen) syns först EFTER
+  // bindningens omladdning — e2e-inloggningen väntar på pillen för att inte
+  // krocka med omladdningen.
+  it("#1435: första inloggningen binder principalen och laddar om — ingen store till appen innan dess", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
+    const principal = { id: "u-lena", email: "lena@ava.test", name: "Lena" };
+    classifyOidcLogin.mockReturnValueOnce({ kind: "authorized", principal });
+    const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
+    const args = makeArgs({ firmaConfig: noPrincipal as FirmaConfig, gateEnv: gateEnv() });
+    await bootstrapSelfHosted(args);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(args.onStoreReady).not.toHaveBeenCalled();
+    expect(args.setStatus).not.toHaveBeenCalledWith("ready");
+    expect(JSON.parse(localStorage.getItem("ava.firma") ?? "{}")).toMatchObject({
+      principalId: "u-lena", authorEmail: "lena@ava.test", authorName: "Lena", sessionVerifiedAt: expect.any(Number),
+    });
+    reload.mockRestore();
+  });
+
   // ── Sessionsgrinden (#1245) ──────────────────────────────────────────────
   it("inloggad med samma identitet: bygger storen och noterar när sessionen verifierades", async () => {
     probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
@@ -174,12 +203,15 @@ describe("bootstrapSelfHosted", () => {
     expect(sessionNotice()).toBe("signed-out");
   });
 
-  it("utloggning offline som inte avslutade proxyns session (#1347): dit först, ingen grind, ingen store", async () => {
+  it("utloggning som inte avslutade proxyns session (#1347): dit först, ingen grind, ingen store", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
     const env = gateEnv();
-    const args = makeArgs({ gateEnv: env, pendingSignOut: () => "/oauth2/sign_out?rd=x" });
+    const pendingSignOut = vi.fn(() => "/oauth2/sign_out?rd=x");
+    const args = makeArgs({ gateEnv: env, pendingSignOut });
     await bootstrapSelfHosted(args);
+    expect(pendingSignOut).toHaveBeenCalledWith("authenticated");
+    expect(env.redirect).toHaveBeenCalledTimes(1);
     expect(env.redirect).toHaveBeenCalledWith("/oauth2/sign_out?rd=x");
-    expect(probeUserinfo).not.toHaveBeenCalled();
     expect(args.makeStore).not.toHaveBeenCalled();
   });
 
@@ -194,12 +226,27 @@ describe("bootstrapSelfHosted", () => {
     bindLocalNamespace(SHARED_NAMESPACE);
   });
 
-  it("webbläsarens default: en väntande utloggning (online) går till proxyns utloggning", async () => {
+  it("webbläsarens default: en väntande utloggning och en levande proxysession går till proxyns utloggning", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
     localStorage.setItem("ava.pendingSignOut", "1");
     const env = gateEnv();
     const { pendingSignOut: _p, ...args } = makeArgs({ gateEnv: env });
     await bootstrapSelfHosted(args);
     expect(env.redirect).toHaveBeenCalledWith(expect.stringMatching(/^\/oauth2\/sign_out\?rd=/));
+  });
+
+  // #1418: admin loggade ut och nästa inloggning började innan landningssidan
+  // hann ta bort nyckeln. Proxyns session var redan slut — ändå skickades
+  // inloggningen till utloggningen och fastnade på `login/?signedOut=1`.
+  it("webbläsarens default: väntande utloggning men proxyns session är slut → till inloggningen, nyckeln borta", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "signed-out" });
+    localStorage.setItem("ava.pendingSignOut", "1");
+    const env = gateEnv();
+    const { pendingSignOut: _p, ...args } = makeArgs({ gateEnv: env });
+    await bootstrapSelfHosted(args);
+    expect(env.redirect).toHaveBeenCalledTimes(1);
+    expect(env.redirect).toHaveBeenCalledWith("/oauth2/start?rd=%2Fava%2Fmatters%2F");
+    expect(localStorage.getItem("ava.pendingSignOut")).toBeNull();
   });
 
   it("offline efter grace: tydligt besked, ingen store", async () => {

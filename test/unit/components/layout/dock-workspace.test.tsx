@@ -14,19 +14,27 @@ interface FakeApi {
   failLoad: boolean;
   layoutListener: (() => void) | null;
   maximized: boolean;
-  maximizeListener: ((e: { isMaximized: boolean }) => void) | null;
+  maximizeListeners: Array<(e: { isMaximized: boolean }) => void>;
 }
-const fake: FakeApi = { added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListener: null };
+const fake: FakeApi = { added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListeners: [] };
 let readyCount = 0;
 
-const dockProps: { defaultTabComponent: unknown } = { defaultTabComponent: null };
+const dockProps: { defaultTabComponent: unknown; disableFloatingGroups: unknown } = { defaultTabComponent: null, disableFloatingGroups: undefined };
+/** Tangenter som nådde flikraden — dockviews lyssnare sitter där (bubbelfasen). */
+const tablistKeys: string[] = [];
+const recordTablistKeys = (el: HTMLDivElement | null): void => {
+  el?.addEventListener("keydown", (e) => { tablistKeys.push(e.key); });
+};
 
 vi.mock("dockview-react", () => ({
   themeLight: { name: "light" },
   themeDark: { name: "dark" },
   DockviewDefaultTab: ({ hideClose }: { hideClose?: boolean }) => <span data-testid="default-tab" data-hide-close={String(hideClose)} />,
-  DockviewReact: ({ onReady, defaultTabComponent }: { onReady: (e: { api: unknown }) => void; defaultTabComponent?: unknown }) => {
+  DockviewReact: ({ onReady, defaultTabComponent, disableFloatingGroups }: {
+    onReady: (e: { api: unknown }) => void; defaultTabComponent?: unknown; disableFloatingGroups?: boolean;
+  }) => {
     dockProps.defaultTabComponent = defaultTabComponent;
+    dockProps.disableFloatingGroups = disableFloatingGroups;
     const panels = new Set<string>();
     const api = {
       addPanel: (o: { id: string; inactive?: boolean; position?: unknown }) => { panels.add(o.id); fake.added.push(o); },
@@ -42,11 +50,17 @@ vi.mock("dockview-react", () => ({
       hasMaximizedGroup: () => fake.maximized,
       width: 1200, height: 800,
       getGroup: () => undefined,
-      onDidMaximizedGroupChange: (l: (e: { isMaximized: boolean }) => void) => { fake.maximizeListener = l; return { dispose: () => {} }; },
+      onDidMaximizedGroupChange: (l: (e: { isMaximized: boolean }) => void) => { fake.maximizeListeners.push(l); return { dispose: () => {} }; },
     };
     // En gång per montering, som dockview.
     if (readyCount++ === 0 || !fake.layoutListener) onReady({ api });
-    return <div data-testid="dock" />;
+    return (
+      <div data-testid="dock">
+        <div role="tablist" aria-label="flikrad" ref={recordTablistKeys}>
+          <div className="dv-tab" data-testid="dv-tab" tabIndex={0} />
+        </div>
+      </div>
+    );
   },
 }));
 
@@ -96,7 +110,8 @@ const renderWs = () => render(<DockWorkspace page="matter" panels={PANELS} defau
 beforeEach(() => {
   vi.clearAllMocks();
   fake.added = []; fake.loaded = []; fake.titles = {}; fake.failLoad = false; fake.layoutListener = null;
-  fake.maximized = false; fake.maximizeListener = null;
+  fake.maximized = false; fake.maximizeListeners = [];
+  tablistKeys.length = 0;
   readyCount = 0;
   prefsData.user = null; prefsData.org = null;
   role.value = "LAWYER";
@@ -118,6 +133,14 @@ describe("DockWorkspace — vilken layout", () => {
     expect(fake.loaded).toHaveLength(1);
     expect(fake.added.map((p) => p.id)).toEqual(["c"]);
     expect(fake.titles).toMatchObject({ a: "Alfa", b: "Beta" });
+  });
+
+  it("en panel som tillkommer efter start läggs till som inaktiv flik (#1431)", () => {
+    const { rerender } = renderWs();
+    const late = [...PANELS, { id: "d", title: "Delta", render: () => <p>delta-innehåll</p> }];
+    rerender(<DockWorkspace page="matter" panels={late} defaultLayout={defaultLayout} />);
+    expect(fake.added.filter((p) => p.id === "d")).toEqual([expect.objectContaining({ id: "d", inactive: true })]);
+    expect(fake.added.filter((p) => p.id === "a")).toHaveLength(1);
   });
 
   it("firmastandard när användaren inte har någon egen", () => {
@@ -158,7 +181,7 @@ describe("DockWorkspace — spara", () => {
 
   it("lyssnar på maximeringar (proportionsvakten, #1291)", () => {
     renderWs();
-    expect(fake.maximizeListener).not.toBeNull();
+    expect(fake.maximizeListeners.length).toBeGreaterThan(0);
   });
 
   it("efter egen ändring: debouncad sparning med version", async () => {
@@ -232,5 +255,53 @@ describe("DockWorkspace — flikar", () => {
     // kan inte skapas här; attrappen av DockviewDefaultTab läser bara hideClose.
     render(<PanelTab {...({} as Parameters<typeof PanelTab>[0])} />);
     expect(screen.getByTestId("default-tab").getAttribute("data-hide-close")).toBe("true");
+  });
+});
+
+// #1356: dockview-core stänger en fokuserad flik med Delete/Backspace trots
+// hideClose, och shift-drag skapade flytande grupper.
+describe("DockWorkspace — tangentbord och flytande grupper", () => {
+  it("Delete/Backspace på en flik når aldrig dockviews flikrad; piltangenter gör det", () => {
+    renderWs();
+    const tab = screen.getByTestId("dv-tab");
+    fireEvent.keyDown(tab, { key: "Delete" });
+    fireEvent.keyDown(tab, { key: "Backspace" });
+    fireEvent.keyDown(tab, { key: "ArrowRight" });
+    expect(tablistKeys).toEqual(["ArrowRight"]);
+  });
+
+  it("flytande grupper är avstängda", () => {
+    renderWs();
+    expect(dockProps.disableFloatingGroups).toBe(true);
+  });
+});
+
+describe("DockWorkspace — firmastandard under maximering (#1356)", () => {
+  const maximize = (on: boolean): void => {
+    fake.maximized = on;
+    act(() => { fake.maximizeListeners.forEach((l) => l({ isMaximized: on })); });
+  };
+
+  it("knappen är spärrad medan en panel är maximerad och öppnas igen efter återställning", () => {
+    role.value = "ADMIN";
+    renderWs();
+    const btn = screen.getByRole("button", { name: "Spara som firmastandard" });
+    maximize(true);
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute("title", "Återställ den maximerade panelen först");
+    fireEvent.click(btn);
+    expect(setOrg).not.toHaveBeenCalled();
+    maximize(false);
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    expect(setOrg).toHaveBeenCalledTimes(1);
+  });
+
+  it("sparar inte heller om maximeringen hann före omritningen", () => {
+    role.value = "ADMIN";
+    renderWs();
+    fake.maximized = true; // dockview har maximerat; React har inte ritat om än
+    fireEvent.click(screen.getByRole("button", { name: "Spara som firmastandard" }));
+    expect(setOrg).not.toHaveBeenCalled();
   });
 });

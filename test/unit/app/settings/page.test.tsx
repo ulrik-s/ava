@@ -58,6 +58,10 @@ vi.mock("@/components/settings/fortnox-section", () => ({
 vi.mock("@/components/sync/sync-devices-section", () => ({
   SyncDevicesSection: () => <div data-testid="sync-devices-section" />,
 }));
+// Backup-panelen (#1431) finns bara för admin mot en server med backup.
+const backupVisible = { value: false };
+vi.mock("@/lib/client/backend/server-backup", () => ({ useCanSeeBackup: () => backupVisible.value }));
+vi.mock("@/components/settings/backup-section", () => ({ BackupSection: () => <div data-testid="backup-section" /> }));
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
@@ -101,6 +105,7 @@ beforeEach(() => {
   updateSettingsState.error = null;
   addOfficeState.isPending = false;
   updateOfficeState.isPending = false;
+  backupVisible.value = false;
 
   // Inga riktiga nätverksanrop från sidans sektioner i enhetstestet.
   global.fetch = vi.fn((url: string | URL | Request) => Promise.reject(new Error(`unexpected fetch: ${String(url)}`))) as typeof fetch;
@@ -117,6 +122,16 @@ describe("SettingsPage", () => {
     settingsQuery.data = undefined;
     render(<SettingsPage />);
     expect(screen.getByText(/Laddar inställningar/i)).toBeInTheDocument();
+  });
+
+  it("Backup-panelen bara för den som får se den (#1431)", () => {
+    const { container, unmount } = render(<SettingsPage />);
+    expect(container.querySelector('[data-panel="backup"]')).toBeNull();
+    unmount();
+    backupVisible.value = true;
+    render(<SettingsPage />);
+    expect(screen.getByTestId("backup-section")).toBeInTheDocument();
+    expect(screen.getByText(/Ta en krypterad backup nu/)).toBeInTheDocument();
   });
 
   it("renderar huvudsektioner", async () => {
