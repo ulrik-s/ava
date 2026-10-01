@@ -15,26 +15,8 @@
  * `/oauth2/start`.
  */
 
-import type { Page } from "@playwright/test";
-
 import { expect, test } from "../_helper-isolation";
-
-const USERS = {
-  admin: { username: "admin", password: "admin", email: "admin@ava.test" },
-  lawyer: { username: "lawyer", password: "lawyer", email: "lawyer@ava.test" },
-};
-
-const AUTHORIZE_RE = /realms\/ava\/protocol\/openid-connect\/auth/;
-const onKeycloak = (u: URL): boolean => AUTHORIZE_RE.test(u.toString());
-
-/** Driv Keycloaks login-formulär i browsern; vänta tillbaka till appen. */
-async function login(page: Page, username: string, password: string): Promise<void> {
-  await page.goto("/ava/");
-  await page.waitForURL(AUTHORIZE_RE); // oauth2-proxy → Keycloak authorize → login-sida
-  await page.fill("#username", username);
-  await page.fill("#password", password);
-  await page.click("#kc-login");
-}
+import { AUTHORIZE_RE, login, onKeycloak, USERS } from "./keycloak-login";
 
 test.describe("OIDC-login mot Keycloak", () => {
   test("oautentiserad → redirectas till Keycloak-login", async ({ page }) => {

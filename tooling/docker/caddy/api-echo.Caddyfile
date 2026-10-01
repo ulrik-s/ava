@@ -1,0 +1,9 @@
+# Låtsas-server-first för OIDC-E2E:n (#1425) — BARA test.
+#
+# docker-compose.oidc.yml kör den riktiga prod-Caddyfile:n framför den riktiga
+# oauth2-proxyn (Keycloak). Den här står på `server-first:3001` där prod-
+# Caddyfile:n skickar /api, och svarar med den e-post Caddys forward_auth
+# kopierade in från auth-svaret — så testet ser vilken identitet servern fick.
+:3001 {
+	respond "{header.X-Auth-Request-Email}" 200
+}

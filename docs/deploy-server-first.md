@@ -16,7 +16,8 @@ automatiskt TLS.
   Browser ──443──►  │  caddy      TLS + statisk app + proxy  │
                     │    │                                   │
                     │    ├─ /oauth2/* ─► oauth2-proxy ──OIDC──┼──► byråns IdP
-                    │    ├─ /api/*    ─► server-first        │    (Entra/Google)
+                    │    │              └─ redis (sessioner)   │    (Entra/Google)
+                    │    ├─ /api/*    ─► server-first        │
                     │    └─ /         ─► releases/current   │
                     │                       │                │
                     │                  postgres  ◄── akterna │
@@ -463,6 +464,37 @@ en release, pekar `current` på den och skapar om Caddy med den nya mounten
 (ett par sekunders avbrott) — innan bygget rör `out/`. Resten är en vanlig
 deploy. Hände det ändå (Caddy ger 404 överallt): kör det nya skriptet, så görs
 samma sak med den `out/` som finns.
+
+### Sessionerna flyttar till redis (en gång, #1425)
+
+oauth2-proxy har sessionen i en `redis`-container i stället för i cookien:
+Caddys `forward_auth` skickar aldrig proxyns förnyade cookie till browsern,
+så efter `COOKIE_REFRESH` (30 min) förnyade proxyn mot Entra på varje
+API-anrop. Bakgrund och avvägning: [auth.md](auth.md#sessionen-i-klienten-och-idp-avbrott-1245-1351-adr-0018).
+
+- **Inga nya variabler** i `ava-server.env`. `docker-compose.production.yml`
+  har `redis` (redis:7-alpine, `appendonly`, volymen `redis_data`, ingen
+  host-port) och `OAUTH2_PROXY_SESSION_STORE_TYPE=redis` /
+  `OAUTH2_PROXY_REDIS_CONNECTION_URL=redis://redis:6379`.
+- **Utrullning:** en vanlig `bash tooling/scripts/deploy-prod.sh`. Dess
+  `docker compose up -d --build` startar `redis` och skapar om `oauth2-proxy`
+  (som väntar tills redis är frisk).
+- **Alla loggas ut en gång.** En cookie-session kan inte läsas som en
+  redis-biljett: nästa anrop ger 401, klienten visar "Logga in igen" (osynkade
+  ändringar ligger kvar och synkas efter inloggningen). Gör det utanför
+  kontorstid. Gamla `_oauth2_proxy_0`/`_1`-cookies ignoreras och går ut av sig
+  själva.
+- **Kontroll efteråt:** `docker compose -f tooling/docker/docker-compose.production.yml ps redis`
+  ska visa `healthy`, och efter 30 min ska
+  `docker compose -f tooling/docker/docker-compose.production.yml logs oauth2-proxy | grep -c 'Refreshing session'`
+  växa med en rad per användare och intervall — inte en per API-anrop.
+- **Drift:** omstart av redis eller servern loggar inte ut någon (AOF på
+  volymen). Är redis *nere* nekas inloggade anrop och användaren får logga in
+  igen; autoheal startar om den om healthchecken fallerar. Redis behöver ingen
+  backup — det värsta en förlorad volym kostar är en ny inloggning.
+- **Rollback** till en version före #1425 sätter proxyn i cookie-läge igen:
+  alla loggas ut en gång till; `redis`-containern blir kvar oanvänd
+  (`docker compose -f tooling/docker/docker-compose.production.yml rm -sf redis`).
 
 ### Manuellt
 

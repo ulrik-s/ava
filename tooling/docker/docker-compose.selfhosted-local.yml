@@ -110,8 +110,27 @@ services:
       # 401:ar oauth2-proxy helperns /api/documents-anrop → 1-klicks-öppning i
       # native-app faller tillbaka. Token verifieras mot samma JWKS/issuer.
       OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS: "true"
+      # Sessionen i redis (#1425): auth_request/forward_auth skickar inte
+      # auth-svarets Set-Cookie till browsern — förnyelsen måste sparas på
+      # serversidan. Se docker-compose.production.yml.
+      OAUTH2_PROXY_SESSION_STORE_TYPE: redis
+      OAUTH2_PROXY_REDIS_CONNECTION_URL: "redis://redis:6379"
     depends_on:
-      - keycloak
+      keycloak:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  # ─── Sessionslagret för oauth2-proxy (#1425) ────────────────────────────
+  # Som i prod, men utan volym: testriggen kastar sessionerna med flit.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   web:
     build:

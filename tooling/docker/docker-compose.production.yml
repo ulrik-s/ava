@@ -92,6 +92,40 @@ services:
       # väg förbi Caddy. OPT-IN: kräver Entra-konfigen i docs/self-hosted-entra.md
       # (exponerat API + email i access-token). Av som default.
       OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS: "${AVA_HELPER_ENABLED:-false}"
+      # Sessionen i redis, inte i cookien (#1425). Caddys forward_auth skickar
+      # aldrig auth-svarets Set-Cookie till browsern, så en förnyelse via
+      # /oauth2/auth (alla /api-anrop) sparades inte i en cookie-session: efter
+      # COOKIE_REFRESH förnyade proxyn mot IdP:n på VARJE anrop. Med redis är
+      # cookien bara en biljett (id + nyckel); förnyelsen skrivs till redis och
+      # gäller nästa anrop oavsett om Set-Cookie når fram. Dessutom: ett lås gör
+      # att parallella anrop förnyar EN gång, och cookien blir liten (en
+      # Entra-session med tre tokens delas annars i _oauth2_proxy_0/_1).
+      # Tokens i redis är krypterade med en nyckel som bara finns i cookien.
+      OAUTH2_PROXY_SESSION_STORE_TYPE: redis
+      OAUTH2_PROXY_REDIS_CONNECTION_URL: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ─── Sessionslagret för oauth2-proxy (#1425) ──────────────────────────
+  # appendonly + namngiven volym: sessionerna överlever omstart och
+  # uppgradering. Utan det loggas alla ut när containern startas om. Är redis
+  # NERE nekas inloggade anrop (och proxyn rensar cookien) — samma värd som
+  # proxyn och databasen, så det är ingen ny sorts beroende; autoheal startar
+  # om den om healthchecken fallerar. Ingen host-port: bara proxyn når den.
+  # Inget minnestak med eviction med flit — en bortkastad nyckel är en
+  # utloggad användare. En session är några kB.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ─── Postgres: byråns akter ───────────────────────────────────────────
   postgres:
@@ -229,6 +263,7 @@ services:
     mem_limit: 3g
 
 volumes:
+  redis_data:
   ollama_models:
   pgdata:
   content:
