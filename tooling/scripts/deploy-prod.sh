@@ -157,7 +157,9 @@ fi
 
 if [ -z "$(release_current)" ] && [ -d out ]; then
   step "första deployen med releases/: nuvarande out/ blir en release och Caddy flyttas dit"
-  boot="$(release_new_name "$before")"
+  # Vilken version en gammal out/ byggdes från går inte att veta (efter en
+  # manuell ff-merge är HEAD redan den NYA) → ett ärligt namn, ingen sha.
+  boot="$(release_new_name bootstrap)"
   run mkdir -p "$RELEASES_DIR"
   run cp -a out "$RELEASES_DIR/$boot"
   run release_activate "$boot"
@@ -182,8 +184,11 @@ STATE_CLIENT="oförändrad; ny release releases/$release förberedd men inte akt
 
 step "kör databasmigrationer (db-migrate kör bara filer som saknas i schema_migrations)"
 STATE_DB="migreringen avbröts — körda filer står i schema_migrations (varje fil i egen transaktion)"
+# Lösenordet ALDRIG på kommandoraden: den syns i `ps` och i --dry-run-utskriften.
+# URL:en ligger i skriptets miljö; `-e NAMN` utan värde låter docker läsa den därifrån.
+export AVA_DATABASE_URL="postgres://${POSTGRES_USER:-ava}:$POSTGRES_PASSWORD@postgres:5432/${POSTGRES_DB:-ava}"
 run docker run --rm --network ava_default -v "$PWD:/app" -w /app \
-  -e AVA_DATABASE_URL="postgres://${POSTGRES_USER:-ava}:$POSTGRES_PASSWORD@postgres:5432/${POSTGRES_DB:-ava}" \
+  -e AVA_DATABASE_URL \
   oven/bun:1 bun tooling/scripts/db-migrate.ts
 STATE_DB="migrerad ($sha)"
 

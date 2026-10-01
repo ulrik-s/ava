@@ -28,7 +28,8 @@ _release_target() { readlink "$RELEASES_DIR/$1" 2>/dev/null || true; }
 release_current() { _release_target current; }
 release_previous() { _release_target previous; }
 
-# Ett ledigt namn för en ny release: <UTC-tid>-<kort sha>[.n].
+# Ett ledigt namn för en ny release: <UTC-tid>-<etikett>[.n], där etiketten är
+# den korta sha:n — eller "bootstrap" för en out/ av okänd version.
 release_new_name() {
   local base name n=1
   base="$(date -u +%Y%m%dT%H%M%SZ)-$1"
