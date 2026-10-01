@@ -5,13 +5,9 @@
  * i `meta.response`.
  */
 
-function field(value: unknown, key: string): unknown {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>)[key] : undefined;
-}
+import { httpStatusOf, trpcCodeOf } from "@/lib/shared/sync/sync-error";
 
 /** Är felet ett 401 (utloggad eller spärrad)? */
 export function isUnauthorizedError(err: unknown): boolean {
-  const data = field(err, "data");
-  if (field(data, "httpStatus") === 401 || field(data, "code") === "UNAUTHORIZED") return true;
-  return field(field(field(err, "meta"), "response"), "status") === 401;
+  return httpStatusOf(err) === 401 || trpcCodeOf(err) === "UNAUTHORIZED";
 }

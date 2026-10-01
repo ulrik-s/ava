@@ -27,7 +27,7 @@ const { StaleDevicesNotice } = await import("@/components/sync/stale-devices-not
 const { default: SyncDevicesPage } = await import("@/app/sync-devices/page");
 
 const device = (over: Partial<SyncDevice>): SyncDevice => ({
-  deviceId: "d1", userId: "u-anna", label: "Chrome på macOS", pendingCount: 0, oldestPendingAt: null, lastSeenAt: NOW, ...over,
+  deviceId: "d1", userId: "u-anna", label: "Chrome på macOS", pendingCount: 0, oldestPendingAt: null, lastError: null, lastSeenAt: NOW, ...over,
 });
 
 beforeEach(() => {
@@ -60,6 +60,14 @@ describe("SyncDevicesSection", () => {
     expect(rows[0]).toHaveTextContent(/Anna Advokat.*Chrome på macOS.*Inget.*OK/);
     expect(rows[1]).toHaveTextContent(/Okänd användare.*Okänd enhet.*3 ändringar \(äldsta .*\).*Osynkat > 1 dygn/);
     expect(rows[2]).toHaveTextContent(/1 ändring.*Ingen synk på en vecka/);
+  });
+
+  it("enhetens senaste synkfel visas (#1353); utan fel visas inget", () => {
+    state.devices = [device({ deviceId: "fel", pendingCount: 2, lastError: "Kunde inte spara till servern: 500" }), device({ deviceId: "ok" })];
+    render(<SyncDevicesSection now={NOW} />);
+    const errors = screen.getAllByTestId("sync-device-error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toHaveTextContent("Senaste synkfel: Kunde inte spara till servern: 500");
   });
 
   it("Glöm frågar först och glömmer sedan enheten", () => {

@@ -26,24 +26,32 @@ describe("DrizzleSyncDevices (#1267)", () => {
 
   it("en rapport sparas med serverns tid; nästa skriver över den", async () => {
     const deviceId = uuidv7();
-    await devices.report(ORG, USER, { deviceId, label: "Chrome på macOS", pendingCount: 3, oldestPendingAt: clock - 60_000 });
+    await devices.report(ORG, USER, { deviceId, label: "Chrome på macOS", pendingCount: 3, oldestPendingAt: clock - 60_000, lastError: null });
     clock += 1000;
-    await devices.report(ORG, USER, { deviceId, label: "Chrome på macOS", pendingCount: 0, oldestPendingAt: null });
+    await devices.report(ORG, USER, { deviceId, label: "Chrome på macOS", pendingCount: 0, oldestPendingAt: null, lastError: null });
     const [row] = (await devices.list(ORG)).filter((d) => d.deviceId === deviceId);
-    expect(row).toEqual({ deviceId, userId: USER, label: "Chrome på macOS", pendingCount: 0, oldestPendingAt: null, lastSeenAt: clock });
+    expect(row).toEqual({ deviceId, userId: USER, label: "Chrome på macOS", pendingCount: 0, oldestPendingAt: null, lastError: null, lastSeenAt: clock });
+  });
+
+  it("felet som stoppade synken sparas (#1353); nästa lyckade rapport nollar det", async () => {
+    const deviceId = uuidv7();
+    await devices.report(ORG, USER, { deviceId, label: null, pendingCount: 2, oldestPendingAt: clock, lastError: "Kunde inte nå servern" });
+    expect((await devices.list(ORG)).find((d) => d.deviceId === deviceId)).toMatchObject({ pendingCount: 2, lastError: "Kunde inte nå servern" });
+    await devices.report(ORG, USER, { deviceId, label: null, pendingCount: 0, oldestPendingAt: null, lastError: null });
+    expect((await devices.list(ORG)).find((d) => d.deviceId === deviceId)?.lastError).toBeNull();
   });
 
   it("den äldsta osynkade ändringen följer med", async () => {
     const deviceId = uuidv7();
     const oldest = clock - 25 * 3600_000;
-    await devices.report(ORG, USER, { deviceId, label: null, pendingCount: 1, oldestPendingAt: oldest });
-    expect((await devices.list(ORG)).find((d) => d.deviceId === deviceId)).toMatchObject({ pendingCount: 1, oldestPendingAt: oldest });
+    await devices.report(ORG, USER, { deviceId, label: null, pendingCount: 1, oldestPendingAt: oldest, lastError: null });
+    expect((await devices.list(ORG)).find((d) => d.deviceId === deviceId)).toMatchObject({ pendingCount: 1, oldestPendingAt: oldest, lastError: null });
   });
 
   it("en enhet i en annan byrå skrivs inte över, syns inte och glöms inte", async () => {
     const deviceId = uuidv7();
-    await devices.report(OTHER, USER, { deviceId, label: "Annan byrå", pendingCount: 5, oldestPendingAt: null });
-    await devices.report(ORG, USER, { deviceId, label: "Kapad", pendingCount: 0, oldestPendingAt: null });
+    await devices.report(OTHER, USER, { deviceId, label: "Annan byrå", pendingCount: 5, oldestPendingAt: null, lastError: null });
+    await devices.report(ORG, USER, { deviceId, label: "Kapad", pendingCount: 0, oldestPendingAt: null, lastError: null });
     expect((await devices.list(ORG)).some((d) => d.deviceId === deviceId)).toBe(false);
     await devices.forget(ORG, deviceId);
     expect(await devices.list(OTHER)).toEqual([expect.objectContaining({ deviceId, label: "Annan byrå", pendingCount: 5 })]);
@@ -52,9 +60,9 @@ describe("DrizzleSyncDevices (#1267)", () => {
   it("listan visar senast sedda först; glömd enhet försvinner", async () => {
     const early = uuidv7(), late = uuidv7();
     const org = uuidv7();
-    await devices.report(org, USER, { deviceId: early, label: null, pendingCount: 0, oldestPendingAt: null });
+    await devices.report(org, USER, { deviceId: early, label: null, pendingCount: 0, oldestPendingAt: null, lastError: null });
     clock += 5000;
-    await devices.report(org, USER, { deviceId: late, label: null, pendingCount: 0, oldestPendingAt: null });
+    await devices.report(org, USER, { deviceId: late, label: null, pendingCount: 0, oldestPendingAt: null, lastError: null });
     expect((await devices.list(org)).map((d) => d.deviceId)).toEqual([late, early]);
     await devices.forget(org, late);
     expect((await devices.list(org)).map((d) => d.deviceId)).toEqual([early]);
@@ -64,7 +72,7 @@ describe("DrizzleSyncDevices (#1267)", () => {
     const real = new DrizzleSyncDevices(handle.db);
     const org = uuidv7(), deviceId = uuidv7();
     const before = Date.now();
-    await real.report(org, USER, { deviceId, label: null, pendingCount: 0, oldestPendingAt: null });
+    await real.report(org, USER, { deviceId, label: null, pendingCount: 0, oldestPendingAt: null, lastError: null });
     expect((await real.list(org))[0]?.lastSeenAt).toBeGreaterThanOrEqual(before - 1000);
   });
 });

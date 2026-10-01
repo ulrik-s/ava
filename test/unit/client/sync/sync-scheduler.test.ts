@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import type { CachingSyncStatus } from "@/lib/client/sync/caching-sync-status";
-import { SyncScheduler, type SyncSchedulerDeps } from "@/lib/client/sync/sync-scheduler";
+import { SyncScheduler, type ReconcileOutcome, type SyncSchedulerDeps } from "@/lib/client/sync/sync-scheduler";
 
 function harness(over: Partial<SyncSchedulerDeps> = {}) {
   const timers: Array<() => void> = [];
@@ -12,7 +12,7 @@ function harness(over: Partial<SyncSchedulerDeps> = {}) {
   let pending = 0;
   let online = true;
   const calls = { reconcile: 0, remote: 0 };
-  let reconcileImpl: () => Promise<{ pulled: number }> = async () => { pending = 0; return { pulled: 0 }; };
+  let reconcileImpl: () => Promise<ReconcileOutcome> = async () => { pending = 0; return { pulled: 0 }; };
   const scheduler = new SyncScheduler({
     reconcile: () => { calls.reconcile++; return reconcileImpl(); },
     pendingCount: () => pending,
@@ -28,7 +28,7 @@ function harness(over: Partial<SyncSchedulerDeps> = {}) {
     scheduler, statuses, calls, timers,
     setPending: (n: number) => { pending = n; },
     setOnline: (v: boolean) => { online = v; },
-    setReconcile: (fn: () => Promise<{ pulled: number; replayed?: number }>) => { reconcileImpl = fn; },
+    setReconcile: (fn: () => Promise<ReconcileOutcome>) => { reconcileImpl = fn; },
     fireTimers: async () => { const fns = timers.splice(0); for (const f of fns) f(); await Promise.resolve(); await Promise.resolve(); },
     last: () => statuses[statuses.length - 1]!,
   };
@@ -127,6 +127,28 @@ describe("SyncScheduler", () => {
     h.setReconcile(async () => { throw Object.assign(new Error("nej"), { data: { code: "UNAUTHORIZED" } }); });
     await h.scheduler.syncNow();
     expect(h.last().error).toBe("Kunde inte spara till servern: nej");
+  });
+
+  // #1353: kön stannade vid en post — reconcile kastade inte, men synken är inte lyckad.
+  it("kön stannade vid en post → felet syns, ingen 'senast synkat'; pullade rader hämtas ändå om", async () => {
+    const h = harness();
+    h.setPending(2);
+    h.setReconcile(async () => ({ pulled: 3, blocked: { error: new Error("Internal Server Error") } }));
+    await h.scheduler.syncNow();
+    expect(h.calls.remote).toBe(1);
+    expect(h.last()).toMatchObject({ error: "Kunde inte spara till servern: Internal Server Error", lastSyncedAt: null, pendingCount: 2 });
+    h.setReconcile(async () => ({ pulled: 0, blocked: null }));
+    await h.scheduler.syncNow();
+    expect(h.last()).toMatchObject({ error: null, lastSyncedAt: 1000 });
+  });
+
+  it("kön stannade på ett 401 → sessionen omvalideras som vid ett kastat 401", async () => {
+    let asked = 0;
+    const h = harness({ onUnauthorized: async () => { asked++; return "Logga in igen."; } });
+    h.setReconcile(async () => ({ pulled: 0, blocked: { error: Object.assign(new Error("UNAUTHORIZED"), { data: { httpStatus: 401 } }) } }));
+    await h.scheduler.syncNow();
+    expect(asked).toBe(1);
+    expect(h.last().error).toBe("Logga in igen.");
   });
 
   it("andra fel omvaliderar inte sessionen", async () => {

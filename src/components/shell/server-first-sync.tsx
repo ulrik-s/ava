@@ -14,6 +14,8 @@ import { SyncScheduler } from "@/lib/client/sync/sync-scheduler";
 import { useRejectedChanges } from "@/lib/client/sync/use-rejected-changes";
 import { pluralChanges } from "@/lib/client/utils";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
+import type { ReconcileResult } from "@/lib/server/data-store/in-memory/reconcile-engine";
+import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import { SyncStatusPill } from "./sync-status-pill";
 
 /** Det synken behöver ur server-first-storen — inget mer (smal söm, testbar). */
@@ -43,11 +45,36 @@ interface ServerFirstSyncProps {
   store: SyncableStore | null;
   /** Be om beständig lagring (#1241). Injicerbar för tester. */
   requestPersistence?: () => Promise<StoragePersistence>;
-  /** Rapportera enhetens synkläge till servern (#1267). Injicerbar för tester. */
-  reportDevice?: (store: SyncableStore) => Promise<void>;
+  /**
+   * Rapportera enhetens synkläge till servern (#1267) — efter varje synk, också
+   * en misslyckad, med felet som stoppade den (#1353). Injicerbar för tester.
+   */
+  reportDevice?: (store: SyncableStore, lastError: string | null) => Promise<void>;
 }
 
-const reportToServer = (store: SyncableStore): Promise<void> => reportSyncDevice(store, navigator.userAgent);
+const reportToServer = (store: SyncableStore, lastError: string | null): Promise<void> =>
+  reportSyncDevice(store, navigator.userAgent, lastError);
+
+/**
+ * En synkrunda: reconcile, sedan rapporten — oavsett utfall (#1353). Annars
+ * skulle en enhet vars kö fastnat aldrig rapportera, och larmet "fast kö"
+ * aldrig gå. Lyckad = hela kön spelades upp; då meddelas lyssnarna (#1243).
+ */
+async function syncAndReport(store: SyncableStore, report: (store: SyncableStore, lastError: string | null) => Promise<void>): Promise<ReconcileResult> {
+  let lastError: string | null = null;
+  try {
+    const result = await store.reconcile();
+    if (result.blocked) lastError = syncErrorMessage(result.blocked.error);
+    else notifyServerSynced(); // bara efter en LYCKAD synk (#1243)
+    return result;
+  } catch (err) {
+    lastError = syncErrorMessage(err);
+    throw err;
+  } finally {
+    // Synkläget per enhet (#1267): servern larmar när något fastnat här.
+    void report(store, lastError);
+  }
+}
 
 /**
  * Server-first-synken i webbläsaren: varje sparad ändring skickas till servern
@@ -78,13 +105,7 @@ export function ServerFirstSync({ store, requestPersistence = requestPersistentS
     if (!store) return;
     const scheduler = new SyncScheduler({
       // En flik i taget skickar kön (#1332).
-      reconcile: () => withSyncLock(async () => {
-        const result = await store.reconcile();
-        notifyServerSynced(); // bara efter en LYCKAD synk (#1243)
-        // Synkläget per enhet (#1267): servern larmar när något fastnat här.
-        void reportDevice(store);
-        return result;
-      }),
+      reconcile: () => withSyncLock(() => syncAndReport(store, reportDevice)),
       pendingCount: () => store.pendingCount(),
       isOnline: () => navigator.onLine,
       onStatus: setStatus,

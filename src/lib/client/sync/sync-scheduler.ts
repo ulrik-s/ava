@@ -12,6 +12,7 @@
  * runda efteråt, så inget blir liggande. Ren klass — timers injiceras (test).
  */
 
+import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import { isUnauthorizedError } from "../auth/unauthorized";
 import type { CachingSyncStatus } from "./caching-sync-status";
 
@@ -19,6 +20,11 @@ export interface ReconcileOutcome {
   pulled: number;
   /** Rader ur serverns svar på omkörda procedur-anrop (#1265). */
   replayed?: number;
+  /**
+   * Kön stannade vid en post (#1353) — servern nåddes inte, eller posten ska
+   * försökas igen senare. Synken räknas då inte som lyckad.
+   */
+  blocked?: { error: unknown } | null;
 }
 
 export interface SyncSchedulerDeps {
@@ -42,7 +48,7 @@ export interface SyncSchedulerDeps {
 const DEFAULT_DEBOUNCE_MS = 800;
 
 function saveErrorMessage(err: unknown): string {
-  return `Kunde inte spara till servern: ${err instanceof Error ? err.message : String(err)}`;
+  return `Kunde inte spara till servern: ${syncErrorMessage(err)}`;
 }
 
 export class SyncScheduler {
@@ -81,13 +87,18 @@ export class SyncScheduler {
   private async runOnce(): Promise<void> {
     try {
       const result = await this.deps.reconcile();
+      if (result.pulled > 0 || (result.replayed ?? 0) > 0) this.deps.onRemoteChanges?.();
+      if (result.blocked) return await this.failed(result.blocked.error);
       this.lastSyncedAt = (this.deps.now ?? Date.now)();
       this.error = null;
-      if (result.pulled > 0 || (result.replayed ?? 0) > 0) this.deps.onRemoteChanges?.();
     } catch (err) {
-      // Ändringen ligger kvar i kön (persisterad) — nästa runda försöker igen.
-      this.error = (await this.authMessage(err)) ?? saveErrorMessage(err);
+      await this.failed(err);
     }
+  }
+
+  /** Ändringen ligger kvar i kön (persisterad) — nästa runda försöker igen. */
+  private async failed(err: unknown): Promise<void> {
+    this.error = (await this.authMessage(err)) ?? saveErrorMessage(err);
   }
 
   /** Ett 401 → låt sessionen omvalideras och visa dess besked (#1245). */

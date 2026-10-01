@@ -9,14 +9,16 @@ import { ServerFirstSync, type SyncableStore } from "@/components/shell/server-f
 import type { StoragePersistence } from "@/lib/client/storage/persistent-storage";
 import { flushServerSync, onServerSynced, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
 
-function fakeStore(opts: { pending: number; fail?: boolean }) {
+function fakeStore(opts: { pending: number; fail?: boolean; blocked?: Error }) {
   const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void), requeued: [] as unknown[] };
   const store: SyncableStore = {
     reconcile: async () => {
       state.reconciles++;
       if (opts.fail) throw new Error("nätverksfel");
+      const entry = { mutationId: "m1", entity: "invoice", kind: "update" as const, row: { id: "i1" }, enqueuedAt: 0 };
+      if (opts.blocked) return { pulled: 0, pushed: 0, rebased: 0, replayed: 0, conflicts: [], cursor: 0, blocked: { mutation: entry, error: opts.blocked, attempts: 1 } };
       state.pending = 0;
-      return { pulled: 0, pushed: 1, rebased: 0, replayed: 0, conflicts: [], cursor: 1 };
+      return { pulled: 0, pushed: 1, rebased: 0, replayed: 0, conflicts: [], cursor: 1, blocked: null };
     },
     pendingCount: () => state.pending,
     oldestPendingAt: () => (state.pending > 0 ? 1 : null),
@@ -54,9 +56,37 @@ describe("ServerFirstSync", () => {
 
   it("rapporterar enhetens synkläge till servern efter en lyckad synk (#1267)", async () => {
     const { store } = fakeStore({ pending: 1 });
-    const reported: SyncableStore[] = [];
-    wrap(<ServerFirstSync reportDevice={async (s) => { reported.push(s); }} store={store} />);
-    await waitFor(() => expect(reported).toEqual([store]));
+    const reported: Array<[SyncableStore, string | null]> = [];
+    wrap(<ServerFirstSync reportDevice={async (s, e) => { reported.push([s, e]); }} store={store} />);
+    await waitFor(() => expect(reported).toEqual([[store, null]]));
+  });
+
+  // #1353: annars går larmet "fast kö" aldrig — enheten rapporterar också när synken fallerar.
+  it("rapporterar också efter en misslyckad synk, med felet", async () => {
+    const { store } = fakeStore({ pending: 2, fail: true });
+    const reported: Array<string | null> = [];
+    wrap(<ServerFirstSync reportDevice={async (_s, e) => { reported.push(e); }} store={store} />);
+    await waitFor(() => expect(reported[0]).toBe("nätverksfel"));
+  });
+
+  it("standardrapporten når ingen server i testet — felet sväljs, synken fälls inte", async () => {
+    const { state, store } = fakeStore({ pending: 1 });
+    wrap(<ServerFirstSync store={store} requestPersistence={async () => "persisted"} />);
+    await waitFor(() => expect(state.reconciles).toBe(1));
+    await waitFor(() => expect(screen.getByText(/Sparat/)).toBeInTheDocument());
+  });
+
+  it("kön stannade vid en post: felet rapporteras och visas, synken räknas inte som lyckad", async () => {
+    let synced = 0;
+    const off = onServerSynced(() => { synced++; });
+    const { state, store } = fakeStore({ pending: 2, blocked: new Error("Internal Server Error") });
+    const reported: Array<string | null> = [];
+    wrap(<ServerFirstSync reportDevice={async (_s, e) => { reported.push(e); }} store={store} />);
+    await waitFor(() => expect(reported[0]).toBe("Internal Server Error"));
+    await waitFor(() => expect(screen.getByTestId("sync-pill")).toHaveAttribute("title", "Kunde inte spara till servern: Internal Server Error"));
+    expect(state.reconciles).toBeGreaterThanOrEqual(1);
+    expect(synced).toBe(0);
+    off();
   });
 
   it("synkar köade ändringar direkt vid start och visar att allt är sparat", async () => {

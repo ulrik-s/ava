@@ -36,7 +36,7 @@ function caller(role: "ADMIN" | "LAWYER", syncDevices?: SyncDeviceStore) {
   return appRouter.createCaller(syncDevices ? { ...ctx, syncDevices } : ctx);
 }
 
-const report = (): SyncDeviceReport => ({ deviceId: uuidv7(), label: "Chrome på macOS", pendingCount: 2, oldestPendingAt: 1000 });
+const report = (): SyncDeviceReport => ({ deviceId: uuidv7(), label: "Chrome på macOS", pendingCount: 2, oldestPendingAt: 1000, lastError: null });
 
 describe("sync-routerns enhetsuppföljning (#1267)", () => {
   it("vem som helst i byrån rapporterar sin enhet — som sig själv, i sin byrå", async () => {
@@ -65,6 +65,15 @@ describe("sync-routerns enhetsuppföljning (#1267)", () => {
     const store = fakeStore();
     await expect(caller("LAWYER", store).sync.reportDevice({ ...report(), pendingCount: -1 })).rejects.toThrow();
     await expect(caller("LAWYER", store).sync.reportDevice({ ...report(), deviceId: "x" })).rejects.toThrow();
+  });
+
+  it("synkfelet följer med (#1353); en äldre klient utan fältet rapporterar null", async () => {
+    const store = fakeStore();
+    const failed = { ...report(), lastError: "Kunde inte spara till servern" };
+    await caller("LAWYER", store).sync.reportDevice(failed);
+    const { lastError: _omitted, ...legacy } = report();
+    await caller("LAWYER", store).sync.reportDevice(legacy);
+    expect(store.reports.map((r) => r.report.lastError)).toEqual(["Kunde inte spara till servern", null]);
   });
 
   it("utan server (demo) → NOT_IMPLEMENTED", async () => {
