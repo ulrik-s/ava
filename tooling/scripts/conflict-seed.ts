@@ -37,7 +37,6 @@ const OUT_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", ".conflict-
 /** Klient-genererat textdokument-id + ärende-id (delas med Playwright-spec:en). */
 const MATTER_ID = "019ef800-0000-7000-8000-000000000742";
 const DOC_ID = "019ef800-0000-7000-8000-0000000007d0";
-const MATTER_NUMBER = "2026-0742";
 const MATTER_TITLE = "Konflikt-e2e (#742)";
 const FILE_NAME = "minnesanteckning.txt";
 const ORIGINAL_TEXT = "Ursprunglig minnesanteckning (version 1).";
@@ -69,9 +68,8 @@ async function main(): Promise<void> {
   console.log(`✓ auth: lawyer=${lawyerMe?.email} + admin (Bearer → oauth2-proxy → server-first)`);
 
   // ── steg 1: lawyer skapar ärende + textdokument (v1) ─────────────
-  await lawyer.matter.create.mutate({
-    id: asId<"MatterId">(MATTER_ID), title: MATTER_TITLE, matterNumber: MATTER_NUMBER, status: "ACTIVE",
-  });
+  // Ärendenumret ur juristens serie — setup-fält får bara ADMIN sätta (#1345).
+  const { matterNumber } = await lawyer.matter.create.mutate({ id: asId<"MatterId">(MATTER_ID), title: MATTER_TITLE });
   await lawyer.document.register.mutate({
     id: asId<"DocumentId">(DOC_ID), matterId: asId<"MatterId">(MATTER_ID),
     fileName: FILE_NAME, mimeType: "text/plain", sizeBytes: 0,
@@ -129,7 +127,7 @@ async function main(): Promise<void> {
   console.log("✓ server-state: 2 filer, bådas innehåll bevarat");
 
   writeFileSync(OUT_FILE, JSON.stringify({
-    matterId: MATTER_ID, matterNumber: MATTER_NUMBER, matterTitle: MATTER_TITLE,
+    matterId: MATTER_ID, matterNumber, matterTitle: MATTER_TITLE,
     originalFileName: FILE_NAME, siblingFileName: sibling!.fileName, siblingId: copy.id,
   }, null, 2));
   console.log(`✓ skrev ${OUT_FILE} (Playwright navigerar dit)`);

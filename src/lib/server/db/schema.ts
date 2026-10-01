@@ -231,7 +231,8 @@ export const timeEntries = pgTable("time_entries", {
   ...baseColumns,
   id: uuid("id").primaryKey().$type<TimeEntryId>(),
   userId: uuid("user_id").notNull().$type<UserId>(),
-  matterId: uuid("matter_id").notNull().$type<MatterId>(),
+  /** Främmande nyckel (migration 0035, #1345): byråavgränsningen går via ärendet. */
+  matterId: uuid("matter_id").notNull().$type<MatterId>().references(() => matters.id),
   date: timestamp("date", { withTimezone: true }).notNull(),
   minutes: integer("minutes").notNull(),
   description: text("description").notNull(),
@@ -251,7 +252,8 @@ export const expenses = pgTable("expenses", {
   ...baseColumns,
   id: uuid("id").primaryKey().$type<ExpenseId>(),
   userId: uuid("user_id").notNull().$type<UserId>(),
-  matterId: uuid("matter_id").notNull().$type<MatterId>(),
+  /** Främmande nyckel (migration 0035, #1345): byråavgränsningen går via ärendet. */
+  matterId: uuid("matter_id").notNull().$type<MatterId>().references(() => matters.id),
   date: timestamp("date", { withTimezone: true }).notNull(),
   amount: ore("amount").notNull(),
   description: text("description").notNull(),

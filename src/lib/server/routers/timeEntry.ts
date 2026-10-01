@@ -4,13 +4,14 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { type TimeEntry } from "@/lib/shared/schemas/billing";
 import { timeEntryKindSchema, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import {
-  asId,
   matterIdSchema,
   userIdSchema,
   timeEntryIdSchema,
   invoiceIdSchema,
   type OrganizationId,
 } from "@/lib/shared/schemas/ids";
+import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
+import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
 import { loadRadgivningStatus, markEntryAsRadgivning } from "../billing/radgivning-entry";
 import { entryRateOre } from "../billing/time-entry-rate";
 import { emit } from "../events/emit";
@@ -61,7 +62,7 @@ async function rateOnKindChange(
   repos: Context["repos"], orgId: OrganizationId, owned: TimeEntry, kind: TimeEntryKind | undefined,
 ): Promise<number | undefined> {
   if (kind === undefined || kind === (owned.kind ?? "ARBETE")) return undefined;
-  const user = await repos.users.getById(owned.userId);
+  const user = await repos.users.getByIdInOrg(owned.userId, orgId);
   return entryRateOre(repos, orgId, { kind, date: owned.date, matterId: owned.matterId, userRates: user?.hourlyRates });
 }
 
@@ -91,7 +92,7 @@ export const timeEntryRouter = router({
       return { entries, total, totalMinutes, pages: Math.ceil(total / input.pageSize) };
     }),
 
-  create: protectedProcedure
+  create: orgProcedure
     .input(
       z.object({
         matterId: matterIdSchema,
@@ -109,8 +110,10 @@ export const timeEntryRouter = router({
         kind: timeEntryKindSchema.optional(),
         /** Byråns standardåtgärd posten registrerades ur (#956) — spårbarhet. */
         standardAtgardId: z.string().optional(),
-        // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
+        /** Klientens id (köade anrop) — annars skapar storen ett. */
         id: timeEntryIdSchema.optional(),
+        // Setup-fält (demo-generator/fixtures, ADR 0003) — bara ADMIN, aldrig
+        // via kön (`setup-fields.ts`, #1345).
         userId: userIdSchema.optional(),
         hourlyRate: z.number().optional(),
         invoiceId: invoiceIdSchema.nullable().optional(),
@@ -119,13 +122,19 @@ export const timeEntryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertMinutes(input);
-      const userId = input.userId ?? asId<"UserId">(ctx.user.id);
-      const user = await ctx.repos.users.getById(userId);
-      if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte." });
-      // Explicit á-pris i input (setup-/fixture-väg) vinner, utom för beredskap.
+      assertSetupFieldsAllowed(ctx, {
+        userId: onBehalfOf(ctx, input.userId), hourlyRate: input.hourlyRate,
+        invoiceId: input.invoiceId, createdAt: input.createdAt,
+      });
+      // Ärendet och juristen måste tillhöra byrån (#1345) — servern kör om
+      // anropet ur kön som den som skickade det.
+      await requireMatterInOrg(ctx, input.matterId);
+      const userId = input.userId ?? ctx.user.id;
+      const user = await requireUserInOrg(ctx, userId);
+      // Explicit á-pris i input (setup-väg) vinner, utom för beredskap.
       const rate = input.hourlyRate !== undefined && !isPerDayKind(input.kind)
         ? input.hourlyRate
-        : await entryRateOre(ctx.repos, asId<"OrganizationId">(ctx.user.organizationId), { ...input, userRates: user.hourlyRates });
+        : await entryRateOre(ctx.repos, ctx.orgId, { ...input, userRates: user.hourlyRates });
 
       const entry = await ctx.repos.timeEntries.create(omitUndefined({
         id: input.id, // undefined → store genererar

@@ -2,13 +2,14 @@ import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { Expense } from "@/lib/shared/schemas/billing";
 import {
-  asId,
   matterIdSchema,
   userIdSchema,
   expenseIdSchema,
   invoiceIdSchema,
 } from "@/lib/shared/schemas/ids";
 import { isBilledEntry } from "@/lib/shared/time-entry-lock";
+import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
+import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 
 /**
@@ -63,21 +64,27 @@ export const expenseRouter = router({
         vatIncluded: z.boolean().default(false),
         /** Äkta utlägg — faktura ställd till klienten → utan moms (#975). */
         passThrough: z.boolean().default(false),
-        // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
+        /** Klientens id (köade anrop) — annars skapar storen ett. */
         id: expenseIdSchema.optional(),
+        // Setup-fält (demo-generator/fixtures, ADR 0003) — bara ADMIN, aldrig
+        // via kön (`setup-fields.ts`, #1345).
         userId: userIdSchema.optional(),
         invoiceId: invoiceIdSchema.nullable().optional(),
         createdAt: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertSetupFieldsAllowed(ctx, {
+        userId: onBehalfOf(ctx, input.userId), invoiceId: input.invoiceId, createdAt: input.createdAt,
+      });
       // Ärendet måste tillhöra byrån (#1276) — servern kör om anropet ur kön,
-      // och ett utlägg i en annan byrås ärende ska inte gå att skapa.
-      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
-      if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
+      // och ett utlägg i en annan byrås ärende ska inte gå att skapa. Detsamma
+      // gäller juristen det registreras på (#1345).
+      await requireMatterInOrg(ctx, input.matterId);
+      const userId = input.userId ? (await requireUserInOrg(ctx, input.userId)).id : ctx.user.id;
       return ctx.repos.expenses.create(omitUndefined({
         id: input.id, // undefined → store genererar
-        userId: input.userId ?? asId<"UserId">(ctx.user.id),
+        userId,
         matterId: input.matterId,
         date: new Date(input.date),
         amount: input.amount,

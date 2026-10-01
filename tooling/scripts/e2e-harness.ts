@@ -36,15 +36,24 @@ export function kr(ore: number): string {
 
 function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
 
-/** Seeda en allowlistad användare — `orgProcedure` släpper bara igenom dessa. */
+/**
+ * Seeda en allowlistad användare — `orgProcedure` släpper bara igenom dessa.
+ *
+ * Fixturanvändaren är ADMIN: skripten bygger upp sina ärenden med setup-fält
+ * (eget ärendenummer, á-pris, skapad-datum) som bara en administratör får
+ * sätta (#1345, `setup-fields.ts`). En befintlig rad lyfts till ADMIN.
+ */
 export async function seedUser(email: string, name: string): Promise<string> {
   const sql = postgres(DB_URL, { max: 1, onnotice: () => {} });
   try {
     const existing = await sql<Array<{ id: string }>>`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
-    if (existing[0]) return existing[0].id;
+    if (existing[0]) {
+      await sql`UPDATE users SET role = 'ADMIN' WHERE id = ${existing[0].id}`;
+      return existing[0].id;
+    }
     const id = uuidv7();
     await sql`INSERT INTO users (id, organization_id, email, name, role, active)
-              VALUES (${id}, ${ORG}, ${email}, ${name}, 'LAWYER', true)`;
+              VALUES (${id}, ${ORG}, ${email}, ${name}, 'ADMIN', true)`;
     return id;
   } finally {
     await sql.end({ timeout: 5 });
