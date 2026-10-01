@@ -200,6 +200,7 @@ const SERIAL_FILES = [
   "test/unit/architecture/fitness.test.ts",
   "test/integration/pdf-extract-compiled.test.ts", // bun build --compile + kör binären (#1156)
   "test/scripts/check-built-css.test.ts", // bash-skripten för deploy (#1166)
+  "test/scripts/deploy-prod.test.ts", // deploy-prod.sh med falsk docker + riktig git-klon (#1369)
   "test/scripts/backup-pull.test.ts", // backup-pull.sh med fejkade sftp/age (#1254)
   "test/scripts/backup-verify.test.ts", // backup-verify.sh argumentfel (#1254)
   "test/scripts/pg-ready.test.ts", // wait_for_pg med falsk docker (#1305)

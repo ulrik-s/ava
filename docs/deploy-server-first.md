@@ -17,7 +17,7 @@ automatiskt TLS.
                     │    │                                   │
                     │    ├─ /oauth2/* ─► oauth2-proxy ──OIDC──┼──► byråns IdP
                     │    ├─ /api/*    ─► server-first        │    (Entra/Google)
-                    │    └─ /         ─► out/ (statisk app)  │
+                    │    └─ /         ─► releases/current   │
                     │                       │                │
                     │                  postgres  ◄── akterna │
                     │                                        │
@@ -53,8 +53,15 @@ docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= oven/bun:1 sh -c \
 ```
 
 Det ger server-binären (`dist/`) och appen (`out/`). `bun run build:demo` bygger
-under `/ava` (GH Pages) — Caddy serverar `out/` på roten, så base-pathen måste
+under `/ava` (GH Pages) — Caddy serverar appen på roten, så base-pathen måste
 vara tom.
+
+Caddy serverar inte `out/` direkt utan `releases/current`, en symlänk till en
+release (se *Uppgradering*). Gör den första releasen av bygget:
+
+```bash
+mkdir -p releases && mv out releases/initial && ln -s initial releases/current
+```
 
 Skapa `ava-server.env`:
 
@@ -342,16 +349,102 @@ skulle en återställning som inte gör någonting alls se ut att lyckas.
 ## Uppgradering
 
 ```bash
-cd /srv/ava && bash tooling/scripts/deploy-prod.sh
+cd /srv/ava && bash tooling/scripts/deploy-prod.sh             # deploy
+cd /srv/ava && bash tooling/scripts/deploy-prod.sh --dry-run   # visa stegen, ändra inget
 ```
 
-Skriptet gör hela rundan: backup → `origin/main` (fast-forward) → **tömmer
-`.next/cache`** → bygger i `oven/bun` → kontrollerar att den byggda CSS:en har
-varje regel ur `globals.css` (annars avbryts det innan något startas om) → kör
-nya migrationer om deployen har några → startar om och väntar på `/readyz`.
+Skriptet gör hela rundan: `origin/main` (fast-forward) → backup → **tömmer
+`.next/cache`** → bygger i `oven/bun` till `out/` → kontrollerar att den byggda
+CSS:en har varje regel ur `globals.css` → lägger bygget i
+`releases/<tid>-<sha>` → kör migrationerna → startar om servern och väntar på
+`/readyz` → **först då** byts klienten (`releases/current`) → städar gamla
+releaser.
 
 Byggcachen töms med flit varje gång (#1166): en gång gav den gammal CSS i prod
 — nya regler saknades trots rätt källkod och nya JS-chunkar, och inget larmade.
+
+### Releaser: varför klienten inte byggs där Caddy läser (#1369)
+
+```
+releases/
+  20261001T130000Z-16e81735/   den aktiva klienten
+  20260930T090000Z-8dc303d5/   förra (behålls för rollback)
+  current  -> 20261001T130000Z-16e81735
+  previous -> 20260930T090000Z-8dc303d5
+```
+
+Caddy monterar hela `releases/` och har `root /srv/releases/current`. Länken
+följs vid varje request, så klientbytet är ett enda `rename` av länken —
+atomärt, utan omstart. Förr byggdes klienten rakt in i `out/`, som Caddy
+monterade: `next build` ersätter `out/` med en ny katalog (en mount pekar på
+den gamla), så prod gav 404 under bygget, och när CSS-kontrollen sedan föll låg
+den nya klienten ändå ute mot den gamla servern. Nu är `out/` bara byggets
+arbetskatalog.
+
+Ordningen är medveten: servern startas om och måste svara på `/readyz` innan
+klienten byts. En ny server tar emot gamla klienter (öppna flikar och
+offline-cachen gör det ändå); en ny klient mot en gammal server är det som gick
+sönder.
+
+### Avbrott och omkörning
+
+Varje steg går att köra om, så efter ett avbrott: rätta felet och kör samma
+kommando igen. Migrationerna körs **alltid** — `db-migrate` hoppar själv över
+filer som redan står i `schema_migrations`. (Förr kördes de bara om `git diff`
+mot förra versionen visade nya filer, och vid en omkörning var koden redan
+uppdaterad → tom lista → migrationerna hoppades över.) Ändras deploy-skriptet
+självt i `origin/main` startar det om sig i den nya versionen.
+
+Avbryts skriptet skriver det ut läget, t.ex.:
+
+```
+!! deploy AVBRÖTS i steget: kontrollerar byggd CSS mot globals.css (exit 1)
+   kod (git): uppdaterad 8dc303d5 → 16e81735 (påverkar inget som körs förrän servern startas om)
+   klient:    oförändrad — releases/current -> 20260930T090000Z-8dc303d5 (previous -> …)
+   server:    oförändrad
+   databas:   oförändrad
+```
+
+### Rollback
+
+**Klienten** (en UI-regression — det vanliga fallet) byts tillbaka på en
+sekund, utan omstart:
+
+```bash
+bash tooling/scripts/deploy-prod.sh --rollback   # current ↔ previous; kör igen för att ångra
+```
+
+**Servern** går också att backa, men **migrationer går bara framåt**: backa bara
+till en version vars kod klarar det nuvarande schemat (migrationer som bara
+lägger till är ofarliga). Annars: återställ databasen från backupen som
+deployen tog (se *Återställning*).
+
+```bash
+git checkout --detach <sha>                      # sha:n står i releasens namn
+docker run --rm -v "$PWD:/app" -w /app oven/bun:1 sh -c \
+  'bun install --frozen-lockfile >/dev/null && bun run server-first:build'
+docker compose -f tooling/docker/docker-compose.production.yml up -d --build server-first
+git checkout main                                # nästa deploy-prod.sh tar det härifrån
+```
+
+### Första deployen med releases/ (en gång, #1369)
+
+Den här ändringen flyttar Caddys mount från `out/` till `releases/`. Kör
+**inte** den gamla versionen av skriptet för den — den läser vidare i sin egen,
+gamla fil och skulle starta Caddy mot en tom `releases/`. Hämta koden först, så
+att det nya skriptet kör:
+
+```bash
+cd /srv/ava
+git fetch origin && git merge --ff-only origin/main
+bash tooling/scripts/deploy-prod.sh
+```
+
+Skriptet ser att `releases/current` saknas, kopierar den nuvarande `out/` till
+en release, pekar `current` på den och skapar om Caddy med den nya mounten
+(ett par sekunders avbrott) — innan bygget rör `out/`. Resten är en vanlig
+deploy. Hände det ändå (Caddy ger 404 överallt): kör det nya skriptet, så görs
+samma sak med den `out/` som finns.
 
 ### Manuellt
 

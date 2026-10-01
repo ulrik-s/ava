@@ -18,8 +18,15 @@ set -euo pipefail
 src="${1:?källfil saknas}"
 shift
 [ "$#" -gt 0 ] && [ -f "$1" ] || { echo "check-built-css: ingen byggd CSS hittades" >&2; exit 1; }
+# Pseudo-element (#1369): minifieraren skriver de gamla CSS2-elementen med ETT
+# kolon (".x::before" → ".x:before"), andra (::placeholder) kan stå kvar med två.
+# Båda sidor normaliseras till ett kolon, så jämförelsen inte beror på vilken
+# form minifieraren valde. (Ett "::" i ett värde, t.ex. content, spelar ingen
+# roll — vi letar bara efter selektorer.)
+normalize_pseudo() { sed -E 's/::/:/g'; }
+
 # "}" först: en selektor allra först i filen får samma avgränsare som resten.
-built="}$(cat "$@")"
+built="}$(cat "$@" | normalize_pseudo)"
 
 # Selektorn måste stå som en HEL selektor — ".bg-canvas" får inte räknas som
 # funnen bara för att ".dark .bg-canvas" finns (just det fallet i #1166).
@@ -39,7 +46,7 @@ missing=0
 while IFS= read -r selector; do
   # Minifieraren skriver ett mellanslag mellan delar och inga kring
   # kombinatorer (">", "+", "~") — normalisera källan likadant.
-  selector="$(printf '%s' "$selector" | tr -s ' ' | sed -E 's/ *([>+~]) */\1/g')"
+  selector="$(printf '%s' "$selector" | tr -s ' ' | sed -E 's/ *([>+~]) */\1/g' | normalize_pseudo)"
   if ! has_selector "$selector"; then
     echo "saknas i byggd CSS: $selector" >&2
     missing=$((missing + 1))

@@ -16,6 +16,8 @@
 # next.js
 /.next/
 /out/
+# klient-releaser på produktionsservern (deploy-prod.sh, #1369)
+/releases/
 
 # production
 /build
