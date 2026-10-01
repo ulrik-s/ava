@@ -147,6 +147,25 @@ describe("bootstrapSelfHosted", () => {
     expect(args.onStoreReady).not.toHaveBeenCalled();
   });
 
+  // #1435: den bundna appen (statusraden med synkpillen) syns först EFTER
+  // bindningens omladdning — e2e-inloggningen väntar på pillen för att inte
+  // krocka med omladdningen.
+  it("#1435: första inloggningen binder principalen och laddar om — ingen store till appen innan dess", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
+    const principal = { id: "u-lena", email: "lena@ava.test", name: "Lena" };
+    classifyOidcLogin.mockReturnValueOnce({ kind: "authorized", principal });
+    const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
+    const args = makeArgs({ firmaConfig: noPrincipal as FirmaConfig, gateEnv: gateEnv() });
+    await bootstrapSelfHosted(args);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(args.onStoreReady).not.toHaveBeenCalled();
+    expect(args.setStatus).not.toHaveBeenCalledWith("ready");
+    expect(JSON.parse(localStorage.getItem("ava.firma") ?? "{}")).toMatchObject({
+      principalId: "u-lena", authorEmail: "lena@ava.test", authorName: "Lena", sessionVerifiedAt: expect.any(Number),
+    });
+    reload.mockRestore();
+  });
+
   // ── Sessionsgrinden (#1245) ──────────────────────────────────────────────
   it("inloggad med samma identitet: bygger storen och noterar när sessionen verifierades", async () => {
     probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
