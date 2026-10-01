@@ -4,6 +4,7 @@
  */
 
 import { conflictScore, parseConflictQuery, type ConflictSearchType } from "@/lib/shared/conflict-match";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 import type { ConflictContactRow } from "../repositories/matter-contact-repository";
 import type { Repositories } from "../repositories/repositories";
@@ -21,7 +22,7 @@ export interface ConflictResult {
   matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
-  role: string;
+  role: MatterRole;
   klient: string | null;
 }
 

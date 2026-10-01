@@ -61,8 +61,13 @@ billigt, eftersom **klient och server redan kör samma `appRouter`**.
 sanning — tilldelas i serverns körning: fakturanummer och andra obrutna serier
 (#1243, ADR 0012), och jävskontroll (#1246).
 
-**Jävskontrollen (#1246):** `matter.create` kör kontrollen för klienten mot
-byråns alla andra ärenden och sparar resultatet på ärendet
+**Jävskontrollen (#1246, #1354):** `matter.create` kör kontrollen för klienten
+mot byråns alla andra ärenden, och `matter.addContact`/`addNewContact` kör om
+den för ärendets alla parter när en klient, motpart eller ett motpartsombud
+läggs till (de köas därför som anrop). En träff räknas bara när personen står
+på andra sidan i det andra ärendet (`src/lib/shared/conflict-roles.ts`): klient
+här och motpart där, eller tvärtom — en återkommande klient är ingen träff.
+Resultatet sparas på ärendet
 (`conflictCheckStatus`: väntar, inga träffar, träffar att bedöma, bedömd).
 Klientens optimistiska körning bär `ctx.provisional`, sätts i `inProcessLink`,
 och lämnar kontrollen som väntande: den lokala kopian behöver inte innehålla
@@ -70,7 +75,9 @@ hela byrån. Servern kör om anropet och avgör, och dess resultat ersätter det
 väntande vid nästa synk. Demon har ingen server och avgör direkt. Ett ärende
 som väntar eller har träffar är en bevakning i Att bevaka tills kontrollen
 körts om (`matter.checkConflicts`) eller träffarna bedömts
-(`matter.markConflictsReviewed`). Båda anropen går via kön.
+(`matter.markConflictsReviewed`). Bedömningen görs av en advokat eller admin,
+kräver en motivering och sparar vem och när (ur anropet, inte klockan) på
+ärendet. Båda anropen går via kön.
 
 **Migrering:** entitet för entitet. Radkön finns kvar för ren data (kontakter,
 uppgifter, kalender, dokumentens metadata …). Den som har affärsregler går via

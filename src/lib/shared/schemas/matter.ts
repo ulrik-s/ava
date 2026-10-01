@@ -129,6 +129,14 @@ export const matterSchema = z.object({
   conflictCheckHits: z.number().int().nonnegative().nullish(),
   /** När kontrollen senast kördes mot byråns alla ärenden. */
   conflictCheckedAt: optionalDateLike,
+  /**
+   * Den dokumenterade bedömningen av träffarna (#1354): vem (advokat eller
+   * admin), när och varför uppdraget ändå togs. Ligger kvar som senaste
+   * bedömning när en ny kontroll ger nya träffar.
+   */
+  conflictReviewedById: userIdSchema.nullish(),
+  conflictReviewedAt: optionalDateLike,
+  conflictReviewNote: z.string().nullish(),
 }).passthrough();
 
 export type Matter = z.infer<typeof matterSchema>;

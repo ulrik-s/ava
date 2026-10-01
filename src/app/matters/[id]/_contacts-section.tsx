@@ -41,7 +41,9 @@ export function ContactsSection({ matterId, contacts }: Props) {
 
   const addContact = trpc.matter.addContact.useMutation({
     onSuccess: () => {
+      // En ny part kontrolleras mot byråns ärenden (#1354) — jävskontrollen i Att bevaka ändras.
       void utils.matter.getById.invalidate({ id: matterId });
+      void utils.watchlist.list.invalidate();
       setPicking(false);
     },
   });

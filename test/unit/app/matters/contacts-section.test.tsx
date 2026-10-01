@@ -20,11 +20,13 @@ const createContact = vi.fn();
 /** onSuccess från contacts.create — testet anropar den som servern hade gjort. */
 let contactCreated: ((c: { id: string; name: string }) => void) | undefined;
 const noopMut = () => ({ mutate: vi.fn(), isPending: false });
+const invalidated = { matter: vi.fn(), watchlist: vi.fn() };
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({
-      matter: { getById: { invalidate: vi.fn() } },
+      matter: { getById: { invalidate: invalidated.matter } },
+      watchlist: { list: { invalidate: invalidated.watchlist } },
       contacts: { list: { invalidate: vi.fn() }, search: { invalidate: vi.fn() } },
     }),
     contacts: {
@@ -37,7 +39,9 @@ vi.mock("@/lib/client/trpc", () => ({
       },
     },
     matter: {
-      addContact: { useMutation: () => ({ mutate: addContact, isPending: false }) },
+      addContact: {
+        useMutation: (o: { onSuccess: () => void }) => ({ mutate: (a: unknown) => { addContact(a); o.onSuccess(); }, isPending: false }),
+      },
       removeContact: { useMutation: () => ({ mutate: removeContact, isPending: false }) },
     },
     prefs: {
@@ -91,6 +95,16 @@ describe("ContactsSection", () => {
     fireEvent.change(within(dialog).getByRole("searchbox"), { target: { value: "berit" } });
     fireEvent.click(within(dialog).getByRole("button", { name: /Berit Befintlig/ }));
     expect(addContact).toHaveBeenCalledWith({ matterId: "m1", contactId: "c2", role: "MOTPARTSOMBUD" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("en ny part uppdaterar ärendet och Att bevaka — jävskontrollen kan ha ändrats (#1354)", () => {
+    searchHits = [{ id: "c2", name: "Berit Befintlig", contactType: "PERSON" }];
+    const dialog = openPicker();
+    fireEvent.change(within(dialog).getByRole("searchbox"), { target: { value: "berit" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Berit Befintlig/ }));
+    expect(invalidated.matter).toHaveBeenCalledWith({ id: "m1" });
+    expect(invalidated.watchlist).toHaveBeenCalled();
   });
 
   it("ingen träff → 'Ny kontakt…' förifylld; OK skapar och kopplar den till ärendet", () => {

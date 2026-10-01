@@ -41,6 +41,10 @@ vi.mock("@/components/watchlist/conflict-check-actions", () => ({
   ConflictCheckActions: ({ hasHits }: { hasHits: boolean }) => <div data-testid="conflict-actions">{hasHits ? "träffar" : "väntar"}</div>,
 }));
 
+vi.mock("@/components/watchlist/conflict-review-info", () => ({
+  ConflictReviewInfo: () => <div data-testid="conflict-review" />,
+}));
+
 let lastSignalArgs: unknown = null;
 const M = asId<"MatterId">("m1");
 beforeEach(() => { tasks = []; signals = []; deletePending = false; vi.clearAllMocks(); });

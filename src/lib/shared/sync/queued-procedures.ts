@@ -75,6 +75,10 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   // Jävskontrollen (#1246): offline väntar den tills servern kört den.
   "matter.checkConflicts": Object.freeze({ entity: "matter" }),
   "matter.markConflictsReviewed": Object.freeze({ entity: "matter" }),
+  // En ny part kontrolleras mot byråns alla ärenden (#1354) — det kan bara
+  // servern. Kopplingen och kontrollen körs därför om där, som anrop.
+  "matter.addContact": Object.freeze({ entity: "matterContact", idField: "id" }),
+  "matter.addNewContact": Object.freeze({ entity: "matterContact" }),
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
   // server-LLM). Klienten kör den inte själv — servern kör om anropet.
   "document.analyze": Object.freeze({ entity: "document" }),

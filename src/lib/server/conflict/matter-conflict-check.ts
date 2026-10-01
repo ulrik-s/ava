@@ -1,9 +1,12 @@
 /**
- * Ärendets jävskontroll (#1246).
+ * Ärendets jävskontroll (#1246, #1354).
  *
- * Advokatetiken kräver kontrollen innan uppdraget tas. Klienten söks på namn
- * och person-/organisationsnummer mot byråns alla andra ärenden, och ärendet
- * bär resultatet: inga träffar, träffar att bedöma, eller väntar.
+ * Advokatetiken kräver kontrollen innan uppdraget tas. Ärendets parter —
+ * klienten, motparten och motpartens ombud — söks på namn och person-/
+ * organisationsnummer mot byråns alla andra ärenden. En träff räknas när
+ * personen står på andra sidan där (`conflict-roles`): en återkommande klient
+ * är ingen jävsfråga, en klient som är motpart i ett annat ärende är det.
+ * Ärendet bär resultatet: inga träffar, träffar att bedöma, eller väntar.
  *
  * Offline har klienten bara sin lokala kopia, som inte behöver innehålla hela
  * byrån. Klientens optimistiska körning (`ctx.provisional`) avgör därför
@@ -13,10 +16,12 @@
  * tills kontrollen körs om.
  */
 
-import type { ConflictCheckStatus } from "@/lib/shared/schemas/enums";
+import { isCheckedRole, isConflictingRole } from "@/lib/shared/conflict-roles";
+import type { Contact } from "@/lib/shared/schemas/contact";
+import type { ConflictCheckStatus, MatterRole } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
-import { type ConflictCtx, type ConflictResult, searchConflicts } from "./conflict-search";
+import { type ConflictCtx, type ConflictResult, pushUnique, searchConflicts } from "./conflict-search";
 
 /** Fälten ärendet får av kontrollen. */
 export type MatterConflictPatch = {
@@ -25,31 +30,74 @@ export type MatterConflictPatch = {
   conflictCheckedAt: Date | null;
 };
 
+/** En part i ärendet: kontakten och dess roll. */
+export interface MatterParty {
+  contactId: ContactId;
+  role: MatterRole;
+}
+
 type CheckCtx = ConflictCtx & QueuedCallScope & { provisional?: true | undefined };
+
+/** En part som ska kontrolleras, med kontaktens uppgifter. */
+type ResolvedParty = { role: MatterRole; contact: Pick<Contact, "id" | "name" | "personalNumber" | "orgNumber"> };
 
 const PENDING: MatterConflictPatch = { conflictCheckStatus: "PENDING", conflictCheckHits: null, conflictCheckedAt: null };
 
-/** Söktermen: klientens namn och nummer — sökningen matchar på vilket som helst. */
-function termFor(klient: { name: string; personalNumber?: string | null | undefined; orgNumber?: string | null | undefined }): string {
-  return [klient.name, klient.personalNumber ?? klient.orgNumber].filter(Boolean).join(" ");
+/** Söktermen: partens namn och nummer — sökningen matchar på vilket som helst. */
+function termFor(party: Pick<Contact, "name" | "personalNumber" | "orgNumber">): string {
+  return [party.name, party.personalNumber ?? party.orgNumber].filter(Boolean).join(" ");
 }
 
-/** Kör kontrollen för ärendets klient och logga den. Returnerar ärendets nya fält. */
-export async function checkMatterConflicts(ctx: CheckCtx, matterId: MatterId, klientId: ContactId | null): Promise<MatterConflictPatch> {
-  if (ctx.provisional || !klientId) return PENDING;
+/** Parterna som kontrolleras (klient- och motsidan), en gång per kontakt och roll. */
+function checkedParties(parties: readonly MatterParty[]): MatterParty[] {
+  const seen = new Set<string>();
+  return parties.filter((p) => {
+    const key = `${p.contactId}:${p.role}`;
+    if (!isCheckedRole(p.role) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Kontakterna bakom parterna; en raderad kontakt hoppas över. */
+async function resolveParties(ctx: CheckCtx, parties: readonly MatterParty[]): Promise<ResolvedParty[]> {
   const orgId = asId<"OrganizationId">(ctx.user.organizationId);
-  const klient = await ctx.repos.contacts.getByIdFull(klientId, orgId);
-  if (!klient) return PENDING;
-  const term = termFor(klient);
-  // Ärendets egen klientkoppling är ingen träff.
-  const results: ConflictResult[] = (await searchConflicts(ctx, term, "both")).filter((r) => r.matterId !== matterId);
+  const resolved = await Promise.all(parties.map(async (p): Promise<ResolvedParty[]> => {
+    const contact = await ctx.repos.contacts.getByIdFull(p.contactId, orgId);
+    return contact ? [{ role: p.role, contact }] : [];
+  }));
+  return resolved.flat();
+}
+
+/**
+ * Sök en part och logga kontrollen. Träffar i ärendet självt räknas inte, och
+ * inte heller träffar på samma sida (klient här och klient där).
+ */
+async function checkParty(ctx: CheckCtx, matterId: MatterId, party: ResolvedParty): Promise<ConflictResult[]> {
+  const term = termFor(party.contact);
+  const results = (await searchConflicts(ctx, term, "both"))
+    .filter((r) => r.matterId !== matterId && isConflictingRole(party.role, r.role));
   await ctx.repos.conflictChecks.create({
-    id: asId<"ConflictCheckId">(newRowId(ctx, "conflictCheck")),
+    id: asId<"ConflictCheckId">(newRowId(ctx, `conflictCheck:${party.contact.id}:${party.role}`)),
     searchTerm: term, searchType: "both", results, checkedById: asId<"UserId">(ctx.user.id),
   });
+  return results;
+}
+
+/**
+ * Kör kontrollen för ärendets parter och logga den (en loggrad per part).
+ * Returnerar ärendets nya fält. Utan klient väntar kontrollen.
+ */
+export async function checkMatterConflicts(ctx: CheckCtx, matterId: MatterId, parties: readonly MatterParty[]): Promise<MatterConflictPatch> {
+  if (ctx.provisional) return PENDING;
+  const resolved = await resolveParties(ctx, checkedParties(parties));
+  if (!resolved.some((p) => p.role === "KLIENT")) return PENDING;
+  const hits: ConflictResult[] = [];
+  // En i taget: loggradernas ordning ska vara densamma i varje körning.
+  for (const party of resolved) pushUnique(hits, await checkParty(ctx, matterId, party));
   return {
-    conflictCheckStatus: results.length > 0 ? "HITS" : "CLEAR",
-    conflictCheckHits: results.length,
+    conflictCheckStatus: hits.length > 0 ? "HITS" : "CLEAR",
+    conflictCheckHits: hits.length,
     conflictCheckedAt: callTime(ctx),
   };
 }
