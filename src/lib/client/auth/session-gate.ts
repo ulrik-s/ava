@@ -45,8 +45,17 @@ function withinGrace(cached: CachedIdentity, now: number, graceMs: number): bool
   return cached.verifiedAt !== undefined && now - cached.verifiedAt <= graceMs;
 }
 
+/**
+ * Är den inloggade (proxyns claims) samma som den bundna? E-posten är
+ * inloggningens identitet (ADR 0009); skiftläge och blanksteg spelar ingen roll.
+ * Delas av grinden vid start och omvalideringen vid synk (#1404).
+ */
+export function sameIdentity(boundEmail: string, claims: Pick<OidcClaims, "email">): boolean {
+  return boundEmail.trim().toLowerCase() === claims.email.trim().toLowerCase();
+}
+
 function decideOnline(claims: OidcClaims, cached: CachedIdentity | null): GateDecision {
-  const same = cached !== null && cached.email.toLowerCase() === claims.email.toLowerCase();
+  const same = cached !== null && sameIdentity(cached.email, claims);
   return same ? { kind: "proceed", verifiedNow: true } : { kind: "bind", claims };
 }
 

@@ -34,6 +34,11 @@ export function boundScope(cfg: IdentityConfig): LocalScope | null {
   return parsed.success ? parsed.data : null;
 }
 
+/** E-posten för den bundna användaren, eller null om ingen är bunden (#1404). */
+export function boundEmail(cfg: IdentityConfig): string | null {
+  return boundScope(cfg) ? cfg.authorEmail : null;
+}
+
 /** Den som arbetar nu: den bundna — eller, utan OIDC, den obundna principalen. */
 export function workingScope(cfg: IdentityConfig): LocalScope {
   return boundScope(cfg) ?? localScopeSchema.parse({ organizationId: cfg.organizationId, principalId: UNBOUND_PRINCIPAL });

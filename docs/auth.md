@@ -72,7 +72,14 @@ Vid synk, när servern svarar 401, bär svaret serverns skäl
 |---|---|
 | `account-inactive` (giltig identitet, inte aktiv i byråns lista) | kontot är spärrat — osynkade ändringar ligger kvar på enheten men sparas inte (karantän) |
 | `token-expired` (korrekt signerad token som gått ut, `verified`-läget) | "Logga in igen" |
-| `no-identity` / naken 401 från proxyn | proxyn frågas: utloggad → "Logga in igen"; inloggad (men servern vägrar) → "Logga in igen" (token duger inte); nås inte → inget särskilt |
+| `no-identity` / naken 401 från proxyn | proxyn frågas: utloggad → "Logga in igen"; inloggad som någon annan än den bundna → sidan laddas om (#1404); inloggad (men servern vägrar) → "Logga in igen" (token duger inte); nås inte → inget särskilt |
+
+**Identitetsbyte i en annan flik (#1404).** Loggar någon annan in i samma
+webbläsare byts proxyns cookie, och servern vägrar den bundna användarens
+köposter (#1347). Svarar proxyn då med en annan e-post än den bundna laddas
+sidan om (inte "Logga in igen"): grinden binder den nya användaren och rensar
+den förras lokala data som vid ett identitetsbyte vid start. Den förras
+osynkade ändringar ligger kvar i hennes egna databaser.
 
 Kön töms aldrig tyst, och ingen omdirigering sker utan att användaren klickar.
 

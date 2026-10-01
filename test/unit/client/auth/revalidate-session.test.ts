@@ -4,12 +4,16 @@
  * kön ligger kvar.
  */
 import { describe, expect, it, vi } from "vitest-compat";
-import { ACCOUNT_REVOKED_MESSAGE, revalidateSession, SESSION_EXPIRED_MESSAGE, TOKEN_EXPIRED_MESSAGE } from "@/lib/client/auth/revalidate-session";
+import {
+  ACCOUNT_REVOKED_MESSAGE, IDENTITY_SWITCH_MESSAGE, revalidateSession, SESSION_EXPIRED_MESSAGE, TOKEN_EXPIRED_MESSAGE,
+} from "@/lib/client/auth/revalidate-session";
 import { isUnauthorizedError } from "@/lib/client/auth/unauthorized";
 
-const deps = (probe: unknown) => ({
+const deps = (probe: unknown, boundEmail: string | null = "a@b.se") => ({
   probe: vi.fn(async () => probe as never),
   notify: vi.fn(),
+  boundEmail,
+  reload: vi.fn(),
 });
 const signedIn = { kind: "authenticated", claims: { email: "a@b.se", subject: "", issuer: "", name: "" } };
 
@@ -39,6 +43,23 @@ describe("revalidateSession", () => {
     const d = deps(signedIn);
     expect(await revalidateSession(d, null)).toBe(TOKEN_EXPIRED_MESSAGE);
     expect(await revalidateSession(d, "no-identity")).toBe(TOKEN_EXPIRED_MESSAGE);
+  });
+
+  // #1404: någon annan loggade in i en annan flik — proxyns cookie byttes.
+  it("proxyn släpper igenom som någon annan än den bundna → sidan laddas om, varken 'Logga in igen' eller 'kontot spärrat'", async () => {
+    const d = deps({ kind: "authenticated", claims: { email: "bo@b.se", subject: "", issuer: "", name: "" } });
+    expect(await revalidateSession(d, null)).toBe(IDENTITY_SWITCH_MESSAGE);
+    expect(d.reload).toHaveBeenCalledTimes(1);
+    expect(d.notify).not.toHaveBeenCalled();
+  });
+
+  it("samma identitet i annat skiftläge, eller ingen bunden användare → ingen omladdning", async () => {
+    const same = deps({ kind: "authenticated", claims: { email: " A@B.se ", subject: "", issuer: "", name: "" } });
+    expect(await revalidateSession(same, null)).toBe(TOKEN_EXPIRED_MESSAGE);
+    const unbound = deps({ kind: "authenticated", claims: { email: "bo@b.se", subject: "", issuer: "", name: "" } }, null);
+    expect(await revalidateSession(unbound, null)).toBe(TOKEN_EXPIRED_MESSAGE);
+    expect(same.reload).not.toHaveBeenCalled();
+    expect(unbound.reload).not.toHaveBeenCalled();
   });
 
   it("nås inte → inget särskilt besked (nästa synk försöker igen)", async () => {
