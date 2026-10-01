@@ -9,7 +9,7 @@ Allt du behöver finns **utanför** den gamla servern:
 
 | Vad | Var |
 |---|---|
-| Senaste krypterade export `ava-<datum>.tar.age` | datorn som hämtar (`~/AVA-backup`) eller den andra backupplatsen (`AVA_BACKUP_MIRROR`) |
+| Senaste krypterade export `ava-<datum>.tar.age` | datorn som hämtar (`~/AVA-backup`), den andra backupplatsen (`AVA_BACKUP_MIRROR`), eller nedladdningsmappen hos en administratör som tagit en backup med "Ta backup nu" i Inställningar ([#1431](./deploy-server-first.md#ta-backup-nu-från-inställningar-1431)) |
 | Den privata age-nyckeln `age.key` | datorn som hämtar, och byråns lösenordshanterare |
 | `ava-server.env` (OIDC, domän, byrå-id) | lösenordshanteraren. Hämta annars värdena hos IdP:n och skapa filen på nytt |
 | Koden | `git clone https://github.com/ulrik-s/ava` |
@@ -96,6 +96,8 @@ Den nya servern har ingen backup förrän du lägger tillbaka den:
 
 1. Lägg in nattjobben igen (`backup-db.sh` och `backup-export.sh`) och
    read-only-kontot för hämtning, enligt [Backup](./deploy-server-first.md#backup).
+   Första `deploy-prod.sh` därefter installerar `.path`-enheten för "Ta backup
+   nu" i Inställningar.
 2. Uppdatera `AVA_BACKUP_HOST` hos hämtaren om adressen ändrades, och kör
    `backup-pull.sh` en gång manuellt.
 3. `rm -rf /root/restore` på servern.

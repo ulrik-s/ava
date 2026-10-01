@@ -20,9 +20,11 @@ import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repo
 import { DrizzleSyncDevices } from "@/lib/server/sync/drizzle-sync-devices";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
+import { handleBackupDownload } from "./backup-download";
 import { bearerConfigFromEnv, type BearerVerifyConfig } from "./bearer-claims";
 import { handleHealthRoute } from "./health";
-import { createServerTrpcHandler } from "./server-trpc-handler";
+import { createServerContext } from "./server-context";
+import { createServerTrpcHandler, type ServerTrpcHandlerDeps } from "./server-trpc-handler";
 import { identityConfigFromEnv, type IdentityConfig } from "./verified-identity";
 
 export interface ServerFirstApiConfig {
@@ -72,9 +74,10 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
   const bearer = config.bearer === undefined ? bearerConfigFromEnv() : config.bearer;
   // Fulltextsökningen (#1215) bor i samma Postgres → alltid på i server-first.
   const search = new PostgresSearchIndex(db);
-  const trpc = createServerTrpcHandler({
+  const ports: IPorts = { ...(config.ports ?? noopPorts), searchIndex: search };
+  const deps: ServerTrpcHandlerDeps = {
     repos,
-    ports: { ...(config.ports ?? noopPorts), searchIndex: search },
+    ports,
     organizationId: config.organizationId,
     sync: new DrizzleSyncStore(db, repos),
     // Köade procedur-anrop körs om auktoritativt (#1265, ADR 0037).
@@ -85,12 +88,15 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     ...(config.onError ? { onError: config.onError } : {}),
     ...(bearer ? { bearer } : {}),
     identity: config.identity ?? identityConfigFromEnv(),
-  });
+  };
+  const trpc = createServerTrpcHandler(deps);
+  // Backupnedladdningen (#1431) verifierar principalen precis som tRPC-anropen.
+  const download = { backup: ports.backup, principalFor: async (req: Request) => (await createServerContext(req, deps)).user };
   // Hälso-rutterna ligger FÖRE tRPC: de ska svara även när allt annat är
   // trasigt, och de får inte kräva en giltig principal (#1079).
   const handler = async (req: Request): Promise<Response> => {
     const health = await handleHealthRoute(new URL(req.url).pathname, ping);
-    return health ?? trpc(req);
+    return health ?? (await handleBackupDownload(req, download)) ?? trpc(req);
   };
   return { handler, repos, pageIndex: search, close };
 }

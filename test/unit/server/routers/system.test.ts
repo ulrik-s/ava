@@ -28,6 +28,16 @@ describe("serverCapabilities", () => {
     expect(c.sync && c.jobs && c.oidc && c.ledger && c.mailSync).toBe(true);
   });
 
+  it("backup (#1431) gate:as på att båda backupkatalogerna är satta", () => {
+    expect(serverCapabilities().backup).toBe(false);
+    process.env.AVA_BACKUP_EXPORT_DIR = "/data/backup-exports";
+    expect(serverCapabilities().backup).toBe(false);
+    process.env.AVA_BACKUP_REQUEST_DIR = "/data/backup-requests";
+    expect(serverCapabilities().backup).toBe(true);
+    delete process.env.AVA_BACKUP_EXPORT_DIR;
+    delete process.env.AVA_BACKUP_REQUEST_DIR;
+  });
+
   it("llm gate:as på en konfigurerad LLM-endpoint", () => {
     expect(serverCapabilities().llm).toBe(false);
     process.env.AVA_LLM_ENDPOINT = "http://localhost:11434";

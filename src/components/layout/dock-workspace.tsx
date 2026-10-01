@@ -18,7 +18,7 @@ import {
   DockviewDefaultTab, DockviewReact, themeDark, themeLight,
   type AddPanelPositionOptions, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type SerializedDockview,
 } from "dockview-react";
-import { createContext, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useScreenClass } from "@/lib/client/layout/use-screen-class";
 import { trpc } from "@/lib/client/trpc";
 import {
@@ -134,6 +134,14 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { scr
   const layout = useLayoutPersistence(key, () => { setGeneration((g) => g + 1); });
   const overflowLabels = useOverflowTriggerLabels();
   const [maximized, setMaximized] = useState(false);
+  // En panel som tillkommer efter start — t.ex. Backup, som visas först när
+  // servern och rollen är kända (#1431) — läggs till som en inaktiv flik.
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!api) return;
+    const add = adder(api, defs);
+    defs.forEach((_, id) => add(id, { inactive: true }));
+  }, [defs]);
 
   if (prefs.isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;
   const stored = parseStoredLayout(prefs.data?.user) ?? parseStoredLayout(prefs.data?.org);

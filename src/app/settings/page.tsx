@@ -4,6 +4,7 @@ import { Trash2, Plus, Pencil, X, Check } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { HourlyRatesFields } from "@/components/billing/hourly-rates-fields";
 import { PanelPage } from "@/components/layout/panel-page";
+import { BackupSection } from "@/components/settings/backup-section";
 import { DatasourceSection } from "@/components/settings/datasource-section";
 import { EditorExtensionsSection } from "@/components/settings/editor-extensions-section";
 import { ExternalEditSection } from "@/components/settings/external-edit-section";
@@ -13,6 +14,7 @@ import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-sec
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
 import { OrgImageSection } from "@/components/settings/org-image-section";
 import { SyncDevicesSection } from "@/components/sync/sync-devices-section";
+import { useCanSeeBackup } from "@/lib/client/backend/server-backup";
 import { trpc } from "@/lib/client/trpc";
 import type { OrgImage } from "@/lib/shared/org-image";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
@@ -450,8 +452,12 @@ function DocFooterPreview({ form }: { form: OrgForm }) {
   );
 }
 
+/** Backup-panelen (#1431) — bara för administratörer mot en server med backup på begäran. */
+const BACKUP_PANEL = { id: "backup", title: "Backup", render: () => <><PanelIntro text="Ta en krypterad backup nu och ladda ner den till den här datorn (admin)." /><BackupSection /></> };
+
 export default function SettingsPage() {
   const { settings, form, setForm, saved, updateSettings } = useOrgSettings();
+  const canSeeBackup = useCanSeeBackup();
 
   if (settings.isLoading) {
     return <div className="p-6 text-sm text-gray-500">Laddar inställningar…</div>;
@@ -475,6 +481,7 @@ export default function SettingsPage() {
     { id: "ledger", title: "Bokföring", render: () => <><PanelIntro text="Fortnox och konto-mappning (BAS) som SIE-exporten och Fortnox bokför mot (admin)." /><FortnoxSection /><LedgerAccountsSection /></> },
     { id: "tags", title: "Dokument-etiketter", render: () => <><PanelIntro text="Giltiga etiketter som dokument kan taggas med — av AI:n och handläggarna (admin)." /><DocumentTagsSection /></> },
     { id: "atgarder", title: "Standardåtgärder", render: () => <><PanelIntro text="Åtgärder som förekommer i varje ärende — samma beskrivning och tidsåtgång för alla (admin)." /><StandardAtgarderSection /></> },
+    ...(canSeeBackup ? [BACKUP_PANEL] : []),
   ];
 
   return (

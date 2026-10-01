@@ -170,10 +170,21 @@ services:
       AVA_FORTNOX_REDIRECT_URI: "${AVA_FORTNOX_REDIRECT_URI:-https://${AVA_DOMAIN}/settings/fortnox}"
       AVA_SECRETS_KEY: "${AVA_SECRETS_KEY:-}"
       AVA_SECRETS_FILE: /data/secrets/vault.enc
+      # Backup på begäran (#1431): "Ta backup nu" i Inställningar. Se volymerna nedan.
+      AVA_BACKUP_EXPORT_DIR: /data/backup-exports
+      AVA_BACKUP_REQUEST_DIR: /data/backup-requests
     volumes:
       - content:/data/content
       # Eget volym: content är ett git-repo som kan speglas — hemligheter hör inte hemma där.
       - secrets:/data/secrets
+      # Backup på begäran (#1431). Servern lägger en begäran här; hostens
+      # ava-backup-request.path (tooling/systemd/, installeras av deploy-prod.sh)
+      # startar då nattjobbets ava-backup.service. Containern får ingen docker-
+      # eller host-åtkomst — den kan bara ändra en fil i den här katalogen.
+      - ${AVA_BACKUP_REQUEST_HOST_DIR:-/srv/ava/backup-requests}:/data/backup-requests
+      # De krypterade exporterna (backup-export.sh), READ-ONLY: läget och
+      # nedladdningen. Servern har bara den publika nyckeln — den kan inte läsa dem.
+      - ${AVA_BACKUP_EXPORT_HOST_DIR:-/srv/backup-chroot/ava}:/data/backup-exports:ro
     # /readyz rör DATABASEN (#1079). En attrapp som bara säger att processen
     # startat hade rapporterat frisk medan poolen var död — och då hade
     # autoheal nedan aldrig gjort något.

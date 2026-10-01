@@ -42,18 +42,19 @@ function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout
  * Fixturanvändaren är ADMIN: skripten bygger upp sina ärenden med setup-fält
  * (eget ärendenummer, á-pris, skapad-datum) som bara en administratör får
  * sätta (#1345, `setup-fields.ts`). En befintlig rad lyfts till ADMIN.
+ * `role` = "LAWYER" ger en vanlig jurist (behörighetskontroller, #1431).
  */
-export async function seedUser(email: string, name: string): Promise<string> {
+export async function seedUser(email: string, name: string, role: "ADMIN" | "LAWYER" = "ADMIN"): Promise<string> {
   const sql = postgres(DB_URL, { max: 1, onnotice: () => {} });
   try {
     const existing = await sql<Array<{ id: string }>>`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
     if (existing[0]) {
-      await sql`UPDATE users SET role = 'ADMIN' WHERE id = ${existing[0].id}`;
+      await sql`UPDATE users SET role = ${role} WHERE id = ${existing[0].id}`;
       return existing[0].id;
     }
     const id = uuidv7();
     await sql`INSERT INTO users (id, organization_id, email, name, role, active)
-              VALUES (${id}, ${ORG}, ${email}, ${name}, 'ADMIN', true)`;
+              VALUES (${id}, ${ORG}, ${email}, ${name}, ${role}, true)`;
     return id;
   } finally {
     await sql.end({ timeout: 5 });

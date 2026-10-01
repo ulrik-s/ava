@@ -15,7 +15,7 @@ function record(layout: DefaultLayout, screen: "laptop" | "large") {
 }
 
 const CASES: Array<[string, DefaultLayout, string[]]> = [
-  ["inställningar", settingsLayout, ["atgarder", "datasource", "devices", "external", "ledger", "offices", "org", "tags", "views"]],
+  ["inställningar", settingsLayout, ["atgarder", "backup", "datasource", "devices", "external", "ledger", "offices", "org", "tags", "views"]],
   ["rapporter", reportsLayout, ["ar", "matters", "summary", "unbilled", "weekly"]],
   ["kalender", calendarLayout, ["calendar", "tasks", "users"]],
   ["jobbkö", jobsLayout, ["active", "history"]],
