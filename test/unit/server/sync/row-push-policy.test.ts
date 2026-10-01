@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import {
-  checkRowPolicy, immutableOnUpdate, ROW_POLICY_REASONS, ROW_PUSH_POLICY, type PolicyInput, type RefOrg,
+  checkRowPolicy, immutableOnUpdate, isSameCreation, ROW_POLICY_REASONS, ROW_PUSH_POLICY, type PolicyInput, type RefOrg,
 } from "@/lib/server/sync/row-push-policy";
 import { PROCEDURE_OWNED_ENTITIES } from "@/lib/shared/sync/procedure-owned";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -115,5 +115,31 @@ describe("immutableOnUpdate", () => {
   it("entiteter utan skapare behåller övriga fält", () => {
     expect(immutableOnUpdate("contact", { name: "N", createdAt: new Date() })).toEqual({ name: "N" });
     expect(immutableOnUpdate("okänd", { name: "N" })).toEqual({ name: "N" });
+  });
+});
+
+describe("isSameCreation (#1380)", () => {
+  const at = new Date("2026-10-01T08:00:00.123Z");
+
+  it("samma tidpunkt som Date, ISO-sträng eller millisekunder → samma skapande", () => {
+    expect(isSameCreation("contact", { createdAt: at }, { createdAt: at.toISOString() })).toBe(true);
+    expect(isSameCreation("contact", { createdAt: at }, { createdAt: new Date(at.getTime()) })).toBe(true);
+    expect(isSameCreation("contact", { createdAt: at }, { createdAt: at.getTime() })).toBe(true);
+  });
+
+  it("annan tidpunkt, eller en som inte går att tolka → en annan rad", () => {
+    expect(isSameCreation("contact", { createdAt: at }, { createdAt: "2026-10-01T08:00:01.000Z" })).toBe(false);
+    expect(isSameCreation("contact", { createdAt: at }, { createdAt: "inte ett datum" })).toBe(false);
+    expect(isSameCreation("contact", { createdAt: at }, { createdAt: true })).toBe(false);
+  });
+
+  it("fält klienten inte skickat jämförs inte", () => {
+    expect(isSameCreation("contact", { createdAt: at }, { name: "N" })).toBe(true);
+    expect(isSameCreation("serviceNote", { authorId: "u1" }, { createdAt: null })).toBe(true);
+  });
+
+  it("skaparen (actor) måste vara densamma", () => {
+    expect(isSameCreation("serviceNote", { createdAt: at, authorId: "u1" }, { createdAt: at, authorId: "u1" })).toBe(true);
+    expect(isSameCreation("serviceNote", { createdAt: at, authorId: "u1" }, { createdAt: at, authorId: "u2" })).toBe(false);
   });
 });
