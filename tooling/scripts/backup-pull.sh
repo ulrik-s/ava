@@ -18,7 +18,10 @@
 #
 # AVA_BACKUP_MIRROR=<katalog>: kopiera också de verifierade exporterna dit —
 # den andra backupplatsen (#1254). Se "Backup utanför servern" i
-# docs/deploy-server-first.md.
+# docs/deploy-server-first.md. Den KRÄVS (#1360): utan den larmar körningen
+# (efter att hämtningen gjorts), eftersom en enda dator är en enda plats.
+# AVA_BACKUP_MIRROR=none väljer bort den uttryckligen — bara när en andra
+# hämtare på en annan plats redan finns.
 set -euo pipefail
 
 DEST="${1:-}"
@@ -59,7 +62,10 @@ fi
 for f in $remote; do
   [ -f "$f.verified" ] && continue
   sha256 -c "$f.sha256" >/dev/null 2>&1 || { rm -f "$f" "$f.sha256"; fail "$f: checksumman stämmer inte"; }
-  age -d -i "$KEY" "$f" | tar -tf - | grep -q 'SHA256SUMS' || fail "$f: går inte att dekryptera/packa upp"
+  # Hela listan läses in FÖRST (#1360): `| grep -q` slutar läsa vid första
+  # träffen, tar får SIGPIPE och `pipefail` gav ett falskt larm om arkivet.
+  listing=$(age -d -i "$KEY" "$f" | tar -tf -) || fail "$f: går inte att dekryptera/packa upp"
+  grep -q 'SHA256SUMS' <<<"$listing" || fail "$f: går inte att dekryptera/packa upp (SHA256SUMS saknas)"
   touch "$f.verified"
   echo "✓ $f"
 done
@@ -69,7 +75,7 @@ find . -maxdepth 1 -name 'ava-*.tar.age*' -mtime +"$KEEP_DAYS" -delete
 # Andra backupplatsen (#1254): kopiera de verifierade exporterna dit — en annan
 # disk, en NAS eller en molnsynkad mapp, helst på en annan plats. Katalogen
 # måste FINNAS: en omonterad volym får inte tyst bli en lokal katalog.
-if [ -n "${AVA_BACKUP_MIRROR:-}" ]; then
+if [ -n "${AVA_BACKUP_MIRROR:-}" ] && [ "$AVA_BACKUP_MIRROR" != "none" ]; then
   MIRROR="$AVA_BACKUP_MIRROR"
   [ -d "$MIRROR" ] || fail "andra backupplatsen $MIRROR finns inte (omonterad?)"
   for f in ava-*.tar.age; do
@@ -94,3 +100,7 @@ mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
 age_h=$(( ( $(date +%s) - $(mtime "$newest") ) / 3600 ))
 [ "$age_h" -le "$MAX_AGE_H" ] || fail "senaste backupen ($newest) är ${age_h} h gammal"
 echo "✓ senaste: $newest (${age_h} h)"
+
+# Utan andra plats larmar körningen (#1360) — sist, så att hämtningen,
+# verifieringen och ålderskontrollen ändå är gjorda.
+[ -n "${AVA_BACKUP_MIRROR:-}" ] || fail "ingen andra backupplats: sätt AVA_BACKUP_MIRROR (annan disk/NAS/molnmapp), eller AVA_BACKUP_MIRROR=none om en andra hämtare finns på en annan plats"

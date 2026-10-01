@@ -69,6 +69,17 @@ describe("TrpcSyncTransport (#sync-bridge, end-to-end)", () => {
     expect(res.changes.some((c) => c.row.id === m1)).toBe(true);
   });
 
+  // #1360: epoken följer med åt båda hållen; en annan epok = återställd databas → omsynk från 0.
+  it("pull skickar epoken; en annan epok än databasens ger resync från 0", async () => {
+    const first = await transport.pull(0);
+    expect(first.epoch).toMatch(/^[0-9a-f-]{36}$/);
+    expect(first.resync).toBeUndefined();
+    expect((await transport.pull(first.cursor, first.epoch ?? "")).changes).toEqual([]);
+    const other = await transport.pull(first.cursor, uuidv7());
+    expect(other).toMatchObject({ resync: true, epoch: first.epoch, cursor: first.cursor });
+    expect(other.changes.length).toBe(first.changes.length);
+  });
+
   it("push:ar en köad mutation som applikeras server-auktoritativt", async () => {
     const c1 = uuidv7();
     const mutation: QueuedMutation = {

@@ -203,6 +203,7 @@ const SERIAL_FILES = [
   "test/scripts/deploy-prod.test.ts", // deploy-prod.sh med falsk docker + riktig git-klon (#1369)
   "test/scripts/backup-pull.test.ts", // backup-pull.sh med fejkade sftp/age (#1254)
   "test/scripts/backup-verify.test.ts", // backup-verify.sh argumentfel (#1254)
+  "test/scripts/restore-db.test.ts", // restore-db.sh med fejkad docker: synkepoken byts (#1360)
   "test/scripts/pg-ready.test.ts", // wait_for_pg med falsk docker (#1305)
   "test/scripts/build-demo.test.ts", // build-demo.sh med falska bun/bunx (#1352)
   "test/scripts/check-no-demo-data.test.ts", // CLI:t som barnprocess (#1352)

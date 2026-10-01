@@ -9,7 +9,10 @@
  * aldrig senare, så cursorn kan sättas till gränsen. Sidindelad (#1388): högst
  * `pageLimit` loggrader per anrop, och raderna hämtas med EN fråga per entitet.
  * Finns fler sätts `hasMore` och cursorn till sidans sista seq (aldrig förbi
- * gränsen) — klienten pullar igen från den.
+ * gränsen) — klienten pullar igen från den. Ligger klientens cursor FÖRE
+ * gränsen, eller har den en annan synkepok än databasen, har databasen
+ * återställts ur en backup (#1360): servern börjar om från 0 och svarar med
+ * `resync` på den sidan, så att klienten synkar om allt.
  * push: köformatet prövas (#1247), sedan avgörs posten i EN transaktion
  * (`RowPushDecider`, ADR 0017-konfliktklasserna). Utfallet sparas per byrå och
  * `mutationId` (#1414, `RowPushLedger`): en omsänd post — tappat svar, eller
@@ -23,7 +26,7 @@ import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { DrizzleRepositories } from "../repositories/drizzle-repositories";
-import { readSafeSeq } from "./change-log-safe-seq";
+import { readPullHead, type PullHead } from "./change-log-safe-seq";
 import { canonicalRows, entityRepo, type EntityRepo, type Row } from "./entity-repo";
 import { admitRow } from "./queue-admission";
 import { RowPushDecider } from "./row-push-decider";
@@ -66,20 +69,22 @@ export class DrizzleSyncStore implements SyncStore {
     return entityRepo(this.repos, entity);
   }
 
-  async pull(organizationId: string, sinceCursor: number): Promise<PullResult> {
+  async pull(organizationId: string, sinceCursor: number, epoch?: string): Promise<PullResult> {
     // Gränsen läses FÖRE raderna (egen sats → raderna läses i en senare
     // ögonblicksbild, där allt ≤ gränsen redan syns).
-    const safe = await readSafeSeq(this.db);
+    const head = await readPullHead(this.db);
+    const resync = mustResync(head, sinceCursor, epoch);
+    const from = resync ? 0 : sinceCursor;
     // En rad extra avslöjar om det finns fler än en sida.
     const rows: ChangeRow[] = await this.db
       .select({ seq: changeLog.seq, entity: changeLog.entity, rowId: changeLog.rowId, op: changeLog.op })
       .from(changeLog)
-      .where(and(eq(changeLog.organizationId, organizationId), gt(changeLog.seq, sinceCursor), lte(changeLog.seq, safe)))
+      .where(and(eq(changeLog.organizationId, organizationId), gt(changeLog.seq, from), lte(changeLog.seq, head.safe)))
       .orderBy(asc(changeLog.seq))
       .limit(this.pageLimit + 1);
-    const page = pageOf(rows, this.pageLimit, sinceCursor, safe);
+    const page = pageOf(rows, this.pageLimit, from, head.safe);
     const changes = await this.toChanges(latestPerRow(page.rows));
-    return { changes, cursor: page.cursor, hasMore: page.hasMore };
+    return { changes, cursor: page.cursor, hasMore: page.hasMore, ...epochFields(head, resync) };
   }
 
   /** Kanoniskt läge för sidans rader: en fråga per entitet, i följd (#1388). */
@@ -113,15 +118,30 @@ export class DrizzleSyncStore implements SyncStore {
 }
 
 /**
- * Sidan ur de lästa raderna (högst `limit + 1`). Ryms allt sätts cursorn till
- * den säkra gränsen — den går aldrig bakåt (en klient från en annan databas
- * behåller sin). Annars sätts den till sidans sista seq, som ligger under
- * gränsen, och resten hämtas i nästa pull.
+ * Sidan ur de lästa raderna (högst `limit + 1`), lästa efter `from` (≤ den
+ * säkra gränsen — en cursor före gränsen ger omsynk, #1360). Ryms allt sätts
+ * cursorn till gränsen. Annars sätts den till sidans sista seq, som ligger
+ * under gränsen, och resten hämtas i nästa pull.
  */
-function pageOf(rows: ChangeRow[], limit: number, sinceCursor: number, safe: number): ChangePage {
-  if (rows.length <= limit) return { rows, cursor: Math.max(sinceCursor, safe), hasMore: false };
+function pageOf(rows: ChangeRow[], limit: number, from: number, safe: number): ChangePage {
+  if (rows.length <= limit) return { rows, cursor: safe, hasMore: false };
   const page = rows.slice(0, limit);
-  return { rows: page, cursor: page.at(-1)?.seq ?? sinceCursor, hasMore: true };
+  return { rows: page, cursor: page.at(-1)?.seq ?? from, hasMore: true };
+}
+
+/**
+ * Har databasen återställts sedan klienten senast pullade (#1360)? Ja om
+ * klientens cursor ligger före den säkra gränsen — sekvensen går aldrig bakåt
+ * annars — eller om klienten har en annan epok än databasen.
+ */
+function mustResync(head: PullHead, sinceCursor: number, epoch: string | undefined): boolean {
+  if (sinceCursor > head.safe) return true;
+  return epoch !== undefined && head.epoch !== null && epoch !== head.epoch;
+}
+
+/** Epoken (när den finns) och `resync` när servern började om från 0. */
+function epochFields(head: PullHead, resync: boolean): Pick<PullResult, "epoch" | "resync"> {
+  return { ...(head.epoch !== null ? { epoch: head.epoch } : {}), ...(resync ? { resync: true as const } : {}) };
 }
 
 /** Senaste op per (entity,rowId) räcker — det kanoniska läget hämtas ändå. */

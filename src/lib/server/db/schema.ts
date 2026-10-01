@@ -198,6 +198,18 @@ export const changeLog = pgTable("change_log", {
 }, (t) => [index("change_log_org_seq_idx").on(t.organizationId, t.seq)]);
 
 /**
+ * Synkens epok (#1360, migration 0041) — ett id för databasens change_log-
+ * historik, en enda rad. Byts när databasen återställs ur en backup
+ * (`restore-db.sh`); en klient med en annan epok synkar om från 0.
+ * SERVER-ONLY (ingen entitet, synkas aldrig).
+ */
+export const syncEpoch = pgTable("sync_epoch", {
+  singleton: boolean("singleton").primaryKey().default(true),
+  epoch: uuid("epoch").notNull().defaultRandom(),
+  rotatedAt: timestamp("rotated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Utfall av köade procedur-anrop som servern kört om (#1265, ADR 0037).
  * SERVER-ONLY (ingen entitet, synkas aldrig). Nyckeln är byrån + klientens
  * `mutationId` (#1353) → samma anrop körs högst en gång, även om klienten skickar det

@@ -24,6 +24,13 @@
  * serverns `current` när den följde med, annars hämtat med `sync.rows`
  * (tombstone om raden inte finns). Går läget inte att hämta (nätet) flyttas
  * inte cursorn, och raderna försöks igen nästa gång.
+ *
+ * Återställd server (#1360): cursorn gäller bara i serverns synkepok. Svarar
+ * servern med `resync` (databasen har lästs in ur en backup) börjar sidan om
+ * från 0, och resten av sidorna hämtas med den nya epoken. När ALLA sidor är
+ * hämtade tas lokala rader bort som inte fanns i någon av dem — utom rader
+ * med köade ändringar, som ligger kvar och spelas upp som vanligt. Kön rörs
+ * aldrig. Cursorn utgår sedan från 0, inte från den gamla positionen.
  */
 
 import { conflictClassOf, type ConflictClass } from "@/lib/shared/conflict-policy";
@@ -34,7 +41,7 @@ import { fetchCanonical, pendingKeysOf, refKey, refsOf, RestorePlan, type ApplyC
 import type { CursorStore } from "./cursor-store";
 import { isProcedureCall, type MutationQueue, type QueueEntry, type QueuedMutation, type QueuedProcedureCall } from "./mutation-queue";
 import { ReplayBackoff } from "./replay-backoff";
-import type { PulledChange, PushResult, RowRef, SyncTransport } from "./sync-transport";
+import type { PulledChange, PullResult, PushResult, RowRef, SyncTransport } from "./sync-transport";
 
 export type { ApplyCanonical } from "./canonical-restore";
 
@@ -83,6 +90,11 @@ export interface ReconcileResult {
   blocked: BlockedEntry | null;
   /** Rader som återställdes till serverns läge efter avvisade ändringar (#1348). */
   restored: number;
+  /**
+   * Lokala rader som togs bort när servern synkade om från 0 (#1360) — de
+   * finns inte i den återställda databasen. 0 utan omsynk.
+   */
+  pruned: number;
 }
 
 export interface ReconcileDeps {
@@ -92,6 +104,25 @@ export interface ReconcileDeps {
   apply: ApplyCanonical;
   /** Omförsöken för kanske-tillfälliga fel (#1353). Injicerbar i tester. */
   backoff?: ReplayBackoff;
+  /**
+   * Ta bort lokala rader vars nyckel (`entitet:id`) inte finns i `keep` (#1360,
+   * omsynk efter en återställd server); svarar med antalet. Utan den (demo,
+   * tester) tas inget bort.
+   */
+  prune?: (keep: ReadonlySet<string>) => number;
+}
+
+/** Vad alla sidor i en reconcile gav (#1388, #1360). */
+interface PullOutcome {
+  pulled: number;
+  cursor: number;
+  /** Epoken att skicka med nästa sida och spara — serverns senaste. */
+  epoch: string | undefined;
+  /**
+   * Vid omsynk: nycklarna för alla levande rader sedan servern började om från
+   * 0. `null` utan omsynk.
+   */
+  keep: Set<string> | null;
 }
 
 const refOf = (entity: string, row: Record<string, unknown>): RowRef => ({
@@ -117,33 +148,55 @@ export class ReconcileEngine {
   async reconcile(): Promise<ReconcileResult> {
     const since = await this.deps.cursor.get();
     const plan = new RestorePlan(this.unrestored);
-    const pull = await this.pullAll(since, plan);
+    const pull = await this.pullAll(since, await this.deps.cursor.getEpoch(), plan);
+    // Först när alla sidor är hämtade vet klienten vad servern har (#1360).
+    const pruned = pull.keep ? this.pruneMissing(pull.keep) : 0;
     const replay = await this.replayQueue(plan);
     const restore = await plan.run(pendingKeysOf(this.deps.queue.pending()), this.deps.transport, this.deps.apply);
     this.unrestored = restore.unrestored;
     // Stannade kön, eller gick en avvisad rad inte att återställa, flyttas inte
     // cursorn: rader som hoppades hämtas igen nästa gång (idempotent).
     const held = replay.blocked !== null || restore.unrestored.length > 0;
-    const cursor = held ? since : pull.cursor;
+    // Efter en omsynk står en ofullständig reconcile kvar på 0 (#1360): den
+    // gamla positionen hör till den återställda databasens förra historik.
+    const base = pull.keep ? 0 : since;
+    const cursor = held ? base : pull.cursor;
+    await this.saveCursor(cursor, pull.epoch);
+    return { pulled: pull.pulled, ...replay, restored: restore.restored, cursor, pruned };
+  }
+
+  /** Spara cursorn, och epoken den hör till när servern skickat en (#1360). */
+  private async saveCursor(cursor: number, epoch: string | undefined): Promise<void> {
     await this.deps.cursor.set(cursor);
-    return { pulled: pull.pulled, ...replay, restored: restore.restored, cursor };
+    if (epoch !== undefined) await this.deps.cursor.setEpoch(epoch);
+  }
+
+  /**
+   * Omsynk (#1360): ta bort lokala rader som varken fanns på någon sida sedan
+   * servern började om eller har en köad ändring. Raderna i kön spelas upp efteråt.
+   */
+  private pruneMissing(keep: Set<string>): number {
+    for (const key of pendingKeysOf(this.deps.queue.pending())) keep.add(key);
+    return this.deps.prune?.(keep) ?? 0;
   }
 
   /**
    * Pulla alla sidor (#1388): servern svarar med högst en sida och `hasMore`,
-   * och nästa sida hämtas från sidans cursor. Cursorn sparas först när hela
-   * reconcilen är klar (som innan). Går cursorn inte framåt stannar loopen i
-   * stället för att snurra.
+   * och nästa sida hämtas från sidans cursor, med serverns senaste epok
+   * (#1360 — den gamla epoken skulle ge en ny omsynk för varje sida). Cursorn
+   * sparas först när hela reconcilen är klar. Går cursorn inte framåt från
+   * sidans början stannar loopen i stället för att snurra.
    */
-  private async pullAll(since: number, plan: RestorePlan): Promise<{ pulled: number; cursor: number }> {
-    let cursor = since;
-    let pulled = 0;
+  private async pullAll(since: number, epoch: string | undefined, plan: RestorePlan): Promise<PullOutcome> {
+    const out: PullOutcome = { pulled: 0, cursor: since, epoch, keep: null };
     for (;;) {
-      const page = await this.deps.transport.pull(cursor);
-      pulled += await this.applyPull(page.changes, plan);
-      const advanced = page.cursor > cursor;
-      cursor = page.cursor;
-      if (page.hasMore !== true || !advanced) return { pulled, cursor };
+      const page = await this.deps.transport.pull(out.cursor, out.epoch);
+      trackPage(out, page);
+      out.pulled += await this.applyPull(page.changes, plan);
+      // En omsynk börjar om från 0, inte från klientens gamla cursor.
+      const from = page.resync ? 0 : out.cursor;
+      out.cursor = page.cursor;
+      if (page.hasMore !== true || page.cursor <= from) return out;
     }
   }
 
@@ -274,6 +327,17 @@ export class ReconcileEngine {
     // Servern har sparat avvisningen för anropet: samma anrop avvisas igen.
     tally.conflicts.push({ mutation: m, conflictClass: "surface", reason: res.reason, retryable: false });
   }
+}
+
+/**
+ * Följ epoken och, vid omsynk (#1360), de levande raderna. En sida med
+ * `resync` börjar om: rader från tidigare sidor hörde till den gamla historiken.
+ */
+function trackPage(out: PullOutcome, page: PullResult): void {
+  if (page.epoch !== undefined) out.epoch = page.epoch;
+  if (page.resync) out.keep = new Set();
+  if (!out.keep) return;
+  for (const ch of page.changes) if (!ch.deleted) out.keep.add(refKey(refOf(ch.entity, ch.row)));
 }
 
 /** Svarade servern med en tombstone (`deleted`, #1397)? */

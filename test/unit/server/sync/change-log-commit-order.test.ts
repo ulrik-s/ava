@@ -97,9 +97,15 @@ describe("change_log.seq i commit-ordning (#1381)", () => {
     }
   });
 
-  it("cursorn går inte bakåt för en klient som ligger före gränsen", async () => {
-    const ahead = (await readSafeSeq(handle.db)) + 1000;
-    expect(await sync.pull(uuidv7(), ahead)).toEqual({ changes: [], cursor: ahead, hasMore: false });
+  // #1360: sekvensen går aldrig bakåt — en cursor före gränsen kommer från en
+  // databas som sedan återställts ur backup. Pullen börjar om från 0.
+  it("en klient som ligger före gränsen synkar om från 0 (återställd databas, #1360)", async () => {
+    const org = uuidv7();
+    await createContact(repos, org, "Finns i backupen");
+    const safe = await readSafeSeq(handle.db);
+    const res = await sync.pull(org, safe + 1000);
+    expect(res).toMatchObject({ cursor: safe, resync: true });
+    expect(res.changes).toHaveLength(1);
   });
 
   it("en rad som skrivs i en egen sats (autocommit) får också sitt nummer vid commit", async () => {

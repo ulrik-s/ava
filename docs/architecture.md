@@ -120,7 +120,12 @@
   (#1388): högst 500 loggrader per svar, raderna hämtas med en fråga per
   entitet (`getByIds`), och finns fler sätts `hasMore` med cursorn på sidans
   sista seq — klientens reconcile pullar sida för sida och sparar cursorn när
-  hela reconcilen är klar.
+  hela reconcilen är klar. Cursorn gäller bara i databasens **synkepok**
+  (`sync_epoch`, #1360, migration 0041), som `restore-db.sh` byter efter en
+  återställning. En klient med en annan epok, eller med en cursor före
+  servern, får historiken från 0 (`resync` på första sidan). När alla sidor
+  är hämtade tar den bort lokala rader som saknas på servern, behåller köade
+  ändringar och spelar upp dem ([runbook](./runbook-aterstallning.md#5b-klienterna-efter-återställningen-1360)).
 - **pg-boss jobb-kö** (#504): durabel server-sidig kö på samma Postgres (eget
   `pgboss`-schema). Claim/lease (FOR UPDATE SKIP LOCKED), retry/backoff,
   dead-letter. Handlers (t.ex. e-postutskick via smtp-sender) registreras i

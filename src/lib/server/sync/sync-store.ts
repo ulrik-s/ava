@@ -14,8 +14,12 @@ import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store
 import type { RowPusher } from "./row-push-policy";
 
 export interface SyncStore {
-  /** Delta-pull: kanoniska ändringar med `seq > sinceCursor` för org:en. */
-  pull(organizationId: string, sinceCursor: number): Promise<PullResult>;
+  /**
+   * Delta-pull: kanoniska ändringar med `seq > sinceCursor` för org:en. Har
+   * databasen återställts sedan klienten fick `epoch` börjar den om från 0
+   * (`resync`, #1360).
+   */
+  pull(organizationId: string, sinceCursor: number, epoch?: string): Promise<PullResult>;
   /**
    * Radernas kanoniska läge inom byrån (#1348) — klienten återställer en rad
    * efter en avvisad ändring. Saknad rad (eller en annan byrås) = tombstone.
