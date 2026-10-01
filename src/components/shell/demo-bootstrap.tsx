@@ -55,6 +55,7 @@ import { AutoSync } from "./auto-sync";
 import { JobsBadge } from "./jobs-badge";
 import { ServerFirstSync } from "./server-first-sync";
 import { ServerInvoiceNumbering } from "./server-invoice-numbering";
+import { UnsavedWritesGuard } from "./unsaved-writes-guard";
 import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
 type Status = "loading" | "ready" | "error";
@@ -321,6 +322,7 @@ function AuthGatedDemoTree(props: TreeProps) {
             <div className="px-3 py-1.5 shrink-0 flex items-center gap-2">
               <JobsBadge />
               <AutoSync />
+              <UnsavedWritesGuard store={cachingSync} />
               {!isDemoTier && <ServerFirstSync store={cachingSync} />}
               {!isDemoTier && <ServerInvoiceNumbering store={cachingSync} />}
               {!isDemoTier && <ActiveMatterPrefetch store={cachingSync} />}

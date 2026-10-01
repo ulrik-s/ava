@@ -38,6 +38,7 @@ import {
   isProcedureCall, MutationQueue, type MutationQueuePersistence, type ProcedureTouch, type QueueEntry, type QueuedMutation,
   type QueueOwner,
 } from "./mutation-queue";
+import { PendingWrites, type PendingWritesView } from "./pending-writes";
 import { ReconcileEngine, type ConflictRecord, type ReconcileResult } from "./reconcile-engine";
 import type { SyncTransport } from "./sync-transport";
 import type { MutationEvent } from "./writable-delegate";
@@ -168,8 +169,18 @@ export class CachingSyncDataStore {
        * här som `touches` i stället för att köas som rader. `null` = ingen.
        */
       capture: { touches: ProcedureTouch[] | null };
+      /** Pågående lokala skrivningar (kö + snapshot) — se {@link pendingWrites}. */
+      writes: PendingWrites;
     },
   ) {}
+
+  /**
+   * Lokala skrivningar som ännu inte nått IndexedDB (#1386). En ändring är
+   * sparad när mutationen svarat; under tiden varnar sidan för att stängas.
+   */
+  get pendingWrites(): PendingWritesView {
+    return this.hooks.writes;
+  }
 
   /**
    * Kör en köbar procedur lokalt (#1265, ADR 0037) och köa ANROPET, inte
@@ -178,7 +189,11 @@ export class CachingSyncDataStore {
    * procedurer exklusivt (`SharedExclusiveLock`), så ingen samtidig mutations
    * skrivningar hamnar i fångsten.
    */
-  async runQueuedProcedure<T>(call: ProcedureCallInput, run: (queued: QueuedCallIdentity) => Promise<T>): Promise<T> {
+  runQueuedProcedure<T>(call: ProcedureCallInput, run: (queued: QueuedCallIdentity) => Promise<T>): Promise<T> {
+    return this.hooks.writes.track(() => this.recordProcedure(call, run));
+  }
+
+  private async recordProcedure<T>(call: ProcedureCallInput, run: (queued: QueuedCallIdentity) => Promise<T>): Promise<T> {
     // Anropets identitet bestäms FÖRE körningen (#1276): den lokala körningen
     // och serverns omkörning härleder skapade id:n och datum ur samma värden.
     const at = Date.now();
@@ -284,12 +299,15 @@ export class CachingSyncDataStore {
   /** Komponera LocalStore (onMutate → enqueue + persist) + ReconcileEngine. */
   private static wire(deps: CachingSyncDeps, queue: MutationQueue, source: DemoSource): CachingSyncDataStore {
     const cursor = deps.cursor ?? new InMemoryCursorStore();
+    const writes = new PendingWrites();
+    // Varje snapshot-skrivning räknas som pågående (lokala ändringar, reconcile, återställning).
     const persistSnapshot = (): Promise<void> =>
-      deps.persistence ? deps.persistence.save(store.currentSource) : Promise.resolve();
+      writes.track(() => deps.persistence ? deps.persistence.save(store.currentSource) : Promise.resolve());
 
     const localChangeListeners = new Set<() => void>();
     const capture: { touches: ProcedureTouch[] | null } = { touches: null };
-    const onLocalMutation = async (event: MutationEvent<Record<string, unknown>>): Promise<void> => {
+    // Varje rad köas (eller fångas som ett anrops touch) när den skrivs …
+    const onLocalMutation = (event: MutationEvent<Record<string, unknown>>): Promise<void> => writes.track(async () => {
       if (capture.touches) {
         recordTouch(capture.touches, event);
         return;
@@ -307,12 +325,19 @@ export class CachingSyncDataStore {
         },
         typeof version === "number" ? { baseVersion: version } : {},
       );
-      await persistSnapshot();
       if (deps.writeBack) await deps.writeBack(event);
+    });
+    // … och snapshotet skrivs EN gång per ändring (#1386): en transaktion med
+    // ärende + mappar + klientkoppling gav förut ett helt snapshot per rad, och
+    // mutationen svarade först när alla skrivits. Ett procedur-anrop persisterar
+    // själv, efter att anropet köats (`runQueuedProcedure`).
+    const onCommit = async (): Promise<void> => {
+      if (capture.touches) return;
+      await persistSnapshot();
       for (const listener of localChangeListeners) listener();
     };
 
-    const store = new LocalStore(source, onLocalMutation);
+    const store = new LocalStore(source, onLocalMutation, onCommit);
 
     // apply skriver bara till lokal store — INGEN persist per rad. En reconcile
     // som hydrerar hela seeden (#544: ~500 rader) skulle annars trigga ~500
@@ -325,7 +350,7 @@ export class CachingSyncDataStore {
     };
 
     const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply });
-    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile, onConflicts: deps.onConflicts, capture });
+    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile, onConflicts: deps.onConflicts, capture, writes });
   }
 
   /** Reconcile mot servern (pull→apply→replay→advance) — online-vägen.
