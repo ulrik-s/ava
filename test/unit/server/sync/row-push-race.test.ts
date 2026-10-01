@@ -14,9 +14,10 @@ import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-
 import { changeLog } from "@/lib/server/db/schema";
 import type { AppDb } from "@/lib/server/db/types";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
-import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
-import type { Repositories } from "@/lib/server/repositories/repositories";
-import { DUPLICATE_ROW_REASON, DrizzleSyncStore, ID_TAKEN_REASON, ROW_GONE_REASON } from "@/lib/server/sync/drizzle-sync-store";
+import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
+import { DrizzleRepository } from "@/lib/server/repositories/drizzle-repository";
+import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { DUPLICATE_ROW_REASON, ID_TAKEN_REASON, ROW_GONE_REASON } from "@/lib/server/sync/row-push-decider";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createPooledTestDb, createTestDb, type TestDbHandle } from "../db/pg-test-db";
@@ -39,7 +40,7 @@ async function changeLogOps(db: AppDb, rowId: string): Promise<string[]> {
   return rows.map((r) => r.op);
 }
 
-function setup(handle: TestDbHandle): { repos: Repositories; sync: DrizzleSyncStore } {
+function setup(handle: TestDbHandle): { repos: DrizzleRepositories; sync: DrizzleSyncStore } {
   const repos = buildDrizzleRepositories(handle.db);
   enableChangeLogOnAll(repos, createDbChangeLogRecorder(handle.db));
   return { repos, sync: new DrizzleSyncStore(handle.db, repos) };
@@ -47,7 +48,7 @@ function setup(handle: TestDbHandle): { repos: Repositories; sync: DrizzleSyncSt
 
 describe("radpush vid kapplöpning (#1380, pglite)", () => {
   let handle: TestDbHandle;
-  let repos: Repositories;
+  let repos: DrizzleRepositories;
   let sync: DrizzleSyncStore;
 
   beforeAll(async () => {
@@ -57,18 +58,23 @@ describe("radpush vid kapplöpning (#1380, pglite)", () => {
   afterEach(() => { vi.restoreAllMocks(); });
   afterAll(async () => { await handle.close(); });
 
-  /** Nästa läsning ser ingen rad — som en flik som läste innan den andra hann skapa. */
-  function staleFirstRead(): void {
-    vi.spyOn(repos.contacts, "getById").mockResolvedValueOnce(null);
+  /**
+   * Nästa läsning ser ingen rad — som en flik som läste innan den andra hann
+   * skapa. Pushen läser genom transaktionens repon, så det är basklassens
+   * `getById` som byts ut.
+   */
+  function staleFirstRead(): ReturnType<typeof vi.spyOn> {
+    return vi.spyOn(DrizzleRepository.prototype, "getById").mockResolvedValueOnce(null);
   }
 
-  it("en samtidig flik hann skapa samma rad → accepted med raden, en rad och en create i change_log", async () => {
+  it("en samtidig push av samma rad hann skapa den → accepted med raden, en rad och en create i change_log", async () => {
     const id = uuidv7();
-    const m = mut("create", contactRow(id));
-    expect((await sync.push(pusher(ORG), m)).status).toBe("accepted");
+    expect((await sync.push(pusher(ORG), mut("create", contactRow(id)))).status).toBe("accepted");
 
+    // En annan köpost (annat mutationId) med samma skapande — t.ex. en äldre
+    // klient som köade om raden — läste innan raden fanns.
     staleFirstRead();
-    const raced = await sync.push(pusher(ORG), m);
+    const raced = await sync.push(pusher(ORG), mut("create", contactRow(id)));
     expect(raced).toMatchObject({ status: "accepted", row: { id, name: "Flikkontakt" } });
     expect(await changeLogOps(handle.db, id)).toEqual(["create"]);
   });
@@ -129,11 +135,11 @@ describe("radpush vid kapplöpning (#1380, pglite)", () => {
 
   it("andra fel kastas vidare (tekniskt fel → klienten försöker igen), även i det andra försöket", async () => {
     const id = uuidv7();
-    vi.spyOn(repos.contacts, "getById").mockRejectedValueOnce(new Error("nätet"));
+    vi.spyOn(DrizzleRepository.prototype, "getById").mockRejectedValueOnce(new Error("nätet"));
     await expect(sync.push(pusher(ORG), mut("create", contactRow(id)))).rejects.toThrow("nätet");
 
     await sync.push(pusher(ORG), mut("create", contactRow(id)));
-    vi.spyOn(repos.contacts, "getById")
+    vi.spyOn(DrizzleRepository.prototype, "getById")
       .mockResolvedValueOnce(null)
       .mockRejectedValueOnce(new Error("nätet igen"));
     await expect(sync.push(pusher(ORG), mut("create", contactRow(id)))).rejects.toThrow("nätet igen");

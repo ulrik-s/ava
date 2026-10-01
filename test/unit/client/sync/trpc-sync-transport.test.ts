@@ -14,8 +14,7 @@ import { MAX_ROW_REFS } from "@/lib/server/data-store/in-memory/sync-transport";
 import { users } from "@/lib/server/db/schema";
 import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
-import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
-import type { Repositories } from "@/lib/server/repositories/repositories";
+import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -26,7 +25,7 @@ const ORG = uuidv7();
 
 describe("TrpcSyncTransport (#sync-bridge, end-to-end)", () => {
   let handle: TestDbHandle;
-  let repos: Repositories;
+  let repos: DrizzleRepositories;
   let transport: TrpcSyncTransport;
 
   beforeAll(async () => {

@@ -251,6 +251,13 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   PRECONDITION_FAILED, FORBIDDEN, CONFLICT) avvisar, liksom fel som ger samma
   utfall varje gång (zod inne i proceduren, Postgres SQLSTATE-klass 22/23);
   tekniska fel kastas och klienten försöker igen.
+- **Radkön avgörs också en gång per post** (#1414, `DrizzleSyncStore.push`):
+  posten avgörs i en transaktion med ett lås per byrå + `mutationId`
+  (`RowPushDecider`), och utfallet sparas i samma `sync_replays`
+  (`path = row:<entitet>.<kind>`, `RowPushLedger`). En omsänd post — tappat
+  svar, eller samma kö från två flikar — får det sparade utfallet med radens
+  läge just nu och tillämpas aldrig igen (ingen andra versionsbump, ingen
+  `stale` mot sin egen första tillämpning).
 - **En trasig köpost blockerar inte kön** (#1353,
   `src/lib/shared/sync/sync-error.ts`, `replay-backoff.ts`). Kastar
   uppspelningen av en post klassas felet: ett deterministiskt fel (tRPC
