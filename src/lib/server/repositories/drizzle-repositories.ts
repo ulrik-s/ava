@@ -93,12 +93,21 @@ function reposForTx(tx: AppDb, recorder?: ChangeLogRecorder): Repositories {
 }
 
 /**
+ * En savepoint i en pågående transaktion (#1414): `fn` får repon bundna till
+ * savepointen. Kastar `fn` rullas bara savepointen tillbaka — transaktionen
+ * kan fortsätta. (Postgres-drivrutinen avbryter annars hela transaktionen när
+ * en sats på dess egen handle har misslyckats, även om felet fångades.)
+ */
+export type Savepoint = <U>(fn: (repos: Repositories) => Promise<U>) => Promise<U>;
+
+/**
  * Server-aggregatet: `Repositories` + en transaktion som även ger tx-handlen,
  * för server-only-tabeller som skrivs atomiskt med entiteterna (t.ex.
- * `sync_replays`, #1265 — utfallet ska committas ihop med anropets skrivningar).
+ * `sync_replays`, #1265 — utfallet ska committas ihop med anropets skrivningar),
+ * och savepoints i den (#1414).
  */
 export interface DrizzleRepositories extends Repositories {
-  transactionWithDb<T>(fn: (repos: Repositories, tx: AppDb) => Promise<T>): Promise<T>;
+  transactionWithDb<T>(fn: (repos: Repositories, tx: AppDb, savepoint: Savepoint) => Promise<T>): Promise<T>;
 }
 
 export function buildDrizzleRepositories(db: AppDb): DrizzleRepositories {
@@ -115,6 +124,9 @@ export function buildDrizzleRepositories(db: AppDb): DrizzleRepositories {
   return {
     ...entities,
     transaction: (fn) => db.transaction((tx) => fn(reposForTx(tx, recorder))),
-    transactionWithDb: (fn) => db.transaction((tx) => fn(reposForTx(tx, recorder), tx)),
+    transactionWithDb: (fn) => db.transaction((tx) => {
+      const savepoint: Savepoint = (inner) => tx.transaction((sp) => inner(reposForTx(sp, recorder)));
+      return fn(reposForTx(tx, recorder), tx, savepoint);
+    }),
   };
 }

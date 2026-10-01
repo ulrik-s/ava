@@ -10,8 +10,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import { changeLog } from "@/lib/server/db/schema";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
-import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
-import type { Repositories } from "@/lib/server/repositories/repositories";
+import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -21,7 +20,7 @@ const ORG = uuidv7();
 
 describe("hardDelete → change_log (#1234)", () => {
   let handle: TestDbHandle;
-  let repos: Repositories;
+  let repos: DrizzleRepositories;
   let sync: DrizzleSyncStore;
   let matterId: string;
 

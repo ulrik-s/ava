@@ -6,9 +6,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
-import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
-import type { Repositories } from "@/lib/server/repositories/repositories";
-import { DrizzleSyncStore, MISSING_BASE_VERSION_REASON } from "@/lib/server/sync/drizzle-sync-store";
+import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
+import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { MISSING_BASE_VERSION_REASON } from "@/lib/server/sync/row-push-decider";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
@@ -29,7 +29,7 @@ function mut(entity: string, kind: QueuedMutation["kind"], row: Record<string, u
 
 describe("DrizzleSyncStore (#sync-bridge)", () => {
   let handle: TestDbHandle;
-  let repos: Repositories;
+  let repos: DrizzleRepositories;
   let sync: DrizzleSyncStore;
 
   beforeAll(async () => {

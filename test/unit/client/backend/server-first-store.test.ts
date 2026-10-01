@@ -16,8 +16,7 @@ import { InMemoryMutationQueuePersistence } from "@/lib/server/data-store/in-mem
 import { users } from "@/lib/server/db/schema";
 import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
-import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
-import type { Repositories } from "@/lib/server/repositories/repositories";
+import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -27,7 +26,7 @@ const ORG = uuidv7();
 
 describe("createServerFirstStore (#2b)", () => {
   let handle: TestDbHandle;
-  let repos: Repositories;
+  let repos: DrizzleRepositories;
   let handler: (req: Request) => Promise<Response>;
 
   beforeAll(async () => {
@@ -82,7 +81,7 @@ describe("createServerFirstStore (#2b)", () => {
 
 describe("räddning av lokalt genererade dokument (#1143, end-to-end)", () => {
   let handle: TestDbHandle;
-  let repos: Repositories;
+  let repos: DrizzleRepositories;
   let handler: (req: Request) => Promise<Response>;
   const content = new Map<string, Uint8Array>();
   const memContent = {

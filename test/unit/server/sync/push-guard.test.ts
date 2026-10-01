@@ -14,8 +14,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
-import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
-import type { Repositories } from "@/lib/server/repositories/repositories";
+import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { asId } from "@/lib/shared/schemas/ids";
 import { PROCEDURE_OWNED_REASON } from "@/lib/shared/sync/procedure-owned";
@@ -32,7 +31,7 @@ function mut(entity: string, kind: QueuedMutation["kind"], row: Record<string, u
 
 describe("synk-push: byråavgränsning och procedurägda entiteter (#1242)", () => {
   let handle: TestDbHandle;
-  let repos: Repositories;
+  let repos: DrizzleRepositories;
   let sync: DrizzleSyncStore;
   let matterA = "";
   let matterB = "";

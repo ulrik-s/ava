@@ -7,43 +7,25 @@
  * rad, hämta kanonisk rad via repot (saknad/raderad → tombstone). Bara upp
  * till den säkra gränsen (#1381, `readSafeSeq`): rader under den committas
  * aldrig senare, så cursorn kan sättas till gränsen.
- * push: kontrollera byrån, avvisa procedurägda entiteter (#1242,
- * `push-guard` — tid, utlägg, fakturering, användare och byråinställningar
- * skrivs bara av procedurkön) och pröva radvägens policy (#1344,
- * `row-push-policy`: neka som standard, referenser inom byrån, vem som skapade
- * raden), applicera sedan en köad mutation per konfliktklass (ADR 0017):
- *   - create  → idempotent (finns id och samma skapande → accepted; en annan
- *               rad med samma id → conflict), annars create. Hinner en samtidig
- *               push av samma rad före (unikhetsfel, #1380) avgörs posten igen
- *               mot den raden — aldrig ett 500.
- *   - update  → finns inte raden (borttagen, #1399) ⇒ conflict utan `current`
- *               (klienten hämtar tombstonen), aldrig en ny rad med samma id.
- *               surface: saknad eller stale `baseVersion` ⇒ conflict; annars
- *               update (server-nyare ⇒ rebased). append/lww applicerar.
- *               När raden skapades och vem som skapade den ändras aldrig.
- *   - delete  → softDelete (redan borta ⇒ idempotent accepted). Svaret är
- *               en tombstone (`deleted`, #1397), aldrig en levande rad.
- * Ett data- eller integritetsfel från databasen (SQLSTATE 22/23) blir en
- * konflikt (#1399): samma post ger samma fel igen, och ett 500 skulle hålla
- * klientens kö i omförsök.
+ * push: köformatet prövas (#1247), sedan avgörs posten i EN transaktion
+ * (`RowPushDecider`, ADR 0017-konfliktklasserna). Utfallet sparas per byrå och
+ * `mutationId` (#1414, `RowPushLedger`): en omsänd post — tappat svar, eller
+ * samma kö från två flikar — får samma svar och tillämpas aldrig två gånger.
  */
 
 import { and, asc, eq, gt, lte } from "drizzle-orm";
-import { conflictClassOf } from "@/lib/shared/conflict-policy";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
-import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
 import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store/in-memory/sync-transport";
-import { deterministicPgCause, isUniqueViolation } from "../db/pg-error";
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
-import type { Repositories } from "../repositories/repositories";
+import type { DrizzleRepositories } from "../repositories/drizzle-repositories";
 import { readSafeSeq } from "./change-log-safe-seq";
-import { canonicalRows, entityRepo, type EntityRepo, type Row } from "./entity-repo";
-import { checkProcedureOwned, checkScope, type PushRejection } from "./push-guard";
+import { canonicalRows, entityRepo, type EntityRepo } from "./entity-repo";
 import { admitRow } from "./queue-admission";
-import { checkRowPolicy, immutableOnUpdate, isSameCreation, type RowPolicyRejection, type RowPusher } from "./row-push-policy";
-import { withoutServerOwned } from "./server-owned-fields";
+import { RowPushDecider } from "./row-push-decider";
+import { RowPushLedger } from "./row-push-ledger";
+import type { RowPusher } from "./row-push-policy";
 import type { SyncStore } from "./sync-store";
 
 interface ChangeRow {
@@ -53,47 +35,10 @@ interface ChangeRow {
   op: string;
 }
 
-function rowId(m: QueuedMutation): string {
-  return typeof m.row.id === "string" ? m.row.id : "";
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** Alla server-tabeller är uuid-nycklade (#879). Ett icke-uuid rowId (t.ex. ett
- *  lokalt genererat nanoid) kan aldrig lagras → `getById` skulle kasta 22P02 och
- *  abortera hela reconcile-batchen. */
-function isUuidRowId(id: string): boolean { return UUID_RE.test(id); }
-
-function versionOf(row: Row | null): number {
-  return row && typeof row.version === "number" ? row.version : 1;
-}
-
-/** Beskedet när en ändring av en surface-entitet saknar versionen den byggde på (#1344). */
-export const MISSING_BASE_VERSION_REASON = "saknar basversion";
-
-/** En create vars id redan bär en annan rad (annat skapande) (#1380). */
-export const ID_TAKEN_REASON = "id:t används redan av en annan rad";
-
-/** En skrivning som krockar med en befintlig rad även efter ett nytt försök (#1380). */
-export const DUPLICATE_ROW_REASON = "raden krockar med en befintlig rad (samma id eller unikt värde)";
-
-/** En ändring av en rad som inte finns på servern — borttagen, eller aldrig skapad (#1399). */
-export const ROW_GONE_REASON = "raden finns inte längre på servern (borttagen)";
-
-/**
- * Ett fel som samma post ger igen (SQLSTATE 22/23) → konflikt; allt annat
- * (nätet, databasen nere) kastas vidare så att klienten försöker igen.
- */
-function deterministicConflict(err: unknown): PushResult {
-  const cause = deterministicPgCause(err);
-  if (cause === undefined) throw err;
-  const reason = isUniqueViolation(cause) ? DUPLICATE_ROW_REASON : `Ändringen gick inte att spara: ${syncErrorMessage(cause)}`;
-  return { status: "conflict", reason };
-}
-
 export class DrizzleSyncStore implements SyncStore {
   constructor(
     private readonly db: AppDb,
-    private readonly repos: Repositories,
+    private readonly repos: DrizzleRepositories,
     /** Köformatets gränser + migreringar (#1247); injicerbar i tester. */
     private readonly queuePolicy: QueuePolicy = QUEUE_POLICY,
   ) {}
@@ -143,105 +88,23 @@ export class DrizzleSyncStore implements SyncStore {
     // stödd migreras; en nyare än servern kastar (klienten försöker igen).
     const admission = admitRow(queued, this.queuePolicy);
     if (admission.kind === "reject") return { status: "conflict", reason: admission.reason };
-    return this.pushAdmitted(pusher, admission.entry);
+    const m = admission.entry;
+    return this.repos.transactionWithDb((tx, txDb, savepoint) =>
+      pushOnce(new RowPushDecider(tx, savepoint), RowPushLedger.for(txDb, pusher, m), pusher, m));
   }
+}
 
-  private async pushAdmitted(pusher: RowPusher, m: QueuedMutation): Promise<PushResult> {
-    const repo = this.repoFor(m.entity);
-    if (!repo) return { status: "conflict", reason: `okänd entitet: ${m.entity}` };
-    // Ogiltigt (icke-uuid) rowId: kan aldrig lagras i de uuid-nycklade tabellerna.
-    // Svara INTE "accepted" — då trodde klienten att raden sparats och den fanns
-    // bara lokalt (dataförlust). "conflict" ackas också (inget 22P02-häng, #879)
-    // men syns som konflikt. Klienten reparerar id:n före push (legacy-id-repair).
-    if (!isUuidRowId(rowId(m))) return { status: "conflict", reason: `ogiltigt id (inte uuid): ${rowId(m)}` };
-    try {
-      return await this.decide(pusher, repo, m);
-    } catch (err) {
-      if (!isUniqueViolation(err)) return deterministicConflict(err);
-      return this.decideAfterRace(pusher, repo, m);
-    }
-  }
-
-  /**
-   * Samma köpost från flera flikar samtidigt (#1380): alla läste "ingen rad",
-   * en hann skapa den, resten fick unikhetsfel. Avgör en gång till mot raden
-   * som nu finns — byrå, policy och "samma skapande" prövas igen, så svaret
-   * blir detsamma som för en omsändning i följd. Krockar det ändå (raden är
-   * borttagen men id:t finns kvar, eller ett annat unikt värde är taget) blir
-   * det en konflikt, aldrig ett 500.
-   */
-  private async decideAfterRace(pusher: RowPusher, repo: EntityRepo, m: QueuedMutation): Promise<PushResult> {
-    try {
-      return await this.decide(pusher, repo, m);
-    } catch (err) {
-      return deterministicConflict(err);
-    }
-  }
-
-  private async decide(pusher: RowPusher, repo: EntityRepo, m: QueuedMutation): Promise<PushResult> {
-    const existing = await repo.getById(rowId(m));
-    // Raden är borttagen (eller fanns aldrig): en ändring skapar den inte igen
-    // (#1399). Ingen `current` — klienten hämtar tombstonen med `sync.rows`.
-    if (!existing && m.kind === "update") return { status: "conflict", reason: ROW_GONE_REASON };
-    const rejected = await this.guard(pusher, repo, m, existing);
-    if (rejected) return { status: "conflict", ...rejected };
-    if (m.kind === "delete") return this.applyDelete(repo, m, existing);
-    if (m.kind === "create" || !existing) return this.applyCreate(repo, m, existing);
-    return this.applyUpdate(repo, m, existing);
-  }
-
-  /**
-   * Byrån, procedurägda entiteter (#1242) och radvägens policy (#1344):
-   * avvisas raden, skrivs ingenting.
-   */
-  private async guard(pusher: RowPusher, repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushRejection | RowPolicyRejection | null> {
-    const incoming = m.kind === "delete" ? null : m.row;
-    const orgOf = (row: Row): Promise<string | undefined> => repo.organizationOf(row);
-    return await checkScope(orgOf, pusher.organizationId, existing, incoming)
-      ?? checkProcedureOwned(m.entity, existing)
-      ?? await checkRowPolicy({ entity: m.entity, kind: m.kind, incoming, existing, pusher, refOrg: (e, id) => this.refOrg(e, id) });
-  }
-
-  /** Byrån en refererad rad hör till; `null` om den inte finns. */
-  private async refOrg(entity: string, id: string): Promise<string | null | undefined> {
-    const repo = this.repoFor(entity);
-    const row = repo ? await repo.getById(id) : null;
-    return repo && row ? repo.organizationOf(row) : null;
-  }
-
-  private async applyCreate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
-    if (!existing) return { status: "accepted", row: await repo.create(m.row) };
-    // Omsändning av samma skapande → idempotent; en annan rad med samma id → konflikt (#1380).
-    if (isSameCreation(m.entity, existing, m.row)) return { status: "accepted", row: existing };
-    return { status: "conflict", reason: ID_TAKEN_REASON, current: existing };
-  }
-
-  private async applyUpdate(repo: EntityRepo, m: QueuedMutation, existing: Row): Promise<PushResult> {
-    const serverVersion = versionOf(existing);
-    const surfaceConflict = this.surfaceConflict(m, serverVersion);
-    if (surfaceConflict) return { status: "conflict", reason: surfaceConflict, current: existing };
-    // Server-ägda fält (dokumentets analys, #1280) och radens ursprung (när och
-    // av vem, #1344) skrivs aldrig av en radpush.
-    const patch = immutableOnUpdate(m.entity, withoutServerOwned(m.entity, existing, m.row));
-    const updated = await repo.update(rowId(m), patch);
-    const rebased = m.baseVersion != null && serverVersion > m.baseVersion;
-    return { status: rebased ? "rebased" : "accepted", row: updated };
-  }
-
-  /**
-   * En surface-entitet ändras bara mot den version klienten byggde på: saknas
-   * den (#1344) kan servern inte se om ändringen är inaktuell — avvisas, i
-   * stället för att tyst skriva över.
-   */
-  private surfaceConflict(m: QueuedMutation, serverVersion: number): string | null {
-    if (conflictClassOf(m.entity) !== "surface") return null;
-    if (m.baseVersion == null) return MISSING_BASE_VERSION_REASON;
-    return serverVersion === m.baseVersion ? null : "stale";
-  }
-
-  /** Radera (redan borta ⇒ idempotent). Svaret är en tombstone (#1397). */
-  private async applyDelete(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
-    if (existing) await repo.softDelete(rowId(m));
-    return { status: "accepted", row: { id: rowId(m) }, deleted: true };
-  }
+/**
+ * Avgör posten en gång (#1414): har den redan avgjorts får den det sparade
+ * utfallet med radens läge just nu; annars avgörs den och utfallet sparas i
+ * samma transaktion som skrivningarna.
+ */
+async function pushOnce(decider: RowPushDecider, ledger: RowPushLedger | null, pusher: RowPusher, m: QueuedMutation): Promise<PushResult> {
+  if (!ledger) return decider.decide(pusher, m);
+  await ledger.lock();
+  const stored = await ledger.stored();
+  if (stored) return decider.replay(m, stored);
+  const res = await decider.decide(pusher, m);
+  await ledger.record(pusher, res);
+  return res;
 }
