@@ -64,11 +64,12 @@
 			# Demodata (#1352): prod byggs utan den (AVA_BUILD_TARGET=server),
 			# men en release byggd före #1352 — t.ex. efter --rollback — har
 			# den kvar, och skalet är oskyddat. Samma lista som
-			# DEMO_DATA_PATHS i tooling/scripts/check-no-demo-data.ts (testat);
-			# /manifest.json är PWA-manifestet och får passera.
+			# DEMO_DATA_PATHS / ALLOWED_PATHS i tooling/scripts/check-no-demo-data.ts
+			# (testat). Ingen app-rutt ligger under dem; /manifest.json är
+			# PWA-manifestet och /_next/* appens byggda tillgångar.
 			@demodata {
-				path /demo-seed.json /.ava/* /documents/* *.json
-				not path /manifest.json
+				path /demo-seed.json /.ava/* /documents/content/* *.json
+				not path /manifest.json /_next/*
 			}
 			respond @demodata 404
 			@shell {

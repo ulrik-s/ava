@@ -22,11 +22,18 @@ import { DEMO_EMAIL_DOMAIN } from "../demo-config";
 /**
  * Sökvägar där bara demodata bor, i Caddys path-matcher-syntax (`*` först =
  * suffix, sist = prefix). Caddyfile nekar exakt den här listan (testat).
+ * Ingen app-rutt ligger under dem: projektionerna är `*.json`
+ * (`matters/active/<id>.json`, `documents/<id>.json` …), blobbarna ligger i
+ * `documents/content/`.
  */
-export const DEMO_DATA_PATHS = ["/demo-seed.json", "/.ava/*", "/documents/*", "*.json"] as const;
+export const DEMO_DATA_PATHS = ["/demo-seed.json", "/.ava/*", "/documents/content/*", "*.json"] as const;
 
-/** Enda JSON-filen skalet har: PWA-manifestet ur `public/` (layout.tsx länkar det). */
-export const ALLOWED_JSON = "/manifest.json";
+/**
+ * Undantag (Caddys `not path`): PWA-manifestet ur `public/` (layout.tsx länkar
+ * det) och Next:s byggda tillgångar, så en framtida JSON-tillgång i
+ * `_next/static` aldrig nekas.
+ */
+export const ALLOWED_PATHS = ["/manifest.json", "/_next/*"] as const;
 
 /** Entitetsrutter med `[id]`-segment (samma lista som shell-routing-shimmen). */
 const ENTITY_PAGE = /^\/(?:matters|contacts|invoices|payment-plans|users|templates)\/([^/]+)\//;
@@ -48,7 +55,8 @@ export function matchesCaddyPath(urlPath: string, pattern: string): boolean {
 
 /** Nekar Caddy sökvägen som demodata? */
 export function isDemoDataPath(urlPath: string): boolean {
-  return urlPath !== ALLOWED_JSON && DEMO_DATA_PATHS.some((p) => matchesCaddyPath(urlPath, p));
+  const matches = (p: string): boolean => matchesCaddyPath(urlPath, p);
+  return !ALLOWED_PATHS.some(matches) && DEMO_DATA_PATHS.some(matches);
 }
 
 /** En förrenderad sida för ett demo-id (`/matters/<uuid>/index.html`)? */

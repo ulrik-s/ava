@@ -62,7 +62,7 @@ och inga förrenderade demo-ärenden (bara `__shell__`-sidorna). Skalet laddas
 utan inloggning (#1245), så allt i `out/` är publikt på byråns domän — utan
 flaggan låg demons fiktiva byrå öppet där. Bygget fälls om något ändå följt med
 (`check-no-demo-data.ts`), och Caddy svarar 404 på samma sökvägar
-(`demo-seed.json`, `.ava/*`, `documents/*`, `*.json` utom PWA-manifestet) ifall
+(`demo-seed.json`, `.ava/*`, `documents/content/*`, `*.json` utom PWA-manifestet och `_next/*`) ifall
 en äldre release med demodata blir aktiv igen, t.ex. efter `--rollback`.
 
 Caddy serverar inte `out/` direkt utan `releases/current`, en symlänk till en

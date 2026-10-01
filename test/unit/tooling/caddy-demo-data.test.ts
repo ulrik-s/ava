@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
-import { ALLOWED_JSON, DEMO_DATA_PATHS } from "../../../tooling/scripts/check-no-demo-data";
+import { ALLOWED_PATHS, DEMO_DATA_PATHS } from "../../../tooling/scripts/check-no-demo-data";
 
 const caddyfile = readFileSync(join(process.cwd(), "tooling/docker/caddy/Caddyfile"), "utf8");
 /** Det oskyddade statiska blocket — sista `handle {`. */
@@ -21,8 +21,8 @@ describe("Caddyfile nekar demodata (#1352)", () => {
     expect(matcher?.[1]?.trim().split(/\s+/)).toEqual([...DEMO_DATA_PATHS]);
   });
 
-  it("PWA-manifestet undantas", () => {
-    expect(matcher?.[2]?.trim()).toBe(ALLOWED_JSON);
+  it("PWA-manifestet och _next undantas — exakt ALLOWED_PATHS", () => {
+    expect(matcher?.[2]?.trim().split(/\s+/)).toEqual([...ALLOWED_PATHS]);
   });
 
   it("svarar 404 innan shell-rewriten och file_server", () => {

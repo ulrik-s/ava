@@ -47,6 +47,7 @@ describe("matchesCaddyPath", () => {
     expect(matchesCaddyPath("/demo-seed.json", "/demo-seed.json")).toBe(true);
     expect(matchesCaddyPath("/x/demo-seed.json", "/demo-seed.json")).toBe(false);
     expect(matchesCaddyPath("/documentsx", "/documents/*")).toBe(false);
+    expect(matchesCaddyPath("/documents/content/a.pdf", "/documents/content/*")).toBe(true);
   });
 });
 
@@ -56,6 +57,8 @@ describe("isDemoDataPath / isDemoEntityPage", () => {
     expect(isDemoDataPath("/contacts/c1.json")).toBe(true);
     expect(isDemoDataPath("/documents/content/a.pdf")).toBe(true);
     expect(isDemoDataPath("/index.html")).toBe(false);
+    expect(isDemoDataPath("/_next/static/chunks/x.json")).toBe(false);
+    expect(isDemoDataPath("/documents/index.html")).toBe(false);
   });
 
   it("förrenderade id-sidor är demo; __shell__ och new är app-sidor", () => {
