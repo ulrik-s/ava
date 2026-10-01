@@ -15,6 +15,7 @@ function toDevice(r: Row): SyncDevice {
   return {
     deviceId: r.deviceId, userId: r.userId, label: r.label, pendingCount: r.pendingCount,
     oldestPendingAt: r.oldestPendingAt ? r.oldestPendingAt.getTime() : null,
+    lastError: r.lastError,
     lastSeenAt: r.lastSeenAt.getTime(),
   };
 }
@@ -26,6 +27,7 @@ export class DrizzleSyncDevices implements SyncDeviceStore {
     const values = {
       userId, label: r.label, pendingCount: r.pendingCount,
       oldestPendingAt: r.oldestPendingAt === null ? null : new Date(r.oldestPendingAt),
+      lastError: r.lastError,
       lastSeenAt: this.now(),
     };
     // En enhet som redan finns i en ANNAN byrå skrivs inte över (`where`).

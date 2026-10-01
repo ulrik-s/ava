@@ -57,6 +57,8 @@ const deviceReportSchema = z.object({
   label: z.string().max(120).nullable(),
   pendingCount: z.number().int().nonnegative(),
   oldestPendingAt: z.number().int().nonnegative().nullable(),
+  /** Felet som stoppade synken (#1353). Saknas från klienter före fältet. */
+  lastError: z.string().max(300).nullable().default(null),
 });
 
 function requireDevices(store: SyncDeviceStore | undefined): SyncDeviceStore {
@@ -68,8 +70,9 @@ function requireDevices(store: SyncDeviceStore | undefined): SyncDeviceStore {
 
 export const syncRouter = router({
   /**
-   * Enhetens synkläge efter en synk (#1267): köns längd och den äldsta
-   * osynkade ändringen. Servern stämplar när rapporten kom.
+   * Enhetens synkläge efter en synk (#1267): köns längd, den äldsta
+   * osynkade ändringen och felet om synken misslyckades (#1353). Servern
+   * stämplar när rapporten kom.
    */
   reportDevice: orgProcedure
     .input(deviceReportSchema)

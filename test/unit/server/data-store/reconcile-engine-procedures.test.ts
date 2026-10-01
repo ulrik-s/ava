@@ -77,11 +77,13 @@ describe("ReconcileEngine — procedur-anrop", () => {
     expect(appliedBeforeReplay).toEqual(["m1"]);
   });
 
-  it("nätfel under uppspelning → posten ligger kvar (inget ack), felet bubblar", async () => {
+  it("fel under uppspelning → posten ligger kvar (inget ack), felet följer med i resultatet (#1353)", async () => {
     const h = await harness();
-    h.transport.replayImpl = async () => { throw new Error("Failed to fetch"); };
+    const err = new Error("Failed to fetch");
+    h.transport.replayImpl = async () => { throw err; };
     await h.queue.enqueueProcedure({ path: "timeEntry.create", input: {}, touches: [] }, { mutationId: "p1" });
-    await expect(h.engine.reconcile()).rejects.toThrow(/Failed to fetch/);
+    const res = await h.engine.reconcile();
+    expect(res.blocked).toMatchObject({ mutation: { mutationId: "p1" }, error: err });
     expect(h.queue.size()).toBe(1);
   });
 

@@ -192,13 +192,13 @@ export const changeLog = pgTable("change_log", {
 
 /**
  * Utfall av köade procedur-anrop som servern kört om (#1265, ADR 0037).
- * SERVER-ONLY (ingen entitet, synkas aldrig). Nyckeln är klientens
- * `mutationId` → samma anrop körs högst en gång, även om klienten skickar det
+ * SERVER-ONLY (ingen entitet, synkas aldrig). Nyckeln är byrån + klientens
+ * `mutationId` (#1353) → samma anrop körs högst en gång, även om klienten skickar det
  * igen efter ett avbrott. Ett accepterat utfall skrivs i SAMMA transaktion som
  * anropets skrivningar; ett avvisat efteråt (ingenting annat skrevs).
  */
 export const syncReplays = pgTable("sync_replays", {
-  mutationId: uuid("mutation_id").primaryKey(),
+  mutationId: uuid("mutation_id").notNull(),
   organizationId: uuid("organization_id").notNull(),
   userId: uuid("user_id"),
   path: text("path").notNull(),
@@ -209,7 +209,12 @@ export const syncReplays = pgTable("sync_replays", {
   code: text("code"),
   reason: text("reason"),
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("sync_replays_org_at_idx").on(t.organizationId, t.at)]);
+}, (t) => [
+  // Byrå + mutationId (#1353): uppslagen är byråavgränsade, och en annan byrås
+  // rad med samma mutationId får aldrig blockera (eller besvara) byråns anrop.
+  primaryKey({ name: "sync_replays_pk", columns: [t.organizationId, t.mutationId] }),
+  index("sync_replays_org_at_idx").on(t.organizationId, t.at),
+]);
 
 /**
  * Synkläget per enhet (#1267) — senaste rapporten från varje webbläsare.
@@ -222,6 +227,8 @@ export const syncDevices = pgTable("sync_devices", {
   label: text("label"),
   pendingCount: integer("pending_count").notNull(),
   oldestPendingAt: timestamp("oldest_pending_at", { withTimezone: true }),
+  /** Felet som stoppade enhetens senaste synk, null när den lyckades (#1353). */
+  lastError: text("last_error"),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("sync_devices_org_idx").on(t.organizationId)]);
 

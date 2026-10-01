@@ -13,15 +13,18 @@
  *     transaktion, så ett avbrott mellan commit och svar ger inte en andra körning.
  *   - rejected — en affärsregel (tRPC-klientfel: BAD_REQUEST, NOT_FOUND,
  *     PRECONDITION_FAILED, FORBIDDEN, CONFLICT) avvisade anropet; ingenting
- *     skrevs, utfallet sparas så att samma mutationId ger samma svar.
+ *     skrevs, utfallet sparas så att samma mutationId ger samma svar. Likaså
+ *     ett fel som ger samma utfall varje gång (#1353): ett zod-fel inne i
+ *     proceduren, eller ett data-/integritetsfel från Postgres (SQLSTATE-klass
+ *     22/23) — att köra om skulle bara blockera kön.
  *   - tekniska fel (databasen, en bugg) är INGET utfall: de kastas, och
  *     klienten försöker igen — användarens arbete kastas aldrig för ett
  *     serverfel.
  *
  * Samma anrop körs högst en gång, också när två omkörningar kommer samtidigt
  * (två flikar, två enheter, ett omförsök medan det första pågår; #1332): ett
- * transaktionslås per `mutationId`, och kontrollen av `sync_replays` görs
- * efter låset i samma transaktion.
+ * transaktionslås per byrå + `mutationId`, och kontrollen av `sync_replays`
+ * görs efter låset i samma transaktion. Nyckeln är (byrå, mutationId) (#1353).
  *
  * Svaret bär de berörda radernas kanoniska läge, lästa org-scopat: en rad i
  * en annan byrå blir en tombstone, aldrig data.
@@ -29,9 +32,11 @@
 
 import { TRPCError } from "@trpc/server";
 import { and, eq, sql } from "drizzle-orm";
+import { ZodError } from "zod";
 import type { OrganizationId } from "@/lib/shared/schemas/ids";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
+import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import type { ProcedureTouch, QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
 import type { ProcedureReplayResult, PulledChange } from "../data-store/in-memory/sync-transport";
 import { syncReplays } from "../db/schema";
@@ -61,12 +66,34 @@ function resolveProcedure(caller: unknown, path: string): (input: unknown) => Pr
   return cur as (input: unknown) => Promise<unknown>;
 }
 
-/** Ett regelbrott → avvisning; allt annat → kasta vidare (tekniskt fel, försök igen). */
+/** SQLSTATE-klass 22 (data exception) och 23 (integrity constraint violation). */
+const DETERMINISTIC_SQLSTATE = /^2[23][0-9A-Z]{3}$/;
+
+/** Hur djupt `cause`-kedjan följs (tRPC → Drizzle → postgres). */
+const MAX_CAUSE_DEPTH = 5;
+
+/** Felet och dess orsaker: tRPC slår in procedurens fel, Drizzle drivrutinens. */
+function causeChain(err: unknown): unknown[] {
+  const chain: unknown[] = [];
+  for (let cur = err; cur instanceof Error && chain.length < MAX_CAUSE_DEPTH; cur = cur.cause) chain.push(cur);
+  return chain;
+}
+
+/** Ger samma anrop samma fel igen? (zod, eller Postgres data-/integritetsfel) */
+function isDeterministicFailure(err: unknown): boolean {
+  if (err instanceof ZodError) return true;
+  const code = err instanceof Error && "code" in err ? err.code : undefined;
+  return typeof code === "string" && DETERMINISTIC_SQLSTATE.test(code);
+}
+
+/** Ett regelbrott eller deterministiskt fel → avvisning; allt annat → kasta vidare (tekniskt fel, försök igen). */
 function ruleViolation(err: unknown): Outcome | null {
   if (err instanceof TRPCError && RULE_CODES.has(err.code)) {
     return { status: "rejected", code: err.code, reason: err.message };
   }
-  return null;
+  const cause = causeChain(err).find(isDeterministicFailure);
+  if (cause === undefined) return null;
+  return { status: "rejected", code: "BAD_REQUEST", reason: `Ändringen gick inte att spara: ${syncErrorMessage(cause)}` };
 }
 
 export class DrizzleProcedureReplayer implements ProcedureReplayer {
@@ -106,7 +133,7 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
       return await this.repos.transactionWithDb(async (tx, txDb): Promise<Outcome> => {
         // En omkörning i taget per anrop (#1332); den som kommer sist får
         // utfallet den första sparade — proceduren körs inte igen.
-        await txDb.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`replay:${call.mutationId}`}))`);
+        await txDb.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`replay:${orgId}:${call.mutationId}`}))`);
         const stored = await this.storedOutcome(txDb, call.mutationId, orgId);
         if (stored) return stored;
         // Samma identitet som klientens körning (#1276): skapade rader får
@@ -151,7 +178,7 @@ export class DrizzleProcedureReplayer implements ProcedureReplayer {
       status: outcome.status,
       code: outcome.status === "rejected" ? outcome.code : null,
       reason: outcome.status === "rejected" ? outcome.reason : null,
-    }).onConflictDoNothing();
+    }).onConflictDoNothing({ target: [syncReplays.organizationId, syncReplays.mutationId] });
   }
 
   /**

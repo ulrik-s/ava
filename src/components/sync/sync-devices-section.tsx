@@ -2,8 +2,9 @@
 
 /**
  * Enheter och synk (#1267): varje webbläsare som synkar mot servern, när den
- * senast synkade och vad som ligger kvar i dess kö. En enhet med en osynkad
- * ändring äldre än ett dygn, eller som inte synkat på en vecka, markeras.
+ * senast synkade, vad som ligger kvar i dess kö och vad som stoppade dess
+ * senaste synk (#1353). En enhet med en osynkad ändring äldre än ett dygn,
+ * eller som inte synkat på en vecka, markeras.
  */
 
 import { useState } from "react";
@@ -33,7 +34,10 @@ function DeviceRow({ device, userName, now }: { device: SyncDevice; userName: st
       <td className="py-2 pr-3">{userName}</td>
       <td className="py-2 pr-3 text-gray-600">{device.label ?? "Okänd enhet"}</td>
       <td className="py-2 pr-3">{when(device.lastSeenAt)}</td>
-      <td className="py-2 pr-3">{pendingText(device)}</td>
+      <td className="py-2 pr-3">
+        {pendingText(device)}
+        {device.lastError && <div className="text-xs text-red-700" data-testid="sync-device-error">Senaste synkfel: {device.lastError}</div>}
+      </td>
       <td className="py-2 pr-3"><span className={`text-xs px-2 py-0.5 rounded border ${health.className}`}>{health.label}</span></td>
       <td className="py-2 text-right">
         <button type="button" className="text-xs text-gray-500 hover:text-red-700" disabled={forget.isPending}

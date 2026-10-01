@@ -1,8 +1,9 @@
 /**
  * Synkläget per enhet (#1267) — det servern vet om varje webbläsare som synkar.
  *
- * Klienten rapporterar efter varje lyckad synk hur många ändringar som ligger
- * kvar i kön och när den äldsta gjordes. Servern sparar senaste rapporten. En
+ * Klienten rapporterar efter varje synk — också en misslyckad (#1353) — hur
+ * många ändringar som ligger kvar i kön, när den äldsta gjordes och vad som
+ * stoppade synken. Servern sparar senaste rapporten. En
  * enhet som slutar rapportera har ändå kvar sitt senaste läge, och det åldras:
  * en ändring som var 20 timmar gammal vid rapporten är 30 timmar gammal tio
  * timmar senare, även om enheten är avstängd.
@@ -21,6 +22,8 @@ export interface SyncDeviceReport {
   pendingCount: number;
   /** När den äldsta av dem gjordes (epoch-ms), eller null. */
   oldestPendingAt: number | null;
+  /** Felet som stoppade synken, eller null när den lyckades (#1353). */
+  lastError: string | null;
 }
 
 /** En enhet som servern känner till. */

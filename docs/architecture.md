@@ -239,9 +239,22 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   Kastar proceduren rullas skrivningarna tillbaka och ingenting köas.
 - **Servern** (`DrizzleProcedureReplayer`, `sync.replay`) kör samma
   `appRouter`-procedur i en transaktion som den inloggade användaren.
-  Utfallet sparas i `sync_replays` (nyckel `mutationId`, samma transaktion) →
-  körs högst en gång. Regelbrott (BAD_REQUEST, NOT_FOUND, PRECONDITION_FAILED,
-  FORBIDDEN, CONFLICT) avvisar; tekniska fel kastas och klienten försöker igen.
+  Utfallet sparas i `sync_replays` (nyckel byrå + `mutationId`, #1353, samma
+  transaktion) → körs högst en gång. Regelbrott (BAD_REQUEST, NOT_FOUND,
+  PRECONDITION_FAILED, FORBIDDEN, CONFLICT) avvisar, liksom fel som ger samma
+  utfall varje gång (zod inne i proceduren, Postgres SQLSTATE-klass 22/23);
+  tekniska fel kastas och klienten försöker igen.
+- **En trasig köpost blockerar inte kön** (#1353,
+  `src/lib/shared/sync/sync-error.ts`, `replay-backoff.ts`). Kastar
+  uppspelningen av en post klassas felet: ett deterministiskt fel (tRPC
+  BAD_REQUEST/NOT_FOUND/FORBIDDEN/CONFLICT/PRECONDITION_FAILED …, 4xx, zod)
+  avvisar posten direkt; ett kanske-tillfälligt fel (500, timeout, okänt)
+  försöks igen med backoff — sex försök, 15 s → 4 min emellan — och avvisas
+  sedan; ett fel som inte beror på posten (nätet, 401, 429, 501–503) stoppar
+  kön utan att räknas. Kön spelas alltid i ordning: stannar den vid en post
+  rörs inte posterna efter den och cursorn flyttas inte. En avvisad post
+  hamnar bland de avvisade ändringarna nedan; en post som byggde på den avvisas
+  då av servern i sin tur.
 - **Svaret** bär de berörda radernas kanoniska läge (org-scopat, annars
   tombstone). Klienten ersätter sitt optimistiska läge med dem i båda utfallen.
 - **Avvisade ändringar** (#1266) — från procedur-kön och radkön — sparas i
@@ -266,9 +279,10 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   jävskontrollens logg kan bara läggas till och hör till byrån via den som
   körde kontrollen. En ändring av en surface-entitet utan basversion avvisas.
   Server-ägda fält skrivs aldrig över.
-- **Synkläget per enhet** (#1267): efter varje lyckad synk rapporterar
-  webbläsaren sitt enhets-id, köns längd och den äldsta osynkade ändringen
-  (`sync.reportDevice`, `src/lib/client/backend/sync-device-report.ts`).
+- **Synkläget per enhet** (#1267): efter varje synk — också en misslyckad
+  (#1353), annars går larmet "fast kö" aldrig — rapporterar webbläsaren sitt
+  enhets-id, köns längd, den äldsta osynkade ändringen och felet som stoppade
+  synken (`sync.reportDevice`, `src/lib/client/backend/sync-device-report.ts`).
   Servern sparar senaste rapporten i `sync_devices` (server-only). Admin ser
   varje enhet i Inställningar → Enheter och synk (`/sync-devices`), och Att
   bevaka larmar när en osynkad ändring är äldre än ett dygn eller en enhet

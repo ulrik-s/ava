@@ -14,6 +14,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
+import { z } from "zod";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildContext } from "@/lib/server/build-context";
 import type { QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
@@ -174,6 +175,58 @@ describe("DrizzleProcedureReplayer", () => {
     await expect(broken.replay(c, ctx)).rejects.toThrow(/connection terminated/);
     const stored = (await handle.db.select().from(syncReplays)).filter((r) => r.mutationId === c.mutationId);
     expect(stored).toHaveLength(0);
+  });
+
+  // #1353: ett fel som ger samma utfall varje gång ska inte blockera kön med eviga omförsök.
+  describe("deterministiska fel avvisas (#1353)", () => {
+    const failingWith = (err: unknown) => new DrizzleProcedureReplayer(handle.db, {
+      ...repos,
+      transactionWithDb: async () => { throw err; },
+    });
+
+    it("ett zod-fel inne i proceduren (inslaget av tRPC) → avvisat och sparat", async () => {
+      const parsed = z.object({ id: z.string() }).safeParse({});
+      if (parsed.success) throw new Error("förväntade ett zod-fel");
+      const c = call("timeEntry.create", createInput(uuidv7()));
+      const res = await failingWith(new TRPCError({ code: "INTERNAL_SERVER_ERROR", cause: parsed.error })).replay(c, ctx);
+      expect(res).toMatchObject({ status: "rejected", code: "BAD_REQUEST", reason: expect.stringMatching(/^Ändringen gick inte att spara: /) });
+      const stored = (await handle.db.select().from(syncReplays)).filter((r) => r.mutationId === c.mutationId);
+      expect(stored).toHaveLength(1);
+    });
+
+    it("ett integritetsfel från Postgres (SQLSTATE 23xxx, inslaget av Drizzle) → avvisat", async () => {
+      const pg = Object.assign(new Error("insert or update on table \"time_entries\" violates foreign key constraint"), { code: "23503" });
+      const res = await failingWith(new Error("Failed query", { cause: pg })).replay(call("timeEntry.create", createInput(uuidv7())), ctx);
+      expect(res).toMatchObject({ status: "rejected", reason: expect.stringContaining("violates foreign key constraint") });
+    });
+
+    it("ett dataformatfel (SQLSTATE 22xxx) → avvisat", async () => {
+      const pg = Object.assign(new Error("invalid input syntax for type uuid"), { code: "22P02" });
+      const res = await failingWith(pg).replay(call("timeEntry.create", createInput(uuidv7())), ctx);
+      expect(res).toMatchObject({ status: "rejected", code: "BAD_REQUEST" });
+    });
+
+    it("ett tillfälligt Postgres-fel (40001, serialisering) kastas — klienten försöker igen", async () => {
+      const pg = Object.assign(new Error("could not serialize access"), { code: "40001" });
+      await expect(failingWith(pg).replay(call("timeEntry.create", createInput(uuidv7())), ctx)).rejects.toThrow(/serialize/);
+    });
+  });
+
+  // #1353: nyckeln är (byrå, mutationId) — en annan byrås utfall med samma id rör inte byråns.
+  it("samma mutationId i en annan byrå blockerar inte byråns omkörning", async () => {
+    const id = uuidv7();
+    const c = call("timeEntry.create", createInput(id), [id]);
+    await handle.db.insert(syncReplays).values({
+      mutationId: c.mutationId, organizationId: OTHER_ORG, userId: null, path: c.path, codeVersion: "test",
+      status: "rejected", code: "BAD_REQUEST", reason: "annan byrå",
+    });
+    const res = await replayer.replay(c, ctx);
+    expect(res.status).toBe("accepted");
+    expect(await repos.timeEntries.getById(asId<"TimeEntryId">(id))).toMatchObject({ id });
+    const stored = (await handle.db.select().from(syncReplays)).filter((r) => r.mutationId === c.mutationId);
+    expect(stored.map((r) => [r.organizationId, r.status]).sort()).toEqual([[ORG, "accepted"], [OTHER_ORG, "rejected"]].sort());
+    // Och det sparade utfallet gäller vid nästa omkörning — inte en andra körning.
+    expect((await replayer.replay(c, ctx)).status).toBe("accepted");
   });
 
   it("berörda rader läses bara inom byrån — en annan byrås rad blir en tombstone, aldrig data", async () => {
