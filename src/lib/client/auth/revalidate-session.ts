@@ -1,33 +1,50 @@
 /**
- * Servern svarade 401 vid synk (#1245, ADR 0018) — fråga om sessionen igen:
+ * Servern svarade 401 vid synk (#1245, #1351, ADR 0018). Serverns skäl
+ * (`data.authFailure`) avgör när det finns; annars frågas proxyn:
  *
- *   - Utloggad (sessionen gick ut) → till inloggningen. Kön ligger kvar i
- *     IndexedDB och synkas efter inloggningen.
- *   - Inloggad, men servern vägrar ändå → kontot är inte längre aktivt
- *     (återkallat). Ändringarna hålls kvar på enheten — aldrig tyst borttagna —
- *     och användaren får veta varför de inte sparas (karantän).
- *   - Nås inte → inget särskilt besked; nästa synk försöker igen.
+ *   - Kontot är inte aktivt (servern vet) → besked om karantän: ändringarna
+ *     hålls kvar på enheten — aldrig tyst borttagna — men sparas inte.
+ *   - Token har gått ut (servern vet), eller proxyn har en session som servern
+ *     ändå inte godtar → "Logga in igen".
+ *   - Proxyn har ingen session → "Logga in igen".
+ *   - Proxyn nås inte → inget särskilt besked; nästa synk försöker igen.
+ *
+ * Ingen hård omdirigering (#1351): ett formulär mitt i skrivandet ska inte
+ * försvinna, och IdP:n kan vara nere. Bannern låter användaren välja när.
+ * Kön ligger kvar i IndexedDB och synkas efter inloggningen.
  */
 
-import type { UserinfoProbe } from "../backend/oidc-principal";
-import { loginUrl } from "./session-gate";
+import type { AuthFailure } from "@/lib/shared/auth-failure";
+import type { SessionNotice } from "./session-notice";
+import type { SessionProbe } from "./session-probe";
 
 export interface RevalidateDeps {
-  probe: () => Promise<UserinfoProbe>;
-  redirect: (url: string) => void;
-  location: () => { pathname: string; search: string };
+  probe: () => Promise<SessionProbe>;
+  /** Visa "Logga in igen"-bannern. */
+  notify: (notice: SessionNotice) => void;
 }
 
-export const SESSION_EXPIRED_MESSAGE = "Sessionen har gått ut — du skickas till inloggningen. Osynkade ändringar finns kvar.";
+export const SESSION_EXPIRED_MESSAGE = "Inloggningen har gått ut — klicka på Logga in igen. Osynkade ändringar finns kvar.";
+export const TOKEN_EXPIRED_MESSAGE = "Servern godtar inte längre inloggningen (token har gått ut) — klicka på Logga in igen. Osynkade ändringar finns kvar.";
 export const ACCOUNT_REVOKED_MESSAGE =
   "Ditt konto är inte längre aktivt i byrån. Osynkade ändringar finns kvar på enheten men sparas inte på servern förrän en administratör återaktiverar kontot.";
 
-/** Beskedet att visa (null = inget särskilt). */
-export async function revalidateSession(deps: RevalidateDeps): Promise<string | null> {
+const MESSAGES: Record<Exclude<SessionNotice, "unreachable">, string> = {
+  "signed-out": SESSION_EXPIRED_MESSAGE,
+  "token-expired": TOKEN_EXPIRED_MESSAGE,
+};
+
+function reauth(deps: RevalidateDeps, notice: Exclude<SessionNotice, "unreachable">): string {
+  deps.notify(notice);
+  return MESSAGES[notice];
+}
+
+/** Beskedet att visa (null = inget särskilt). `failure` = serverns skäl, om det kom med. */
+export async function revalidateSession(deps: RevalidateDeps, failure: AuthFailure | null): Promise<string | null> {
+  if (failure === "account-inactive") return ACCOUNT_REVOKED_MESSAGE;
+  if (failure === "token-expired") return reauth(deps, "token-expired");
   const probe = await deps.probe();
-  if (probe.kind === "unauthenticated") {
-    deps.redirect(loginUrl(deps.location()));
-    return SESSION_EXPIRED_MESSAGE;
-  }
-  return probe.kind === "ok" ? ACCOUNT_REVOKED_MESSAGE : null;
+  if (probe.kind === "signed-out") return reauth(deps, "signed-out");
+  // Proxyn släpper igenom men servern vägrar: dess token duger inte längre.
+  return probe.kind === "authenticated" ? reauth(deps, "token-expired") : null;
 }

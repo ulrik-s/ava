@@ -53,7 +53,12 @@ services:
       OAUTH2_PROXY_REDIRECT_URL: "${OIDC_REDIRECT_URL:-http://localhost:8080/oauth2/callback}"
       # Entra lägger email i `email`-claim (kräver optional claim) eller upn.
       OAUTH2_PROXY_OIDC_EMAIL_CLAIM: "${OIDC_EMAIL_CLAIM:-email}"
-      OAUTH2_PROXY_SCOPE: "${OIDC_SCOPE:-openid email profile}"
+      # `offline_access` → refresh-token (Entra), så proxyn kan förnya sessionen
+      # (#1351). Google godtar inte scopet: sätt OIDC_SCOPE utan det.
+      OAUTH2_PROXY_SCOPE: "${OIDC_SCOPE:-openid email profile offline_access}"
+      # Förnya före ID-tokenets timme; < COOKIE_EXPIRE (= offline-grace 7 dygn).
+      OAUTH2_PROXY_COOKIE_REFRESH: "${OAUTH2_PROXY_COOKIE_REFRESH:-30m}"
+      OAUTH2_PROXY_COOKIE_EXPIRE: "${OAUTH2_PROXY_COOKIE_EXPIRE:-168h}"
       # AVA auktoriserar via allowlist i firma.git → proxy:n släpper alla domäner.
       OAUTH2_PROXY_EMAIL_DOMAINS: "*"
       OAUTH2_PROXY_UPSTREAMS: "static://202"

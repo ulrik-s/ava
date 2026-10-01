@@ -39,44 +39,85 @@ docker compose -f tooling/docker/docker-compose.yml \
   (token/jwks/userinfo via `keycloak:8080`) löses med `SKIP_OIDC_DISCOVERY` +
   explicita `REDEEM_URL`/`OIDC_JWKS_URL`/`PROFILE_URL`.
 - **Klient-bryggan:** appen hämtar inloggad email från `/oauth2/userinfo`
-  (`src/lib/client/backend/oidc-principal.ts`) och auktoriserar mot
+  (`src/lib/client/auth/session-probe.ts`) och auktoriserar mot
   användar-allowlisten i firma.git via `OidcAuthProvider` (#223). Okänd email
   nekas (autentisering ≠ auktorisering).
 
-### Sessionen i klienten och IdP-avbrott (#1245, ADR 0018)
+### Sessionen i klienten och IdP-avbrott (#1245, #1351, ADR 0018)
 
 Vid varje start frågar klienten `/oauth2/userinfo`
-(`src/lib/client/auth/session-gate.ts`):
+(`src/lib/client/auth/session-probe.ts`, högst 3 s — starten hänger aldrig på
+proxyn). Bara oauth2-proxys egna svar räknas som besked; allt annat är "vet
+inte" och då avgör offline-graceperioden (`session-gate.ts`):
 
-| Svar | Klienten gör |
+| Svar på `/oauth2/userinfo` | Utfall | Inom grace (7 dygn) | Utan giltig grace |
+|---|---|---|---|
+| 200 + JSON med email, samma identitet | inloggad | startar, noterar `sessionVerifiedAt` | (samma) |
+| 200 + JSON med email, ny/annan identitet | inloggad | binder principalen mot användarlistan | (samma) |
+| 401 | utloggad (bekräftat) | startar lokalt + bannern **Logga in igen** | till `/oauth2/start?rd=<sidan>` |
+| nätverksfel, inget svar inom 3 s, 5xx | nås inte | startar lokalt + bannern | besked: anslut till nätet |
+| omdirigering (3xx/`opaqueredirect`), annan 4xx | nås inte | startar lokalt + bannern | besked: anslut till nätet |
+| 200 med HTML/annan typ (captive portal), JSON utan email | nås inte | startar lokalt + bannern | besked: anslut till nätet |
+| 404 (ingen oauth2-proxy, basic-auth-drift) | finns inte | som förut | som förut |
+
+Inom grace skickas ingen hårt vidare till IdP:n: den kan vara nere (då
+hamnade användaren på en felsida), och ett formulär mitt i skrivandet ska inte
+försvinna. Bannern låter användaren välja när; en lyckad synk tar bort den.
+Ingen bunden identitet på enheten → alltid till inloggningen.
+
+Vid synk, när servern svarar 401, bär svaret serverns skäl
+(`data.authFailure`, `src/lib/shared/auth-failure.ts`):
+
+| Skäl | Klienten visar |
 |---|---|
-| Inloggad, samma identitet | Startar och noterar `sessionVerifiedAt` |
-| Inloggad, ny/annan identitet | Binder principalen mot användarlistan (som förut) |
-| Utloggad (401, omdirigering) | Skickar till `/oauth2/start?rd=<sidan>` |
-| Nås inte (nätverk, 5xx) | Startar under den cachade identiteten om den verifierades online inom **7 dagar**; annars ett besked om att ansluta |
-| Finns inte (404, basic-auth-drift) | Som förut |
+| `account-inactive` (giltig identitet, inte aktiv i byråns lista) | kontot är spärrat — osynkade ändringar ligger kvar på enheten men sparas inte (karantän) |
+| `token-expired` (korrekt signerad token som gått ut, `verified`-läget) | "Logga in igen" |
+| `no-identity` / naken 401 från proxyn | proxyn frågas: utloggad → "Logga in igen"; inloggad (men servern vägrar) → "Logga in igen" (token duger inte); nås inte → inget särskilt |
 
-Vid synk omvalideras sessionen när servern svarar 401: utloggad → till
-inloggningen; inloggad men servern vägrar → kontot är spärrat, och användaren
-får veta att osynkade ändringar ligger kvar på enheten men inte sparas
-(karantän). Kön töms aldrig tyst.
+Kön töms aldrig tyst, och ingen omdirigering sker utan att användaren klickar.
+
+**Sessionen förnyas** (`OAUTH2_PROXY_COOKIE_REFRESH`, #1351). ID-token från
+Entra gäller en timme. Utan förnyelse dog proxyns session efter en timme, och
+i `verified`-läget fick servern en utgången token (401 med beskedet "kontot
+spärrat"). Proxyn förnyar med refresh-token vid första anropet efter
+`COOKIE_REFRESH` — innan den validerar — så den token servern får har alltid
+minst 30 minuter kvar. Misslyckas förnyelsen (IdP:n nere) behålls sessionen
+tills token gått ut; därefter ger proxyn 401 och klienten visar bannern.
+
+| Stack | `COOKIE_REFRESH` | `COOKIE_EXPIRE` | scope |
+|---|---|---|---|
+| produktion, BYO-IdP (Entra) | `30m` (< ID-tokenets 60 min) | `168h` (= offline-grace) | `openid email profile offline_access` |
+| Keycloak-riggar (realm `accessTokenLifespan` 300 s) | `1m` | `168h` | (provider-default) |
+
+Entra ger refresh-token bara när `offline_access` finns i scope. Proxyn
+vägrar starta om `COOKIE_REFRESH` >= `COOKIE_EXPIRE`.
+`test/unit/tooling/session-refresh.test.ts` fäller en stack som saknar
+förnyelse.
+
+Servern verifierar tokens med `algorithms: ["RS256"]` och `clockTolerance:
+60 s` (`src/lib/server/http/bearer-claims.ts`).
 
 **När IdP:n (t.ex. Entra) är nere:**
 
 - Den som redan har en giltig proxysession märker inget: oauth2-proxy
-  validerar sin egen cookie utan IdP:n.
+  validerar sin egen cookie utan IdP:n (förnyelsen misslyckas tyst tills
+  token gått ut).
 - Den vars session gått ut kan inte logga in på nytt förrän IdP:n är uppe
   igen, men **appen startar ändå** — skalet kommer från service workern eller
-  servern utan inloggning. Utan nät arbetar hen offline inom grace-tiden;
-  ändringarna köas och synkas efter nästa inloggning.
+  servern utan inloggning — under den cachade identiteten inom grace-tiden,
+  med bannern "Logga in igen". Ändringarna köas och synkas efter nästa
+  inloggning.
 - Servern tar aldrig emot data utan giltig session: `/api` och `/git` gat:as
   fortfarande av proxyn, och principalen omvalideras vid varje anrop.
+- `test/e2e/oidc/oidc-idp-down.spec.ts` (i `bun run e2e:oidc`) prövar det mot
+  den riktiga stacken: ingen omdirigering, ingen loop, banner.
 
 Den cachade identiteten (`principalId`, e-post, `sessionVerifiedAt` i
 `ava.firma`) är ingen hemlighet: den ger ingen åtkomst till servern, bara till
 det som redan finns lokalt på enheten. Sessionshemligheten är proxyns
-HttpOnly-cookie. Option B i ADR 0018 (`offline_access`-refresh-token) är inte
-byggd.
+HttpOnly-cookie. Refresh-token (`offline_access`) hålls av oauth2-proxy i
+dess krypterade cookie — aldrig i klienten (Option B i ADR 0018, en klient-
+hållen refresh-token, är inte byggd).
 
 ### Lokal data, byte av användare och utloggning (#1347, advokatsekretess)
 

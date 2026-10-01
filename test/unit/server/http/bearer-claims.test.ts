@@ -6,7 +6,7 @@
 
 import { SignJWT, exportJWK, generateKeyPair, createLocalJWKSet, type JWTVerifyGetKey } from "jose";
 import { describe, it, expect, beforeAll } from "vitest-compat";
-import { bearerClaims, bearerConfigFromEnv, helperOidcConfig } from "@/lib/server/http/bearer-claims";
+import { bearerClaims, bearerConfigFromEnv, CLOCK_TOLERANCE_S, helperOidcConfig, verifyBearerToken } from "@/lib/server/http/bearer-claims";
 
 const ISSUER = "https://idp.example/realms/ava";
 const AUDIENCE = "ava";
@@ -45,6 +45,8 @@ async function token(opts: TokenOpts = {}): Promise<string> {
     .sign(opts.signKey ?? privateKey);
 }
 
+const nowS = (): number => Math.floor(Date.now() / 1000);
+
 function authHeaders(jwt: string | null): Headers {
   const h = new Headers();
   if (jwt) h.set("authorization", `Bearer ${jwt}`);
@@ -74,7 +76,7 @@ describe("bearerClaims", () => {
   });
 
   it("utgången token → null", async () => {
-    const expired = await token({ email: "a@b.se", expiresIn: Math.floor(Date.now() / 1000) - 60 });
+    const expired = await token({ email: "a@b.se", expiresIn: nowS() - CLOCK_TOLERANCE_S - 60 });
     expect(await bearerClaims(authHeaders(expired), cfg())).toBeNull();
   });
 
@@ -90,6 +92,31 @@ describe("bearerClaims", () => {
   it("utan audience-konfig hoppas aud-kontrollen över", async () => {
     const claims = await bearerClaims(authHeaders(await token({ audience: "vad-som-helst", email: "a@b.se" })), { issuer: ISSUER, jwks });
     expect(claims?.email).toBe("a@b.se");
+  });
+});
+
+describe("verifyBearerToken (#1351)", () => {
+  it("skiljer saknad, utgången och ogiltig token åt", async () => {
+    expect(await verifyBearerToken(null, cfg())).toEqual({ kind: "missing" });
+    const expired = await token({ email: "a@b.se", expiresIn: nowS() - CLOCK_TOLERANCE_S - 60 });
+    expect(await verifyBearerToken(`Bearer ${expired}`, cfg())).toEqual({ kind: "expired" });
+    const forged = await token({ email: "a@b.se", signKey: (await generateKeyPair("RS256")).privateKey });
+    expect(await verifyBearerToken(`Bearer ${forged}`, cfg())).toEqual({ kind: "invalid" });
+    expect(await verifyBearerToken(`Bearer ${await token({})}`, cfg())).toEqual({ kind: "invalid" });
+  });
+
+  it("godtar en token som gått ut inom klocktoleransen", async () => {
+    const justExpired = await token({ email: "a@b.se", expiresIn: nowS() - 10 });
+    expect(await verifyBearerToken(`Bearer ${justExpired}`, cfg())).toMatchObject({ kind: "verified" });
+  });
+
+  it("godtar bara RS256 — en annan algoritm avvisas även med rätt nyckel", async () => {
+    const es = await generateKeyPair("ES256");
+    const jwt = await new SignJWT({ email: "a@b.se" })
+      .setProtectedHeader({ alg: "ES256" }).setIssuer(ISSUER).setAudience(AUDIENCE).setExpirationTime("1h")
+      .sign(es.privateKey);
+    const anyKey: JWTVerifyGetKey = async () => es.publicKey;
+    expect(await verifyBearerToken(`Bearer ${jwt}`, { issuer: ISSUER, audience: AUDIENCE, jwks: anyKey })).toEqual({ kind: "invalid" });
   });
 });
 

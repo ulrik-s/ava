@@ -38,9 +38,10 @@ export interface SyncSchedulerDeps {
   onRemoteChanges?: () => void;
   /**
    * Servern svarade 401 (#1245): sessionen gick ut eller kontot är spärrat.
-   * Returnerar beskedet att visa i stället för det generiska felet.
+   * Får felet (som kan bära serverns skäl, #1351) och returnerar beskedet att
+   * visa i stället för det generiska felet.
    */
-  onUnauthorized?: () => Promise<string | null>;
+  onUnauthorized?: (err: unknown) => Promise<string | null>;
   debounceMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
@@ -106,7 +107,7 @@ export class SyncScheduler {
   /** Ett 401 → låt sessionen omvalideras och visa dess besked (#1245). */
   private async authMessage(err: unknown): Promise<string | null> {
     if (!this.deps.onUnauthorized || !isUnauthorizedError(err)) return null;
-    return this.deps.onUnauthorized();
+    return this.deps.onUnauthorized(err);
   }
 
   /** Finns det ändringar som inte nått servern? (varning vid stängning av fliken) */

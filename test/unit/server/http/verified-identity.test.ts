@@ -31,10 +31,10 @@ beforeAll(async () => {
   jwks = createLocalJWKSet({ keys: [publicJwk] });
 });
 
-function idToken(claims: Record<string, unknown>, opts: { audience?: string; key?: CryptoKey } = {}): Promise<string> {
+function idToken(claims: Record<string, unknown>, opts: { audience?: string; key?: CryptoKey; exp?: number } = {}): Promise<string> {
   return new SignJWT({ sub: "s1", ...claims })
     .setProtectedHeader({ alg: "RS256", kid: "k1" })
-    .setIssuedAt().setIssuer(ISSUER).setAudience(opts.audience ?? PROXY_CLIENT).setExpirationTime("1h")
+    .setIssuedAt().setIssuer(ISSUER).setAudience(opts.audience ?? PROXY_CLIENT).setExpirationTime(opts.exp ?? "1h")
     .sign(opts.key ?? privateKey);
 }
 
@@ -129,7 +129,9 @@ describe("createServerContext i verified-läget (#1256)", () => {
 
   it("fel nyckel, eller token till en annan klient → ingen principal", async () => {
     const forged = await idToken({ email: "anna@byra.se" }, { key: otherKey });
-    expect((await createServerContext(req({ [IDENTITY_TOKEN_HEADER]: `Bearer ${forged}` }), verified())).user).toBeNull();
+    const forgedCtx = await createServerContext(req({ [IDENTITY_TOKEN_HEADER]: `Bearer ${forged}` }), verified());
+    expect(forgedCtx.user).toBeNull();
+    expect(forgedCtx.authFailure).toBe("no-identity");
     const otherClient = await idToken({ email: "anna@byra.se" }, { audience: "annan-app" });
     expect((await createServerContext(req({ [IDENTITY_TOKEN_HEADER]: `Bearer ${otherClient}` }), verified())).user).toBeNull();
   });
@@ -138,5 +140,29 @@ describe("createServerContext i verified-läget (#1256)", () => {
     const helperDeps = { ...verified(), bearer: { issuer: ISSUER, audience: "helper", jwks } };
     const ctx = await createServerContext(req({ authorization: `Bearer ${await idToken({ email: "anna@byra.se" }, { audience: "helper" })}` }), helperDeps);
     expect(ctx.user).toMatchObject({ id: ANNA });
+  });
+
+  // #1351: utgången token skiljs från spärrat konto — klienten ber om ny inloggning.
+  const expiredToken = () => idToken({ email: "anna@byra.se" }, { exp: Math.floor(Date.now() / 1000) - 3600 });
+
+  it("proxyns token har gått ut → token-expired, inte spärrat konto", async () => {
+    const ctx = await createServerContext(req({ [IDENTITY_TOKEN_HEADER]: `Bearer ${await expiredToken()}` }), verified());
+    expect(ctx.user).toBeNull();
+    expect(ctx.authFailure).toBe("token-expired");
+  });
+
+  it("utgången proxytoken men en giltig egen Bearer → principalen; utan egen → token-expired", async () => {
+    const helperDeps = { ...verified(), bearer: { issuer: ISSUER, audience: "helper", jwks } };
+    const own = `Bearer ${await idToken({ email: "anna@byra.se" }, { audience: "helper" })}`;
+    const both = await createServerContext(req({ [IDENTITY_TOKEN_HEADER]: `Bearer ${await expiredToken()}`, authorization: own }), helperDeps);
+    expect(both.user).toMatchObject({ id: ANNA });
+    expect(both.authFailure).toBeUndefined();
+    const alone = await createServerContext(req({ [IDENTITY_TOKEN_HEADER]: `Bearer ${await expiredToken()}` }), helperDeps);
+    expect(alone.authFailure).toBe("token-expired");
+  });
+
+  it("giltig token för en okänd användare → account-inactive", async () => {
+    const ctx = await createServerContext(req({ [IDENTITY_TOKEN_HEADER]: `Bearer ${await idToken({ email: "okand@byra.se" })}` }), verified());
+    expect(ctx.authFailure).toBe("account-inactive");
   });
 });
