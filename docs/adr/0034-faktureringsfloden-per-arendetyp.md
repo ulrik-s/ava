@@ -171,3 +171,28 @@ Testerna hittade två avvikelser, som nu är rättade:
   Nedsättningen mäts nu mot körningens yrkade belopp. Avrundningsresten läggs
   på betalarens arvodesrad (`settleToAward`), så klientens och betalarens
   fakturor tillsammans blir exakt det domstolen beslutat.
+
+## Hela kronor per rad (#1438)
+
+Fakturor och kostnadsräkningar avrundar varje rad till hela kronor med svensk
+öresavrundning (1–49 öre nedåt, 50–99 öre uppåt; negativa belopp speglas).
+Summa exkl moms är summan av de avrundade raderna, momsen 25 % av den summan
+avrundad till hela kronor, och brutto = netto + moms. Reglerna finns på ett
+ställe, `src/lib/shared/whole-kronor.ts`, och används av värderingen
+(`billing-work-value`), utläggen (`expense-vat`), delningen klient/betalare
+(`coverage-billing`), acontot (`acconto-vat`) och kostnadsräkningen
+(`kr-claim`, `kostnadsrakning`). Därmed är det lagrade beloppet, dokumentet,
+OCR-beloppet, kundfordran och verifikatet samma tal.
+
+Bara nya fakturor berörs. De bär `amountRounding: "KRONOR"`; en äldre faktura
+saknar fältet och avrundades på öret. Dess belopp räknas aldrig om, och dess
+specifikation räknas med öresavrundning när dokumentet renderas om.
+
+Belopp som någon annan fastställt tas som de är: domstolens beviljade belopp
+och prutning, försäkringsbolagets prutning, tak och lägsta självrisk, och redan
+betalda aconton. Har ett sådant belopp ören bär fakturan dem.
+
+Två fakturor som delar ett arbete (klient och betalare) räknar momsen var för
+sig på sitt eget netto. Tillsammans kan de därför bära en krona mer eller mindre
+moms än helheten skulle ha gjort. I rättshjälp jämkas betalarens rad mot det
+beviljade beloppet (`settleToAward`), så summan är ändå exakt domen.

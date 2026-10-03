@@ -16,7 +16,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { deductAcconto } from "@/lib/shared/acconto-vat";
+import { accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import {
@@ -68,7 +68,8 @@ import {
   type SettlementBreakdown, type SettlementRowKind, type SettlementView,
 } from "@/lib/shared/settlement-view";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
-import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
+import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
+import { CURRENT_ROUNDING, roundingOf, roundToKronor, splitGross } from "@/lib/shared/whole-kronor";
 import { valueKrRun } from "../billing/kr-run-valuation";
 import { logMatterNote } from "../billing/matter-note";
 import { removeVoidedKrDocuments } from "../billing/void-kr-documents";
@@ -373,6 +374,7 @@ async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx &
   const base = {
     id: asId<"InvoiceId">(newRowId(ctx, "clientInvoice")),
     matterId: a.matterId, amount: clientNet, ...(await invoiceNumbering(repos, orgId, "KLIENT", a.invoiceDate)), invoiceDate: a.invoiceDate,
+    amountRounding: CURRENT_ROUNDING,
   };
   // #968 (modell A): acontona har redan bokfört sin intäkt och sin moms, så
   // slutfakturan bär bara det som ÅTERSTÅR — annars bokförs acontot två gånger.
@@ -601,10 +603,13 @@ export const billingRunRouter = router({
         ctx.repos.expenses.listByInvoice(input.invoiceId),
         fetchSpecDeductions(ctx.repos, ctx.orgId, input.invoiceId),
       ]);
+      // Fakturans EGET avrundningssätt (#1438): en äldre faktura specificeras
+      // på öret, precis som när den skapades — beloppen räknas aldrig om.
+      const rounding = roundingOf(invoice);
       return buildInvoiceSpecification({
-        timeLines: specTimeLines(matter.paymentMethod, te, invoice.invoiceDate ?? new Date()),
-        expenseLines: specExpenseLines(ex),
-        deductions, payableOre: invoice.amount,
+        timeLines: specTimeLines(matter.paymentMethod, te, invoice.invoiceDate ?? new Date(), rounding),
+        expenseLines: specExpenseLines(ex, rounding),
+        deductions, payableOre: invoice.amount, rounding,
       });
     }),
 
@@ -636,11 +641,12 @@ export const billingRunRouter = router({
         // belopp = %-sats × upparbetat − Σ tidigare aconto-fakturor.
         const priorAccontoSumOre = await sumPriorAccontos(tx, input.matterId);
         const proposedOre = proposedAccontoOre(value, input.clientShareBips, priorAccontoSumOre);
-        // Acconto är ett brutto-förskott på arvode (25 % moms ingår, #782).
-        const accontoNetOre = splitVat({ amount: input.amountOre, vatRate: DEFAULT_VAT_RATE, vatIncluded: true }).exclVat;
-        const accontoVatOre = input.amountOre - accontoNetOre;
+        // Acconto är ett brutto-förskott på arvode (25 % moms ingår, #782). Beloppet
+        // är fakturans enda rad → hela kronor (#1438), och nettot likaså.
+        const amountOre = roundToKronor(input.amountOre);
+        const { netOre: accontoNetOre, vatOre: accontoVatOre } = accontoSplit(amountOre);
         const invoice = await tx.invoices.create({
-          matterId: input.matterId, amount: input.amountOre, vatOre: accontoVatOre,
+          matterId: input.matterId, amount: amountOre, vatOre: accontoVatOre, amountRounding: CURRENT_ROUNDING,
           vatBreakdown: [{ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: accontoNetOre, vatOre: accontoVatOre }],
           // Nedbrytning (#878/#880): anroparen (simuleringen) skickar en spec med det
           // upparbetade arbetet så klienten ser vad acontot avser; annars en enkel default.
@@ -650,7 +656,7 @@ export const billingRunRouter = router({
               { label: `Klientens andel ${input.clientShareBips / 100} % av upparbetat arbete (exkl moms)`, amountOre: accontoNetOre, kind: "add" },
               { label: "Moms 25 %", amountOre: accontoVatOre, kind: "add" },
             ],
-            totalLabel: "Att betala (inkl moms)", totalOre: input.amountOre,
+            totalLabel: "Att betala (inkl moms)", totalOre: amountOre,
           },
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
@@ -660,7 +666,7 @@ export const billingRunRouter = router({
           id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "ACCONTO", recipient: input.recipient,
           status: "SENT", workValueOreAtRun: value, clientShareBips: input.clientShareBips,
-          proposedAmountOre: proposedOre, amountOre: input.amountOre,
+          proposedAmountOre: proposedOre, amountOre,
           invoiceId: invoice.id, deductedBillingRunIds: [],
           periodTo: at, notes: input.notes,
         });
@@ -700,7 +706,7 @@ export const billingRunRouter = router({
         const invoiceDate = dateOrCallTime(ctx, input.invoiceDate);
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: finalAmount, vatOre: vatOreOf(rest.lines),
-          vatBreakdown: rest.lines,
+          vatBreakdown: rest.lines, amountRounding: CURRENT_ROUNDING,
           invoiceType: "FINAL", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
           ...invoiceMeta(ctx, input), notes: input.notes,
@@ -913,7 +919,9 @@ export const billingRunRouter = router({
         const invoiceDate = callTime(ctx);
         const invoice = await tx.invoices.create({
           id: asId<"InvoiceId">(newRowId(ctx, "invoice")),
-          matterId: run.matterId, amount: finalAmount,
+          // Yrkandet är i hela kronor (#1218); domstolens prutning tas som den är.
+          // Momsen följer med så verifikatet bokför samma tal som fakturan (#1438).
+          matterId: run.matterId, amount: finalAmount, vatOre: splitGross(finalAmount, DEFAULT_VAT_RATE).vatOre, amountRounding: CURRENT_ROUNDING,
           invoiceType: "FINAL", status: "DRAFT",
           // DOMSTOL → F-nummer (samma format som övriga, #889) men ingen OCR.
           ...(await invoiceNumbering(tx, ctx.orgId, "DOMSTOL", invoiceDate)),
@@ -1004,7 +1012,7 @@ export const billingRunRouter = router({
         const payerInvoice = await tx.invoices.create({
           id: asId<"InvoiceId">(newRowId(ctx, "payerInvoice")),
           matterId: input.matterId, amount: payerGross, vatOre: vatOreOf(payerLines), vatBreakdown: payerLines,
-          settlementBreakdown: payerView,
+          settlementBreakdown: payerView, amountRounding: CURRENT_ROUNDING,
           invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient, settleDate)), invoiceDate: settleDate, notes: input.notes,
         });
         await bookFirmLoss(tx, { userId: ctx.user.id, matterId: input.matterId, firmLossOre: split.firmLossOre + expenseLossNetOre, scope: ctx });
@@ -1064,7 +1072,8 @@ export const billingRunRouter = router({
     .mutation(({ ctx, input }) =>
       ctx.repos.transaction(async (tx) => {
         const t = await resolvePruningTargets(tx, ctx.orgId, input.matterId);
-        const prunedGross = arvodeInclVatOre(input.prunedNetOre);
+        // Bolagets prutning tas som den är; momsen på den avrundas som fakturans rader (#1438).
+        const prunedGross = arvodeInclVatOre(input.prunedNetOre, roundingOf(t.payerInvoice));
         const prunedVat = prunedGross - input.prunedNetOre;
         if (prunedGross > t.payerInvoice.amount) {
           throw new TRPCError({

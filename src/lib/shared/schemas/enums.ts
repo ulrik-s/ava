@@ -136,6 +136,19 @@ export const INVOICE_TYPE_LABELS = {
 export const invoiceTypeSchema = enumFromLabels(INVOICE_TYPE_LABELS);
 export type InvoiceType = z.infer<typeof invoiceTypeSchema>;
 
+/**
+ * Hur en fakturas rader är avrundade (#1438). `KRONOR` = varje rad till hela
+ * kronor, momsen på den avrundade summan — alla fakturor som skapas från och med
+ * #1438. `ORE` = äldre fakturor, avrundade på öret; deras belopp och dokument
+ * räknas aldrig om. Saknas fältet (null) är fakturan en äldre (`ORE`).
+ */
+export const AMOUNT_ROUNDING_LABELS = {
+  ORE: "Öre (äldre fakturor)",
+  KRONOR: "Hela kronor per rad",
+} as const satisfies Record<string, string>;
+export const amountRoundingSchema = enumFromLabels(AMOUNT_ROUNDING_LABELS);
+export type AmountRounding = z.infer<typeof amountRoundingSchema>;
+
 // ─── BillingRun (fakturerings-händelse) ───────────────────────────────────
 
 /** Typen av billing-händelse. Skiljer aconto (klient betalar andel) från

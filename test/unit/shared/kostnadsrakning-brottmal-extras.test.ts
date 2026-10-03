@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest-compat";
 import { advokatberedskapFtaxForDate, applyNoFTaxFactorForDate, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { buildKostnadsrakningContext, kostnadsrakningClaimInclVat, type TimeEntryInput } from "@/lib/shared/kostnadsrakning";
-import { roundToKronor } from "@/lib/shared/kr-claim";
+import { roundToKronor } from "@/lib/shared/whole-kronor";
 
 const DATE = "2026-05-25";
 const base = {

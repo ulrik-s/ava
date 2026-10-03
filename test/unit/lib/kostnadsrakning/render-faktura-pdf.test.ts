@@ -127,7 +127,7 @@ describe("renderFakturaPdf — uträkningen och deltabellerna (#1200/#1439)", ()
         { date: "2026-05-04", description: "Restid till tingsrätten", minutes: 90, amountOre: 150_000, kind: "TIDSSPILLAN" },
       ],
       expenseLines: [{ date: "2026-05-04", description: "Tågbiljett", netOre: 90_000, grossOre: 112_500 }],
-      deductions: [], payableOre: 768_750,
+      deductions: [], payableOre: 768_750, rounding: "KRONOR"
     }),
   });
 

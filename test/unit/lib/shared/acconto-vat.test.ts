@@ -28,8 +28,9 @@ const F0039: VatBreakdownLine[] = [
 const F0039_ACCONTON = 955_100; // 6 299,00 + 3 252,00 kr
 
 describe("accontoSplit", () => {
-  it("delar ett acontobelopp i netto + 25 % moms", () => {
-    expect(accontoSplit(629_900)).toEqual({ netOre: 503_920, vatOre: 125_980 });
+  it("delar ett acontobelopp i netto + 25 % moms — nettot i hela kronor (#1438)", () => {
+    // 6 299 kr / 1,25 = 5 039,20 kr → 5 039 kr; momsen är resten.
+    expect(accontoSplit(629_900)).toEqual({ netOre: 503_900, vatOre: 126_000 });
   });
 
   it("netto + moms är alltid exakt bruttot (avrundning får inte tappa ören)", () => {
@@ -44,10 +45,11 @@ describe("deductAcconto", () => {
   it("F-2026-0039: momsen blir den som ÅTERSTÅR, inte hela fakturans", () => {
     // Kärnan i #968. Före fixen redovisade slutfakturan 3 704,61 kr moms trots
     // att acontona redan redovisat 1 910,20 kr av den — 1 910,20 kr dubbelt.
+    // Sedan #1438 delas acontot i hela kronor: 9 551 kr = 7 641 kr + 1 910 kr moms.
     const r = deductAcconto(F0039, F0039_ACCONTON);
-    expect(r.deductedVatOre).toBe(191_020);
+    expect(r.deductedVatOre).toBe(191_000);
     expect(gross(r.lines)).toBe(gross(F0039) - F0039_ACCONTON);
-    expect(r.lines.reduce((s, l) => s + l.vatOre, 0)).toBe(370_461 - 191_020);
+    expect(r.lines.reduce((s, l) => s + l.vatOre, 0)).toBe(370_461 - 191_000);
     expect(r.overpaidGrossOre).toBe(0);
   });
 

@@ -28,8 +28,9 @@ import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
 import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
 import { buildInvoiceSpecification, type InvoiceSpecification } from "@/lib/shared/invoice-specification";
 import type { OrgImage } from "@/lib/shared/org-image";
-import { TIME_ENTRY_KIND_LABELS, type TimeEntryKind } from "@/lib/shared/schemas/enums";
+import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
+import { roundingOf } from "@/lib/shared/whole-kronor";
 
 export type { InvoiceSpecification };
 
@@ -75,6 +76,8 @@ export interface FakturaDocInvoice {
   /** Fri text. Blir sammanställningens rad när fakturan saknar itemiserat
    *  arbete (rådgivningstimmen, rena aconton) så beloppet aldrig är oförklarat (#870). */
   notes?: string | null | undefined;
+  /** Fakturans radavrundning (#1438) — saknas på äldre fakturor (öre). */
+  amountRounding?: AmountRounding | null | undefined;
 }
 
 export interface FakturaTemplateArgs {
@@ -188,16 +191,19 @@ function resolveSpec(a: FakturaTemplateArgs): InvoiceSpecification | null {
   if (spec && spec.timeLines.length > 0) return spec;
   const carried = breakdown?.timeLines;
   if (!carried?.length) return spec ?? null;
-  return specFromCarriedWork(carried, spec, a.invoice.amount);
+  return specFromCarriedWork(carried, spec, a.invoice);
 }
 
 /** Bygg specifikationen ur nedbrytningens arbete, med spec:ens utlägg/avdrag kvar. */
-function specFromCarriedWork(carried: CarriedWork, spec: InvoiceSpecification | null | undefined, payableOre: number): InvoiceSpecification {
+function specFromCarriedWork(carried: CarriedWork, spec: InvoiceSpecification | null | undefined, invoice: FakturaDocInvoice): InvoiceSpecification {
   return buildInvoiceSpecification({
     timeLines: carried.map((l) => ({ date: l.date, description: l.description, minutes: l.minutes, amountOre: l.amountOre, kind: l.kind })),
     expenseLines: spec?.expenseLines ?? [],
     deductions: spec?.deductions ?? [],
-    payableOre,
+    payableOre: invoice.amount,
+    // Summeras med fakturans EGET avrundningssätt (#1438) — en äldre faktura
+    // visar samma moms som när den skapades.
+    rounding: roundingOf(invoice),
   });
 }
 

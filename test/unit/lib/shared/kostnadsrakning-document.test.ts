@@ -9,8 +9,9 @@ import { toLocalTime, toSwedishLongDate } from "@/lib/shared/iso-date";
 import { buildKostnadsrakningContext, withDocumentFields, type BuildInput } from "@/lib/shared/kostnadsrakning";
 import { buildKrDocument, cityFromAddress, displayWebsite, vatNumberFromOrgNumber, type KrDocumentInput } from "@/lib/shared/kostnadsrakning-document";
 import { expenseSpec, hourlyRowSpecs, timeSpecSections, type KrTimeLineLike } from "@/lib/shared/kostnadsrakning-document-rows";
-import { krClaim, roundToKronor, type KrClaim } from "@/lib/shared/kr-claim";
+import { krClaim, type KrClaim } from "@/lib/shared/kr-claim";
 import { formatHours, formatMinutes, formatOreAsKr, formatPlainKr, formatQuantity, formatRateKr } from "@/lib/shared/kr-format";
+import { roundToKronor } from "@/lib/shared/whole-kronor";
 import { TINY_JPEG, TINY_PNG } from "../../../helpers/tiny-images";
 
 const nb = (s: string): string => s.replace(/ /g, " ");
@@ -144,7 +145,8 @@ describe("sammanställningen — löpande räkning", () => {
     expect(nb(d.totals.exclVat)).toBe("72 550,00 kr");
     expect(nb(d.totals.vat)).toBe("18 138,00 kr");
     expect(nb(d.totals.inclVat)).toBe("90 688,00 kr");
-    expect(roundToKronor(-150)).toBe(-100);
+    // Öresavrundningen speglas för negativa belopp (#1438): −1,50 kr → −2 kr.
+    expect(roundToKronor(-150)).toBe(-200);
   });
   it("utläggsraden (exkl moms) och notiserna; momsetiketten bara (25%) när allt är 25 %", () => {
     const d = buildKrDocument({

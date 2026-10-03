@@ -13,16 +13,12 @@
  * Det är det YRKADE beloppet: samma regel används för dokumentet
  * (`buildKostnadsrakningContext`) och för körningens lagrade belopp
  * (`krGrossOre` → `billingRun.createKostnadsrakning`), så räkningen och det
- * som sparas/stäms av mot domen alltid är samma tal. Gäller BARA
- * kostnadsräkningen — fakturor avrundas som förut (öre).
+ * som sparas/stäms av mot domen alltid är samma tal. Fakturorna följer samma
+ * regel sedan #1438 — avrundningen bor i `whole-kronor`.
  */
 
 import { CHARGED_EXPENSE_VAT_RATE } from "./expense-vat";
-
-/** Öre → närmaste hela krona (i öre). Den enda platsen avrundningen görs. */
-export function roundToKronor(ore: number): number {
-  return Math.round(ore / 100) * 100;
-}
+import { roundToKronor, vatOnRow } from "./whole-kronor";
 
 /** Underlaget för ett yrkande, oavrundat (öre). */
 export interface KrClaimInput {
@@ -48,10 +44,10 @@ export interface KrClaim {
 
 /** Räkna fram yrkandet ur de oavrundade raderna. */
 export function krClaim(input: KrClaimInput): KrClaim {
-  const arvodeRowsOre = input.arvodeRowsOre.map(roundToKronor);
+  const arvodeRowsOre = input.arvodeRowsOre.map((r) => roundToKronor(r));
   const arvodeExclVat = arvodeRowsOre.reduce((s, r) => s + r, 0);
   const expenseExclVat = roundToKronor(input.expenseChargedNetOre + input.expensePassThroughOre);
   const exclVat = arvodeExclVat + expenseExclVat;
-  const vat = roundToKronor(((exclVat - input.expensePassThroughOre) * CHARGED_EXPENSE_VAT_RATE) / 10_000);
+  const vat = vatOnRow(exclVat - input.expensePassThroughOre, CHARGED_EXPENSE_VAT_RATE);
   return { arvodeRowsOre, arvodeExclVat, expenseExclVat, exclVat, vat, inclVat: exclVat + vat };
 }

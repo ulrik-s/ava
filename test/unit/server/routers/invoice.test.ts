@@ -183,11 +183,13 @@ describe("invoice.createRadgivning", () => {
 
     const res = await makeCaller().createRadgivning({ matterId: "m1" });
 
-    // 1 tim × timkostnadsnorm (F-skatt default) = 162 600 netto; brutto = 203 250 (inkl 25 %).
+    // 1 tim × timkostnadsnorm (F-skatt default) = 162 600 netto; moms 406,50 → 407 kr
+    // (#1438) → brutto 2 033 kr.
     expect(res.beloppExclVatOre).toBe(162_600);
     const data = mockPrisma.invoice.create.mock.calls[0]![0].data;
     expect(data.invoiceType).toBe("STANDARD"); // riktig faktura, inte aconto
-    expect(data.amount).toBe(203_250); // brutto (inkl moms)
+    expect(data.amount).toBe(203_300); // brutto (inkl moms)
+    expect(data.amountRounding).toBe("KRONOR");
     expect(data.status).toBe("DRAFT"); // "Skapad" — skickas inte automatiskt (#1138)
     // Ingen billing-run skapas (det är en fristående klientfaktura).
     expect(mockPrisma.billingRun.create).not.toHaveBeenCalled();

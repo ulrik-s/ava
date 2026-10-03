@@ -24,13 +24,13 @@
 
 import type { VatBreakdownLine } from "./accounting/semantic-voucher";
 import {
-  arvodeLine, expenseBreakdownLines, grossOreOf, netOreOf, timeEntryValueOre,
+  arvodeLine, expenseBreakdownLines, grossOreOf, minutesByKind, netOreOf, sumKindValueOre,
   type UnfrozenWork,
 } from "./billing-work-value";
-import { coverageEntryRateOre } from "./brottmalstaxa";
 import { arvodeInclVatOre } from "./invoice-calc";
 import { omitUndefined } from "./omit-undefined";
 import type { PaymentMethod, TimeEntryKind } from "./schemas/enums";
+import { kronorQuotient, roundToKronor, shareOfRow, splitGross, vatOnRow } from "./whole-kronor";
 
 export interface CoverageSplitInput {
   method: PaymentMethod;
@@ -87,15 +87,13 @@ export interface CoverageSplit {
   clientParts?: RattsskyddClientParts;
 }
 
-function shareOf(ore: number, bips: number): number {
-  return Math.round((ore * bips) / 10000);
-}
+
 
 export function computeCoverageSplit(input: CoverageSplitInput): CoverageSplit {
   const total = Math.max(0, input.totalOre);
   if (input.method === "RATTSHJALP") {
     const reduced = clampReduction(input.awardedOre, total);
-    const clientOre = shareOf(reduced, input.clientShareBips);
+    const clientOre = shareOfRow(reduced, input.clientShareBips);
     return { clientOre, payerOre: reduced - clientOre, firmLossOre: total - reduced, effectiveTotalOre: reduced };
   }
   if (input.method === "RATTSSKYDD") {
@@ -115,7 +113,7 @@ function rattsskyddSplit(total: number, input: CoverageSplitInput): CoverageSpli
   const covered = Math.max(0, Math.min(input.coveredOre ?? total, total));
   // Självrisk = andel% × täckt, dock LÄGST beslutets golv-belopp (#899), men aldrig
   // mer än den täckta delen (annars skulle försäkringen betala negativt).
-  const sjalvrisk = Math.min(covered, Math.max(input.minSjalvriskOre ?? 0, shareOf(covered, input.clientShareBips)));
+  const sjalvrisk = Math.min(covered, Math.max(input.minSjalvriskOre ?? 0, shareOfRow(covered, input.clientShareBips)));
   const prutning = Math.max(0, input.insurerPrutningOre ?? 0);
   const insurerRaw = Math.max(0, covered - sjalvrisk - prutning);
   const overCap = input.capOre != null ? Math.max(0, insurerRaw - input.capOre) : 0;
@@ -217,21 +215,23 @@ export interface RattsskyddMatter {
  * Värdet (netto) av den TÄCKTA delen (#950). Minuterna kommer ur den kronologiska
  * partitioneringen, men värdet måste räknas på posternas KATEGORINORMER — samma
  * valuta som `settlementArvodeNet` — annars jämförs äpplen med päron. Fördelar de
- * täckta minuterna över posterna i ordning (äldsta först).
+ * täckta minuterna över posterna i ordning (äldsta först) och värderar dem per
+ * KATEGORI, avrundat till hela kronor som arvodesraderna (#1438) — är allt
+ * täckt blir värdet då exakt arvodesbasen, utan en otäckt rest av avrundningar.
  */
 export function coveredValueOre(
   entries: ReadonlyArray<{ minutes: number; billable: boolean; kind?: TimeEntryKind | null | undefined }>,
   coveredMinutes: number, settleDate: Date | string,
 ): number {
   let left = coveredMinutes;
-  let value = 0;
+  const portions: Array<{ minutes: number; kind?: TimeEntryKind | null | undefined }> = [];
   for (const t of entries.filter((e) => e.billable)) {
     if (left <= 0) break;
     const take = Math.min(left, t.minutes);
-    value += timeEntryValueOre(take, coverageEntryRateOre(t.kind, settleDate));
+    portions.push({ minutes: take, kind: t.kind });
     left -= take;
   }
-  return value;
+  return sumKindValueOre(minutesByKind(portions), settleDate);
 }
 
 export function rattsskyddCoverage(
@@ -253,18 +253,19 @@ export function rattsskyddCoverage(
 }
 
 /** Dela utläggs-raderna mellan klient och betalare med SAMMA andel som arvodet
- *  (#878): klientens andel = clientOre/effectiveTotal. Betalaren får resten (så
- *  öre-avrundning aldrig tappas). Per momssats-rad delas netto + moms var för sig. */
+ *  (#878): klientens andel = clientOre/effectiveTotal. Betalaren får resten av
+ *  nettot (så ingen avrundning tappas). Varje part är en egen faktura, så nettot
+ *  avrundas till hela kronor och momsen räknas på det per part (#1438). */
 export function apportionExpenseLines(lines: VatBreakdownLine[], split: CoverageSplit): { clientLines: VatBreakdownLine[]; payerLines: VatBreakdownLine[] } {
   const denom = split.effectiveTotalOre;
   const clientLines: VatBreakdownLine[] = [];
   const payerLines: VatBreakdownLine[] = [];
   for (const l of lines) {
-    const clientNet = denom > 0 ? Math.round((l.netOre * split.clientOre) / denom) : 0;
-    const clientVat = denom > 0 ? Math.round((l.vatOre * split.clientOre) / denom) : 0;
+    const clientNet = denom > 0 ? kronorQuotient(l.netOre * split.clientOre, denom) : 0;
+    const clientVat = vatOnRow(clientNet, l.vatRate);
     if (clientNet + clientVat > 0) clientLines.push({ ...l, netOre: clientNet, vatOre: clientVat });
     const payerNet = l.netOre - clientNet;
-    const payerVat = l.vatOre - clientVat;
+    const payerVat = vatOnRow(payerNet, l.vatRate);
     if (payerNet + payerVat > 0) payerLines.push({ ...l, netOre: payerNet, vatOre: payerVat });
   }
   return { clientLines, payerLines };
@@ -299,7 +300,11 @@ export function coverageInvoiceLines(split: CoverageSplit, expenseLines: VatBrea
  */
 export function scaleVatLines(lines: VatBreakdownLine[], factor: number): VatBreakdownLine[] {
   if (factor >= 1) return lines;
-  return lines.map((l) => ({ ...l, netOre: Math.round(l.netOre * factor), vatOre: Math.round(l.vatOre * factor) }));
+  // Hela kronor per rad, momsen på det skalade nettot (#1438).
+  return lines.map((l) => {
+    const netOre = roundToKronor(l.netOre * factor);
+    return { ...l, netOre, vatOre: vatOnRow(netOre, l.vatRate) };
+  });
 }
 
 /**
@@ -340,7 +345,7 @@ export function resolveAward(
   const factor = awardFactor(awardedOre, claimGrossOre);
   const expenseLines = scaleVatLines(rawExpenseLines, factor);
   return {
-    awardedArvodeNetOre: Math.round(totalArvodeNet * factor),
+    awardedArvodeNetOre: roundToKronor(totalArvodeNet * factor),
     expenseLines, expensesBaseNetOre,
     // Byrån bär nedsättningen på utläggen också — arvodesdelen bärs via split.firmLossOre.
     expenseLossNetOre: netOreOf(rawExpenseLines) - netOreOf(expenseLines),
@@ -368,8 +373,10 @@ export function settleToAward(lines: SettlementLines, method: PaymentMethod, awa
   const i = lines.payerLines.findIndex((l) => l.kind === "arvode");
   const line = lines.payerLines[i];
   if (residual === 0 || !line) return lines;
-  const netDelta = Math.round((residual * 10_000) / (10_000 + line.vatRate));
+  // Nettot i hela kronor (#1438); har domstolen beviljat ett belopp med ören tas
+  // det som det är, och örena hamnar på momsdelen av resten.
+  const { netOre: netDelta, vatOre: vatDelta } = splitGross(residual, line.vatRate);
   const payerLines = lines.payerLines.map((l, j) =>
-    j === i ? { ...l, netOre: l.netOre + netDelta, vatOre: l.vatOre + residual - netDelta } : l);
+    j === i ? { ...l, netOre: l.netOre + netDelta, vatOre: l.vatOre + vatDelta } : l);
   return { ...lines, payerLines, split: { ...lines.split, payerOre: lines.split.payerOre + netDelta } };
 }

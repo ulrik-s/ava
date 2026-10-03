@@ -286,9 +286,15 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
       (s, t) => s + Math.round((t.minutes * TIMKOSTNADSNORM_FTAX_ORE_PER_H) / 60), 0,
     );
     expect(expectedTime).toBe(8_279_050);
-    // Alla fakturor lägger på 25 % moms på arvodet (#782); utlägg 28 650 öre brutto.
+    // Fakturan avrundar varje tidspost till hela kronor (#1438) → 82 792 kr.
+    const invoicedTime = times.entries.reduce(
+      (s, t) => s + Math.round((t.minutes * TIMKOSTNADSNORM_FTAX_ORE_PER_H) / 6000) * 100, 0,
+    );
+    expect(invoicedTime).toBe(8_279_200);
+    // Alla fakturor lägger på 25 % moms på arvodet (#782), i hela kronor (#1438).
+    // Utläggen 3 × 70 + 19 (19,20) = 229 kr + 57 kr moms (57,25) = 28 600 öre brutto.
     // Inget acconto-avdrag → fakturabeloppet (netto) = brutto; run bär brutto-värdet.
-    const expectedGross = arvodeInclVatOre(expectedTime) + 28_650;
+    const expectedGross = arvodeInclVatOre(invoicedTime) + 28_600;
     expect(r.run.workValueOreAtRun).toBe(expectedGross);
     expect(r.invoice.amount).toBe(expectedGross);
     state.invoiceId = r.invoice.id;

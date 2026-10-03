@@ -388,6 +388,24 @@ describe("InvoiceDetailPage", () => {
     expect(screen.getByText(/Aconto 2026-03-01/)).toBeInTheDocument();
   });
 
+  it("underlaget räknas som fakturan avrundades: hela kronor på nya, öre på äldre (#1438)", async () => {
+    const entries = { timeEntries: [{ id: "t1", date: new Date("2026-03-01"), description: "Brev", minutes: 7, hourlyRate: 100_000 }],
+      expenses: [{ id: "e1", date: new Date("2026-03-02"), description: "Porto", amount: 4_999, vatRate: 0, vatIncluded: false }] };
+    invoiceQuery.data = { ...baseInvoice, invoiceType: "FINAL", amountRounding: "KRONOR", ...entries };
+    const { unmount } = renderPage();
+    await waitFor(() => expect(screen.getByRole("heading", { name: /Underlag/i })).toBeInTheDocument());
+    // 117 kr arvode + 29 kr moms + 63 kr utlägg = 209 kr.
+    const card = screen.getByRole("heading", { name: /Underlag/i }).parentElement!;
+    expect(card.textContent?.replace(/\s/g, "")).toContain("209,00");
+    unmount();
+    invoiceQuery.data = { ...baseInvoice, invoiceType: "FINAL", ...entries };
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("heading", { name: /Underlag/i })).toBeInTheDocument());
+    // 116,67 + 29,17 + 62,49 = 208,33 kr — den äldre fakturans öresavrundning.
+    const legacy = screen.getByRole("heading", { name: /Underlag/i }).parentElement!;
+    expect(legacy.textContent?.replace(/\s/g, "")).toContain("208,33");
+  });
+
   it("renderar PAID-status utan Registrera betalning-knapp", async () => {
     invoiceQuery.data = { ...baseInvoice, status: "PAID" };
     renderPage();

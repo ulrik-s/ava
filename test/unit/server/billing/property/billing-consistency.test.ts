@@ -23,18 +23,22 @@ const SEEDS: number[] = process.env.AVA_BILLING_SEED
   ? [Number(process.env.AVA_BILLING_SEED)]
   : Array.from({ length: Number(process.env.AVA_BILLING_SEEDS ?? 40) }, (_, i) => i + 1);
 
+/** Hela kronor, räknat oberoende av `whole-kronor`: 1–49 öre ned, 50–99 upp. */
+const kr = (ore: number): number => Math.floor((ore + 50) / 100) * 100;
+
 /**
  * Privat slutfaktura räknad för hand ur ärendet: posternas egna á-priser med
  * 25 % moms. Kostnadselement vidarefaktureras med sin ingående moms avräknad
- * och 25 % pålagt; äkta utlägg går vidare som de är, utan moms.
+ * och 25 % pålagt; äkta utlägg går vidare som de är, utan moms. Varje rad är
+ * hela kronor och momsen räknas på summan av raderna (#1438).
  */
 function privateGrossOre(s: Scenario): number {
-  const vat25 = (net: number): number => Math.round(net * 0.25);
+  const vat25 = (net: number): number => kr(net * 0.25);
   const ownNet = (x: Scenario["expenses"][number]): number =>
     x.vatIncluded && x.vatRate > 0 ? Math.round((x.amount * 10_000) / (10_000 + x.vatRate)) : x.amount;
-  const arvodeNet = s.entries.reduce((sum, e) => sum + Math.round((e.minutes / 60) * e.hourlyRate), 0);
-  const chargedNet = s.expenses.filter((x) => !x.passThrough).reduce((sum, x) => sum + ownNet(x), 0);
-  const passThrough = s.expenses.filter((x) => x.passThrough).reduce((sum, x) => sum + x.amount, 0);
+  const arvodeNet = s.entries.reduce((sum, e) => sum + kr((e.minutes * e.hourlyRate) / 60), 0);
+  const chargedNet = s.expenses.filter((x) => !x.passThrough).reduce((sum, x) => sum + kr(ownNet(x)), 0);
+  const passThrough = s.expenses.filter((x) => x.passThrough).reduce((sum, x) => sum + kr(x.amount), 0);
   return arvodeNet + vat25(arvodeNet) + chargedNet + vat25(chargedNet) + passThrough;
 }
 

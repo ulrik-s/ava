@@ -15,12 +15,19 @@ const gross = (l: SettlementLines): number => [...l.clientLines, ...l.payerLines
 
 describe("settleToAward", () => {
   it("lägger avrundningsresten på betalarens arvodesrad, och fördelningen följer med", () => {
-    const out = settleToAward(LINES, "RATTSHJALP", gross(LINES) + 37);
-    expect(gross(out)).toBe(gross(LINES) + 37);
-    expect(out.payerLines[1]).toEqual({ kind: "arvode", vatRate: 2500, netOre: 80_030, vatOre: 20_007 });
+    // 5 kr mer beviljat → 4 kr netto + 1 kr moms, båda i hela kronor (#1438).
+    const out = settleToAward(LINES, "RATTSHJALP", gross(LINES) + 500);
+    expect(gross(out)).toBe(gross(LINES) + 500);
+    expect(out.payerLines[1]).toEqual({ kind: "arvode", vatRate: 2500, netOre: 80_400, vatOre: 20_100 });
     expect(out.payerLines[0]).toBe(utlagg);
     expect(out.clientLines).toBe(LINES.clientLines);
-    expect(out.split).toEqual({ ...SPLIT, payerOre: 80_030 });
+    expect(out.split).toEqual({ ...SPLIT, payerOre: 80_400 });
+  });
+
+  it("ett beviljat belopp med ören tas som det är — örena hamnar på momsdelen (#1438)", () => {
+    const out = settleToAward(LINES, "RATTSHJALP", gross(LINES) + 37);
+    expect(gross(out)).toBe(gross(LINES) + 37);
+    expect(out.payerLines[1]).toEqual({ kind: "arvode", vatRate: 2500, netOre: 80_000, vatOre: 20_037 });
   });
 
   it("en negativ rest drar av på samma rad", () => {
@@ -42,12 +49,12 @@ describe("settleToAward", () => {
 describe("resolveAward — beslutet mot det yrkade (#1255)", () => {
   const WORK = { timeEntries: [], expenses: [] };
 
-  it("fullt beviljat yrkande ger ingen nedsättning, även när omräkningen på öret är högre", () => {
-    // Omräknat 100 001 öre netto (125 001 brutto) mot yrkat och beviljat 125 000.
-    expect(resolveAward("RATTSHJALP", 100_001, WORK, 125_000, 125_000).awardedArvodeNetOre).toBe(100_001);
+  it("fullt beviljat yrkande ger ingen nedsättning, även när omräkningen är högre", () => {
+    // Omräknat 1 001 kr netto (1 251 kr brutto) mot yrkat och beviljat 1 250 kr.
+    expect(resolveAward("RATTSHJALP", 100_100, WORK, 125_000, 125_000).awardedArvodeNetOre).toBe(100_100);
   });
 
-  it("utan körningens yrkande jämförs beslutet med omräkningen, som förut", () => {
-    expect(resolveAward("RATTSHJALP", 100_001, WORK, 125_000).awardedArvodeNetOre).toBe(100_000);
+  it("utan körningens yrkande jämförs beslutet med omräkningen — nedsatt arvode i hela kronor", () => {
+    expect(resolveAward("RATTSHJALP", 100_100, WORK, 125_000).awardedArvodeNetOre).toBe(100_000);
   });
 });

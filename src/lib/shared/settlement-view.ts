@@ -8,8 +8,8 @@
 
 import { accontoCreditAmounts, accontoCreditLines, accontoSplit } from "./acconto-vat";
 import type { VatBreakdownLine } from "./accounting/semantic-voucher";
-import { vatOnNet, type UnfrozenWork } from "./billing-work-value";
-import { coverageEntryValueOre, payableCoverageEntries } from "./brottmalstaxa";
+import { coverageEntryRowOre, vatOnNet, type UnfrozenWork } from "./billing-work-value";
+import { payableCoverageEntries } from "./brottmalstaxa";
 import type { RattsskyddClientParts } from "./coverage-billing";
 import { arvodeInclVatOre } from "./invoice-calc";
 import type { SpecDeduction, SpecTimeLine } from "./invoice-specification";
@@ -99,8 +99,8 @@ export interface SettlementBreakdown {
 }
 
 /** Klientfakturans tidsspec (#876): det ofrysta arbetet, värderat på samma rate
- *  som arvodesbasen och AVSTÄMT så radernas summa exakt = `totalArvodeNet` (per-
- *  rad-avrundning läggs på sista raden). Rådgivningstimmen är en låst post och
+ *  som arvodesbasen, varje rad i hela kronor (#1438), och AVSTÄMT så radernas
+ *  summa exakt = `totalArvodeNet` (avrundningsresten läggs på sista raden). Rådgivningstimmen är en låst post och
  *  finns inte i `work` (#1205) — ingen registrerad tid dras av i dess ställe. */
 export function buildClientArvodeLines(work: UnfrozenWork, totalArvodeNet: number, settleDate: Date | string): SpecTimeLine[] {
   const entries = payableCoverageEntries(work.timeEntries.filter((t) => t.billable));
@@ -109,11 +109,11 @@ export function buildClientArvodeLines(work: UnfrozenWork, totalArvodeNet: numbe
   // kategorier (advokatberedskap) får sitt dagbelopp, inte minuter × norm.
   const lines: SpecTimeLine[] = entries.map((t) => ({
     date: t.date, description: t.description, minutes: t.minutes, kind: t.kind,
-    amountOre: coverageEntryValueOre(t, settleDate),
+    amountOre: coverageEntryRowOre(t, settleDate),
   }));
   const sum = lines.reduce((s, l) => s + l.amountOre, 0);
   const last = lines[lines.length - 1];
-  if (last && sum !== totalArvodeNet) last.amountOre += totalArvodeNet - sum; // avstämning (öre)
+  if (last && sum !== totalArvodeNet) last.amountOre += totalArvodeNet - sum; // avstämning
   return lines;
 }
 
