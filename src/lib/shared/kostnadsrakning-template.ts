@@ -131,7 +131,7 @@ export const KOSTNADSRAKNING_DEFAULT_HTML = `<!DOCTYPE html>
   {{#if footerLines.length}}
   <div class="footer">
     {{#if footerSeal}}<img class="seal" src="{{footerSeal}}" alt="">{{/if}}
-    {{#each footerLines}}<div>{{#each this}}{{#unless @first}} ∽ {{/unless}}{{this}}{{/each}}</div>{{/each}}
+    {{#each footerLines}}<div>{{#each this}}{{#unless @first}} · {{/unless}}{{this}}{{/each}}</div>{{/each}}
   </div>
   {{/if}}
 </section>

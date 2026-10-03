@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest-compat";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { buildKostnadsrakningContext, type BuildInput, type TimeEntryInput } from "@/lib/shared/kostnadsrakning";
+import { FOOTER_SEPARATOR } from "@/lib/shared/kostnadsrakning-document";
 import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/kostnadsrakning-template";
 import { pdfPageContents, pdfPageTexts } from "../../../helpers/pdf-text";
 import { BROKEN_PNG, TINY_JPEG, TINY_PNG } from "../../../helpers/tiny-images";
@@ -68,9 +69,21 @@ describe("renderKostnadsrakningPdf — sida 1 (sammanställning)", () => {
     expect(p1.join("|")).toContain("Teststad den 24 juni 2026|Test Testsson|Advokat");
   });
 
-  it("sidfoten: byrå, kontakt, bankgiro, VAT och F-skatt", async () => {
-    const [p1] = await render(FORSVARARE);
-    expect(p1).toEqual(expect.arrayContaining(["Tel: 010-000 00 00", "kontakt@testbyran.se", "Arvoden bankgiro 111-2222", "VAT nr: SE556000000101", "Godkänd för F-skatt"]));
+  it("sidfoten: byrå, kontakt, bankgiro, VAT och F-skatt — delarna åtskilda av en mittpunkt", async () => {
+    const [p1 = []] = await render(FORSVARARE);
+    const footer = p1.join("|");
+    for (const part of ["Tel: 010-000 00 00", "kontakt@testbyran.se", "Arvoden bankgiro 111-2222"]) expect(footer).toContain(part);
+    expect(footer).toContain("VAT nr: SE556000000101 · Godkänd för F-skatt");
+  });
+
+  it("sidfotens tecken finns alla i teckensnittets kodning — inget ritas som ett trasigt tecken", async () => {
+    const { PDFDocument, StandardFonts } = await import("pdf-lib");
+    const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
+    const charset = new Set(font.getCharacterSet());
+    const doc = buildKostnadsrakningContext({ ...FORSVARARE, organization: { ...ORG, website: "https://www.testbyran.se/" } }).document;
+    const text = doc.footerLines.map((parts) => parts.join(FOOTER_SEPARATOR)).join("");
+    expect([...text].filter((c) => !charset.has(c.codePointAt(0) ?? 0))).toEqual([]);
+    expect(text).toContain(FOOTER_SEPARATOR.trim());
   });
 
   it("sida 1 har inget sidnummer", async () => {
@@ -87,10 +100,10 @@ describe("renderKostnadsrakningPdf — sida 1 (sammanställning)", () => {
 
   it("utan domstol, målnummer och byrå: inget mottagarblock, rubriken utan mål", async () => {
     const { courtName: _court, ...utanDomstol } = FORSVARARE;
-    const [p1] = await render({ ...utanDomstol, matter: { matterNumber: "T-2", title: "x" }, organization: {}, hasFTax: false });
+    const [p1 = []] = await render({ ...utanDomstol, matter: { matterNumber: "T-2", title: "x" }, organization: {}, hasFTax: false });
     expect(p1).not.toContain("via e-post");
     expect(p1).toContain("KOSTNADSRÄKNING");
-    expect(p1).not.toContain("Godkänd för F-skatt");
+    expect(p1.join("|")).not.toContain("Godkänd för F-skatt");
   });
 });
 
@@ -145,7 +158,7 @@ describe("byråns webbplats, logga och sidfotsmärke (#1218)", () => {
     const bytes = await renderBytes(branded);
     const [p1 = []] = await pdfPageTexts(bytes);
     expect(p1[0]).toBe("Teststads tingsrätt"); // inget namn som brevhuvud
-    expect(p1).toContain("www.testbyran.se");
+    expect(p1.join("|")).toContain("www.testbyran.se");
     const [c1 = ""] = await pdfPageContents(bytes);
     expect(c1.match(/ Do/g)).toHaveLength(2); // logga + märke
   });

@@ -74,7 +74,6 @@ const REPLACEMENTS: Readonly<Record<string, string>> = {
   " ": " ", // smalt hårt mellanslag
   " ": " ",
   "→": "->",
-  "∽": "~",
 };
 
 export class PdfWriter {
@@ -149,14 +148,6 @@ export class PdfWriter {
   rule(x1: number, x2: number, top: number, thickness: number, grey = false): void {
     const y = PAGE_HEIGHT - top;
     this.current.drawLine({ start: { x: x1, y }, end: { x: x2, y }, thickness, color: grey ? this.rgb(0.75, 0.75, 0.75) : this.rgb(0, 0, 0) });
-  }
-
-  /** Omvänd tilde (∽) som vektor — WinAnsi saknar tecknet. `x` = vänsterkant. */
-  tilde(x: number, top: number, size: number): void {
-    const s = size / 8;
-    this.current.drawSvgPath(`M0 0 C${1.2 * s} ${1.6 * s} ${2.4 * s} ${1.6 * s} ${3.6 * s} 0 S${6 * s} ${-1.6 * s} ${7.2 * s} 0`, {
-      x, y: PAGE_HEIGHT - top + size * 0.3, borderColor: this.rgb(0, 0, 0), borderWidth: 0.45,
-    });
   }
 
   /**
