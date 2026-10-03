@@ -1,26 +1,68 @@
 /**
  * Lokal CA + leaf-cert för helper-HTTPS (#102, ADR 0006).
  *
- * Nyckel-generering sker med node:crypto (snabb native RSA); cert-bygge +
- * signering med node-forge (ren JS, ingen system-openssl). CA:n utfärdas
- * med X.509 Name Constraints begränsade till localhost/127.0.0.1/::1 → en
- * läckt CA-nyckel kan inte förfalska cert för riktiga domäner.
+ * Nyckel-generering och RSA-signering sker med node:crypto (native, synkront);
+ * själva X.509-strukturen byggs och DER-kodas med `@peculiar/asn1-x509` (typade
+ * ASN.1-scheman, ingen egen kryptografi). CA:n utfärdas med X.509 Name
+ * Constraints begränsade till localhost → en läckt CA-nyckel kan inte förfalska
+ * cert för riktiga domäner.
+ *
+ * Tidigare byggdes certen med node-forge, som har en olagad sårbarhet i sin
+ * RSA-signaturverifiering (GHSA-86w9-cpqp-85rv). Formatet är detsamma: CN som
+ * PrintableString, sha256WithRSAEncryption med NULL-parametrar, samma tillägg —
+ * så CA:er som redan ligger i användarens nyckelring fortsätter att användas.
  *
  * Material lagras i data-dir; nycklar med 0600. Idempotent: återanvänder
  * giltig CA + leaf, återutfärdar leaf när den närmar sig utgång.
  */
 
-import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { createPrivateKey, generateKeyPairSync, randomBytes, sign, X509Certificate, type KeyObject } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import forge from "node-forge";
+import { AsnConvert, OctetString } from "@peculiar/asn1-schema";
+import {
+  AlgorithmIdentifier,
+  AttributeTypeAndValue,
+  AttributeValue,
+  BasicConstraints,
+  Certificate,
+  ExtendedKeyUsage,
+  Extension,
+  Extensions,
+  GeneralName,
+  GeneralSubtree,
+  GeneralSubtrees,
+  KeyUsage,
+  KeyUsageFlags,
+  Name,
+  NameConstraints,
+  RelativeDistinguishedName,
+  SubjectAlternativeName,
+  SubjectPublicKeyInfo,
+  TBSCertificate,
+  Validity,
+  Version,
+  id_ce_basicConstraints,
+  id_ce_extKeyUsage,
+  id_ce_keyUsage,
+  id_ce_nameConstraints,
+  id_ce_subjectAltName,
+  id_kp_serverAuth,
+} from "@peculiar/asn1-x509";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CA_VALID_MS = 3650 * DAY_MS; // ~10 år
 const LEAF_VALID_MS = 365 * DAY_MS;
 const LEAF_RENEW_BEFORE_MS = 30 * DAY_MS;
 const CLOCK_SKEW_MS = 60 * 1000;
+
+/** sha256WithRSAEncryption (RFC 4055). */
+const SHA256_WITH_RSA = "1.2.840.113549.1.1.11";
+/** id-at-commonName. */
+const COMMON_NAME = "2.5.4.3";
+/** DER för ASN.1 NULL — RSA-algoritmidentifierare ska bära explicit NULL. */
+const DER_NULL = new Uint8Array([0x05, 0x00]).buffer;
 
 export interface CertPair {
   /** PEM. */
@@ -33,31 +75,42 @@ export interface TlsMaterial {
   leaf: CertPair;
 }
 
-function newKey(): { priv: forge.pki.rsa.PrivateKey; pub: forge.pki.rsa.PublicKey; keyPem: string } {
-  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: "spki", format: "pem" },
-    privateKeyEncoding: { type: "pkcs8", format: "pem" },
-  });
+interface NewKey {
+  privateKey: KeyObject;
+  spki: SubjectPublicKeyInfo;
+  keyPem: string;
+}
+
+function newKey(): NewKey {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   return {
-    priv: forge.pki.privateKeyFromPem(privateKey),
-    pub: forge.pki.publicKeyFromPem(publicKey),
-    keyPem: privateKey,
+    privateKey,
+    spki: AsnConvert.parse(publicKey.export({ type: "spki", format: "der" }), SubjectPublicKeyInfo),
+    keyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
   };
 }
 
-function serial(): string {
-  // Inled med "00" så serien tolkas som positiv (icke-negativ INTEGER).
-  return `00${randomBytes(8).toString("hex")}`;
+/** 16 slumpbytes; första byten utan teckenbit och ≠ 0 → positiv, minimal DER-INTEGER. */
+function serial(): ArrayBuffer {
+  const bytes = randomBytes(16);
+  bytes[0] = ((bytes[0] ?? 0) & 0x7f) | 0x40;
+  return new Uint8Array(bytes).buffer;
 }
 
-/** GeneralName [2] dNSName (primitiv, IA5String). */
-function dnsName(name: string): forge.asn1.Asn1 {
-  return forge.asn1.create(forge.asn1.Class.CONTEXT_SPECIFIC, 2, false, name);
+/** `CN=<cn>` som PrintableString (samma kodning som de forge-genererade certen). */
+function commonName(cn: string): Name {
+  const attr = new AttributeTypeAndValue({ type: COMMON_NAME, value: new AttributeValue({ printableString: cn }) });
+  return new Name([new RelativeDistinguishedName([attr])]);
 }
 
-function subtree(generalName: forge.asn1.Asn1): forge.asn1.Asn1 {
-  return forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [generalName]);
+function extension(extnID: string, critical: boolean, value: unknown): Extension {
+  return new Extension({ extnID, critical, extnValue: new OctetString(AsnConvert.serialize(value)) });
+}
+
+function keyUsage(flags: number): KeyUsage {
+  const ku = new KeyUsage();
+  ku.fromNumber(flags);
+  return ku;
 }
 
 /**
@@ -69,75 +122,105 @@ function subtree(generalName: forge.asn1.Asn1): forge.asn1.Asn1 {
  * (127.0.0.1/::1) blir därmed obegränsade, vilket är acceptabelt (domän-
  * förfalskning är den verkliga risken, inte loopback-IP).
  */
-function nameConstraintsExtension(): { id: string; critical: boolean; value: string } {
-  const permitted = forge.asn1.create(forge.asn1.Class.CONTEXT_SPECIFIC, 0, true, [
-    subtree(dnsName("localhost")),
-  ]);
-  const nc = forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [permitted]);
-  return { id: "2.5.29.30", critical: true, value: forge.asn1.toDer(nc).getBytes() };
+function nameConstraintsExtension(): Extension {
+  const permitted = new GeneralSubtrees([new GeneralSubtree({ base: new GeneralName({ dNSName: "localhost" }) })]);
+  return extension(id_ce_nameConstraints, true, new NameConstraints({ permittedSubtrees: permitted }));
+}
+
+interface CertSpec {
+  issuer: Name;
+  subject: Name;
+  spki: SubjectPublicKeyInfo;
+  signer: KeyObject;
+  now: Date;
+  validMs: number;
+  extensions: Extension[];
+}
+
+/** Bygg TBSCertificate, signera med RSA-PKCS#1 v1.5/SHA-256 och returnera PEM. */
+function buildCert(spec: CertSpec): string {
+  const algorithm = new AlgorithmIdentifier({ algorithm: SHA256_WITH_RSA, parameters: DER_NULL });
+  const tbsCertificate = new TBSCertificate({
+    version: Version.v3,
+    serialNumber: serial(),
+    signature: algorithm,
+    issuer: spec.issuer,
+    validity: new Validity({
+      notBefore: new Date(spec.now.getTime() - CLOCK_SKEW_MS),
+      notAfter: new Date(spec.now.getTime() + spec.validMs),
+    }),
+    subject: spec.subject,
+    subjectPublicKeyInfo: spec.spki,
+    extensions: new Extensions(spec.extensions),
+  });
+  const tbs = new Uint8Array(AsnConvert.serialize(tbsCertificate));
+  const signatureValue = new Uint8Array(sign("sha256", tbs, spec.signer)).buffer;
+  const der = AsnConvert.serialize(new Certificate({ tbsCertificate, signatureAlgorithm: algorithm, signatureValue }));
+  return new X509Certificate(new Uint8Array(der)).toString();
 }
 
 /** CN på den lokala CA:n — används av trust-install/-uninstall (#103). */
 export const CA_COMMON_NAME = "AVA Helper Local CA";
 
-const CA_ATTRS = [{ name: "commonName", value: CA_COMMON_NAME }];
-
 /** Generera en self-signed, name-constrained lokal CA. */
 export function generateCa(now: Date = new Date()): CertPair {
-  const { priv, pub, keyPem } = newKey();
-  const cert = forge.pki.createCertificate();
-  cert.publicKey = pub;
-  cert.serialNumber = serial();
-  cert.validity.notBefore = new Date(now.getTime() - CLOCK_SKEW_MS);
-  cert.validity.notAfter = new Date(now.getTime() + CA_VALID_MS);
-  cert.setSubject(CA_ATTRS);
-  cert.setIssuer(CA_ATTRS);
-  cert.setExtensions([
-    { name: "basicConstraints", cA: true, critical: true },
-    { name: "keyUsage", keyCertSign: true, cRLSign: true, critical: true },
-    nameConstraintsExtension(),
-  ]);
-  cert.sign(priv, forge.md.sha256.create());
-  return { cert: forge.pki.certificateToPem(cert), key: keyPem };
+  const { privateKey, spki, keyPem } = newKey();
+  const cert = buildCert({
+    issuer: commonName(CA_COMMON_NAME),
+    subject: commonName(CA_COMMON_NAME),
+    spki,
+    signer: privateKey,
+    now,
+    validMs: CA_VALID_MS,
+    extensions: [
+      extension(id_ce_basicConstraints, true, new BasicConstraints({ cA: true })),
+      extension(id_ce_keyUsage, true, keyUsage(KeyUsageFlags.keyCertSign | KeyUsageFlags.cRLSign)),
+      nameConstraintsExtension(),
+    ],
+  });
+  return { cert, key: keyPem };
 }
 
-/** Utfärda ett leaf-cert för localhost/127.0.0.1/::1, signerat av CA:n. */
+/**
+ * Utfärda ett leaf-cert för localhost/127.0.0.1/::1, signerat av CA:n.
+ * Utfärdarnamnet kopieras ur CA-certet (inte återskapat) så kedjan håller även
+ * mot en äldre, redan betrodd CA.
+ */
 export function issueLeaf(ca: CertPair, now: Date = new Date()): CertPair {
-  const caCert = forge.pki.certificateFromPem(ca.cert);
-  const caKey = forge.pki.privateKeyFromPem(ca.key);
-  const { pub, keyPem } = newKey();
-  const cert = forge.pki.createCertificate();
-  cert.publicKey = pub;
-  cert.serialNumber = serial();
-  cert.validity.notBefore = new Date(now.getTime() - CLOCK_SKEW_MS);
-  cert.validity.notAfter = new Date(now.getTime() + LEAF_VALID_MS);
-  cert.setSubject([{ name: "commonName", value: "localhost" }]);
-  cert.setIssuer(caCert.subject.attributes);
-  cert.setExtensions([
-    { name: "basicConstraints", cA: false, critical: true },
-    { name: "keyUsage", digitalSignature: true, keyEncipherment: true, critical: true },
-    { name: "extKeyUsage", serverAuth: true },
-    {
-      name: "subjectAltName",
-      altNames: [
-        { type: 2, value: "localhost" },
-        { type: 7, ip: "127.0.0.1" },
-        { type: 7, ip: "::1" },
-      ],
-    },
+  const caCert = AsnConvert.parse(new X509Certificate(ca.cert).raw, Certificate);
+  const { spki, keyPem } = newKey();
+  const san = new SubjectAlternativeName([
+    new GeneralName({ dNSName: "localhost" }),
+    new GeneralName({ iPAddress: "127.0.0.1" }),
+    new GeneralName({ iPAddress: "::1" }),
   ]);
-  cert.sign(caKey, forge.md.sha256.create());
-  return { cert: forge.pki.certificateToPem(cert), key: keyPem };
+  const cert = buildCert({
+    issuer: caCert.tbsCertificate.subject,
+    subject: commonName("localhost"),
+    spki,
+    signer: createPrivateKey(ca.key),
+    now,
+    validMs: LEAF_VALID_MS,
+    extensions: [
+      extension(id_ce_basicConstraints, true, new BasicConstraints({ cA: false })),
+      extension(id_ce_keyUsage, true, keyUsage(KeyUsageFlags.digitalSignature | KeyUsageFlags.keyEncipherment)),
+      extension(id_ce_extKeyUsage, false, new ExtendedKeyUsage([id_kp_serverAuth])),
+      extension(id_ce_subjectAltName, false, san),
+    ],
+  });
+  return { cert, key: keyPem };
 }
 
 function notAfter(certPem: string): number {
-  return forge.pki.certificateFromPem(certPem).validity.notAfter.getTime();
+  return new X509Certificate(certPem).validToDate.getTime();
 }
 
+/**
+ * Är leafen utfärdad av JUST den här CA:n? Namnmatchning räcker inte: en
+ * återskapad CA får samma CN, så signaturen kontrolleras mot CA:ns nyckel.
+ */
 function leafIssuedBy(leafPem: string, caPem: string): boolean {
-  const leaf = forge.pki.certificateFromPem(leafPem);
-  const ca = forge.pki.certificateFromPem(caPem);
-  return leaf.issuer.hash === ca.subject.hash;
+  return new X509Certificate(leafPem).verify(new X509Certificate(caPem).publicKey);
 }
 
 function readPair(certPath: string, keyPath: string): CertPair | null {

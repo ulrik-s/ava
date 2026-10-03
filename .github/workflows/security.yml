@@ -62,7 +62,8 @@ jobs:
   #
   # Undantagen nedan är namngivna per advisory, inte en uppmjukad nivå. Var och en
   # kräver en rad med skäl; utan skäl ska raden bort och sårbarheten åtgärdas.
-  # `helper-ui` har INGA undantag.
+  # Samma regel gäller båda arbetsytorna (roten och `helper-ui`): undantag bara
+  # per advisory, med skäl och ett uppföljningsärende.
   audit:
     name: Sårbara beroenden (bun audit)
     runs-on: ubuntu-latest
@@ -78,18 +79,37 @@ jobs:
       #
       # (De två image-size-undantagen är BORTA sedan #970 — html-to-docx är
       # ersatt av en egen DOCX-skrivare, så paketet finns inte längre i trädet.)
+      # braces (high, GHSA-vfj7-8cjw-p6xm, 2026-09-18): stackspill vid djupt
+      #   nästlade glob-mönster → DoS. Ingen rättad version finns. Bara i
+      #   devDep-kedjan eslint-config-next → @next/eslint-plugin-next → fast-glob
+      #   → micromatch → braces: körs av lint på våra egna mönster, aldrig i
+      #   server/klient. Undantaget godkänt av Ulrik 2026-10-03; tas bort i #1442
+      #   så fort braces/micromatch släpper en rättning.
       - name: bun audit (roten)
         run: |
           bun audit --audit-level=low \
-            --ignore GHSA-67mh-4wv8-2f99
+            --ignore GHSA-67mh-4wv8-2f99 \
+            --ignore GHSA-vfj7-8cjw-p6xm
 
       # helper-ui har egen lockfil och låg helt UTANFÖR grinden fram till #966 —
-      # den innehöll då 27 sårbarheter, varav en critical (node-tar). Nu ren.
+      # den innehöll då 27 sårbarheter, varav en critical (node-tar).
       - name: Installera helper-ui (frozen)
         run: bun install --frozen-lockfile
         working-directory: helper-ui
+
+      # (node-forge, GHSA-86w9-cpqp-85rv, åtgärdades i stället för att undantas:
+      # cert-bygget i src/engine/tls/certs.ts använder nu @peculiar/asn1-x509 +
+      # node:crypto, så paketet finns inte längre i trädet.)
+      # http-cache-semantics (high, GHSA-ch52-4w7c-c8xp): max-stale kan lämna ut
+      #   cachade svar mellan användare. Ingen rättad version finns. Bara i
+      #   BYGG-/installationskedjan electron(-builder) → @electron/get → got →
+      #   cacheable-request (laddar ner Electron-binären); devDeps, paketeras
+      #   inte i appen. Undantaget godkänt av Ulrik 2026-10-03; tas bort i #1444
+      #   så fort en rättning finns.
       - name: bun audit (helper-ui)
-        run: bun audit --audit-level=low
+        run: |
+          bun audit --audit-level=low \
+            --ignore GHSA-ch52-4w7c-c8xp
         working-directory: helper-ui
 
       - name: Full rapport (informativ, fäller inte)
