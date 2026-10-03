@@ -78,10 +78,17 @@ jobs:
       #
       # (De två image-size-undantagen är BORTA sedan #970 — html-to-docx är
       # ersatt av en egen DOCX-skrivare, så paketet finns inte längre i trädet.)
+      # braces (high, GHSA-vfj7-8cjw-p6xm, 2026-09-18): stackspill vid djupt
+      #   nästlade glob-mönster → DoS. Ingen rättad version finns. Bara i
+      #   devDep-kedjan eslint-config-next → @next/eslint-plugin-next → fast-glob
+      #   → micromatch → braces: körs av lint på våra egna mönster, aldrig i
+      #   server/klient. Undantaget godkänt av Ulrik 2026-10-03; tas bort i #1442
+      #   så fort braces/micromatch släpper en rättning.
       - name: bun audit (roten)
         run: |
           bun audit --audit-level=low \
-            --ignore GHSA-67mh-4wv8-2f99
+            --ignore GHSA-67mh-4wv8-2f99 \
+            --ignore GHSA-vfj7-8cjw-p6xm
 
       # helper-ui har egen lockfil och låg helt UTANFÖR grinden fram till #966 —
       # den innehöll då 27 sårbarheter, varav en critical (node-tar). Nu ren.
