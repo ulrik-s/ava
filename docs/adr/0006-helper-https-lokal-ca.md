@@ -41,7 +41,7 @@ Linux- och Windows-helpers (samt Windows Office-add-ins via WebView2) fortsätte
 **Kostnad / risk**
 - En betrodd **root-CA på användarens maskin** är en säkerhetsyta. Mildras av: per-maskin unik CA (aldrig delad/inbäddad i releasen), Name Constraints, `0600`-skydd på nyckeln, kort leaf-livslängd + rotation, tydlig logg om vad som installeras.
 - **Engångsprompt** (keychain-auktorisering) vid install — sämre UX än väg A:s noll-prompt.
-- Cert-generering kräver ett X.509-bibliotek i binären (`node-forge`/`@peculiar/x509`; ej system-`openssl`-beroende).
+- Cert-generering kräver ett X.509-bibliotek i binären (ej system-`openssl`-beroende). Först `node-forge`; sedan 2026-10-03 (#1443, GHSA-86w9-cpqp-85rv utan rättning) typade ASN.1-scheman från `@peculiar/asn1-x509` + nyckelgenerering/signering i `node:crypto`. Samma certformat, så redan betrodda CA:er återanvänds.
 - Firefox har egen NSS-store — men Firefox behöver inte helper-HTTPS (HTTP-loopback funkar), så vi rör den **inte**.
 - Underhåll: leaf-förnyelse + en avinstallations-väg som faktiskt städar trust-storen.
 
