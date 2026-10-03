@@ -69,7 +69,7 @@ vi.mock("@/lib/client/trpc", () => ({
       coverageSplit: { useQuery: () => ({ data: coverageSplitData }) },
     },
     organization: {
-      getSettings: { useQuery: () => ({ data: { name: "Byrå AB", orgNumber: "556677-8899", address: "Storgatan 1" } }) },
+      getSettings: { useQuery: () => ({ data: { name: "Byrå AB", orgNumber: "556677-8899", address: "Storgatan 1", logo: ORG_LOGO } }) },
     },
     user: { current: { useQuery: () => ({ data: { name: "Adv. Anna", email: "anna@byra.se" } }) } },
     // DataTable (faktura-listan, #1146) läser/sparar vy-inställningar.
@@ -111,12 +111,16 @@ vi.mock("@/lib/client/demo/generated-doc-cache", () => ({
   openGeneratedDoc: (id: string) => openGeneratedDocFn(id),
 }));
 const openDocumentFn = vi.fn(async () => "opened-blob" as const);
+/** Byråns logga i inställningarna (#1439) — följer med till fakturadialogerna. */
+const ORG_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+let billingDialogMeta: unknown;
+let verdictOrganization: unknown;
 vi.mock("@/lib/client/firma/open-document", () => ({ openDocument: openDocumentFn }));
 vi.mock("@/app/matters/[id]/_billing-dialog", () => ({
-  BillingDialog: ({ type }: { type: string }) => <div data-testid="billing-dialog">{type}</div>,
+  BillingDialog: ({ type, meta }: { type: string; meta: unknown }) => { billingDialogMeta = meta; return <div data-testid="billing-dialog">{type}</div>; },
 }));
 vi.mock("@/app/matters/[id]/_verdict-dialog", () => ({
-  VerdictDialog: () => <div data-testid="verdict-dialog" />,
+  VerdictDialog: ({ organization }: { organization?: unknown }) => { verdictOrganization = organization; return <div data-testid="verdict-dialog" />; },
 }));
 // Modalen själv testas separat — här bara skillnaden stänga vs faktiskt generera (#1121).
 vi.mock("@/app/matters/[id]/_kostnadsrakning-modal", () => ({
@@ -296,6 +300,14 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
     expect(screen.queryByRole("button", { name: "Ångra kostnadsräkning" })).not.toBeInTheDocument();
   });
 
+  it("'Skapa faktura' ger domstolsfakturan byråns namn, org.nr och logga (#1439)", () => {
+    runsData = { runs: [{ id: "r3", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", kostnadsrakningStatus: "BESLUTAD", recipient: "DOMSTOL", amountOre: 50_000, awardedOre: 40_000, createdAt: "2026-03-01" }] };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
+    expect(screen.getByTestId("verdict-dialog")).toBeInTheDocument();
+    expect(verdictOrganization).toEqual({ organizationName: "Byrå AB", organizationOrgNumber: "556677-8899", organizationLogo: ORG_LOGO });
+  });
+
   it("öppnar KR-dokumentet ur blob-cachen när det finns", () => {
     documentListData = { documents: [{ id: "doc-1", fileName: "kostnadsrakning.docx", documentType: "Kostnadsräkning", createdAt: "2026-03-01" }] };
     hasDoc = true;
@@ -331,6 +343,8 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Faktura till klient" }));
     expect(screen.getByTestId("billing-dialog")).toHaveTextContent("FINAL");
+    // Byråns namn, org.nr och logga följer med till fakturadokumentet (#1439).
+    expect(billingDialogMeta).toMatchObject({ organizationName: "Byrå AB", organizationOrgNumber: "556677-8899", organizationLogo: ORG_LOGO });
   });
 
   it("RATTSSKYDD: aconto + faktura till försäkring", () => {

@@ -75,7 +75,7 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
   const ctx: RunCtx = { c: target.caller, sink, res: emptyRunResult() };
   await runSimulation(ctx, seed);
 
-  // Faktura-/KR-HTML-dokument som EFTER-pass (läser skapade fakturor/runs; renderar
+  // Faktura-/KR-PDF-dokument (#1439) som EFTER-pass (läser skapade fakturor/runs; renderar
   // settlementBreakdown efter #878).
   const invoiceDocs = await populateInvoiceDocs(target.caller, sink);
   const kostnadsrakningDocs = await populateKostnadsrakningDocs(target.caller, sink);

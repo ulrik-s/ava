@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import { VatBreakdown } from "@/components/billing/vat-breakdown";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
+import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
@@ -24,12 +25,12 @@ import type { MatterId } from "@/lib/shared/schemas/ids";
 
 interface AccontoRow { id: string; amountOre: number; recipient: string }
 
-export interface BillingMeta {
+/** Ärendets och byråns fält till fakturaflödena — byråfälten (namn, org.nr,
+ *  logga, #1439) följer med till fakturadokumentet. */
+export interface BillingMeta extends FakturaOrgMeta {
   matterNumber: string;
   matterTitle: string;
   clientName?: string;
-  organizationName?: string;
-  organizationOrgNumber?: string;
   /** Klientens andel i bips (2500 = 25 %); förifyller acconto-förslaget (#778). */
   clientShareBips?: number | null;
 }
@@ -60,8 +61,7 @@ function docMetaFrom(meta: BillingMeta): FakturaDocMeta {
   return {
     matterNumber: meta.matterNumber, matterTitle: meta.matterTitle,
     ...(meta.clientName ? { clientName: meta.clientName } : {}),
-    ...(meta.organizationName ? { organizationName: meta.organizationName } : {}),
-    ...(meta.organizationOrgNumber ? { organizationOrgNumber: meta.organizationOrgNumber } : {}),
+    ...fakturaOrgMeta({ name: meta.organizationName, orgNumber: meta.organizationOrgNumber, logo: meta.organizationLogo }),
   };
 }
 

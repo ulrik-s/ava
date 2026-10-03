@@ -6,9 +6,11 @@
  * Invoice-objektet. `document.register` emittar inga events (ingen read-only-trap),
  * så detta funkar i både demo- och git-backend.
  *
- * HTML:en kommer ur den DELADE mallen (`faktura-template.ts`, #937) — samma
- * renderare som demo-generatorn använder, så varje faktura i systemet har
- * sammanställning på första sidan och specifikation därefter.
+ * Dokumentet är en PDF (#1439) ur den DELADE vy-modellen (`buildFakturaView`,
+ * #937/#938) och PDF-renderaren (`renderFakturaPdf`) — samma som demo-
+ * generatorn och fakturautskicket använder, så varje faktura i systemet har
+ * sammanställning på första sidan och specifikation därefter. Inga nya
+ * HTML-dokument skapas; äldre HTML-fakturor ligger kvar orörda.
  */
 
 import type { inferRouterInputs } from "@trpc/server";
@@ -49,12 +51,15 @@ export interface GenerateFakturaFromTemplateArgs {
   deferIfPending?: boolean;
 }
 
+/** Fakturadokumentets format (#1439) — alltid PDF. */
+const FAKTURA_MIME = "application/pdf";
+
 /** Utfallet: skapat, uppskjutet (numret inte fastställt) eller överhoppat (väntar redan). */
 export type FakturaDocOutcome = "generated" | "deferred" | "pending";
 
 /**
- * Generera ett faktura-DOKUMENT via TEMPLATE-MOTORN (#852/#937): renderar den
- * delade faktura-mallen mot fakturans kontext → HTML, registrerar
+ * Generera ett faktura-DOKUMENT (#852/#937): bygger fakturans vy-modell och
+ * renderar den till PDF (#1439), registrerar
  * (documentType=Faktura, invoiceId) och persisterar bytes:erna. Används av ALLA
  * fakturaflöden (aconto, rådgivning, slutreglering, dom) så klient-/betalar-
  * fakturorna får dokument i fil-listan + länk på faktura-objektet.
@@ -73,19 +78,19 @@ export async function generateFakturaFromTemplate(args: GenerateFakturaFromTempl
   const invoice = number.state === "final"
     ? { ...args.invoice, invoiceNumber: number.invoiceNumber, ocrReference: number.ocrReference }
     : args.invoice;
-  const { renderFakturaHtml } = await import("./faktura-template");
+  const { buildFakturaView } = await import("./faktura-template");
+  const { renderFakturaPdf } = await import("./render-faktura-pdf");
   const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
-  const html = renderFakturaHtml({ invoice, recipient, meta, spec, breakdown });
-  const bytes = new TextEncoder().encode(html);
+  const bytes = await renderFakturaPdf(buildFakturaView({ invoice, recipient, meta, spec, breakdown }));
   // uuid — servern lagrar bara uuid-nycklade rader (#1124; fakturan missades där).
   const docId = uuidv7();
-  const fileName = `Faktura ${invoice.invoiceNumber ?? meta.matterNumber} ${new Date().toISOString().slice(0, 10)}.html`;
-  const storagePath = `documents/content/${docId}.html`;
+  const fileName = `Faktura ${invoice.invoiceNumber ?? meta.matterNumber} ${new Date().toISOString().slice(0, 10)}.pdf`;
+  const storagePath = `documents/content/${docId}.pdf`;
   await register.mutateAsync({
-    id: asId<"DocumentId">(docId), matterId, fileName, mimeType: "text/html; charset=utf-8",
+    id: asId<"DocumentId">(docId), matterId, fileName, mimeType: FAKTURA_MIME,
     sizeBytes: bytes.byteLength, storagePath, documentType: "Faktura", invoiceId: invoice.id, analysisStatus: "DONE",
   });
-  await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "text/html; charset=utf-8", bytes });
+  await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: FAKTURA_MIME, bytes });
   try {
     await utils.document.tree.invalidate({ matterId });
     await utils.document.tree.refetch({ matterId });

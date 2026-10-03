@@ -15,6 +15,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
+import { fakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate, type DocUtils, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
@@ -80,11 +81,8 @@ type OrgSettings = inferRouterOutputs<AppRouter>["organization"]["getSettings"];
 /** Generera faktura-dokument (template-motorn) för klient- + betalar-fakturan
  *  efter slutreglering (#852). Utbrutet så dialogen håller sig ≤8 i komplexitet. */
 function settlementMeta(matter: MatterDetail | undefined, org: OrgSettings | undefined): FakturaDocMeta {
-  const meta: FakturaDocMeta = { matterNumber: "", matterTitle: "" };
-  if (matter) { meta.matterNumber = matter.matterNumber; meta.matterTitle = matter.title; }
-  if (org?.name) meta.organizationName = org.name;
-  if (org?.orgNumber) meta.organizationOrgNumber = org.orgNumber;
-  return meta;
+  // Byråns namn, org.nr och logga (#1439) — samma mappning som övriga fakturaflöden.
+  return { matterNumber: matter?.matterNumber ?? "", matterTitle: matter?.title ?? "", ...fakturaOrgMeta(org) };
 }
 
 function clientNameOf(matter: MatterDetail | undefined): string {

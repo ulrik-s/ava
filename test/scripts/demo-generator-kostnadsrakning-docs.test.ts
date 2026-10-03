@@ -12,7 +12,16 @@ import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populateKostnadsrakningDocs } from "../../tooling/demo-generator/populate-kostnadsrakning-docs";
 import { buildSeed } from "../../tooling/scripts/seed-data";
+import { pdfPageTexts } from "../helpers/pdf-text";
 import { runDemoSeed } from "./_demo-seed";
+
+/** Dokumentets text (alla sidor, en ritad sträng per rad) — PDF sedan #1439. */
+async function docText(bytes: Uint8Array): Promise<string> {
+  return (await pdfPageTexts(bytes)).flat().join("\n");
+}
+
+/** Belopp som de står i PDF:en (hårda mellanslag → vanliga, som i `pdfPageTexts`). */
+const asDrawn = (s: string): string => s.replace(/[\u00A0\u202F]/g, " ");
 
 const ADMIN = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">("firma-ab") };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -29,10 +38,11 @@ describe("populateKostnadsrakningDocs", () => {
   it("genererar ett KR-dokument per KOSTNADSRAKNING-run, taggat documentType=Kostnadsräkning", async () => {
     const seed = buildSeed();
     const writes: string[] = [];
+    const bodies: Uint8Array[] = [];
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
     await runDemoSeed(target.caller, seed);
 
-    const n = await populateKostnadsrakningDocs(target.caller, (p, b) => { writes.push(p); return b.byteLength; });
+    const n = await populateKostnadsrakningDocs(target.caller, (p, b) => { writes.push(p); bodies.push(b); return b.byteLength; });
 
     const c = target.caller as Any;
     const { runs } = await c.billingRun.list({});
@@ -43,7 +53,9 @@ describe("populateKostnadsrakningDocs", () => {
     const linked = new Set<string>();
     for (const r of krRuns) for (const d of await krDocsFor(c, r.matterId)) linked.add(String(d.billingRunId));
     expect(krRuns.every((r) => linked.has(String(r.id)))).toBe(true);
-    expect(writes.every((p) => p.startsWith("documents/content/krdoc-") && p.endsWith(".html"))).toBe(true);
+    // Bara PDF:er — samma format som appens kostnadsräkning, inga HTML-dokument (#1439).
+    expect(writes.every((p) => p.startsWith("documents/content/krdoc-") && p.endsWith(".pdf"))).toBe(true);
+    expect(bodies.every((b) => new TextDecoder().decode(b.slice(0, 5)) === "%PDF-")).toBe(true);
   });
 
   it("ärendet som väntar på dom får en kostnadsräkning → 'väntar på dom' är inte längre orphan", async () => {
@@ -66,25 +78,26 @@ describe("populateKostnadsrakningDocs", () => {
     await populateKostnadsrakningDocs(c);
     const docs = await krDocsFor(c, matterId);
     expect(docs).toHaveLength(1);
-    expect(String(docs[0].fileName)).toContain("Kostnadsräkning");
+    expect(String(docs[0].fileName)).toMatch(/^Kostnadsräkning .*\.pdf$/);
+    expect(docs[0].mimeType).toBe("application/pdf");
   });
 
-  it("KR-dokumentet renderas ur byråns default-mall: sammanställning + arbetsredogörelse (#864, #1218)", async () => {
+  it("KR-dokumentet renderas som i appen: sammanställning + arbetsredogörelse (#864, #1218, #1439)", async () => {
     const seed = buildSeed();
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
     await runDemoSeed(target.caller, seed);
-    const htmls: string[] = [];
-    await populateKostnadsrakningDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
+    const bodies: Uint8Array[] = [];
+    await populateKostnadsrakningDocs(target.caller, (_p, b) => { bodies.push(b); return b.byteLength; });
+    const texts = await Promise.all(bodies.map(docText));
     // Minst en KR har en arbetsredogörelse (ej längre "ospecificerad") + summor.
-    const withSpec = htmls.find((h) => h.includes("ARBETSREDOGÖRELSE"));
+    const withSpec = texts.find((h) => h.includes("ARBETSREDOGÖRELSE"));
     expect(withSpec, "minst en KR ska ha en arbetsredogörelse").toBeDefined();
     expect(withSpec).toContain("Belopp inkl. moms");
     expect(withSpec).toContain("Anges vid betalning");
-    expect(withSpec).not.toMatch(/\{\{/);
     // Rättshjälps-KR:n (den med rådgivningsnotis) värderas på timkostnadsnormen: ARVODE á timpris.
-    const rattshjalp = htmls.find((h) => h.includes("Rådgivningstimme"));
+    const rattshjalp = texts.find((h) => h.includes("Rådgivningstimme"));
     expect(rattshjalp, "en rättshjälps-KR ska ha rådgivningsnotis").toBeDefined();
-    expect(rattshjalp).toMatch(/ARVODE<\/td><td class="num">[\d,]+ á /);
+    expect(rattshjalp).toMatch(/\nARVODE\n[\d,]+ á /);
     expect(rattshjalp).toContain("ARBETSREDOGÖRELSE");
   });
 
@@ -92,20 +105,21 @@ describe("populateKostnadsrakningDocs", () => {
     const seed = buildSeed();
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
     await runDemoSeed(target.caller, seed);
-    const html = new Map<string, string>();
-    await populateKostnadsrakningDocs(target.caller, (p, b) => { html.set(p, new TextDecoder().decode(b)); return b.byteLength; });
+    const bytes = new Map<string, Uint8Array>();
+    await populateKostnadsrakningDocs(target.caller, (p, b) => { bytes.set(p, b); return b.byteLength; });
+    const textByPath = new Map(await Promise.all([...bytes].map(async ([p, b]) => [p, await docText(b)] as const)));
     const c = target.caller as Any;
     const { runs } = await c.billingRun.list({});
     const krRuns = (runs as Any[]).filter((r) => r.type === "KOSTNADSRAKNING");
     for (const r of krRuns) {
-      const doc = html.get(`documents/content/krdoc-${String(r.id)}.html`);
+      const doc = textByPath.get(`documents/content/krdoc-${String(r.id)}.pdf`);
       expect(doc, `dokument för ${String(r.id)}`).toBeDefined();
-      expect(doc, `yrkat i dokumentet = körningens ${String(r.workValueOreAtRun)} öre`).toContain(formatOreAsKr(r.workValueOreAtRun));
+      expect(doc, `yrkat i dokumentet = körningens ${String(r.workValueOreAtRun)} öre`).toContain(asDrawn(formatOreAsKr(r.workValueOreAtRun)));
     }
     const taxe = [];
     for (const r of krRuns) {
       const m = await c.matter.getById({ id: r.matterId });
-      if (m.isTaxeArende && m.paymentMethod === "OFFENTLIGT_UPPDRAG") taxe.push(html.get(`documents/content/krdoc-${String(r.id)}.html`));
+      if (m.isTaxeArende && m.paymentMethod === "OFFENTLIGT_UPPDRAG") taxe.push(textByPath.get(`documents/content/krdoc-${String(r.id)}.pdf`));
     }
     expect(taxe.length, "demon har ett taxeärende med kostnadsräkning").toBeGreaterThan(0);
     expect(taxe.every((h) => h?.includes("ARVODE ENLIGT BROTTMÅLSTAXAN"))).toBe(true);

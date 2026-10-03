@@ -11,6 +11,7 @@
  */
 import { VatBreakdown } from "@/components/billing/vat-breakdown";
 import { Modal } from "@/components/ui/modal";
+import type { FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaDocInvoice } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
@@ -27,8 +28,8 @@ interface Props {
   matterNumber: string;
   matterTitle: string;
   clientName?: string;
-  organizationName?: string;
-  organizationOrgNumber?: string;
+  /** Byråns namn, org.nr och logga till fakturadokumentet (#1439). */
+  organization?: FakturaOrgMeta;
   onClose: () => void;
 }
 
@@ -50,11 +51,8 @@ export function VerdictDialog(props: Props) {
           recipient: BILLING_RUN_RECIPIENT_LABELS.RATTSHJALPSMYNDIGHET,
           meta: {
             matterNumber: props.matterNumber, matterTitle: props.matterTitle,
-            ...omitUndefined({
-              clientName: props.clientName,
-              organizationName: props.organizationName,
-              organizationOrgNumber: props.organizationOrgNumber,
-            }),
+            ...omitUndefined({ clientName: props.clientName }),
+            ...props.organization,
           },
           register, utils, spec,
         });

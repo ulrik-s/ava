@@ -13,14 +13,17 @@ const recordMutate = vi.fn();
 const queueMutate = vi.fn();
 const composeMail = vi.fn(async () => true);
 const downloadBytes = vi.fn();
-const renderFakturaPdf = vi.fn(async () => new Uint8Array([1, 2, 3]));
+const renderFakturaPdf = vi.fn(async (_view: unknown) => new Uint8Array([1, 2, 3]));
 const specFetch = vi.fn(async () => null);
+const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const orgFetch = vi.fn(async (): Promise<unknown> => ({ name: "Byrå AB", orgNumber: "556677-8899", logo: LOGO }));
 let helperVersion: string | undefined | null = "helper-v1.0.0";
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     // Bilagan hämtar fakturaspecifikationen (#938) via utils.
-    useUtils: () => ({ billingRun: { invoiceSpecification: { fetch: specFetch } } }),
+    // … och byråns namn/org.nr/logga till sidhuvudet (#1439).
+    useUtils: () => ({ billingRun: { invoiceSpecification: { fetch: specFetch } }, organization: { getSettings: { fetch: orgFetch } } }),
     invoiceDispatch: {
       recordManual: { useMutation: (opts: { onSuccess?: () => void }) => ({ mutate: (...a: unknown[]) => { recordMutate(...a); opts.onSuccess?.(); }, isPending: false, error: null }) },
       queue: { useMutation: (opts: { onSuccess?: () => void }) => ({ mutate: (...a: unknown[]) => { queueMutate(...a); opts.onSuccess?.(); }, isPending: false, error: null }) },
@@ -32,7 +35,7 @@ vi.mock("@/lib/client/helper/use-helper", () => ({
   composeMailViaHelper: (...a: unknown[]) => composeMail(...a),
 }));
 vi.mock("@/lib/client/download-text", () => ({ downloadBytes: (...a: unknown[]) => downloadBytes(...a) }));
-vi.mock("@/lib/client/kostnadsrakning/render-faktura-pdf", () => ({ renderFakturaPdf: (...a: unknown[]) => renderFakturaPdf(...a) }));
+vi.mock("@/lib/client/kostnadsrakning/render-faktura-pdf", () => ({ renderFakturaPdf: (view: unknown) => renderFakturaPdf(view) }));
 
 const baseProps = {
   invoiceId: asId<"InvoiceId">("inv-1"),
@@ -83,6 +86,21 @@ describe("SendInvoiceModal", () => {
     await waitFor(() => expect(downloadBytes).toHaveBeenCalled());
     expect(renderFakturaPdf).toHaveBeenCalled();
     expect(await screen.findByRole("button", { name: /Markera som skickad/i })).toBeInTheDocument();
+  });
+
+  it("bilagan får byråns namn, org.nr och logga ur inställningarna (#1439)", async () => {
+    render(<SendInvoiceModal {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /Ladda ner PDF/i }));
+    await waitFor(() => expect(renderFakturaPdf).toHaveBeenCalled());
+    expect(renderFakturaPdf.mock.calls[0]?.[0]).toMatchObject({ organizationName: "Byrå AB", organizationOrgNumber: "556677-8899", logo: LOGO });
+  });
+
+  it("inställningarna går inte att hämta → bilagan skapas ändå, utan logga", async () => {
+    orgFetch.mockRejectedValueOnce(new Error("offline"));
+    render(<SendInvoiceModal {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /Ladda ner PDF/i }));
+    await waitFor(() => expect(downloadBytes).toHaveBeenCalled());
+    expect(renderFakturaPdf.mock.calls[0]?.[0]).toMatchObject({ organizationName: "", logo: null });
   });
 
   it("helper tillgänglig → öppnar mailklient (compose-mail), ingen nedladdning", async () => {

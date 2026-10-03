@@ -14,6 +14,7 @@ import { useState } from "react";
 import { bytesToBase64 } from "@/lib/client/bytes-base64";
 import { downloadBytes } from "@/lib/client/download-text";
 import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
+import { fakturaOrgMeta, type FakturaOrgMeta, type FakturaOrgSettings } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaBreakdown, InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
@@ -57,6 +58,19 @@ function pdfFileName(p: SendInvoiceModalProps): string {
  *  netto/moms-raderna i st.f. att utskicket stoppas. */
 type SpecFetcher = (a: { matterId: MatterId; invoiceId: InvoiceId }) => Promise<InvoiceSpecification>;
 
+/** Byråns inställningar (namn, org.nr, logga) till bilagans sidhuvud (#1439). */
+type OrgFetcher = () => Promise<FakturaOrgSettings | null | undefined>;
+
+/** Underlaget bilagan hämtar när den byggs. */
+interface PdfSources { spec: SpecFetcher; org: OrgFetcher }
+
+/** Byråfälten — utan dem (fel/offline) blir bilagan bara utan logga. */
+async function fetchOrgMeta(fetcher: OrgFetcher): Promise<FakturaOrgMeta> {
+  try {
+    return fakturaOrgMeta(await fetcher());
+  } catch { return {}; }
+}
+
 async function fetchSpec(fetcher: SpecFetcher, p: SendInvoiceModalProps): Promise<InvoiceSpecification | null> {
   try {
     return await fetcher({ matterId: p.matterId, invoiceId: p.invoiceId });
@@ -67,10 +81,10 @@ async function fetchSpec(fetcher: SpecFetcher, p: SendInvoiceModalProps): Promis
  * Bilagan renderas ur SAMMA vy-modell som det arkiverade fakturadokumentet
  * (#938) → sammanställning på sida 1, specifikation därefter.
  */
-async function buildPdf(p: SendInvoiceModalProps, recipient: string, fetcher: SpecFetcher): Promise<Uint8Array> {
+async function buildPdf(p: SendInvoiceModalProps, recipient: string, sources: PdfSources): Promise<Uint8Array> {
   const { buildFakturaView } = await import("@/lib/client/kostnadsrakning/faktura-template");
   const { renderFakturaPdf } = await import("@/lib/client/kostnadsrakning/render-faktura-pdf");
-  const spec = await fetchSpec(fetcher, p);
+  const [spec, org] = await Promise.all([fetchSpec(sources.spec, p), fetchOrgMeta(sources.org)]);
   const view = buildFakturaView({
     invoice: {
       id: p.invoiceId, amount: p.amount, vatOre: p.vatOre,
@@ -78,7 +92,7 @@ async function buildPdf(p: SendInvoiceModalProps, recipient: string, fetcher: Sp
       invoiceType: p.invoiceType, notes: p.notes,
     },
     recipient: recipient || p.matterTitle,
-    meta: { matterNumber: p.matterNumber, matterTitle: p.matterTitle },
+    meta: { matterNumber: p.matterNumber, matterTitle: p.matterTitle, ...org },
     spec, breakdown: p.settlementBreakdown,
   });
   return renderFakturaPdf(view);
@@ -108,7 +122,10 @@ function useSendInvoice(props: SendInvoiceModalProps): SendInvoiceState {
   const [error, setError] = useState<string | null>(null);
   const helper = useHelper();
   const utils = trpc.useUtils();
-  const fetchSpecification: SpecFetcher = (a) => utils.billingRun.invoiceSpecification.fetch(a);
+  const sources: PdfSources = {
+    spec: (a) => utils.billingRun.invoiceSpecification.fetch(a),
+    org: () => utils.organization.getSettings.fetch(),
+  };
 
   const record = trpc.invoiceDispatch.recordManual.useMutation({
     onSuccess: () => { props.onRecorded(); props.onClose(); },
@@ -141,7 +158,7 @@ function useSendInvoice(props: SendInvoiceModalProps): SendInvoiceState {
   };
 
   const onEmail = () => void run(async () => {
-    const bytes = await buildPdf(props, recipient, fetchSpecification);
+    const bytes = await buildPdf(props, recipient, sources);
     const opened = Boolean(helper.version) && await composeMailViaHelper({
       ...(recipient ? { to: recipient } : {}),
       fileName: pdfFileName(props),
@@ -156,7 +173,7 @@ function useSendInvoice(props: SendInvoiceModalProps): SendInvoiceState {
   });
 
   const onDownload = () => void run(async () => {
-    const bytes = await buildPdf(props, recipient, fetchSpecification);
+    const bytes = await buildPdf(props, recipient, sources);
     downloadBytes(pdfFileName(props), new Uint8Array(bytes), "application/pdf");
     return "PDF:en laddades ner.";
   });

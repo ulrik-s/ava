@@ -3,14 +3,17 @@
  * det till fakturan (document.register med invoiceId), så att faktura-detaljen
  * kan länka till "hela bilden" — en formell faktura som ligger i ärendet.
  *
- * HTML:en renderas med APPENS delade faktura-mall (`renderFakturaHtml`, #937) —
- * demon hade tidigare en EGEN renderare, så mall-ändringar (sammanställning på
- * första sidan + specifikation därefter) nådde aldrig demons fakturor. Nu finns
- * en enda renderare, och underlaget hämtas ur samma router som appen använder
- * (`billingRun.invoiceSpecification`).
+ * PDF:en renderas med APPENS delade vy-modell och PDF-renderare
+ * (`buildFakturaView` + `renderFakturaPdf`, #937/#1439) — demon hade tidigare en
+ * EGEN renderare, så mall-ändringar nådde aldrig demons fakturor. Nu finns en
+ * enda renderare, underlaget hämtas ur samma router som appen använder
+ * (`billingRun.invoiceSpecification`), och demons fakturor är PDF:er precis som
+ * appens (#1439).
  */
 
-import { fakturaHeading, renderFakturaHtml, type FakturaBreakdown } from "@/lib/client/kostnadsrakning/faktura-template";
+import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
+import { buildFakturaView, fakturaHeading, type FakturaBreakdown } from "@/lib/client/kostnadsrakning/faktura-template";
+import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
 import type { BinarySink, GeneratorCaller } from "./backend-target";
 import { ensureFolderPath, INVOICE_FOLDER, type FolderCache } from "./folder-filing";
@@ -45,15 +48,18 @@ interface DocLookups {
   recipientByInvoice: Map<string, string>;
   /** matterId → klientens namn (ärendelistans KLIENT-include). */
   clientByMatter: Map<string, string>;
+  /** Byråns namn, org.nr och logga (#1439) — samma på alla fakturor. */
+  org: FakturaOrgMeta;
 }
 
 async function loadLookups(c: Any): Promise<DocLookups> {
-  const [runsRes, mattersRes] = await Promise.all([c.billingRun.list({}), c.matter.list({ pageSize: 500 })]);
+  const [runsRes, mattersRes, org] = await Promise.all([c.billingRun.list({}), c.matter.list({ pageSize: 500 }), c.organization.getSettings()]);
   const runs: Any[] = runsRes?.runs ?? [];
   const matters: Any[] = mattersRes?.matters ?? [];
   return {
     recipientByInvoice: new Map(runs.filter((r) => r.invoiceId).map((r) => [String(r.invoiceId), String(r.recipient)])),
     clientByMatter: new Map(matters.map((m) => [String(m.id), clientNameOf(m)]).filter((e): e is [string, string] => !!e[1])),
+    org: fakturaOrgMeta(org),
   };
 }
 
@@ -77,18 +83,18 @@ function payerLabel(recipient: string): string {
   return BILLING_RUN_RECIPIENT_LABELS[recipient as keyof typeof BILLING_RUN_RECIPIENT_LABELS] ?? recipient;
 }
 
-/** Fakturans HTML via appens mall — sammanställning först, specifikation efter. */
-async function renderDoc(c: Any, inv: Any, l: DocLookups): Promise<string> {
+/** Fakturans PDF via appens renderare — sammanställning först, specifikation efter. */
+async function renderDoc(c: Any, inv: Any, l: DocLookups): Promise<Uint8Array> {
   const spec = await c.billingRun.invoiceSpecification({ matterId: inv.matter.id, invoiceId: inv.id });
-  return renderFakturaHtml({
+  return renderFakturaPdf(buildFakturaView({
     invoice: {
       id: inv.id, amount: inv.amount, vatOre: inv.vatOre, invoiceNumber: inv.invoiceNumber,
       ocrReference: inv.ocrReference, invoiceDate: inv.invoiceDate, invoiceType: inv.invoiceType, notes: inv.notes,
     },
     recipient: recipientOf(inv, l),
-    meta: { matterNumber: inv.matter.matterNumber, matterTitle: inv.matter.title },
+    meta: { matterNumber: inv.matter.matterNumber, matterTitle: inv.matter.title, ...l.org },
     spec, breakdown: breakdownOf(inv),
-  });
+  }));
 }
 
 export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: BinarySink, idFor?: InvoiceDocIdFn): Promise<number> {
@@ -103,10 +109,9 @@ export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: Binary
   for (const summary of invoices) {
     if (!shouldGenerateDoc(summary)) continue;
     const inv = await c.invoice.getById({ id: summary.id });
-    const html = await renderDoc(c, inv, lookups);
+    const bytes = await renderDoc(c, inv, lookups);
     const id = idFor ? idFor(inv.id) : `invdoc-${inv.id}`;
-    const storagePath = `documents/content/${id}.html`;
-    const bytes = new TextEncoder().encode(html);
+    const storagePath = `documents/content/${id}.pdf`;
     const size = sink ? sink(storagePath, bytes) : bytes.byteLength;
     // Tydlig etikett per fakturatyp så den inte förväxlas i fil-listan (#870/#878)
     // — samma rubrik som mallen sätter i dokumentet.
@@ -114,8 +119,8 @@ export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: Binary
     const folderId = await ensureFolderPath(c, String(inv.matter.id), INVOICE_FOLDER, folders);
     await c.document.register({
       id, matterId: inv.matter.id, invoiceId: inv.id, folderId,
-      fileName: `${label} ${inv.matter.matterNumber}.html`,
-      mimeType: "text/html; charset=utf-8", sizeBytes: size, storagePath,
+      fileName: `${label} ${inv.matter.matterNumber}.pdf`,
+      mimeType: "application/pdf", sizeBytes: size, storagePath,
       title: `${label} — ${inv.matter.matterNumber}`,
       documentType: "Faktura", analysisStatus: "DONE",
       createdAt: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString() : undefined,

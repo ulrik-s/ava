@@ -1,24 +1,28 @@
 "use client";
 
 /**
- * `renderFakturaPdf` (#938) — faktura-PDF client-side via pdf-lib, med SAMMA
- * upplägg som det arkiverade HTML-dokumentet:
- *   sida 1  Sammanställning (rad per kategori + timpris, uträkningskedjan
- *           arvode → moms → utlägg → moms → äkta utlägg → summa inkl moms)
- *           + uppdelning klient/betalare + "att betala".
- *   sida 2+ Specifikation — tidsspecifikation per arvodeskategori (med timpris
- *           och delsumma, #1200) + utläggsspecifikation, med automatisk
- *           sidbrytning när raderna inte får plats.
+ * `renderFakturaPdf` (#938) — faktura-PDF client-side via pdf-lib. Fakturans
+ * enda format sedan #1439: både dokumentet som arkiveras i ärendet och bilagan
+ * som mejlas ritas här.
+ *   sida 1  Sidhuvud med byråns logga (när den finns), sammanställning (rad per
+ *           kategori + timpris, uträkningskedjan arvode → moms → utlägg → moms
+ *           → äkta utlägg → summa inkl moms) + uppdelning klient/betalare +
+ *           "att betala".
+ *   sida 2+ Specifikation — tidsspecifikation per arvodeskategori (omfattning,
+ *           belopp och delsumma; timpriset står en gång i sammanställningen,
+ *           #1439) + utläggsspecifikation, med automatisk sidbrytning.
  *
  * Renderaren räknar INGENTING: den tar en färdig `FakturaView`
  * (`buildFakturaView` i `faktura-template.ts`), så bilagan som mejlas och
  * dokumentet som arkiveras aldrig kan visa olika belopp.
  *
- * Används av det manuella fakturautskicket (#179).
+ * Används av fakturadokumentet (`generateFakturaFromTemplate`), det manuella
+ * fakturautskicket (#179) och demo-generatorn.
  */
 
 import type { PDFDocument, PDFFont, PDFPage, RGB } from "pdf-lib";
 import type { FakturaView } from "./faktura-template";
+import { embedOrgImage, type ScaledImage } from "./pdf-writer";
 
 const A4: [number, number] = [595, 842];
 const M = 50;
@@ -98,16 +102,6 @@ function drawRight(c: Ctx, s: string, rightX: number, o: TextOpts = {}): void {
   draw(c, s, { ...o, x: rightX - w });
 }
 
-/** Korta av texten så den ryms inom `maxWidth`. */
-function fit(c: Ctx, s: string, maxWidth: number, o: TextOpts = {}): string {
-  const size = o.size ?? 10;
-  const f = font(c, o.b ?? false);
-  let t = toWinAnsi(s);
-  if (f.widthOfTextAtSize(t, size) <= maxWidth) return t;
-  while (t.length > 1 && f.widthOfTextAtSize(`${t}...`, size) > maxWidth) t = t.slice(0, -1);
-  return `${t}...`;
-}
-
 function rule(c: Ctx, thickness = 0.5): void {
   c.page.drawLine({ start: { x: M, y: c.y }, end: { x: RIGHT, y: c.y }, thickness, color: c.rule });
 }
@@ -142,6 +136,18 @@ function labelRow(c: Ctx, label: string, maxLabelWidth: number, cells: () => voi
 }
 
 // ── Sida 1: huvud + sammanställning + uppdelning ────────────────────────────
+
+/** Loggans ruta (punkter): högerställd i sidhuvudet, överkant strax ovanför
+ *  rubriken och underkant ovanför ärenderaden — så texten till vänster ligger
+ *  kvar där den låg utan logga. */
+const LOGO_MAX_W = 170;
+const LOGO_MAX_H = 56;
+const LOGO_TOP_Y = 815;
+
+/** Rita byråns logga högerställd i sidhuvudet (#1439). */
+function drawLogo(c: Ctx, logo: ScaledImage): void {
+  c.page.drawImage(logo.embedded, { x: RIGHT - logo.width, y: LOGO_TOP_Y - logo.height, width: logo.width, height: logo.height });
+}
 
 function drawHeader(c: Ctx, v: FakturaView): void {
   draw(c, v.heading.toUpperCase(), { size: 20, b: true });
@@ -224,15 +230,18 @@ function drawSplit(c: Ctx, v: FakturaView): void {
 
 // ── Sida 2+: specifikationen ────────────────────────────────────────────────
 
+/** Datumkolumnen: fast bredd som rymmer "2026-10-03" i 9 pt (≈ 46 pt) med
+ *  luft — datumet ritas alltid på en rad, aldrig radbrutet (#1439). */
 const SPEC_DATE_W = 66;
 const SPEC_DESC_X = M + SPEC_DATE_W;
+const SPEC_SIZE = 9;
+const SPEC_LEADING = 12;
 
 interface SpecCol { header: string; rightX: number }
 
-/** Tidsspecifikationens talkolumner (#1200): Tim | Timpris | Belopp. */
-const TIME_COLS: readonly SpecCol[] = [
-  { header: "Tim", rightX: 380 }, { header: "Timpris", rightX: 465 }, { header: "Belopp", rightX: RIGHT },
-];
+/** Tidsspecifikationens talkolumner: Tim | Belopp. Timpriset står en gång per
+ *  kategori i sammanställningen, inte på varje post (#1439). */
+const TIME_COLS: readonly SpecCol[] = [{ header: "Tim", rightX: 465 }, { header: "Belopp", rightX: RIGHT }];
 const EXPENSE_COLS: readonly SpecCol[] = [{ header: "Netto", rightX: 470 }, { header: "Brutto", rightX: RIGHT }];
 
 /** Rita talkolumnerna högerjusterat, en cell per kolumn. */
@@ -251,15 +260,17 @@ function specHead(c: Ctx, cols: readonly SpecCol[]): void {
   c.y -= 13;
 }
 
-/** En specifikationsrad: datum, beskrivning (kapas så den ryms före första
- *  talkolumnen) och tabellens talkolumner. */
+/** En specifikationsrad: datum, beskrivning (radbryts så den ryms före första
+ *  talkolumnen — kapas aldrig, #1439) och talkolumnerna på första raden. */
 function specRow(c: Ctx, date: string, description: string, cells: readonly string[], cols: readonly SpecCol[]): void {
-  ensure(c, 20);
   const descWidth = (cols[0]?.rightX ?? RIGHT) - SPEC_DESC_X - 46;
-  draw(c, date, { size: 9 });
-  draw(c, fit(c, description, descWidth, { size: 9 }), { size: 9, x: SPEC_DESC_X });
-  drawCells(c, cols, cells, { size: 9 });
-  c.y -= 14;
+  const lines = wrap(c, description, descWidth, SPEC_SIZE);
+  if (lines.length === 0) lines.push(""); // tom beskrivning tar ändå sin rad
+  ensure(c, SPEC_LEADING * lines.length + 6);
+  draw(c, date, { size: SPEC_SIZE });
+  drawCells(c, cols, cells, { size: SPEC_SIZE });
+  for (const line of lines) { draw(c, line, { size: SPEC_SIZE, x: SPEC_DESC_X }); c.y -= SPEC_LEADING; }
+  c.y -= 2;
 }
 
 /** En kategoris deltabell (#1200): rubrik, poster och fet delsumma. */
@@ -268,13 +279,13 @@ function drawTimeGroup(c: Ctx, g: FakturaView["timeGroups"][number]): void {
   draw(c, g.label, { size: 10, b: true });
   c.y -= 14;
   specHead(c, TIME_COLS);
-  for (const l of g.lines) specRow(c, l.date, l.description, [l.hours, l.rate, l.amount], TIME_COLS);
+  for (const l of g.lines) specRow(c, l.date, l.description, [l.hours, l.amount], TIME_COLS);
   ensure(c, 24);
   c.y += 4;
   rule(c);
   c.y -= 11;
   draw(c, g.subtotalLabel, { size: 9, b: true });
-  drawCells(c, TIME_COLS, [g.hours, "", g.amount], { size: 9, b: true });
+  drawCells(c, TIME_COLS, [g.hours, g.amount], { size: 9, b: true });
   c.y -= 20;
 }
 
@@ -295,7 +306,7 @@ function drawExpenseSpec(c: Ctx, v: FakturaView): void {
   for (const l of v.expenseLines) specRow(c, l.date, l.description, [l.net, l.gross], EXPENSE_COLS);
 }
 
-/** Specifikationen börjar ALLTID på ny sida — speglar HTML-mallens sidbrytning. */
+/** Specifikationen börjar ALLTID på ny sida, efter sammanställningen. */
 function drawSpecification(c: Ctx, v: FakturaView): void {
   if (!v.hasSpec) return;
   addPage(c);
@@ -321,6 +332,8 @@ export async function renderFakturaPdf(view: FakturaView): Promise<Uint8Array> {
     gray: rgb(0.45, 0.45, 0.45),
     rule: rgb(0.72, 0.72, 0.72),
   };
+  const logo = view.logo ? await embedOrgImage(pdf, view.logo, LOGO_MAX_W, LOGO_MAX_H) : null;
+  if (logo) drawLogo(c, logo);
   drawHeader(c, view);
   drawSummary(c, view);
   drawSplit(c, view);

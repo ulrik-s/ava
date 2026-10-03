@@ -68,16 +68,15 @@ test("fakturadokument öppnas i ny flik — dirigeras INTE in i ärendet (+ inge
   const survivedNav = await page.evaluate(() => (window as unknown as { __avaSpa?: string }).__avaSpa);
   expect(survivedNav, "navigering till fakturan ska vara soft (ingen sidomladdning)").toBe("alive");
 
-  // Fakturadokument-panelen: dokumentnamnet "Faktura ….html". Lokalisera via TEXT
+  // Fakturadokument-panelen: dokumentnamnet "Faktura ….pdf". Lokalisera via TEXT
   // så det fångar både den BUGGIGA varianten (en <a>-länk till /matters) och den
   // FIXADE (en <button> som öppnar dokumentet).
   //
-  // Filändelsen är `.html` sedan #937/#939 (en enda fakturarenderare). Att testet
-  // fortfarande letade efter `.pdf` MÄRKTES INTE, eftersom det kördes mot den
-  // DEPLOYADE demon — där låg en äldre build vars fakturor var PDF:er. Grönt mot
-  // gammal data, fel mot koden i repot: precis det #932 handlar om.
+  // Fakturadokumenten är PDF:er sedan #1439 (var `.html` under #937–#1439). Kör
+  // testet mot en lokalt byggd `out/` — mot den deployade demon testar det den
+  // builden, inte koden i repot (#932).
   await showPanel(page, "Fakturadokument"); // bakgrundsflik på fakturasidan (#1184)
-  const docEl = page.getByText(/Faktura .*\.html/i).first();
+  const docEl = page.getByText(/Faktura .*\.pdf/i).first();
   await expect(docEl).toBeVisible({ timeout: 15_000 });
 
   const urlBeforeClick = page.url();

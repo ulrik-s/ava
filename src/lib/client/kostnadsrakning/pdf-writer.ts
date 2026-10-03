@@ -9,7 +9,7 @@
  * teckensnitten (WinAnsi) saknar — ett okänt tecken ska aldrig spräcka PDF:en.
  */
 
-import type { PDFDocument, PDFFont, PDFPage, RGB } from "pdf-lib";
+import type { PDFDocument, PDFFont, PDFImage, PDFPage, RGB } from "pdf-lib";
 import { decodeOrgImage, type OrgImage } from "@/lib/shared/org-image";
 
 /** A4 i punkter. */
@@ -43,6 +43,29 @@ export interface ImageBox {
   maxHeight: number;
   /** x är bildens mitt (center) eller vänsterkant (left). */
   align: "center" | "left";
+}
+
+/** En inbäddad byråbild, inskalad i en ruta (bevarat bildförhållande). */
+export interface ScaledImage {
+  embedded: PDFImage;
+  width: number;
+  height: number;
+}
+
+/**
+ * Bädda in en byråbild (PNG/JPEG) och skala den så den ryms i
+ * `maxWidth` × `maxHeight`. `null` om bilden inte går att bädda in — anroparen
+ * ritar då utan bild. Delas av kostnadsräkningen och fakturan (#1439).
+ */
+export async function embedOrgImage(pdf: PDFDocument, image: OrgImage, maxWidth: number, maxHeight: number): Promise<ScaledImage | null> {
+  try {
+    const { mime, bytes } = decodeOrgImage(image);
+    const embedded = mime === "image/png" ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+    const scale = Math.min(maxWidth / embedded.width, maxHeight / embedded.height);
+    return { embedded, width: embedded.width * scale, height: embedded.height * scale };
+  } catch {
+    return null;
+  }
 }
 
 /** Tecken som saknas i WinAnsi men har en rimlig ersättning. */
@@ -141,18 +164,12 @@ export class PdfWriter {
    * inte gick att bädda in — anroparen faller då tillbaka på text.
    */
   async image(image: OrgImage, box: ImageBox): Promise<boolean> {
-    try {
-      const { mime, bytes } = decodeOrgImage(image);
-      const embedded = mime === "image/png" ? await this.pdf.embedPng(bytes) : await this.pdf.embedJpg(bytes);
-      const scale = Math.min(box.maxWidth / embedded.width, box.maxHeight / embedded.height);
-      const width = embedded.width * scale;
-      const height = embedded.height * scale;
-      const x = box.align === "center" ? box.x - width / 2 : box.x;
-      this.current.drawImage(embedded, { x, y: PAGE_HEIGHT - box.top - height, width, height });
-      return true;
-    } catch {
-      return false;
-    }
+    const scaled = await embedOrgImage(this.pdf, image, box.maxWidth, box.maxHeight);
+    if (!scaled) return false;
+    const { embedded, width, height } = scaled;
+    const x = box.align === "center" ? box.x - width / 2 : box.x;
+    this.current.drawImage(embedded, { x, y: PAGE_HEIGHT - box.top - height, width, height });
+    return true;
   }
 
   /** Radbryt `text` så att varje rad ryms inom `maxWidth`. */

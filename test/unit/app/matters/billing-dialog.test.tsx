@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { BillingDialog } from "@/app/matters/[id]/_billing-dialog";
 import { toIsoDate } from "@/lib/shared/iso-date";
 import { asId } from "@/lib/shared/schemas/ids";
+import { pdfPageTexts } from "../../../helpers/pdf-text";
 
 /** Fakturadokumentet får uuid-id (#1143). */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -58,7 +59,7 @@ vi.mock("@/lib/client/trpc", () => ({
 }));
 vi.mock("@/lib/client/demo/persist-generated-doc", () => ({ persistGeneratedDoc }));
 
-const meta = { matterNumber: "2026-0001", matterTitle: "Tvist", clientName: "Anna Andersson" };
+const meta = { matterNumber: "2026-0001", matterTitle: "Tvist", clientName: "Anna Andersson", organizationName: "Byrå AB" };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -147,13 +148,15 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     const onClose = vi.fn();
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={onClose} />);
     await accontoOnSuccess!({ invoice: { id: "inv-1", amount: 100_000, invoiceType: "ACCONTO", notes: "Aconto — klientens andel" } });
-    // Aconton renderas nu via den DELADE mallen (#937): sammanställning med
-    // notes-raden (fakturan har inga länkade tidsposter) i st.f. en egen PDF.
-    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
-    expect(html).toContain("Aconto-faktura");
-    expect(html).toContain("Sammanställning");
-    expect(html).toContain("Aconto — klientens andel");
-    expect(html).toContain("Anna Andersson"); // mottagare = klienten
+    // Aconton renderas via den DELADE vy-modellen (#937) som PDF (#1439):
+    // sammanställning med notes-raden (fakturan har inga länkade tidsposter).
+    const text = (await pdfPageTexts(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array)).flat();
+    expect(text).toContain("ACONTO-FAKTURA");
+    expect(text).toContain("Sammanställning");
+    expect(text).toContain("Aconto - klientens andel"); // WinAnsi: tankstreck → bindestreck
+    expect(text).toContain("Mottagare: Anna Andersson"); // mottagare = klienten
+    // Byråns fält ur metan (#1439) står i sidhuvudet.
+    expect(text).toContain("Byrå AB");
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-1", documentType: "Faktura",
     }));

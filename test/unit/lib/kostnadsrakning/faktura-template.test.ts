@@ -1,17 +1,21 @@
 /**
- * `renderFakturaHtml` (#937) — den DELADE faktura-renderaren. Kontraktet är
- * detsamma för ALLA fakturor (aconto, rådgivning, slutfaktura, kredit):
- * sammanställning på första sidan, specifikation därefter.
+ * Den DELADE fakturan (#937/#1439): vy-modellen `buildFakturaView` och dess
+ * enda renderare, PDF:en (`renderFakturaPdf`). Kontraktet är detsamma för ALLA
+ * fakturor (aconto, rådgivning, slutfaktura, kredit): sammanställning på första
+ * sidan, specifikation därefter.
  *
  * Kostnadsräkningen till domstol har en egen mall och berörs inte.
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildFakturaView, fakturaHeading, renderFakturaHtml, type InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
+import { buildFakturaView, fakturaHeading, type FakturaTemplateArgs, type InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
+import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 import { formatCurrency } from "@/lib/client/utils";
 import { tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { buildInvoiceSpecification } from "@/lib/shared/invoice-specification";
+import { orgImageSchema } from "@/lib/shared/org-image";
 import { asId } from "@/lib/shared/schemas/ids";
+import { pdfPageTexts } from "../../../helpers/pdf-text";
 
 const META = { matterNumber: "2026-0010", matterTitle: "Umgängestvist Carlsson" };
 const invoice = (over: Record<string, unknown> = {}) => ({
@@ -25,6 +29,14 @@ const spec = (over: Partial<InvoiceSpecification> = {}): InvoiceSpecification =>
   deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 0, ...over,
 });
 
+/** Beloppen som de står i PDF:en (hårda mellanslag → vanliga, som i `pdfPageTexts`). */
+const kr = (ore: number): string => formatCurrency(ore).replace(/[  ]/g, " ");
+
+/** Fakturan renderad till PDF → texten per sida, i ritordning. */
+async function rendered(args: FakturaTemplateArgs): Promise<string[][]> {
+  return pdfPageTexts(await renderFakturaPdf(buildFakturaView(args)));
+}
+
 describe("fakturaHeading", () => {
   it("härleds ur fakturatyp — rådgivningstimmen känns igen på notes", () => {
     expect(fakturaHeading({ invoiceType: "FINAL", notes: null })).toBe("Faktura");
@@ -35,25 +47,26 @@ describe("fakturaHeading", () => {
   });
 });
 
-describe("renderFakturaHtml — sammanställning + specifikation (#937)", () => {
-  it("sammanställningen står FÖRE specifikationen, med sidbrytning emellan", () => {
-    const html = renderFakturaHtml({
+describe("fakturan (PDF) — sammanställning + specifikation (#937/#1439)", () => {
+  it("sammanställningen står på sida 1, specifikationen på en egen sida därefter", async () => {
+    const pages = await rendered({
       invoice: invoice(), recipient: "Cecilia Carlsson", meta: META,
       spec: spec({
         timeLines: [{ date: "2026-05-02", description: "Genomgång av handlingar", minutes: 60, amountOre: 162_600 }],
         totalMinutes: 60, arvodeNetOre: 162_600, arvodeVatOre: 40_650, grossOre: 203_250, payableOre: 203_250,
       }),
     });
-    expect(html.indexOf("Sammanställning")).toBeGreaterThan(-1);
-    expect(html.indexOf("Sammanställning")).toBeLessThan(html.indexOf(">Specifikation<"));
-    expect(html.indexOf('class="page-break"')).toBeLessThan(html.indexOf(">Specifikation<"));
-    expect(html).toContain("Tidsspecifikation");
+    expect(pages).toHaveLength(2);
+    expect(pages[0]).toContain("Sammanställning");
+    expect(pages[0]).not.toContain("Specifikation");
+    expect(pages[1]?.[0]).toBe("Specifikation");
+    expect(pages[1]).toContain("Tidsspecifikation");
   });
 
-  it("fakturor utan egna tidsposter specificeras ur nedbrytningens arbete (#880)", () => {
+  it("fakturor utan egna tidsposter specificeras ur nedbrytningens arbete (#880)", async () => {
     // Klientens självrisk-faktura: arbetet ligger på betalar-fakturan, men
     // nedbrytningen bär tidsraderna → specifikationen ska ändå renderas.
-    const html = renderFakturaHtml({
+    const texts = (await rendered({
       invoice: invoice({ amount: 81_300 }), recipient: "Cecilia Carlsson", meta: META,
       spec: spec({ payableOre: 81_300 }),
       breakdown: {
@@ -67,47 +80,47 @@ describe("renderFakturaHtml — sammanställning + specifikation (#937)", () => 
         ],
         totalLabel: "Att betala (inkl moms)", totalOre: 81_300,
       },
-    });
-    expect(html).toContain("Tidsspecifikation");
-    expect(html).toContain("Restid till sammanträde");
+    })).flat();
+    expect(texts).toContain("Tidsspecifikation");
+    expect(texts).toContain("Restid till sammanträde");
     // Äldre rader saknar arvodeskategori (#953) → tidsspillan-normerna räddas ur
     // taxan, resten benämns arvode. Här: 1 626 = arvode, 1 487 = tidsspillan dagtid.
-    expect(html).toContain("<td>Timarvode</td>");
-    expect(html).toContain("<td>Tidsspillan</td>");
-    expect(html).toContain(`${formatCurrency(148_700)}/tim`);
+    expect(texts).toContain("Timarvode");
+    expect(texts).toContain("Tidsspillan");
+    expect(texts).toContain(`${kr(148_700)}/tim`);
     // Uppdelningen (klient/betalare) och fakturans faktiska belopp bevaras.
-    expect(html).toContain("Klientens självrisk 20 % (exkl moms)");
-    expect(html).toContain(formatCurrency(81_300));
+    expect(texts).toContain("Klientens självrisk 20 % (exkl moms)");
+    expect(texts).toContain(kr(81_300));
   });
 
-  it("faktura helt utan itemiserat arbete får ändå en förklarande rad ur notes (#870)", () => {
-    const html = renderFakturaHtml({
+  it("faktura helt utan itemiserat arbete får ändå en förklarande rad ur notes (#870)", async () => {
+    const pages = await rendered({
       invoice: invoice({ amount: 203_250, invoiceType: "STANDARD", notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim)." }),
       recipient: "Cecilia Carlsson", meta: META, spec: spec({ payableOre: 203_250 }),
     });
-    expect(html).toContain("Rådgivningsfaktura");
-    expect(html).toContain("Sammanställning");
-    expect(html).toContain("Rådgivningstimme enligt rättshjälpstaxan (1 tim).");
-    expect(html).toContain(formatCurrency(203_250));
-    // Rådgivningsnotisen (spegel av KR-notisen) följer med.
-    expect(html).toContain("ingår INTE i kostnadsräkningen till domstolen");
+    const text = pages.flat().join("\n");
+    expect(text).toContain("RÅDGIVNINGSFAKTURA");
+    expect(text).toContain("Sammanställning");
+    expect(text).toContain("Rådgivningstimme enligt rättshjälpstaxan (1 tim).");
+    expect(text).toContain(kr(203_250));
+    // Rådgivningsnotisen (spegel av KR-notisen) följer med — ordbruten i PDF:en.
+    expect(text.replace(/\n/g, " ")).toContain("ingår INTE i kostnadsräkningen till domstolen");
     // Inget tomt specifikations-avsnitt när det inte finns något underlag.
-    expect(html).not.toContain(">Specifikation<");
+    expect(pages).toHaveLength(1);
   });
 
-  it("utan spec faller mallen tillbaka på netto/moms ur fakturan", () => {
-    const html = renderFakturaHtml({ invoice: invoice(), recipient: "Klient AB", meta: META });
-    expect(html).toContain("Netto (exkl moms)");
-    expect(html).toContain(formatCurrency(203_250 - 40_650));
-    expect(html).toContain("Att betala (inkl moms)");
-    expect(html).not.toContain("{{");
+  it("utan spec faller fakturan tillbaka på netto/moms ur fakturan", async () => {
+    const texts = (await rendered({ invoice: invoice(), recipient: "Klient AB", meta: META })).flat();
+    expect(texts).toContain("Netto (exkl moms)");
+    expect(texts).toContain(kr(203_250 - 40_650));
+    expect(texts).toContain("Att betala (inkl moms)");
   });
 
-  it("sammanställningen BENÄMNER varje arvodeskategori — inte 'Arvode' fyra gånger (#953)", () => {
+  it("sammanställningen BENÄMNER varje arvodeskategori — inte 'Arvode' fyra gånger (#953)", async () => {
     // Efter en retroaktiv taxehöjning bär raden slutregleringsårets taxa men sitt
     // eget datum, så benämningen KAN inte gissas ur beloppet — kategorin måste följa
     // med. Alla fyra kategorierna, var och en på sin 2026-norm.
-    const html = renderFakturaHtml({
+    const [page1 = []] = await rendered({
       invoice: invoice(), recipient: "Domstol (kostnadsräkning)", meta: META,
       spec: spec({
         timeLines: [
@@ -119,21 +132,18 @@ describe("renderFakturaHtml — sammanställning + specifikation (#937)", () => 
         totalMinutes: 630, arvodeNetOre: 1_893_950, arvodeVatOre: 473_488, grossOre: 2_367_438, payableOre: 2_367_438,
       }),
     });
-    expect(html).toContain("<td>Timarvode</td>");
-    expect(html).toContain("<td>Timarvode helg/kväll</td>");
-    expect(html).toContain("<td>Tidsspillan</td>");
-    expect(html).toContain("<td>Tidsspillan helg/kväll</td>");
+    for (const label of ["Timarvode", "Timarvode helg/kväll", "Tidsspillan", "Tidsspillan helg/kväll"]) expect(page1).toContain(label);
     // Varje kategori får sin egen taxa-rad, ingen sammanslagning.
-    expect(html).toContain(`${formatCurrency(325_600)}/tim`);
-    expect(html).toContain(`${formatCurrency(97_500)}/tim`);
+    expect(page1).toContain(`${kr(325_600)}/tim`);
+    expect(page1).toContain(`${kr(97_500)}/tim`);
     // Ordningen är kategori-ordningen (arvode först, tidsspillan sist), inte taxan —
     // annars hamnar helgtaxan (högst) överst.
-    expect(html.indexOf("<td>Timarvode</td>")).toBeLessThan(html.indexOf("<td>Tidsspillan</td>"));
-    expect(html.indexOf("<td>Tidsspillan</td>")).toBeLessThan(html.indexOf("<td>Tidsspillan helg/kväll</td>"));
+    expect(page1.indexOf("Timarvode")).toBeLessThan(page1.indexOf("Tidsspillan"));
+    expect(page1.indexOf("Tidsspillan")).toBeLessThan(page1.indexOf("Tidsspillan helg/kväll"));
   });
 
-  it("samma kategori på TVÅ taxor (byråns egen taxa ändrad) ger en rad per taxa", () => {
-    const html = renderFakturaHtml({
+  it("samma kategori på TVÅ taxor (byråns egen taxa ändrad) ger en rad per taxa", async () => {
+    const [page1 = []] = await rendered({
       invoice: invoice(), recipient: "Klient AB", meta: META,
       spec: spec({
         timeLines: [
@@ -143,17 +153,17 @@ describe("renderFakturaHtml — sammanställning + specifikation (#937)", () => 
         totalMinutes: 120, arvodeNetOre: 530_000, arvodeVatOre: 132_500, grossOre: 662_500, payableOre: 662_500,
       }),
     });
-    expect(html).toContain(`${formatCurrency(250_000)}/tim`);
-    expect(html).toContain(`${formatCurrency(280_000)}/tim`);
+    expect(page1).toContain(`${kr(250_000)}/tim`);
+    expect(page1).toContain(`${kr(280_000)}/tim`);
   });
 
-  it("organisationsuppgifter renderas i foten när de finns", () => {
-    const html = renderFakturaHtml({
+  it("organisationsuppgifter står i sidhuvudet när de finns", async () => {
+    const texts = (await rendered({
       invoice: invoice(), recipient: "Klient AB",
       meta: { ...META, organizationName: "Firma AB", organizationOrgNumber: "556677-8899" },
-    });
-    expect(html).toContain("Firma AB");
-    expect(html).toContain("556677-8899");
+    })).flat();
+    expect(texts).toContain("Firma AB");
+    expect(texts).toContain("Org.nr 556677-8899");
   });
 });
 
@@ -230,20 +240,21 @@ describe("buildFakturaView — sammanställningen är en uträkning (#1200)", ()
     expect(Number(v.summaryTotal) - 200_000).toBe(Number(v.total));
   });
 
-  it("tidsspecifikationen delas per kategori, med timpris och delsumma", () => {
+  it("tidsspecifikationen delas per kategori med delsumma — inget timpris per post (#1439)", () => {
     expect(v.timeGroups.map((g) => [g.label, g.subtotalLabel, g.hours, g.amount])).toEqual([
       ["Timarvode", "Summa timarvode", "3,5", "525000"],
       ["Tidsspillan", "Summa tidsspillan", "1,5", "150000"],
     ]);
-    expect(v.timeGroups[0]?.lines.map((l) => [l.description, l.hours, l.rate, l.amount])).toEqual([
-      ["Genomgång av handlingar", "2,5", "150000/tim", "375000"],
-      ["Huvudförhandling", "1", "150000/tim", "150000"],
+    expect(v.timeGroups[0]?.lines.map((l) => [l.date, l.description, l.hours, l.amount])).toEqual([
+      ["2026-05-02", "Genomgång av handlingar", "2,5", "375000"],
+      ["2026-05-04", "Huvudförhandling", "1", "150000"],
     ]);
+    expect(v.timeGroups[0]?.lines[0]).not.toHaveProperty("rate");
     // Delsummorna = posterna i deltabellen, och tillsammans = summa arvode exkl moms.
     for (const g of v.timeGroups) expect(g.lines.reduce((acc, l) => acc + Number(l.amount), 0)).toBe(Number(g.amount));
     expect(v.timeGroups.reduce((acc, g) => acc + Number(g.amount), 0)).toBe(s.arvodeNetOre);
-    // Den platta listan (byrå-mallar, #852) bär också timpriset, i fakturans ordning.
-    expect(v.timeLines.map((l) => l.rate)).toEqual(["150000/tim", "100000/tim", "150000/tim"]);
+    // Den platta listan (#852) bär posterna i fakturans ordning.
+    expect(v.timeLines.map((l) => l.description)).toEqual(["Genomgång av handlingar", "Restid till tingsrätten", "Huvudförhandling"]);
   });
 });
 
@@ -270,7 +281,7 @@ describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
     const v = buildFakturaView({ invoice: invoice({ amount: 625_000 }), recipient: "K", meta: META, spec: s }, ore);
     expect(v.summary[0]).toEqual({ label: "Advokatberedskap — garantiersättning per dag", hours: "2 dygn", rateLabel: "250000/dygn", amount: "500000", subtotal: false });
     expect(v.timeGroups[0]?.hours).toBe("2 dygn");
-    expect(v.timeGroups[0]?.lines[0]).toMatchObject({ hours: "1 dygn", rate: "250000/dygn" });
+    expect(v.timeGroups[0]?.lines[0]).toEqual({ date: "2026-05-02", description: "Beredskap lördag", hours: "1 dygn", amount: "250000" });
     expect(reconcile(v.summary)).toBe(Number(v.summaryTotal));
   });
 
@@ -281,7 +292,6 @@ describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
     });
     const v = buildFakturaView({ invoice: invoice({ amount: 0 }), recipient: "K", meta: META, spec: s }, ore);
     expect(v.summary[0]?.rateLabel).toBe("");
-    expect(v.timeLines[0]?.rate).toBe("");
   });
 
   it("äldre rader utan kategori: tidsspillan annan tid räddas ur taxan till egen deltabell", () => {
@@ -324,21 +334,39 @@ describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
   });
 });
 
-describe("renderFakturaHtml — kolumner och deltabeller (#1200)", () => {
-  const html = renderFakturaHtml({ invoice: invoice(), recipient: "Klient AB", meta: META, spec: realisticSpec() });
+describe("fakturan (PDF) — kolumner och deltabeller (#1200/#1439)", () => {
+  const pagesP = rendered({ invoice: invoice(), recipient: "Klient AB", meta: META, spec: realisticSpec() });
 
-  it("sammanställningen har kolumnerna Benämning | Tim | Timpris | Belopp och fet summarad", () => {
-    expect(html).toContain("<th>Benämning</th><th style=\"text-align:right\">Tim</th><th style=\"text-align:right\">Timpris</th><th style=\"text-align:right\">Belopp</th>");
-    expect(html).toContain(`<tr style="border-top:1px solid #ccc;font-weight:bold"><td>Summa arvode exkl moms</td>`);
-    expect(html).toContain(">Summa inkl moms<");
-    expect(html).not.toContain("Timtaxa");
+  it("sammanställningen har kolumnerna Benämning | Tim | Timpris | Belopp och summaraderna", async () => {
+    const [page1 = []] = await pagesP;
+    const head = page1.indexOf("Benämning");
+    expect(page1.slice(head, head + 4)).toEqual(["Benämning", "Tim", "Timpris", "Belopp"]);
+    expect(page1).toContain("Summa arvode exkl moms");
+    expect(page1).toContain("Summa inkl moms");
+    expect(page1).not.toContain("Timtaxa");
   });
 
-  it("tidsspecifikationen har en deltabell per kategori med delsumma", () => {
-    expect(html).toContain("<h4 style=\"font-size:13px;margin-top:1rem;margin-bottom:.25rem\">Timarvode</h4>");
-    expect(html.indexOf(">Timarvode</h4>")).toBeLessThan(html.indexOf(">Tidsspillan</h4>"));
-    expect(html).toContain(`<td colspan="2">Summa tidsspillan</td><td style="text-align:right">1,5</td>`);
-    expect(html).toContain(`${formatCurrency(150_000)}/tim`);
-    expect(html).not.toContain("{{");
+  it("tidsspecifikationen: en deltabell per kategori med delsumma — utan timpris per post (#1439)", async () => {
+    const [, page2 = []] = await pagesP;
+    expect(page2.indexOf("Timarvode")).toBeLessThan(page2.indexOf("Tidsspillan"));
+    expect(page2).toContain("Summa tidsspillan");
+    // Kolumnerna är Datum | Beskrivning | Tim | Belopp — timpriset står bara i sammanställningen.
+    const head = page2.indexOf("Datum");
+    expect(page2.slice(head, head + 4)).toEqual(["Datum", "Beskrivning", "Tim", "Belopp"]);
+    expect(page2).not.toContain("Timpris");
+    expect(page2.some((t) => t.endsWith("/tim"))).toBe(false);
+    // Posten: hela datumet, omfattning och belopp på första raden, sedan beskrivningen.
+    const row = page2.indexOf("2026-05-02");
+    expect(page2.slice(row, row + 4)).toEqual(["2026-05-02", "2,5", kr(375_000), "Genomgång av handlingar"]);
+  });
+});
+
+describe("fakturan — byråns logga (#1439)", () => {
+  /** 1×1 px PNG — minsta giltiga bild. */
+  const PNG = orgImageSchema.parse("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+
+  it("vy-modellen bär loggan ur organisationsinställningarna; utan logga → null", () => {
+    expect(buildFakturaView({ invoice: invoice(), recipient: "K", meta: { ...META, organizationLogo: PNG } }).logo).toBe(PNG);
+    expect(buildFakturaView({ invoice: invoice(), recipient: "K", meta: META }).logo).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 /**
- * `renderFakturaPdf` (#938) — bilagan vid manuellt fakturautskick. Samma upplägg
- * som det arkiverade HTML-dokumentet: sammanställning på sida 1, specifikation
+ * `renderFakturaPdf` (#938/#1439) — fakturans enda format: både det arkiverade
+ * dokumentet och bilagan vid utskick. Sammanställning på sida 1, specifikation
  * på egen sida därefter. Renderaren tar en färdig `FakturaView` och räknar inget.
  */
 import { inflateSync } from "node:zlib";
@@ -8,7 +8,9 @@ import { describe, it, expect } from "vitest-compat";
 import { buildFakturaView, type FakturaView } from "@/lib/client/kostnadsrakning/faktura-template";
 import { renderFakturaPdf, toWinAnsi } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 import { buildInvoiceSpecification } from "@/lib/shared/invoice-specification";
+import { orgImageSchema } from "@/lib/shared/org-image";
 import { asId } from "@/lib/shared/schemas/ids";
+import { pdfPageContents, pdfPageTexts } from "../../../helpers/pdf-text";
 
 const head = (b: Uint8Array) => String.fromCharCode(b[0]!, b[1]!, b[2]!, b[3]!);
 
@@ -20,7 +22,7 @@ async function pageCount(bytes: Uint8Array): Promise<number> {
 const view = (over: Partial<FakturaView> = {}): FakturaView => ({
   heading: "Faktura", invoiceNumber: "F-2026-0001", ocr: "1234567894", date: "2026-05-12",
   matterNumber: "B 2026-1234", matterTitle: "Brottmål Falk", recipient: "Domstolsverket",
-  organizationName: "Firma AB", organizationOrgNumber: "556677-8899", footnote: "",
+  organizationName: "Firma AB", organizationOrgNumber: "556677-8899", logo: null, footnote: "",
   summary: [{ label: "Arvode (timkostnadsnorm)", rateLabel: "1 626,00 kr/tim", hours: "4", amount: "6 504,00 kr", subtotal: false }],
   summaryTotalLabel: "Summa inkl moms", summaryTotal: "8 130,00 kr",
   hasSplit: false, splitRows: [{ label: "Netto (exkl moms)", amount: "6 504,00 kr", style: "", muted: false }],
@@ -52,7 +54,7 @@ describe("renderFakturaPdf", () => {
       hasSpec: true,
       timeGroups: [{
         label: "Arvode", subtotalLabel: "Summa arvode", hours: "4", amount: "6 504,00 kr",
-        lines: [{ date: "2026-05-02", description: "Genomgång av handlingar", hours: "4", rate: "1 626,00 kr/tim", amount: "6 504,00 kr" }],
+        lines: [{ date: "2026-05-02", description: "Genomgång av handlingar", hours: "4", amount: "6 504,00 kr" }],
       }],
       expenseLines: [{ date: "2026-05-03", description: "Ansökningsavgift", net: "900,00 kr", gross: "1 125,00 kr" }],
     }));
@@ -62,7 +64,7 @@ describe("renderFakturaPdf", () => {
   it("bryter sidan när tidsspecifikationen är längre än en sida", async () => {
     const lines = Array.from({ length: 120 }, (_, i) => ({
       date: "2026-05-02", description: `Post ${i} — genomgång av handlingar och underlag`,
-      hours: "1", rate: "1 626,00 kr/tim", amount: "1 626,00 kr",
+      hours: "1", amount: "1 626,00 kr",
     }));
     const timeGroups = [{ label: "Arvode", subtotalLabel: "Summa arvode", hours: "120", amount: "195 120,00 kr", lines }];
     const bytes = await renderFakturaPdf(view({ hasSpec: true, timeGroups }));
@@ -114,7 +116,7 @@ function pdfTexts(bytes: Uint8Array): string[] {
   return texts;
 }
 
-describe("renderFakturaPdf — samma uträkning och deltabeller som HTML:en (#1200)", () => {
+describe("renderFakturaPdf — uträkningen och deltabellerna (#1200/#1439)", () => {
   const v = buildFakturaView({
     invoice: { id: asId<"InvoiceId">("inv-2"), amount: 1_046_875, invoiceNumber: "F-2026-0008", invoiceDate: "2026-06-30" },
     recipient: "Klient AB",
@@ -142,7 +144,7 @@ describe("renderFakturaPdf — samma uträkning och deltabeller som HTML:en (#12
     expect(texts).toContain(toWinAnsi(v.summaryTotal));
   });
 
-  it("tidsspecifikationen: en deltabell per kategori med timpris och delsumma", async () => {
+  it("tidsspecifikationen: en deltabell per kategori med delsumma — timpriset bara i sammanställningen (#1439)", async () => {
     const texts = pdfTexts(await renderFakturaPdf(v));
     const at = (s: string) => texts.indexOf(s);
     // Kategorirubriken står både i sammanställningen och som deltabellens rubrik
@@ -150,6 +152,69 @@ describe("renderFakturaPdf — samma uträkning och deltabeller som HTML:en (#12
     expect(texts.lastIndexOf("Tidsspillan")).toBeGreaterThan(at("Summa timarvode"));
     expect(at("Summa timarvode")).toBeGreaterThan(-1);
     expect(at("Summa tidsspillan")).toBeGreaterThan(-1);
-    expect(texts).toContain(toWinAnsi(v.timeGroups[0]?.lines[0]?.rate ?? "saknas"));
+    // "Timpris" och "…/tim" står en gång per kategori — i sammanställningen, före specifikationen.
+    const spec = at("Specifikation");
+    expect(texts.lastIndexOf("Timpris")).toBeLessThan(spec);
+    expect(texts.slice(spec).some((t) => t.endsWith("/tim"))).toBe(false);
+  });
+});
+
+/** 1×1 px PNG — minsta giltiga byråbild. */
+const PNG_LOGO = orgImageSchema.parse("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+
+describe("renderFakturaPdf — byråns logga (#1439)", () => {
+  /** Ritas en bild (`Do`-operatorn) på sidan? */
+  const drawsImage = (content: string | undefined): boolean => /\/\S+ Do/.test(content ?? "");
+
+  it("loggan ritas i sidhuvudet på sida 1, men inte på specifikationens sidor", async () => {
+    const lines = [{ date: "2026-05-02", description: "Genomgång", hours: "1", amount: "1 626,00 kr" }];
+    const timeGroups = [{ label: "Arvode", subtotalLabel: "Summa arvode", hours: "1", amount: "1 626,00 kr", lines }];
+    const [page1, page2] = await pdfPageContents(await renderFakturaPdf(view({ logo: PNG_LOGO, hasSpec: true, timeGroups })));
+    expect(drawsImage(page1)).toBe(true);
+    expect(drawsImage(page2)).toBe(false);
+  });
+
+  it("utan logga är layouten oförändrad — ingen bild, samma text på samma plats", async () => {
+    const without = await renderFakturaPdf(view());
+    const [page] = await pdfPageContents(without);
+    expect(drawsImage(page)).toBe(false);
+    const withLogo = await renderFakturaPdf(view({ logo: PNG_LOGO }));
+    // Texten (och dess ordning) är densamma med och utan logga — loggan ritas i en egen ruta.
+    expect(await pdfPageTexts(withLogo)).toEqual(await pdfPageTexts(without));
+  });
+
+  it("en logga som inte går att bädda in fäller inte fakturan — den ritas utan logga", async () => {
+    // Giltig data-URL enligt schemat, men inte en riktig PNG.
+    const broken = orgImageSchema.parse("data:image/png;base64,AAAA");
+    const bytes = await renderFakturaPdf(view({ logo: broken }));
+    expect(head(bytes)).toBe("%PDF");
+    const [page] = await pdfPageContents(bytes);
+    expect(drawsImage(page)).toBe(false);
+  });
+});
+
+describe("renderFakturaPdf — specifikationens rader (#1439)", () => {
+  const group = (description: string) => [{
+    label: "Arvode", subtotalLabel: "Summa arvode", hours: "1", amount: "1 626,00 kr",
+    lines: [{ date: "2026-10-03", description, hours: "1", amount: "1 626,00 kr" }],
+  }];
+
+  it("datumet ritas helt på en rad och en lång beskrivning radbryts i stället för att kapas", async () => {
+    const long = "Genomgång av förundersökningsprotokollet med samtliga bilagor, förhörsutskrifter och tekniska utredningar inför huvudförhandlingen";
+    const [, page2 = []] = await pdfPageTexts(await renderFakturaPdf(view({ hasSpec: true, timeGroups: group(long) })));
+    const row = page2.indexOf("2026-10-03");
+    expect(row).toBeGreaterThan(-1);
+    // Datum, Tim och Belopp på första raden; därefter beskrivningen över flera rader.
+    expect(page2.slice(row, row + 3)).toEqual(["2026-10-03", "1", "1 626,00 kr"]);
+    const descLines = page2.slice(row + 3, page2.indexOf("Summa arvode"));
+    expect(descLines.length).toBeGreaterThan(1);
+    expect(descLines.join(" ")).toBe(long);
+    expect(page2.some((t) => t.endsWith("..."))).toBe(false);
+  });
+
+  it("en post utan beskrivning tar ändå sin rad", async () => {
+    const [, page2 = []] = await pdfPageTexts(await renderFakturaPdf(view({ hasSpec: true, timeGroups: group("") })));
+    expect(page2).toContain("2026-10-03");
+    expect(page2).toContain("Summa arvode");
   });
 });
