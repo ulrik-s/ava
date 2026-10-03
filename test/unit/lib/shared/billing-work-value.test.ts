@@ -15,7 +15,7 @@ import {
   arvodeLine, arvodeNetOre, entryOwnValueOre,
   expenseGrossOre, expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown,
   krGrossOre, matterKrArvodeRows, minutesByKind, netOreOf, settlementArvodeNet, sumKindValueOre,
-  timeEntryValueOre, vatOnNet, vatOreOf, workValueOre, type UnfrozenWork,
+  timeEntryValueOre, vatOreOf, workValueOre, type UnfrozenWork,
 } from "@/lib/shared/billing-work-value";
 import { asId } from "@/lib/shared/schemas/ids";
 
@@ -79,11 +79,6 @@ describe("utlägg och moms", () => {
 
   it("ej debiterbara utlägg räknas inte", () => {
     expect(expenseNetOre(work([], [ex({ billable: false })]))).toBe(0);
-  });
-
-  it("vatOnNet lägger 25 % på nettot", () => {
-    expect(vatOnNet(100_000)).toBe(25_000);
-    expect(vatOnNet(0)).toBe(0);
   });
 
   it("arvodeLine är null vid noll arvode — en tom rad ljuger om innehåll", () => {

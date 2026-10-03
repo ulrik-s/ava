@@ -31,7 +31,7 @@
  */
 
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
-import { splitVat } from "@/lib/shared/vat";
+import { splitGross } from "@/lib/shared/whole-kronor";
 
 /** Momssatsen aconton faktureras med — rent arvode (#968). */
 const ACCONTO_VAT_RATE = 2500;
@@ -47,10 +47,10 @@ export interface AccontoDeductionResult {
   overpaidGrossOre: number;
 }
 
-/** Netto/moms i ett acontobelopp (brutto, inkl 25 % moms). */
+/** Netto/moms i ett acontobelopp (brutto, inkl 25 % moms). Nettot i hela
+ *  kronor och momsen resten (#1438) — samma uppdelning som acontofakturan bär. */
 export function accontoSplit(grossOre: number): { netOre: number; vatOre: number } {
-  const { exclVat } = splitVat({ amount: grossOre, vatRate: ACCONTO_VAT_RATE, vatIncluded: true });
-  return { netOre: exclVat, vatOre: grossOre - exclVat };
+  return splitGross(grossOre, ACCONTO_VAT_RATE);
 }
 
 const grossOf = (l: VatBreakdownLine): number => l.netOre + l.vatOre;
@@ -69,11 +69,14 @@ function deductionOrder(lines: readonly VatBreakdownLine[]): number[] {
     .map((x) => x.index);
 }
 
-/** Rad med `takeGrossOre` bortdraget — momssatsen bevaras exakt. */
+/**
+ * Rad med `takeGrossOre` bortdraget. Det bortdragna delas i netto och moms med
+ * SAMMA regel som acontofakturan (#1438), så slutfakturan vänder exakt den intäkt
+ * och moms acontot bokförde — och raden förblir hela kronor.
+ */
 function shrink(line: VatBreakdownLine, takeGrossOre: number): VatBreakdownLine {
-  const rest = grossOf(line) - takeGrossOre;
-  const netOre = Math.round((rest * 10_000) / (10_000 + line.vatRate));
-  return { ...line, netOre, vatOre: rest - netOre };
+  const take = splitGross(takeGrossOre, line.vatRate);
+  return { ...line, netOre: line.netOre - take.netOre, vatOre: line.vatOre - take.vatOre };
 }
 
 /**

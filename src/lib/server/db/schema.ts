@@ -24,7 +24,7 @@ import type {
 } from "@/lib/shared/schemas/calendar";
 import type { DocumentPartSource } from "@/lib/shared/schemas/document";
 import type {
-  BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, InvoiceStatus,
+  AmountRounding, BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, InvoiceStatus,
   ConflictCheckStatus, InvoiceType, MatterRole, MatterStatus, PaymentMethod, PaymentPlanStatus, ReminderType,
   SuggestionStatus, UserRole,
 } from "@/lib/shared/schemas/enums";
@@ -323,6 +323,8 @@ export const invoices = pgTable("invoices", {
   dueDate: timestamp("due_date", { withTimezone: true }),
   notes: text("notes"),
   creditedInvoiceId: uuid("credited_invoice_id").$type<InvoiceId>(),
+  // Radavrundning (#1438): 'KRONOR' på nya fakturor; null = äldre (öre).
+  amountRounding: text("amount_rounding").$type<AmountRounding>(),
 }, (t) => [index("invoices_matter_idx").on(t.matterId)]);
 
 /**

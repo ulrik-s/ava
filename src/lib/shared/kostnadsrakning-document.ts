@@ -83,6 +83,13 @@ export interface KrDocumentInput {
 }
 
 /** Kostnadsräkningens dokumentvy — allt färdigformaterat. */
+/**
+ * Skiljetecknet mellan sidfotens delar. Mittpunkten finns i WinAnsi, som PDF:ens
+ * standardteckensnitt kodar — det tidigare "∽" saknades där och ritades som en
+ * vektor som såg ut som ett trasigt tecken.
+ */
+export const FOOTER_SEPARATOR = " · ";
+
 export interface KrDocumentView {
   /** Brevhuvudet (byråns namn centrerat överst); tom = inget brevhuvud. */
   firmName: string;
@@ -90,7 +97,7 @@ export interface KrDocumentView {
   logo: OrgImage | null;
   /** Märket till vänster i sidfoten på sida 1. */
   footerSeal: OrgImage | null;
-  /** Sidfotens rader på sida 1; varje rad är delar som sammanfogas med "∽". */
+  /** Sidfotens rader på sida 1; varje rad är delar som sammanfogas med `FOOTER_SEPARATOR`. */
   footerLines: string[][];
   /** Mottagaren (domstolen); null = inget mottagarblock. */
   recipient: string | null;

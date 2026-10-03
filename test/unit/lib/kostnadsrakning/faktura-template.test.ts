@@ -53,7 +53,7 @@ describe("fakturan (PDF) — sammanställning + specifikation (#937/#1439)", () 
       invoice: invoice(), recipient: "Cecilia Carlsson", meta: META,
       spec: spec({
         timeLines: [{ date: "2026-05-02", description: "Genomgång av handlingar", minutes: 60, amountOre: 162_600 }],
-        totalMinutes: 60, arvodeNetOre: 162_600, arvodeVatOre: 40_650, grossOre: 203_250, payableOre: 203_250,
+        totalMinutes: 60, arvodeNetOre: 162_600, arvodeVatOre: 40_650, grossOre: 203_250, payableOre: 203_250
       }),
     });
     expect(pages).toHaveLength(2);
@@ -129,7 +129,7 @@ describe("fakturan (PDF) — sammanställning + specifikation (#937/#1439)", () 
           { date: "2025-12-17", description: "Restid till sammanträde", minutes: 180, amountOre: 446_100, kind: "TIDSSPILLAN" },
           { date: "2026-05-16", description: "Hemresa efter kvällssammanträde", minutes: 90, amountOre: 146_250, kind: "TIDSSPILLAN_OVRIG_TID" },
         ],
-        totalMinutes: 630, arvodeNetOre: 1_893_950, arvodeVatOre: 473_488, grossOre: 2_367_438, payableOre: 2_367_438,
+        totalMinutes: 630, arvodeNetOre: 1_893_950, arvodeVatOre: 473_488, grossOre: 2_367_438, payableOre: 2_367_438
       }),
     });
     for (const label of ["Timarvode", "Timarvode helg/kväll", "Tidsspillan", "Tidsspillan helg/kväll"]) expect(page1).toContain(label);
@@ -150,7 +150,7 @@ describe("fakturan (PDF) — sammanställning + specifikation (#937/#1439)", () 
           { date: "2026-01-10", description: "Arbete före höjning", minutes: 60, amountOre: 250_000, kind: "ARBETE" },
           { date: "2026-06-10", description: "Arbete efter höjning", minutes: 60, amountOre: 280_000, kind: "ARBETE" },
         ],
-        totalMinutes: 120, arvodeNetOre: 530_000, arvodeVatOre: 132_500, grossOre: 662_500, payableOre: 662_500,
+        totalMinutes: 120, arvodeNetOre: 530_000, arvodeVatOre: 132_500, grossOre: 662_500, payableOre: 662_500
       }),
     });
     expect(page1).toContain(`${kr(250_000)}/tim`);
@@ -199,8 +199,8 @@ function realisticSpec(): InvoiceSpecification {
     { date: "2026-05-05", description: "Registerutdrag (äkta utlägg)", netOre: 50_000, grossOre: 50_000, passThrough: true },
   ];
   const deductions = [{ invoiceNumber: "F-2026-0003", date: "2026-04-01", amountOre: 200_000 }];
-  const base = buildInvoiceSpecification({ timeLines, expenseLines, deductions, payableOre: 0 });
-  return buildInvoiceSpecification({ timeLines, expenseLines, deductions, payableOre: base.grossOre - 200_000 });
+  const base = buildInvoiceSpecification({ timeLines, expenseLines, deductions, payableOre: 0, rounding: "KRONOR" });
+  return buildInvoiceSpecification({ timeLines, expenseLines, deductions, payableOre: base.grossOre - 200_000, rounding: "KRONOR" });
 }
 
 describe("buildFakturaView — sammanställningen är en uträkning (#1200)", () => {
@@ -262,7 +262,7 @@ describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
   it("nollrader utelämnas (inga utlägg → ingen utläggs-/utläggsmomsrad)", () => {
     const s = buildInvoiceSpecification({
       timeLines: [{ date: "2026-05-02", description: "Möte", minutes: 60, amountOre: 150_000, kind: "ARBETE" }],
-      expenseLines: [], deductions: [], payableOre: 187_500,
+      expenseLines: [], deductions: [], payableOre: 187_500, rounding: "KRONOR"
     });
     const v = buildFakturaView({ invoice: invoice({ amount: 187_500 }), recipient: "K", meta: META, spec: s }, ore);
     expect(v.summary.map((r) => r.label)).toEqual(["Timarvode", "Summa arvode exkl moms", "Moms 25 % på arvode"]);
@@ -276,7 +276,7 @@ describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
         { date: "2026-05-02", description: "Beredskap lördag", minutes: 0, amountOre: 250_000, kind: "ADVOKATBEREDSKAP" },
         { date: "2026-05-03", description: "Beredskap söndag", minutes: 0, amountOre: 250_000, kind: "ADVOKATBEREDSKAP" },
       ],
-      expenseLines: [], deductions: [], payableOre: 625_000,
+      expenseLines: [], deductions: [], payableOre: 625_000, rounding: "KRONOR"
     });
     const v = buildFakturaView({ invoice: invoice({ amount: 625_000 }), recipient: "K", meta: META, spec: s }, ore);
     expect(v.summary[0]).toEqual({ label: "Advokatberedskap — garantiersättning per dag", hours: "2 dygn", rateLabel: "250000/dygn", amount: "500000", subtotal: false });
@@ -288,7 +288,7 @@ describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
   it("post utan tid och belopp får inget påhittat timpris", () => {
     const s = buildInvoiceSpecification({
       timeLines: [{ date: "2026-05-02", description: "Notering", minutes: 0, amountOre: 0, kind: "ARBETE" }],
-      expenseLines: [], deductions: [], payableOre: 0,
+      expenseLines: [], deductions: [], payableOre: 0, rounding: "KRONOR"
     });
     const v = buildFakturaView({ invoice: invoice({ amount: 0 }), recipient: "K", meta: META, spec: s }, ore);
     expect(v.summary[0]?.rateLabel).toBe("");
@@ -303,7 +303,7 @@ describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
           { date: "2026-05-04", description: "Hemresa kväll", minutes: 60, amountOre: ovrig },
           { date: "2026-05-02", description: "Genomgång", minutes: 60, amountOre: 162_600 },
         ],
-        expenseLines: [], deductions: [], payableOre: 0,
+        expenseLines: [], deductions: [], payableOre: 0, rounding: "KRONOR"
       }),
     }, ore);
     expect(v.timeGroups.map((g) => g.label)).toEqual(["Timarvode", "Tidsspillan helg/kväll"]);

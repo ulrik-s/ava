@@ -18,13 +18,14 @@
  */
 
 import { applyNoFTaxFactorForDate, computeBrottmalstaxa, computeTimkostnadsnorm, coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries, timkostnadsnormFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
-import { CHARGED_EXPENSE_VAT_RATE, chargedVatOre, expenseNetOre as chargedExpenseNetOre } from "./expense-vat";
+import { CHARGED_EXPENSE_VAT_RATE, expenseNetOre as chargedExpenseNetOre } from "./expense-vat";
 import { computeForordnandeErsattning, forhorMinutes, type Forhor, type ForordnandeResult, tidsspillanUtover } from "./forordnandetaxa";
 import { isTidsspillanKind } from "./hourly-rate";
+import { ARVODE_VAT_BIPS } from "./invoice-calc";
 import { toIsoDate, toLocalTime } from "./iso-date";
 import { buildKrDocument, krArvodePart, type KrArvodeBasis, type KrArvodePart, type KrDocumentView, type KrHuvudforhandling } from "./kostnadsrakning-document";
 import { timeAmountOre } from "./kostnadsrakning-document-rows";
-import { krClaim, roundToKronor, type KrClaim } from "./kr-claim";
+import { krClaim, type KrClaim } from "./kr-claim";
 import { formatHours, formatMinutes, formatOreAsKr } from "./kr-format";
 import { omitUndefined } from "./omit-undefined";
 import type { OrgImage } from "./org-image";
@@ -32,6 +33,7 @@ import { radgivningTextRad } from "./rattshjalp";
 import type { TimeEntryKind } from "./schemas/enums";
 import type { BillingRunId } from "./schemas/ids";
 import { isLockedEntry, type LockableEntry } from "./time-entry-lock";
+import { roundToKronor, vatOnRow } from "./whole-kronor";
 
 export interface ExpenseInput {
   id: string;
@@ -457,12 +459,14 @@ function resolveBasis(original: BuildInput, billable: readonly TimeEntryInput[],
  * Utläggsrader — bara debiterbara; övriga är byråns egen kostnad. Momsen är den
  * DEBITERADE (#975, NJA 2005 s. 606): byråns ingående moms räknas av och 25 %
  * läggs på; äkta utlägg går vidare utan moms. Samma regel som körningens belopp
- * (`krGrossOre`), så dokumentet och det lagrade yrkandet stämmer.
+ * (`krGrossOre`), så dokumentet och det lagrade yrkandet stämmer. Varje rad är
+ * avrundad till hela kronor (#1438) — utläggsavsnittets rader summerar då exakt
+ * till sammanställningens utläggsrad.
  */
 function expenseLinesOf(expenses: readonly ExpenseInput[]): ExpenseLine[] {
   return expenses.filter((e) => e.billable !== false).map((e) => {
-    const exclVat = chargedExpenseNetOre({ ...e, vatIncluded: e.vatIncluded ?? true });
-    const vat = e.passThrough === true ? 0 : chargedVatOre(exclVat);
+    const exclVat = roundToKronor(chargedExpenseNetOre({ ...e, vatIncluded: e.vatIncluded ?? true }));
+    const vat = e.passThrough === true ? 0 : vatOnRow(exclVat, CHARGED_EXPENSE_VAT_RATE);
     return {
       id: e.id, date: toIsoDate(e.date), description: e.description,
       vatRate: e.passThrough === true ? 0 : CHARGED_EXPENSE_VAT_RATE, exclVat, vat, inclVat: exclVat + vat,
@@ -552,7 +556,7 @@ export function buildKostnadsrakningContext(original: BuildInput): Kostnadsrakni
   const arvodeExclVat = claim.arvodeExclVat;
   // Delsummorna (äldre vy-fält): arvodets moms i hela kronor, utläggen tar resten
   // av den avrundade totalmomsen — så arvode + utlägg alltid = yrkandet.
-  const arvodeMoms = roundToKronor(arvodeExclVat * 0.25);
+  const arvodeMoms = vatOnRow(arvodeExclVat, ARVODE_VAT_BIPS);
   const expenseVat = claim.vat - arvodeMoms;
   const expenseSummary = { exclVat: claim.expenseExclVat, vat: expenseVat, inclVat: claim.expenseExclVat + expenseVat };
   const arvodeInclVat = arvodeExclVat + arvodeMoms;

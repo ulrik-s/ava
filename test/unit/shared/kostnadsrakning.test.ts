@@ -89,11 +89,13 @@ describe("buildKostnadsrakningContext — med utlägg", () => {
     expect(r.expenseLines.map((l) => l.id).sort()).toEqual(["e1", "e2"]);
   });
 
-  it("delar upp varje utlägg: byråns moms räknas av, 25 % debiteras (#975)", () => {
+  it("delar upp varje utlägg: byråns moms räknas av, 25 % debiteras (#975), varje rad i hela kronor (#1438)", () => {
     const e1 = r.expenseLines.find((l) => l.id === "e1")!;
-    expect(e1).toMatchObject({ exclVat: 12500, vat: 3125, inclVat: 15625, vatRate: 2500 });
+    // 125 kr × 25 % = 31,25 → 31 kr.
+    expect(e1).toMatchObject({ exclVat: 12500, vat: 3100, inclVat: 15600, vatRate: 2500 });
     const e2 = r.expenseLines.find((l) => l.id === "e2")!;
-    expect(e2).toMatchObject({ exclVat: 42453, vat: 10613, inclVat: 53066 });
+    // 450 kr inkl 6 % = 424,53 kr netto → 425 kr; moms 106,25 → 106 kr.
+    expect(e2).toMatchObject({ exclVat: 42500, vat: 10600, inclVat: 53100 });
   });
 
   it("expenseSummary: utläggsraden avrundad till hela kronor (#1218)", () => {
@@ -154,7 +156,7 @@ describe("templateContext — formaterad data för Handlebars", () => {
   it("expenseLines har formaterade belopp + vatRateLabel", () => {
     const lines = (r.templateContext.expenseLines as Array<Record<string, unknown>>);
     expect(lines[0]!.vatRateLabel).toBe("25 %");
-    expect(lines[0]!.inclVatFormatted).toMatch(/530,66\s+kr/);
+    expect(lines[0]!.inclVatFormatted).toMatch(/531,00\s+kr/);
   });
 });
 

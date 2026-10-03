@@ -2,6 +2,7 @@ import { z } from "zod";
 import { kostnadsrakningStatusSchema } from "../kostnadsrakning-flow";
 import { baseFields, orgScopedFields, dateLike, optionalDateLike } from "./common";
 import {
+  amountRoundingSchema,
   billingRunRecipientSchema,
   billingRunStatusSchema,
   billingRunTypeSchema,
@@ -175,6 +176,10 @@ export const invoiceSchema = z.object({
   notes: z.string().nullish(),
   /** Bara satt på CREDIT-fakturor — pekar på den ursprungliga fakturan som krediteras. */
   creditedInvoiceId: invoiceIdSchema.nullish(),
+  /** Hur fakturans rader är avrundade (#1438): `KRONOR` på alla nya fakturor,
+   *  null/`ORE` på äldre — deras specifikation räknas med öresavrundning så ett
+   *  omrenderat dokument visar samma rader som det som skickades. */
+  amountRounding: amountRoundingSchema.nullish(),
 }).passthrough();
 
 export type Invoice = z.infer<typeof invoiceSchema>;

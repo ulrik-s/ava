@@ -14,7 +14,7 @@ import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import type { Rng } from "../../../helpers/seeded-rng";
 
 /** Betalningssätten egenskaperna gäller. */
-export type ScenarioMethod = "OFFENTLIGT_UPPDRAG" | "RATTSHJALP" | "PRIVAT";
+export type ScenarioMethod = "OFFENTLIGT_UPPDRAG" | "RATTSHJALP" | "RATTSSKYDD" | "PRIVAT";
 
 type Kind = "ARBETE" | "TIDSSPILLAN" | "ADVOKATBEREDSKAP";
 
@@ -91,7 +91,7 @@ export function scenarioFor(r: Rng, method: ScenarioMethod): Scenario {
     isTaxe: method === "OFFENTLIGT_UPPDRAG" && r.next() < 0.5,
     taxaLevel: (r.pick([1, 2, 3, 4] as const) ?? 1),
     huf: hufFor(r),
-    clientShareBips: method === "RATTSHJALP" ? 100 * r.int(2, 40) : 0,
+    clientShareBips: method === "RATTSHJALP" || method === "RATTSSKYDD" ? 100 * r.int(2, 40) : 0,
   };
 }
 

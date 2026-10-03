@@ -18,6 +18,7 @@ import { fakturaOrgMeta, type FakturaOrgMeta, type FakturaOrgSettings } from "@/
 import type { FakturaBreakdown, InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import type { AmountRounding } from "@/lib/shared/schemas/enums";
 import type { InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 
 export interface SendInvoiceModalProps {
@@ -32,6 +33,8 @@ export interface SendInvoiceModalProps {
   invoiceDate?: string | Date | null | undefined;
   invoiceType?: string | null | undefined;
   notes?: string | null | undefined;
+  /** Fakturans radavrundning (#1438) — bilagan räknas som fakturan skapades. */
+  amountRounding?: AmountRounding | null | undefined;
   /** Persisterad nedbrytning (#878) → uppdelningen klient/betalare i bilagan. */
   settlementBreakdown?: FakturaBreakdown | null | undefined;
   matterNumber: string;
@@ -89,7 +92,7 @@ async function buildPdf(p: SendInvoiceModalProps, recipient: string, sources: Pd
     invoice: {
       id: p.invoiceId, amount: p.amount, vatOre: p.vatOre,
       invoiceNumber: p.invoiceNumber, ocrReference: p.ocrReference, invoiceDate: p.invoiceDate,
-      invoiceType: p.invoiceType, notes: p.notes,
+      invoiceType: p.invoiceType, notes: p.notes, amountRounding: p.amountRounding,
     },
     recipient: recipient || p.matterTitle,
     meta: { matterNumber: p.matterNumber, matterTitle: p.matterTitle, ...org },

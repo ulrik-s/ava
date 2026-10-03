@@ -33,7 +33,9 @@
  */
 
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
+import type { AmountRounding } from "@/lib/shared/schemas/enums";
 import { splitVat } from "@/lib/shared/vat";
+import { CURRENT_ROUNDING, roundRow, vatOnRow } from "@/lib/shared/whole-kronor";
 
 /** Satsen biträdet debiterar vidare med, oavsett vad byrån själv betalade. */
 export const CHARGED_EXPENSE_VAT_RATE = 2500;
@@ -79,17 +81,22 @@ export function chargedVatOre(netOre: number): number {
  * se vad som vidarefakturerats obeskattat, och SIE bokför per sats (#790).
  *
  * Tomma grupper utelämnas så fakturan inte bär nollrader.
+ *
+ * Varje utlägg är en rad på fakturan och avrundas därför för sig (#1438) —
+ * hela kronor på nya fakturor, öre på äldre (`rounding`). Momsen räknas på
+ * summan av de avrundade raderna.
  */
-export function chargedExpenseLines(expenses: readonly ChargeableExpense[]): VatBreakdownLine[] {
+export function chargedExpenseLines(expenses: readonly ChargeableExpense[], rounding: AmountRounding = CURRENT_ROUNDING): VatBreakdownLine[] {
   let chargedNetOre = 0;
   let passThroughOre = 0;
   for (const e of expenses) {
-    if (isPassThrough(e)) passThroughOre += expenseNetOre(e);
-    else chargedNetOre += expenseNetOre(e);
+    const rowOre = roundRow(expenseNetOre(e), rounding);
+    if (isPassThrough(e)) passThroughOre += rowOre;
+    else chargedNetOre += rowOre;
   }
   const lines: VatBreakdownLine[] = [];
   if (chargedNetOre !== 0) {
-    lines.push({ kind: "utlagg", vatRate: CHARGED_EXPENSE_VAT_RATE, netOre: chargedNetOre, vatOre: chargedVatOre(chargedNetOre) });
+    lines.push({ kind: "utlagg", vatRate: CHARGED_EXPENSE_VAT_RATE, netOre: chargedNetOre, vatOre: vatOnRow(chargedNetOre, CHARGED_EXPENSE_VAT_RATE, rounding) });
   }
   // Äkta utlägg: beloppet är vad klienten ska betala; ingen moms läggs på.
   if (passThroughOre !== 0) lines.push({ kind: "utlagg", vatRate: 0, netOre: passThroughOre, vatOre: 0 });

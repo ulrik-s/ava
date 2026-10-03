@@ -39,6 +39,7 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
+import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/whole-kronor";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
 import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
@@ -57,9 +58,12 @@ import { router, orgProcedure } from "../trpc";
  * före #782) speglar vi bara `vatOre`; då får verifikatet falla tillbaka på
  * enkelrads-vägen precis som originalet gjorde.
  */
-function mirroredCreditAmounts(original: Pick<Invoice, "vatOre" | "vatBreakdown">): Partial<Invoice> {
+function mirroredCreditAmounts(original: Pick<Invoice, "vatOre" | "vatBreakdown" | "amountRounding">): Partial<Invoice> {
   const lines = original.vatBreakdown ?? [];
+  // Krediteringen avrundas som originalet (#1438) — den räknas aldrig om.
+  const amountRounding = original.amountRounding ?? undefined;
   return omitUndefined({
+    amountRounding,
     vatOre: original.vatOre == null ? undefined : -original.vatOre,
     vatBreakdown: lines.length === 0
       ? undefined
@@ -214,14 +218,15 @@ export const invoiceRouter = router({
         const when = dateOrCallTime(ctx, input.invoiceDate);
         // Norm efter mötesdagen (#897): rådgivning i nov 2025 → 2025 års timkostnadsnorm.
         const avgift = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }), date: when });
-        const netOre = avgift.beloppExclVatOre;
+        // Fakturans enda rad → hela kronor (#1438), momsen på den.
+        const netOre = roundToKronor(avgift.beloppExclVatOre);
         const grossOre = arvodeInclVatOre(netOre);
         const vatOre = grossOre - netOre;
         const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId, stockholmYear(when));
         const invoice = await repos.invoices.create({
           id: asId<"InvoiceId">(newRowId(ctx, "invoice")),
           matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
-          amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }],
+          amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }], amountRounding: CURRENT_ROUNDING,
           invoiceType: "STANDARD", status: "DRAFT", invoiceDate: when, // "Skapad" tills den skickas (#1138)
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
           notes: RADGIVNING_INVOICE_NOTES,

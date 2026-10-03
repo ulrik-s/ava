@@ -21,21 +21,23 @@
  * domänfråga. Gränsen är enkel att hålla: den här filen importerar bara från
  * `@/lib/shared/*`, aldrig från `@/lib/server/*`.
  *
- * ## Öre, inte kronor
+ * ## Hela kronor per rad
  *
- * Allt räknas i heltalsören. Avrundning sker EN gång, vid värderingen av en
- * post (`timeEntryValueOre`), aldrig i mellansummorna — annars ackumuleras
- * ören och fakturan slutar stämma med sin egen specifikation.
+ * Allt räknas i heltalsören, men varje RAD fakturan visar — en tidspost, en
+ * kategorirad, ett utlägg — avrundas till hela kronor (#1438, `whole-kronor`).
+ * Mellansummorna är summor av avrundade rader och avrundas aldrig igen, så
+ * fakturan alltid stämmer med sin egen specifikation; momsen räknas på den
+ * avrundade summan.
  */
 
 import type { VatBreakdownLine } from "./accounting/semantic-voucher";
-import { coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries } from "./brottmalstaxa";
+import { coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries, type CoverageEntryLike } from "./brottmalstaxa";
 import { chargedExpenseLines } from "./expense-vat";
-import { arvodeInclVatOre } from "./invoice-calc";
 import { krClaim } from "./kr-claim";
 import type { PaymentMethod, TimeEntryKind } from "./schemas/enums";
 import type { ExpenseId, TimeEntryId } from "./schemas/ids";
 import { DEFAULT_VAT_RATE } from "./vat";
+import { roundToKronor, timeRowOre, vatOnRow } from "./whole-kronor";
 
 /** Det som behövs för att värdera ARVODET — tidsposternas värderingsfält. */
 export interface ArvodeWork {
@@ -47,7 +49,8 @@ export interface UnfrozenWork {
   expenses: Array<{ id: ExpenseId; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>;
 }
 
-/** Värdet på en (debiterbar) tidspost i öre — speglar workValueOre:s ton. */
+/** Värdet på en (debiterbar) tidspost i öre, oavrundat till kronor — basen som
+ *  raderna avrundas ifrån (äldre fakturors specifikation använder det rakt av). */
 export function timeEntryValueOre(minutes: number, hourlyRate: number): number {
   return Math.round((minutes / 60) * hourlyRate);
 }
@@ -63,7 +66,14 @@ export function timeEntryValueOre(minutes: number, hourlyRate: number): number {
 export function entryOwnValueOre(
   t: { minutes: number; hourlyRate: number; date: Date | string; kind?: TimeEntryKind | null | undefined },
 ): number {
-  return isPerDayKind(t.kind) ? coverageEntryValueOre(t, t.date) : timeEntryValueOre(t.minutes, t.hourlyRate);
+  // Posten är en rad på fakturan → hela kronor (#1438).
+  return isPerDayKind(t.kind) ? coverageEntryRowOre(t, t.date) : timeRowOre(t.minutes, t.hourlyRate);
+}
+
+/** En post värderad på sin kategoris norm för `date`, som en fakturarad i hela
+ *  kronor (#1438): dagbeloppet för per-dygns-kategorier, annars tid × norm. */
+export function coverageEntryRowOre(t: CoverageEntryLike, date: Date | string): number {
+  return isPerDayKind(t.kind) ? roundToKronor(coverageEntryValueOre(t, date)) : timeRowOre(t.minutes, coverageEntryRateOre(t.kind, date));
 }
 
 /** Debiterbara minuter grupperade per arvodeskategori (#950). */
@@ -89,20 +99,20 @@ export function perDayValueOre(
 ): number {
   return entries
     .filter((e) => isPerDayKind(e.kind))
-    .reduce((sum, e) => sum + coverageEntryValueOre(e, settleDate), 0);
+    .reduce((sum, e) => sum + coverageEntryRowOre(e, settleDate), 0);
 }
 
 /** Summera kategoriernas minuter på respektive årsnorm (#950). */
 export function sumKindValueOre(byKind: ReadonlyMap<TimeEntryKind, number>, settleDate: Date | string): number {
   let net = 0;
-  for (const [kind, minutes] of byKind) net += timeEntryValueOre(minutes, coverageEntryRateOre(kind, settleDate));
+  for (const [kind, minutes] of byKind) net += timeRowOre(minutes, coverageEntryRateOre(kind, settleDate));
   return net;
 }
 
 /** En arvode-breakdown-rad (25 % moms) ur ett netto-arvode; null om 0. */
 export function arvodeLine(arvodeNet: number): VatBreakdownLine | null {
   if (arvodeNet <= 0) return null;
-  return { kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: arvodeNet, vatOre: arvodeInclVatOre(arvodeNet) - arvodeNet };
+  return { kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: arvodeNet, vatOre: vatOnRow(arvodeNet, DEFAULT_VAT_RATE) };
 }
 
 /** Utläggens moms-uppdelning: en 25 %-rad (kostnadselement) + en 0 %-rad (äkta
@@ -124,11 +134,6 @@ export function netOreOf(lines: VatBreakdownLine[]): number {
 /** Brutto (öre) ur en breakdown: netto + moms. */
 export function grossOreOf(lines: VatBreakdownLine[]): number {
   return lines.reduce((s, l) => s + l.netOre + l.vatOre, 0);
-}
-
-/** Moms (öre) på ett nettobelopp vid standardsatsen. */
-export function vatOnNet(netOre: number): number {
-  return Math.round((netOre * DEFAULT_VAT_RATE) / 10000);
 }
 
 /** Arvode netto (exkl. moms) — summa av debiterbara tidsposter. */
@@ -156,9 +161,10 @@ export function workValueOre(work: UnfrozenWork): number {
 }
 
 /** Fakturans bruttobelopp: arvode + 25 % moms + utlägg. Alla fakturor lägger
- *  på moms på arvodet oavsett mottagare (#782). */
+ *  på moms på arvodet oavsett mottagare (#782). Härleds ur SAMMA moms-uppdelning
+ *  som fakturan och verifikatet bär, så beloppen aldrig kan skilja (#1438). */
 export function invoiceGrossOre(work: UnfrozenWork): number {
-  return arvodeInclVatOre(arvodeNetOre(work)) + expenseGrossOre(work);
+  return grossOreOf(invoiceVatBreakdown(work));
 }
 
 /** Fakturans moms-uppdelning per sats (#790): en arvode-rad (25 %) + en utläggs-
@@ -198,7 +204,8 @@ function kindValueRowsOre(billable: ArvodeWork["timeEntries"], date: Date | stri
   const payable = payableCoverageEntries(billable);
   // Rådgivningstimmen dras INTE av här (#1205): den är en låst post som redan
   // fakturerats klienten och ingår aldrig i underlaget som värderas.
-  const rows = [...minutesByKind(payable)].map(([kind, minutes]) => timeEntryValueOre(minutes, coverageEntryRateOre(kind, date)));
+  // Varje kategorirad avrundas till hela kronor — samma rader som kostnadsräkningen (#1218/#1438).
+  const rows = [...minutesByKind(payable)].map(([kind, minutes]) => timeRowOre(minutes, coverageEntryRateOre(kind, date)));
   const perDay = perDayValueOre(payable, date);
   return perDay > 0 ? [...rows, perDay] : rows;
 }
@@ -230,7 +237,7 @@ export function matterArvodeNet(m: ValuationMatter, work: ArvodeWork, date: Date
 export function matterEntryValueOre(
   m: ValuationMatter, t: ArvodeWork["timeEntries"][number], date: Date | string,
 ): number {
-  return usesOwnRates(m) ? entryOwnValueOre(t) : coverageEntryValueOre(t, date);
+  return usesOwnRates(m) ? entryOwnValueOre(t) : coverageEntryRowOre(t, date);
 }
 
 /**

@@ -16,7 +16,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { deductAcconto } from "@/lib/shared/acconto-vat";
+import { accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import {
@@ -26,15 +26,12 @@ import {
 import { buildProposal, proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import {
   expenseGrossOre,
-  expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown, krGrossOre, matterArvodeNet, matterKrArvodeRows, netOreOf,
+  expenseNetOre, invoiceGrossOre, invoiceVatBreakdown, krGrossOre, matterArvodeNet, matterKrArvodeRows,
   settlementArvodeNet, vatOreOf,
   type UnfrozenWork,
 } from "@/lib/shared/billing-work-value";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
-import {
-  computeCoverageSplit, coverageInvoiceLines, rattsskyddCoverage, resolveAward, settleToAward,
-  type CoverageSplit,
-} from "@/lib/shared/coverage-billing";
+import { rattsskyddCoverage } from "@/lib/shared/coverage-billing";
 import { resolveHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import {
@@ -63,12 +60,14 @@ import {
   type TimeEntryId,
   type UserId,
 } from "@/lib/shared/schemas/ids";
+import { allocateSettlement, settlementAmounts, type SettlementAllocation } from "@/lib/shared/settlement-allocation";
 import {
   buildClientArvodeLines, buildCreditView, buildSettlementViews, creditPayload, radgivningOre,
   type SettlementBreakdown, type SettlementRowKind, type SettlementView,
 } from "@/lib/shared/settlement-view";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
-import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
+import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
+import { CURRENT_ROUNDING, roundingOf, roundToKronor, splitGross } from "@/lib/shared/whole-kronor";
 import { valueKrRun } from "../billing/kr-run-valuation";
 import { logMatterNote } from "../billing/matter-note";
 import { removeVoidedKrDocuments } from "../billing/void-kr-documents";
@@ -163,38 +162,25 @@ interface SettlementLinesInput {
   work: UnfrozenWork;
   totalArvodeNet: number;
   awardedOre: number | null;
-  krRun: BillingRunListRow | undefined;
   insurerPrutningOre: number | undefined;
   settleDate: Date | string;
 }
 
 /**
- * Fördelningen mellan klient och betalare med fakturornas rader.
- *
- * Domstolens beslut avser det kostnadsräkningen YRKADE: arvode + utlägg, inkl
- * moms (#943). Nedsättningen härleds som en andel av hela anspråket och skalar
- * BÅDE arvodet och utläggsraderna — annars klampas den bort (beviljat brutto >
- * arvode netto) och byrån fakturerar som om domstolen beviljat allt. Rättsskydd
- * rör inte den här vägen: där är bolagets prutning en egen händelse som klienten
- * bär (`recordInsurerPruning`). Rättshjälp: fakturorna summerar till exakt det
- * domstolen beviljat (#1255).
+ * Fördelningen mellan klient och betalare med fakturornas rader (#1438): totalen
+ * räknas en gång — domstolens beslut som det är, annars fakturans uträkning —
+ * klienten får sin andel av totalen inkl moms och betalaren resten. Domstolens
+ * nedsättning (#943) träffar hela anspråket, arvode och utlägg, eftersom beslutet
+ * fördelas över alla rader. Rättsskyddets prutning efter slutregleringen är en
+ * egen händelse (`recordInsurerPruning`).
  */
-function settlementLines(a: SettlementLinesInput) {
-  const method = a.matter.paymentMethod;
-  const award = resolveAward(method, a.totalArvodeNet, a.work, a.awardedOre, a.krRun?.workValueOreAtRun ?? null);
-  const baseSplit = computeCoverageSplit({
-    method, totalOre: a.totalArvodeNet, clientShareBips: a.matter.clientShareBips ?? 0,
-    awardedOre: award.awardedArvodeNetOre,
-    insurerPrutningOre: a.insurerPrutningOre ?? null,
-    ...rattsskyddCoverage(a.matter, a.work.timeEntries, a.settleDate),
+function settlementLines(a: SettlementLinesInput): SettlementAllocation {
+  return allocateSettlement({
+    method: a.matter.paymentMethod, totalArvodeNet: a.totalArvodeNet, work: a.work,
+    clientShareBips: a.matter.clientShareBips ?? 0, awardedOre: a.awardedOre,
+    insurerPrutningOre: a.insurerPrutningOre,
+    coverage: rattsskyddCoverage(a.matter, a.work.timeEntries, a.settleDate),
   });
-  const lines = coverageInvoiceLines(baseSplit, award.expenseLines);
-  const { split, payerLines } = settleToAward({ split: baseSplit, clientLines: lines.clientLines, payerLines: lines.payerLines }, method, a.awardedOre);
-  return {
-    split, payerLines, clientLines: lines.clientLines,
-    clientExpenseLines: lines.clientExpenseLines, payerExpenseLines: lines.payerExpenseLines,
-    expenseLossNetOre: award.expenseLossNetOre, expensesBaseNetOre: award.expensesBaseNetOre,
-  };
 }
 
 /** Domsbeloppet för slutregleringen (#828): finns en kostnadsräkning måste den
@@ -313,52 +299,35 @@ async function fetchSpecDeductions(repos: Repositories, orgId: OrganizationId, f
 
 
 async function buildSettlementBreakdown(repos: Repositories, orgId: OrganizationId, a: {
-  clientShareBips: number; totalArvodeNet: number; split: CoverageSplit; work: UnfrozenWork;
-  payerGross: number; clientPayable: number; radgivningInvoiced: boolean; rateOre: number; settleDate: Date | string;
+  clientShareBips: number; totalArvodeNet: number; allocation: SettlementAllocation; work: UnfrozenWork;
+  clientPayable: number; radgivningInvoiced: boolean; rateOre: number; settleDate: Date | string;
   deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
-  /** Utläggsrader per part EFTER nedsättning (#943) och ev. 25 %-omrating mot
-   *  domstol (#945) — exakt de rader fakturorna bär. */
-  clientExpenseLines: VatBreakdownLine[];
-  payerExpenseLines: VatBreakdownLine[];
-  /** Nedsättningens utläggsdel (netto) — byrån bär den, jfr split.firmLossOre. */
-  expenseLossNetOre: number;
-  /** Utlägg netto FÖRE domstolens nedsättning — trappans utläggsrad (#947). */
-  expensesBaseNetOre: number;
 }): Promise<SettlementBreakdown> {
   // Rådgivningstimmen ingår ALDRIG i domstolens arvode (#860/#1205) — den är en
   // låst, redan fakturerad post och finns inte i `work`; den omnämns bara.
-  // Utlägg delas per samma andel som arvodet (#878): klientens del + betalarens del.
-  const clientExpensesGrossOre = grossOreOf(a.clientExpenseLines);
-  const payerExpensesGrossOre = grossOreOf(a.payerExpenseLines);
+  // Delbeloppen läses ur fakturornas egna rader (#1438), så vyn och fakturan är samma tal.
   const deductedAccontos: SpecDeduction[] = [];
   for (const r of a.deductedRuns) {
     if (!r.invoiceId) continue;
     const inv = await repos.invoices.getByIdInOrg(r.invoiceId, orgId);
     if (inv) deductedAccontos.push({ invoiceNumber: inv.invoiceNumber ?? "—", date: inv.invoiceDate ?? null, amountOre: inv.amount });
   }
+  const { allocation } = a;
   return {
     clientShareBips: a.clientShareBips,
     arvodeBaseNetOre: a.totalArvodeNet,
     baseArvodeGrossOre: arvodeInclVatOre(a.totalArvodeNet),
-    expensesGrossOre: payerExpensesGrossOre,
-    clientExpensesGrossOre,
-    expensesBaseNetOre: a.expensesBaseNetOre,
-    expenseLossNetOre: a.expenseLossNetOre,
-    clientExpensesNetOre: netOreOf(a.clientExpenseLines),
-    clientExpensesVatOre: vatOreOf(a.clientExpenseLines),
-    payerExpensesNetOre: netOreOf(a.payerExpenseLines),
-    payerExpensesVatOre: vatOreOf(a.payerExpenseLines),
-    sjalvriskNetOre: a.split.clientOre,
-    sjalvriskGrossOre: arvodeInclVatOre(a.split.clientOre),
-    firmLossNetOre: a.split.firmLossOre,
-    prutningGrossOre: arvodeInclVatOre(a.split.firmLossOre),
-    payerArvodeNetOre: a.split.payerOre,
+    expensesBaseNetOre: allocation.expensesBaseNetOre,
+    expenseLossNetOre: allocation.expenseLossNetOre,
+    ...settlementAmounts(allocation),
+    firmLossNetOre: allocation.arvodeLossNetOre,
+    prutningGrossOre: arvodeInclVatOre(allocation.arvodeLossNetOre),
     ...radgivningOre(a.radgivningInvoiced, a.rateOre),
-    payerPayableOre: a.payerGross,
+    payerPayableOre: allocation.payerGrossOre,
     clientPayableOre: a.clientPayable,
     clientArvodeLines: buildClientArvodeLines(a.work, a.totalArvodeNet, a.settleDate),
     deductedAccontos,
-    ...(a.split.clientParts ? { clientParts: a.split.clientParts } : {}),
+    ...(allocation.split.clientParts ? { clientParts: allocation.split.clientParts } : {}),
   };
 }
 
@@ -373,6 +342,7 @@ async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx &
   const base = {
     id: asId<"InvoiceId">(newRowId(ctx, "clientInvoice")),
     matterId: a.matterId, amount: clientNet, ...(await invoiceNumbering(repos, orgId, "KLIENT", a.invoiceDate)), invoiceDate: a.invoiceDate,
+    amountRounding: CURRENT_ROUNDING,
   };
   // #968 (modell A): acontona har redan bokfört sin intäkt och sin moms, så
   // slutfakturan bär bara det som ÅTERSTÅR — annars bokförs acontot två gånger.
@@ -601,10 +571,13 @@ export const billingRunRouter = router({
         ctx.repos.expenses.listByInvoice(input.invoiceId),
         fetchSpecDeductions(ctx.repos, ctx.orgId, input.invoiceId),
       ]);
+      // Fakturans EGET avrundningssätt (#1438): en äldre faktura specificeras
+      // på öret, precis som när den skapades — beloppen räknas aldrig om.
+      const rounding = roundingOf(invoice);
       return buildInvoiceSpecification({
-        timeLines: specTimeLines(matter.paymentMethod, te, invoice.invoiceDate ?? new Date()),
-        expenseLines: specExpenseLines(ex),
-        deductions, payableOre: invoice.amount,
+        timeLines: specTimeLines(matter.paymentMethod, te, invoice.invoiceDate ?? new Date(), rounding),
+        expenseLines: specExpenseLines(ex, rounding),
+        deductions, payableOre: invoice.amount, rounding,
       });
     }),
 
@@ -636,11 +609,12 @@ export const billingRunRouter = router({
         // belopp = %-sats × upparbetat − Σ tidigare aconto-fakturor.
         const priorAccontoSumOre = await sumPriorAccontos(tx, input.matterId);
         const proposedOre = proposedAccontoOre(value, input.clientShareBips, priorAccontoSumOre);
-        // Acconto är ett brutto-förskott på arvode (25 % moms ingår, #782).
-        const accontoNetOre = splitVat({ amount: input.amountOre, vatRate: DEFAULT_VAT_RATE, vatIncluded: true }).exclVat;
-        const accontoVatOre = input.amountOre - accontoNetOre;
+        // Acconto är ett brutto-förskott på arvode (25 % moms ingår, #782). Beloppet
+        // är fakturans enda rad → hela kronor (#1438), och nettot likaså.
+        const amountOre = roundToKronor(input.amountOre);
+        const { netOre: accontoNetOre, vatOre: accontoVatOre } = accontoSplit(amountOre);
         const invoice = await tx.invoices.create({
-          matterId: input.matterId, amount: input.amountOre, vatOre: accontoVatOre,
+          matterId: input.matterId, amount: amountOre, vatOre: accontoVatOre, amountRounding: CURRENT_ROUNDING,
           vatBreakdown: [{ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: accontoNetOre, vatOre: accontoVatOre }],
           // Nedbrytning (#878/#880): anroparen (simuleringen) skickar en spec med det
           // upparbetade arbetet så klienten ser vad acontot avser; annars en enkel default.
@@ -650,7 +624,7 @@ export const billingRunRouter = router({
               { label: `Klientens andel ${input.clientShareBips / 100} % av upparbetat arbete (exkl moms)`, amountOre: accontoNetOre, kind: "add" },
               { label: "Moms 25 %", amountOre: accontoVatOre, kind: "add" },
             ],
-            totalLabel: "Att betala (inkl moms)", totalOre: input.amountOre,
+            totalLabel: "Att betala (inkl moms)", totalOre: amountOre,
           },
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
@@ -660,7 +634,7 @@ export const billingRunRouter = router({
           id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "ACCONTO", recipient: input.recipient,
           status: "SENT", workValueOreAtRun: value, clientShareBips: input.clientShareBips,
-          proposedAmountOre: proposedOre, amountOre: input.amountOre,
+          proposedAmountOre: proposedOre, amountOre,
           invoiceId: invoice.id, deductedBillingRunIds: [],
           periodTo: at, notes: input.notes,
         });
@@ -700,7 +674,7 @@ export const billingRunRouter = router({
         const invoiceDate = dateOrCallTime(ctx, input.invoiceDate);
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: finalAmount, vatOre: vatOreOf(rest.lines),
-          vatBreakdown: rest.lines,
+          vatBreakdown: rest.lines, amountRounding: CURRENT_ROUNDING,
           invoiceType: "FINAL", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
           ...invoiceMeta(ctx, input), notes: input.notes,
@@ -868,21 +842,24 @@ export const billingRunRouter = router({
       // Förhandsvisningen måste räkna EXAKT som slutregleringen (#950) — annars
       // visar dialogen ett annat belopp än den faktura som sedan skapas.
       const totalOre = settlementArvodeNet(matter.paymentMethod, work, new Date());
-      // Utlägg bokas på betalaren i settlement-flödet (coverageInvoiceLines) →
-      // måste med i förhandsvisningen (#849). Både netto OCH brutto returneras:
-      // utläggen har BLANDADE momssatser (6/12/25 %), så bruttot kan inte räknas
-      // ur nettot med en platt sats — då blir totalen fel (#850).
+      // Utläggen ingår i totalen och delas i samma steg som arvodet (#849/#1438).
+      // Både netto OCH brutto returneras: utläggen har BLANDADE momssatser, så
+      // bruttot kan inte räknas ur nettot med en platt sats (#850).
       const expensesNetOre = expenseNetOre(work);
       const expensesGrossOre = expenseGrossOre(work);
-      const split = computeCoverageSplit({
-        method: matter.paymentMethod,
-        totalOre,
-        clientShareBips: matter.clientShareBips ?? 0,
-        ...(input.awardedOre != null ? { awardedOre: input.awardedOre } : {}),
-        ...(input.insurerPrutningOre != null ? { insurerPrutningOre: input.insurerPrutningOre } : {}),
-        ...rattsskyddCoverage(matter, work.timeEntries, new Date()),
+      // Samma fördelning som slutregleringen (#1438): klienten får sin andel av
+      // totalen inkl moms, betalaren resten.
+      const allocation = settlementLines({
+        matter, work, totalArvodeNet: totalOre, awardedOre: input.awardedOre ?? null,
+        insurerPrutningOre: input.insurerPrutningOre, settleDate: new Date(),
       });
-      return { ...split, totalOre, expensesNetOre, expensesGrossOre, currentRateOre, billableMinutes };
+      const firmLossOre = allocation.arvodeLossNetOre + allocation.expenseLossNetOre;
+      return {
+        ...allocation.split, firmLossOre,
+        clientGrossOre: allocation.clientGrossOre, payerGrossOre: allocation.payerGrossOre,
+        firmLossGrossOre: arvodeInclVatOre(totalOre) + expensesGrossOre - allocation.totalGrossOre,
+        totalOre, expensesNetOre, expensesGrossOre, currentRateOre, billableMinutes,
+      };
     }),
 
   setVerdict: orgProcedure
@@ -913,7 +890,9 @@ export const billingRunRouter = router({
         const invoiceDate = callTime(ctx);
         const invoice = await tx.invoices.create({
           id: asId<"InvoiceId">(newRowId(ctx, "invoice")),
-          matterId: run.matterId, amount: finalAmount,
+          // Yrkandet är i hela kronor (#1218); domstolens prutning tas som den är.
+          // Momsen följer med så verifikatet bokför samma tal som fakturan (#1438).
+          matterId: run.matterId, amount: finalAmount, vatOre: splitGross(finalAmount, DEFAULT_VAT_RATE).vatOre, amountRounding: CURRENT_ROUNDING,
           invoiceType: "FINAL", status: "DRAFT",
           // DOMSTOL → F-nummer (samma format som övriga, #889) men ingen OCR.
           ...(await invoiceNumbering(tx, ctx.orgId, "DOMSTOL", invoiceDate)),
@@ -972,27 +951,25 @@ export const billingRunRouter = router({
         // över årsskifte + tidsspillan på egen norm); övriga metoder → platt rate.
         const settleDate = dateOrCallTime(ctx, input.invoiceDate);
         const totalArvodeNet = settlementArvodeNet(matter.paymentMethod, work, settleDate);
-        const { split, clientLines, payerLines, clientExpenseLines, payerExpenseLines, expenseLossNetOre, expensesBaseNetOre } =
-          settlementLines({ matter, work, totalArvodeNet, awardedOre, krRun, insurerPrutningOre: input.insurerPrutningOre, settleDate });
+        const allocation = settlementLines({ matter, work, totalArvodeNet, awardedOre, insurerPrutningOre: input.insurerPrutningOre, settleDate });
+        const { split, clientLines, payerLines } = allocation;
 
         // Klient: självrisk (+ ev. prutning), moms 25 %, minus tidigare aconton.
         // Auto-dra av ALLA skickade klient-aconton (#856): de har redan betalats,
         // så slutfakturan reduceras med dem (utöver ev. explicit valda).
         const sentAccontoIds = (await tx.billingRuns.listAccontoSent(input.matterId)).map((r) => r.id);
         const deductIds = [...new Set([...input.deductedBillingRunIds, ...sentAccontoIds])];
-        const clientGross = grossOreOf(clientLines);
+        const clientGross = allocation.clientGrossOre;
         const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, deductIds);
         const deductionOre = deductedRuns.reduce((s, r) => s + (r.amountOre ?? 0), 0);
         const clientAmount = Math.max(0, clientGross - deductionOre);
-        const payerGross = grossOreOf(payerLines);
+        const payerGross = allocation.payerGrossOre;
 
         // Bygg slutregleringsvyerna FÖRE fakturorna (#876) så de kan persisteras på
         // respektive faktura → EN källa för både dokumentet och Slutfaktura-sidan.
         const breakdown = await buildSettlementBreakdown(tx, ctx.orgId, {
-          clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet,
-          split, work, payerGross, clientPayable: clientAmount,
+          clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet, allocation, work, clientPayable: clientAmount,
           radgivningInvoiced: isRadgivningInvoiced(matter), rateOre, settleDate, deductedRuns,
-          clientExpenseLines, payerExpenseLines, expenseLossNetOre, expensesBaseNetOre,
         });
         const { clientView, payerView } = buildSettlementViews(breakdown, matter.paymentMethod);
 
@@ -1004,10 +981,10 @@ export const billingRunRouter = router({
         const payerInvoice = await tx.invoices.create({
           id: asId<"InvoiceId">(newRowId(ctx, "payerInvoice")),
           matterId: input.matterId, amount: payerGross, vatOre: vatOreOf(payerLines), vatBreakdown: payerLines,
-          settlementBreakdown: payerView,
+          settlementBreakdown: payerView, amountRounding: CURRENT_ROUNDING,
           invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient, settleDate)), invoiceDate: settleDate, notes: input.notes,
         });
-        await bookFirmLoss(tx, { userId: ctx.user.id, matterId: input.matterId, firmLossOre: split.firmLossOre + expenseLossNetOre, scope: ctx });
+        await bookFirmLoss(tx, { userId: ctx.user.id, matterId: input.matterId, firmLossOre: allocation.arvodeLossNetOre + allocation.expenseLossNetOre, scope: ctx });
         const clientRun = await tx.billingRuns.create({
           id: asId<"BillingRunId">(newRowId(ctx, "clientRun")),
           matterId: input.matterId, type: "FINAL", recipient: "KLIENT", status: "SENT",
@@ -1064,7 +1041,8 @@ export const billingRunRouter = router({
     .mutation(({ ctx, input }) =>
       ctx.repos.transaction(async (tx) => {
         const t = await resolvePruningTargets(tx, ctx.orgId, input.matterId);
-        const prunedGross = arvodeInclVatOre(input.prunedNetOre);
+        // Bolagets prutning tas som den är; momsen på den avrundas som fakturans rader (#1438).
+        const prunedGross = arvodeInclVatOre(input.prunedNetOre, roundingOf(t.payerInvoice));
         const prunedVat = prunedGross - input.prunedNetOre;
         if (prunedGross > t.payerInvoice.amount) {
           throw new TRPCError({

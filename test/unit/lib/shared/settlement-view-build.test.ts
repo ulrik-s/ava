@@ -30,7 +30,7 @@ function breakdown(o: Partial<SettlementBreakdown> = {}): SettlementBreakdown {
     payerExpensesNetOre: 6_400, payerExpensesVatOre: 1_600,
     sjalvriskNetOre: 20_000, sjalvriskGrossOre: 25_000,
     firmLossNetOre: 0, prutningGrossOre: 0,
-    payerArvodeNetOre: 80_000,
+    payerArvodeNetOre: 80_000, payerArvodeVatOre: 20_000,
     radgivningGrossOre: 0, radgivningNetOre: 0,
     payerPayableOre: 88_000, clientPayableOre: 27_000,
     clientArvodeLines: [], deductedAccontos: [],

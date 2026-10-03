@@ -7,6 +7,7 @@
 import { matterArvodeNet, matterEntryValueOre, type ValuationMatter } from "./billing-work-value";
 import { payableCoverageEntries } from "./brottmalstaxa";
 import type { ExpenseKind, TimeEntryKind } from "./schemas/enums";
+import { shareOfRow } from "./whole-kronor";
 
 /**
  * Föreslaget aconto-belopp i öre:
@@ -18,7 +19,8 @@ export function proposedAccontoOre(
   clientShareBips: number,
   priorAccontoSumOre: number,
 ): number {
-  return Math.max(0, Math.round((workValueOre * clientShareBips) / 10000) - priorAccontoSumOre);
+  // Förslaget blir acontofakturans enda rad → hela kronor (#1438).
+  return Math.max(0, shareOfRow(workValueOre, clientShareBips) - priorAccontoSumOre);
 }
 
 

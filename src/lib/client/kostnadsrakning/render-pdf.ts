@@ -17,7 +17,7 @@
 
 import type { PDFDocument, StandardFonts } from "pdf-lib";
 import type { KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
-import type { KrDocumentView } from "@/lib/shared/kostnadsrakning-document";
+import { FOOTER_SEPARATOR, type KrDocumentView } from "@/lib/shared/kostnadsrakning-document";
 import type { KrExpenseSpec, KrSpecSection } from "@/lib/shared/kostnadsrakning-document-rows";
 import { PAGE_WIDTH, PdfWriter, type PdfFonts } from "./pdf-writer";
 
@@ -153,7 +153,7 @@ function drawSignature(w: PdfWriter, doc: KrDocumentView, top: number): void {
 
 const FOOTER_SIZE = 8;
 
-/** Sidfoten på sida 1: linje + centrerade rader, delarna åtskilda av ∽. */
+/** Sidfoten på sida 1: linje + centrerade rader, delarna åtskilda av en mittpunkt. */
 function drawFooter(w: PdfWriter, lines: readonly string[][]): void {
   if (lines.length === 0) return;
   w.rule(LEFT, RIGHT, 782, 0.75, true);
@@ -161,16 +161,7 @@ function drawFooter(w: PdfWriter, lines: readonly string[][]): void {
 }
 
 function drawFooterLine(w: PdfWriter, parts: readonly string[], top: number): void {
-  const gap = w.width(" ", "sans", FOOTER_SIZE) * 2 + FOOTER_SIZE * 0.9;
-  const total = parts.reduce((s, p) => s + w.width(p, "sans", FOOTER_SIZE), 0) + gap * (parts.length - 1);
-  let x = (PAGE_WIDTH - total) / 2;
-  parts.forEach((part, i) => {
-    if (i > 0) {
-      w.tilde(x + w.width(" ", "sans", FOOTER_SIZE), top, FOOTER_SIZE);
-      x += gap;
-    }
-    x += w.text(part, x, top, { font: "sans", size: FOOTER_SIZE });
-  });
+  w.text(parts.join(FOOTER_SEPARATOR), PAGE_WIDTH / 2, top, { font: "sans", size: FOOTER_SIZE, align: "center" });
 }
 
 // ─── Sida 2+: arbetsredogörelsen ───────────────────────────────────────────

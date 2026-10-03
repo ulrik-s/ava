@@ -11,6 +11,8 @@
 
 import { Temporal } from "@js-temporal/polyfill";
 import { chargedExpenseLines } from "./expense-vat";
+import type { AmountRounding } from "./schemas/enums";
+import { CURRENT_ROUNDING, timeRowOre, vatOnRow } from "./whole-kronor";
 
 export interface TimeEntryForInvoice {
   minutes: number;
@@ -42,9 +44,10 @@ export interface AccontoForDeduction {
  */
 export const ARVODE_VAT_BIPS = 2500;
 
-/** Arvode netto (exkl. moms, öre) → inkl. moms (öre). Deterministisk rundning. */
-export function arvodeInclVatOre(arvodeNetOre: number): number {
-  return arvodeNetOre + Math.round((arvodeNetOre * ARVODE_VAT_BIPS) / 10000);
+/** Arvode netto (exkl. moms, öre) → inkl. moms (öre). Momsen avrundas som
+ *  fakturans rader (#1438): hela kronor på nya fakturor, öre på äldre. */
+export function arvodeInclVatOre(arvodeNetOre: number, rounding: AmountRounding = CURRENT_ROUNDING): number {
+  return arvodeNetOre + vatOnRow(arvodeNetOre, ARVODE_VAT_BIPS, rounding);
 }
 
 export interface FinalInvoiceBreakdown {
@@ -63,8 +66,8 @@ export interface FinalInvoiceBreakdown {
 /**
  * Räknar ut slutfakturans brutto, avdrag och netto.
  *
- * - `timeEntries.hourlyRate` och `minutes` multipliceras; 60 min i taget
- *   (INT-aritmetik) så 1,5 tim × 1500 kr/h = 2250 kr exakt.
+ * - `timeEntries.hourlyRate` och `minutes` multipliceras och varje post
+ *   avrundas till hela kronor (#1438), så 1,5 tim × 1500 kr/h = 2250 kr exakt.
  * - `expenses` räknas bara om `billable=true`.
  * - `accontos` adderas rakt av (beloppet är vad klienten redan betalat).
  *
@@ -77,7 +80,7 @@ export function computeFinalInvoiceBreakdown(
   accontos: readonly AccontoForDeduction[],
 ): FinalInvoiceBreakdown {
   const timeTotal = timeEntries.reduce(
-    (sum, t) => sum + Math.round((t.minutes * t.hourlyRate) / 60),
+    (sum, t) => sum + timeRowOre(t.minutes, t.hourlyRate),
     0,
   );
   // Utläggen debiteras vidare med 25 % på nettot enligt NJA 2005 s. 606 (#975) —

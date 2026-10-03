@@ -170,4 +170,53 @@ Testerna hittade två avvikelser, som nu är rättade:
 
   Nedsättningen mäts nu mot körningens yrkade belopp. Avrundningsresten läggs
   på betalarens arvodesrad (`settleToAward`), så klientens och betalarens
-  fakturor tillsammans blir exakt det domstolen beslutat.
+  fakturor tillsammans blir exakt det domstolen beslutat. (Ersatt av
+  delningsmodellen i #1438 nedan: beslutet ÄR totalen och betalaren får resten.)
+
+## Hela kronor per rad (#1438)
+
+Fakturor och kostnadsräkningar avrundar varje rad till hela kronor med svensk
+öresavrundning (1–49 öre nedåt, 50–99 öre uppåt; negativa belopp speglas).
+Summa exkl moms är summan av de avrundade raderna, momsen 25 % av den summan
+avrundad till hela kronor, och brutto = netto + moms. Reglerna finns på ett
+ställe, `src/lib/shared/whole-kronor.ts`, och används av värderingen
+(`billing-work-value`), utläggen (`expense-vat`), delningen klient/betalare
+(`coverage-billing`), acontot (`acconto-vat`) och kostnadsräkningen
+(`kr-claim`, `kostnadsrakning`). Därmed är det lagrade beloppet, dokumentet,
+OCR-beloppet, kundfordran och verifikatet samma tal.
+
+Bara nya fakturor berörs. De bär `amountRounding: "KRONOR"`; en äldre faktura
+saknar fältet och avrundades på öret. Dess belopp räknas aldrig om, och dess
+specifikation räknas med öresavrundning när dokumentet renderas om.
+
+Belopp som någon annan fastställt tas som de är: domstolens beviljade belopp
+och prutning, försäkringsbolagets prutning, tak och lägsta självrisk, och redan
+betalda aconton. Har ett sådant belopp ören bär fakturan dem. Ett äldre aconto
+med ören som dras av på en ny slutfaktura ger alltså en slutfaktura med ören, och
+dess netto/moms-uppdelning kan skilja under en krona från acontots egen —
+accepterat (Ulrik, #1438).
+
+### Delningsmodellen: klient och betalare (#1438)
+
+Gäller rättshjälp och rättsskydd, varje delning mellan klient och betalare
+(`src/lib/shared/settlement-allocation.ts`):
+
+1. **Totalen räknas en gång, brutto.** Rättshjälp med domstolens beslut: beslutet
+   som det är. Annars fakturans uträkning — netto = summan av de avrundade
+   raderna, moms = 25 % av nettot i hela kronor, totalen = netto + moms.
+2. **Del 1 (klienten)** = andelen × totalen INKL moms, avrundad till hela kronor —
+   efter rättsskyddets golv och tak som förut (lägsta självrisk, maxbelopp,
+   bolagets prutning, otäckt arbete; beloppen i beslutet är netto och möter
+   totalen med 25 % moms). Andelen räknas på totalen inkl moms för både
+   rättsskyddets självrisk och rättshjälpsavgiften.
+3. **Del 2 (betalaren)** = totalen − del 1. Den räknas aldrig för sig.
+4. **Varje faktura** delar sitt brutto per momssats: netto = brutto / 1,25 i hela
+   kronor, moms = resten. Momsen är därmed rätt på under en krona på varje
+   faktura.
+
+Summan av delarnas brutto är alltid exakt totalen. Delarnas netto och moms var
+för sig kan skilja en krona från det odelade — accepterat. Utläggen ingår i
+totalen och delas i samma steg, så betalarens utläggsdel är också resten.
+Domstolens nedsättning fördelas över alla rader (arvode och utlägg) och byrån bär
+skillnaden mot det odelade nettot. Förhandsvisningen i slutregleringsdialogen
+(`billingRun.coverageSplit`) räknar med samma funktion.

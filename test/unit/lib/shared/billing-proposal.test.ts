@@ -23,8 +23,10 @@ describe("proposedAccontoOre", () => {
     expect(proposedAccontoOre(500_000, 0, 0)).toBe(0);
   });
 
-  it("avrundar bråkdels-ören (3333 bips × 100 öre)", () => {
-    // 100 × 3333 / 10000 = 33.33 → 33
-    expect(proposedAccontoOre(100, 3333, 0)).toBe(33);
+  it("avrundar förslaget till hela kronor (#1438)", () => {
+    // 33,33 % av 100 kr = 33,33 kr → 33 kr; 33,33 % av 1,50 kr = 0,50 kr → 1 kr.
+    expect(proposedAccontoOre(10_000, 3333, 0)).toBe(3_300);
+    expect(proposedAccontoOre(150, 3333, 0)).toBe(0);
+    expect(proposedAccontoOre(300, 5000, 0)).toBe(200);
   });
 });

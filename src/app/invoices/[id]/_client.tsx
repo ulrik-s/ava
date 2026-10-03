@@ -17,13 +17,13 @@ import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { specCardTotals, specLineOre } from "@/lib/shared/invoice-specification";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
-import { INVOICE_STATUS_LABELS } from "@/lib/shared/schemas/enums";
+import { INVOICE_STATUS_LABELS, type AmountRounding } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { SettlementView } from "@/lib/shared/settlement-view";
-import { splitVat } from "@/lib/shared/vat";
+import { roundingOf } from "@/lib/shared/whole-kronor";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
@@ -168,7 +168,7 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
  *  (identisk med faktura-dokumentet), övriga fakturor den vanliga tids-/utläggsspecen. */
 function PrimarySpecCard({ inv }: { inv: Inv }) {
   if (inv.settlementBreakdown) return <SettlementBreakdownCard view={inv.settlementBreakdown} />;
-  return <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} />;
+  return <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} rounding={roundingOf(inv)} />;
 }
 
 /** Slutregleringens persisterade vy (#876): tidsspec-tabell + beloppstrappa + total,
@@ -266,6 +266,7 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
           invoiceDate={inv.invoiceDate}
           invoiceType={inv.invoiceType}
           notes={inv.notes}
+          amountRounding={roundingOf(inv)}
           settlementBreakdown={(inv as { settlementBreakdown?: SendInvoiceModalProps["settlementBreakdown"] }).settlementBreakdown}
           matterNumber={inv.matter.matterNumber}
           matterTitle={inv.matter.title}
@@ -563,17 +564,12 @@ function InvoiceDocumentsCard({ documents }: { documents: InvoiceDocRow[] }) {
   );
 }
 
-function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow[]; expenses: SpecExpenseRow[] }) {
+function SpecificationCard({ timeEntries, expenses, rounding }: { timeEntries: SpecTimeRow[]; expenses: SpecExpenseRow[]; rounding: AmountRounding }) {
   if (timeEntries.length === 0 && expenses.length === 0) return null;
-  const lineFor = (t: SpecTimeRow) => Math.round((t.minutes / 60) * (t.hourlyRate ?? 0));
-  // Utlägg lagras netto (#782) → räkna fram brutto (inkl moms) för det fakturerade.
-  const expenseInclOf = (e: SpecExpenseRow) =>
-    splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? false }).inclVat;
-  const timeTotal = timeEntries.reduce((s, t) => s + lineFor(t), 0);
-  const expenseTotal = expenses.reduce((s, e) => s + expenseInclOf(e), 0);
-  // Arvode lagras exkl. moms; alla fakturor lägger på 25 % moms på arvodet (#782).
-  const arvodeMomsOre = arvodeInclVatOre(timeTotal) - timeTotal;
-  const summaUnderlag = arvodeInclVatOre(timeTotal) + expenseTotal;
+  // Samma regler och samma avrundning som fakturan själv (#1438).
+  const lineFor = (t: SpecTimeRow) => specLineOre(t.minutes, t.hourlyRate ?? 0, rounding);
+  const expenseInclOf = (e: SpecExpenseRow) => specCardTotals([], [e], rounding).expensesGrossOre;
+  const { arvodeVatOre: arvodeMomsOre, totalOre: summaUnderlag } = specCardTotals(timeEntries, expenses, rounding);
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       <h2 className="font-semibold mb-3">Underlag (specifikation)</h2>

@@ -7,15 +7,25 @@ import {
 } from "@/lib/shared/invoice-calc";
 
 describe("computeFinalInvoiceBreakdown", () => {
-  it("räknar time × rate / 60 per post + 25 % moms på arvodet (#782)", () => {
+  it("räknar time × rate / 60 per post + 25 % moms på arvodet (#782), momsen i hela kronor (#1438)", () => {
     const r = computeFinalInvoiceBreakdown(
       [{ minutes: 90, hourlyRate: 150_000 }], // 1,5 tim × 1500 kr = 2250 kr exkl
       [],
       [],
     );
-    expect(r.grossAmount).toBe(281_250); // 2250 kr + 25 % moms
-    expect(r.arvodeVatOre).toBe(56_250);
-    expect(r.netAmount).toBe(281_250);
+    // 25 % av 2 250 kr = 562,50 kr → 563 kr (50 öre avrundas uppåt).
+    expect(r.grossAmount).toBe(281_300);
+    expect(r.arvodeVatOre).toBe(56_300);
+    expect(r.netAmount).toBe(281_300);
+  });
+
+  it("varje tidspost avrundas till hela kronor innan summering (#1438)", () => {
+    // 7 min × 1 000 kr/h = 116,67 kr → 117 kr; två poster = 234 kr (inte 233,33 → 233).
+    const r = computeFinalInvoiceBreakdown(
+      [{ minutes: 7, hourlyRate: 100_000 }, { minutes: 7, hourlyRate: 100_000 }], [], [],
+    );
+    expect(r.grossAmount - r.arvodeVatOre).toBe(23_400);
+    expect(r.arvodeVatOre).toBe(5_900); // 25 % av 234 = 58,50 → 59 kr
   });
 
   it("utelämnar icke-debiterbara utlägg", () => {
