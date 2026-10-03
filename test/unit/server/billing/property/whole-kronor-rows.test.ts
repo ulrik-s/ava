@@ -28,7 +28,10 @@ function assertWholeAndBalanced(seed: number, invoice: Invoice): void {
   expect({ seed, rounding: invoice.amountRounding }).toEqual({ seed, rounding: "KRONOR" });
   // Beloppet är summan av raderna — annars bokför verifikatet något annat än fakturan.
   expect({ seed, lines: lines.reduce((s, l) => s + l.netOre + l.vatOre, 0) }).toEqual({ seed, lines: invoice.amount });
-  const voucher = buildSemanticVoucher({ ...invoice, invoiceDate: invoice.invoiceDate ?? new Date() });
+  const voucher = buildSemanticVoucher({
+    amount: invoice.amount, vatOre: invoice.vatOre ?? null, vatBreakdown: invoice.vatBreakdown ?? null,
+    invoiceDate: invoice.invoiceDate ?? new Date(),
+  });
   const debit = voucher.rows.reduce((s, r) => s + r.debit, 0);
   const credit = voucher.rows.reduce((s, r) => s + r.credit, 0);
   expect({ seed, debit, wholeRows: voucher.rows.every((r) => whole(r.debit) && whole(r.credit)) })

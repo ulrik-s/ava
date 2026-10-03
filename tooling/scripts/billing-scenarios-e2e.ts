@@ -95,6 +95,9 @@ export async function newMatterWithClient(c: Ava, userId: string, sc: Scenario, 
   return { matterId: matter.id, clientName };
 }
 
+/** Hela kronor per faktura (#1438): klient- och betalarfakturan avrundar var för sig. */
+const ROUNDING_TOLERANCE_ORE = 100;
+
 /** Kostnadsräkning → domstolens beslut. Returnerar det yrkade bruttot. */
 async function runKostnadsrakning(c: Ava, matterId: string): Promise<number> {
   const { run } = await c.billingRun.createKostnadsrakning.mutate({ matterId });
@@ -122,15 +125,17 @@ export async function runCoverageScenario(c: Ava, userId: string, sc: Scenario, 
   console.log(`  Klient: ${kr(clientOre)} · ${sc.payerRecipient}: ${kr(payerOre)}`);
 
   // Summan ska motsvara HELA anspråket inkl moms. Går de isär bär byrån glappet.
+  // Varje faktura avrundar sina rader och sin moms till hela kronor (#1438), så
+  // de två fakturorna tillsammans får skilja högst en krona från helheten.
   const expectedTotal = Math.round(split.totalOre * VAT);
   const sum = clientOre + payerOre;
-  assert(Math.abs(sum - expectedTotal) <= 2,
+  assert(Math.abs(sum - expectedTotal) <= ROUNDING_TOLERANCE_ORE,
     `klient + betalare = ${kr(sum)} ≠ anspråket ${kr(expectedTotal)}`);
   console.log(`  ✓ Summan stämmer: ${kr(sum)} = hela anspråket inkl moms`);
 
-  // Klientens andel ska vara exakt den avtalade — inte "ungefär".
+  // Klientens andel ska vara den avtalade — bortsett från avrundningen till hela kronor.
   const clientShare = Math.round((clientOre / sum) * 10_000);
-  assert(Math.abs(clientShare - sc.clientShareBips) <= 1,
+  assert(Math.abs(clientOre - Math.round((sum * sc.clientShareBips) / 10_000)) <= ROUNDING_TOLERANCE_ORE,
     `klientandel ${clientShare} bips ≠ avtalade ${sc.clientShareBips}`);
   console.log(`  ✓ Klientandelen är ${clientShare / 100} % som avtalat`);
 
@@ -138,7 +143,7 @@ export async function runCoverageScenario(c: Ava, userId: string, sc: Scenario, 
   // ingen registrerad tid dras av i dess ställe → hela 10 h, varken 9 eller 11.
   if (sc.paymentMethod === "RATTSHJALP") {
     const helaArbetet = Math.round((WORK_MINUTES / 60) * NORM_ORE * VAT);
-    assert(Math.abs(sum - helaArbetet) <= 2,
+    assert(Math.abs(sum - helaArbetet) <= ROUNDING_TOLERANCE_ORE,
       `anspråket ≠ registrerat arbete: ${kr(sum)} ≠ ${kr(helaArbetet)}`);
     console.log("  ✓ Rådgivningstimmen ligger utanför anspråket, registrerad tid är orörd (#1205)");
   }

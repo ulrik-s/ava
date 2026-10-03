@@ -325,7 +325,8 @@ async function archetypeRattsskyddPruning(c: Ava, userId: string, stamp: string)
   const split = await c.billingRun.coverageSplit.query({ matterId });
   const res = await c.billingRun.settleCoverage.mutate({ matterId, payerRecipient: "FORSAKRING" });
   const sum = res.clientInvoice.amount + res.payerInvoice.amount;
-  assert(Math.abs(sum - Math.round(split.totalOre * VAT)) <= 2,
+  // Klient- och försäkringsfakturan avrundar var för sig till hela kronor (#1438).
+  assert(Math.abs(sum - Math.round(split.totalOre * VAT)) <= 100,
     `klient + försäkring = ${kr(sum)} ≠ anspråket ${kr(Math.round(split.totalOre * VAT))}`);
   console.log(`  Slutreglerat: klient ${kr(res.clientInvoice.amount)} · försäkring ${kr(res.payerInvoice.amount)}`);
 
