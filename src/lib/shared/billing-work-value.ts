@@ -136,11 +136,6 @@ export function grossOreOf(lines: VatBreakdownLine[]): number {
   return lines.reduce((s, l) => s + l.netOre + l.vatOre, 0);
 }
 
-/** Moms (öre) på ett nettobelopp vid standardsatsen, i hela kronor (#1438). */
-export function vatOnNet(netOre: number): number {
-  return vatOnRow(netOre, DEFAULT_VAT_RATE);
-}
-
 /** Arvode netto (exkl. moms) — summa av debiterbara tidsposter. */
 export function arvodeNetOre(work: ArvodeWork): number {
   return payableCoverageEntries(work.timeEntries.filter((t) => t.billable))

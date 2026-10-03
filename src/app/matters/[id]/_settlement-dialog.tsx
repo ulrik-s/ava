@@ -28,9 +28,13 @@ import type { MatterId } from "@/lib/shared/schemas/ids";
 import type { SettlementView } from "@/lib/shared/settlement-view";
 
 interface SplitData {
+  /** Klientens och betalarens del, netto och brutto — exakt som fakturorna (#1438). */
   clientOre: number;
+  clientGrossOre: number;
   payerOre: number;
+  payerGrossOre: number;
   firmLossOre: number;
+  firmLossGrossOre: number;
   totalOre: number;
   /** Utlägg netto + brutto — separat eftersom utlägg har BLANDADE momssatser och
    *  bruttot inte kan räknas ur nettot med en platt 25 %-sats (#850). */
@@ -65,10 +69,10 @@ function SplitPreview({ data, payerLabel }: { data: SplitData; payerLabel: strin
     <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 space-y-1">
       <Row label="Upparbetat (aktuellt timarvode)" netOre={data.totalOre} grossOre={arvodeInclVatOre(data.totalOre)} />
       {data.expensesNetOre > 0 && <Row label="Utlägg" netOre={data.expensesNetOre} grossOre={data.expensesGrossOre} />}
-      <Row label="Klientens del" netOre={data.clientOre} grossOre={arvodeInclVatOre(data.clientOre)} />
-      {/* Betalaren står för sin arvodesdel + utläggen (coverageInvoiceLines, #849). */}
-      <Row label={payerLabel} netOre={data.payerOre + data.expensesNetOre} grossOre={arvodeInclVatOre(data.payerOre) + data.expensesGrossOre} />
-      {data.firmLossOre > 0 && <Row label="Byrån bär (prutning)" netOre={data.firmLossOre} grossOre={arvodeInclVatOre(data.firmLossOre)} dim />}
+      {/* Klienten får sin andel av totalen inkl moms, betalaren resten — arvode och utlägg (#1438). */}
+      <Row label="Klientens del" netOre={data.clientOre} grossOre={data.clientGrossOre} />
+      <Row label={payerLabel} netOre={data.payerOre} grossOre={data.payerGrossOre} />
+      {data.firmLossOre > 0 && <Row label="Byrån bär (prutning)" netOre={data.firmLossOre} grossOre={data.firmLossGrossOre} dim />}
       <p className="text-[11px] text-gray-400 pt-1">Klicka på ett belopp för att växla inkl./exkl. moms.</p>
     </div>
   );

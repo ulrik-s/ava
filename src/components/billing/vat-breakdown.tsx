@@ -5,11 +5,13 @@
  */
 
 import { formatCurrency } from "@/lib/client/utils";
-import { DEFAULT_VAT_RATE, splitVat } from "@/lib/shared/vat";
+import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
+import { splitGross } from "@/lib/shared/whole-kronor";
 
 export function VatBreakdown({ inclOre }: { inclOre: number }) {
   if (inclOre <= 0) return null;
-  const { exclVat, vat } = splitVat({ amount: inclOre, vatRate: DEFAULT_VAT_RATE, vatIncluded: true });
+  // Samma uppdelning som fakturan (#1438): nettot i hela kronor, momsen resten.
+  const { netOre: exclVat, vatOre: vat } = splitGross(inclOre, DEFAULT_VAT_RATE);
   return (
     <p className="mt-1 text-[11px] text-gray-500">
       Varav moms (25 %): <span className="font-mono">{formatCurrency(vat)}</span>

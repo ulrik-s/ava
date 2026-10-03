@@ -70,6 +70,7 @@ describe("roundRow / vatOnRow / splitGross", () => {
     expect(splitGross(100_100, 2500)).toEqual({ netOre: 80_100, vatOre: 20_000 }); // 800,80 → 801 kr
     expect(splitGross(629_900, 2500)).toEqual({ netOre: 503_900, vatOre: 126_000 });
     expect(splitGross(5_000, 0)).toEqual({ netOre: 5_000, vatOre: 0 });
+    expect(splitGross(1_234, 0)).toEqual({ netOre: 1_234, vatOre: 0 }); // momsfritt med ören: allt netto
   });
 
   it("netto + moms är alltid exakt bruttot", () => {

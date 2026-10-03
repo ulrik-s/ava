@@ -46,6 +46,20 @@ function assertVatOnNet(seed: number, invoice: Invoice): void {
   }
 }
 
+/** Fakturans moms per sats är satsen på dess netto, fel på under en krona. */
+function assertVatWithinKrona(seed: number, invoice: Invoice): void {
+  const lines = invoice.vatBreakdown ?? [];
+  for (const rate of new Set(lines.map((l) => l.vatRate))) {
+    const group = lines.filter((l) => l.vatRate === rate);
+    const net = group.reduce((x, l) => x + l.netOre, 0);
+    const vat = group.reduce((x, l) => x + l.vatOre, 0);
+    expect({ seed, rate, off: Math.abs(vat - (net * rate) / 10_000) < 100 }).toEqual({ seed, rate, off: true });
+  }
+}
+
+/** Hela kronor, räknat oberoende av `whole-kronor`. */
+const kr = (ore: number): number => Math.floor((ore + 50) / 100) * 100;
+
 describe.each(SEEDS)("seed %i", (seed) => {
   const r: Rng = rng(seed);
 
@@ -94,7 +108,10 @@ describe.each(SEEDS)("seed %i", (seed) => {
     await world.caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: run.id, awardedOre: claimed });
     const { clientInvoice, payerInvoice } = await world.caller.billingRun.settleCoverage({ matterId: world.matterId, payerRecipient: "DOMSTOL" });
     for (const inv of [clientInvoice, payerInvoice]) if (inv.amount !== 0) assertWholeAndBalanced(seed, inv);
-    expect({ seed, invoiced: clientInvoice.amount + payerInvoice.amount }).toEqual({ seed, invoiced: claimed });
+    for (const inv of [clientInvoice, payerInvoice]) assertVatWithinKrona(seed, inv);
+    // Totalen = beslutet, exakt; klienten får sin andel av totalen INKL moms, betalaren resten.
+    expect({ seed, invoiced: clientInvoice.amount + payerInvoice.amount, client: clientInvoice.amount })
+      .toEqual({ seed, invoiced: claimed, client: kr((claimed * s.clientShareBips) / 10_000) });
   });
 
   it("rättshjälp med nedsättning i hela kronor: fakturorna summerar till domen, byrån bär resten", async () => {
@@ -106,28 +123,31 @@ describe.each(SEEDS)("seed %i", (seed) => {
     await world.caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: run.id, awardedOre: awarded });
     const { clientInvoice, payerInvoice, split } = await world.caller.billingRun.settleCoverage({ matterId: world.matterId, payerRecipient: "DOMSTOL" });
     for (const inv of [clientInvoice, payerInvoice]) if (inv.amount !== 0) assertWholeAndBalanced(seed, inv);
-    expect({ seed, invoiced: clientInvoice.amount + payerInvoice.amount, lossWhole: whole(split.firmLossOre) })
-      .toEqual({ seed, invoiced: awarded, lossWhole: true });
+    for (const inv of [clientInvoice, payerInvoice]) assertVatWithinKrona(seed, inv);
+    expect({ seed, invoiced: clientInvoice.amount + payerInvoice.amount, client: clientInvoice.amount, lossWhole: whole(split.firmLossOre) })
+      .toEqual({ seed, invoiced: awarded, client: kr((awarded * s.clientShareBips) / 10_000), lossWhole: true });
   });
 
-  it("rättsskydd med försäkringens prutning: båda fakturorna hela kronor, varje moms 25 % av sitt netto", async () => {
+  it("rättsskydd med försäkringens prutning: klienten får sin andel av totalen inkl moms, försäkringen resten", async () => {
     const s = scenarioFor(r, "RATTSSKYDD");
     const world = worldFor(s);
     const insurerPrutningOre = 100 * r.int(0, 2_000);
-    const { clientInvoice, payerInvoice, split } = await world.caller.billingRun.settleCoverage({
+    const preview = await world.caller.billingRun.coverageSplit({ matterId: world.matterId, insurerPrutningOre });
+    const { clientInvoice, payerInvoice } = await world.caller.billingRun.settleCoverage({
       matterId: world.matterId, payerRecipient: "FORSAKRING", insurerPrutningOre,
     });
     for (const inv of [clientInvoice, payerInvoice]) {
       if (inv.amount === 0) continue;
       assertWholeAndBalanced(seed, inv);
-      assertVatOnNet(seed, inv);
+      assertVatWithinKrona(seed, inv);
     }
-    // Klientens och försäkringens netto = hela arbetet; inget faller bort i delningen.
-    const net = (inv: Invoice): number => (inv.vatBreakdown ?? []).reduce((x, l) => x + l.netOre, 0);
-    const parts = split.clientParts;
-    expect({ seed, parts: parts ? parts.uncoveredOre + parts.sjalvriskOre + parts.prutningOre + parts.overCapOre : -1 })
-      .toEqual({ seed, parts: split.clientOre });
-    expect({ seed, arvode: split.clientOre + split.payerOre }).toEqual({ seed, arvode: split.effectiveTotalOre });
-    expect({ seed, positive: net(clientInvoice) + net(payerInvoice) >= split.effectiveTotalOre }).toEqual({ seed, positive: true });
+    // Totalen räknas en gång: arvodet + 25 % moms i hela kronor + utläggen.
+    const total = preview.totalOre + kr(preview.totalOre * 0.25) + preview.expensesGrossOre;
+    const client = Math.min(total, kr((total * s.clientShareBips) / 10_000) + kr(insurerPrutningOre * 1.25));
+    expect({ seed, sum: clientInvoice.amount + payerInvoice.amount, client: clientInvoice.amount })
+      .toEqual({ seed, sum: total, client });
+    // Förhandsvisningen visar samma fördelning som fakturorna.
+    expect({ seed, client: preview.clientGrossOre, payer: preview.payerGrossOre })
+      .toEqual({ seed, client: clientInvoice.amount, payer: payerInvoice.amount });
   });
 });

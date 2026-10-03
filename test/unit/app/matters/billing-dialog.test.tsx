@@ -122,6 +122,16 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ amountOre: 75_000 }));
   });
 
+  it("ett belopp med ören avrundas synligt till hela kronor — det som visas faktureras (#1438)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    expect(screen.queryByRole("status")).toBeNull(); // förslaget är redan hela kronor
+    const boxes = screen.getAllByRole("textbox");
+    fireEvent.change(boxes[1]!, { target: { value: "750,50" } });
+    expect(screen.getByRole("status").textContent).toMatch(/Avrundat till hela kronor:\s*751,00/);
+    fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
+    expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ amountOre: 75_100 }));
+  });
+
   it("belopps-fältet är ett text-fält utan spinner-pilar (#778)", () => {
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     // Inga number-spinners alls (type=number ger role 'spinbutton').

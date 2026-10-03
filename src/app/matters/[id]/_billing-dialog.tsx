@@ -22,6 +22,7 @@ import { formatCurrency } from "@/lib/client/utils";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { toIsoDate } from "@/lib/shared/iso-date";
 import type { MatterId } from "@/lib/shared/schemas/ids";
+import { roundToKronor } from "@/lib/shared/whole-kronor";
 
 interface AccontoRow { id: string; amountOre: number; recipient: string }
 
@@ -96,7 +97,21 @@ function accontoAmounts(workValueOre: number, clientShareBips: number, priorOre:
   // Förifyllt förslag (#778) — visa det i fältet, men tomt om inget att föreslå.
   const suggestionKr = suggestedOre > 0 ? suggestedOre / 100 : null;
   const fieldKr = amountKr ?? suggestionKr;
-  return { suggestedOre, fieldKr, effectiveOre: Math.round((fieldKr ?? 0) * 100) };
+  // Fakturans enda rad är hela kronor (#1438): det som visas är det som faktureras.
+  const typedOre = Math.round((fieldKr ?? 0) * 100);
+  const effectiveOre = roundToKronor(typedOre);
+  return { suggestedOre, fieldKr, effectiveOre, roundedFromOre: typedOre === effectiveOre ? null : typedOre };
+}
+
+/** Säg till när beloppet avrundades — så det som syns är det som faktureras (#1438). */
+function RoundedNote({ fromOre, toOre }: { fromOre: number | null; toOre: number }) {
+  if (fromOre === null) return null;
+  return (
+    <p role="status" className="mt-1 text-[11px] text-amber-700">
+      Avrundat till hela kronor: <span className="font-mono">{formatCurrency(toOre)}</span>
+      {" "}(angivet <span className="font-mono">{formatCurrency(fromOre)}</span>) — fakturans rader är alltid hela kronor.
+    </p>
+  );
 }
 
 function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: BillingMeta; onDone: () => void }) {
@@ -108,7 +123,7 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   const [amountKr, setAmountKr] = useState<number | null>(null); // null → följ förslaget
   const [invoiceDate, setInvoiceDate] = useState(() => toIsoDate(new Date()));
   const makeDoc = useFakturaDoc(matterId, meta);
-  const { suggestedOre, fieldKr, effectiveOre } = accontoAmounts(workValueOre, clientShareBips, priorOre, amountKr);
+  const { suggestedOre, fieldKr, effectiveOre, roundedFromOre } = accontoAmounts(workValueOre, clientShareBips, priorOre, amountKr);
   const mut = trpc.billingRun.createAcconto.useMutation({
     onSuccess: async (res) => { await makeDoc(res.invoice, recipientLabel("KLIENT", meta.clientName)); onDone(); },
   });
@@ -129,6 +144,7 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
       <Field label="Belopp (kr) — inkl. moms">
         <DecimalInput value={fieldKr} onChange={setAmountKr} placeholder="Skriv in belopp"
           className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
+        <RoundedNote fromOre={roundedFromOre} toOre={effectiveOre} />
         <VatBreakdown inclOre={effectiveOre} />
       </Field>
       <InvoiceDateField value={invoiceDate} onChange={setInvoiceDate} />

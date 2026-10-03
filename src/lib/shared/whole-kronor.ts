@@ -81,6 +81,8 @@ export function timeRowOre(minutes: number, hourlyRateOre: number): number {
  * rad och momsen är resten, så netto + moms alltid är exakt bruttot.
  */
 export function splitGross(grossOre: number, bips: number, rounding: AmountRounding = CURRENT_ROUNDING): { netOre: number; vatOre: number } {
+  // Momsfritt: hela bruttot är netto, även när det har ören (t.ex. ett belopp utifrån).
+  if (bips === 0) return { netOre: grossOre, vatOre: 0 };
   const netOre = roundQuotient(grossOre * 10_000, 10_000 + bips, rounding);
   return { netOre, vatOre: grossOre - netOre };
 }

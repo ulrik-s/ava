@@ -8,7 +8,7 @@
 
 import { accontoCreditAmounts, accontoCreditLines, accontoSplit } from "./acconto-vat";
 import type { VatBreakdownLine } from "./accounting/semantic-voucher";
-import { coverageEntryRowOre, vatOnNet, type UnfrozenWork } from "./billing-work-value";
+import { coverageEntryRowOre, type UnfrozenWork } from "./billing-work-value";
 import { payableCoverageEntries } from "./brottmalstaxa";
 import type { RattsskyddClientParts } from "./coverage-billing";
 import { arvodeInclVatOre } from "./invoice-calc";
@@ -85,6 +85,7 @@ export interface SettlementBreakdown {
   firmLossNetOre: number;        // byrå-förlust/prutning NETTO — domstolens trappa (#876)
   prutningGrossOre: number;      // byrå-förlust/prutning brutto
   payerArvodeNetOre: number;     // domstolens/försäkringens andel av arvodet NETTO — trappan (#876)
+  payerArvodeVatOre: number;     // …och dess moms, exakt som betalarens faktura bär den (#1438)
   radgivningGrossOre: number;    // redan fakturerad rådgivningstimme brutto — bara omnämnd, ej i underlaget (#876/#1205)
   radgivningNetOre: number;      // samma timme NETTO — info-raden i arvodestrappan (#1205)
   payerPayableOre: number;       // domstolen att betala
@@ -214,7 +215,9 @@ export function feeBaseSuffix(b: SettlementBreakdown): string {
  * felaktig — säg bara "Moms".
  */
 export function vatLabel(netOre: number, vatOre: number): string {
-  return netOre > 0 && vatOre === vatOnNet(netOre) ? "Moms 25 %" : "Moms";
+  // Fakturans moms delas ur bruttot i hela kronor (#1438) och ligger då högst
+  // 62,5 öre från 25 % av nettot — inom det bär hela underlaget 25 %.
+  return netOre > 0 && Math.abs(vatOre * 10_000 - netOre * 2500) <= 625_000 ? "Moms 25 %" : "Moms";
 }
 
 /**
@@ -258,8 +261,9 @@ export function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, f
   // stället för ett lumpet belopp, så klienten ser varför den ska betala. Rättshjälp
   // har bara avgiftsandelen (prutningen bärs av byrån, inte klienten).
   if (!isRattshjalp && b.clientParts) {
+    // Posterna räknas på hela underlaget, utläggen inräknade (#1438) — de
+    // summerar till klientens netto, så utläggen har ingen egen rad här.
     rows.push(...rattsskyddClientRows(b.clientParts, share));
-    if (b.clientExpensesNetOre > 0) rows.push({ label: "Klientens andel av utläggen (exkl moms)", amountOre: b.clientExpensesNetOre, kind: "add" });
   } else {
     // Andelen omfattar BÅDE arvode och utlägg (#947) — de delas i samma proportion.
     rows.push({ label: `Klientens ${feeTerm} ${share} %${feeBaseSuffix(b)} (exkl moms)`, amountOre: b.sjalvriskNetOre + b.clientExpensesNetOre, kind: "add" });
@@ -279,9 +283,11 @@ export function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, f
 export function buildPayerView(b: SettlementBreakdown, payerLabel: string, payerNoun: string, feeTerm: string): SettlementView {
   // Andelarna omfattar BÅDE arvode och utlägg (#947) — de delas i samma proportion,
   // så trappan går hela vägen ned till betalarens totala andel utan lösa rader.
-  const clientShareNetOre = b.sjalvriskNetOre + b.clientExpensesNetOre;
+  // Betalarens del är totalen minus klientens (#1438): avdraget här är därför
+  // beviljat − betalarens netto, så trappan går jämnt ut på betalarens faktura.
   const payerShareNetOre = b.payerArvodeNetOre + b.payerExpensesNetOre;
-  const payerVatOre = arvodeInclVatOre(b.payerArvodeNetOre) - b.payerArvodeNetOre + b.payerExpensesVatOre;
+  const clientShareNetOre = awardedBaseOre(b) - payerShareNetOre;
+  const payerVatOre = b.payerArvodeVatOre + b.payerExpensesVatOre;
   const rows: SettlementRow[] = arvodeLadderRows(b, payerNoun);
   rows.push({ label: `Avgår klientens ${feeTerm} ${shareLabel(b.clientShareBips)} %${feeBaseSuffix(b)} (exkl moms)`, amountOre: clientShareNetOre, kind: "deduct" });
   rows.push({ label: `${payerNoun} andel (exkl moms)`, amountOre: payerShareNetOre, kind: "add" });
