@@ -9,13 +9,14 @@
  *           utlägg → summa inkl moms. Därefter uppdelningen mellan klient och
  *           betalare (domstol/försäkringsbolag) → att betala.
  *   sida 2+ Specifikation — tidsspecifikation per arvodeskategori (arvode,
- *           tidsspillan …) med timpris och delsumma + utläggsspecifikation,
- *           dvs underlaget till beloppen på sida 1.
+ *           tidsspillan …) med delsumma + utläggsspecifikation, dvs underlaget
+ *           till beloppen på sida 1. Timpriset står EN gång per kategori i
+ *           sammanställningen, inte på varje post (#1439).
  *
  * `buildFakturaView` är den TYPADE vy-modellen (#938): färdigformaterade rader,
- * inga öre kvar. Både HTML-mallen (`renderFakturaHtml`) och PDF-bilagan
- * (`renderFakturaPdf`) läser den, så etiketter och belopp kan inte glida isär
- * mellan det dokument som arkiveras och det som mejlas.
+ * inga öre kvar. PDF:en (`renderFakturaPdf`) är fakturans enda format sedan
+ * #1439 — samma renderare för det arkiverade dokumentet och bilagan som mejlas,
+ * så etiketter och belopp kan inte glida isär.
  *
  * KOSTNADSRÄKNINGEN till domstol har en EGEN mall (`buildKostnadsrakningContext`)
  * — den är en myndighetsblankett, inte en faktura, och berörs inte här.
@@ -26,9 +27,9 @@ import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } fro
 import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
 import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
 import { buildInvoiceSpecification, type InvoiceSpecification } from "@/lib/shared/invoice-specification";
+import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
-import { renderHandlebars } from "./render-handlebars";
 
 export type { InvoiceSpecification };
 
@@ -57,6 +58,8 @@ export interface FakturaDocMeta {
   recipient?: string;
   organizationName?: string;
   organizationOrgNumber?: string;
+  /** Byråns logga ur organisationsinställningarna (#1439) — ritas i sidhuvudet. */
+  organizationLogo?: OrgImage;
 }
 
 export interface FakturaDocInvoice {
@@ -103,9 +106,9 @@ export interface FakturaSummaryRow { label: string; rateLabel: string; hours: st
  */
 export interface FakturaSplitRow { label: string; amount: string; style: string; muted: boolean }
 
-/** En tidspost. `rate` = timpriset ("1 500,00 kr/tim"), dagbeloppet för
- *  per-dygns-kategorier ("… kr/dygn"), tomt när det saknas (#1200). */
-export interface FakturaTimeRow { date: string; description: string; hours: string; rate: string; amount: string }
+/** En tidspost. Inget pris per post (#1439): posterna står under sin kategori,
+ *  och kategorins timpris står i sammanställningen. */
+export interface FakturaTimeRow { date: string; description: string; hours: string; amount: string }
 
 /** Tidsspecifikationens deltabell för EN arvodeskategori (#1200) — rubrik,
  *  poster och delsumma ("Summa tidsspillan …: 3 tim — 4 461 kr"). */
@@ -124,6 +127,8 @@ export interface FakturaView {
   recipient: string;
   organizationName: string;
   organizationOrgNumber: string;
+  /** Byråns logga (#1439); null → sidhuvudet utan logga. */
+  logo: OrgImage | null;
   /** Rådgivningsnotisen (#870) — tom sträng när den inte gäller. */
   footnote: string;
   summary: FakturaSummaryRow[];
@@ -143,52 +148,6 @@ export interface FakturaView {
   timeGroups: FakturaTimeGroup[];
   expenseLines: FakturaExpenseRow[];
 }
-
-/** Inbyggd faktura-mall (Handlebars) — används av template-motorn (#852) när
- *  ingen byrå-mall finns. HTML → öppningsbar + skrivbar. */
-const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>{{heading}} {{invoiceNumber}}</title>
-<style>@media print{.page-break{page-break-before:always}}.page-break{border:0;border-top:1px dashed #ccc;margin:2rem 0}</style></head>
-<body style="font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;color:#111">
-<h1 style="margin-bottom:0">{{heading}}</h1>
-<p style="color:#555">Fakturanr: {{invoiceNumber}}{{#if ocr}} · OCR: {{ocr}}{{/if}}<br>Datum: {{date}}</p>
-<p style="color:#555">Ärende {{matterNumber}} — {{matterTitle}}<br>Mottagare: {{recipient}}</p>
-
-<h2 style="font-size:16px;margin-top:1.5rem;margin-bottom:.5rem">Sammanställning</h2>
-{{#if summary.length}}
-<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:1rem">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Benämning</th><th style="text-align:right">Tim</th><th style="text-align:right">Timpris</th><th style="text-align:right">Belopp</th></tr></thead>
-<tbody>{{#each summary}}<tr{{#if this.subtotal}} style="border-top:1px solid #ccc;font-weight:bold"{{/if}}><td>{{this.label}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.rateLabel}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
-<tfoot><tr style="border-top:2px solid #333"><td style="font-weight:bold">{{summaryTotalLabel}}</td><td></td><td></td><td style="text-align:right;font-weight:bold">{{summaryTotal}}</td></tr></tfoot>
-</table>{{/if}}
-{{#if hasSplit}}<h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Uppdelning klient / betalare</h3>{{/if}}
-<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px">
-<tbody>{{#each splitRows}}<tr style="{{this.style}}"><td>{{this.label}}</td><td style="text-align:right;{{this.style}}">{{this.amount}}</td></tr>{{/each}}</tbody>
-<tfoot><tr style="border-top:2px solid #333"><td style="font-weight:bold">{{totalLabel}}</td><td style="text-align:right;font-weight:bold">{{total}}</td></tr></tfoot>
-</table>
-{{#if footnote}}<p style="color:#555;font-size:13px;margin-top:1rem">{{footnote}}</p>{{/if}}
-{{#if hasSpec}}
-<hr class="page-break">
-<h2 style="font-size:16px;margin-bottom:.25rem">Specifikation</h2>
-<p style="color:#777;font-size:12px;margin-top:0">Underlag till beloppen i sammanställningen ovan.</p>
-{{#if timeGroups.length}}
-<h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Tidsspecifikation</h3>
-{{#each timeGroups}}
-<h4 style="font-size:13px;margin-top:1rem;margin-bottom:.25rem">{{this.label}}</h4>
-<table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Tim</th><th style="text-align:right">Timpris</th><th style="text-align:right">Belopp</th></tr></thead>
-<tbody>{{#each this.lines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right;white-space:nowrap">{{this.rate}}</td><td style="text-align:right;white-space:nowrap">{{this.amount}}</td></tr>{{/each}}</tbody>
-<tfoot><tr style="border-top:1px solid #ccc;font-weight:bold"><td colspan="2">{{this.subtotalLabel}}</td><td style="text-align:right">{{this.hours}}</td><td></td><td style="text-align:right;white-space:nowrap">{{this.amount}}</td></tr></tfoot>
-</table>
-{{/each}}{{/if}}
-{{#if expenseLines.length}}
-<h3 style="font-size:14px;margin-top:1.5rem;margin-bottom:.25rem">Utläggsspecifikation</h3>
-<table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Netto</th><th style="text-align:right">Brutto</th></tr></thead>
-<tbody>{{#each expenseLines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.net}}</td><td style="text-align:right">{{this.gross}}</td></tr>{{/each}}</tbody>
-</table>{{/if}}
-{{/if}}
-{{#if organizationName}}<p style="color:#777;font-size:13px;margin-top:1.5rem">{{organizationName}}{{#if organizationOrgNumber}} · {{organizationOrgNumber}}{{/if}}</p>{{/if}}
-</body></html>`;
 
 const svDate = (d: Date | string | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
 const svHours = (minutes: number): string => (minutes / 60).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
@@ -404,10 +363,9 @@ function splitRowsFor(a: FakturaTemplateArgs, spec: InvoiceSpecification | null,
   ];
 }
 
-/** En tidspost i specifikationen, med sitt pris per enhet (#1200). */
+/** En tidspost i specifikationen — omfattning och belopp, inget pris (#1439). */
 function timeRow(l: SpecLine, fc: Fc): FakturaTimeRow {
-  const kind = resolveKind(l);
-  return { date: svDate(l.date), description: l.description, hours: quantityLabel(kind, [l]), rate: rateLabelFor(kind, unitRateOre(l), fc), amount: fc(l.amountOre) };
+  return { date: svDate(l.date), description: l.description, hours: quantityLabel(resolveKind(l), [l]), amount: fc(l.amountOre) };
 }
 
 const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
@@ -436,7 +394,7 @@ function specTables(spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView
 
 /** Faktura-huvudets fält (rubrik/nr/datum/mottagare/org). Utbrutet → håller
  *  `buildFakturaView` under param- och komplexitetsgränsen. */
-function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "footnote" | "invoiceNumber" | "ocr" | "date" | "matterNumber" | "matterTitle" | "recipient" | "organizationName" | "organizationOrgNumber"> {
+function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "footnote" | "invoiceNumber" | "ocr" | "date" | "matterNumber" | "matterTitle" | "recipient" | "organizationName" | "organizationOrgNumber" | "logo"> {
   const { invoice, meta } = a;
   return {
     heading: fakturaHeading(invoice),
@@ -449,12 +407,13 @@ function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "fo
     recipient: a.recipient,
     organizationName: meta.organizationName ?? "",
     organizationOrgNumber: meta.organizationOrgNumber ?? "",
+    logo: meta.organizationLogo ?? null,
   };
 }
 
 /**
  * Bygg den färdigformaterade vy-modellen (#938) — enda stället där öre blir
- * text. HTML-mallen och PDF-bilagan renderar samma `FakturaView`.
+ * text. PDF-renderaren (`renderFakturaPdf`) ritar den rakt av.
  */
 export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatCurrency): FakturaView {
   const spec = resolveSpec(a);
@@ -470,12 +429,4 @@ export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatCurrency
     total: fc(a.breakdown ? a.breakdown.totalOre : a.invoice.amount),
     ...specTables(spec, fc),
   };
-}
-
-/**
- * Rendera fakturan till HTML — sammanställning först, specifikation efter.
- * Enda vägen till faktura-HTML i hela kodbasen (appen + demo-generatorn, #937).
- */
-export function renderFakturaHtml(args: FakturaTemplateArgs): string {
-  return renderHandlebars(FAKTURA_TEMPLATE, { ...buildFakturaView(args, formatCurrency) });
 }

@@ -1,7 +1,7 @@
 /**
- * Tester för generateFakturaFromTemplate (#852) — faktura-dokument via template-
- * motorn (Handlebars): registrerar documentType=Faktura + invoiceId och renderar
- * fakturanummer/mottagare/belopp i HTML:en.
+ * Tester för generateFakturaFromTemplate (#852/#1439) — faktura-dokumentet är en
+ * PDF: registrerar documentType=Faktura + invoiceId och renderar
+ * fakturanummer/mottagare/belopp i PDF:en. Inga nya HTML-dokument.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
@@ -9,6 +9,7 @@ import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/genera
 import { formatCurrency } from "@/lib/client/utils";
 import { asId } from "@/lib/shared/schemas/ids";
 import { isUuid } from "@/lib/shared/uuid";
+import { pdfPageTexts } from "../../../helpers/pdf-text";
 
 const persistGeneratedDoc = vi.fn(async () => {});
 vi.mock("@/lib/client/demo/persist-generated-doc", () => ({ persistGeneratedDoc }));
@@ -23,8 +24,17 @@ const utils = {
 
 beforeEach(() => { vi.clearAllMocks(); });
 
+/** Belopp som de står i PDF:en (hårda mellanslag → vanliga, som i `pdfPageTexts`). */
+const kr = (ore: number): string => formatCurrency(ore).replace(/[\u00A0\u202F]/g, " ");
+
+/** Texten i det persisterade dokumentet (alla sidor, en ritad sträng per rad). */
+async function persistedText(): Promise<string> {
+  const bytes = persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array;
+  return (await pdfPageTexts(bytes)).flat().join("\n");
+}
+
 describe("generateFakturaFromTemplate", () => {
-  it("registrerar Faktura-dokument (HTML) kopplat till invoiceId + renderar mall-data", async () => {
+  it("registrerar Faktura-dokument som PDF kopplat till invoiceId + renderar fakturans data (#1439)", async () => {
     await generateFakturaFromTemplate({
       invoice: { id: asId<"InvoiceId">("inv-9"), amount: 203_250, vatOre: 40_650, invoiceNumber: "F-2026-0099", invoiceDate: "2026-06-30" },
       matterId: asId<"MatterId">("m1"),
@@ -34,17 +44,23 @@ describe("generateFakturaFromTemplate", () => {
       utils,
     });
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      matterId: "m1", documentType: "Faktura", invoiceId: "inv-9", mimeType: "text/html; charset=utf-8",
+      matterId: "m1", documentType: "Faktura", invoiceId: "inv-9", mimeType: "application/pdf",
     }));
     expect(persistGeneratedDoc).toHaveBeenCalled();
     // uuid-id: servern lagrar bara uuid-nycklade rader (#1143, missades i #1124).
     const registered = registerMutateAsync.mock.calls[0]![0];
     expect(isUuid(registered.id)).toBe(true);
     expect(persistGeneratedDoc.mock.calls[0]![0].id).toBe(registered.id);
-    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
-    expect(html).toContain("F-2026-0099"); // fakturanummer ur mallen
-    expect(html).toContain("Staten");      // mottagare
-    expect(html).toContain("Vårdnadstvist");
+    // Inget nytt HTML-dokument (#1439): filnamn, sökväg, typ och bytes är PDF.
+    const persisted = persistGeneratedDoc.mock.calls[0]![0] as { storagePath: string; fileName: string; mimeType: string; bytes: Uint8Array };
+    expect(persisted.mimeType).toBe("application/pdf");
+    expect(persisted.storagePath).toMatch(/^documents\/content\/[0-9a-f-]+\.pdf$/);
+    expect(persisted.fileName).toMatch(/^Faktura F-2026-0099 \d{4}-\d{2}-\d{2}\.pdf$/);
+    expect(new TextDecoder().decode(persisted.bytes.slice(0, 5))).toBe("%PDF-");
+    const text = await persistedText();
+    expect(text).toContain("F-2026-0099"); // fakturanummer
+    expect(text).toContain("Staten");      // mottagare
+    expect(text).toContain("Vårdnadstvist");
   });
 
   it("renderar fullständig specifikation (tider, utlägg, avdragna aconton) — #856", async () => {
@@ -68,13 +84,13 @@ describe("generateFakturaFromTemplate", () => {
         payableOre: 373_750,
       },
     });
-    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
-    expect(html).toContain("Tidsspecifikation");
-    expect(html).toContain("Genomgång av handlingar");
-    expect(html).toContain("Utläggsspecifikation");
-    expect(html).toContain("Ansökningsavgift");
-    expect(html).toContain("Avgår aconto");
-    expect(html).toContain("F-2026-0000"); // avdragen aconto-faktura listad i specifikationen
+    const text = await persistedText();
+    expect(text).toContain("Tidsspecifikation");
+    expect(text).toContain("Genomgång av handlingar");
+    expect(text).toContain("Utläggsspecifikation");
+    expect(text).toContain("Ansökningsavgift");
+    expect(text).toContain("Avgår aconto");
+    expect(text).toContain("F-2026-0000"); // avdragen aconto-faktura listad i specifikationen
   });
 
   it("renderar itemiserad nedbrytning (självrisk/rådgivning/prutning + aconto-info) — #858", async () => {
@@ -95,13 +111,14 @@ describe("generateFakturaFromTemplate", () => {
         totalOre: 325_200,
       },
     });
-    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
-    expect(html).toContain("Arvode (timkostnadsnorm)");
-    expect(html).toContain("Klientens självrisk");
-    expect(html).toContain("Betalt via aconto — faktura F-2026-0001");
-    expect(html).toContain("Domstolen betalar — att betala");
-    expect(html).not.toContain("Nedsättning"); // lumpen ersatt av itemiserade rader
-    expect(html).not.toContain("Rådgivning"); // rådgivningstimmen syns ALDRIG på domstols-fakturan (#860)
+    const text = await persistedText();
+    expect(text).toContain("Arvode (timkostnadsnorm)");
+    expect(text).toContain("Klientens självrisk");
+    // WinAnsi saknar tankstreck → PDF:en skriver bindestreck.
+    expect(text).toContain("Betalt via aconto - faktura F-2026-0001");
+    expect(text).toContain("Domstolen betalar - att betala");
+    expect(text).not.toContain("Nedsättning"); // lumpen ersatt av itemiserade rader
+    expect(text).not.toContain("Rådgivning"); // rådgivningstimmen syns ALDRIG på domstols-fakturan (#860)
   });
 
   it("sammanställning: rad per kategori + timpris, uträkningskedja till summa, spec efter (#925/#1200)", async () => {
@@ -127,36 +144,37 @@ describe("generateFakturaFromTemplate", () => {
         deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 1_071_500,
       },
     });
-    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
+    const text = await persistedText();
     // En rad per kategori + timpris (norm 1 626 kr/tim + tidsspillan 1 487 kr/tim),
     // läst som uträkning: Benämning | Tim | Timpris | Belopp (#1200).
-    expect(html).toContain("Sammanställning");
-    expect(html).toContain("Benämning");
-    expect(html).toContain("Timpris");
-    expect(html).toContain(`${formatCurrency(162_600)}/tim`); // timkostnadsnorm 2026
-    expect(html).toContain(`${formatCurrency(148_700)}/tim`); // tidsspillan 2026 (297 400 / 2 tim)
+    expect(text).toContain("Sammanställning");
+    expect(text).toContain("Benämning");
+    expect(text).toContain("Timpris");
+    expect(text).toContain(`${kr(162_600)}/tim`); // timkostnadsnorm 2026
+    expect(text).toContain(`${kr(148_700)}/tim`); // tidsspillan 2026 (297 400 / 2 tim)
     // Utan arvodeskategori på raden (äldre faktura) räddas tidsspillan-normerna ur
     // taxan; resten benämns arvode (#953).
-    expect(html).toContain("<td>Timarvode</td>");
-    expect(html).toContain("<td>Tidsspillan</td>");
+    expect(text).toContain("\nTimarvode\n");
+    expect(text).toContain("\nTidsspillan\n");
     // Kedjan (#1200): summa arvode exkl moms → moms på arvode → utlägg exkl moms →
     // summa inkl moms. Utläggen är momsfria här → ingen momsrad för utlägg.
-    const iArvode = html.indexOf("Summa arvode exkl moms");
-    const iMoms = html.indexOf("Moms 25 % på arvode");
-    const iExkl = html.indexOf("Utlägg exkl moms");
-    const iSumma = html.indexOf("Summa inkl moms");
+    const iArvode = text.indexOf("Summa arvode exkl moms");
+    const iMoms = text.indexOf("Moms 25 % på arvode");
+    const iExkl = text.indexOf("Utlägg exkl moms");
+    const iSumma = text.indexOf("Summa inkl moms");
     expect(iArvode).toBeGreaterThan(-1);
     expect(iArvode).toBeLessThan(iMoms);
     expect(iMoms).toBeLessThan(iExkl);
     expect(iExkl).toBeLessThan(iSumma);
-    expect(html).not.toContain("på utlägg");
-    expect(html).toContain(formatCurrency(785_200)); // summa arvode exkl moms
-    expect(html).toContain(formatCurrency(196_300)); // moms på arvode
-    expect(html).toContain(formatCurrency(1_071_500)); // 785 200 + 196 300 + 90 000
-    // Sammanställningen står FÖRE specifikationen; specen har sidbrytning.
-    expect(html.indexOf("Sammanställning")).toBeLessThan(html.indexOf("Specifikation"));
-    expect(html.indexOf("Sammanställning")).toBeLessThan(html.indexOf("Tidsspecifikation"));
-    expect(html).toContain('class="page-break"');
+    expect(text).not.toContain("på utlägg");
+    expect(text).toContain(kr(785_200)); // summa arvode exkl moms
+    expect(text).toContain(kr(196_300)); // moms på arvode
+    expect(text).toContain(kr(1_071_500)); // 785 200 + 196 300 + 90 000
+    // Sammanställningen står FÖRE specifikationen, som börjar på en egen sida.
+    const pages = await pdfPageTexts(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
+    expect(pages[0]).toContain("Sammanställning");
+    expect(pages[1]?.[0]).toBe("Specifikation");
+    expect(pages[1]).toContain("Tidsspecifikation");
   });
 
   it("klientens självrisk-faktura (#876): tidsspec-TABELL + moms-trappa, spec-summeringen undertryckt", async () => {
@@ -185,14 +203,14 @@ describe("generateFakturaFromTemplate", () => {
         totalLabel: "Att betala (inkl moms)", totalOre: 31_300,
       },
     });
-    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
-    expect(html).toContain("Tidsspecifikation");               // #1 — underlaget syns
-    expect(html).toContain("Genomgång av handlingar");
-    expect(html).toContain("Upparbetat arvode (exkl moms)");    // #3 — basen märkt EXKL moms
-    expect(html).toContain("Moms 25 %");                        // momsen redovisad …
-    expect(html).toContain("Självrisk (inkl moms)");
-    expect(html).toContain("Avgår aconto — faktura F-2026-0013");
+    const text = await persistedText();
+    expect(text).toContain("Tidsspecifikation");               // #1 — underlaget syns
+    expect(text).toContain("Genomgång av handlingar");
+    expect(text).toContain("Upparbetat arvode (exkl moms)");    // #3 — basen märkt EXKL moms
+    expect(text).toContain("Moms 25 %");                        // momsen redovisad …
+    expect(text).toContain("Självrisk (inkl moms)");
+    expect(text).toContain("Avgår aconto - faktura F-2026-0013");
     // … men spec-summeringen undertrycks när breakdown finns → ingen dubbel moms/summa.
-    expect(html).not.toContain("Delsumma (inkl moms)");
+    expect(text).not.toContain("Delsumma (inkl moms)");
   });
 });

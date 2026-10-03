@@ -28,6 +28,7 @@ import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-d
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 import { useMatterDocuments, type MatterDocument } from "@/lib/client/documents/use-matter-documents";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
+import { fakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaDocInvoice } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
@@ -285,10 +286,12 @@ interface DialogsProps {
 }
 
 function useBillingMeta(matter: MatterContext): BillingMeta {
-  const org = orgProps(trpc.organization.getSettings.useQuery().data ?? undefined);
+  const settings = trpc.organization.getSettings.useQuery().data;
   return {
     matterNumber: matter.matterNumber, matterTitle: matter.title,
-    ...omitUndefined({ clientName: clientOf(matter) || undefined, organizationName: org.name, organizationOrgNumber: org.orgNumber, clientShareBips: matter.clientShareBips ?? undefined }),
+    ...omitUndefined({ clientName: clientOf(matter) || undefined, clientShareBips: matter.clientShareBips ?? undefined }),
+    // Byråns namn, org.nr och logga till fakturadokumenten (#1439).
+    ...fakturaOrgMeta(settings),
   };
 }
 
@@ -314,7 +317,7 @@ function BillingDialogs({ matterId, matter, rows, dialog, setDialog, verdictRunI
         <VerdictDialog billingRunId={verdictRunId} workValueOre={amounts.workValueOre}
           awardedOre={amounts.awardedOre}
           matterId={matterId} matterNumber={matter.matterNumber} matterTitle={matter.title}
-          clientName={clientOf(matter)}
+          clientName={clientOf(matter)} organization={fakturaOrgMeta({ name: meta.organizationName, orgNumber: meta.organizationOrgNumber, logo: meta.organizationLogo })}
           onClose={() => { setVerdictRunId(null); onRefetch(); }} />
       )}
     </>

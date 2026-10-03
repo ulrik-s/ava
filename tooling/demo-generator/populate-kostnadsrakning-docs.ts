@@ -11,25 +11,33 @@
  * Carlsson). Den här stegen återställer kohärensen genom att skapa
  * dokumentet som billing-run:n förutsätter.
  *
- * Speglar `populateInvoiceDocs`: renderar default-mallen till HTML, skriver binären via
- * sink:en och registrerar via `document.register` med
+ * Speglar `populateInvoiceDocs`: renderar kostnadsräkningen till PDF med APPENS
+ * renderare (`renderKostnadsrakningPdf`, samma som i appen — inga HTML-dokument,
+ * #1439), skriver binären via sink:en och registrerar via `document.register` med
  * documentType="Kostnadsräkning" (samma tagg som `kostnadsrakning.record`
  * sätter i prod, så `findKrDocument` i billing-panelen hittar den).
  */
 
-import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
-import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
-import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/kostnadsrakning-template";
+import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
+import { buildKostnadsrakningContext, type KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
 import type { BinarySink, GeneratorCaller } from "./backend-target";
 import { ensureFolderPath, KOSTNADSRAKNING_FOLDER, type FolderCache } from "./folder-filing";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-/** KR-dokumentet (#864, #1218): byråns default-mall renderad ur den delade
- *  contexten — samma layout och innehåll som i appen. */
-function renderKrHtml(tc: Record<string, unknown>): string {
-  return renderHandlebars(KOSTNADSRAKNING_DEFAULT_HTML, tc);
+/** KR-dokumentet (#864, #1218, #1439): PDF ur den delade dokumentvyn — samma
+ *  layout, innehåll och format som i appen. */
+function renderKr(result: KostnadsrakningResult, run: Any): Promise<Uint8Array> {
+  const m = run.matter ?? {};
+  return renderKostnadsrakningPdf({
+    result,
+    meta: {
+      matterNumber: String(m.matterNumber ?? ""), matterTitle: String(m.title ?? ""),
+      clientName: String(m.clientName ?? ""), courtName: "",
+      defenderName: String(m.responsibleLawyerName ?? "Ansvarig jurist"),
+    },
+  });
 }
 
 /** Byråns fält till dokumentet (null → utelämnat). */
@@ -55,7 +63,7 @@ function taxaFields(m: Any, date: Date): Record<string, unknown> {
 }
 
 /** Bygg KR-contexten för en run ur ärendets tids-/utläggsposter (#864). */
-async function krContextFor(c: Any, run: Any): Promise<Any> {
+async function krContextFor(c: Any, run: Any): Promise<KostnadsrakningResult> {
   const matter = run.matter ?? {};
   const date = run.createdAt ? new Date(run.createdAt) : new Date();
   const [te, ex, org, full] = await Promise.all([
@@ -80,7 +88,7 @@ async function krContextFor(c: Any, run: Any): Promise<Any> {
     ownBillingRunId: run.id,
     expenses: (ex.expenses ?? []) as Any,
   });
-  return result.templateContext;
+  return result;
 }
 
 /** Dokument-id för en KR-run. Default = läsbar `krdoc-<runId>` (in-memory demo +
@@ -96,11 +104,9 @@ export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?
   for (const summary of runs as Any[]) {
     if (summary.type !== "KOSTNADSRAKNING") continue;
     const run = await c.billingRun.byId({ id: summary.id });
-    const tc = await krContextFor(c, run);
-    const html = renderKrHtml(tc);
+    const bytes = await renderKr(await krContextFor(c, run), run);
     const id = idFor ? idFor(run.id) : `krdoc-${run.id}`;
-    const storagePath = `documents/content/${id}.html`;
-    const bytes = new TextEncoder().encode(html);
+    const storagePath = `documents/content/${id}.pdf`;
     const size = sink ? sink(storagePath, bytes) : bytes.byteLength;
     const folderId = await ensureFolderPath(c, String(run.matter.id), KOSTNADSRAKNING_FOLDER, folders);
     await c.document.register({
@@ -108,8 +114,8 @@ export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?
       invoiceId: run.invoiceId ?? undefined,
       // Länkad till sin körning (#1230) — ångras den tas dokumentet bort.
       billingRunId: run.id,
-      fileName: `Kostnadsräkning ${run.matter.matterNumber}.html`,
-      mimeType: "text/html; charset=utf-8", sizeBytes: size, storagePath,
+      fileName: `Kostnadsräkning ${run.matter.matterNumber}.pdf`,
+      mimeType: "application/pdf", sizeBytes: size, storagePath,
       title: `Kostnadsräkning — ${run.matter.matterNumber}`,
       documentType: "Kostnadsräkning", analysisStatus: "DONE",
       // Kostnadsräkningen skickas till domstolen (#901) → syns i "skickat till domstol"-filtret.

@@ -8,7 +8,9 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { VerdictDialog } from "@/app/matters/[id]/_verdict-dialog";
+import { orgImageSchema } from "@/lib/shared/org-image";
 import { asId } from "@/lib/shared/schemas/ids";
+import { pdfPageContents, pdfPageTexts } from "../../../helpers/pdf-text";
 
 /** Fakturadokumentet får uuid-id (#1143). */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -77,16 +79,26 @@ describe("VerdictDialog", () => {
     render(<VerdictDialog {...baseProps} onClose={onClose} />);
     expect(verdictOnSuccess).toBeDefined();
     await verdictOnSuccess!({ invoice: { id: "inv-9", amount: 400_000, invoiceNumber: "2026-9" } });
-    // Fakturan renderas via den DELADE mallen (#937) → HTML med sammanställning
-    // + specifikation, inte längre en egen PDF-renderare.
+    // Fakturan renderas via den DELADE vy-modellen (#937) → en PDF (#1439) med
+    // sammanställning + specifikation.
     const bytes = persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array;
-    const html = new TextDecoder().decode(bytes);
-    expect(html).toContain("Sammanställning");
-    expect(html).toContain("Rättshjälpsmyndighet/domstol");
+    const text = (await pdfPageTexts(bytes)).flat();
+    expect(text).toContain("Sammanställning");
+    expect(text).toContain("Mottagare: Rättshjälpsmyndighet/domstol");
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-9", documentType: "Faktura",
     }));
     expect(persistGeneratedDoc).toHaveBeenCalled();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("byråns namn, org.nr och logga följer med till fakturadokumentet (#1439)", async () => {
+    const logo = orgImageSchema.parse("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+    render(<VerdictDialog {...baseProps} organization={{ organizationName: "Byrå AB", organizationOrgNumber: "556677-8899", organizationLogo: logo }} />);
+    await verdictOnSuccess!({ invoice: { id: "inv-9", amount: 400_000, invoiceNumber: "2026-9" } });
+    const bytes = persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array;
+    expect((await pdfPageTexts(bytes)).flat()).toEqual(expect.arrayContaining(["Byrå AB", "Org.nr 556677-8899"]));
+    const [page1] = await pdfPageContents(bytes);
+    expect(page1).toMatch(/\/\S+ Do/); // loggan ritad
   });
 });
