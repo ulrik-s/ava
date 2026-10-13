@@ -28,6 +28,8 @@ import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
 const ORG = uuidv7();
 const USER = uuidv7();
+/** Workerns procedurer (statusrapport, Fortnox-markering) kräver admin (#1450). */
+const ADMIN_USER = uuidv7();
 /** När anropet gjordes — servern kör om det senare. */
 const MADE_AT = Date.UTC(2025, 11, 28, 10, 0);
 /** Servern kör om anropet tre dagar senare — inom gränsen för anropstiden (#1350). */
@@ -38,6 +40,7 @@ describe("utskick, påminnelser och Fortnox i procedur-kön (#1242)", () => {
   let repos: DrizzleRepositories;
   let replayer: DrizzleProcedureReplayer;
   let ctx: Context;
+  let adminCtx: Context;
   let matterId = "";
 
   beforeAll(async () => {
@@ -47,11 +50,17 @@ describe("utskick, påminnelser och Fortnox i procedur-kön (#1242)", () => {
     replayer = new DrizzleProcedureReplayer(handle.db, repos, QUEUE_POLICY, () => REPLAYED_AT);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await handle.db.insert(users).values({ id: USER, organizationId: ORG, email: "lena@byra.se", name: "Lena", role: "LAWYER", active: true, version: 1 } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handle.db.insert(users).values({ id: ADMIN_USER, organizationId: ORG, email: "admin@byra.se", name: "Admin", role: "ADMIN", active: true, version: 1 } as any);
     matterId = uuidv7();
     await repos.matters.create({ id: matterId, organizationId: ORG, title: "Utskick", status: "ACTIVE", matterNumber: "2025-1242" } as never);
     ctx = buildContext({
       repos, eventLog: serverFirstEventLog, ports: noopPorts,
       principal: { id: asId<"UserId">(USER), email: "lena@byra.se", name: "Lena", role: "LAWYER", organizationId: asId<"OrganizationId">(ORG) },
+    });
+    adminCtx = buildContext({
+      repos, eventLog: serverFirstEventLog, ports: noopPorts,
+      principal: { id: asId<"UserId">(ADMIN_USER), email: "admin@byra.se", name: "Admin", role: "ADMIN", organizationId: asId<"OrganizationId">(ORG) },
     });
   });
   afterAll(async () => { await handle.close(); });
@@ -64,8 +73,8 @@ describe("utskick, påminnelser och Fortnox i procedur-kön (#1242)", () => {
     await repos.invoices.create({ id, matterId, amount: 100_000, invoiceDate: new Date("2025-11-01"), status, invoiceNumber: `F-2025-${id.slice(-4)}` } as never);
     return id;
   }
-  async function accepted(c: QueuedProcedureCall): Promise<void> {
-    expect(await replayer.replay(c, ctx)).toMatchObject({ status: "accepted" });
+  async function accepted(c: QueuedProcedureCall, as: Context = ctx): Promise<void> {
+    expect(await replayer.replay(c, as)).toMatchObject({ status: "accepted" });
   }
   const at = (v: unknown): number => new Date(String(v)).getTime();
 
@@ -95,7 +104,7 @@ describe("utskick, påminnelser och Fortnox i procedur-kön (#1242)", () => {
     expect(sent).toMatchObject({ status: "sent" });
     expect(at(sent?.sentAt)).toBe(MADE_AT);
 
-    await accepted(call("invoiceDispatch.updateStatus", { dispatchId, status: "delivered" }));
+    await accepted(call("invoiceDispatch.updateStatus", { dispatchId, status: "delivered" }), adminCtx);
     const delivered = await repos.invoiceDispatches.getById(asId<"InvoiceDispatchId">(dispatchId));
     expect(delivered).toMatchObject({ status: "delivered" });
     expect(at(delivered?.deliveredAt)).toBe(MADE_AT);
@@ -129,8 +138,15 @@ describe("utskick, påminnelser och Fortnox i procedur-kön (#1242)", () => {
 
   it("markFortnoxBooked: sätter Fortnox-id en gång — en redan bokförd faktura skrivs inte över", async () => {
     const inv = await invoice("SENT");
-    await accepted(call("invoice.markFortnoxBooked", { invoiceId: inv, fortnoxId: "FX-1" }));
-    await accepted(call("invoice.markFortnoxBooked", { invoiceId: inv, fortnoxId: "FX-2" }));
+    await accepted(call("invoice.markFortnoxBooked", { invoiceId: inv, fortnoxId: "FX-1" }), adminCtx);
+    await accepted(call("invoice.markFortnoxBooked", { invoiceId: inv, fortnoxId: "FX-2" }), adminCtx);
     expect(await repos.invoices.getById(asId<"InvoiceId">(inv))).toMatchObject({ fortnoxId: "FX-1" });
+  });
+
+  it("markFortnoxBooked från en vanlig användare avvisas vid omkörningen och lämnar fakturan obokförd (#1450)", async () => {
+    const inv = await invoice("SENT");
+    const outcome = await replayer.replay(call("invoice.markFortnoxBooked", { invoiceId: inv, fortnoxId: "FX-FAKE" }), ctx);
+    expect(outcome.status).not.toBe("accepted");
+    expect((await repos.invoices.getById(asId<"InvoiceId">(inv)))?.fortnoxId ?? null).toBeNull();
   });
 });

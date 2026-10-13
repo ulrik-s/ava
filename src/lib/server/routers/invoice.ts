@@ -41,6 +41,7 @@ import type { Matter } from "@/lib/shared/schemas/matter";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/whole-kronor";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
+import { assertAdmin } from "../auth/assert-admin";
 import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
 import { logMatterNote } from "../billing/matter-note";
@@ -539,10 +540,14 @@ export const invoiceRouter = router({
    * IDEMPOTENT: skriver ALDRIG över en redan satt `fortnoxId` — det är
    * dubbelbokförings-skyddet (en omkörd peer-cykel får inte boka om). Redan
    * märkt → returnera oförändrad rad.
+   *
+   * Bara administratör (#1450): ett påhittat id stoppar annars den riktiga
+   * bokföringen, eftersom ett satt id aldrig skrivs över.
    */
   markFortnoxBooked: orgProcedure
     .input(z.object({ invoiceId: invoiceIdSchema, fortnoxId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
+      assertAdmin(ctx);
       // Migrerad till repository-sömmen (ADR 0020). Org-scope via getByIdInOrg.
       const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
