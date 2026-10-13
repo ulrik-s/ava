@@ -11,9 +11,12 @@
  *   POST /content       → dokument-bytes ur durabla cachen (ADR 0028 §3/§5)
  *   POST /config        → auto-konfigurering från web-appen (ADR 0029)
  *
- * Säkerhet: lyssnar bara på localhost; CORS-whitelist (localhost-portar
- * + *.github.io + custom via AVA_HELPER_ORIGINS); inga endpoints som
- * exekverar godtyckliga kommandon.
+ * Säkerhet: lyssnar bara på localhost. Bara godkända origins (localhost-
+ * portar, demons origin, AVA_HELPER_ORIGINS och de användaren godkänt) når
+ * en hanterare — CORS styr bara vem som får LÄSA svaret, inte vem som får
+ * skicka, så origin kontrolleras före routningen (#1448). `/ping` är öppen
+ * (upptäckt + frågan om en okänd origin), och läsningarna utan sidoeffekter
+ * får anropas utan Origin (skalets egen pollning).
  */
 
 import {
@@ -58,6 +61,9 @@ export function createHandler(deps: ServerDeps): (req: Request) => Promise<Respo
     if (req.method === "OPTIONS") {
       return withCors(new Response(null, { status: 204 }), origin, allowed);
     }
+    if (!mayRoute(new URL(req.url).pathname, origin, allowed)) {
+      return textError(403, "origin not allowed");
+    }
     const res = await route(req, deps);
     return withCors(res, origin, allowed);
   };
@@ -68,6 +74,19 @@ function corsAllowed(origin: string, deps: ServerDeps): boolean {
   const allowed = isAllowedOrigin(origin, [...(deps.extraOrigins ?? []), ...(deps.approvedOrigins?.() ?? [])]);
   if (!allowed && origin !== "") deps.onUnknownOrigin?.(origin);
   return allowed;
+}
+
+/** Läsningar utan sidoeffekter — de enda som får anropas utan Origin. */
+const LOCAL_READS: ReadonlySet<string> = new Set(["/ping", "/version", "/status"]);
+
+/**
+ * Får anropet nå sin hanterare (#1448)? En godkänd origin alltid; `/ping`
+ * alltid; utan Origin (inte en webbläsare) bara läsningarna. En okänd
+ * webbsida når alltså aldrig `/open`, `/content`, `/config` m.fl.
+ */
+export function mayRoute(pathname: string, origin: string, allowed: boolean): boolean {
+  if (allowed || pathname === "/ping") return true;
+  return origin === "" && LOCAL_READS.has(pathname);
 }
 
 /**

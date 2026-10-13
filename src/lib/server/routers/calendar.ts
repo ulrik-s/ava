@@ -21,6 +21,7 @@ import {
   userIdSchema,
   contactIdSchema,
 } from "@/lib/shared/schemas/ids";
+import { requireRefsInOrg } from "../auth/org-scope";
 import { router, protectedProcedure, TRPCError } from "../trpc";
 
 const createInput = z.object({
@@ -151,6 +152,10 @@ export const calendarRouter = router({
   create: protectedProcedure
     .input(createInput)
     .mutation(async ({ ctx, input }) => {
+      await requireRefsInOrg(
+        { repos: ctx.repos, orgId: asId<"OrganizationId">(ctx.user.organizationId) },
+        { matterId: input.matterId, userIds: [input.userId, ...(input.inviteeUserIds ?? [])] },
+      );
       // exactOptionalPropertyTypes: utelämna nycklar vars värde är undefined
       // (förr droppades de ändå av create). null behålls (nullish-fält).
       const cleanInput = Object.fromEntries(

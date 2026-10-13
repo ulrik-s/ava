@@ -245,17 +245,54 @@ export function isSafeFileName(name: string): boolean {
 }
 
 /**
- * CORS-whitelist: localhost-portar (dev/self-hosted), *.github.io
- * (GH-Pages-demon) och valfria extra origins.
+ * Filändelser som körs i stället för att öppnas när helpern startar
+ * "standardprogrammet" (`rundll32 url.dll,FileProtocolHandler`, `open`,
+ * `xdg-open`). En spärrlista, inte en tillåtelselista: dokumenten kan vara av
+ * vilken typ som helst (ljud- och videobevis, e-post, arkiv), men ett program
+ * eller skript ska aldrig startas via helpern (#1448).
+ */
+const EXECUTABLE_EXTENSIONS: ReadonlySet<string> = new Set([
+  // Windows
+  "exe", "com", "scr", "pif", "cpl", "msi", "msp", "mst", "msc", "bat", "cmd", "ps1", "psm1", "psd1",
+  "vbs", "vbe", "js", "jse", "wsf", "wsh", "wsc", "hta", "lnk", "url", "scf", "inf", "reg", "dll",
+  "jar", "appx", "appxbundle", "msix", "msixbundle", "application", "gadget", "appref-ms", "settingcontent-ms",
+  "iso", "img", "vhd", "vhdx", "xll", "library-ms", "search-ms",
+  // macOS / Linux
+  "app", "pkg", "mpkg", "command", "tool", "terminal", "workflow", "scpt", "applescript", "sh", "bash",
+  "zsh", "csh", "ksh", "run", "bin", "desktop", "appimage", "deb", "rpm", "dmg",
+]);
+
+/**
+ * Är filen ett program eller skript som skulle köras om det "öppnades" (#1448)?
+ * Windows tar bort avslutande punkter och blanksteg (`x.exe.` körs som
+ * `x.exe`), och ett kolon pekar ut en alternativ dataström — båda räknas.
+ */
+export function isExecutableFileName(name: string): boolean {
+  const trimmed = name.replace(/[.\s]+$/u, "");
+  if (trimmed.includes(":")) return true;
+  const dot = trimmed.lastIndexOf(".");
+  if (dot < 0) return false;
+  return EXECUTABLE_EXTENSIONS.has(trimmed.slice(dot + 1).toLowerCase());
+}
+
+/**
+ * GH Pages-demons origin. Bara den — inte `*.github.io`, där vem som helst
+ * kan lägga upp en sida och då nå helpern (#1448).
+ */
+export const DEMO_ORIGIN = "https://ulrik-s.github.io";
+
+/**
+ * Godkända origins: localhost-portar (dev/self-hosted), demons origin och
+ * valfria extra origins.
  *
  * `extraOrigins` matas av helpern från `AVA_HELPER_ORIGINS` (komma-
- * separerad). Ren funktion → testbar utan env.
+ * separerad) och de origins användaren godkänt. Ren funktion → testbar utan env.
  */
 export function isAllowedOrigin(origin: string, extraOrigins: readonly string[] = []): boolean {
   if (origin === "") return false;
   if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
     return true;
   }
-  if (origin.endsWith(".github.io")) return true;
+  if (origin === DEMO_ORIGIN) return true;
   return extraOrigins.some((extra) => extra.trim() !== "" && extra.trim() === origin);
 }

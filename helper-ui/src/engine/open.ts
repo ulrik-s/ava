@@ -11,7 +11,7 @@ import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-import { isSafeFileName, type HelperDocumentRef, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
+import { isExecutableFileName, isSafeFileName, type HelperDocumentRef, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import type { ContentStore } from "./content-store.ts";
 import {
   acquireLeaseViaTrpc,
@@ -85,6 +85,7 @@ async function parseOpenRequest(req: Request): Promise<HelperOpenRequest | Respo
     return textError(400, "source (document|downloadUrl) and fileName required");
   }
   if (!isSafeFileName(body.fileName)) return textError(400, "invalid fileName");
+  if (isExecutableFileName(body.fileName)) return textError(400, "file type not allowed");
   return body;
 }
 

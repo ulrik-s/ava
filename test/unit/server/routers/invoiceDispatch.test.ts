@@ -8,6 +8,11 @@ import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = { id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1") };
 
+function callerFor(ds: DemoDataStore, role: Principal["role"]) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: { ...PRINCIPAL, role } }) as any);
+}
+
 function makeCaller() {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "Byrå" }, { id: "org-2", name: "Annan" }],
@@ -22,8 +27,7 @@ function makeCaller() {
       { id: "inv-foreign", matterId: "m-2", amount: 5_000, status: "SENT", invoiceType: "STANDARD", invoiceDate: new Date(), createdAt: new Date() },
     ],
   }, async () => {});
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { ds, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any) };
+  return { ds, caller: callerFor(ds, "ADMIN") };
 }
 
 describe("invoiceDispatch.queue + list", () => {
@@ -102,6 +106,16 @@ describe("skickning flippar DRAFT → SENT (#392)", () => {
 });
 
 describe("invoiceDispatch.updateStatus", () => {
+  it("nekar en vanlig användare (#1450)", async () => {
+    const { ds, caller } = makeCaller();
+    const d = await caller.invoiceDispatch.queue({ invoiceId: "inv-1", channel: "email", recipient: "k@x.se" });
+    await expect(
+      callerFor(ds, "LAWYER").invoiceDispatch.updateStatus({ dispatchId: d.id, status: "sent" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const [row] = await caller.invoiceDispatch.list({ invoiceId: "inv-1" });
+    expect(row?.status).toBe("queued");
+  });
+
   it("queued → sent sätter sentAt + messageId (idempotent)", async () => {
     const { caller } = makeCaller();
     const d = await caller.invoiceDispatch.queue({ invoiceId: "inv-1", channel: "email", recipient: "k@x.se" });
