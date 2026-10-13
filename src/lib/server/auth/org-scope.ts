@@ -30,3 +30,20 @@ export async function requireUserInOrg(ctx: OrgScope, userId: UserId): Promise<U
   if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte." });
   return user;
 }
+
+/** Valfria referenser i ett skapa-anrop (#1452). */
+export interface OrgRefs {
+  readonly matterId?: MatterId | null | undefined;
+  readonly userIds?: readonly (UserId | null | undefined)[] | undefined;
+}
+
+/**
+ * Satta referenser måste finnas i byrån — samma regel som radkön har för
+ * `refs` (`row-push-policy.ts`), så att det direkta anropet inte är svagare.
+ */
+export async function requireRefsInOrg(ctx: OrgScope, refs: OrgRefs): Promise<void> {
+  if (refs.matterId) await requireMatterInOrg(ctx, refs.matterId);
+  for (const userId of refs.userIds ?? []) {
+    if (userId) await requireUserInOrg(ctx, userId);
+  }
+}
