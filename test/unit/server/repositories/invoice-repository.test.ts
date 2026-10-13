@@ -4,7 +4,9 @@
  * version-bump, soft-delete, listByMatter och getByIdWithLedger (relations).
  */
 
+import { sql } from "drizzle-orm";
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
+import { z } from "zod";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import {
   invoices, matters, payments, writeOffs, paymentPlans, paymentPlanReminders,
@@ -15,7 +17,7 @@ import { InMemoryInvoiceRepository } from "@/lib/server/repositories/in-memory-i
 import type { InvoiceRepository } from "@/lib/server/repositories/invoice-repository";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
-import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
+import { createPooledTestDb, createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
 const matterId = uuidv7();
 const invId = uuidv7();
@@ -25,6 +27,10 @@ const inv = (o: Record<string, unknown> = {}): any => ({
   id: invId, matterId, amount: 100_000, status: "DRAFT", invoiceType: "STANDARD",
   invoiceDate: new Date("2026-06-01T00:00:00.000Z"), ...o,
 });
+
+/** `db.execute`: postgres-js ger raderna som array, pglite som `{ rows }`. */
+const lockCountRow = z.object({ n: z.coerce.number() });
+const lockCountRows = z.union([z.array(lockCountRow), z.object({ rows: z.array(lockCountRow) })]);
 
 /** Det delade kontraktet — körs identiskt mot varje backend. */
 async function assertContract(repo: InvoiceRepository): Promise<void> {
@@ -50,6 +56,11 @@ describe("InvoiceRepository — in-memory", () => {
   it("uppfyller kontraktet", async () => {
     const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
     await assertContract(new InMemoryInvoiceRepository(store));
+  });
+
+  it("lockForBooking är en no-op (#1453)", async () => {
+    const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
+    await expect(new InMemoryInvoiceRepository(store).lockForBooking(asId<"InvoiceId">(invId))).resolves.toBeUndefined();
   });
 
   it("getByIdWithLedger hämtar betalningar + avskrivningar", async () => {
@@ -223,6 +234,21 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
   let handle: TestDbHandle;
   beforeAll(async () => { handle = await createTestDb(); });
   afterAll(async () => { await handle.close(); });
+
+  it("lockForBooking håller ett transaktionslås per faktura till commit (#1453)", async () => {
+    // Bara den egna anslutningens lås: andra testfiler kan köra mot samma databas.
+    const ownAdvisoryLocks = async (db: typeof handle.db): Promise<number> => {
+      const rows = lockCountRows.parse(await db.execute(
+        sql`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND granted AND pid = pg_backend_pid()`,
+      ));
+      return (Array.isArray(rows) ? rows : rows.rows)[0]?.n ?? 0;
+    };
+    await handle.db.transaction(async (tx) => {
+      await new DrizzleInvoiceRepository(tx).lockForBooking(asId<"InvoiceId">(uuidv7()));
+      expect(await ownAdvisoryLocks(tx)).toBe(1);
+    });
+    expect(await ownAdvisoryLocks(handle.db)).toBe(0);
+  });
 
   it("uppfyller kontraktet", async () => {
     await assertContract(new DrizzleInvoiceRepository(handle.db));
@@ -400,5 +426,37 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(accontoDeductions).values(v({ id: uuidv7(), finalInvoiceId: finalId, accontoInvoiceId: acc2 }));
     const repo = new DrizzleInvoiceRepository(handle.db);
     expect((await repo.listDeductibleAccontos(asId<"MatterId">(mId), [acc1, acc2].map((i) => asId<"InvoiceId">(i)))).map((a) => a.id)).toEqual([acc1]);
+  });
+});
+
+/** Riktiga samtidiga anslutningar (CI:s "Repository (Postgres)"-jobb); hoppas utan PG_TEST_URL. */
+const itPg = process.env.PG_TEST_URL ? it : it.skip;
+
+describe("lockForBooking — två anslutningar mot riktig Postgres (#1453)", () => {
+  let pooled: TestDbHandle | null = null;
+  beforeAll(async () => { pooled = await createPooledTestDb(2); });
+  afterAll(async () => { await pooled?.close(); });
+
+  itPg("den andra bokföringen av samma faktura väntar tills den första har committat", async () => {
+    if (!pooled) throw new Error("PG_TEST_URL saknas");
+    const db = pooled.db;
+    const id = asId<"InvoiceId">(uuidv7());
+    const order: string[] = [];
+    let firstHasLock: () => void = () => {};
+    const locked = new Promise<void>((resolve) => { firstHasLock = resolve; });
+    const first = db.transaction(async (tx) => {
+      await new DrizzleInvoiceRepository(tx).lockForBooking(id);
+      order.push("första låst");
+      firstHasLock();
+      await new Promise((r) => setTimeout(r, 200)); // "skickar till Fortnox"
+      order.push("första klar");
+    });
+    await locked;
+    const second = db.transaction(async (tx) => {
+      await new DrizzleInvoiceRepository(tx).lockForBooking(id);
+      order.push("andra låst");
+    });
+    await Promise.all([first, second]);
+    expect(order).toEqual(["första låst", "första klar", "andra låst"]);
   });
 });

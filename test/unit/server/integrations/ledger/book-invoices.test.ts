@@ -111,6 +111,26 @@ describe("bookUnbookedInvoices", () => {
     expect(marked).toEqual([]);
   });
 
+  it("pushen lyckas men write-back fallerar → felet namnger verifikatet och varnar för ombokning (#1453)", async () => {
+    const c = fakeConnector();
+    const [out] = await bookUnbookedInvoices({
+      invoices: [invoice()], connector: c, markBooked: async () => { throw new Error("db nere"); },
+    });
+    expect(c.pushed).toHaveLength(1);
+    expect(out?.externalId).toBeNull();
+    expect(out?.error).toBe(
+      "Verifikatet A/1 skapades i bokföringssystemet men kunde inte sparas i AVA (db nere). " +
+      "Bokför inte igen — en administratör kan märka posten som bokförd med A/1.",
+    );
+  });
+
+  it("write-back-fel som inte är Error blir text (#1453)", async () => {
+    const [out] = await bookUnbookedInvoices({
+      invoices: [invoice()], connector: fakeConnector(), markBooked: async () => { throw "timeout"; },
+    });
+    expect(out?.error).toContain("(timeout)");
+  });
+
   it("verifikatet bär ärendenumret (#785)", async () => {
     const c = fakeConnector();
     await bookUnbookedInvoices({
