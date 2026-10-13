@@ -92,6 +92,24 @@ function pushFnOf(connector: BookInvoicesDeps["connector"]): PushFn {
   return push.bind(connector) as PushFn;
 }
 
+/**
+ * Write-back efter en lyckad push (#1453). Misslyckas den finns verifikatet
+ * ändå i bokföringssystemet, och en omkörning skulle bokföra en gång till.
+ * Felet säger därför vilket verifikat som skapades och att det inte ska
+ * bokföras igen — en administratör kan märka posten med det id:t.
+ */
+export async function markBookedOrExplain(externalId: string, markBooked: () => Promise<unknown>): Promise<void> {
+  try {
+    await markBooked();
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Verifikatet ${externalId} skapades i bokföringssystemet men kunde inte sparas i AVA (${reason}). ` +
+      `Bokför inte igen — en administratör kan märka posten som bokförd med ${externalId}.`,
+    );
+  }
+}
+
 /** Bokför EN faktura. Utbruten så `bookUnbookedInvoices` håller komplexitet ≤ 8. */
 async function bookOne(inv: BookableInvoice, deps: BookInvoicesDeps, push: PushFn): Promise<BookingOutcome> {
   const base = { invoiceId: inv.id, invoiceNumber: inv.invoiceNumber };
@@ -111,8 +129,8 @@ async function bookOne(inv: BookableInvoice, deps: BookInvoicesDeps, push: PushF
     });
     // Write-back FÖRST efter lyckad push: kraschar vi mellan dem är fakturan
     // bokförd men omärkt → nästa körning dubbelbokför. Därför är det här den
-    // enda riskfönstret, och det loggas som fel i st.f. att sväljas.
-    await deps.markBooked(inv.id, res.externalId);
+    // enda riskfönstret, och felet säger vilket verifikat som skapades.
+    await markBookedOrExplain(res.externalId, () => deps.markBooked(inv.id, res.externalId));
     return { ...base, externalId: res.externalId, error: null };
   } catch (e) {
     return { ...base, externalId: null, error: e instanceof Error ? e.message : String(e) };

@@ -8,6 +8,7 @@
  */
 
 import { buildPaymentVoucher } from "@/lib/shared/accounting/semantic-voucher";
+import { markBookedOrExplain } from "./book-invoices";
 import type { LedgerConnector } from "./port";
 
 export interface BookablePayment {
@@ -36,7 +37,7 @@ async function bookOne<P extends BookablePayment>(p: P, deps: BookPaymentsDeps<P
     if (!deps.connector.capabilities().pushVoucher || !push) throw new Error("Ledger-connectorn saknar pushVoucher-kapabilitet.");
     const voucher = buildPaymentVoucher({ amount: p.amount, paidAt: p.paidAt, ...deps.invoice });
     const res = await push.call(deps.connector, voucher, { idempotencyKey: p.id });
-    await deps.markBooked(p, res.externalId);
+    await markBookedOrExplain(res.externalId, () => deps.markBooked(p, res.externalId));
     return { paymentId: p.id, externalId: res.externalId, error: null };
   } catch (e) {
     return { paymentId: p.id, externalId: null, error: e instanceof Error ? e.message : String(e) };

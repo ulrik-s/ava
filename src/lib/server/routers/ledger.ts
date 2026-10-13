@@ -107,13 +107,21 @@ export const ledgerRouter = router({
    */
   bookInvoice: orgProcedure
     .input(z.object({ invoiceId: invoiceIdSchema }))
-    .mutation(async ({ ctx, input }) => {
-      const inv = await ctx.repos.invoices.getByIdFull(input.invoiceId, ctx.orgId);
-      if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-      const map = await requireAccountMap(ctx);
-      const connector = connectorOrThrow(ctx, map);
-      const externalId = inv.fortnoxId ?? await bookTheInvoice(ctx, inv, connector);
-      const payments = await bookPaymentsOf(ctx, inv, map, connector);
-      return { externalId, payments };
-    }),
+    .mutation(({ ctx, input }) =>
+      // Ett lås per faktura (#1453): läsa → skicka → skriva tillbaka körs i en
+      // transaktion, och fakturan läses under låset. Ett dubbelklick eller en
+      // andra flik väntar och ser då den första bokföringens verifikat-id —
+      // ett verifikat i bokföringssystemet går inte att ta bort.
+      ctx.repos.transaction(async (tx) => {
+        const locked: Ctx = { ...ctx, repos: tx };
+        await tx.invoices.lockForBooking(input.invoiceId);
+        const inv = await tx.invoices.getByIdFull(input.invoiceId, ctx.orgId);
+        if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+        const map = await requireAccountMap(locked);
+        const connector = connectorOrThrow(locked, map);
+        const externalId = inv.fortnoxId ?? await bookTheInvoice(locked, inv, connector);
+        const payments = await bookPaymentsOf(locked, inv, map, connector);
+        return { externalId, payments };
+      }),
+    ),
 });

@@ -103,6 +103,9 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
     return rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt);
   }
 
+  /** No-op: en process och ingen bokföringsconnector i demon. */
+  async lockForBooking(_invoiceId: InvoiceId): Promise<void> {}
+
   async nextInvoiceNumber(organizationId: OrganizationId, year: number = stockholmYear(this.now())): Promise<string> {
     const prefix = invoiceNumberPrefix(year);
     const rows = (await this.store.invoices.findMany({

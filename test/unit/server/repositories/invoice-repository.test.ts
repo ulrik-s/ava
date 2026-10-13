@@ -4,7 +4,9 @@
  * version-bump, soft-delete, listByMatter och getByIdWithLedger (relations).
  */
 
+import { sql } from "drizzle-orm";
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
+import { z } from "zod";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import {
   invoices, matters, payments, writeOffs, paymentPlans, paymentPlanReminders,
@@ -50,6 +52,11 @@ describe("InvoiceRepository — in-memory", () => {
   it("uppfyller kontraktet", async () => {
     const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
     await assertContract(new InMemoryInvoiceRepository(store));
+  });
+
+  it("lockForBooking är en no-op (#1453)", async () => {
+    const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
+    await expect(new InMemoryInvoiceRepository(store).lockForBooking(asId<"InvoiceId">(invId))).resolves.toBeUndefined();
   });
 
   it("getByIdWithLedger hämtar betalningar + avskrivningar", async () => {
@@ -223,6 +230,19 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
   let handle: TestDbHandle;
   beforeAll(async () => { handle = await createTestDb(); });
   afterAll(async () => { await handle.close(); });
+
+  it("lockForBooking håller ett transaktionslås per faktura till commit (#1453)", async () => {
+    const id = uuidv7();
+    const advisoryLocks = async (db: typeof handle.db): Promise<number> => {
+      const res = await db.execute(sql`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND granted`);
+      return z.object({ rows: z.array(z.object({ n: z.coerce.number() })) }).parse(res).rows[0]?.n ?? 0;
+    };
+    await handle.db.transaction(async (tx) => {
+      await new DrizzleInvoiceRepository(tx).lockForBooking(asId<"InvoiceId">(id));
+      expect(await advisoryLocks(tx)).toBe(1);
+    });
+    expect(await advisoryLocks(handle.db)).toBe(0);
+  });
 
   it("uppfyller kontraktet", async () => {
     await assertContract(new DrizzleInvoiceRepository(handle.db));
