@@ -73,7 +73,7 @@ jobs:
       - run: bun run db:check-migrations
       - name: Upload jscpd report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: jscpd-report
           path: reports/jscpd/
@@ -92,7 +92,7 @@ jobs:
       - run: bun run test:cov
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage
           path: coverage/
@@ -287,7 +287,7 @@ jobs:
         run: bash tooling/scripts/caddy-e2e/caddy-prod-e2e.sh
       - name: Upload Playwright report (prod-klienten)
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-prod-client-report
           path: reports/playwright-prod-client/
@@ -340,7 +340,7 @@ jobs:
       - run: bun run e2e:oidc
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-oidc-report
           path: reports/playwright-oidc/
@@ -421,7 +421,7 @@ jobs:
           --config tooling/config/playwright-demo.config.ts
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-demo-report
           path: reports/playwright-demo/
@@ -449,7 +449,7 @@ jobs:
       - run: bun run e2e:conflict
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-conflict-report
           path: reports/playwright-conflict/
