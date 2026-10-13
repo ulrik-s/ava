@@ -41,7 +41,7 @@ describe("CORS", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:3000");
   });
 
-  test("tillåter github.io", async () => {
+  test("tillåter demons origin", async () => {
     const res = await corsFor("https://ulrik-s.github.io");
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://ulrik-s.github.io");
   });
@@ -167,5 +167,67 @@ describe("okänd route", () => {
   test("404", async () => {
     const res = await handler()(req("/nope"));
     expect(res.status).toBe(404);
+  });
+});
+
+describe("origin-spärr före routning (#1448)", () => {
+  /** Ett anrop helt utan Origin — inte en webbläsare (t.ex. skalets egen pollning). */
+  function bare(path: string, init: RequestInit = {}): Request {
+    return new Request(`http://127.0.0.1:48761${path}`, init);
+  }
+
+  test("okänd origin når inte /open — 403 och hanteraren körs aldrig", async () => {
+    let opened = false;
+    const h = handler({ onOpen: async () => { opened = true; return new Response("ok"); } });
+    const res = await h(req("/open", { method: "POST", headers: { Origin: "https://evil.github.io" }, body: "{}" }));
+    expect(res.status).toBe(403);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(opened).toBe(false);
+  });
+
+  test("okänd origin når inte /config, /content, /compose-mail eller /check-update", async () => {
+    let called = 0;
+    const touch = async (): Promise<Response> => { called++; return new Response("ok"); };
+    const h = handler({ onConfig: touch, onContent: touch, onComposeMail: touch, onCheckUpdate: () => { called++; } });
+    for (const path of ["/config", "/content", "/compose-mail", "/check-update"]) {
+      const res = await h(req(path, { method: "POST", headers: { Origin: "https://evil.example" }, body: "{}" }));
+      expect(res.status).toBe(403);
+    }
+    expect(called).toBe(0);
+  });
+
+  test("okänd origin får /ping (upptäckt) och rapporteras så skalet kan fråga", async () => {
+    const unknown: string[] = [];
+    const res = await handler({ onUnknownOrigin: (o) => unknown.push(o) })(req("/ping", { headers: { Origin: "https://ava-crm.io" } }));
+    expect(res.status).toBe(200);
+    expect(unknown).toEqual(["https://ava-crm.io"]);
+  });
+
+  test("okänd origin får inte läsa /status eller /version", async () => {
+    const h = handler();
+    expect((await h(req("/status", { headers: { Origin: "https://evil.example" } }))).status).toBe(403);
+    expect((await h(req("/version", { headers: { Origin: "https://evil.example" } }))).status).toBe(403);
+  });
+
+  test("utan Origin: läsningarna går, sidoeffekterna nekas", async () => {
+    let opened = false;
+    const h = handler({ onOpen: async () => { opened = true; return new Response("ok"); } });
+    expect((await h(bare("/ping"))).status).toBe(200);
+    expect((await h(bare("/version"))).status).toBe(200);
+    expect((await h(bare("/status"))).status).toBe(200);
+    expect((await h(bare("/open", { method: "POST", body: "{}" }))).status).toBe(403);
+    expect(opened).toBe(false);
+  });
+
+  test("godkänd origin (trust-on-first-use) når /open", async () => {
+    let opened = false;
+    const h = handler({
+      approvedOrigins: () => ["https://ava-crm.io"],
+      onOpen: async () => { opened = true; return new Response("ok"); },
+    });
+    const res = await h(req("/open", { method: "POST", headers: { Origin: "https://ava-crm.io" }, body: "{}" }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://ava-crm.io");
+    expect(opened).toBe(true);
   });
 });

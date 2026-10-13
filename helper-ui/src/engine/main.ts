@@ -271,7 +271,7 @@ function startStores(dir: string | null, signal: AbortSignal, authHeader?: AuthH
 
 export interface EngineOpts {
   /** Fråga användaren om en okänd webbplats får använda helpern (skalets dialog, #1149).
-   *  Utelämnad (headless) → ingen fråga; bara localhost/github.io/AVA_HELPER_ORIGINS. */
+   *  Utelämnad (headless) → ingen fråga; bara localhost/demon/AVA_HELPER_ORIGINS. */
   confirmOrigin?: ConfirmOrigin;
   /** Lyssningsport (default `AVA_HELPER_PORT`/48761). */
   port?: number;
