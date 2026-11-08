@@ -101,7 +101,7 @@
   "dependencies": {
     "@azure/msal-browser": "^5.21.0",
     "@js-temporal/polyfill": "^0.5.1",
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/server": "2.4.0",
     "@tanstack/react-query": "^5.101.0",
     "@testing-library/dom": "^10.4.1",
     "@trpc/client": "^11.17.0",
@@ -115,8 +115,8 @@
     "json-logic-js": "^2.0.5",
     "lucide-react": "^1.17.0",
     "mammoth": "^1.12.0",
-    "next": "16.3.8",
-    "nodemailer": "^10.0.12",
+    "next": "16.4.5",
+    "nodemailer": "^10.4.0",
     "pdfjs-dist": "6.2.108",
     "pg-boss": "^12.19.1",
     "postgres": "^3.4.9",
@@ -124,15 +124,15 @@
     "react-dom": "19.3.0",
     "superjson": "^2.2.6",
     "tailwind-merge": "^3.6.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.0.2",
     "@commitlint/config-conventional": "^21.0.2",
     "@electric-sql/pglite": "^0.5.2",
-    "@happy-dom/global-registrator": "^20.10.2",
+    "@happy-dom/global-registrator": "^21.0.4",
     "@isomorphic-git/cors-proxy": "^3.0.1",
-    "@modelcontextprotocol/client": "2.2.0",
+    "@modelcontextprotocol/client": "2.4.0",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^7.0.1",
@@ -149,10 +149,10 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "eslint": "^10",
-    "eslint-config-next": "16.3.8",
-    "eslint-plugin-import-x": "^4.16.2",
+    "eslint-config-next": "16.4.5",
+    "eslint-plugin-import-x": "^4.18.0",
     "fake-indexeddb": "^6.2.5",
-    "happy-dom": "^20.10.2",
+    "happy-dom": "^21.0.4",
     "husky": "^9.1.7",
     "jscpd": "^5.0.4",
     "knip": "^6.16.1",
@@ -165,12 +165,12 @@
   "trustedDependencies": [
     "unrs-resolver"
   ],
-  "//overrides": "CVE-tvingade versioner på TRANSITIVA beroenden (#966). Varje rad har en advisory bakom sig och det direkta beroendet kan inte bumpas dit själv. Ta bort en rad så fort uppströms hunnit ikapp — bun audit i Security-workflowen visar om den fortfarande behövs.",
+  "//overrides": "CVE-tvingade versioner på TRANSITIVA beroenden (#966). Varje rad har en advisory bakom sig och det direkta beroendet kan inte bumpas dit själv. Ta bort en rad så fort uppströms hunnit ikapp — bun audit i Security-workflowen visar om den fortfarande behövs. zod (#1473): det direkta beroendet är bumpat, men knip och eslint-plugin-react-hooks behöll en egen 4.4.3-kopia i lockfilen; overriden ger EN zod-instans i trädet.",
   "overrides": {
     "@xmldom/xmldom": "^0.8.15",
     "brace-expansion": "^5.0.11",
     "browserslist": "^4.28.9",
-    "fast-uri": "^3.1.8",
+    "fast-uri": "^3.1.9",
     "hono": "^4.13.1",
     "js-yaml": "^4.3.2",
     "nanoid": "^3.3.18",
@@ -178,7 +178,8 @@
     "sharp": "^0.35.5",
     "shell-quote": "^1.11.0",
     "smol-toml": "^1.9.0",
-    "source-map-js": "^1.2.2"
+    "source-map-js": "^1.2.2",
+    "zod": "^4.6.7"
   },
   "patchedDependencies": {
     "lint-staged@17.0.7": "patches/lint-staged@17.0.7.patch"
