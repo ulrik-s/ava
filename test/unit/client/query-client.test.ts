@@ -24,7 +24,7 @@ describe("makeAppQueryClient", () => {
   it("en fråga körs även offline (läser den lokala storen)", async () => {
     onlineManager.setOnline(false);
     const client = makeAppQueryClient();
-    await expect(client.fetchQuery({ queryKey: ["x"], queryFn: async () => 42 })).resolves.toBe(42);
+    await expect(client.query({ queryKey: ["x"], queryFn: async () => 42 })).resolves.toBe(42);
   });
 
   it("kontroll: med TanStacks standardläge pausas mutationen offline", async () => {
