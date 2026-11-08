@@ -147,7 +147,7 @@ mottagaren sväljs — det loggas inte, eftersom det skulle kunna loopa.
 | `AVA_POSTHOG_KEY` | tomt = **av** | projektets token (`phc_…`), skapas på eu.posthog.com |
 | `AVA_POSTHOG_HOST` | `https://eu.i.posthog.com` | bara för själv-hostad PostHog; amerikansk värd vägras |
 | `AVA_ERROR_ENVIRONMENT` | `production` | t.ex. `staging` (bara `A–Z a–z 0–9 . _ + -`) |
-| `AVA_RELEASE` | — | server-versionen, t.ex. commit-sha |
+| `AVA_RELEASE` | taggen/sha från `deploy-prod.sh` | server-versionen; visas också i `/readyz` |
 
 En felaktig nyckel eller värd gör inte servern otillgänglig, men den syns i
 startloggen: `felrapportering: AV — …`. En fungerande ger

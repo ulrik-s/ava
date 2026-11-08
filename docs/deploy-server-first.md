@@ -186,7 +186,7 @@ Kontrollera status:
 
 ```bash
 docker compose -f tooling/docker/docker-compose.production.yml ps
-curl -s https://ava.byra.se/readyz     # {"status":"ok","checks":{"database":{"ok":true}}}
+curl -s https://ava.byra.se/readyz     # {"status":"ok","checks":{"database":{"ok":true}},"release":"v0.2.0"}
 ```
 
 ### Vad som INTE finns
@@ -666,7 +666,7 @@ PostHogs biträdesavtal (DPA) innan nyckeln sätts. Vad som skickas: se
 AVA_POSTHOG_KEY=phc_<byråns-projekt-token>   # skapas på eu.posthog.com
 # AVA_POSTHOG_HOST=https://posthog.byran.se   # bara vid själv-hostad PostHog
 # AVA_ERROR_ENVIRONMENT=staging               # default production
-# AVA_RELEASE=<commit-sha>                    # server-versionen
+# AVA_RELEASE=<etikett>   # sätts annars av deploy-prod.sh (taggen); syns i /readyz
 ```
 
 ```bash
