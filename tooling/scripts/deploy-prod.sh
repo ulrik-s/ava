@@ -6,15 +6,21 @@
 #   cd /srv/ava && bash tooling/scripts/deploy-prod.sh             # deploy
 #   cd /srv/ava && bash tooling/scripts/deploy-prod.sh --dry-run   # visa stegen, ändra inget
 #   cd /srv/ava && bash tooling/scripts/deploy-prod.sh --rollback  # förra klienten tillbaka
+#   cd /srv/ava && bash tooling/scripts/deploy-prod.sh --tag v1.2.0  # en tagg i stället för main
+#
+# Utan hand: ava-deploy.timer kör deploy-latest-tag.sh var femte minut, som
+# kör det här med --tag när en ny v*-tagg finns i origin (Deploy via tagg i
+# docs/deploy-server-first.md).
 #
 # Steg:
 #   1. vägra om ett annat bygge redan kör
-#   2. uppdatera till origin/main (bara fast-forward); har deploy-skriptet
-#      ändrats startas det om i den nya versionen
+#   2. uppdatera till origin/main (bara fast-forward) eller till taggen
+#      (--tag); har deploy-skriptet ändrats startas det om i den nya versionen
 #   3. läs ava-server.env
 #   4. backup (systemd-tjänsten ava-backup, annars backup-db.sh)
 #   4b. backup på begäran (#1431): installera/uppdatera hostens
 #      ava-backup-request.path/.service (bara om ava-backup.service finns)
+#   4c. deploy via tagg: installera/uppdatera ava-deploy.timer/.service
 #   5. (en gång) flytta Caddy från out/ till releases/current
 #   6. TÖM .next/cache — en gammal byggcache gav en gång gammal CSS i prod
 #   7. bygg server + klient i oven/bun (hosten har bara docker + git) till
@@ -41,20 +47,26 @@ cd "$(dirname "$0")/../.."
 COMPOSE="tooling/docker/docker-compose.production.yml"
 SYSTEMD_DIR="${AVA_SYSTEMD_DIR:-/etc/systemd/system}"
 BACKUP_UNITS="ava-backup-request.path ava-backup-request.service"
+DEPLOY_UNITS="ava-deploy.timer ava-deploy.service"
 CADDYFILE="tooling/docker/caddy/Caddyfile"
 READY_TRIES="${AVA_DEPLOY_READY_TRIES:-30}"
 READY_PAUSE="${AVA_DEPLOY_READY_PAUSE:-2}"
 DRY_RUN=0
 MODE=deploy
+TAG=""
 
 usage() {
-  echo "användning: bash tooling/scripts/deploy-prod.sh [--dry-run] [--rollback]"
+  echo "användning: bash tooling/scripts/deploy-prod.sh [--dry-run] [--rollback] [--tag <v…>]"
 }
 
-for arg in "$@"; do
+# Originalargumenten: skriptet startar om sig självt med dem om det ändrats.
+ARGS=("$@")
+while [ $# -gt 0 ]; do
+  arg="$1"; shift
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --rollback) MODE=rollback ;;
+    --tag) TAG="${1:-}"; [ -n "$TAG" ] || { usage >&2; exit 2; }; shift ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -117,18 +129,18 @@ caddyfile_stale() {
   ! dc exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null | cmp -s - "$CADDYFILE"
 }
 
-# Backup på begäran (#1431): enhetsfilerna ur repot till systemd — bara de som
-# ändrats, och daemon-reload bara då. `enable --now` är idempotent.
-install_backup_units() {
+# Enhetsfiler ur repot till systemd — bara de som ändrats, och daemon-reload
+# bara då. `enable --now` är idempotent. install_units "<enheter>" <enable>
+install_units() {
   local unit changed=0
-  for unit in $BACKUP_UNITS; do
+  for unit in $1; do
     if ! cmp -s "tooling/systemd/$unit" "$SYSTEMD_DIR/$unit"; then
       run install -m 644 "tooling/systemd/$unit" "$SYSTEMD_DIR/$unit"
       changed=1
     fi
   done
   [ "$changed" = 0 ] || run systemctl daemon-reload
-  run systemctl enable --now ava-backup-request.path
+  run systemctl enable --now "$2"
 }
 
 step "kontrollerar att inget annat bygge kör"
@@ -137,15 +149,21 @@ if [ -n "$(docker ps -q --filter ancestor=oven/bun:1)" ]; then
   exit 1
 fi
 
-step "uppdaterar till origin/main (bara fast-forward)"
+target="${TAG:-origin/main}"
+step "uppdaterar till $target${TAG:+ (taggen)}${TAG:- (bara fast-forward)}"
 before="${AVA_DEPLOY_BEFORE:-$(git rev-parse --short HEAD)}"
-# fetch ändrar bara origin/*, inget som körs — görs även vid --dry-run.
-git fetch -q origin
-run git merge --ff-only -q origin/main
+# fetch ändrar bara origin/* och taggarna, inget som körs — görs även vid --dry-run.
+git fetch -q origin --tags
+if [ -n "$TAG" ]; then
+  git rev-parse --verify --quiet "$TAG^{commit}" >/dev/null || { echo "taggen $TAG finns inte i origin" >&2; exit 1; }
+  run git checkout -q --detach "$TAG"
+else
+  run git merge --ff-only -q origin/main
+fi
 if [ "$DRY_RUN" = 1 ]; then
-  sha="$(git rev-parse --short origin/main)"
-  git log --oneline "HEAD..origin/main"
-  echo "(--dry-run visar DET HÄR skriptets steg; en ny version i origin/main kan ha andra)"
+  sha="$(git rev-parse --short "$target")"
+  git log --oneline "HEAD..$target"
+  echo "(--dry-run visar DET HÄR skriptets steg; en ny version i $target kan ha andra)"
 else
   sha="$(git rev-parse --short HEAD)"
   STATE_CODE="uppdaterad $before → $sha (påverkar inget som körs förrän servern startas om)"
@@ -156,7 +174,7 @@ else
     ! git diff --quiet "$before" HEAD -- tooling/scripts/deploy-prod.sh tooling/scripts/lib/release.sh; then
     echo "deploy-skriptet har ändrats — startar om med den nya versionen"
     trap - EXIT
-    AVA_DEPLOY_BEFORE="$before" exec bash tooling/scripts/deploy-prod.sh "$@"
+    AVA_DEPLOY_BEFORE="$before" exec bash tooling/scripts/deploy-prod.sh "${ARGS[@]}"
   fi
 fi
 git log --oneline -1 "$sha"
@@ -176,10 +194,13 @@ fi
 
 step "backup på begäran: hostens .path-enhet (#1431)"
 if systemctl cat ava-backup.service >/dev/null 2>&1; then
-  install_backup_units
+  install_units "$BACKUP_UNITS" ava-backup-request.path
 else
   echo "ingen ava-backup.service — \"Ta backup nu\" fungerar först när nattjobbet finns (docs/deploy-server-first.md, Backup)"
 fi
+
+step "deploy via tagg: hostens timer (ava-deploy.timer)"
+install_units "$DEPLOY_UNITS" ava-deploy.timer
 
 if [ -z "$(release_current)" ] && [ -d out ]; then
   step "första deployen med releases/: nuvarande out/ blir en release och Caddy flyttas dit"
