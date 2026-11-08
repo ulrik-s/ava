@@ -83,6 +83,7 @@ case "$1" in
     esac ;;
   compose)
     case "$*" in
+      *"up -d --build"*) echo "release \${AVA_RELEASE:-saknas}" >> "$FAKE_LOG" ;;
       *"exec -T caddy wget"*) [ -n "\${FAKE_READY_FAIL:-}" ] || echo '{"status":"ok"}' ;;
       *"exec -T caddy cat"*) if [ -n "\${FAKE_CADDYFILE_STALE:-}" ]; then echo gammal; else cat tooling/docker/caddy/Caddyfile; fi ;;
     esac ;;
@@ -172,6 +173,8 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     expect(up).toBeLessThan(at(calls, "exec -T caddy wget"));
     expect(at(calls, "restart caddy")).toBe(-1);
     expect(out).toContain("deploy klar");
+    // Versionsstämpeln till servern (/readyz): otaggad HEAD → sha.
+    expect(calls).toContain(`release ${sha}`);
   });
 
   it("första deployen med releases/: nuvarande out/ blir en release och Caddy flyttas dit FÖRE bygget", () => {
@@ -285,9 +288,10 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     const src = readFileSync(join(dev, "tooling/scripts/deploy-prod.sh"), "utf8");
     const newer = pushCommit("tooling/scripts/deploy-prod.sh", src.replace("set -euo pipefail\n", "set -euo pipefail\necho NY-VERSION-KÖR\n"));
     expect(newer).not.toBe(tagged);
-    const { status, out } = deploy(["--tag", "v1.2.0"]);
+    const { status, out, calls } = deploy(["--tag", "v1.2.0"]);
     expect(status, out).toBe(0);
     expect(out).toContain("uppdaterar till v1.2.0 (taggen)");
+    expect(calls).toContain("release v1.2.0");
     expect(head()).toBe(tagged);
     expect(served()).toBe(`klient ${tagged}`);
     expect(out).not.toContain("NY-VERSION-KÖR");

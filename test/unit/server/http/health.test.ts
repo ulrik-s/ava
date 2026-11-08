@@ -77,3 +77,27 @@ describe("handleHealthRoute", () => {
     expect(res?.headers.get("cache-control")).toBe("no-store");
   });
 });
+
+describe("versionsstämpeln (AVA_RELEASE)", () => {
+  it("/readyz bär releasen när den är satt — så ett deploy går att verifiera utifrån", async () => {
+    const r = await checkReadiness(ok, HEALTH_TIMEOUT_MS, "v0.2.0");
+    expect(r).toMatchObject({ status: "ok", release: "v0.2.0" });
+  });
+
+  it("följer med även på degraded — man vill veta VILKEN version som är sjuk", async () => {
+    expect((await checkReadiness(broken, HEALTH_TIMEOUT_MS, "v0.2.0")).release).toBe("v0.2.0");
+  });
+
+  it("utelämnas när den saknas, och när miljövariabeln ser konstig ut", async () => {
+    expect((await checkReadiness(ok, HEALTH_TIMEOUT_MS, undefined)).release).toBeUndefined();
+    const prev = process.env.AVA_RELEASE;
+    try {
+      process.env.AVA_RELEASE = "v0.2.0 <script>";
+      expect((await checkReadiness(ok)).release).toBeUndefined();
+      process.env.AVA_RELEASE = "v0.2.0-3-g800e9c39";
+      expect((await checkReadiness(ok)).release).toBe("v0.2.0-3-g800e9c39");
+    } finally {
+      if (prev === undefined) delete process.env.AVA_RELEASE; else process.env.AVA_RELEASE = prev;
+    }
+  });
+});

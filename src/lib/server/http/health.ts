@@ -34,6 +34,17 @@
 export interface HealthResult {
   status: "ok" | "degraded";
   checks: Record<string, { ok: boolean; detail?: string }>;
+  /** Versionen som kör (AVA_RELEASE, t.ex. `v0.2.0`) — så det syns utifrån vad som är deployat. */
+  release?: string;
+}
+
+/** Samma etikettregel som PostHog-sinken: en miljövariabel ska inte kunna skriva vad som helst i svaret. */
+const SAFE_LABEL = /^[\w.+-]{1,64}$/;
+
+/** Versionsstämpeln ur miljön, eller undefined när den saknas eller ser konstig ut. */
+function releaseLabel(raw: string | undefined): string | undefined {
+  const v = raw?.trim();
+  return v && SAFE_LABEL.test(v) ? v : undefined;
 }
 
 /** Db-ping: minsta möjliga fråga som bevisar att anslutningen lever. */
@@ -61,13 +72,16 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  * Readiness: kan tjänsten göra sitt jobb? Kastar aldrig — ett fel ÄR svaret,
  * och en hälsokontroll som kastar ger 500 utan att säga varför.
  */
-export async function checkReadiness(ping: DbPing, timeoutMs = HEALTH_TIMEOUT_MS): Promise<HealthResult> {
+export async function checkReadiness(
+  ping: DbPing, timeoutMs = HEALTH_TIMEOUT_MS, release = releaseLabel(process.env.AVA_RELEASE),
+): Promise<HealthResult> {
+  const stamp = release ? { release } : {};
   try {
     await withTimeout(Promise.resolve(ping()), timeoutMs);
-    return { status: "ok", checks: { database: { ok: true } } };
+    return { status: "ok", checks: { database: { ok: true } }, ...stamp };
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
-    return { status: "degraded", checks: { database: { ok: false, detail } } };
+    return { status: "degraded", checks: { database: { ok: false, detail } }, ...stamp };
   }
 }
 
@@ -84,8 +98,9 @@ function json(body: HealthResult): Response {
  * inte är en hälso-rutt, så anroparen kan gå vidare till tRPC.
  *
  * Båda är ÖPPNA (ingen auth). En hälsokontroll bakom inloggning kan inte
- * användas av det som ska övervaka den, och svaret läcker inget: den säger
- * bara om databasen svarar.
+ * användas av det som ska övervaka den, och svaret läcker nästan inget: om
+ * databasen svarar, och vilken release som kör (deploy-prod.sh sätter
+ * AVA_RELEASE till taggen) — så ett deploy går att verifiera utifrån.
  */
 export async function handleHealthRoute(
   pathname: string, ping: DbPing, timeoutMs = HEALTH_TIMEOUT_MS,
