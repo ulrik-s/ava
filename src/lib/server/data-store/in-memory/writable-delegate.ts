@@ -59,7 +59,7 @@ function genId(): string {
 
 export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnlyDelegate<T> {
   constructor(private wopts: WritableDelegateOpts<T>) {
-    super(() => wopts.collection() as readonly T[], wopts.relations !== undefined ? { relations: wopts.relations } : {});
+    super(() => wopts.collection(), wopts.relations !== undefined ? { relations: wopts.relations } : {});
   }
 
   /** Aktuell array — hämtas på begäran så DataStore kan byta ut den. */

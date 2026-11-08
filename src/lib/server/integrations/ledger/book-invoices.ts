@@ -89,7 +89,7 @@ function pushFnOf(connector: BookInvoicesDeps["connector"]): PushFn {
   if (!connector.capabilities().pushVoucher || !push) {
     throw new Error("Ledger-connectorn saknar pushVoucher-kapabilitet.");
   }
-  return push.bind(connector) as PushFn;
+  return push.bind(connector);
 }
 
 /**

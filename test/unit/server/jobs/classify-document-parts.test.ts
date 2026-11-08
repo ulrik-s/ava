@@ -42,7 +42,7 @@ function setup(doc: Record<string, unknown> = {}, pages: string[] = COMPOSITE, s
 }
 
 function run(s: ReturnType<typeof setup>, extra: Record<string, unknown> = {}) {
-  return createClassifyDocumentHandler({ documents: s.documents as never, parts: s.parts, readPages: s.readPages, ...extra })(jobFor(DOC));
+  return createClassifyDocumentHandler({ documents: s.documents, parts: s.parts, readPages: s.readPages, ...extra })(jobFor(DOC));
 }
 
 const simple = (ps: DocumentPart[]) => ps.map((p) => ({ kind: p.kind, fromPage: p.fromPage, toPage: p.toPage, source: p.source, ordinal: p.ordinal }));
@@ -151,7 +151,7 @@ describe("classify-document — dokumentdelar", () => {
 
   it("utan parts-repo: segmenteringen ger ändå kategorin (inga delar skrivs)", async () => {
     const s = setup();
-    await createClassifyDocumentHandler({ documents: s.documents as never, readPages: s.readPages })(jobFor(DOC));
+    await createClassifyDocumentHandler({ documents: s.documents, readPages: s.readPages })(jobFor(DOC));
     expect(s.documents.updateMetadata.mock.calls[0]![1]).toMatchObject({ documentType: "KALLELSE" });
   });
 

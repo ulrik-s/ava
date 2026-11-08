@@ -19,7 +19,7 @@ function makeStore(): { source: DemoSource; lease: InMemoryLeaseStore } {
   const source = prebakeJoins({
     matters: [{ id: "m1", organizationId: ORG, matterNumber: "2026-1", title: "T" }],
     documents: [{ id: "d1", matterId: "m1", fileName: "avtal.docx" }],
-  } as DemoSource);
+  });
   return { source, lease: new InMemoryLeaseStore() };
 }
 

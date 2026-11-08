@@ -103,7 +103,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
   async update(id: Row["id"], patch: Partial<Row>): Promise<Row> {
     const current = await this.getByIdOrThrow(id);
     const [row] = await this.db.update(this.table)
-      .set({ ...patch, version: nextVersion(current), updatedAt: this.now() } as never)
+      .set({ ...patch, version: nextVersion(current), updatedAt: this.now() })
       .where(eq(this.table.id, id)).returning();
     await this.logChange(row, "update");
     return this.asRow(row) as Row;
@@ -113,7 +113,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
   async updateMetadata(id: Row["id"], patch: Partial<Row>): Promise<Row> {
     await this.getByIdOrThrow(id);
     const [row] = await this.db.update(this.table)
-      .set({ ...patch, updatedAt: this.now() } as never)
+      .set({ ...patch, updatedAt: this.now() })
       .where(eq(this.table.id, id)).returning();
     await this.logChange(row, "update");
     return this.asRow(row) as Row;
@@ -122,7 +122,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
   async softDelete(id: Row["id"]): Promise<Row> {
     const current = await this.getByIdOrThrow(id);
     const [row] = await this.db.update(this.table)
-      .set({ deletedAt: this.now(), version: nextVersion(current) } as never)
+      .set({ deletedAt: this.now(), version: nextVersion(current) })
       .where(eq(this.table.id, id)).returning();
     await this.logChange(row, "delete");
     return this.asRow(row) as Row;
@@ -147,7 +147,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
    */
   protected async updateWhere(where: SQL | undefined, patch: Record<string, unknown>): Promise<void> {
     const rows: unknown[] = await this.db.update(this.table)
-      .set({ ...patch, version: sql`${this.table.version} + 1`, updatedAt: this.now() } as never)
+      .set({ ...patch, version: sql`${this.table.version} + 1`, updatedAt: this.now() })
       .where(where).returning();
     for (const row of rows) await this.logChange(row, "update");
   }

@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import type { Delegate } from "@/lib/server/data-store/IDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { InMemoryRepository } from "@/lib/server/repositories/in-memory-repository";
 import type { RowBase } from "@/lib/server/repositories/types";
@@ -16,7 +15,7 @@ interface UserRow extends RowBase { name: string }
 
 function makeRepo(seed: UserRow[] = []) {
   const store = new LocalStore({ users: seed as unknown as Record<string, unknown>[] }, async () => {});
-  return new InMemoryRepository<UserRow>(store.users as unknown as Delegate, () => NOW);
+  return new InMemoryRepository<UserRow>(store.users, () => NOW);
 }
 
 describe("InMemoryRepository", () => {

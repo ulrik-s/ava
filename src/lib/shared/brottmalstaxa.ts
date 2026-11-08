@@ -454,7 +454,7 @@ function validateTaxaInput(huf: number, level: number): TaxaResult | null {
   }
   if (huf > TAXA_MAX_MINUTES) {
     return {
-      kind: "exceeds-max", intervalLabel: "", level: level as TaxaLevel,
+      kind: "exceeds-max", intervalLabel: "", level: level,
       ersattningExclVat: 0, gransvardeExclVat: 0,
       notes: [
         `Förhandlingstiden överstiger taxans maxgräns (${TAXA_MAX_MINUTES} min = 3 tim 45 min).`,

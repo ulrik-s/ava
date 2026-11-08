@@ -32,8 +32,7 @@ function world(invoice: Record<string, unknown>, matter: Record<string, unknown>
     timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-08-01"), description: "Brev", billable: true, invoiceId: "inv-1", ...ENTRY }],
     expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-08-02"), amount: 4_999, description: "Porto", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE", invoiceId: "inv-1" }],
   }, async () => {});
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
 }
 
 describe("invoiceSpecification följer fakturans EGET avrundningssätt (#1438)", () => {

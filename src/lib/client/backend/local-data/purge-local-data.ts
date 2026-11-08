@@ -20,6 +20,7 @@
 import { z } from "zod";
 import { IdbEntryStore } from "@/lib/server/data-store/in-memory/idb-entry-store";
 import { deleteDatabase, openExistingDatabase } from "@/lib/server/data-store/in-memory/idb-open";
+import { parseJsonWith } from "@/lib/shared/parse-json";
 import { DocumentContentCache } from "../content-cache";
 import { IndexedDbListStore } from "../idb-list-store";
 import { queueLocation, rejectedLocation, type LocalDataPlace } from "./local-data-locations";
@@ -41,7 +42,7 @@ const pendingSchema = z.array(z.string()).catch([]);
 
 function pendingPurges(env: PurgeEnv): string[] {
   try {
-    return pendingSchema.parse(JSON.parse(env.storage.getItem(PENDING_PURGE_KEY) ?? "[]"));
+    return parseJsonWith(pendingSchema, env.storage.getItem(PENDING_PURGE_KEY) ?? "[]");
   } catch {
     return [];
   }

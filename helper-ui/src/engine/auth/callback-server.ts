@@ -61,7 +61,7 @@ export function waitForCallback(port: number, expectedState: string, deps: WaitF
         queueMicrotask(() => {
           handle.stop();
           if (ok) resolve(result.code);
-          else reject(new Error(`callback: ${(result as { error: string }).error}`));
+          else reject(new Error(`callback: ${result.error}`));
         });
       }
       return new Response(ok ? SUCCESS_HTML : ERROR_HTML, { status: ok ? 200 : 400, headers: { "Content-Type": "text/html; charset=utf-8" } });

@@ -16,6 +16,7 @@
  * [ADR 0007]: ../../../docs/adr/0007-kundfordringar-konstaterad-kundforlust.md
  */
 
+import { primitiveText } from "./primitive-text";
 import { computeInvoiceLedger } from "./write-off-calc";
 
 type Row = Record<string, unknown>;
@@ -28,7 +29,7 @@ export function creditedInvoiceIds(invoices: readonly Row[]): Set<string> {
   const ids = new Set<string>();
   for (const i of invoices) {
     if (i.invoiceType !== "CREDIT") continue;
-    const target = String(i.creditedInvoiceId ?? "");
+    const target = primitiveText(i.creditedInvoiceId);
     if (target) ids.add(target);
   }
   return ids;
@@ -37,7 +38,7 @@ export function creditedInvoiceIds(invoices: readonly Row[]): Set<string> {
 /** Var fakturan utställd? Utställd status, eller annullerad AV en kreditering. */
 function wasIssued(inv: Row, creditedIds: ReadonlySet<string>): boolean {
   if (ISSUED_STATUSES.has(String(inv.status))) return true;
-  return String(inv.status) === "CANCELLED" && creditedIds.has(String(inv.id ?? ""));
+  return String(inv.status) === "CANCELLED" && creditedIds.has(primitiveText(inv.id));
 }
 
 function num(v: unknown): number {
@@ -57,7 +58,7 @@ function coerceDateOrNull(v: unknown): Date | null {
 function sumAmountByKey(rows: readonly Row[], key: string): Map<string, number> {
   const m = new Map<string, number>();
   for (const r of rows) {
-    const k = String(r[key] ?? "");
+    const k = primitiveText(r[key]);
     if (k) m.set(k, (m.get(k) ?? 0) + num(r.amount));
   }
   return m;
@@ -68,7 +69,7 @@ function creditedByInvoice(invoices: readonly Row[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const inv of invoices) {
     if (inv.invoiceType !== "CREDIT") continue;
-    const target = String(inv.creditedInvoiceId ?? "");
+    const target = primitiveText(inv.creditedInvoiceId);
     if (target) m.set(target, (m.get(target) ?? 0) + Math.abs(num(inv.amount)));
   }
   return m;
@@ -93,7 +94,7 @@ function invoiceLedgerRow(
   written: Map<string, number>,
 ): ArInvoiceLedgerRow | null {
   if (!ISSUED_STATUSES.has(String(inv.status)) || inv.invoiceType === "CREDIT") return null;
-  const id = String(inv.id ?? "");
+  const id = primitiveText(inv.id);
   const p = paid.get(id) ?? 0;
   const c = credited.get(id) ?? 0;
   const w = written.get(id) ?? 0;
@@ -143,16 +144,16 @@ export function scopeArToPeriod(
   for (const inv of invoices) {
     if (inv.invoiceType === "CREDIT") continue;
     const d = issueDateOf(inv);
-    if (d && d.getTime() >= fromMs && d.getTime() <= toMs) periodIds.add(String(inv.id ?? ""));
+    if (d && d.getTime() >= fromMs && d.getTime() <= toMs) periodIds.add(primitiveText(inv.id));
   }
   const belongs = (inv: Row): boolean =>
     inv.invoiceType === "CREDIT"
-      ? periodIds.has(String(inv.creditedInvoiceId ?? ""))
-      : periodIds.has(String(inv.id ?? ""));
+      ? periodIds.has(primitiveText(inv.creditedInvoiceId))
+      : periodIds.has(primitiveText(inv.id));
   return {
     invoices: invoices.filter(belongs),
-    payments: payments.filter((p) => periodIds.has(String(p.invoiceId ?? ""))),
-    writeOffs: writeOffs.filter((w) => periodIds.has(String(w.invoiceId ?? ""))),
+    payments: payments.filter((p) => periodIds.has(primitiveText(p.invoiceId))),
+    writeOffs: writeOffs.filter((w) => periodIds.has(primitiveText(w.invoiceId))),
   };
 }
 
@@ -173,9 +174,9 @@ export function attributeArToLawyer(
 ): { invoices: Row[]; payments: Row[]; writeOffs: Row[] } {
   const ratioForInvoice = (inv: Row): number =>
     inv.invoiceType === "CREDIT"
-      ? ratioByInvoice.get(String(inv.creditedInvoiceId ?? "")) ?? 0
-      : ratioByInvoice.get(String(inv.id ?? "")) ?? 0;
-  const ratioByRow = (row: Row): number => ratioByInvoice.get(String(row.invoiceId ?? "")) ?? 0;
+      ? ratioByInvoice.get(primitiveText(inv.creditedInvoiceId)) ?? 0
+      : ratioByInvoice.get(primitiveText(inv.id)) ?? 0;
+  const ratioByRow = (row: Row): number => ratioByInvoice.get(primitiveText(row.invoiceId)) ?? 0;
   const scaled = (row: Row, ratio: number): Row => ({ ...row, amount: Math.round(num(row.amount) * ratio) });
 
   return {

@@ -31,7 +31,7 @@ describe("LedgerAccountsSection", () => {
     mutate.mockClear();
     render(<LedgerAccountsSection />);
 
-    const kundNr = screen.getByLabelText(/Kundfordran.*kontonummer/) as HTMLInputElement;
+    const kundNr = screen.getByLabelText<HTMLInputElement>(/Kundfordran.*kontonummer/);
     expect(kundNr.value).toBe("1510"); // BAS-default förifyllt
 
     fireEvent.change(kundNr, { target: { value: "1511" } });
@@ -48,7 +48,7 @@ describe("LedgerAccountsSection", () => {
     mutate.mockClear();
     render(<LedgerAccountsSection />);
 
-    const momsNr = screen.getByLabelText(/Utgående moms.*kontonummer/) as HTMLInputElement;
+    const momsNr = screen.getByLabelText<HTMLInputElement>(/Utgående moms.*kontonummer/);
     fireEvent.change(momsNr, { target: { value: "26" } }); // för kort
     fireEvent.click(screen.getByRole("button", { name: /Spara mappning/ }));
 
@@ -60,7 +60,7 @@ describe("LedgerAccountsSection", () => {
     state.role = "ADMIN";
     mutate.mockClear();
     render(<LedgerAccountsSection />);
-    const bankNr = screen.getByLabelText(/Bank.*kontonummer/) as HTMLInputElement;
+    const bankNr = screen.getByLabelText<HTMLInputElement>(/Bank.*kontonummer/);
     expect(bankNr.value).toBe("1930");
     fireEvent.change(bankNr, { target: { value: "" } });
     fireEvent.change(screen.getByLabelText(/Bank.*kontonamn/), { target: { value: "" } });

@@ -45,7 +45,7 @@ const ANNA = uuidv7();
 function nodeFetch(input: string | URL, init?: RequestInit): Promise<Response> {
   const url = new URL(typeof input === "string" ? input : input.toString());
   const headers: Record<string, string> = {};
-  new Headers(init?.headers as HeadersInit | undefined).forEach((v, k) => { headers[k] = v; });
+  new Headers(init?.headers).forEach((v, k) => { headers[k] = v; });
   return new Promise((resolve, reject) => {
     const req = httpRequest(
       { hostname: url.hostname, port: url.port, path: url.pathname + url.search, method: init?.method ?? "GET", headers },
@@ -165,7 +165,7 @@ describe("server-first E2E över riktig HTTP-socket (#470)", () => {
       const ds = await client({});
       await ds.reconcile(); // serverns läge lokalt
       // En äldre klient köade tidsposten som en rad (procedurägd → avvisas, #1242).
-      await ds.store.timeEntries.update({ where: { id: entry.id }, data: { minutes: 600, description: "Spöke" } as never });
+      await ds.store.timeEntries.update({ where: { id: entry.id }, data: { minutes: 600, description: "Spöke" } });
       const res = await ds.reconcile();
       expect(res.conflicts).toMatchObject([{ retryable: false, current: { id: entry.id } }]);
       const local = await ds.store.timeEntries.findUnique({ where: { id: entry.id } });

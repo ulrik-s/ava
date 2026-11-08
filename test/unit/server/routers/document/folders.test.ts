@@ -8,7 +8,6 @@
 
 import { describe, it, expect, vi } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
@@ -30,9 +29,9 @@ function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG) {
     documentFolders: [],
     documents: [],
     ...seed,
-  } as DemoSource);
+  });
   const store = new LocalStore(source, async () => {});
-  const repos = buildInMemoryRepositories(store as unknown as IDataStore);
+  const repos = buildInMemoryRepositories(store);
   const ctx = {
     user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
     dataStore: store, repos, orgId,
@@ -207,7 +206,7 @@ describe("mappoperationernas behörighet (#1449)", () => {
       { id: "d1", matterId: "m1", folderId: null, fileName: "a.pdf" },
       { id: "dx", matterId: "mx", folderId: "fx", fileName: "x.pdf" },
     ],
-  } as Partial<DemoSource>);
+  });
 
   it("renameFolder nekar en mapp i en annan byrå", async () => {
     const { caller, store } = makeCaller(seed());

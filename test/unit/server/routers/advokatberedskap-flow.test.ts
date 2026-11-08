@@ -52,8 +52,7 @@ function makeCaller(entries: readonly EntrySpec[], paymentMethod = "OFFENTLIGT_U
     })),
     expenses: [],
   }, async () => { /* writable: noop write-back */ });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
 }
 
 /** En beredskapsdag: noll minuter, dagbeloppet som á-pris. */

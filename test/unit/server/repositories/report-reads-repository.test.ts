@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, expenses, invoices, matterContacts, matters, payments, timeEntries, users, writeOffs } from "@/lib/server/db/schema";
 import { DrizzleExpenseRepository } from "@/lib/server/repositories/drizzle-expense-repository";
@@ -45,16 +44,12 @@ describe("Report-läsningar — in-memory", () => {
       expenses: [{ id: uuidv7(), userId: uId, matterId: mId, amount: 500, billable: true, date: new Date("2026-06-12") }],
       payments: [{ id: uuidv7(), invoiceId: invId, amount: 200 }],
       writeOffs: [{ id: uuidv7(), invoiceId: invId, amount: 100, writtenOffAt: new Date("2026-06-20") }],
-    } as DemoSource);
+    });
     const store = new LocalStore(source, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const te = new InMemoryTimeEntryRepository(store as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ex = new InMemoryExpenseRepository(store as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pay = new InMemoryPaymentRepository(store as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const wo = new InMemoryWriteOffRepository(store as any);
+    const te = new InMemoryTimeEntryRepository(store);
+    const ex = new InMemoryExpenseRepository(store);
+    const pay = new InMemoryPaymentRepository(store);
+    const wo = new InMemoryWriteOffRepository(store);
 
     const lawyerTime = await te.listForLawyerInPeriod(asId<"OrganizationId">(ORG), asId<"UserId">(uId), FROM, TO);
     expect(lawyerTime).toHaveLength(2); // jan-posten utanför perioden

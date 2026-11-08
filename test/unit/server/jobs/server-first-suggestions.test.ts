@@ -14,7 +14,6 @@
 
 import type { Job } from "pg-boss";
 import { describe, it, expect } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import type { SuggestionRepos } from "@/lib/server/documents/suggest-from-text";
 import { JOB_QUEUES } from "@/lib/server/jobs/job-queue";
@@ -23,6 +22,7 @@ import type { IContentStore } from "@/lib/server/ports";
 import { InMemoryDocumentSuggestionRepository } from "@/lib/server/repositories/in-memory-document-suggestion-repository";
 import { InMemoryMatterEventSuggestionRepository } from "@/lib/server/repositories/in-memory-matter-event-suggestion-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { requestBodyText } from "@/lib/shared/request-url";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 
@@ -57,7 +57,7 @@ function setup() {
     }],
     documentAnalysisSuggestions: [],
     matterEventSuggestions: [],
-  } as DemoSource);
+  });
   const store = new LocalStore(source, async () => {});
   const suggestions: SuggestionRepos = {
     documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(store),
@@ -146,7 +146,7 @@ describe("classify-document → kontakt-/händelseförslag (server-first)", () =
     const realFetch = globalThis.fetch;
     const prompts: string[] = [];
     globalThis.fetch = (async (_url: string, init: RequestInit) => {
-      prompts.push(String(init.body));
+      prompts.push(requestBodyText(init));
       return new Response(JSON.stringify({ choices: [{ message: { content: "STAMNING, Tvist" } }] }), { status: 200 });
     }) as typeof fetch;
     try {

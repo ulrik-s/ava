@@ -35,13 +35,13 @@ describe("HourlyRatesFields", () => {
 
   it("visar egna priser i kronor och ärvda som placeholder", () => {
     render(<HourlyRatesFields value={{ ARBETE: 300_000 }} onChange={() => {}} parents={[{ TIDSSPILLAN: 148_700 }]} />);
-    expect((screen.getByLabelText(/^Timarvode \(kr/) as HTMLInputElement).value).toBe("3000");
+    expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode \(kr/).value).toBe("3000");
     // Byråns tidsspillan går före juristens timarvode …
-    expect((screen.getByLabelText(/^Tidsspillan \(kr/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 1\s487 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan \(kr/).placeholder).toMatch(/^ärvs: 1\s487 kr\/h$/);
     // … men utan kategoripris ärvs nivåns eget timarvode.
-    expect((screen.getByLabelText(/^Timarvode helg\/kväll/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 3\s000 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode helg\/kväll/).placeholder).toMatch(/^ärvs: 3\s000 kr\/h$/);
     // Timarvodet självt har inget att ärva.
-    expect((screen.getByLabelText(/^Timarvode \(kr/) as HTMLInputElement).placeholder).toBe("ej satt");
+    expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode \(kr/).placeholder).toBe("ej satt");
   });
 
   it("visar föreskriftens omfång under tidsspillan och helg/kväll", () => {

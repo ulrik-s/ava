@@ -205,7 +205,7 @@ describe("CachingSyncDataStore — omsynk efter återställd server (#1360)", ()
     const ds = await CachingSyncDataStore.create({
       transport,
       persistence,
-      seed: { matters: [{ id: ghost, title: "Skrevs efter backupen" }, { id: kept, title: "Finns i backupen" }] } as never,
+      seed: { matters: [{ id: ghost, title: "Skrevs efter backupen" }, { id: kept, title: "Finns i backupen" }] },
     });
     // En lokal, ej synkad ändring: ska överleva omsynken och spelas upp.
     await ds.store.contacts.create({ data: { id: mine, name: "Offline-kontakt" } as never });
@@ -229,7 +229,7 @@ describe("CachingSyncDataStore — omsynk över flera sidor (#1360 + #1388)", ()
     const ds = await CachingSyncDataStore.create({
       transport,
       persistence: new InMemoryPersistence(),
-      seed: { matters: [{ id: ghost, title: "Spöke" }, { id: first, title: "Sida 1" }, { id: second, title: "Sida 2" }] } as never,
+      seed: { matters: [{ id: ghost, title: "Spöke" }, { id: first, title: "Sida 1" }, { id: second, title: "Sida 2" }] },
     });
     transport.pages = [
       { changes: [{ entity: "matter", row: { id: first, title: "Sida 1" } }], cursor: 7, hasMore: true, epoch: NEW, resync: true },

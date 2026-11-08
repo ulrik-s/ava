@@ -456,7 +456,7 @@ describe("MatterDetailPage", () => {
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
     // Format-alternativen är nu "PDF (via utskrift)" / "HTML-fil" (värde docx).
-    const htmlRadio = screen.getByRole("radio", { name: /HTML/i }) as HTMLInputElement;
+    const htmlRadio = screen.getByRole<HTMLInputElement>("radio", { name: /HTML/i });
     fireEvent.click(htmlRadio);
     expect(htmlRadio.checked).toBe(true);
   });
@@ -517,7 +517,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "tpl1" } });
     fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));
     await waitFor(() => expect(openMock).toHaveBeenCalledWith("blob:fake", "_blank", "noopener,noreferrer"));
@@ -528,7 +528,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "tpl1" } });
     fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));
     await waitFor(() => expect(screen.getByText(/Mallen saknar innehåll/)).toBeInTheDocument());

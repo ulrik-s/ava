@@ -96,7 +96,7 @@ describe("NewUserPage", () => {
     const { container } = render(<NewUserPage />);
     fireEvent.change(container.querySelectorAll("input")[0]!, { target: { value: "B" } });
     fireEvent.change(container.querySelector('input[type="email"]')!, { target: { value: "b@x.se" } });
-    const role = screen.getByRole("combobox") as HTMLSelectElement;
+    const role = screen.getByRole("combobox");
     fireEvent.change(role, { target: { value: "ADMIN" } });
     const passwords = container.querySelectorAll('input[type="password"]');
     fireEvent.change(passwords[0]!, { target: { value: "pp" } });

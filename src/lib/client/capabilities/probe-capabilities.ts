@@ -21,7 +21,7 @@ export async function probeCapabilities(baseUrl?: string): Promise<Capabilities 
     });
     const query = client.system.capabilities.query().catch(() => null);
     const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), PROBE_TIMEOUT_MS));
-    return (await Promise.race([query, timeout])) as Capabilities | null;
+    return await Promise.race([query, timeout]);
   } catch {
     return null;
   }

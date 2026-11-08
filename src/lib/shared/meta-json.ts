@@ -13,6 +13,7 @@
 
 import { z } from "zod";
 
+import { parseJsonWith } from "./parse-json";
 import { parseSchemaVersion } from "./schema-version";
 
 export const metaJsonSchema = z
@@ -25,7 +26,7 @@ export const metaJsonSchema = z
  * precis som en saknad nyckel. Ogiltig JSON kastar.
  */
 export function schemaVersionFromMetaJson(text: string): number | undefined {
-  const parsed = metaJsonSchema.safeParse(JSON.parse(text));
+  const parsed = metaJsonSchema.safeParse(parseJsonWith(z.unknown(), text));
   if (!parsed.success) return undefined;
   return parseSchemaVersion(parsed.data.schemaVersion);
 }

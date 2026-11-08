@@ -31,8 +31,7 @@ function makeCaller(opts?: { workMinutes?: number; expenseOre?: number; paymentM
     timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: opts?.workMinutes ?? 120, description: "Möte", hourlyRate: opts?.hourlyRate ?? 250000, billable: true }, ...tids],
     expenses: opts?.expenseOre != null ? [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: opts.expenseOre, description: "Avgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" }] : [],
   }, async () => { /* writable: noop write-back */ });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { ds, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any) };
+  return { ds, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL })) };
 }
 
 describe("billingRun.createAcconto", () => {
@@ -452,8 +451,7 @@ describe("billingRun.coverageSplit — currentRateOre ärvs ärende → ansvarig
       users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: lawyerRates }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 60, description: "M", hourlyRate: 200000, billable: true }],
     }, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
     return c.billingRun.coverageSplit({ matterId: "m-1" }).then((r) => r.currentRateOre);
   }
 
@@ -480,8 +478,7 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
       users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: currentRate } }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes, description: "M", hourlyRate: 200000, billable: true }],
     }, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
   }
 
   it("rättsskydd: värderar på timkostnadsnormen (#950) + klient tar prutningen", async () => {
@@ -532,8 +529,7 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
         { id: "ex-3", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 1745, description: "Taxi", billable: true, vatRate: 600, vatIncluded: false, kind: "EXPENSE" },
       ],
     }, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
     const r = await c.billingRun.coverageSplit({ matterId: "m-1" });
     expect(r.totalOre).toBe(325_200); // #950: arvode 2h × timkostnadsnormen 1 626 kr
     // Varje utlägg är en rad i hela kronor (#1438): 79 + 224 + 17 = 320 kr.
@@ -568,8 +564,7 @@ describe("moms mot DOMSTOL är alltid 25 % (#945)", () => {
         { id: "ex-2", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 40000, description: "Tåg", billable: true, vatRate: 600, vatIncluded: false, kind: "EXPENSE" },
       ],
     }, async () => { /* writable */ });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
   }
 
   it("kostnadsräkningen yrkar 25 % på utläggens netto, inte posternas egna satser", async () => {
@@ -612,8 +607,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
       users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: currentRate } }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes, description: "M", hourlyRate: 200000, billable: true }],
     }, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return { ds, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any) };
+    return { ds, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL })) };
   }
 
   it("rättsskydd: klient = (självrisk + prutning) inkl moms; försäkring = resten; ingen byrå-förlust", async () => {
@@ -837,8 +831,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
       expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 10000, description: "Ansökningsavgift", billable: true, vatRate: 2500, vatIncluded: false }],
     }, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
     // Klienten (20 %) bär 20 % av utlägget: net 2 000 + moms 500 = 2 500 brutto; domstolen resten (10 000).
     expect(res.clientInvoice.amount).toBe(83_800);   // rättshjälpsavgift 81 300 + utläggsandel 2 500
@@ -922,8 +915,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
         { id: "te-post", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-04-15"), minutes: 120, description: "efter beslut", hourlyRate: 200000, billable: true },
       ],
     }, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING" });
     // #950: allt värderas på timkostnadsnormen. 6 tim × 1 626 = 975 600 total;
     // täckt 4 tim (retro 2 + efter 2) = 650 400; otäckt (2 tim före tvist) = 325 200.
@@ -966,8 +958,7 @@ describe("billingRun.invoiceSpecification (#856)", () => {
       users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 999999 } }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 180, description: "M", hourlyRate: 200000, billable: true }],
     }, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
     await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50000 }); // SENT-aconto som auto-dras av
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
     // Betalar-fakturan (domstol) har tidsraden värderad på timkostnadsnormen (162 600/tim × 3 tim).
@@ -1017,8 +1008,7 @@ describe("slutreglering med ALLA arvodeskategorier (#953)", () => {
         { id: "ex-3", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-05-04"), amount: 25_000, description: "Kopiering", billable: true, vatRate: 2500, vatIncluded: false, kind: "EXPENSE" },
       ],
     }, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
   }
 
   it.each(["RATTSHJALP", "RATTSSKYDD"] as const)(

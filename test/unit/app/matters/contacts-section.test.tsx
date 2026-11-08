@@ -113,7 +113,7 @@ describe("ContactsSection", () => {
     expect(screen.getByText(/Ingen träff — skapa kontakten/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Ny kontakt/ }));
     const create = screen.getByRole("dialog", { name: "Ny kontakt" });
-    expect((within(create).getByLabelText(/Namn/) as HTMLInputElement).value).toBe("Motpart AB");
+    expect((within(create).getByLabelText<HTMLInputElement>(/Namn/)).value).toBe("Motpart AB");
     fireEvent.click(within(create).getByRole("button", { name: "OK" }));
     expect(createContact).toHaveBeenCalledWith(expect.objectContaining({ name: "Motpart AB" }));
     act(() => contactCreated?.({ id: "c-new", name: "Motpart AB" }));

@@ -35,7 +35,7 @@ test("medarbetar-dropdown fylls och filtrerar ärendelistan", async ({ page }) =
 
   // Välj första medarbetaren → listan ska filtreras till en delmängd
   const firstEmployee = await dropdown.locator("option").nth(1).getAttribute("value");
-  await dropdown.selectOption(firstEmployee!);
+  await dropdown.selectOption(firstEmployee);
   await page.waitForTimeout(1500);
 
   const filteredCount = await page.locator("table tbody tr").count();

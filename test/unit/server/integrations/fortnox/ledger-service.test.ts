@@ -4,6 +4,7 @@ import type { FortnoxConfig } from "@/lib/server/integrations/fortnox/schema";
 import type { SecretsVault } from "@/lib/server/secrets/vault";
 import { DEFAULT_LEDGER_ACCOUNT_MAP } from "@/lib/shared/accounting/account-map";
 import { buildSemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
+import { requestUrl } from "@/lib/shared/request-url";
 
 const config: FortnoxConfig = {
   clientId: "cid", clientSecret: "secret", redirectUri: "https://app.example/settings/fortnox",
@@ -30,7 +31,7 @@ const TOKENS = { access_token: "at", refresh_token: "rt", token_type: "Bearer", 
 function fakeFetch(log: string[]): typeof globalThis.fetch {
   let n = 0;
   return (async (url: string | URL | Request) => {
-    const u = String(url);
+    const u = requestUrl(url);
     if (u.endsWith("/oauth-v1/token")) { log.push("token"); return json(TOKENS); }
     n++;
     log.push(`voucher:${n}`);
@@ -89,7 +90,7 @@ describe("FortnoxLedgerService", () => {
   it("ett misslyckat anrop blockerar inte kön", async () => {
     let fail = true;
     const fetchFn = (async (url: string | URL | Request) => {
-      if (String(url).endsWith("/oauth-v1/token")) return json(TOKENS);
+      if (requestUrl(url).endsWith("/oauth-v1/token")) return json(TOKENS);
       if (fail) { fail = false; return new Response("nej", { status: 400 }); }
       return json({ Voucher: { VoucherSeries: "A", VoucherNumber: 9, Year: 1 } });
     }) as typeof globalThis.fetch;

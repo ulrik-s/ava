@@ -63,7 +63,7 @@ function templateContext(ctx: ExecutionContext, loopBindings?: Record<string, un
 function evalPredicate(predicate: unknown, data: Record<string, unknown>): boolean {
   if (predicate == null) return true;
   try {
-    return !!jsonLogic.apply(predicate as never, data);
+    return !!jsonLogic.apply(predicate, data);
   } catch {
     return false;
   }
@@ -109,7 +109,7 @@ type StepHandler<K extends RuleStep["do"]> = (
 const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
   "emit": async ({ step, ctx, tctx }) => {
     await ctx.dataStore.events.emit({
-      type: step.eventType as never,
+      type: step.eventType,
       source: "rule",
       actor: { kind: "rule", id: ctx.rule.id },
       causedBy: ctx.event.id,
@@ -121,7 +121,7 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
 
   "email.send": async ({ step, ctx, tctx }) => {
     const to = String(templateValue(step.to, tctx));
-    const vars = templateValue(step.vars ?? {}, tctx) as Record<string, unknown>;
+    const vars = templateValue(step.vars ?? {}, tctx);
     const idempotencyKey = step.idempotencyKey ? String(templateValue(step.idempotencyKey, tctx)) : undefined;
     const sent = await ctx.handlers.sendEmail(omitUndefined({
       template: step.template,
@@ -144,7 +144,7 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
 
   "matter.update": async ({ step, ctx, tctx }) => {
     const matterId = String(templateValue(step.matterId, tctx));
-    const patch = templateValue(step.patch, tctx) as Record<string, unknown>;
+    const patch = templateValue(step.patch, tctx);
     await ctx.handlers.updateMatter(matterId, patch);
     return undefined;
   },

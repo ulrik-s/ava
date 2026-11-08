@@ -1,6 +1,7 @@
 "use client";
 
 import { z } from "zod";
+import { safeParseJsonWith } from "@/lib/shared/parse-json";
 
 /**
  * `.ava/sync-state.json` — lokal metadata-fil i FSA-mappen som spårar
@@ -42,7 +43,7 @@ export async function readSyncState(handle: FileSystemDirectoryHandle): Promise<
     const ava = await handle.getDirectoryHandle(".ava");
     const file = await ava.getFileHandle("sync-state.json");
     const text = await (await file.getFile()).text();
-    const parsed = syncStateSchema.safeParse(JSON.parse(text));
+    const parsed = safeParseJsonWith(syncStateSchema, text);
     return parsed.success ? parsed.data : null;
   } catch {
     return null;

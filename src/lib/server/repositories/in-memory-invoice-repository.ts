@@ -27,7 +27,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
   async getByIdInOrg(id: InvoiceId, organizationId: OrganizationId): Promise<Invoice | null> {
     // Samma relations-filter som routern använde mot DemoDataStore (org via ärende).
     const row = (await this.store.invoices
-      .findFirst({ where: { id, matter: { organizationId } } })) as Invoice | null;
+      .findFirst({ where: { id, matter: { organizationId } } }));
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
@@ -124,7 +124,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
 
   async getCreditNoteFor(invoiceId: InvoiceId): Promise<Invoice | null> {
     const row = (await this.store.invoices
-      .findFirst({ where: { creditedInvoiceId: invoiceId } })) as Invoice | null;
+      .findFirst({ where: { creditedInvoiceId: invoiceId } }));
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
@@ -132,7 +132,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
     if (!ids.length) return [];
     return (await this.store.invoices.findMany({
       where: { id: { in: ids }, matterId, invoiceType: "ACCONTO", deductedOnFinals: { none: {} } },
-    })) as Invoice[];
+    }));
   }
 
   async listByMatter(matterId: MatterId): Promise<Invoice[]> {

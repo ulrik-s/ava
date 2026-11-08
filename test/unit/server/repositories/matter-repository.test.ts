@@ -74,8 +74,7 @@ describe("MatterRepository — Drizzle (pglite)", () => {
     const db = handle.db;
     const org = asId<"OrganizationId">(uuidv7());
     const id = asId<"MatterId">(uuidv7());
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await db.insert(matters).values({ id, organizationId: org, matterNumber: "2026-2", title: "T", version: 1 } as any);
+    await db.insert(matters).values({ id, organizationId: org, matterNumber: "2026-2", title: "T", version: 1 });
     const repo = new DrizzleMatterRepository(handle.db);
     expect(await repo.getByIdInOrg(id, org)).toMatchObject({ id });
     expect(await repo.getByIdInOrg(id, asId<"OrganizationId">(uuidv7()))).toBeNull(); // fel org

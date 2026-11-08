@@ -16,6 +16,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Principal } from "@/lib/server/auth/principal";
 import { asId } from "@/lib/shared/schemas/ids";
+import { primitiveText } from "../../src/lib/shared/primitive-text";
 import { buildSeed, type BuildSeedOpts } from "../scripts/seed-data";
 import { createGitTarget } from "./backend-target";
 import { createIdTranslator, translateSeed, type IdTranslator } from "./id-translator";
@@ -43,7 +44,7 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
   //    skickar UUID:n till mutations precis som prod (ADR 0003).
   const translator = createIdTranslator();
   const seed = translateSeed(buildSeed(seedOpts), translator);
-  const orgId = String(seed.organizations?.[0]?.id ?? "");
+  const orgId = primitiveText(seed.organizations?.[0]?.id);
   if (!orgId) throw new Error("Seed saknar organization-rad");
   const currentUserIdSlug = seedOpts.currentUserId ?? "current-user";
   const currentUserId = translator.toUuid(currentUserIdSlug);

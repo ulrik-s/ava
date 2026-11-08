@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, matterContacts, matters } from "@/lib/server/db/schema";
 import { DrizzleContactRepository } from "@/lib/server/repositories/drizzle-contact-repository";
@@ -29,7 +28,7 @@ describe("ContactRepository — in-memory", () => {
       ],
       matters: [{ id: mId, organizationId: "org-1", matterNumber: "2026-1", title: "T", status: "ACTIVE" }],
       matterContacts: [{ id: uuidv7(), matterId: mId, contactId: c1, role: "KLIENT" }],
-    } as DemoSource);
+    });
     const store = new LocalStore(source, async () => {});
     return { store, c1, child };
   }

@@ -12,7 +12,7 @@ import { isJunkFileName } from "@/lib/shared/junk-files";
 import { log } from "@/lib/shared/observability/logger";
 import { errorMessage } from "@/lib/shared/observability/redact";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { documentAnalysisStatusSchema, documentDirectionSchema, documentRecipientSchema, type Document } from "@/lib/shared/schemas/document";
+import { documentAnalysisStatusSchema, documentDirectionSchema, documentRecipientSchema } from "@/lib/shared/schemas/document";
 import { asId, billingRunIdSchema, documentFolderIdSchema, documentIdSchema, invoiceIdSchema, matterIdSchema, userIdSchema, type BillingRunId, type InvoiceId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { assertSetupFieldsAllowed } from "../../auth/setup-fields";
@@ -230,7 +230,7 @@ export const coreProcedures = {
       // (uploadContent/markExternallyEdited); metadata/analys går via updateMetadata
       // som inte bumpar → inga falska konflikter.
       if (input.baseVersion !== undefined) {
-        const current = (await ctx.repos.documents.getById(input.documentId)) as Document | null;
+        const current = await ctx.repos.documents.getById(input.documentId);
         if (current && current.version !== input.baseVersion) {
           throw new TRPCError({
             code: "CONFLICT",
@@ -261,7 +261,7 @@ export const coreProcedures = {
     .input(z.object({ documentId: documentIdSchema }))
     .query(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
-      const doc = (await ctx.repos.documents.getById(input.documentId)) as Document | null;
+      const doc = await ctx.repos.documents.getById(input.documentId);
       // En rad med en sökväg av fel form (skriven före #1372) läses aldrig.
       if (!doc || !isDocumentStoragePath(doc.storagePath)) throw new TRPCError({ code: "NOT_FOUND" });
       const bytes = await ctx.ports.content.read(doc.storagePath);
@@ -286,7 +286,7 @@ export const coreProcedures = {
     }))
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
-      const original = (await ctx.repos.documents.getById(input.documentId)) as Document | null;
+      const original = await ctx.repos.documents.getById(input.documentId);
       if (!original) throw new TRPCError({ code: "NOT_FOUND" });
       const bytes = base64ToBytes(input.contentBase64);
       const storagePath = contentStoragePath(await sha256Hex(bytes));

@@ -9,8 +9,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 const PRINCIPAL: Principal = { id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1") };
 
 function callerFor(ds: DemoDataStore, role: Principal["role"]) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: { ...PRINCIPAL, role } }) as any);
+  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: { ...PRINCIPAL, role } }));
 }
 
 function makeCaller() {

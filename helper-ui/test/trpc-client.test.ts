@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import superjson from "superjson";
 
+import { requestBodyText } from "@/lib/shared/request-url";
 import { asId } from "@/lib/shared/schemas/ids";
 
 import {
@@ -82,7 +83,7 @@ describe("uploadDocumentBytes (ADR 0033 §1 — optimistisk version)", () => {
   test("success → {status:'ok', version} och skickar med baseVersion", async () => {
     let sentBody = "";
     const client = clientWith(async (_input, init) => {
-      sentBody = String(init?.body ?? "");
+      sentBody = requestBodyText(init);
       return batchOk({ id: "doc-1", version: 9 });
     });
     const res = await uploadDocumentBytes(client, "doc-1", new TextEncoder().encode("x"), 8);
@@ -109,7 +110,7 @@ describe("saveConflictCopyBytes (ADR 0033 §4 — keep-both)", () => {
       trpcUrl: "http://h:8080/api/trpc", token: "t",
       fetch: async (input, init) => {
         url = String(input);
-        body = String(init?.body ?? "");
+        body = requestBodyText(init);
         return batchOk({ id: "copy-1", fileName: "Avtal (din ändring 2026-06-22 14:32).docx" });
       },
     });

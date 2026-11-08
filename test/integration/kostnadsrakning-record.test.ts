@@ -47,7 +47,7 @@ function makeStore() {
     invoices: [], calendarEvents: [], tasks: [],
     documentTemplates: [], conflictChecks: [], offices: [],
     paymentPlans: [], paymentPlanReminders: [], payments: [],
-  } as DemoSource);
+  });
   // Andra argumentet = onMutate (write-back). Satt → writable, precis som
   // demo-bootstrap.tsx gör. ReadOnlyEventLog används OAVSETT detta.
   const dataStore = new DemoDataStore(source, async () => { /* no-op write-back, som demo utan FSA */ });

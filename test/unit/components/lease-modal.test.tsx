@@ -37,7 +37,7 @@ describe("LeaseModal", () => {
 
   it("busy låser knapparna och visar 'Tar över…'", () => {
     render(<LeaseModal fileName="a.docx" leaseHolder="Bo" busy onTakeover={noop} onForceEdit={noop} onClose={noop} />);
-    expect((screen.getByRole("button", { name: "Tar över…" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Behåll skrivskyddat" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Tar över…" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Behåll skrivskyddat" }).disabled).toBe(true);
   });
 });

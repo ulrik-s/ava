@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documentAnalysisSuggestions, documents, matters } from "@/lib/server/db/schema";
 import { DrizzleDocumentSuggestionRepository } from "@/lib/server/repositories/drizzle-document-suggestion-repository";
@@ -30,7 +29,7 @@ describe("DocumentSuggestionRepository — in-memory", () => {
         { id: s1, documentId: dId, name: "Anna", role: "MOTPART", contactType: "PERSON", status: "PENDING", createdAt: new Date("2026-06-01") },
         { id: s2, documentId: dId, name: "Bo", role: "OMBUD", contactType: "PERSON", status: "REJECTED", createdAt: new Date("2026-06-02") },
       ],
-    } as DemoSource);
+    });
     const store = new LocalStore(source, async () => {});
     const repo = new InMemoryDocumentSuggestionRepository(store);
 

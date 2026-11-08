@@ -134,7 +134,7 @@ describe("DemoDataStore.transaction — shallow snapshot-invariant (#190)", () =
         await tx.invoices.update({
           where: { id: "inv1" },
           data: { meta: { note: "ändrad" } },
-        } as never);
+        });
         throw new Error("boom");
       }),
     ).rejects.toThrow("boom");

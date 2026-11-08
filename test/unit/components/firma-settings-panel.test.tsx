@@ -36,14 +36,14 @@ beforeEach(() => {
 describe("FirmaSettingsPanel — server-first", () => {
   it("default-toggle = allowAnonymousRead true", () => {
     render(<FirmaSettingsPanel initial={baseConfig} onSaved={() => {}} onCancel={() => {}} />);
-    const cb = screen.getByRole("checkbox") as HTMLInputElement;
+    const cb = screen.getByRole<HTMLInputElement>("checkbox");
     expect(cb.checked).toBe(true);
   });
 
   it("läser pre-existerande allowAnonymousRead=false från localStorage", () => {
     saveAuthSettings({ allowAnonymousRead: false });
     render(<FirmaSettingsPanel initial={baseConfig} onSaved={() => {}} onCancel={() => {}} />);
-    const cb = screen.getByRole("checkbox") as HTMLInputElement;
+    const cb = screen.getByRole<HTMLInputElement>("checkbox");
     expect(cb.checked).toBe(false);
   });
 
@@ -164,7 +164,7 @@ describe("FooterButtons", () => {
 
   it("disablar Spara när canSave=false", () => {
     setup({ canSave: false });
-    expect((screen.getByText("Spara") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText<HTMLButtonElement>("Spara").disabled).toBe(true);
   });
 
   it("anropar callbacks", () => {

@@ -257,8 +257,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
   it("getByIdWithLedger hämtar betalningar", async () => {
     const db = handle.db;
     const id = uuidv7();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await db.insert(invoices).values(inv({ id }) as any);
+    await db.insert(invoices).values(inv({ id }));
     await db.insert(payments).values({
       id: uuidv7(), invoiceId: id, amount: 7_500, paidAt: new Date(), recordedById: uuidv7(), version: 1,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -275,8 +274,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     const org = uuidv7(); // uuid-kolumn → måste vara giltig UUID
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await db.insert(matters).values({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T", version: 1 } as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await db.insert(invoices).values(inv({ id, matterId: mId }) as any);
+    await db.insert(invoices).values(inv({ id, matterId: mId }));
     const repo = new DrizzleInvoiceRepository(handle.db);
     expect(await repo.getByIdInOrg(asId<"InvoiceId">(id), asId<"OrganizationId">(org))).toMatchObject({ id });
     expect(await repo.getByIdInOrg(asId<"InvoiceId">(id), asId<"OrganizationId">(uuidv7()))).toBeNull();

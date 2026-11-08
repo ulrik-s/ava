@@ -11,7 +11,7 @@ import {
   createPersistedLocalStore,
 } from "@/lib/server/data-store/in-memory/local-store-persistence";
 
-const loose = (d: unknown): Delegate => d as unknown as Delegate;
+const loose = (d: unknown): Delegate => d as Delegate;
 
 describe("InMemoryPersistence", () => {
   it("hydrate på tom persistens → null", async () => {

@@ -5,6 +5,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import SettingsPage from "@/app/settings/page";
+import { requestUrl } from "@/lib/shared/request-url";
 import { TINY_PNG, TINY_PNG_BYTES } from "../../../helpers/tiny-images";
 
 const settingsQuery = {
@@ -108,7 +109,7 @@ beforeEach(() => {
   backupVisible.value = false;
 
   // Inga riktiga nätverksanrop från sidans sektioner i enhetstestet.
-  global.fetch = vi.fn((url: string | URL | Request) => Promise.reject(new Error(`unexpected fetch: ${String(url)}`))) as typeof fetch;
+  global.fetch = vi.fn((url: string | URL | Request) => Promise.reject(new Error(`unexpected fetch: ${requestUrl(url)}`))) as typeof fetch;
 
   // Mock clipboard
   Object.assign(navigator, {
@@ -153,7 +154,7 @@ describe("SettingsPage", () => {
   // Kontaktuppgifter auto-sparas (debounce 800ms) — ingen separat Spara-knapp.
   it("auto-sparar kontaktuppgifter (debounce) vid ändring", async () => {
     render(<SettingsPage />);
-    const nameInput = screen.getByDisplayValue("Byrå AB") as HTMLInputElement;
+    const nameInput = screen.getByDisplayValue<HTMLInputElement>("Byrå AB");
     fireEvent.change(nameInput, { target: { value: "Byrå AB" } });
     await waitFor(() => expect(updateSettingsMutate).toHaveBeenCalled(), { timeout: 2000 });
     expect(updateSettingsMutate.mock.calls.at(-1)![0]).toMatchObject({ name: "Byrå AB" });
@@ -164,7 +165,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     expect(screen.getByLabelText(/^Timarvode \(kr/)).toHaveProperty("value", "2500");
     expect(screen.getByLabelText(/^Tidsspillan \(kr/)).toHaveProperty("value", "1500");
-    expect((screen.getByLabelText(/^Tidsspillan helg\/kväll/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan helg\/kväll/).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
   });
 
   it("timpriser: kr/h i fältet, hela kartan sparas i öre; tömt fält tar bort kategorin", async () => {
@@ -218,14 +219,14 @@ describe("SettingsPage", () => {
 
   it("uppdaterar byråns namn-input och auto-sparar med nytt värde", async () => {
     render(<SettingsPage />);
-    const nameInput = screen.getByDisplayValue("Byrå AB") as HTMLInputElement;
+    const nameInput = screen.getByDisplayValue<HTMLInputElement>("Byrå AB");
     fireEvent.change(nameInput, { target: { value: "Ny Byrå AB" } });
     await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]?.name).toBe("Ny Byrå AB"), { timeout: 2000 });
   });
 
   it("uppdaterar bankgiro-input", () => {
     render(<SettingsPage />);
-    const bg = screen.getByDisplayValue("123-4567") as HTMLInputElement;
+    const bg = screen.getByDisplayValue<HTMLInputElement>("123-4567");
     fireEvent.change(bg, { target: { value: "999-9999" } });
     expect(bg.value).toBe("999-9999");
   });
@@ -273,7 +274,7 @@ describe("SettingsPage", () => {
   it("togglar Huvudkontor-checkboxen i nytt kontor", () => {
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("button", { name: /Lägg till kontor/i }));
-    const isMainCheckbox = screen.getByRole("checkbox") as HTMLInputElement;
+    const isMainCheckbox = screen.getByRole<HTMLInputElement>("checkbox");
     expect(isMainCheckbox.checked).toBe(false);
     fireEvent.click(isMainCheckbox);
     expect(isMainCheckbox.checked).toBe(true);
@@ -289,11 +290,11 @@ describe("SettingsPage", () => {
 
   it("uppdaterar email, telefon, address och auto-sparar", async () => {
     render(<SettingsPage />);
-    const emailInput = screen.getByDisplayValue("info@byra.se") as HTMLInputElement;
+    const emailInput = screen.getByDisplayValue<HTMLInputElement>("info@byra.se");
     fireEvent.change(emailInput, { target: { value: "ny@byra.se" } });
-    const phoneInput = screen.getByDisplayValue("08-123") as HTMLInputElement;
+    const phoneInput = screen.getByDisplayValue<HTMLInputElement>("08-123");
     fireEvent.change(phoneInput, { target: { value: "08-999" } });
-    const addressInput = screen.getByDisplayValue("Storgatan 1") as HTMLInputElement;
+    const addressInput = screen.getByDisplayValue<HTMLInputElement>("Storgatan 1");
     fireEvent.change(addressInput, { target: { value: "Lillgatan 2" } });
     // Debounce coalescar de tre ändringarna → sista mutate har alla värden.
     await waitFor(() => {
@@ -335,7 +336,7 @@ describe("SettingsPage", () => {
     ];
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("button", { name: /Redigera/i }));
-    const addressInput = screen.getByDisplayValue("Gamla") as HTMLInputElement;
+    const addressInput = screen.getByDisplayValue<HTMLInputElement>("Gamla");
     fireEvent.change(addressInput, { target: { value: "Ny adress" } });
     expect(addressInput.value).toBe("Ny adress");
   });

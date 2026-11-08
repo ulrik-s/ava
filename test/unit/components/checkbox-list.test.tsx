@@ -65,7 +65,7 @@ describe("CheckboxList", () => {
 
   it("checkboxar reflekterar selectedIds", () => {
     render(<CheckboxList options={OPTIONS} selectedIds={["u2"]} onChange={vi.fn()} />);
-    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    const boxes = screen.getAllByRole<HTMLInputElement>("checkbox");
     expect(boxes[0]!.checked).toBe(false); // u1
     expect(boxes[1]!.checked).toBe(true); // u2
   });

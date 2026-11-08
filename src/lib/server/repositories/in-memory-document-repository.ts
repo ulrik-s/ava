@@ -73,7 +73,7 @@ export class InMemoryDocumentRepository
   async reassignFolder(fromFolderId: DocumentFolderId, toFolderId: DocumentFolderId | null): Promise<void> {
     await this.delegate.updateMany({
       where: { folderId: fromFolderId },
-      data: { folderId: toFolderId } as Partial<Document>,
+      data: { folderId: toFolderId },
     });
   }
 }

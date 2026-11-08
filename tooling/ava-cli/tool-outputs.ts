@@ -122,5 +122,5 @@ export function toolOutputJsonSchema(path: string): Record<string, unknown> | nu
       const def = (ctx.zodSchema as { _zod?: { def?: { type?: string } } })._zod?.def;
       if (def?.type === "date") Object.assign(ctx.jsonSchema, { type: "string", format: "date-time" });
     },
-  }) as Record<string, unknown>;
+  });
 }

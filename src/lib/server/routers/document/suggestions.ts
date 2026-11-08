@@ -19,7 +19,6 @@ import {
   findExistingContactForSuggestion,
   type ContactCandidate,
 } from "@/lib/shared/contact-dedup";
-import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
 import { matterRoleSchema, contactTypeSchema, type MatterRole, type SuggestionStatus } from "@/lib/shared/schemas/enums";
 import {
   asId, contactIdSchema, documentAnalysisSuggestionIdSchema, matterIdSchema,
@@ -108,7 +107,7 @@ function pick<K extends keyof SuggOverride & keyof Suggestion>(
   sugg: Suggestion,
   key: K,
 ): SuggOverride[K] {
-  return (o[key] ?? sugg[key]) as SuggOverride[K];
+  return (o[key] ?? sugg[key]);
 }
 
 /** Merga override över suggestion (override-värdet vinner). Tomma strängar → null. */
@@ -180,7 +179,7 @@ function pickFirstFromGroup<K extends keyof Suggestion>(
   suggs: Suggestion[],
   key: K,
 ): Suggestion[K] | null {
-  return (suggs.find((s) => s[key])?.[key] ?? null) as Suggestion[K] | null;
+  return (suggs.find((s) => s[key])?.[key] ?? null);
 }
 
 /** Sök/skapa kontakt från en grupp av förslag. */
@@ -311,7 +310,7 @@ export const suggestionProcedures = {
 
       await ensureMatterContactLink(ctx, matterId, contactId, finalRole, sugg.notes);
       await ctx.repos.documentAnalysisSuggestions.update(
-        sugg.id, { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
+        sugg.id, { status: "ACCEPTED", acceptedContactId: contactId },
       );
       await recheckIfParty(ctx, matterId, [finalRole]);
       return { contactId };
@@ -323,7 +322,7 @@ export const suggestionProcedures = {
       const sugg = await ctx.repos.documentAnalysisSuggestions.getByIdInOrg(input.suggestionId, ctx.orgId);
       if (!sugg) throw new TRPCError({ code: "NOT_FOUND" });
       return ctx.repos.documentAnalysisSuggestions.update(
-        sugg.id, { status: "REJECTED" } as Partial<DocumentAnalysisSuggestion>,
+        sugg.id, { status: "REJECTED" },
       );
     }),
 
@@ -353,7 +352,7 @@ export const suggestionProcedures = {
       const distinctRoles = await linkGroupRoles(ctx, suggs, matterId, contactId);
       await ctx.repos.documentAnalysisSuggestions.updateManyByIds(
         suggs.map((s) => s.id),
-        { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
+        { status: "ACCEPTED", acceptedContactId: contactId },
       );
       await recheckIfParty(ctx, matterId, distinctRoles);
       return { contactId, acceptedRoles: distinctRoles };
@@ -372,7 +371,7 @@ export const suggestionProcedures = {
         });
       }
       await ctx.repos.documentAnalysisSuggestions.updateManyByIds(
-        suggs.map((s) => s.id), { status: "REJECTED" } as Partial<DocumentAnalysisSuggestion>,
+        suggs.map((s) => s.id), { status: "REJECTED" },
       );
       return { rejected: suggs.length };
     }),

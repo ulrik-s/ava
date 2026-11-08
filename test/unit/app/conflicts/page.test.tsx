@@ -78,7 +78,7 @@ describe("ConflictsPage", () => {
 
   it("växlar mellan name/personalNumber/both via select", () => {
     render(<ConflictsPage />);
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "name" } });
     expect(select.value).toBe("name");
   });
@@ -128,7 +128,7 @@ describe("ConflictsPage", () => {
   it("visar disabled-läge när isPending", () => {
     checkState.isPending = true;
     render(<ConflictsPage />);
-    const submitBtn = screen.getByRole("button", { name: /Söker/i }) as HTMLButtonElement;
+    const submitBtn = screen.getByRole<HTMLButtonElement>("button", { name: /Söker/i });
     expect(submitBtn.disabled).toBe(true);
   });
 });

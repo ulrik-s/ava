@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest-compat";
 import { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
 import type { FortnoxConfig, FortnoxStoredTokens, FortnoxVoucher } from "@/lib/server/integrations/fortnox/schema";
 import { InMemoryFortnoxTokenStore } from "@/lib/server/integrations/fortnox/token-store";
+import { requestBodyText, requestUrl } from "@/lib/shared/request-url";
 
 const config: FortnoxConfig = {
   clientId: "cid",
@@ -35,7 +36,7 @@ interface Counts { token: number; voucher: number; lastAuth?: string; lastBody?:
 /** fetch som routar token- vs voucher-endpoint; voucher-status styrs per anrop. */
 function makeFetch(voucherStatuses: number[], counts: Counts) {
   return (async (url: string | URL | Request, init?: RequestInit) => {
-    const u = String(url);
+    const u = requestUrl(url);
     if (u.endsWith("/oauth-v1/token")) {
       counts.token++;
       return json(200, ROTATED);
@@ -116,7 +117,7 @@ describe("FortnoxClient fil-bilaga (#785)", () => {
   it("uploadInboxFile → POST /3/inbox (multipart) och returnerar fil-id", async () => {
     let url = ""; let auth = ""; let isForm = false;
     const fetchFn = (async (u: string | URL | Request, init?: RequestInit) => {
-      url = String(u);
+      url = requestUrl(u);
       const headers = (init?.headers ?? {}) as Record<string, string>;
       auth = headers.Authorization ?? "";
       isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
@@ -134,7 +135,7 @@ describe("FortnoxClient fil-bilaga (#785)", () => {
   it("connectFileToVoucher → POST /3/voucherfileconnections med FileId/serie/nummer", async () => {
     let url = ""; let body: unknown;
     const fetchFn = (async (u: string | URL | Request, init?: RequestInit) => {
-      url = String(u);
+      url = requestUrl(u);
       body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
       return new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } });
     }) as typeof globalThis.fetch;
@@ -159,7 +160,7 @@ describe("FortnoxClient fil-bilaga (#785)", () => {
  * tysta typcheckaren.
  */
 function fetchFake(handler: (url: string, init?: RequestInit) => Promise<Response>): typeof globalThis.fetch {
-  const fn = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => handler(String(input), init);
+  const fn = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => handler(requestUrl(input), init);
   return Object.assign(fn, { preconnect: (): void => {} });
 }
 
@@ -263,7 +264,7 @@ describe("FortnoxClient — verifikatserier (#1035)", () => {
   it("createVoucherSeries POST:ar Code + Description i Fortnox nästling", async () => {
     let seen: { url: string; method: string; body: unknown } | null = null;
     const client = new FortnoxClient(config, storeWithFreshToken(), fetchFake(async (url, init) => {
-      seen = { url, method: init?.method ?? "GET", body: JSON.parse(String(init?.body)) };
+      seen = { url, method: init?.method ?? "GET", body: JSON.parse(requestBodyText(init)) };
       return json(200, { VoucherSeries: { Code: "Z", Description: "CI-testverifikat", Manual: true } });
     }));
     const created = await client.createVoucherSeries("Z", "CI-testverifikat");
@@ -295,7 +296,7 @@ describe("FortnoxClient — verifikatlistning + räkenskapsår (#1050)", () => {
   function listFetch(pages: Array<{ vouchers: Array<{ s: string; n: number }>; totalPages: number }>) {
     const seen: string[] = [];
     const fn = (async (url: string | URL) => {
-      const u = String(url);
+      const u = requestUrl(url);
       seen.push(u);
       if (u.endsWith("/oauth-v1/token")) return json(200, ROTATED);
       if (u.includes("/3/financialyears")) {

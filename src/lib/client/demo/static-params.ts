@@ -73,7 +73,7 @@ export async function collectDemoIds(pathPrefix: string): Promise<string[]> {
     // deterministiska id:n (1 per ärende). Lägg till dem som pre-renderbara
     // params så /invoices/<id> + /payment-plans/<id> inte 404:ar.
     if (pathPrefix === "invoices" || pathPrefix === "payment-plans") {
-      const ids = await collectBillingIds(pathPrefix, seed.matters as Array<{ id?: unknown }>);
+      const ids = await collectBillingIds(pathPrefix, seed.matters);
       return [...seedIds, ...ids];
     }
     return seedIds;

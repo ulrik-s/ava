@@ -281,8 +281,8 @@ for (const backend of BACKENDS) {
       const matter = asId<"MatterId">(parents.matter);
       const te = asId<"TimeEntryId">(uuidv7());
       const ex = asId<"ExpenseId">(uuidv7());
-      await repos.timeEntries.create({ id: te, ...FIXTURES.timeEntries.row(parents) } as never);
-      await repos.expenses.create({ id: ex, ...FIXTURES.expenses.row(parents) } as never);
+      await repos.timeEntries.create({ id: te, ...FIXTURES.timeEntries.row(parents) });
+      await repos.expenses.create({ id: ex, ...FIXTURES.expenses.row(parents) });
       const run = asId<"BillingRunId">(uuidv7());
       await repos.timeEntries.freezeByIds([te], run, at);
       await repos.expenses.freezeByIds([ex], run, at);

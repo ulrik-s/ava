@@ -77,8 +77,8 @@ type ExistingEvent = { mirrorToOutlook?: boolean | undefined };
 function computeMirrorPatch(data: UpdateData, existing: ExistingEvent): Record<string, unknown> {
   const newFlag = data.mirrorToOutlook;
   const oldFlag = existing.mirrorToOutlook ?? false;
-  const flippedOn = newFlag === true && oldFlag === false;
-  const flippedOff = newFlag === false && oldFlag === true;
+  const flippedOn = newFlag === true && !oldFlag;
+  const flippedOff = newFlag === false && oldFlag;
   const otherFieldsChanged = Object.keys(data).some((k) => k !== "mirrorToOutlook");
 
   if (flippedOff) return { mirrorStatus: null, outlookEventId: null };

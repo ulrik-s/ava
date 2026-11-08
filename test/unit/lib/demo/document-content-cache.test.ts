@@ -11,6 +11,7 @@ import {
   setDocumentContent,
   clearDocumentContentCache,
 } from "@/lib/client/demo/document-content-cache";
+import { requestUrl } from "@/lib/shared/request-url";
 import { fetchFake } from "../../../helpers/fetch-fake";
 
 beforeEach(() => clearDocumentContentCache());
@@ -58,7 +59,7 @@ describe("preloadDocumentContents + getDocumentContent", () => {
     // Koden försöker FÖRST documents/text/<id>.txt (extraherad text); om den
     // inte finns faller den tillbaka till documents/content/<id>.<ext>.
     const fakeFetch = vi.fn(async (url: string | URL | Request) => {
-      const u = url.toString();
+      const u = requestUrl(url);
       if (u.includes("/documents/text/")) return { ok: false } as Response; // ingen extraherad text ännu
       return { ok: true, text: async () => `content of ${u}` } as Response;
     });
@@ -74,7 +75,7 @@ describe("preloadDocumentContents + getDocumentContent", () => {
   it("föredrar extraherad text från documents/text/ när den finns", async () => {
     const fakeFetch = vi.fn(async (url: string | URL | Request) => ({
       ok: true,
-      text: async () => `extracted from ${url.toString()}`,
+      text: async () => `extracted from ${requestUrl(url)}`,
     } as Response));
     await preloadDocumentContents(
       [{ id: "d-1", storagePath: "documents/content/d-1.pdf", mimeType: "application/pdf" }],
@@ -103,7 +104,7 @@ describe("preloadDocumentContents + getDocumentContent", () => {
   it("byggs URL korrekt utan dubbla slashes", async () => {
     const seenUrls: string[] = [];
     const fakeFetch = vi.fn(async (url: string | URL | Request) => {
-      const u = url.toString();
+      const u = requestUrl(url);
       seenUrls.push(u);
       // text/ branch saknas → faller till content/
       if (u.includes("/documents/text/")) return { ok: false } as Response;

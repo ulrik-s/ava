@@ -43,7 +43,7 @@ describe("DemoDataStore writable", () => {
     const m = await ds.matters.findUnique({
       where: { id: "m1" },
       include: { contacts: { include: { contact: true } } },
-    } as never);
+    });
     type MatterWithContacts = { contacts: Array<{ contact: { name: string } }> };
     const matter = m as unknown as MatterWithContacts;
     expect(matter.contacts).toHaveLength(1);
@@ -86,7 +86,7 @@ describe("DemoDataStore writable", () => {
     const m = await ds.matters.findUnique({
       where: { id: "m1" },
       include: { contacts: { include: { contact: true } } },
-    } as never);
+    });
     type MatterWithContacts = { contacts: Array<{ contact: { name: string } }> };
     const matter = m as unknown as MatterWithContacts;
     expect(matter.contacts).toHaveLength(1);

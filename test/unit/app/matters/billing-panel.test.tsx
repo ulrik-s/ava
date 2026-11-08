@@ -238,7 +238,7 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
   const verdictMatter = { ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" as const };
 
   it("visar KR-kortet + 'Registrera beslut' → öppnar beslut-dialogen; statusen står i Anteckningar (#1221)", () => {
-    runsData = { runs: [{ ...runsData.runs[0]!, reference: "KR-2026-0003" } as BillingRunRow] };
+    runsData = { runs: [{ ...runsData.runs[0]!, reference: "KR-2026-0003" }] };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
     expect(screen.getAllByText("KR-2026-0003", { exact: false }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Inskickad — väntar på beslut/)).not.toBeInTheDocument();
@@ -468,7 +468,7 @@ describe("BillingPanel — informationsrutorna är borta (#1221)", () => {
     const { unmount } = render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSSKYDD" }} />);
     expect(screen.getByRole("button", { name: "Registrera prutning" })).toBeInTheDocument();
     unmount();
-    runsData = { runs: [{ ...payer, invoice: { id: "i1", status: "PAID" } } as BillingRunRow] };
+    runsData = { runs: [{ ...payer, invoice: { id: "i1", status: "PAID" } }] };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSSKYDD" }} />);
     expect(screen.queryByRole("button", { name: "Registrera prutning" })).not.toBeInTheDocument();
   });

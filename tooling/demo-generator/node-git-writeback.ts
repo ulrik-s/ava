@@ -10,6 +10,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
+import { primitiveText } from "../../src/lib/shared/primitive-text";
 
 export interface WriteBackEvent {
   entity: string;
@@ -24,7 +25,7 @@ export function makeNodeGitWriteBack(outDir: string): (event: WriteBackEvent) =>
     // documentText: extraherad text, plain .txt (inte en registry-entitet)
     if (event.entity === "documentText") {
       const id = String(event.row.id);
-      writeFile(join(outDir, `documents/text/${id}.txt`), String(event.row.text ?? ""));
+      writeFile(join(outDir, `documents/text/${id}.txt`), primitiveText(event.row.text));
       return;
     }
 

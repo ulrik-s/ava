@@ -8,7 +8,6 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import type { DocumentFolder } from "@/lib/shared/schemas/document";
 import {
   matterIdSchema,
   documentFolderIdSchema,
@@ -34,14 +33,14 @@ export const folderProcedures = {
         name: input.name,
         matterId: input.matterId,
         parentId: input.parentId,
-      } as Partial<DocumentFolder>);
+      });
     }),
 
   renameFolder: orgProcedure
     .input(z.object({ id: documentFolderIdSchema, name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       await assertFolderAccess(ctx, input.id);
-      return ctx.repos.documentFolders.update(input.id, { name: input.name } as Partial<DocumentFolder>);
+      return ctx.repos.documentFolders.update(input.id, { name: input.name });
     }),
 
   /** Flyttar innehåll till parent och raderar mappen. */
@@ -49,7 +48,7 @@ export const folderProcedures = {
     .input(z.object({ id: documentFolderIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const folder = await assertFolderAccess(ctx, input.id);
-      const parentId = (folder.parentId as DocumentFolderId | null | undefined) ?? null;
+      const parentId = folder.parentId ?? null;
       await ctx.repos.documents.reassignFolder(input.id, parentId);
       await ctx.repos.documentFolders.reassignParent(input.id, parentId);
       await ctx.repos.documentFolders.hardDelete(input.id);
@@ -82,11 +81,11 @@ export const folderProcedures = {
             });
           }
           const parent = await ctx.repos.documentFolders.getById(checkId);
-          checkId = (parent?.parentId as DocumentFolderId | null | undefined) ?? null;
+          checkId = (parent?.parentId) ?? null;
         }
       }
       return ctx.repos.documentFolders.update(
-        input.folderId, { parentId: input.targetParentId } as Partial<DocumentFolder>,
+        input.folderId, { parentId: input.targetParentId },
       );
     }),
 
@@ -103,7 +102,7 @@ export const folderProcedures = {
         const folder = await ctx.repos.documentFolders.getById(currentId);
         if (!folder) break;
         path.unshift({ id: folder.id, name: folder.name });
-        currentId = (folder.parentId as DocumentFolderId | null | undefined) ?? null;
+        currentId = folder.parentId ?? null;
       }
       return path;
     }),

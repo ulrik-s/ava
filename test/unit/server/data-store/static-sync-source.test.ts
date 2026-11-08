@@ -16,7 +16,7 @@ const seed: DemoSource = {
     { id: "c1", organizationId: "org", name: "Anna", contactType: "PERSON", version: 1 },
     { id: "c2", organizationId: "org", name: "Bo", contactType: "PERSON", version: 1 },
   ],
-} as unknown as DemoSource;
+};
 
 function mutation(over: Partial<QueuedMutation> & Pick<QueuedMutation, "entity" | "kind" | "row">): QueuedMutation {
   return { mutationId: "mut-1", enqueuedAt: 0, ...over };

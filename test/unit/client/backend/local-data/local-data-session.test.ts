@@ -47,7 +47,7 @@ async function seedLegacy(): Promise<void> {
   await new IndexedDbMutationQueuePersistence(factory, "ava-mutation-queue").add(entry("v2-1")); // #1346
   await new IndexedDbRejectedChangesPersistence(factory, "ava-rejected-changes")
     .add({ id: "r1", rejectedAt: 1, label: "Ny kontakt", reason: "nej", entry: entry("r1") });
-  await new IndexedDbPersistence(factory, "ava-local-store").save({ contacts: [{ id: "c1", name: "Klient" }] } as never);
+  await new IndexedDbPersistence(factory, "ava-local-store").save({ contacts: [{ id: "c1", name: "Klient" }] });
   const content = new DocumentContentCache(factory, "ava-doc-content");
   await content.cache(asId<"DocumentId">("d-pending"), "sha-p", new Uint8Array([1]));
   await content.putBytes("sha-read", new Uint8Array([2]));
@@ -164,7 +164,7 @@ describe("byte av användare (bindningsfasen)", () => {
     if (!annaPlace) throw new Error("ingen plats");
     const ns = userNamespace(anna);
     await new IndexedDbMutationQueuePersistence(factory, queueLocation(annaPlace)).add(entry("offline-1"));
-    await new IndexedDbPersistence(factory, dbNameIn(ns, LOCAL_DB.localStore)).save({ contacts: [{ id: "x" }] } as never);
+    await new IndexedDbPersistence(factory, dbNameIn(ns, LOCAL_DB.localStore)).save({ contacts: [{ id: "x" }] });
     await new LocalDocumentTextStore(factory, { dbName: dbNameIn(ns, LOCAL_DB.docText) }).put("d1", "hemligt");
 
     // Bos cookie, men configen är fortfarande Annas → bindningsfasen.
@@ -193,7 +193,7 @@ describe("purgeLocalData", () => {
 
   it("inget osynkat → allt raderas", async () => {
     const ns = userNamespace(anna);
-    await new IndexedDbPersistence(factory, dbNameIn(ns, LOCAL_DB.localStore)).save({} as never);
+    await new IndexedDbPersistence(factory, dbNameIn(ns, LOCAL_DB.localStore)).save({});
     expect(await purgeLocalData(env(), annaPlace())).toEqual({ kept: [] });
     expect(await names()).toEqual([]);
   });
@@ -208,7 +208,7 @@ describe("purgeLocalData", () => {
     const content = new DocumentContentCache(factory, dbNameIn(ns, LOCAL_DB.docContent));
     await content.cache(asId<"DocumentId">("d"), "sha-p", new Uint8Array([1]));
     await content.putBytes("sha-read", new Uint8Array([2]));
-    await new IndexedDbPersistence(factory, dbNameIn(ns, LOCAL_DB.localStore)).save({} as never);
+    await new IndexedDbPersistence(factory, dbNameIn(ns, LOCAL_DB.localStore)).save({});
 
     expect((await purgeLocalData(env(), place)).kept).toEqual([
       LOCAL_DB.mutationQueue, LOCAL_DB.rejectedChanges, LOCAL_DB.docContent, LOCAL_DB.generatedDocs, LOCAL_DB.deferredFakturaDocs,
@@ -220,7 +220,7 @@ describe("purgeLocalData", () => {
 
   it("en blockerad radering görs om vid nästa start", async () => {
     const name = dbNameIn(userNamespace(anna), LOCAL_DB.localStore);
-    await new IndexedDbPersistence(factory, name).save({} as never);
+    await new IndexedDbPersistence(factory, name).save({});
     // En annan flik håller databasen öppen (utan att stänga vid versionchange).
     const held = await new Promise<IDBDatabase>((resolve) => {
       const req = factory.open(name);
