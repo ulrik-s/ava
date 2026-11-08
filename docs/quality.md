@@ -419,7 +419,9 @@ Jobben laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-rep
 (lasttestet, nattligt + manuellt, [`load-testing.md`](load-testing.md)), **`security.yml`**
 (CodeQL/SAST + `bun audit`-grinden på push/PR + veckovis schema) och
 **`release.yml`**
-(tag-triggad paket-release). Beroenden hålls uppdaterade av
+(tag-triggad paket-release) och **`deploy-prod.yml`** (deploy till prod över ssh efter grön
+CI på `main`, med godkännande i GitHub-miljön `production`,
+[`deploy-server-first.md`](deploy-server-first.md)). Beroenden hålls uppdaterade av
 [`.github/dependabot.yml`](../.github/dependabot.yml) (npm root + helper-ui +
 github-actions).
 

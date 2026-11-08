@@ -439,6 +439,41 @@ releaser.
 Byggcachen töms med flit varje gång (#1166): en gång gav den gammal CSS i prod
 — nya regler saknades trots rätt källkod och nya JS-chunkar, och inget larmade.
 
+### Deploy från CI
+
+Workflowet `.github/workflows/deploy-prod.yml` kör samma kommando som ovan över
+ssh efter varje grön **CI** på `main` (och för hand via *Run workflow*). Det
+checkar inte ut något — servern hämtar `origin/main` själv. Jobbet kör i
+GitHub-miljön **`production`** med ägaren som obligatorisk granskare: varje
+grön main förbereder ett deploy, ett klick godkänner det. Ta bort granskaren
+i miljöns inställningar om det ska gå rakt igenom.
+
+**Servern** (en gång): en nyckel som bara kan deploya. `restrict` stänger av
+forwarding/pty, `command=` ersätter vad klienten än skickar.
+
+```bash
+# På en dator som inte är servern — den privata delen blir en GitHub-secret.
+ssh-keygen -t ed25519 -N "" -C ava-deploy -f ava-deploy
+# På servern, som root:
+echo "restrict,command=\"cd /srv/ava && bash tooling/scripts/deploy-prod.sh\" $(cat ava-deploy.pub)" >> /root/.ssh/authorized_keys
+```
+
+**GitHub** (en gång): *Settings → Environments → production*: *Required
+reviewers* = ägaren. Secrets i miljön:
+
+| Secret | Innehåll |
+|---|---|
+| `AVA_DEPLOY_SSH_KEY` | hela `ava-deploy` (privata nyckeln) |
+| `AVA_DEPLOY_HOST` | serverns värdnamn eller IP |
+| `AVA_DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -t ed25519 <host>` — en rad |
+
+Variabeln `AVA_DEPLOY_USER` sätts bara om användaren inte är `root`
+(skriptet installerar systemd-enheter, så den behöver root).
+
+Rollback (`--rollback`) går inte via nyckeln — den kan bara deploya — utan som
+i *Rollback* nedan, från servern. Radera den privata nyckeln lokalt när
+secreten är satt.
+
 ### Releaser: varför klienten inte byggs där Caddy läser (#1369)
 
 ```
