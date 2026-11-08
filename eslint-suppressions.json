@@ -184,6 +184,11 @@
       "count": 3
     }
   },
+  "office-addin/build.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
   "src/app/calendar/_calendar-grid.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4

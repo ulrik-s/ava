@@ -13,7 +13,7 @@ import { cp } from "node:fs/promises";
 import { join } from "node:path";
 
 const root = import.meta.dir;
-const outdir: string = join(root, "dist");
+const outdir = join(root, "dist");
 
 const result = await Bun.build({
   entrypoints: [join(root, "taskpane/taskpane.ts")],
