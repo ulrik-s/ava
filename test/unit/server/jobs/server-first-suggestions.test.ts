@@ -75,7 +75,7 @@ function setup() {
 function jobFor(documentId: string): Job {
   return {
     id: "job-1", name: JOB_QUEUES.classifyDocument, data: { documentId },
-    expireInSeconds: 60, heartbeatSeconds: null, signal: AbortSignal.abort(),
+    expireInSeconds: 60, heartbeatSeconds: null, retryCount: 0, signal: AbortSignal.abort(),
   };
 }
 
