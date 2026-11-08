@@ -64,7 +64,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          path: artifacts
+          name: web-demo
+          # Med name: läggs filerna direkt i path, utan extra katalog — samma
+          # layout oavsett action-version (v8 lade dem inte där v7 gjorde).
+          path: artifacts/web-demo
+      - run: ls -laR artifacts
       - name: Publish release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
