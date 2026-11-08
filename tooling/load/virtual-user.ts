@@ -85,6 +85,8 @@ export class VirtualUser {
       fetch: this.fetchFn,
       persistence: new InMemoryPersistence(),
       queuePersistence: new InMemoryMutationQueuePersistence(),
+      // Allt i minnet, som bindningsfasen (#1347): ingen namnrymd är bunden i lasttestets process.
+      local: "binding",
       skipInitialReconcile: true,
       rejected: { changes: this.rejected, persistence: new InMemoryRejectedChangesPersistence() },
     });
