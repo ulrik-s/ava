@@ -29,7 +29,11 @@ const COPIED = [
   "tooling/docker/caddy/Caddyfile",
   "tooling/systemd/ava-backup-request.path",
   "tooling/systemd/ava-backup-request.service",
+  "tooling/systemd/ava-deploy.timer",
+  "tooling/systemd/ava-deploy.service",
 ];
+/** Enheterna som installeras vid VARJE deploy (deploy via tagg). */
+const DEPLOY_UNITS = ["ava-deploy.service", "ava-deploy.timer"];
 
 let root = "";
 let srv = "";
@@ -254,12 +258,60 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     expect(readdirSync(systemd)).toEqual([]);
   });
 
-  it("backup på begäran utan nattjobbet: inga enheter, och det sägs", () => {
+  it("backup på begäran utan nattjobbet: inga backupenheter, och det sägs", () => {
     const { status, out, calls } = deploy();
     expect(status, out).toBe(0);
-    expect(readdirSync(systemd)).toEqual([]);
+    expect(readdirSync(systemd).sort()).toEqual(DEPLOY_UNITS);
     expect(calls.some((c) => c.includes("ava-backup-request"))).toBe(false);
     expect(out).toContain("ingen ava-backup.service");
+  });
+
+  it("deploy via tagg: timern installeras och startas vid varje deploy", () => {
+    const { status, out, calls } = deploy();
+    expect(status, out).toBe(0);
+    for (const unit of DEPLOY_UNITS) {
+      expect(readFileSync(join(systemd, unit), "utf8")).toBe(readFileSync(join(REPO, "tooling/systemd", unit), "utf8"));
+    }
+    expect(calls).toContain("systemctl enable --now ava-deploy.timer");
+    const again = deploy();
+    expect(again.status, again.out).toBe(0);
+    expect(again.calls).not.toContain("systemctl daemon-reload");
+    expect(again.calls).toContain("systemctl enable --now ava-deploy.timer");
+  });
+
+  it("--tag checkar ut taggen, inte origin/main — också när skriptet ändrats och startar om", () => {
+    const tagged = pushCommit();
+    sh("git tag v1.2.0 && git push -q origin v1.2.0", dev);
+    const src = readFileSync(join(dev, "tooling/scripts/deploy-prod.sh"), "utf8");
+    const newer = pushCommit("tooling/scripts/deploy-prod.sh", src.replace("set -euo pipefail\n", "set -euo pipefail\necho NY-VERSION-KÖR\n"));
+    expect(newer).not.toBe(tagged);
+    const { status, out } = deploy(["--tag", "v1.2.0"]);
+    expect(status, out).toBe(0);
+    expect(out).toContain("uppdaterar till v1.2.0 (taggen)");
+    expect(head()).toBe(tagged);
+    expect(served()).toBe(`klient ${tagged}`);
+    expect(out).not.toContain("NY-VERSION-KÖR");
+
+    // Taggen pekar på deploy-skriptets gamla version; en ny tagg på den nya
+    // versionen → omstarten körs med den nya versionen OCH behåller --tag.
+    sh("git tag v1.3.0 && git push -q origin v1.3.0", dev);
+    pushCommit();
+    const next = deploy(["--tag", "v1.3.0"]);
+    expect(next.status, next.out).toBe(0);
+    expect(next.out).toContain("startar om med den nya versionen");
+    expect(next.out).toContain("NY-VERSION-KÖR");
+    expect(head()).toBe(newer);
+    expect(served()).toBe(`klient ${newer}`);
+  });
+
+  it("--tag utan värde → exit 2; okänd tagg → fel, inget ändrat", () => {
+    expect(deploy(["--tag"]).status).toBe(2);
+    expect(deploy().status).toBe(0);
+    const before = link("current");
+    const { status, out } = deploy(["--tag", "v9.9.9"]);
+    expect(status).toBe(1);
+    expect(out).toContain("taggen v9.9.9 finns inte i origin");
+    expect(link("current")).toBe(before);
   });
 
   it("deploy-skriptet ändrat i origin/main → deployen körs med den nya versionen", () => {
@@ -363,7 +415,8 @@ describe("deploy-prod.sh — --dry-run, --rollback och argument", () => {
     expect(head()).toBe(oldHead);
     expect(link("current")).toBe(before);
     expect(calls.filter((c) => !c.startsWith("docker ps") && !c.startsWith("systemctl cat"))).toEqual([]);
-    expect(readdirSync(systemd)).toEqual([]);
+    // Bara det den riktiga deployen ovan lade dit — dry-run installerar inget.
+    expect(readdirSync(systemd).sort()).toEqual(DEPLOY_UNITS);
     expect(out).toContain("[dry-run] git merge --ff-only");
     expect(out).toContain(`[dry-run] release_activate `);
     expect(out).toContain(sha);

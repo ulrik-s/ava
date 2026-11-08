@@ -59,6 +59,8 @@ usage() {
   echo "användning: bash tooling/scripts/deploy-prod.sh [--dry-run] [--rollback] [--tag <v…>]"
 }
 
+# Originalargumenten: skriptet startar om sig självt med dem om det ändrats.
+ARGS=("$@")
 while [ $# -gt 0 ]; do
   arg="$1"; shift
   case "$arg" in
@@ -172,7 +174,7 @@ else
     ! git diff --quiet "$before" HEAD -- tooling/scripts/deploy-prod.sh tooling/scripts/lib/release.sh; then
     echo "deploy-skriptet har ändrats — startar om med den nya versionen"
     trap - EXIT
-    AVA_DEPLOY_BEFORE="$before" exec bash tooling/scripts/deploy-prod.sh "$@"
+    AVA_DEPLOY_BEFORE="$before" exec bash tooling/scripts/deploy-prod.sh "${ARGS[@]}"
   fi
 fi
 git log --oneline -1 "$sha"
