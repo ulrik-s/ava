@@ -49,7 +49,7 @@ describe("runQueuedProcedure", () => {
     const id = uuidv7();
     await ds.runQueuedProcedure({ path: "timeEntry.create", input: { id } }, async () => {
       await ds.store.timeEntries.create({ data: entry(id) as never });
-      await ds.store.timeEntries.update({ where: { id }, data: { minutes: 45 } as never });
+      await ds.store.timeEntries.update({ where: { id }, data: { minutes: 45 } });
     });
     expect(ds.pendingEntries()[0]).toMatchObject({ touches: [{ entity: "timeEntry", id }] });
   });

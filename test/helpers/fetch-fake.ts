@@ -13,9 +13,11 @@
  * accepteras av en cast i varje testfil.
  */
 
+import { requestUrl } from "@/lib/shared/request-url";
+
 /** En attrapp som svarar likadant på varje anrop. */
 export function fetchFake(handler: (url: string, init?: RequestInit) => Promise<Response>): typeof globalThis.fetch {
-  const fn = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => handler(String(input), init);
+  const fn = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => handler(requestUrl(input), init);
   return Object.assign(fn, { preconnect: (): void => {} });
 }
 

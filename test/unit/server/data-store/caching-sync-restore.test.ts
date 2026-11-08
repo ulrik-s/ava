@@ -68,7 +68,7 @@ describe("reconcile — avvisad rad lämnar ingen spökrad (#1348)", () => {
   it("avvisad ändring med serverns current → den lokala raden blir serverns", async () => {
     const id = uuidv7();
     const h = await setup({ tasks: [{ id, title: "Server", version: 3 }] });
-    await h.ds.store.tasks.update({ where: { id }, data: { title: "Min ändring" } as never });
+    await h.ds.store.tasks.update({ where: { id }, data: { title: "Min ändring" } });
     h.server.pushImpl = () => ({ status: "conflict", reason: "stale", current: { id, title: "Kollegans", version: 4 } });
     await h.ds.reconcile();
     expect(await h.task(id)).toMatchObject({ title: "Kollegans", version: 4 });
@@ -93,7 +93,7 @@ describe("restore — Kasta hämtar serverns läge (#1348)", () => {
   it("en rad med en ny, ej synkad ändring rörs inte — inget hämtas, inget sparas", async () => {
     const id = uuidv7();
     const h = await setup({ tasks: [{ id, title: "Server" }] });
-    await h.ds.store.tasks.update({ where: { id }, data: { title: "Ny ändring" } as never });
+    await h.ds.store.tasks.update({ where: { id }, data: { title: "Ny ändring" } });
     const saves = h.persistence.saves;
     expect(await h.ds.restore({ mutationId: "gammal", entity: "task", kind: "update", row: { id }, enqueuedAt: 0 })).toBe(0);
     expect(h.server.rowRequests).toEqual([]);

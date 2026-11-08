@@ -13,12 +13,13 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { primitiveText } from "@/lib/shared/primitive-text";
 import { buildSeed } from "@/../tooling/scripts/seed-data";
 
 const seed = buildSeed();
 const asDate = (v: unknown): Date => (v instanceof Date ? v : new Date(String(v)));
 const invoiceById = new Map(seed.invoices.map((i) => [String(i.id), i]));
-const label = (row: Record<string, unknown>): string => `${String(row.id)} (${String(row.invoiceId ?? "")})`;
+const label = (row: Record<string, unknown>): string => `${String(row.id)} (${primitiveText(row.invoiceId)})`;
 
 describe("betalningarnas tidslinje", () => {
   it("ingen betalning är daterad före sin fakturas utställning", () => {
@@ -120,8 +121,8 @@ describe("kostnadsräkningarnas livscykel finns i datan (#828)", () => {
 
   it("en inskickad KR har varken beslut eller prutning", () => {
     for (const run of seed.billingRuns.filter((r) => r.kostnadsrakningStatus === "INSKICKAD")) {
-      expect(run.awardedOre, `${String(run.id)}`).toBeNull();
-      expect(run.prutningOre, `${String(run.id)}`).toBeNull();
+      expect(run.awardedOre, String(run.id)).toBeNull();
+      expect(run.prutningOre, String(run.id)).toBeNull();
     }
   });
 });
@@ -147,7 +148,7 @@ describe("utskickshistoriken skiljer skickad från oskickad", () => {
     for (const d of seed.invoiceDispatches) {
       const inv = invoiceById.get(String(d.invoiceId));
       if (!inv) continue;
-      expect(asDate(d.queuedAt).getTime(), `${String(d.id)}`).toBeGreaterThanOrEqual(asDate(inv.issuedAt).getTime());
+      expect(asDate(d.queuedAt).getTime(), String(d.id)).toBeGreaterThanOrEqual(asDate(inv.issuedAt).getTime());
     }
   });
 });

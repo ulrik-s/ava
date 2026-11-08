@@ -33,7 +33,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("pathSkipsAuth", () => {
   it.each([["/demo", true], ["/demo/", true], ["/login", true], ["/login/", true],
     ["/matters", false], ["/", false], ["/demos", false]])(
-    "%s → %s", (p, expected) => expect(pathSkipsAuth(p as string)).toBe(expected),
+    "%s → %s", (p, expected) => expect(pathSkipsAuth(p)).toBe(expected),
   );
 });
 

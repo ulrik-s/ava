@@ -140,7 +140,7 @@ describe("Att bevaka-sidan", () => {
 
   it("ny bevakning: titel + datum krävs, skapas som uppgift med datumet (lokal midnatt)", () => {
     render(<WatchlistPage />);
-    const add = screen.getByRole("button", { name: "Lägg till" }) as HTMLButtonElement;
+    const add = screen.getByRole<HTMLButtonElement>("button", { name: "Lägg till" });
     fireEvent.change(screen.getByLabelText("Ny bevakning"), { target: { value: "Ring klienten" } });
     expect(add.disabled).toBe(true); // datum saknas
     fireEvent.change(screen.getByLabelText("Bevakningsdatum"), { target: { value: "2026-10-02" } });

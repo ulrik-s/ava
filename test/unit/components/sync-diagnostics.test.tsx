@@ -22,7 +22,7 @@ vi.mock("@/lib/client/sync/sync-context", () => ({
 }));
 
 function reset(): void {
-  ctxState.state = { kind: "idle" } as SyncState;
+  ctxState.state = { kind: "idle" };
   ctxState.providerKind = "fsa";
   ctxState.lastError = null;
   ctxState.enabled = true;
@@ -47,21 +47,21 @@ describe("SyncDiagnostics", () => {
 
   it("visar StateLabel för synced med tidsstämpel", () => {
     reset();
-    ctxState.state = { kind: "synced", at: Date.now() } as SyncState;
+    ctxState.state = { kind: "synced", at: Date.now() };
     render(<SyncDiagnostics />);
     expect(screen.getByText(/Allt sparat/)).toBeInTheDocument();
   });
 
   it("visar StateLabel för syncing pull", () => {
     reset();
-    ctxState.state = { kind: "syncing", what: "pull" } as SyncState;
+    ctxState.state = { kind: "syncing", what: "pull" };
     render(<SyncDiagnostics />);
     expect(screen.getByText(/Hämtar uppdateringar/)).toBeInTheDocument();
   });
 
   it("disable:ar 'Synka nu' medan syncing pågår", () => {
     reset();
-    ctxState.state = { kind: "syncing", what: "push" } as SyncState;
+    ctxState.state = { kind: "syncing", what: "push" };
     render(<SyncDiagnostics />);
     expect(screen.getByRole("button", { name: /Synka nu/ })).toBeDisabled();
   });

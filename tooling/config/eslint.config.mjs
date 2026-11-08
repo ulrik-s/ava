@@ -76,6 +76,14 @@ const eslintConfig = defineConfig([
           message:
             "Dubbel-cast (`<T><U>x`) är förbjuden — den raderar typsäkerheten. Använd riktiga typer (#562, ADR 0026).",
         },
+        {
+          // Rå JSON.parse ger `any` som sedan castas. All extern text ska gå
+          // genom zod: parseJsonWith/safeParseJsonWith i src/lib/shared/parse-json.ts (#1469).
+          selector:
+            "CallExpression[callee.type='MemberExpression'][callee.object.name='JSON'][callee.property.name='parse']",
+          message:
+            "Direkt JSON.parse är förbjuden — använd parseJsonWith(schema, text) / safeParseJsonWith(schema, text) från @/lib/shared/parse-json så värdet valideras med zod (#1469).",
+        },
       ],
       // Promise-säkerhet: oavsiktligt obevakade promises, async-callbacks i
       // synkron/void-kontext, och `await` på icke-thenables är vanliga
@@ -94,6 +102,35 @@ const eslintConfig = defineConfig([
       // de tillkommer utan extra parser-overhead när de aktiveras.
       // Underscore-prefix = avsiktligt oanvänd (signaturkrav, framtida bruk).
       // Skiljer medvetna platshållare från faktiskt bortglömd kod.
+      // ── strictTypeChecked-urval med baslinje (#1469, steg 2) ──────────
+      // Reglerna nedan är `error`; dagens skuld ligger i eslint-suppressions.json
+      // (bulk-suppression) och betas av med `bun run lint:prune`. NYA brott
+      // fäller CI. no-base-to-string och JSON.parse-förbudet baselineades
+      // INTE — de rättades (riktiga "[object Object]"-buggar resp. ovaliderad
+      // extern data).
+      "@typescript-eslint/no-base-to-string": "error",
+      "@typescript-eslint/no-deprecated": "error",
+      "@typescript-eslint/no-unnecessary-condition": "error",
+      "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      "@typescript-eslint/require-await": "error",
+      "@typescript-eslint/no-unnecessary-type-conversion": "error",
+      "@typescript-eslint/no-misused-spread": "error",
+      "@typescript-eslint/no-dynamic-delete": "error",
+      "@typescript-eslint/prefer-promise-reject-errors": "error",
+      "@typescript-eslint/no-redundant-type-constituents": "error",
+      "@typescript-eslint/only-throw-error": "error",
+      "@typescript-eslint/use-unknown-in-catch-callback-variable": "error",
+      "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
+      "@typescript-eslint/no-unnecessary-template-expression": "error",
+      "@typescript-eslint/unified-signatures": "error",
+      "@typescript-eslint/no-unnecessary-type-parameters": "error",
+      "@typescript-eslint/restrict-template-expressions": [
+        "error",
+        { allowNumber: true, allowBoolean: false, allowNullish: false, allowAny: false, allowNever: false, allowRegExp: false },
+      ],
+      "@typescript-eslint/restrict-plus-operands": "error",
+      "@typescript-eslint/unbound-method": "error",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         {

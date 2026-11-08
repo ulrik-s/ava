@@ -6,7 +6,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, documents, matterContacts, matters, timeEntries, users } from "@/lib/server/db/schema";
 import { DrizzleContactRepository } from "@/lib/server/repositories/drizzle-contact-repository";
@@ -37,11 +36,10 @@ describe("Matter-läsningar — in-memory", () => {
       matterContacts: [{ id: mcId, matterId: mId, contactId: cId, role: "KLIENT" }],
       documents: [{ id: uuidv7(), matterId: mId, fileName: "a.pdf", folderId: null }],
       timeEntries: [{ id: uuidv7(), matterId: mId, userId: uId, minutes: 30, billable: true, hourlyRate: 1000, date: new Date() }],
-    } as DemoSource);
+    });
     const store = new LocalStore(source, async () => {});
     const mRepo = new InMemoryMatterRepository(store);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mcRepo = new InMemoryMatterContactRepository(store as any);
+    const mcRepo = new InMemoryMatterContactRepository(store);
     const cRepo = new InMemoryContactRepository(store);
 
     const list = await mRepo.listForOrg(ORG, { page: 1, pageSize: 20 });

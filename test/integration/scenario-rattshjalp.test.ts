@@ -53,7 +53,7 @@ function makeStore(): { caller: ReturnType<typeof appRouter.createCaller>; sourc
     invoices: [], calendarEvents: [], tasks: [],
     documentTemplates: [], conflictChecks: [], offices: [],
     paymentPlans: [], paymentPlanReminders: [], payments: [],
-  } as DemoSource);
+  });
   const dataStore = new DemoDataStore(source, async () => { /* no-op */ });
   const ports = buildGitPorts(dataStore);
   const caller = appRouter.createCaller({
@@ -102,7 +102,7 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
       title: "Tomas Talesman — grov ekobrottslighet (omfattande)",
       description: "Mål B 2026-9999. Solna TR. 17 åtalspunkter, 8 vittnen.",
       matterType: "Brottmål",
-      klientId: state.klientId!,
+      klientId: state.klientId,
       // Initialt markerat som taxeärende — typiskt för brottmål med
       // offentlig försvarare. Men HUF visar sig bli > 225 min →
       // taxan TILLÄMPAS INTE, trots flaggan.
@@ -113,7 +113,7 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
     // tillåter FINAL (#816). Sätts explicit så fakturerings-guarden passerar.
     await state.caller.matter.update({ id: matter.id, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     await state.caller.matter.addContact({
-      matterId: matter.id, contactId: state.domstolId!, role: "DOMSTOL",
+      matterId: matter.id, contactId: state.domstolId, role: "DOMSTOL",
     });
   });
 

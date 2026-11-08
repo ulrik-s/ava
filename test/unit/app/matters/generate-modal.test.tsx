@@ -135,7 +135,7 @@ describe("GenerateModal — generering", () => {
 
   it("format docx går att välja", () => {
     render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={() => {}} />);
-    const docx = screen.getByRole("radio", { name: /HTML-fil/ }) as HTMLInputElement;
+    const docx = screen.getByRole<HTMLInputElement>("radio", { name: /HTML-fil/ });
     fireEvent.click(docx);
     expect(docx.checked).toBe(true);
   });

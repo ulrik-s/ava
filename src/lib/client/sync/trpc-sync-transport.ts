@@ -20,20 +20,20 @@ export class TrpcSyncTransport implements SyncTransport {
   constructor(private readonly client: TRPCClient<AppRouter>) {}
 
   pull(sinceCursor: number, epoch?: string): Promise<PullResult> {
-    return this.client.sync.pull.query({ sinceCursor, ...(epoch !== undefined ? { epoch } : {}) }) as Promise<PullResult>;
+    return this.client.sync.pull.query({ sinceCursor, ...(epoch !== undefined ? { epoch } : {}) });
   }
 
   /** Radernas kanoniska läge (#1348) — återställning efter en avvisad ändring. */
   rows(refs: readonly RowRef[]): Promise<PulledChange[]> {
-    return this.client.sync.rows.mutate({ refs: [...refs] }) as Promise<PulledChange[]>;
+    return this.client.sync.rows.mutate({ refs: [...refs] });
   }
 
   push(mutation: QueuedMutation): Promise<PushResult> {
-    return this.client.sync.push.mutate(mutation) as Promise<PushResult>;
+    return this.client.sync.push.mutate(mutation);
   }
 
   /** Låt servern köra om ett köat procedur-anrop (#1265, ADR 0037). */
   pushProcedure(call: QueuedProcedureCall): Promise<ProcedureReplayResult> {
-    return this.client.sync.replay.mutate(call) as Promise<ProcedureReplayResult>;
+    return this.client.sync.replay.mutate(call);
   }
 }

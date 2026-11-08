@@ -16,7 +16,7 @@ export function matchEventTriggers(rules: AvaRule[], event: AvaEvent): AvaRule[]
     if (rule.trigger.type !== event.type) return false;
     if (!rule.trigger.predicate) return true;
     try {
-      return !!jsonLogic.apply(rule.trigger.predicate as never, {
+      return !!jsonLogic.apply(rule.trigger.predicate, {
         event,
         payload: event.payload,
         actor: event.actor,

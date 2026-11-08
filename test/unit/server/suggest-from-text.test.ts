@@ -13,7 +13,6 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { writeSuggestionsFromText } from "@/lib/server/documents/suggest-from-text";
 import type { SuggestionRepos } from "@/lib/server/documents/suggest-from-text";
@@ -41,7 +40,7 @@ function setup() {
     documents: [{ id: documentId, matterId, fileName: "stamning.pdf", title: "Stämning" }],
     documentAnalysisSuggestions: [],
     matterEventSuggestions: [],
-  } as DemoSource);
+  });
   const store = new LocalStore(source, async () => {});
   const repos: SuggestionRepos = {
     documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(store),

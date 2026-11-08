@@ -38,7 +38,7 @@ export class InMemoryDocumentFolderRepository
   async reassignParent(fromParentId: DocumentFolderId, toParentId: DocumentFolderId | null): Promise<void> {
     await this.delegate.updateMany({
       where: { parentId: fromParentId },
-      data: { parentId: toParentId } as Partial<DocumentFolder>,
+      data: { parentId: toParentId },
     });
   }
 }

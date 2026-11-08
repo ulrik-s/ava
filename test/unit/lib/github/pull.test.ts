@@ -8,6 +8,7 @@ import { writeFile } from "@/lib/client/github/fsa-walker";
 import { gitBlobSha1 } from "@/lib/client/github/git-blob-hash";
 import { pullViaRest } from "@/lib/client/github/pull";
 import { writeSyncState, readSyncState } from "@/lib/client/github/sync-state";
+import { requestUrl } from "@/lib/shared/request-url";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 const REPO = { owner: "ulrik-s", repo: "ava" };
@@ -21,7 +22,7 @@ interface MockResponses {
 
 function mockGitHub(responses: MockResponses): typeof fetch {
   return vi.fn(async (url: URL | RequestInfo) => {
-    const u = url.toString();
+    const u = requestUrl(url);
     const json = (body: unknown): Response => ({
       ok: true, status: 200, statusText: "OK",
       text: async () => JSON.stringify(body),
@@ -108,12 +109,12 @@ describe("pullViaRest", () => {
 
     let blobFetched = false;
     globalThis.fetch = vi.fn(async (url: URL | RequestInfo) => {
-      const u = url.toString();
+      const u = requestUrl(url);
       if (u.includes("/git/blobs/")) blobFetched = true;
       return mockGitHub({
         head: "newhead",
         tree: { sha: "t", truncated: false, tree: [{ path: "stable.json", type: "blob", sha }] },
-      })(url, undefined as never);
+      })(url, undefined);
     }) as typeof fetch;
 
     const result = await pullViaRest({

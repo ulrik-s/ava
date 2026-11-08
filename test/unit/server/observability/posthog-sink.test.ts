@@ -14,6 +14,7 @@ import {
   POSTHOG_EU_HOST, errorSinkFromEnv, posthogEvent, posthogReporter, retryAfterMs, startErrorReporting,
   type ErrorSinkConfig, type SinkResponse,
 } from "@/lib/server/observability/posthog-sink";
+import { requestBodyText, requestUrl } from "@/lib/shared/request-url";
 
 const TOKEN = "phc_testtoken12345";
 const CONFIG: ErrorSinkConfig = {
@@ -143,7 +144,7 @@ describe("posthogReporter", () => {
     expect(sent[0]?.url).toBe("https://eu.i.posthog.com/i/v0/e/");
     expect(sent[0]?.init.method).toBe("POST");
     expect(sent[0]?.init.headers).toEqual({ "Content-Type": "application/json" });
-    expect(JSON.parse(String(sent[0]?.init.body))).toEqual(posthogEvent(REPORT, CONFIG));
+    expect(JSON.parse(requestBodyText(sent[0]?.init))).toEqual(posthogEvent(REPORT, CONFIG));
   });
 
   it("ett nätverksfel kastar inte och släpper platsen", async () => {
@@ -201,7 +202,7 @@ describe("posthogReporter", () => {
     it("använder fetch", async () => {
       const { sent, send } = recorder();
       const stub = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-        await send(String(input), init ?? {});
+        await send(requestUrl(input), init ?? {});
         return new Response();
       };
       globalThis.fetch = Object.assign(stub, { preconnect: original.preconnect });

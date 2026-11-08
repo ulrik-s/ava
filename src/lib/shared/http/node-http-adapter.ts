@@ -49,7 +49,7 @@ function toFetchRequest(req: IncomingMessage, body: Buffer): Request {
 
 /** Har klienten gått? Bun:s node:http sätter inte `res.destroyed` — socketen säger det i båda. */
 function gone(res: ServerResponse, socket: Socket | null): boolean {
-  return res.destroyed === true || socket?.destroyed === true;
+  return res.destroyed || socket?.destroyed === true;
 }
 
 /** Hur länge en ström får stå still (ingen `drain`) innan den ges upp. */

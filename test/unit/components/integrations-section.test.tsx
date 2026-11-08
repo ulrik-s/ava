@@ -71,7 +71,7 @@ describe("IntegrationsSection", () => {
     const { unmount } = render(<IntegrationsSection />);
     expect(screen.getByText(/Token förfallit/)).toBeInTheDocument();
     unmount();
-    currentStatus = { kind: "error", message: "boom" } as ConnectionStatus;
+    currentStatus = { kind: "error", message: "boom" };
     render(<IntegrationsSection />);
     expect(screen.getByText(/✗ boom/)).toBeInTheDocument();
   });

@@ -27,8 +27,7 @@ function caller() {
       { id: "c5", organizationId: "org-2", name: "Anna Andersson", contactType: "PERSON", parentId: null },
     ],
   }, async () => { /* noop write-back */ });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
 }
 
 const names = (r: { contacts: Array<{ name: string }> }) => r.contacts.map((c) => c.name);

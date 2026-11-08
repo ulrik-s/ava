@@ -156,7 +156,7 @@ async function runRest(caller: GeneratorCaller, seed: SeedDataset, loginIds: Log
   const sink = contentSink();
   const ctx: RunCtx = { c: caller, res: emptyRunResult(), ...(sink ? { sink } : {}) };
   await runSimulation(ctx, seed);
-  await addTodayTimeEntries(caller, seed.timeEntries as Row[], seed.matters as Row[], loginIds); // "idag"-tid för dashboarden
+  await addTodayTimeEntries(caller, seed.timeEntries, seed.matters, loginIds); // "idag"-tid för dashboarden
   const kostnadsrakningDocs = await seedKostnadsrakningDocs(caller);
   const invoiceDocs = await seedInvoiceDocs(caller);
   return { ...core, sim: ctx.res, kostnadsrakningDocs, invoiceDocs };
@@ -194,11 +194,11 @@ async function main(): Promise<void> {
     const admin = (await repos.users.listByOrg(ORG)).find((u) => u.role === "ADMIN");
     const principal = seedPrincipal(admin);
     const ctx = buildContext({ repos, eventLog: serverFirstEventLog, ports: noopPorts, principal });
-    const inProcess = appRouter.createCaller(ctx as never) as GeneratorCaller;
+    const inProcess = appRouter.createCaller(ctx);
 
     // Slug-seed → UUID:er (ADR 0003) + mappa admin/huvud-jurist till KC-login-emailen.
     const seed = translateSeed(buildSeed({}), createIdTranslator());
-    const loginIds = remapLoginUsers(seed.users as Row[]);
+    const loginIds = remapLoginUsers(seed.users);
 
     const result = VIA_HTTP
       ? await seedViaHttp(inProcess, seed, loginIds)

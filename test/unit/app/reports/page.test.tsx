@@ -125,7 +125,7 @@ describe("ReportsPage", () => {
 
   it("listar advokater i select", () => {
     render(<ReportsPage />);
-    const options = screen.getAllByRole("option") as HTMLOptionElement[];
+    const options = screen.getAllByRole<HTMLOptionElement>("option");
     const names = options.map((o) => o.textContent);
     expect(names).toContain("Anna");
     expect(names).toContain("Bo");
@@ -193,7 +193,7 @@ describe("ReportsPage", () => {
 
   it("byter advokat via select", () => {
     render(<ReportsPage />);
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "u2" } });
     expect(select.value).toBe("u2");
   });
@@ -209,11 +209,11 @@ describe("ReportsPage", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       blob: () => Promise.resolve(new Blob(["x"])),
     });
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
     const createObjectURL = vi.fn().mockReturnValue("blob:url");
     const revokeObjectURL = vi.fn();
-    global.URL.createObjectURL = createObjectURL as unknown as typeof URL.createObjectURL;
-    global.URL.revokeObjectURL = revokeObjectURL as unknown as typeof URL.revokeObjectURL;
+    global.URL.createObjectURL = createObjectURL;
+    global.URL.revokeObjectURL = revokeObjectURL;
 
     render(<ReportsPage />);
     const btn = screen.getByRole("button", { name: /Exportera Excel/i });

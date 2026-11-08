@@ -1,7 +1,1228 @@
 {
-  "test/bun-compat.ts": {
+  "helper-ui/make-icons.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "helper-ui/src/engine/allowed-origins.ts": {
     "no-restricted-syntax": {
       "count": 1
+    }
+  },
+  "helper-ui/src/engine/auth/callback-server.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "helper-ui/src/engine/auth/token-store.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "helper-ui/src/engine/compose-mail.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "helper-ui/src/engine/content-store.ts": {
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 2
+    },
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "helper-ui/src/engine/helper-config.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "helper-ui/src/engine/main.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "helper-ui/src/engine/queue.ts": {
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "helper-ui/src/engine/tls/certs.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "helper-ui/test/allowed-origins.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 5
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "helper-ui/test/auth-orchestration.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 23
+    }
+  },
+  "helper-ui/test/auth.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 7
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "helper-ui/test/compose-mail.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 9
+    }
+  },
+  "helper-ui/test/content-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "helper-ui/test/content.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 14
+    }
+  },
+  "helper-ui/test/engine.integration.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "helper-ui/test/helper-config.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "helper-ui/test/helper-ui.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "helper-ui/test/install.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "helper-ui/test/io.test.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 5
+    }
+  },
+  "helper-ui/test/lease-session.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 8
+    }
+  },
+  "helper-ui/test/open.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 16
+    }
+  },
+  "helper-ui/test/queue.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 14
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "helper-ui/test/server.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 6
+    }
+  },
+  "helper-ui/test/trpc-client.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
+  "helper-ui/test/update.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 7
+    }
+  },
+  "helper-ui/test/watch.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "src/app/calendar/_calendar-grid.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/app/calendar/_day-view.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/calendar/page.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "src/app/conflicts/page.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/app/contacts/[id]/_client.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/app/contacts/page.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/app/invoices/[id]/_client.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 13
+    }
+  },
+  "src/app/invoices/page.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/app/login/page.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    }
+  },
+  "src/app/matters/[id]/_billing-panel.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 3
+    }
+  },
+  "src/app/matters/[id]/_contacts-section.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 7
+    }
+  },
+  "src/app/matters/[id]/_expense-section.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/matters/[id]/_generate-modal.tsx": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/app/matters/[id]/_service-notes-section.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/app/matters/[id]/_settlement-dialog.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/app/matters/[id]/_watch-section.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/app/matters/page.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "src/app/profile/page.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/app/reports/page.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/search/page.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    }
+  },
+  "src/app/setup/page.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    }
+  },
+  "src/app/time/page.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/users/[id]/_edit-client.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/app/users/_user-form.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/app/users/new/page.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/bin/server-first.ts": {
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    }
+  },
+  "src/components/billing/hourly-rates-fields.tsx": {
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 1
+    }
+  },
+  "src/components/contacts/client-picker-dialog.tsx": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "src/components/contacts/new-client-dialog.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/components/contacts/new-contact-form.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/components/diagnostics/error-report-button.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/components/documents/_document-row.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "src/components/documents/_document-tags.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/components/documents/document-browser.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/components/layout/overflow-trigger.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/components/matter/_suggestion-row.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/components/matter/payment-method-card.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/components/settings/backup-section.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/components/settings/external-edit-section.tsx": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "src/components/settings/org-defaults-section.tsx": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 4
+    }
+  },
+  "src/components/shell/app-shell.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/components/shell/auth-status-banner.tsx": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "src/components/shell/demo-bootstrap.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/components/time/time-entry-form.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/components/ui/data-table-logic.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 3
+    }
+  },
+  "src/components/ui/data-table.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 2
+    }
+  },
+  "src/components/watchlist/conflict-check-actions.tsx": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/lib/client/addin/taskpane-controller.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/lib/client/auth/auth-client.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    }
+  },
+  "src/lib/client/auth/github-auth.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/lib/client/auth/session-keepalive.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/client/auth/session-probe.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/lib/client/backend/content-cache.ts": {
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 1
+    }
+  },
+  "src/lib/client/backend/rejected-changes.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "src/lib/client/billing/deferred-faktura-docs.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/lib/client/calendar/user-colors.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/lib/client/demo/demo-seed-loader.ts": {
+    "@typescript-eslint/only-throw-error": {
+      "count": 1
+    }
+  },
+  "src/lib/client/demo/generated-doc-idb.ts": {
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 3
+    }
+  },
+  "src/lib/client/demo/reset-demo.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/client/demo/static-params.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/client/demo/use-route-id.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/client/diagnostics/index.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/lib/client/diagnostics/issue-store.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "src/lib/client/diagnostics/log-buffer.ts": {
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/client/diagnostics/report.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/lib/client/firma/firma-config.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    },
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 1
+    }
+  },
+  "src/lib/client/firma/prefetch-matter-documents.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/lib/client/fsa/download-to-fsa.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/lib/client/fsa/fs-adapter.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/lib/client/fsa/handle-store.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 2
+    }
+  },
+  "src/lib/client/fsa/open-in-finder.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/lib/client/fsa/preload-documents.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/lib/client/fsa/read-from-fsa.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/lib/client/github/api.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "src/lib/client/github/fsa-walker.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/lib/client/github/push.ts": {
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/lib/client/integrations/microsoft-graph.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    }
+  },
+  "src/lib/client/integrations/office365-connector.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/lib/client/jobs/job-queue.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/lib/client/jobs/register-workers.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/lib/client/kostnadsrakning/faktura-template.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/client/kostnadsrakning/pdf-writer.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 2
+    }
+  },
+  "src/lib/client/kostnadsrakning/render-faktura-pdf.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    }
+  },
+  "src/lib/client/labels.ts": {
+    "@typescript-eslint/unified-signatures": {
+      "count": 2
+    }
+  },
+  "src/lib/client/sync/external-actions.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "src/lib/client/theme/theme-store.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/lib/server/adapters/noop-ports.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 6
+    }
+  },
+  "src/lib/server/backup/fs-backup-store.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/lib/server/billing/billing-action-input.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "src/lib/server/data-store/in-memory/cursor-store.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "src/lib/server/data-store/in-memory/idb-kv.ts": {
+    "@typescript-eslint/no-unnecessary-type-parameters": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 1
+    }
+  },
+  "src/lib/server/data-store/in-memory/legacy-list.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/server/data-store/in-memory/local-store-persistence.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/lib/server/data-store/in-memory/local-store.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/lib/server/data-store/in-memory/mutation-queue.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "src/lib/server/data-store/in-memory/read-only-delegate.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 8
+    }
+  },
+  "src/lib/server/events/schema.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 3
+    }
+  },
+  "src/lib/server/events/uuid7.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/lib/server/http/server-context.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/server/integrations/fortnox/ledger-service.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/lib/server/integrations/fortnox/schema.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 4
+    }
+  },
+  "src/lib/server/integrations/msgraph/schema.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    }
+  },
+  "src/lib/server/integrations/token-store.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/lib/server/jobs/handlers/classify-document-handler.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/change-log-recorder.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-billing-run-repository.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-conflict-check-repository.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-contact-repository.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-document-folder-repository.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-document-repository.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-document-template-repository.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-expense-repository.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-invoice-repository.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-matter-repository.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-payment-plan-repository.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-payment-repository.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-repository.ts": {
+    "@typescript-eslint/no-unnecessary-type-parameters": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-time-entry-repository.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-write-off-repository.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/in-memory-document-template-repository.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/in-memory-repository.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/in-memory-time-entry-repository.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/lib/server/routers/billingRun.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 5
+    }
+  },
+  "src/lib/server/routers/contact.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 3
+    }
+  },
+  "src/lib/server/routers/ledger.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    }
+  },
+  "src/lib/server/routers/organization.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 3
+    }
+  },
+  "src/lib/server/routers/paymentPlan.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/lib/server/routers/reports.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/server/routers/sync.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 4
+    }
+  },
+  "src/lib/server/routers/todo.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/server/routers/user.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/lib/server/routers/watchlist.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 2
+    }
+  },
+  "src/lib/server/rules/execute.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 9
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/lib/server/rules/scheduler.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    }
+  },
+  "src/lib/server/secrets/crypto.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/lib/server/secrets/vault.ts": {
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 1
+    }
+  },
+  "src/lib/server/sync/change-log-safe-seq.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/lib/server/sync/entity-repo.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/accounting/pc8.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/billing-todo.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/conflict-match.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/lib/shared/contact-dedup.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/document-extraction.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "src/lib/shared/extract-text.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/lib/shared/gh-pages-url.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 4
+    }
+  },
+  "src/lib/shared/hourly-rate.ts": {
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/kostnadsrakning-document.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/layout/dock-layout.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 6
+    }
+  },
+  "src/lib/shared/meta-json.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/payments/camt-parse.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    }
+  },
+  "src/lib/shared/payments/match-receivables.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/schemas/billing.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 11
+    }
+  },
+  "src/lib/shared/schemas/calendar.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    }
+  },
+  "src/lib/shared/schemas/contact.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/schemas/document.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 5
+    }
+  },
+  "src/lib/shared/schemas/ids.ts": {
+    "@typescript-eslint/no-unnecessary-type-parameters": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/schemas/index.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/schemas/matter.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    }
+  },
+  "src/lib/shared/schemas/misc.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    }
+  },
+  "src/lib/shared/schemas/organization.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    }
+  },
+  "src/lib/shared/schemas/preference.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
+    }
+  },
+  "src/lib/shared/schemas/service-note.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/schemas/user.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/uuid-derive.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 19
+    }
+  },
+  "src/lib/shared/uuid.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/lib/shared/watchlist.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "test/bun-compat.ts": {
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 2
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-parameters": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/e2e/chrome-regressions.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/e2e/conflict/helper-config-retry.spec.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/e2e/conflict/keep-both.spec.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/e2e/conflict/offline-invoice-number.spec.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/e2e/conflict/offline-search.spec.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/e2e/conflict/pdf-classification.spec.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/e2e/conflict/procedure-replay.spec.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/e2e/conflict/server-delete-sync.spec.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/e2e/conflict/unsynced-logout.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/e2e/conflict/user-switch.spec.ts": {
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 2
     }
   },
   "test/e2e/demo-invoice-document.spec.ts": {
@@ -9,49 +1230,798 @@
       "count": 2
     }
   },
+  "test/e2e/demo-smoke.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 2
+    }
+  },
+  "test/e2e/demo-storage-persistence.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/e2e/fortnox/fortnox-ui.spec.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/e2e/kebab-verify.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/e2e/prod-client/prod-client-smoke.spec.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
   "test/helpers/fake-fsa.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 11
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    },
     "no-restricted-syntax": {
       "count": 5
     }
   },
+  "test/integration/kostnadsrakning-record.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/integration/mcp-server.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    },
+    "no-restricted-syntax": {
+      "count": 18
+    }
+  },
+  "test/integration/scenario-brottmal.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 22
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/integration/scenario-civilmal.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 27
+    }
+  },
+  "test/integration/scenario-rattshjalp.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
   "test/integration/seed-smoke.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
     "no-restricted-syntax": {
       "count": 1
+    }
+  },
+  "test/scripts/backup-pull.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/scripts/backup-verify.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
     }
   },
   "test/scripts/bootstrap-admin.test.ts": {
     "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/scripts/build-demo.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/scripts/build-service-worker.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/scripts/demo-deployed-path-repro.test.ts": {
+    "@typescript-eslint/require-await": {
       "count": 1
     }
   },
   "test/scripts/demo-generator.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/scripts/demo-prutning.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/scripts/deploy-prod.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    }
+  },
+  "test/scripts/folder-filing.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/scripts/http-target.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/scripts/id-translator.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "test/scripts/install-from-release.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/scripts/install-server-orchestrate.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/scripts/install-server-services.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 12
+    }
+  },
+  "test/scripts/install-server-trial-realm.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/scripts/install-server-wizard.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/scripts/install-server.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/scripts/oauth2-proxy-stub.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/scripts/pg-ready.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/scripts/pin-actions.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/scripts/restore-db.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/scripts/simulate-orchestrate.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 4
+    }
+  },
+  "test/scripts/simulate-runner.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 12
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/scripts/write-demo-meta.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/app/calendar/calendar-forms.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/app/calendar/calendar-grid-helpers.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "test/unit/app/calendar/day-view-helpers.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "test/unit/app/calendar/user-picker.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
-  "test/setup/preload.ts": {
-    "no-restricted-syntax": {
+  "test/unit/app/conflicts/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/app/contacts/[id]/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "test/unit/app/contacts/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/app/demo/demo-client.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/app/invoices/[id]/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 14
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/app/invoices/send-invoice-modal.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/app/login/page.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/app/matters/[id]/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/app/matters/billing-dialog.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/app/matters/billing-panel.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/app/matters/expense-section.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/app/matters/generate-modal.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/app/matters/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/app/matters/radgivning-entry.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/app/matters/service-notes-section.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/app/matters/settlement-dialog.test.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/app/matters/time-section.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/app/matters/verdict-dialog.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/app/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
   "test/unit/app/reports/page.test.tsx": {
-    "no-restricted-syntax": {
+    "@typescript-eslint/no-non-null-assertion": {
       "count": 3
+    }
+  },
+  "test/unit/app/search/page-offline.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/app/search/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/app/settings/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/app/settings/standard-atgarder-section.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/app/setup/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/app/sync-conflicts-page.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/app/templates/[id]/edit/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/app/templates/new/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/app/templates/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/app/time-section-invoiced.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/app/time/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
     }
   },
   "test/unit/app/users-become.test.tsx": {
     "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/app/users/[id]/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
+  "test/unit/app/users/new/page.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 22
+    }
+  },
+  "test/unit/architecture/fitness.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/ava-cli/cli.test.ts": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "test/unit/ava-cli/mcp.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "no-restricted-syntax": {
       "count": 2
+    }
+  },
+  "test/unit/ava-cli/tool-descriptions.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 8
+    }
+  },
+  "test/unit/ava-cli/tool-projections.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
     }
   },
   "test/unit/client/addin/addin-client.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    },
     "no-restricted-syntax": {
       "count": 2
     }
   },
-  "test/unit/client/fsa/read-from-fsa.test.ts": {
+  "test/unit/client/addin/save-incoming-mail.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/client/addin/taskpane-controller.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/client/auth/revalidate-session.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/client/auth/session-keepalive.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/client/auth/session-probe.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/backend/content-cache.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/client/backend/content-sync.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 17
+    }
+  },
+  "test/unit/client/backend/load-document-blob.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/client/backend/local-data/legacy-owner.test.ts": {
     "no-restricted-syntax": {
       "count": 1
+    }
+  },
+  "test/unit/client/backend/local-data/local-data-session.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/client/backend/local-data/sign-out.test.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/client/backend/oidc-principal.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/client/backend/rejected-changes.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/client/backend/save-document-content.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/client/backend/server-backup.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/unit/client/backend/server-first-store-local.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/backend/server-first-store.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/client/backend/server-ledger.test.tsx": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/backend/server-trpc-client.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/client/backend/suggest-from-bytes.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/client/backend/sync-device-report.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/client/backend/sync-devices.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/client/demo/persist-generated-doc.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/unit/client/firma/prefetch-active-matters.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 9
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/unit/client/firma/start-active-matter-prefetch.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 10
+    }
+  },
+  "test/unit/client/fsa/read-from-fsa.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/client/graph/graph-mail.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 7
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/client/graph/mail-document.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/client/integrations/office365-connector.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
+  "test/unit/client/jobs/enqueue-text-extraction.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/client/jobs/use-jobs.test.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/client/query-client.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/client/sync/server-sync-flush.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/sync/sync-context.test.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/client/sync/sync-lock.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/sync/sync-scheduler.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 17
+    }
+  },
+  "test/unit/client/working-set/working-set-cache.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/components/action-menu.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/components/active-matter-prefetch.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/components/boot-screen.test.tsx": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    }
+  },
+  "test/unit/components/bootstrap-self-hosted.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 6
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/components/checkbox-list.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/components/data-table-component.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "test/unit/components/data-table-logic.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/components/demo-bootstrap-helpers.test.tsx": {
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    }
+  },
+  "test/unit/components/document-browser.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 16
+    },
+    "@typescript-eslint/require-await": {
+      "count": 7
     }
   },
   "test/unit/components/document-row-upload-guard.test.tsx": {
@@ -59,24 +2029,179 @@
       "count": 1
     }
   },
+  "test/unit/components/documents-list-view.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/components/error-report-button.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/components/external-edit-indicator.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
   "test/unit/components/external-edit-modal.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
-  "test/unit/components/sidebar-signout.test.tsx": {
+  "test/unit/components/extract-text-dispatcher-registrar.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/components/helper-auto-config.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 7
+    }
+  },
+  "test/unit/components/jobs-badge.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/components/layout/dock-workspace.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/components/matter-combobox.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/components/mirror-outlook-registrar.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/components/money.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/components/pwa-register.test.tsx": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/components/render-error-boundary.test.tsx": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    }
+  },
+  "test/unit/components/server-first-sync.test.tsx": {
+    "@typescript-eslint/only-throw-error": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 16
+    }
+  },
+  "test/unit/components/server-invoice-numbering.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/components/settings/backup-section.test.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/components/settings/ledger-accounts-section.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/components/sidebar.test.tsx": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    },
     "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "test/unit/components/storage-status.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/components/sync-diagnostics.test.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/components/sync/rejected-changes-list.test.tsx": {
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/components/template-editor.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/components/theme-toggle.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/components/unsaved-writes-guard.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/advokatberedskap.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/auth-server-core.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },
   "test/unit/lib/auth/auth-client.test.ts": {
     "no-restricted-syntax": {
-      "count": 1
+      "count": 2
     }
   },
   "test/unit/lib/auth/github-auth.test.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/auth/use-auth-mode.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 10
     }
   },
   "test/unit/lib/backend/backend-runtime-pluggability.test.ts": {
@@ -89,14 +2214,99 @@
       "count": 1
     }
   },
+  "test/unit/lib/backend/in-process-link-procedures.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    }
+  },
   "test/unit/lib/backend/in-process-link.test.ts": {
     "no-restricted-syntax": {
       "count": 4
     }
   },
+  "test/unit/lib/backend/shared-exclusive-lock.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 7
+    }
+  },
   "test/unit/lib/backend/static-content-store.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
+    },
     "no-restricted-syntax": {
       "count": 6
+    }
+  },
+  "test/unit/lib/billed-per-lawyer.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/billing/deferred-faktura-docs.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 7
+    }
+  },
+  "test/unit/lib/billing/invoice-number-finality.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 10
+    }
+  },
+  "test/unit/lib/billing/server-invoice-numbering.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 7
+    }
+  },
+  "test/unit/lib/build-demo-repo.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/client/demo-meta.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/client/download-text.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/client/time-filter.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/lib/components/data-table-helpers.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "test/unit/lib/demo/demo-seed-loader.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/demo/demo-source-keys.test.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/demo/document-content-cache.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 10
     }
   },
   "test/unit/lib/demo/generated-doc-cache.test.ts": {
@@ -104,44 +2314,299 @@
       "count": 1
     }
   },
+  "test/unit/lib/demo/generated-doc-idb.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/lib/demo/reset-demo.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/diagnostics/issue-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/diagnostics/use-matter-invariants.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/firma/firma-config.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/firma/open-document.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    },
+    "@typescript-eslint/require-await": {
+      "count": 27
+    }
+  },
+  "test/unit/lib/firma/open-matter-document.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/lib/firma/prefetch-matter-documents.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
   "test/unit/lib/fsa/download-to-fsa.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 7
+    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
+  "test/unit/lib/fsa/external-edit-tracker.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
   "test/unit/lib/fsa/fs-adapter.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 8
+    },
     "no-restricted-syntax": {
       "count": 4
     }
   },
   "test/unit/lib/fsa/handle-store.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 9
+    },
     "no-restricted-syntax": {
       "count": 5
     }
   },
   "test/unit/lib/fsa/preload-documents.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
+  "test/unit/lib/fsa/read-document.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
   "test/unit/lib/fsa/upload-document.integration.test.tsx": {
-    "no-restricted-syntax": {
+    "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
   "test/unit/lib/fsa/upload-document.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/generate-demo-manifest.test.ts": {
     "no-restricted-syntax": {
       "count": 1
     }
   },
   "test/unit/lib/github/api.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 23
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 5
+    },
+    "no-restricted-syntax": {
+      "count": 8
+    }
+  },
+  "test/unit/lib/github/fsa-walker.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/lib/github/pull.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/lib/github/push.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
+  "test/unit/lib/github/sync-state.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/helper/use-helper.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 6
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
   "test/unit/lib/integrations/microsoft-graph.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 11
+    },
     "no-restricted-syntax": {
       "count": 7
+    }
+  },
+  "test/unit/lib/integrations/registry.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/jobs/analyze-flow.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/jobs/extract-text-formats.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/lib/jobs/job-queue-release.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/jobs/job-queue.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/jobs/mirror-outlook.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
+    "@typescript-eslint/require-await": {
+      "count": 25
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/kostnadsrakning/forordnandemal.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/kostnadsrakning/generate-faktura-from-template.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "test/unit/lib/kostnadsrakning/generate-kr-doc.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/kostnadsrakning/render-faktura-pdf.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/lib/kostnadsrakning/render-pdf.test.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/payments/camt-parse.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/lib/payments/match-receivables.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "test/unit/lib/pwa/chunk-reload.test.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/pwa/sw-handlers.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 32
+    },
+    "@typescript-eslint/require-await": {
+      "count": 23
+    }
+  },
+  "test/unit/lib/register-service-worker.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/lib/search/use-document-search.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
     }
   },
   "test/unit/lib/seed-invoice-coherence.test.ts": {
@@ -149,9 +2614,144 @@
       "count": 2
     }
   },
+  "test/unit/lib/shared/billing-run-schema.test.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/shared/coverage-billing.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/shared/coverage-cap.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "test/unit/lib/shared/kostnadsrakning-tidsspillan.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "test/unit/lib/shared/payment-reminders.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 12
+    }
+  },
+  "test/unit/lib/shared/schema-migration.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/shared/settlement-view-build.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/shared/uuid.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/standard-atgard.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/storage/persistent-storage.test.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/suggestion-grouping.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 13
+    }
+  },
+  "test/unit/lib/sync/confirm-sign-out.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/lib/sync/use-auto-sync.test.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/lib/template-recipients.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/lib/todo-views.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/watchlist-billing-action.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/write-off-migration.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/server/adapters/demo-document-analyzer.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
   "test/unit/server/adapters/demo-search-index.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    },
     "no-restricted-syntax": {
       "count": 3
+    }
+  },
+  "test/unit/server/adapters/git-content-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/adapters/git-index-lock.test.ts": {
+    "@typescript-eslint/only-throw-error": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 7
+    }
+  },
+  "test/unit/server/backup/fs-backup-store.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/billing/property/billing-consistency.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/server/billing/property/whole-kronor-rows.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 3
+    }
+  },
+  "test/unit/server/billing/radgivning-entry.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
     }
   },
   "test/unit/server/build-context.test.ts": {
@@ -159,14 +2759,71 @@
       "count": 2
     }
   },
+  "test/unit/server/concurrency/mutex.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/server/data-store/caching-sync-data-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 10
+    }
+  },
+  "test/unit/server/data-store/caching-sync-procedures.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/server/data-store/caching-sync-restore.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/server/data-store/canonical-restore.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/data-store/count-without-include.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
+  "test/unit/server/data-store/demo-data-store-transaction.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
   "test/unit/server/data-store/demo-data-store-writable.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
     "no-restricted-syntax": {
       "count": 4
     }
   },
-  "test/unit/server/data-store/demo-data-store.test.ts": {
-    "no-restricted-syntax": {
+  "test/unit/server/data-store/idb-entry-store.test.ts": {
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 3
+    }
+  },
+  "test/unit/server/data-store/idb-open.test.ts": {
+    "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 1
+    }
+  },
+  "test/unit/server/data-store/in-memory/query-engine.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
     }
   },
   "test/unit/server/data-store/in-memory/read-only-delegate.test.ts": {
@@ -174,109 +2831,1123 @@
       "count": 4
     }
   },
-  "test/unit/server/data-store/local-store-persistence.test.ts": {
+  "test/unit/server/data-store/legacy-id-repair.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    }
+  },
+  "test/unit/server/data-store/local-data-migration.test.ts": {
     "no-restricted-syntax": {
       "count": 1
     }
   },
   "test/unit/server/data-store/local-store.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/server/data-store/mutation-queue-multi-tab.test.ts": {
     "no-restricted-syntax": {
       "count": 1
+    }
+  },
+  "test/unit/server/data-store/mutation-queue-owner.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/server/data-store/mutation-queue-procedures.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/server/data-store/pending-writes.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/server/data-store/reconcile-engine-failures.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/server/data-store/reconcile-engine-procedures.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 9
+    }
+  },
+  "test/unit/server/data-store/reconcile-engine-restore.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/server/data-store/reconcile-engine-resync.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
+  "test/unit/server/data-store/reconcile-engine.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
     }
   },
   "test/unit/server/data-store/static-sync-source.test.ts": {
     "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/data-store/writable-delegate.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },
+  "test/unit/server/db/relations.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/unit/server/db/schema.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/unit/server/db/server-first-deploy.test.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "test/unit/server/documents/remove-document.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/events/emit.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/server/helpers/mock-data-store.ts": {
+    "@typescript-eslint/no-unnecessary-type-parameters": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/http/backup-download.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 6
+    }
+  },
+  "test/unit/server/http/bearer-claims.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/http/node-http-adapter.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 10
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/http/server-first-http-e2e.test.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "test/unit/server/http/verified-identity.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/server/integrations/email/smtp-sender.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/integrations/fortnox/client.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 14
+    },
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "test/unit/server/integrations/fortnox/connector.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/server/integrations/fortnox/ledger-service.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
+  "test/unit/server/integrations/fortnox/oauth.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/integrations/fortnox/token-store.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/server/integrations/fortnox/voucher.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/server/integrations/ledger/bank-file-connector.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/integrations/ledger/book-invoices.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/only-throw-error": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 8
+    }
+  },
+  "test/unit/server/integrations/ledger/book-payments.test.ts": {
+    "@typescript-eslint/only-throw-error": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 9
+    }
+  },
+  "test/unit/server/integrations/ledger/booking-window.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 4
+    }
+  },
+  "test/unit/server/integrations/ledger/capabilities.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/server/integrations/ledger/sie-connector.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/integrations/msgraph/oauth.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/integrations/msgraph/token-store.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/server/integrity/content-integrity.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 6
+    }
+  },
   "test/unit/server/jobs/classify-document-handler.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 29
+    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
+  "test/unit/server/jobs/classify-document-parts.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
   "test/unit/server/jobs/email-dispatch-handler.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    },
     "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/jobs/index-document-handler.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 6
+    }
+  },
+  "test/unit/server/jobs/job-queue.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/jobs/job-worker-runtime.test.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
       "count": 1
     }
   },
   "test/unit/server/jobs/queue-backed-document-analyzer.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
   "test/unit/server/jobs/queue-backed-email-sender.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
-  "test/unit/server/repositories/drizzle-repositories.test.ts": {
+  "test/unit/server/jobs/server-first-suggestions.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 9
+    }
+  },
+  "test/unit/server/lease-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/server/llm/ollama-classifier.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    },
+    "@typescript-eslint/require-await": {
+      "count": 13
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/observability/posthog-sink.test.ts": {
     "no-restricted-syntax": {
       "count": 1
+    }
+  },
+  "test/unit/server/repositories/billing-run-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/conflict-matter-contact-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "test/unit/server/repositories/contact-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/document-folder-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/server/repositories/document-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "test/unit/server/repositories/document-template-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/drizzle-repositories.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/expense-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
     }
   },
   "test/unit/server/repositories/in-memory-repository.test.ts": {
     "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/invoice-dispatch-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/server/repositories/invoice-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
+    }
+  },
+  "test/unit/server/repositories/matter-event-suggestion-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/matter-reads-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/server/repositories/organization-office-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/payment-plan-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 8
+    }
+  },
+  "test/unit/server/repositories/report-reads-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 8
+    }
+  },
+  "test/unit/server/repositories/repository-contract.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/service-note-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/task-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/server/repositories/time-entry-list-report-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/server/repositories/time-entry-repository.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/server/routers/backup.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/server/routers/billing-notes-watch-flow.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 18
+    }
+  },
+  "test/unit/server/routers/billingRun-amount-rounding.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/billingRun.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 24
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/calendar.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
     }
   },
   "test/unit/server/routers/conflict.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
     "no-restricted-syntax": {
-      "count": 2
+      "count": 1
+    }
+  },
+  "test/unit/server/routers/contact.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
     }
   },
   "test/unit/server/routers/document.events.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    },
     "no-restricted-syntax": {
-      "count": 2
+      "count": 1
     }
   },
   "test/unit/server/routers/document.groups.test.ts": {
-    "no-restricted-syntax": {
+    "@typescript-eslint/no-non-null-assertion": {
       "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
     }
   },
   "test/unit/server/routers/document/core.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 12
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/routers/document/folders.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 16
+    },
     "no-restricted-syntax": {
       "count": 2
     }
   },
-  "test/unit/server/routers/document/folders.test.ts": {
-    "no-restricted-syntax": {
+  "test/unit/server/routers/document/keep-both-conflict.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/server/routers/document/storage-path.test.ts": {
+    "@typescript-eslint/require-await": {
       "count": 3
     }
   },
   "test/unit/server/routers/document/suggestions.test.ts": {
-    "no-restricted-syntax": {
+    "@typescript-eslint/no-non-null-assertion": {
       "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
     }
   },
   "test/unit/server/routers/document/upload-content.test.ts": {
-    "no-restricted-syntax": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/server/routers/documentTemplate.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
       "count": 1
+    }
+  },
+  "test/unit/server/routers/expectedReceivable.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "test/unit/server/routers/expense.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
     }
   },
   "test/unit/server/routers/invoice.demo-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
-  "test/unit/server/routers/matter.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
+  "test/unit/server/routers/invoice.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
+    "@typescript-eslint/require-await": {
+      "count": 3
     }
   },
-  "test/unit/server/routers/paymentPlan.test.ts": {
-    "no-restricted-syntax": {
+  "test/unit/server/routers/invoiceDispatch.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },
+  "test/unit/server/routers/ledger.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 12
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    }
+  },
+  "test/unit/server/routers/mail.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/matter.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/routers/organization.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "test/unit/server/routers/paymentPlan.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/routers/radgivning-locked-entry-flow.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "test/unit/server/routers/reports-firm-overview.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "test/unit/server/routers/reports.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 28
+    }
+  },
+  "test/unit/server/routers/serviceNote.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/sync-devices.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/server/routers/sync-owner.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/server/routers/sync-push-classify.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
+  "test/unit/server/routers/task.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
+  "test/unit/server/routers/timeEntry-mark-radgivning.test.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    }
+  },
+  "test/unit/server/routers/timeEntry.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 30
+    }
+  },
+  "test/unit/server/routers/todo.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    }
+  },
+  "test/unit/server/routers/user.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
   "test/unit/server/rules/execute.test.ts": {
+    "@typescript-eslint/only-throw-error": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 6
+    },
     "no-restricted-syntax": {
       "count": 2
     }
   },
   "test/unit/server/rules/scheduler.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 6
+    },
     "no-restricted-syntax": {
       "count": 4
+    }
+  },
+  "test/unit/server/search-document-type-filter.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/server/secrets/vault.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/server/suggest-from-text.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/server/sync/change-log-commit-order.test.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "test/unit/server/sync/classify-new-content.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/server/sync/procedure-replayer.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/server/sync/push-guard-rules.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/sync/row-push-policy.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/server/sync/simulation/sim-ops.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/shared/accounting/semantic-voucher.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/shared/brottmalstaxa.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
+  "test/unit/shared/conflict-roles.test.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 3
+    }
+  },
+  "test/unit/shared/diagnostics/invariants.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "test/unit/shared/document-segmentation.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 6
+    }
+  },
+  "test/unit/shared/kostnadsrakning.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "test/unit/shared/schemas/registry.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 12
+    }
+  },
+  "test/unit/shared/sync/queue-format.test.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "test/unit/tooling/backfill-matter-folders.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
+  "test/unit/tooling/backfill-search-index.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 7
+    }
+  },
+  "test/unit/tooling/helper-network-guard.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/tooling/msgraph-delta.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "test/unit/tooling/office-addin-serve.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/tooling/pdfjs-pin.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "tooling/ava-cli/cli.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "tooling/ava-cli/mcp.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "tooling/demo-generator/generate-into.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "tooling/demo-generator/generate.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    },
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    }
+  },
+  "tooling/demo-generator/http-target.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "tooling/demo-generator/node-git-writeback.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "tooling/demo-generator/populate-invoice-docs.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 3
+    }
+  },
+  "tooling/demo-generator/populate-kostnadsrakning-docs.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 3
+    }
+  },
+  "tooling/demo-generator/populate.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "tooling/demo-generator/simulate/runner.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "tooling/demo-generator/simulate/scenarios/privat.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "tooling/load/docker-stats.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "tooling/load/http-metrics.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "tooling/load/scenarios/invoice.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "tooling/load/scenarios/storm.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "tooling/load/server-log.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/billing-pipeline-e2e.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 4
+    }
+  },
+  "tooling/scripts/billing-scenarios-e2e.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/bootstrap-admin.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/build-demo-repo.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/camt-payment-e2e.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/check-complexity-strict.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/conflict-seed.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/diagnose-ui.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    },
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/document-pipeline-e2e.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 13
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 5
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 5
+    }
+  },
+  "tooling/scripts/expected-receivable-e2e.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/find-double-casts.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/fortnox-bookkeeping-e2e.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/fortnox-e2e.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/fortnox-ui-harness.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 4
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/generate-demo-seed.ts": {
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/install-server.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 3
+    }
+  },
+  "tooling/scripts/install-server/wizard.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/matter-flora-e2e.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/msgraph-mail-e2e.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "tooling/scripts/normalize-commit-subject.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/pin-actions.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "tooling/scripts/reports-e2e.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/seed-data.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/seed-firma-local.ts": {
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/serve-demo-static.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/server-first-offline-e2e.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/write-demo-meta.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
     }
   }
 }

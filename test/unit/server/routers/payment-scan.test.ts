@@ -22,8 +22,7 @@ function makeCaller(opts: { startDate: string; paidOre?: number }) {
     payments: opts.paidOre != null ? [{ id: "pay-1", invoiceId: "inv-1", amount: opts.paidOre, paidAt: new Date() }] : [],
     paymentPlans: [{ id: "pp-1", invoiceId: "inv-1", monthlyAmount: 50000, dayOfMonth: 10, startDate: opts.startDate, status: "ACTIVE", createdAt: new Date() }],
   }, async () => { /* writable noop */ });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { ds, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any) };
+  return { ds, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL })) };
 }
 
 describe("paymentPlan.scanDueReminders", () => {
@@ -69,8 +68,7 @@ describe("paymentPlan.scanDueReminders", () => {
       invoices: [{ id: "inv-1", organizationId: "org-1", matterId: "m-1", amount: 600000, invoiceType: "STANDARD", status: "INSTALLMENT_PLAN", invoiceDate: new Date() }],
       paymentPlans: [{ id: "pp-1", invoiceId: "inv-1", monthlyAmount: 50000, dayOfMonth: 10, startDate: "2026-03-01", status: "ACTIVE", createdAt: new Date() }],
     }, async () => { /* noop */ });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
     const res = await caller.paymentPlan.scanDueReminders({ asOf: "2026-03-10T09:00:00.000Z" });
     expect(res).toMatchObject({ planned: 1, due: 1 });
     const reminders = await ds.paymentPlanReminders.findMany({ where: { planId: "pp-1" } });

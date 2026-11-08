@@ -15,6 +15,7 @@ import { writeFile, deleteFile } from "@/lib/client/github/fsa-walker";
 import { gitBlobSha1 } from "@/lib/client/github/git-blob-hash";
 import { pushViaRest } from "@/lib/client/github/push";
 import { writeSyncState } from "@/lib/client/github/sync-state";
+import { requestUrl } from "@/lib/shared/request-url";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 const REPO = { owner: "ulrik-s", repo: "ava" };
@@ -30,7 +31,7 @@ beforeEach(() => {
   blobCounter = treeCounter = commitCounter = 0;
   // Stub global fetch — varje endpoint returnerar förutsägbara nya SHAs
   globalThis.fetch = vi.fn(async (url: URL | RequestInfo, init?: RequestInit) => {
-    const u = url.toString();
+    const u = requestUrl(url);
     const method = init?.method ?? "GET";
     const body = init?.body ? JSON.parse(init.body as string) : undefined;
     calls.push({ url: u, method, body });

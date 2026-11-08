@@ -96,7 +96,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
 
   async flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void> {
     if (!ids.length) return;
-    await this.delegate.updateMany({ where: { id: { in: ids } }, data: { invoiceId } as Partial<TimeEntry> });
+    await this.delegate.updateMany({ where: { id: { in: ids } }, data: { invoiceId } });
   }
 
   async listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]> {
@@ -152,7 +152,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.delegate.updateMany({
       where: { matterId, frozenByBillingRunId: null, frozenAt: null },
-      data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<TimeEntry>,
+      data: { frozenAt: now, frozenByBillingRunId: billingRunId },
     });
   }
 
@@ -161,11 +161,11 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     // faktura (rådgivningstimmen, #1235) och behåller `frozenAt`.
     await this.delegate.updateMany({
       where: { frozenByBillingRunId: billingRunId, invoiceId: null },
-      data: { frozenAt: null, frozenByBillingRunId: null } as Partial<TimeEntry>,
+      data: { frozenAt: null, frozenByBillingRunId: null },
     });
     await this.delegate.updateMany({
       where: { frozenByBillingRunId: billingRunId },
-      data: { frozenByBillingRunId: null } as Partial<TimeEntry>,
+      data: { frozenByBillingRunId: null },
     });
   }
 
@@ -173,7 +173,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     if (!ids.length) return;
     await this.delegate.updateMany({
       where: { id: { in: ids }, frozenByBillingRunId: null, frozenAt: null },
-      data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<TimeEntry>,
+      data: { frozenAt: now, frozenByBillingRunId: billingRunId },
     });
   }
 

@@ -6,8 +6,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
@@ -32,9 +30,9 @@ function makeCaller(orgId = ORG) {
       id: "d1", organizationId: ORG, matterId: "m1", fileName: "avtal.pdf",
       mimeType: "application/pdf", sizeBytes: 3, storagePath: "documents/content/old", version: 1,
     }],
-  } as DemoSource);
+  });
   const store = new LocalStore(source, async () => {});
-  const repos = buildInMemoryRepositories(store as unknown as IDataStore);
+  const repos = buildInMemoryRepositories(store);
   const blobs = new Map<string, Uint8Array>();
   const analyze = vi.fn().mockResolvedValue(undefined);
   const ports = {

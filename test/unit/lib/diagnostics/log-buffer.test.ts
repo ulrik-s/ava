@@ -12,10 +12,13 @@ describe("formatArgs", () => {
     expect(formatArgs([undefined])).toBe("undefined");
   });
 
-  it("faller tillbaka på String() vid cirkulär struktur", () => {
+  it("visar typen vid cirkulär struktur — aldrig \"[object Object]\" (#1469)", () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
-    expect(formatArgs([circular])).toBe("[object Object]");
+    expect(formatArgs([circular])).toBe("[Object]");
+    const arr: unknown[] = [];
+    arr.push(arr);
+    expect(formatArgs([arr])).toBe("[Array]");
   });
 });
 
@@ -118,11 +121,16 @@ describe("installConsoleCapture", () => {
     target.emit("error", { message: "synkfel", filename: "a.js", lineno: 12 });
     target.emit("error", { error: new Error("objektfel") });
     target.emit("unhandledrejection", { reason: new Error("avvisad") });
+    // Fält av fel typ (message som objekt) → "okänt fel", aldrig "[object Object]" (#1469).
+    target.emit("error", { message: { nested: true } });
+    target.emit("error", { filename: "b.js" });
 
     expect(buf.recent().map((e) => `${e.level}:${e.text}`)).toEqual([
       "uncaught:synkfel (a.js:12)",
       "uncaught:Error: objektfel",
       "rejection:Error: avvisad",
+      "uncaught:okänt fel",
+      "uncaught:okänt fel (b.js:)",
     ]);
 
     uninstall();

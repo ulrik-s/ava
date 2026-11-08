@@ -17,6 +17,7 @@ import { open, readdir, readFile, rename, writeFile, type FileHandle } from "nod
 import { join } from "node:path";
 import { z } from "zod";
 import { backupFileNameSchema, sha256HexSchema, type BackupExport, type BackupFileName, type Sha256Hex } from "@/lib/shared/backup";
+import { safeParseJsonWith } from "@/lib/shared/parse-json";
 import type { BackupExportStream, BackupRequest, IBackupStore } from "../ports";
 
 /** Katalogerna (sökvägar i containern). */
@@ -53,12 +54,8 @@ export function parseSha256File(text: string): Sha256Hex | null {
 
 /** Begärandefilen; null om den saknas eller inte har serverns form. */
 export function parseBackupRequest(text: string): BackupRequest | null {
-  try {
-    const parsed = backupRequestSchema.safeParse(JSON.parse(text));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
+  const parsed = safeParseJsonWith(backupRequestSchema, text);
+  return parsed.success ? parsed.data : null;
 }
 
 function isMissing(e: unknown): boolean {

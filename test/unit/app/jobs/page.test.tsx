@@ -43,7 +43,7 @@ vi.mock("@/lib/client/jobs/job-queue", () => ({
 }));
 
 function job(over: Partial<Job> & Pick<Job, "id" | "status">): Job {
-  return { kind: "classify-document", label: `Jobb ${over.id}`, enqueuedAt: 1000, ...over } as Job;
+  return { kind: "classify-document", label: `Jobb ${over.id}`, enqueuedAt: 1000, ...over };
 }
 
 beforeEach(() => {

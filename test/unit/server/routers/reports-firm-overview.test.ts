@@ -53,8 +53,7 @@ function makeCaller() {
     payments: [{ id: "p-1", organizationId: "org-1", invoiceId: "f-1", amount: 400_000, paidAt: new Date("2026-03-20"), createdAt: new Date("2026-03-20") }],
     expenses: [],
   }, async () => { /* skrivbar store */ });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
 }
 
 const PERIOD = { from: "2026-01-01", to: "2026-06-30" };

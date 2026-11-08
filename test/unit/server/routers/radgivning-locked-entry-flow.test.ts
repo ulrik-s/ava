@@ -47,8 +47,7 @@ function makeCaller() {
     ],
     expenses: [],
   }, async () => { /* writable: noop write-back */ });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
 }
 
 type Caller = ReturnType<typeof makeCaller>;

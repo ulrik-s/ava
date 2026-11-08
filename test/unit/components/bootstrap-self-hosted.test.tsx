@@ -103,7 +103,7 @@ describe("bootstrapSelfHosted", () => {
     probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
     const listQuery = vi.fn(async () => ({ users: [] }));
     const args = makeArgs({
-      firmaConfig: noPrincipal as FirmaConfig,
+      firmaConfig: noPrincipal,
       makeClient: vi.fn(() => ({ user: { list: { query: listQuery } } }) as never),
     });
     await bootstrapSelfHosted(args);
@@ -119,7 +119,7 @@ describe("bootstrapSelfHosted", () => {
     probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: { email: "lawyer@ava.test", subject: "", issuer: "", name: "" } });
     const allowlist = [{ id: "u1", email: "lawyer@ava.test", name: "Lena", role: "LAWYER" }];
     const args = makeArgs({
-      firmaConfig: noPrincipal as FirmaConfig,
+      firmaConfig: noPrincipal,
       makeClient: clientReturning(allowlist),
     });
     await bootstrapSelfHosted(args);
@@ -130,7 +130,7 @@ describe("bootstrapSelfHosted", () => {
   it("#1391: inloggad men saknas i byrån → begripligt fel (inte 'Laddar…'), ingen store till appen", async () => {
     probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
     classifyOidcLogin.mockReturnValueOnce({ kind: "denied", email: "a@b.se" });
-    const args = makeArgs({ firmaConfig: noPrincipal as FirmaConfig });
+    const args = makeArgs({ firmaConfig: noPrincipal });
     await bootstrapSelfHosted(args);
     expect(args.setStatus).toHaveBeenCalledWith("error");
     expect(args.setErrorMsg).toHaveBeenCalledWith("Inte behörig: ditt konto (a@b.se) finns inte i byrån — kontakta administratören.");
@@ -140,7 +140,7 @@ describe("bootstrapSelfHosted", () => {
   it("#1408: adressen hör till flera konton → nekad med ett eget besked, ingen store till appen", async () => {
     probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
     classifyOidcLogin.mockReturnValueOnce({ kind: "ambiguous", email: "a@b.se" });
-    const args = makeArgs({ firmaConfig: noPrincipal as FirmaConfig });
+    const args = makeArgs({ firmaConfig: noPrincipal });
     await bootstrapSelfHosted(args);
     expect(args.setStatus).toHaveBeenCalledWith("error");
     expect(args.setErrorMsg).toHaveBeenCalledWith(expect.stringMatching(/a@b\.se\) hör till mer än ett konto/));
@@ -155,7 +155,7 @@ describe("bootstrapSelfHosted", () => {
     const principal = { id: "u-lena", email: "lena@ava.test", name: "Lena" };
     classifyOidcLogin.mockReturnValueOnce({ kind: "authorized", principal });
     const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
-    const args = makeArgs({ firmaConfig: noPrincipal as FirmaConfig, gateEnv: gateEnv() });
+    const args = makeArgs({ firmaConfig: noPrincipal, gateEnv: gateEnv() });
     await bootstrapSelfHosted(args);
     expect(reload).toHaveBeenCalledTimes(1);
     expect(args.onStoreReady).not.toHaveBeenCalled();

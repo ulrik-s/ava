@@ -46,7 +46,7 @@ describe("createServerFirstStore (#2b)", () => {
   const fetchToServer = (input: string | URL, init?: RequestInit): Promise<Response> => {
     const headers = new Headers(init?.headers);
     headers.set("X-Auth-Request-Email", "anna@byra.se");
-    return handler(new Request(input as string, { ...init, headers } as RequestInit));
+    return handler(new Request(input, { ...init, headers }));
   };
 
   function makeStore() {
@@ -127,7 +127,7 @@ describe("räddning av lokalt genererade dokument (#1143, end-to-end)", () => {
       fetch: (input, init) => {
         const headers = new Headers(init?.headers);
         headers.set("X-Auth-Request-Email", "anna@byra.se");
-        return handler(new Request(input as string, { ...init, headers } as RequestInit));
+        return handler(new Request(input, { ...init, headers }));
       },
       persistence: new InMemoryPersistence(),
       queuePersistence: new InMemoryMutationQueuePersistence(),

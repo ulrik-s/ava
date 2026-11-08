@@ -110,7 +110,7 @@ describe("PaymentPlansPage — Skicka påminnelser nu (#71)", () => {
   it("disablad + 'Skickar…' medan mutationen körs", () => {
     scanState.isPending = true;
     render(<PaymentPlansPage />);
-    const btn = screen.getByTestId("send-reminders") as HTMLButtonElement;
+    const btn = screen.getByTestId<HTMLButtonElement>("send-reminders");
     expect(btn.disabled).toBe(true);
     expect(btn.textContent).toContain("Skickar");
   });
@@ -138,7 +138,7 @@ describe("PaymentPlansPage — filter, sök, rad-klick", () => {
 
   it("sökfältet uppdaterar värdet", () => {
     render(<PaymentPlansPage />);
-    const search = screen.getByPlaceholderText(/Sök på klient/) as HTMLInputElement;
+    const search = screen.getByPlaceholderText<HTMLInputElement>(/Sök på klient/);
     fireEvent.change(search, { target: { value: "Anna" } });
     expect(search.value).toBe("Anna");
   });

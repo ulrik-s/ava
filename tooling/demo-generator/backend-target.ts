@@ -41,9 +41,9 @@ export interface GitTargetOpts {
 export function createGitTarget(opts: GitTargetOpts): BackendTarget {
   const source: DemoSource = {};
   // writeBack gör delegaterna skrivbara + persisterar till disk.
-  const dataStore = new DemoDataStore(source, opts.writeBack as never);
+  const dataStore = new DemoDataStore(source, opts.writeBack);
   const ctx = buildContext({ dataStore, ports: noopPorts, principal: opts.principal });
-  const caller = appRouter.createCaller(ctx as never) as GeneratorCaller;
+  const caller = appRouter.createCaller(ctx);
   return {
     caller,
     finalize: async () => { await opts.onFinalize?.(); },

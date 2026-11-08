@@ -13,6 +13,8 @@
  * console + event-target via parametrar, så den kan node-testas utan jsdom.
  */
 
+import { z } from "zod";
+
 export type LogLevel = "log" | "info" | "warn" | "error" | "uncaught" | "rejection";
 
 export interface LogEntry {
@@ -33,8 +35,8 @@ function stringifyArg(arg: unknown): string {
   try {
     return JSON.stringify(arg);
   } catch {
-    // Cirkulär struktur el. dyl. — falla tillbaka på String().
-    return String(arg);
+    // Cirkulär struktur el. dyl. — visa typen ("[Object]", "[Window]") i stället för "[object Object]".
+    return `[${Object.prototype.toString.call(arg).slice(8, -1)}]`;
   }
 }
 
@@ -106,11 +108,21 @@ const INSTALLED = Symbol.for("ava.diagnostics.consoleCaptureInstalled");
 
 const CONSOLE_LEVELS: ReadonlyArray<keyof ConsoleLike> = ["log", "info", "warn", "error"];
 
+/** De fält i ett ErrorEvent vi läser — allt annat ger "okänt fel". */
+const errorEventSchema = z.object({
+  message: z.string().optional(),
+  error: z.unknown().optional(),
+  filename: z.string().optional(),
+  lineno: z.number().optional(),
+});
+
 function extractErrorEvent(ev: unknown): string {
-  const e = ev as { message?: unknown; error?: unknown; filename?: unknown; lineno?: unknown };
-  if (e?.error instanceof Error) return `${e.error.name}: ${e.error.message}`;
-  const loc = e?.filename ? ` (${String(e.filename)}:${String(e.lineno ?? "")})` : "";
-  return `${String(e?.message ?? "okänt fel")}${loc}`;
+  const parsed = errorEventSchema.safeParse(ev);
+  if (!parsed.success) return "okänt fel";
+  const e = parsed.data;
+  if (e.error instanceof Error) return `${e.error.name}: ${e.error.message}`;
+  const loc = e.filename ? ` (${e.filename}:${e.lineno ?? ""})` : "";
+  return `${e.message ?? "okänt fel"}${loc}`;
 }
 
 function extractRejection(ev: unknown): string {
@@ -157,7 +169,7 @@ export function installConsoleCapture(opts: InstallOptions): () => void {
   }
 
   return () => {
-    for (const [level, fn] of originals) con[level] = fn as Console[typeof level];
+    for (const [level, fn] of originals) con[level] = fn;
     if (target) {
       target.removeEventListener("error", onError);
       target.removeEventListener("unhandledrejection", onRejection);

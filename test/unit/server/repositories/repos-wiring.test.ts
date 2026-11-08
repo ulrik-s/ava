@@ -19,7 +19,7 @@ const inv = (id: string, matterId: string): any => ({
 });
 
 function ctxOver(seed: Record<string, unknown[]>) {
-  const ds = new DemoDataStore(seed as never, async () => {});
+  const ds = new DemoDataStore(seed, async () => {});
   return buildContext({ dataStore: ds, ports: noopPorts, principal: null });
 }
 

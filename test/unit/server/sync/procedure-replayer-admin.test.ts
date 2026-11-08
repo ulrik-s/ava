@@ -52,7 +52,7 @@ describe("administrationen körs om av servern (#1344)", () => {
     handle = await createTestDb();
     repos = buildDrizzleRepositories(handle.db);
     replayer = new DrizzleProcedureReplayer(handle.db, repos);
-    await repos.organizations.create({ id: ORG, name: "Byrån", bankgiro: "111-1111", orgNumber: "556000-0001" } as never);
+    await repos.organizations.create({ id: ORG, name: "Byrån", bankgiro: "111-1111", orgNumber: "556000-0001" });
     await repos.users.create({ id: ADMIN, organizationId: ORG, email: "admin@a.se", name: "Admin", role: "ADMIN", active: true } as never);
     await repos.users.create({ id: MEMBER, organizationId: ORG, email: "medlem@a.se", name: "Medlem", role: "LAWYER", active: true } as never);
     await repos.users.create({ id: USER_B, organizationId: ORG_B, email: "b@b.se", name: "B", role: "LAWYER", active: true } as never);
@@ -129,7 +129,7 @@ describe("administrationen körs om av servern (#1344)", () => {
       expect(await replayer.replay(call("organization.addOffice", { name: "Filial" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
       expect(await repos.offices.listByOrg(ORG)).toHaveLength(before);
       const id = asId<"OfficeId">(uuidv7());
-      await repos.offices.create({ id, organizationId: ORG, name: "Filial", isMain: false } as never);
+      await repos.offices.create({ id, organizationId: ORG, name: "Filial", isMain: false });
       expect(await replayer.replay(call("organization.updateOffice", { id, name: "Kapad" }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
       expect(await replayer.replay(call("organization.deleteOffice", { id }), asMember)).toMatchObject({ status: "rejected", code: "FORBIDDEN" });
       expect((await repos.offices.getById(id))?.name).toBe("Filial");

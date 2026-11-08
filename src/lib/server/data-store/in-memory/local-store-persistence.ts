@@ -23,11 +23,11 @@ export class InMemoryPersistence implements LocalStorePersistence {
   constructor(private snapshot: DemoSource | null = null) {}
 
   async hydrate(): Promise<DemoSource | null> {
-    return this.snapshot ? (structuredClone(this.snapshot) as DemoSource) : null;
+    return this.snapshot ? structuredClone(this.snapshot) : null;
   }
 
   async save(source: DemoSource): Promise<void> {
-    this.snapshot = structuredClone(source) as DemoSource;
+    this.snapshot = structuredClone(source);
   }
 }
 

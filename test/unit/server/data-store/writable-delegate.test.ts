@@ -80,7 +80,7 @@ describe("WritableDelegate", () => {
     await delegate.create({ data: { id: "m1", title: "A", organizationId: "o1" } });
     await delegate.create({ data: { id: "m2", title: "B", organizationId: "o1" } });
     const all = await delegate.findMany({});
-    expect((all as Matter[]).map((m) => m.id).sort()).toEqual(["m1", "m2"]);
+    expect(all.map((m) => m.id).sort()).toEqual(["m1", "m2"]);
   });
 
   it("getter-baserad collection: byt ut array-referens vid run-time", async () => {
@@ -94,8 +94,8 @@ describe("WritableDelegate", () => {
     // Byt ut hela array:n (som mergeSource gör)
     box.items = [{ id: "fresh", title: "Loaded", organizationId: "o1" }];
     const all = await delegate.findMany({});
-    expect((all as Matter[])).toHaveLength(1);
-    expect((all as Matter[])[0]!.title).toBe("Loaded");
+    expect(all).toHaveLength(1);
+    expect((all)[0]!.title).toBe("Loaded");
 
     // Mutation efter byte muterar nya array:n
     await delegate.create({ data: { id: "m2", title: "Added after", organizationId: "o1" } });

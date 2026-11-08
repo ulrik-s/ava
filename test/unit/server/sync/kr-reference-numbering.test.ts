@@ -38,7 +38,7 @@ function runData(matterId: string, reference: string | null): Record<string, unk
 function submit(repos: DrizzleRepositories, org: OrganizationId, matterId: string): Promise<{ reference?: string | null | undefined }> {
   return repos.transaction(async (tx) => {
     const reference = await tx.billingRuns.nextKrReference(org, YEAR);
-    return tx.billingRuns.create(runData(matterId, reference) as never);
+    return tx.billingRuns.create(runData(matterId, reference));
   });
 }
 
@@ -80,14 +80,14 @@ describe("KR-referenser från servern (#1379)", () => {
 
   it("efter 9999 kommer 10000 — numeriskt, även i registret", async () => {
     const { org, matterId } = await newOrgMatter(repos);
-    await repos.billingRuns.create(runData(matterId, ref(9999)) as never);
+    await repos.billingRuns.create(runData(matterId, ref(9999)));
     expect((await submit(repos, org, matterId)).reference).toBe(`${PREFIX}10000`);
     expect((await submit(repos, org, matterId)).reference).toBe(`${PREFIX}10001`);
   });
 
   it("databasen vägrar en dubblett inom byrån — och ingen halv körning blir kvar", async () => {
     const { matterId } = await newOrgMatter(repos);
-    await repos.billingRuns.create(runData(matterId, ref(7)) as never);
+    await repos.billingRuns.create(runData(matterId, ref(7)));
     const dup = runData(matterId, ref(7));
     await expect(repos.billingRuns.create(dup as never)).rejects.toThrow();
     expect(await repos.billingRuns.getById(asId<"BillingRunId">(String(dup.id)))).toBeNull();
@@ -96,7 +96,7 @@ describe("KR-referenser från servern (#1379)", () => {
   it("körningar utan referens, eller utan känd byrå, registreras inte; utan id genereras ett", async () => {
     const { org, matterId } = await newOrgMatter(repos);
     const { id: _id, ...noId } = runData(matterId, null);
-    const created = await repos.billingRuns.create(noId as never);
+    const created = await repos.billingRuns.create(noId);
     expect(created.id).toBeTruthy();
     await repos.billingRuns.create(runData(uuidv7(), ref(3)) as never).catch(() => null);
     expect(await registered(org)).toEqual([]);
@@ -104,7 +104,7 @@ describe("KR-referenser från servern (#1379)", () => {
 
   it("en uppdatering skriver aldrig över referensen", async () => {
     const { matterId } = await newOrgMatter(repos);
-    const run = await repos.billingRuns.create(runData(matterId, ref(4)) as never);
+    const run = await repos.billingRuns.create(runData(matterId, ref(4)));
     const updated = await repos.billingRuns.update(run.id, { reference: ref(99), status: "VOIDED" } as never);
     expect(updated).toMatchObject({ reference: ref(4), status: "VOIDED" });
   });
@@ -137,7 +137,7 @@ describe("KR-referenser — samtidiga anslutningar mot riktig Postgres (#1379)",
       if (++arrived === 2) release();
       await bothOpen;
       const reference = await tx.billingRuns.nextKrReference(org, YEAR);
-      await tx.billingRuns.create(runData(matterId, reference) as never);
+      await tx.billingRuns.create(runData(matterId, reference));
       return { reference, pid };
     });
     const [a, b] = await Promise.all([submitConcurrently(), submitConcurrently()]);

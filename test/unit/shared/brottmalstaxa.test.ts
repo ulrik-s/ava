@@ -265,7 +265,7 @@ describe.each(Object.entries(BROTTMALSTAXA_TABLE_BY_YEAR))("Tabellintegritet —
 
   it("ersättning ökar monotont mellan intervaller (nivå 1)", () => {
     for (let i = 1; i < table.length; i++) {
-      expect(table[i]!.ersattning[0]).toBeGreaterThan(table[i - 1]!.ersattning[0]!);
+      expect(table[i]!.ersattning[0]).toBeGreaterThan(table[i - 1]!.ersattning[0]);
     }
   });
 

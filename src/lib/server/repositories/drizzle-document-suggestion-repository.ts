@@ -43,7 +43,7 @@ export class DrizzleDocumentSuggestionRepository
 
   async listForDocument(documentId: DocumentId): Promise<DocumentAnalysisSuggestion[]> {
     return await this.db.select().from(S)
-      .where(and(eq(S.documentId, documentId), isNull(S.deletedAt))) as DocumentAnalysisSuggestion[];
+      .where(and(eq(S.documentId, documentId), isNull(S.deletedAt)));
   }
 
   async listPendingForMatter(matterId: MatterId, organizationId: OrganizationId, order: "asc" | "desc"): Promise<SuggestionListRow[]> {

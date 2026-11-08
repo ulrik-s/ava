@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, matterContacts, matters, timeEntries, users } from "@/lib/server/db/schema";
 import { DrizzleTimeEntryRepository } from "@/lib/server/repositories/drizzle-time-entry-repository";
@@ -29,7 +28,7 @@ describe("TimeEntryRepository list/report — in-memory", () => {
         { id: t1, userId, matterId: mId, minutes: 60, billable: true, date: new Date("2026-06-02") },
         { id: uuidv7(), userId, matterId: mId, minutes: 30, billable: false, date: new Date("2026-06-03") },
       ],
-    } as DemoSource);
+    });
     const repo = new InMemoryTimeEntryRepository(new LocalStore(source, async () => {}));
 
     const list = await repo.listForOrg(asId<"OrganizationId">("org-1"), { page: 1, pageSize: 50 });
@@ -96,7 +95,7 @@ describe("TimeEntryRepository coverageUsageForMatter(s) — täcknings-tak (#793
         // mB: 120 min @ 2500 = 500000 öre
         { id: uuidv7(), userId, matterId: mB, minutes: 120, hourlyRate: 250000, billable: true, date: new Date("2026-06-04") },
       ],
-    } as DemoSource);
+    });
     const repo = new InMemoryTimeEntryRepository(new LocalStore(source, async () => {}));
 
     const single = await repo.coverageUsageForMatter(asId<"MatterId">(mA));
@@ -117,7 +116,7 @@ describe("TimeEntryRepository coverageUsageForMatter(s) — täcknings-tak (#793
         { id: uuidv7(), userId, matterId: mId, minutes: 60, hourlyRate: 162600, billable: true, date: new Date("2026-06-01"), frozenAt: new Date("2026-06-01") },
         { id: uuidv7(), userId, matterId: mId, minutes: 42, hourlyRate: 148700, billable: true, date: new Date("2026-06-03"), frozenAt: new Date("2026-06-10"), frozenByBillingRunId: uuidv7() },
       ],
-    } as DemoSource);
+    });
     const repo = new InMemoryTimeEntryRepository(new LocalStore(source, async () => {}));
     const expected = { billableMinutes: 432, billableValueOre: 1_056_900 + 104_090 };
     expect(await repo.coverageUsageForMatter(asId<"MatterId">(mId))).toEqual(expected);

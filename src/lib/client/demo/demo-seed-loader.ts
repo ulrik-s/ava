@@ -20,8 +20,10 @@
  * returnerar deterministisk data; produktion använder global `fetch`.
  */
 
+import { z } from "zod";
 import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
 import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
+import { parseJsonWith } from "@/lib/shared/parse-json";
 import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import { demoDataBaseUrl } from "./demo-data-base";
@@ -190,6 +192,8 @@ function repoSchemaVersion(files: FetchedFile[]): number {
  * mappar mot någon känd entitet (t.ex. meta.json, dokument-innehåll) hoppas.
  * Korrupt JSON loggas men kastar inte — resten av seed:en laddas ändå.
  */
+const rowSchema = z.record(z.string(), z.unknown());
+
 function assembleSource(files: FetchedFile[]): DemoSource {
   const grouped: Record<string, Record<string, unknown>[]> = {};
   for (const file of files) {
@@ -197,13 +201,13 @@ function assembleSource(files: FetchedFile[]): DemoSource {
     const key = pathToSourceKey(file.path);
     if (!key) continue;
     try {
-      const row = JSON.parse(file.body) as Record<string, unknown>;
+      const row = parseJsonWith(rowSchema, file.body);
       (grouped[key] ??= []).push(row);
     } catch (err) {
       console.warn(`[demo-seed-loader] kunde inte parsa ${file.path}:`, err);
     }
   }
-  return grouped as DemoSource;
+  return grouped;
 }
 
 interface ResolvedOpts {

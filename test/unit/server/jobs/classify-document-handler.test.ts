@@ -18,7 +18,7 @@ describe("createClassifyDocumentHandler", () => {
       getById: vi.fn(async () => ({ id: "d1", fileName: "Stämning.pdf" })),
       updateMetadata: vi.fn(async () => ({})),
     };
-    const handler = createClassifyDocumentHandler({ documents: documents as never });
+    const handler = createClassifyDocumentHandler({ documents: documents });
     await handler(jobFor("d1"));
 
     expect(documents.getById).toHaveBeenCalledWith("d1");
@@ -37,7 +37,7 @@ describe("createClassifyDocumentHandler", () => {
       getById: vi.fn(async () => null),
       updateMetadata: vi.fn(async () => ({})),
     };
-    const handler = createClassifyDocumentHandler({ documents: documents as never });
+    const handler = createClassifyDocumentHandler({ documents: documents });
     await handler(jobFor("borta"));
     expect(documents.updateMetadata).not.toHaveBeenCalled();
   });
@@ -48,7 +48,7 @@ describe("createClassifyDocumentHandler", () => {
       updateMetadata: vi.fn(async () => ({})),
     };
     const classify = vi.fn(async () => "AVTAL" as const);
-    const handler = createClassifyDocumentHandler({ documents: documents as never, classify, model: "ollama:llama" });
+    const handler = createClassifyDocumentHandler({ documents: documents, classify, model: "ollama:llama" });
     await handler(jobFor("d1"));
     // Utan readPages finns ingen text server-side → tom sträng.
     expect(classify).toHaveBeenCalledWith(expect.objectContaining({ fileName: "x.bin" }), "");
@@ -61,7 +61,7 @@ describe("createClassifyDocumentHandler", () => {
       updateMetadata: vi.fn(async () => ({})),
     };
     const suggestTags = vi.fn(async () => ["Sekretess", "Brådskande"]);
-    const handler = createClassifyDocumentHandler({ documents: documents as never, suggestTags });
+    const handler = createClassifyDocumentHandler({ documents: documents, suggestTags });
     await handler(jobFor("d1"));
     // union(["Manuell","Sekretess"], ["Sekretess","Brådskande"]) → dedupat
     expect(documents.updateMetadata.mock.calls[0]![1]).toMatchObject({
@@ -78,7 +78,7 @@ describe("createClassifyDocumentHandler", () => {
       updateMetadata: vi.fn(async () => { calls.push("updateMetadata"); return {}; }),
     };
     const suggestFromText = vi.fn(async () => { calls.push("suggestFromText"); });
-    const handler = createClassifyDocumentHandler({ documents: documents as never, suggestFromText });
+    const handler = createClassifyDocumentHandler({ documents: documents, suggestFromText });
     await handler(jobFor("d1"));
 
     expect(calls).toEqual(["updateMetadata", "suggestFromText"]);
@@ -98,7 +98,7 @@ describe("createClassifyDocumentHandler", () => {
     const suggestTags = vi.fn(async () => ["Tvist"]);
     const suggestFromText = vi.fn(async () => {});
     await createClassifyDocumentHandler({
-      documents: documents as never, readPages, pageIndex, classify, suggestTags, suggestFromText,
+      documents: documents, readPages, pageIndex, classify, suggestTags, suggestFromText,
     })(jobFor("d1"));
 
     expect(readPages).toHaveBeenCalledTimes(1);
@@ -117,7 +117,7 @@ describe("createClassifyDocumentHandler", () => {
       updateMetadata: vi.fn(async () => ({})),
     };
     const classify = vi.fn(async () => "AVTAL" as const);
-    await createClassifyDocumentHandler({ documents: documents as never, readPages: async () => ["avtal"], classify })(jobFor("d1"));
+    await createClassifyDocumentHandler({ documents: documents, readPages: async () => ["avtal"], classify })(jobFor("d1"));
     expect(classify).toHaveBeenCalledWith(expect.anything(), "avtal");
   });
 
@@ -127,14 +127,14 @@ describe("createClassifyDocumentHandler", () => {
       updateMetadata: vi.fn(async () => ({})),
     };
     // Ska inte kasta trots att dep:en saknas — optional call, inte ett villkor.
-    await createClassifyDocumentHandler({ documents: documents as never })(jobFor("d1"));
+    await createClassifyDocumentHandler({ documents: documents })(jobFor("d1"));
     expect(documents.updateMetadata).toHaveBeenCalled();
   });
 
   it("raderat dokument → varken metadata eller förslag skrivs", async () => {
     const suggestFromText = vi.fn(async () => {});
     const documents = { getById: vi.fn(async () => null), updateMetadata: vi.fn(async () => ({})) };
-    await createClassifyDocumentHandler({ documents: documents as never, suggestFromText })(jobFor("borta"));
+    await createClassifyDocumentHandler({ documents: documents, suggestFromText })(jobFor("borta"));
     expect(suggestFromText).not.toHaveBeenCalled();
   });
 
@@ -143,7 +143,7 @@ describe("createClassifyDocumentHandler", () => {
       getById: vi.fn(async () => ({ id: "d1", fileName: "x.pdf", tags: ["Manuell"] })),
       updateMetadata: vi.fn(async () => ({})),
     };
-    const handler = createClassifyDocumentHandler({ documents: documents as never });
+    const handler = createClassifyDocumentHandler({ documents: documents });
     await handler(jobFor("d1"));
     expect(documents.updateMetadata.mock.calls[0]![1]).not.toHaveProperty("tags");
   });

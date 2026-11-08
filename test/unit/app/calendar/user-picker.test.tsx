@@ -11,7 +11,7 @@ const usersQuery = {
     { id: "current-user", name: "Anna Advokat", role: "ADMIN" },
     { id: "u-bjorn", name: "Björn Bauer", role: "LAWYER" },
     { id: "u-cecilia", name: "Cecilia Carlsson", role: "LAWYER" },
-  ] } as { users: Array<{ id: string; name: string; role: string }> },
+  ] },
   isLoading: false,
 };
 

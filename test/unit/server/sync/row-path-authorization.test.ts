@@ -233,7 +233,7 @@ describe("radvägens behörighet (#1344)", () => {
 
     it("en ändring som pekar om till B:s fil → avvisad; ett namnbyte med en äldre sökväg orörd → accepterat", async () => {
       const id = uuidv7();
-      await repos.documents.create({ ...docRow(id, "documents/content/doc-pdf-01.pdf"), organizationId: ORG_A } as never);
+      await repos.documents.create({ ...docRow(id, "documents/content/doc-pdf-01.pdf"), organizationId: ORG_A });
       expect(await sync.push(member, mut("document", "update", { id, storagePath: `documents/content/${DOC_B}.pdf` }))).toEqual({ status: "conflict", reason: ROW_POLICY_REASONS.contentPath });
       expect(await sync.push(member, mut("document", "update", { id, fileName: "b.pdf", storagePath: "documents/content/doc-pdf-01.pdf" }))).toMatchObject({ status: "accepted" });
       expect(await repos.documents.getById(asId<"DocumentId">(id))).toMatchObject({ fileName: "b.pdf", storagePath: "documents/content/doc-pdf-01.pdf" });

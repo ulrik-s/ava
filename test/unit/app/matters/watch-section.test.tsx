@@ -79,7 +79,7 @@ describe("WatchSection", () => {
 
   it("lägg till: bevakning + datum (lokal midnatt) i ärendet, uppdaterar ärendet och globala Att bevaka", () => {
     render(<WatchSection matterId={M} />);
-    const add = screen.getByRole("button", { name: "Lägg till" }) as HTMLButtonElement;
+    const add = screen.getByRole<HTMLButtonElement>("button", { name: "Lägg till" });
     fireEvent.change(screen.getByLabelText("Bevakning"), { target: { value: "Överklagandefrist" } });
     expect(add.disabled).toBe(true); // en bevakning har alltid ett datum
     fireEvent.change(screen.getByLabelText("Bevakningsdatum"), { target: { value: "2026-10-01" } });

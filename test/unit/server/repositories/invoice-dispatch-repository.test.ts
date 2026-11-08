@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { invoiceDispatches, invoices, matters } from "@/lib/server/db/schema";
 import { DrizzleInvoiceDispatchRepository } from "@/lib/server/repositories/drizzle-invoice-dispatch-repository";
@@ -26,7 +25,7 @@ describe("InvoiceDispatchRepository — in-memory", () => {
         { id: d1, invoiceId: invId, channel: "email", recipient: "a@x", status: "queued", queuedAt: new Date(), recordedById: uuidv7() },
         { id: uuidv7(), invoiceId: invId, channel: "email", recipient: "b@x", status: "sent", queuedAt: new Date(), recordedById: uuidv7() },
       ],
-    } as DemoSource);
+    });
     const repo = new InMemoryInvoiceDispatchRepository(new LocalStore(source, async () => {}));
     expect(await repo.listByInvoice(asId<"InvoiceId">(invId))).toHaveLength(2);
     const queued = await repo.listByStatusForOrg(asId<"OrganizationId">("org-1"), "queued");

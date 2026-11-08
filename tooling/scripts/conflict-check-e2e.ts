@@ -203,7 +203,7 @@ async function verifyHistorik(c: Ava, f: Fixture, stamp: string): Promise<void> 
   assert(terms.includes(KARIN_PNR), "personnummer-sökningen saknas i historiken");
   assert(terms.some((t) => t.includes(`Ovidkommande Person ${stamp}`)),
     "sökningen UTAN träff loggades inte — även ett negativt resultat ska kunna visas");
-  console.log(`  ✓ Alla ${5} kontroller loggade, inklusive den utan träff`);
+  console.log(`  ✓ Alla 5 kontroller loggade, inklusive den utan träff`);
 }
 
 // ─── Körning ───────────────────────────────────────────────────────────────

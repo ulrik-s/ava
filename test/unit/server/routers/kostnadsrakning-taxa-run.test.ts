@@ -46,8 +46,7 @@ function setup(entries: readonly EntrySpec[], matterExtra: Record<string, unknow
     })),
     expenses: [],
   }, async () => { /* writable */ });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
   return { caller, ds };
 }
 

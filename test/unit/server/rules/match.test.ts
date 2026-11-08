@@ -65,7 +65,7 @@ describe("matchEventTriggers", () => {
         trigger: {
           kind: "event",
           type: "matter.created",
-          predicate: { "weird-op": [1, 2] } as never,
+          predicate: { "weird-op": [1, 2] },
         },
       }),
     ];

@@ -15,7 +15,7 @@ describe("capabilitiesForTier (ADR 0027)", () => {
   it("self-hosted → förmågorna på, utom backup som bara servern vet om (#1431)", () => {
     expect(capabilitiesForTier("self-hosted")).toEqual(SELF_HOSTED_CAPABILITIES);
     const { backup, ...rest } = SELF_HOSTED_CAPABILITIES;
-    expect(Object.values(rest).every((v) => v === true)).toBe(true);
+    expect(Object.values(rest).every((v) => v)).toBe(true);
     expect(backup).toBe(false);
   });
 

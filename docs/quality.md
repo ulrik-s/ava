@@ -187,6 +187,24 @@ att `any` läcker i `src/**` (`no-unsafe-assignment/-call/-member-access/
 -return/-argument`) — smalna med zod/typvakter. `test/` och `tooling/` väntar
 på typade testhjälpare (uppföljning i #1469).
 
+#### Typskärpning med baslinje (#1469, steg 2)
+
+Ett urval ur typescript-eslints `strictTypeChecked` är `error` för alla
+`*.ts(x)`: `no-deprecated`, `no-unnecessary-condition`, `no-non-null-assertion`,
+`no-unnecessary-type-assertion`, `require-await`, `no-unnecessary-type-conversion`,
+`no-misused-spread`, `no-dynamic-delete`, `prefer-promise-reject-errors`,
+`no-redundant-type-constituents`, `only-throw-error`,
+`use-unknown-in-catch-callback-variable`, `no-unnecessary-boolean-literal-compare`,
+`no-unnecessary-template-expression`, `unified-signatures`,
+`no-unnecessary-type-parameters`, `restrict-template-expressions` (bara tal
+tillåts), `restrict-plus-operands` och `unbound-method`. Dagens skuld ligger i
+`eslint-suppressions.json` och betas av med `lint:prune` — **nya** brott fäller
+CI. Två saker baselineades INTE utan rättades: `no-base-to-string` (riktiga
+"[object Object]"-buggar; använd `primitiveText`/`requestUrl`/`requestBodyText`
+i `src/lib/shared/`) och direkt `JSON.parse` i src (förbjudet via
+`no-restricted-syntax`; använd `parseJsonWith`/`safeParseJsonWith` i
+`src/lib/shared/parse-json.ts` så texten alltid valideras med zod).
+
 ### Duplikat (`bun run duplicates`)
 
 | Mått | Gräns |

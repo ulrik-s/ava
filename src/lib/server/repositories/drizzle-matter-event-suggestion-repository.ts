@@ -31,7 +31,7 @@ export class DrizzleMatterEventSuggestionRepository
       .where(and(
         eq(matterEventSuggestions.documentId, documentId),
         isNull(matterEventSuggestions.deletedAt),
-      )) as MatterEventSuggestion[];
+      ));
   }
 
   async listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<MatterEventSuggestionRow[]> {

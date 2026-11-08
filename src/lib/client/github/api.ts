@@ -11,6 +11,7 @@
 
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { safeParseJsonWith } from "@/lib/shared/parse-json";
 
 const API = "https://api.github.com";
 
@@ -87,14 +88,11 @@ async function apiFetch(path: string, init: RequestInit, opts: ApiOpts): Promise
 async function expectOk<S extends z.ZodType>(res: Response, label: string, schema: S): Promise<z.infer<S>> {
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    let msg = body;
-    try {
-      const parsed = errorBodySchema.safeParse(JSON.parse(body));
-      if (parsed.success && parsed.data.message) msg = parsed.data.message;
-    } catch { /* ignorera — rå body */ }
+    const parsed = safeParseJsonWith(errorBodySchema, body);
+    const msg = parsed.success && parsed.data.message ? parsed.data.message : body;
     throw new Error(`${label}: ${res.status} ${res.statusText} ${msg ? "— " + msg : ""}`);
   }
-  return schema.parse(await res.json()) as z.infer<S>;
+  return schema.parse(await res.json());
 }
 
 /** GET /repos/{o}/{r}/git/refs/heads/{branch} */

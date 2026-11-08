@@ -37,7 +37,7 @@ export function pathFromTool(name: string): string {
  */
 export function toolInputSchema(schema: unknown): JsonSchemaType {
   if (schema !== null && typeof schema === "object" && (schema as { type?: unknown }).type === "object") {
-    return schema as JsonSchemaType;
+    return schema;
   }
   return { type: "object" };
 }
