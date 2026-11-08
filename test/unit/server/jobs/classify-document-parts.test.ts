@@ -21,7 +21,7 @@ const MATTER = asId<"MatterId">("22222222-2222-7222-8222-222222222222");
 function jobFor(documentId: string): Job {
   return {
     id: "job-1", name: JOB_QUEUES.classifyDocument, data: { documentId },
-    expireInSeconds: 60, heartbeatSeconds: null, signal: AbortSignal.abort(),
+    expireInSeconds: 60, heartbeatSeconds: null, retryCount: 0, signal: AbortSignal.abort(),
   };
 }
 
