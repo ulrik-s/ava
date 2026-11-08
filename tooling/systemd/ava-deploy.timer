@@ -1,0 +1,12 @@
+# Deploy via tagg: var femte minut, se ava-deploy.service.
+
+[Unit]
+Description=AVA: leta efter en ny v*-tagg var femte minut
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Unit=ava-deploy.service
+
+[Install]
+WantedBy=timers.target

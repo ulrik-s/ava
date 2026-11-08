@@ -439,40 +439,29 @@ releaser.
 Byggcachen töms med flit varje gång (#1166): en gång gav den gammal CSS i prod
 — nya regler saknades trots rätt källkod och nya JS-chunkar, och inget larmade.
 
-### Deploy från CI
+### Deploy via tagg (utan hand)
 
-Workflowet `.github/workflows/deploy-prod.yml` kör samma kommando som ovan över
-ssh efter varje grön **CI** på `main` (och för hand via *Run workflow*). Det
-checkar inte ut något — servern hämtar `origin/main` själv. Jobbet kör i
-GitHub-miljön **`production`** med ägaren som obligatorisk granskare: varje
-grön main förbereder ett deploy, ett klick godkänner det. Ta bort granskaren
-i miljöns inställningar om det ska gå rakt igenom.
-
-**Servern** (en gång): en nyckel som bara kan deploya. `restrict` stänger av
-forwarding/pty, `command=` ersätter vad klienten än skickar.
+Servern hämtar själv: `ava-deploy.timer` kör `deploy-latest-tag.sh` var femte
+minut, och finns en ny `v*`-tagg i `origin` körs `deploy-prod.sh --tag <v…>`.
+Ingen nyckel i GitHub, ingen väg in till servern. Timern installeras av
+`deploy-prod.sh` vid nästa manuella deploy (en gång; sedan håller den sig
+själv uppdaterad).
 
 ```bash
-# På en dator som inte är servern — den privata delen blir en GitHub-secret.
-ssh-keygen -t ed25519 -N "" -C ava-deploy -f ava-deploy
-# På servern, som root:
-echo "restrict,command=\"cd /srv/ava && bash tooling/scripts/deploy-prod.sh\" $(cat ava-deploy.pub)" >> /root/.ssh/authorized_keys
+# På en utvecklardator, när main är grön och ska ut:
+git tag v1.2.0 && git push origin v1.2.0
+# → release.yml bygger GitHub-releasen; inom fem minuter deployar servern.
 ```
 
-**GitHub** (en gång): *Settings → Environments → production*: *Required
-reviewers* = ägaren. Secrets i miljön:
-
-| Secret | Innehåll |
-|---|---|
-| `AVA_DEPLOY_SSH_KEY` | hela `ava-deploy` (privata nyckeln) |
-| `AVA_DEPLOY_HOST` | serverns värdnamn eller IP |
-| `AVA_DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -t ed25519 <host>` — en rad |
-
-Variabeln `AVA_DEPLOY_USER` sätts bara om användaren inte är `root`
-(skriptet installerar systemd-enheter, så den behöver root).
-
-Rollback (`--rollback`) går inte via nyckeln — den kan bara deploya — utan som
-i *Rollback* nedan, från servern. Radera den privata nyckeln lokalt när
-secreten är satt.
+- Bara taggar som börjar på `v` räknas (`helper-v*` är helperns). **Högsta
+  versionen** vinner, inte senast skapade: `v1.10.0` > `v1.9.0`.
+- Pekar den deployade releasen (`releases/current`) redan på taggens commit
+  händer ingenting.
+- Faller deployen körs den **inte om** på samma tagg (markören
+  `releases/.deploy-failed`): rätta felet och kör `deploy-prod.sh --tag <v…>`
+  för hand, eller sätt en ny tagg. Loggen: `journalctl -u ava-deploy`.
+- `deploy-prod.sh` utan `--tag` deployar fortfarande `origin/main` för hand.
+  Rollback som i *Rollback* nedan.
 
 ### Releaser: varför klienten inte byggs där Caddy läser (#1369)
 
