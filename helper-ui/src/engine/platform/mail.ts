@@ -46,7 +46,7 @@ export function mailCommand(platform: Platform, opts: ComposeMailOpts): Command 
       return { cmd: "xdg-email", args: linuxArgs(opts) };
     case "windows":
       return { cmd: "powershell", args: ["-NoProfile", "-Command", windowsScript(opts)] };
-    default:
+    case "other":
       throw new Error(`unsupported OS: ${platform}`);
   }
 }

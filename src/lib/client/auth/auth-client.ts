@@ -7,6 +7,8 @@
  * `baseUrl` injicerbar för test (default = same-origin `/auth`).
  */
 
+import { z } from "zod";
+
 export interface AuthStatus {
   hasAdmin: boolean;
   totalUsers: number;
@@ -30,6 +32,13 @@ export interface AuthClientOpts {
   fetchFn?: typeof fetch;
 }
 
+/** Felkroppen `{ error }` från `/auth/`; allt annat (tom/annan kropp) → undefined. */
+const errorBodySchema = z.object({ error: z.string() });
+function errorMessage(body: unknown): string | undefined {
+  const parsed = errorBodySchema.safeParse(body);
+  return parsed.success ? parsed.data.error : undefined;
+}
+
 class AuthClientImpl implements AuthClient {
   private readonly base: string;
   private readonly fetch: typeof fetch;
@@ -45,8 +54,8 @@ class AuthClientImpl implements AuthClient {
       headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-      throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+      const body: unknown = await res.json().catch(() => null);
+      throw new Error(errorMessage(body) ?? `HTTP ${res.status}`);
     }
     return res.json() as Promise<T>;
   }

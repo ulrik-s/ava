@@ -20,7 +20,7 @@ function statusBadgeClass(status: InvoiceStatus): string {
     case "INSTALLMENT_PLAN": return "bg-indigo-100 text-indigo-700";
     case "CANCELLED": return "bg-gray-200 text-gray-600";
     case "BAD_DEBT": return "bg-red-100 text-red-700";
-    default: return "bg-gray-100 text-gray-600";
+    case "DRAFT": return "bg-gray-100 text-gray-600";
   }
 }
 

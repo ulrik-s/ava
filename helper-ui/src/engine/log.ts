@@ -24,7 +24,8 @@ export function resolveLogDir(platform: Platform, home: string, localAppData?: s
       return join(home, "Library", "Logs", "AVA");
     case "windows":
       return join(localAppData ?? home, "AVA", "Logs");
-    default:
+    case "linux":
+    case "other":
       return join(home, ".local", "state", "AVA");
   }
 }

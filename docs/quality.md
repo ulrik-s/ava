@@ -177,6 +177,16 @@ bun run lint:suppress  # ENDAST om en helt ny, oundviklig long-fn måste in (mot
 ratchet-loosening — undvik den; bryt hellre ut funktionen. Antalet poster i
 `eslint-suppressions.json` är skuldräknaren (mål: 0).
 
+#### Typskärpning (#1469)
+
+Steg 1 (inga nya suppressions): `tsconfig.json` har `verbatimModuleSyntax`,
+`noUncheckedSideEffectImports`, `noUnusedLocals` och `noUnusedParameters`
+(`test/` + `helper-ui/` ärver dem). ESLint kräver uttömmande `switch` över
+unioner (`switch-exhaustiveness-check`, en `default` räknas inte) och förbjuder
+att `any` läcker i `src/**` (`no-unsafe-assignment/-call/-member-access/
+-return/-argument`) — smalna med zod/typvakter. `test/` och `tooling/` väntar
+på typade testhjälpare (uppföljning i #1469).
+
 ### Duplikat (`bun run duplicates`)
 
 | Mått | Gräns |
