@@ -201,6 +201,7 @@ const SERIAL_FILES = [
   "test/integration/pdf-extract-compiled.test.ts", // bun build --compile + kör binären (#1156)
   "test/scripts/check-built-css.test.ts", // bash-skripten för deploy (#1166)
   "test/scripts/deploy-prod.test.ts", // deploy-prod.sh med falsk docker + riktig git-klon (#1369)
+  "test/unit/tooling/deploy-latest-tag.test.ts", // deploy-latest-tag.sh mot ett äkta repo + stubbad deploy
   "test/scripts/backup-pull.test.ts", // backup-pull.sh med fejkade sftp/age (#1254)
   "test/scripts/backup-verify.test.ts", // backup-verify.sh argumentfel (#1254)
   "test/scripts/restore-db.test.ts", // restore-db.sh med fejkad docker: synkepoken byts (#1360)

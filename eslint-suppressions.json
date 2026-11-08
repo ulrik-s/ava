@@ -677,6 +677,11 @@
       "count": 2
     }
   },
+  "src/lib/client/trpc.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    }
+  },
   "src/lib/server/adapters/noop-ports.ts": {
     "@typescript-eslint/require-await": {
       "count": 6
