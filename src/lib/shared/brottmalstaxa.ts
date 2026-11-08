@@ -249,7 +249,11 @@ export function coverageEntryRateOre(kind: TimeEntryKind | null | undefined, dat
     case "TIDSSPILLAN": return tidsspillanFtaxForDate(date);
     case "TIDSSPILLAN_OVRIG_TID": return tidsspillanOvrigFtaxForDate(date);
     case "ARBETE_OBEKVAM_TID": return arbeteObekvamFtaxForDate(date);
-    default: return timkostnadsnormFtaxForDate(date);
+    case "ARBETE":
+    case "ADVOKATBEREDSKAP":
+    case null:
+    case undefined:
+      return timkostnadsnormFtaxForDate(date);
   }
 }
 

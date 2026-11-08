@@ -44,7 +44,7 @@ export function template(input: string, ctx: Record<string, unknown>): unknown {
   const single = input.match(SINGLE);
   if (single) return resolveOne(single[1] ?? "", ctx);
 
-  return input.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
+  return input.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr: string) => {
     const v = resolveOne(expr, ctx);
     return v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
   });
@@ -66,7 +66,7 @@ function resolveOne(expr: string, ctx: Record<string, unknown>): unknown {
  */
 export function templateValue<T>(input: T, ctx: Record<string, unknown>): T {
   if (typeof input === "string") return template(input, ctx) as T;
-  if (Array.isArray(input)) return input.map((v) => templateValue(v, ctx)) as T;
+  if (Array.isArray(input)) return input.map((v: unknown) => templateValue(v, ctx)) as T;
   if (input && typeof input === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(input as Record<string, unknown>)) {

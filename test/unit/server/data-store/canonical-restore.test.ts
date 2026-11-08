@@ -53,7 +53,7 @@ describe("RestorePlan", () => {
     const out = await plan.run(
       new Set(["task:pending"]),
       { rows: (refs) => { requested.push(...refs.map((r) => r.id)); return tombstones(refs); } },
-      (entity, row, deleted) => { applied.push(`${String(row.id)}${deleted ? "-" : "+"}`); },
+      (_entity, row, deleted) => { applied.push(`${String(row.id)}${deleted ? "-" : "+"}`); },
     );
     expect(requested).toEqual(["carried", "b"]);
     expect(applied).toEqual(["a+", "carried-", "b-"]);

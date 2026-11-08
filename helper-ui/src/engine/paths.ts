@@ -24,9 +24,15 @@ export function resolveDataDir(platform: Platform, home: string, env: DataDirEnv
       return join(home, "Library", "Application Support", "AVA");
     case "windows":
       return join(env.localAppData ?? home, "AVA");
-    default:
-      return join(env.xdgDataHome && env.xdgDataHome !== "" ? env.xdgDataHome : join(home, ".local", "share"), "AVA");
+    case "linux":
+    case "other":
+      return join(xdgDataHome(home, env), "AVA");
   }
+}
+
+/** `$XDG_DATA_HOME` om satt (och icke-tom), annars `~/.local/share`. */
+function xdgDataHome(home: string, env: DataDirEnv): string {
+  return env.xdgDataHome !== undefined && env.xdgDataHome !== "" ? env.xdgDataHome : join(home, ".local", "share");
 }
 
 export function dataDir(): string | null {

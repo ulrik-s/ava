@@ -11,6 +11,14 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
+    // Gratis skärpning (#1469): `import type` tvingas syntaktiskt (ingen
+    // importelision att gissa om), side-effect-importer måste peka på filer
+    // som finns, och oanvända lokaler/parametrar är kompilatorfel (inte bara
+    // ESLint-varning). `_`-prefix markerar avsiktligt oanvända parametrar.
+    "verbatimModuleSyntax": true,
+    "noUncheckedSideEffectImports": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     // TS6: matcha 7.0:s (Go-native) typordning → mindre diff vid den migreringen.
     "stableTypeOrdering": true,
     // TS6: default blev [] (drar inte längre in alla @types/* → snabbare).

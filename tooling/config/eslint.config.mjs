@@ -83,6 +83,11 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": "error",
       "@typescript-eslint/await-thenable": "error",
+      // Uttömmande switch (#1469): en switch över en union/enum måste täcka
+      // alla medlemmar explicit (en `default` räknas inte som täckning). Att
+      // lägga till en unionsmedlem blir då ett lint-fel på varje switch som
+      // glömt den — i stället för en tyst fall-igenom i produktion.
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
       // Utvärderade men uppskjutna (#9): no-unnecessary-condition (~105 brott)
       // och strict-boolean-expressions (~529) är för stora för ett svep —
       // ratchas per katalog i uppföljnings-issue. Typinfon ovan är redan på, så
@@ -106,6 +111,22 @@ const eslintConfig = defineConfig([
       ],
       "max-params": ["error", 5],
       "max-nested-callbacks": ["error", 4],
+    },
+  },
+  {
+    // `any` får inte läcka in i produktionskoden (#1469): värden av typen
+    // `any` (från otypade bibliotek, JSON.parse, `catch (e)` utan typ …) får
+    // varken tilldelas, anropas, indexeras, returneras eller skickas vidare.
+    // Smalna med zod/typvakter i stället. Gäller bara src/ tills vidare —
+    // test/ och tooling/ har otypade testhjälpare som typas i en uppföljning
+    // (se #1469).
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/no-unsafe-argument": "error",
     },
   },
   {

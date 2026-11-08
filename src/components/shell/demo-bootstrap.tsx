@@ -417,7 +417,8 @@ function runSessionGate(
     case "login":
       env.redirect(loginUrl(env.location()));
       return { kind: "halt" };
-    default:
+    case "offline-expired":
+    case "offline-unbound":
       setStatus("error");
       setErrorMsg(offlineGateMessage(decision));
       return { kind: "halt" };

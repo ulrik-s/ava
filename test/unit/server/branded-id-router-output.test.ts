@@ -6,7 +6,7 @@
  * `bun run typecheck` (include: **\/*.ts). Om en delegate åter-typas till
  * `Delegate<any>`, eller `Joined` återinför en `[k: string]: any`-index-
  * signatur, blir `.id` `any` igen → dessa rader blir röda. Runtime-testet
- * finns bara så vitest räknar filen.
+ * finns bara så testköraren räknar filen.
  */
 
 import type { inferRouterOutputs } from "@trpc/server";
@@ -21,7 +21,7 @@ type IsAny<T> = 0 extends 1 & T ? true : false;
 type Assert<T extends true> = T;
 
 // matter.getById().id är MatterId (och INTE any/plain string).
-type _matterId = Assert<
+type MatterIdIsBranded = Assert<
   IsAny<Out["matter"]["getById"]["id"]> extends true
     ? false
     : Out["matter"]["getById"]["id"] extends MatterId
@@ -30,7 +30,7 @@ type _matterId = Assert<
 >;
 
 // contact.getById().id är ContactId (och INTE any/plain string).
-type _contactId = Assert<
+type ContactIdIsBranded = Assert<
   IsAny<Out["contacts"]["getById"]["id"]> extends true
     ? false
     : Out["contacts"]["getById"]["id"] extends ContactId
@@ -39,12 +39,16 @@ type _contactId = Assert<
 >;
 
 // Korsbrand: en MatterId får INTE vara assignable till ContactId-utdata.
-type _distinct = Assert<Out["matter"]["getById"]["id"] extends ContactId ? false : true>;
+type Distinct = Assert<Out["matter"]["getById"]["id"] extends ContactId ? false : true>;
+
+// Värdet binder typerna till runtime-testet (noUnusedLocals, #1469): om
+// någon av dem faller till `never` går tupeln inte att tilldela.
+const contract: [MatterIdIsBranded, ContactIdIsBranded, Distinct] = [true, true, true];
 
 describe("branded id:n når router-output (#39)", () => {
   it("är ett typ-nivå-kontrakt som verifieras av tsc", () => {
     // De faktiska assertions:erna är typerna ovan; om de inte håller blir
     // `bun run typecheck` rött. Här bekräftar vi bara att filen körs.
-    expect(true).toBe(true);
+    expect(contract).toEqual([true, true, true]);
   });
 });

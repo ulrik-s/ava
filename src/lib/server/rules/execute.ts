@@ -9,6 +9,7 @@
  */
 
 import jsonLogic from "json-logic-js";
+import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { AvaEvent } from "../events/schema";
@@ -171,10 +172,10 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
   },
 
   "for-each": async ({ step, ctx, tctx, depth, loopBindings }) => {
-    const items = lookup(tctx, step.items);
-    if (!Array.isArray(items)) throw new Error(`for-each.items "${step.items}" är inte en array`);
+    const items = z.array(z.unknown()).safeParse(lookup(tctx, step.items));
+    if (!items.success) throw new Error(`for-each.items "${step.items}" är inte en array`);
     let totalNested = 0;
-    for (const item of items) {
+    for (const item of items.data) {
       const newBindings = { ...(loopBindings ?? {}), [step.as]: item };
       const sub = await runSteps(step.body, ctx, depth + 1, newBindings);
       totalNested += sub.stepsRan;
