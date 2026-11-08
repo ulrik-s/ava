@@ -199,7 +199,7 @@ describe("ContactDetailPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: "Anna Andersson" });
     fireEvent.click(screen.getByRole("button", { name: /Redigera/i }));
-    const emailInput = screen.getByDisplayValue("anna@x.se") as HTMLInputElement;
+    const emailInput = screen.getByDisplayValue("anna@x.se");
     fireEvent.change(emailInput, { target: { value: "ny@x.se" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(updateMutate.mock.calls[0]![0].email).toBe("ny@x.se");
@@ -237,13 +237,13 @@ describe("ContactDetailPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: "Anna Andersson" });
     fireEvent.click(screen.getByRole("button", { name: /Redigera/i }));
-    fireEvent.change(screen.getByLabelText(/^Namn \*$/) as HTMLInputElement, { target: { value: "Annika" } });
-    fireEvent.change(screen.getByLabelText(/^Typ$/) as HTMLSelectElement, { target: { value: "PERSON" } });
-    fireEvent.change(screen.getByLabelText(/Personnummer/) as HTMLInputElement, { target: { value: "19900101-1111" } });
-    fireEvent.change(screen.getByLabelText(/Organisationsnummer/) as HTMLInputElement, { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText(/Telefon/) as HTMLInputElement, { target: { value: "070-9" } });
-    fireEvent.change(screen.getByLabelText(/^Adress$/) as HTMLInputElement, { target: { value: "Lillgatan" } });
-    fireEvent.change(screen.getByLabelText(/Anteckningar/) as HTMLTextAreaElement, { target: { value: "ny" } });
+    fireEvent.change(screen.getByLabelText(/^Namn \*$/), { target: { value: "Annika" } });
+    fireEvent.change(screen.getByLabelText(/^Typ$/), { target: { value: "PERSON" } });
+    fireEvent.change(screen.getByLabelText(/Personnummer/), { target: { value: "19900101-1111" } });
+    fireEvent.change(screen.getByLabelText(/Organisationsnummer/), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText(/Telefon/), { target: { value: "070-9" } });
+    fireEvent.change(screen.getByLabelText(/^Adress$/), { target: { value: "Lillgatan" } });
+    fireEvent.change(screen.getByLabelText(/Anteckningar/), { target: { value: "ny" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     const arg = updateMutate.mock.calls[0]![0];
     expect(arg.name).toBe("Annika");
@@ -257,10 +257,10 @@ describe("ContactDetailPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: "Acme AB" });
     fireEvent.click(screen.getByRole("button", { name: /Lägg till/i }));
-    fireEvent.change(screen.getByPlaceholderText(/Namn \*/) as HTMLInputElement, { target: { value: "C" } });
-    fireEvent.change(screen.getByPlaceholderText(/E-post/) as HTMLInputElement, { target: { value: "c@x.se" } });
-    fireEvent.change(screen.getByPlaceholderText(/Telefon/) as HTMLInputElement, { target: { value: "07" } });
-    fireEvent.change(screen.getByPlaceholderText(/Roll\/anteckning/) as HTMLInputElement, { target: { value: "VD" } });
+    fireEvent.change(screen.getByPlaceholderText(/Namn \*/), { target: { value: "C" } });
+    fireEvent.change(screen.getByPlaceholderText(/E-post/), { target: { value: "c@x.se" } });
+    fireEvent.change(screen.getByPlaceholderText(/Telefon/), { target: { value: "07" } });
+    fireEvent.change(screen.getByPlaceholderText(/Roll\/anteckning/), { target: { value: "VD" } });
     fireEvent.click(screen.getByRole("button", { name: /^Lägg till$/i }));
     expect(addChildMutate).toHaveBeenCalled();
     expect(addChildMutate.mock.calls[0]![0]).toMatchObject({

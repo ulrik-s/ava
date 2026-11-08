@@ -6,7 +6,6 @@
 
 import { describe, it, expect } from "vitest-compat";
 // .mjs utan d.ts — TS implicit-any på import:n, vi castar till any nedan
- 
 import * as core from "../../../tooling/docker/auth-server/auth-core.mjs";
 
 const {
@@ -14,8 +13,7 @@ const {
   parseHtpasswd, serializeHtpasswd, upsertHtpasswd,
   createInvite, findValidInvite, redeemInvite, hasAdmin,
   claimAdminDecision,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-} = core as any;
+} = core;
 
 describe("hashToken / safeEqual", () => {
   it("hashToken är deterministisk", () => {

@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documentFolders, documents, matters, users } from "@/lib/server/db/schema";
 import { DrizzleDocumentFolderRepository } from "@/lib/server/repositories/drizzle-document-folder-repository";
@@ -45,10 +44,9 @@ describe("DocumentFolderRepository — in-memory", () => {
       matters: [{ id: t.mId, organizationId: ORG, matterNumber: "2026-7", title: "Z" }],
       documentFolders: t.folders,
       documents: t.docs,
-    } as DemoSource);
+    });
     const store = new LocalStore(source, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const repo = new InMemoryDocumentFolderRepository(store as any);
+    const repo = new InMemoryDocumentFolderRepository(store);
 
     const roots = await repo.listInParent(t.mId, null);
     expect(roots.map((f) => f.id)).toEqual([t.fA, t.fB]); // namn-asc: "A Avtal" < "B Bilagor"

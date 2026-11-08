@@ -142,7 +142,7 @@ describe("MattersPage", () => {
 
   it("uppdaterar sökfältet", () => {
     render(<MattersPage />);
-    const search = screen.getByPlaceholderText(/Sök ärenden/i) as HTMLInputElement;
+    const search = screen.getByPlaceholderText<HTMLInputElement>(/Sök ärenden/i);
     fireEvent.change(search, { target: { value: "bodel" } });
     expect(search.value).toBe("bodel");
   });
@@ -251,7 +251,7 @@ describe("MattersPage — Välj klient via sökdialog (#1128)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Ny klient/ }));
 
     const dialog = screen.getByRole("dialog", { name: "Ny klient" });
-    expect((within(dialog).getByLabelText(/Namn/) as HTMLInputElement).value).toBe("Nya Klienten AB");
+    expect((within(dialog).getByLabelText<HTMLInputElement>(/Namn/)).value).toBe("Nya Klienten AB");
     fireEvent.click(within(dialog).getByRole("button", { name: "OK" }));
     expect(createContactMutate).toHaveBeenCalledWith(expect.objectContaining({ name: "Nya Klienten AB" }));
 

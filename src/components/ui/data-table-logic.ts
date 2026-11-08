@@ -5,6 +5,7 @@
  * importörer (och tester) fortsätter peka på `@/components/ui/data-table`.
  */
 import type * as React from "react";
+import { primitiveText } from "@/lib/shared/primitive-text";
 
 export type SortDir = "asc" | "desc";
 
@@ -95,7 +96,7 @@ function coerce(v: unknown): string | number | null {
   if (v == null) return null;
   if (v instanceof Date) return v.getTime();
   if (typeof v === "number") return v;
-  return String(v).toLowerCase();
+  return primitiveText(v).toLowerCase();
 }
 
 function nullCmp(a: string | number | null, b: string | number | null, dir: SortDir): number {
@@ -117,7 +118,7 @@ export function sortRows<T>(rows: T[], columns: Column<T>[], sortBy?: string, so
   if (!sortBy || !sortDir) return rows;
   const col = columns.find((c) => c.key === sortBy);
   if (!col?.sortable) return rows;
-  const valueOf = col.sortValue ?? ((r: T) => String(col.render(r) ?? ""));
+  const valueOf = col.sortValue ?? ((r: T) => primitiveText(col.render(r)));
   return [...rows].sort((a, b) => compareValues(valueOf(a), valueOf(b), sortDir));
 }
 
@@ -129,7 +130,7 @@ function columnValueAsString<T>(col: Column<T>, row: T): string {
     if (v instanceof Date) return v.toLocaleDateString("sv-SE");
     return String(v);
   }
-  return String(col.render(row) ?? "");
+  return primitiveText(col.render(row));
 }
 
 export function filterRows<T>(rows: T[], columns: Column<T>[], filters?: Record<string, string>): T[] {

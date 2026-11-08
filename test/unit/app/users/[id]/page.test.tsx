@@ -137,10 +137,10 @@ describe("EditUserPage", () => {
   it("ändrar roll och timpriser, submittar med nya värden", async () => {
     renderPage();
     await screen.findByRole("heading", { name: /Redigera användare/i });
-    const roleSelect = screen.getByRole("combobox") as HTMLSelectElement;
+    const roleSelect = screen.getByRole<HTMLSelectElement>("combobox");
     expect(roleSelect.value).toBe("LAWYER");
     fireEvent.change(roleSelect, { target: { value: "ADMIN" } });
-    const hourlyInput = screen.getByDisplayValue("2500") as HTMLInputElement;
+    const hourlyInput = screen.getByDisplayValue<HTMLInputElement>("2500");
     fireEvent.change(hourlyInput, { target: { value: "3000" } });
     fireEvent.change(screen.getByLabelText(/^Tidsspillan helg\/kväll/), { target: { value: "975" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
@@ -154,9 +154,9 @@ describe("EditUserPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: /Redigera användare/i });
     // Byråns tidsspillan går före juristens eget timarvode …
-    expect((screen.getByLabelText(/^Tidsspillan \(kr/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 1\s487 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan \(kr/).placeholder).toMatch(/^ärvs: 1\s487 kr\/h$/);
     // … men utan byråpris ärvs juristens timarvode.
-    expect((screen.getByLabelText(/^Timarvode helg\/kväll/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode helg\/kväll/).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
   });
 
   it("inkluderar lösenord i submit när matchande", async () => {

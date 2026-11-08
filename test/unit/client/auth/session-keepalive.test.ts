@@ -46,7 +46,8 @@ class FakeLocks implements KeepaliveLocks {
 /** En flik: egna händelser, synlighet och svar från proxyn. */
 function fakeTab(opts: { locks?: KeepaliveLocks; probe?: () => Promise<SessionProbe>; signedIn?: () => boolean } = {}) {
   const events = new EventTarget();
-  const page = Object.assign(new EventTarget(), { visibilityState: "visible" as DocumentVisibilityState });
+  const visibility: { visibilityState: DocumentVisibilityState } = { visibilityState: "visible" };
+  const page = Object.assign(new EventTarget(), visibility);
   const notices: SessionNotice[] = [];
   const probe = vi.fn(opts.probe ?? (async () => AUTHENTICATED));
   const env: KeepaliveEnv = {

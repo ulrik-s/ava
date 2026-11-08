@@ -23,6 +23,7 @@ import {
   parseRepoLocator,
   updateRef,
 } from "@/lib/client/github/api";
+import { requestUrl } from "@/lib/shared/request-url";
 
 const REPO = { owner: "ulrik-s", repo: "ava" };
 const OPTS = { token: "ghp_test" };
@@ -32,7 +33,7 @@ let calls: MockCall[];
 
 function mockFetch(impl: (call: MockCall) => Response | Promise<Response>) {
   globalThis.fetch = vi.fn(async (url: URL | RequestInfo, init?: RequestInit) => {
-    const call: MockCall = { url: url.toString(), ...(init !== undefined ? { init } : {}) };
+    const call: MockCall = { url: requestUrl(url), ...(init !== undefined ? { init } : {}) };
     calls.push(call);
     return impl(call);
   }) as typeof fetch;
@@ -217,13 +218,13 @@ describe("updateRef", () => {
 
 describe("error handling", () => {
   it("hanterar non-JSON body i felmeddelandet", async () => {
-    globalThis.fetch = vi.fn(async () => ({
+    globalThis.fetch = vi.fn(async () => (({
       ok: false,
       status: 500,
       statusText: "Server Error",
       text: async () => "Internal server crash",
       json: async () => { throw new Error("not json"); },
-    } as unknown as Response)) as typeof fetch;
+    }))) as typeof fetch;
     await expect(getBranchHead(REPO, "main", OPTS)).rejects.toThrow(/500.*Internal server crash/);
   });
 });

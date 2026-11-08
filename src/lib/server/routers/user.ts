@@ -16,7 +16,7 @@ function pickList(u: User) {
   return {
     id: u.id, email: u.email, name: u.name, title: u.title ?? null, role: u.role,
     hourlyRates: u.hourlyRates ?? {}, mileageRate: u.mileageRate ?? null,
-    matterNumberPrefix: u.matterNumberPrefix ?? null, createdAt: u.createdAt as Date,
+    matterNumberPrefix: u.matterNumberPrefix ?? null, createdAt: u.createdAt,
   };
 }
 // bcryptjs är borttagen — pure-git-modellen har inte server-side

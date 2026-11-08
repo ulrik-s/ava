@@ -3,7 +3,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documentTemplates, users } from "@/lib/server/db/schema";
 import { DrizzleDocumentTemplateRepository } from "@/lib/server/repositories/drizzle-document-template-repository";
@@ -22,7 +21,7 @@ describe("DocumentTemplateRepository — in-memory", () => {
       documentTemplates: [
         { id: t1, organizationId: "org-1", name: "Avtal", category: "A", content: "x", createdById: userId },
       ],
-    } as DemoSource);
+    });
     const repo = new InMemoryDocumentTemplateRepository(new LocalStore(source, async () => {}));
     const list = await repo.listForOrg(asId<"OrganizationId">("org-1"));
     expect(list).toHaveLength(1);

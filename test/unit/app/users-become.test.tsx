@@ -15,7 +15,7 @@ describe("becomeUser", () => {
   });
 
   it("uppdaterar principalId + authorName + authorEmail i firma-config", () => {
-    vi.stubGlobal("location", { replace: vi.fn() } as unknown as Location);
+    vi.stubGlobal("location", { replace: vi.fn() });
     becomeUser({ id: "<uuid-bjorn>", name: "Björn Bauer", email: "bjorn@ava" });
     const cfg = JSON.parse(localStorage.getItem("ava.firma") ?? "{}");
     expect(cfg.principalId).toBe("<uuid-bjorn>");
@@ -25,7 +25,7 @@ describe("becomeUser", () => {
 
   it("redirectar till root så demo-bootstrap re-initierar med nytt principal", () => {
     const replace = vi.fn();
-    vi.stubGlobal("location", { replace } as unknown as Location);
+    vi.stubGlobal("location", { replace });
     becomeUser({ id: "x", name: "X", email: "x@ava" });
     expect(replace).toHaveBeenCalledWith("/");
   });

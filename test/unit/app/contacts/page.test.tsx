@@ -123,7 +123,7 @@ describe("ContactsPage", () => {
       pages: 0,
     };
     render(<ContactsPage />);
-    const search = screen.getByPlaceholderText(/Sök kontakter/i) as HTMLInputElement;
+    const search = screen.getByPlaceholderText<HTMLInputElement>(/Sök kontakter/i);
     fireEvent.change(search, { target: { value: "Anna" } });
     expect(search.value).toBe("Anna");
   });
@@ -157,34 +157,34 @@ describe("ContactsPage", () => {
   it("paginering: Föregående är disabled på sida 1", () => {
     contactsQuery.data = { contacts: [], total: 50, pages: 3 };
     render(<ContactsPage />);
-    const prev = screen.getByRole("button", { name: /Föregående/i }) as HTMLButtonElement;
+    const prev = screen.getByRole<HTMLButtonElement>("button", { name: /Föregående/i });
     expect(prev.disabled).toBe(true);
   });
 
   it("uppdaterar alla formulärfält i ny kontakt-form", () => {
     render(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
-    const nameInput = screen.getByLabelText(/Namn/) as HTMLInputElement;
+    const nameInput = screen.getByLabelText<HTMLInputElement>(/Namn/);
     fireEvent.change(nameInput, { target: { value: "Bertil" } });
     expect(nameInput.value).toBe("Bertil");
 
-    const personalNr = screen.getByLabelText(/Personnummer/) as HTMLInputElement;
+    const personalNr = screen.getByLabelText<HTMLInputElement>(/Personnummer/);
     fireEvent.change(personalNr, { target: { value: "19800101-1234" } });
     expect(personalNr.value).toBe("19800101-1234");
 
-    const email = screen.getByLabelText(/^E-post$/) as HTMLInputElement;
+    const email = screen.getByLabelText<HTMLInputElement>(/^E-post$/);
     fireEvent.change(email, { target: { value: "b@x.se" } });
     expect(email.value).toBe("b@x.se");
 
-    const phone = screen.getByLabelText(/^Telefon$/) as HTMLInputElement;
+    const phone = screen.getByLabelText<HTMLInputElement>(/^Telefon$/);
     fireEvent.change(phone, { target: { value: "070-1" } });
     expect(phone.value).toBe("070-1");
 
-    const address = screen.getByLabelText(/^Adress$/) as HTMLInputElement;
+    const address = screen.getByLabelText<HTMLInputElement>(/^Adress$/);
     fireEvent.change(address, { target: { value: "Storgatan" } });
     expect(address.value).toBe("Storgatan");
 
-    const notes = screen.getByLabelText(/Anteckningar/) as HTMLTextAreaElement;
+    const notes = screen.getByLabelText<HTMLTextAreaElement>(/Anteckningar/);
     fireEvent.change(notes, { target: { value: "anteckning" } });
     expect(notes.value).toBe("anteckning");
   });
@@ -192,9 +192,9 @@ describe("ContactsPage", () => {
   it("uppdaterar org-nummerfält när typ=COMPANY", () => {
     render(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
-    const typeSelect = screen.getByLabelText(/^Typ$/) as HTMLSelectElement;
+    const typeSelect = screen.getByLabelText<HTMLSelectElement>(/^Typ$/);
     fireEvent.change(typeSelect, { target: { value: "COMPANY" } });
-    const orgNr = screen.getByLabelText(/Organisationsnummer/) as HTMLInputElement;
+    const orgNr = screen.getByLabelText<HTMLInputElement>(/Organisationsnummer/);
     fireEvent.change(orgNr, { target: { value: "556677-8899" } });
     expect(orgNr.value).toBe("556677-8899");
   });

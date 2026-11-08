@@ -25,10 +25,9 @@ function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG, userId = "user-
     contacts: [],
     matterContacts: [],
     ...seed,
-  } as DemoSource, async () => { /* writable */ });
+  }, async () => { /* writable */ });
   const principal: Principal = { id: asId<"UserId">(userId), email: "a@b.com", name: "Test", role, organizationId: asId<"OrganizationId">(orgId) };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal }) as any);
+  const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal }));
   return { ds, caller: caller.matter };
 }
 

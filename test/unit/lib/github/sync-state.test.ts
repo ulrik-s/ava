@@ -40,7 +40,7 @@ describe("sync-state", () => {
     const bytes = new TextEncoder().encode(JSON.stringify({ ...sampleState, version: 2 }));
     const ava = await fsa.root.getDirectoryHandle(".ava");
     const file = await ava.getFileHandle("sync-state.json");
-    const w = await (file as FileSystemFileHandle).createWritable();
+    const w = await file.createWritable();
     await w.write(bytes);
     await w.close();
     expect(await readSyncState(fsa.root)).toBeNull();
@@ -50,7 +50,7 @@ describe("sync-state", () => {
     const fsa = makeFakeFsa();
     const ava = await fsa.root.getDirectoryHandle(".ava", { create: true });
     const file = await ava.getFileHandle("sync-state.json", { create: true });
-    const w = await (file as FileSystemFileHandle).createWritable();
+    const w = await file.createWritable();
     await w.write("not-json");
     await w.close();
     expect(await readSyncState(fsa.root)).toBeNull();

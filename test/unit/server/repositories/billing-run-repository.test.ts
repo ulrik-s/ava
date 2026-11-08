@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { billingRuns, invoices, matters } from "@/lib/server/db/schema";
 import { DrizzleBillingRunRepository } from "@/lib/server/repositories/drizzle-billing-run-repository";
@@ -34,7 +33,7 @@ describe("BillingRunRepository — in-memory", () => {
         run({ id: r1, matterId: mId, invoiceId: invId, type: "ACCONTO", status: "SENT" }),
         run({ id: r2, matterId: mId, invoiceId: null, type: "FINAL", status: "SENT" }),
       ],
-    } as DemoSource);
+    });
     const repo = new InMemoryBillingRunRepository(new LocalStore(source, async () => {}));
 
     const list = await repo.listForOrg(asId<"OrganizationId">(ORG));

@@ -33,7 +33,7 @@ function makeEnv(over: Partial<SignOutEnv> = {}): SignOutEnv & { navigate: Retur
     endSessionUrl: async () => null,
     timeoutMs: 200,
     ...over,
-  } as SignOutEnv & { navigate: ReturnType<typeof vi.fn>; notifyOtherTabs: ReturnType<typeof vi.fn> };
+  };
 }
 
 beforeEach(() => {
@@ -51,7 +51,7 @@ describe("signOut", () => {
   it("rensar Annas lokala data, glömmer identiteten och går till proxyns utloggning", async () => {
     bindLocalNamespace(userNamespace(anna));
     const cache = dbNameIn(userNamespace(anna), LOCAL_DB.localStore);
-    await new IndexedDbPersistence(factory, cache).save({} as never);
+    await new IndexedDbPersistence(factory, cache).save({});
     localStorage.setItem("ava.outlookToken", "hemlig");
     localStorage.setItem("ava.theme", "dark");
     sessionStorage.setItem("msal.token", "hemlig");

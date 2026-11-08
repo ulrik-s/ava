@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import { requestBodyText } from "@/lib/shared/request-url";
 import {
   buildAuthorizeUrl,
   discoverOidc,
@@ -96,7 +97,7 @@ describe("exchangeCode + refreshTokens", () => {
   test("exchange POST:ar rätt grant + sätter expiresAt ur now+expires_in", async () => {
     let seenBody = "";
     const fetchFn = (async (_url: string, init?: RequestInit) => {
-      seenBody = String(init?.body);
+      seenBody = requestBodyText(init);
       return jsonResponse({ access_token: "AT", refresh_token: "RT", expires_in: 300 });
     }) satisfies FetchLike;
     const t = await exchangeCode(EP, { clientId: "ava", code: "C", verifier: "V", redirectUri: "http://127.0.0.1/cb" }, fetchFn, () => 1_000);
@@ -108,7 +109,7 @@ describe("exchangeCode + refreshTokens", () => {
   test("refresh POST:ar refresh_token-grant", async () => {
     let seenBody = "";
     const fetchFn = (async (_url: string, init?: RequestInit) => {
-      seenBody = String(init?.body);
+      seenBody = requestBodyText(init);
       return jsonResponse({ access_token: "AT2", expires_in: 60 });
     }) satisfies FetchLike;
     const t = await refreshTokens(EP, { clientId: "ava", refreshToken: "RT" }, fetchFn, () => 0);
@@ -184,7 +185,7 @@ describe("token-store (keychain args + parse)", () => {
 
 describe("TokenManager", () => {
   function mgr(store: InMemoryTokenStore, now: number, refresh = (): Promise<never> => Promise.reject(new Error("no refresh"))) {
-    return new TokenManager(store, EP, "ava", { now: () => now, refresh: refresh as never });
+    return new TokenManager(store, EP, "ava", { now: () => now, refresh: refresh });
   }
 
   test("giltig (ej snart utgången) → returnerar access-token utan refresh", async () => {

@@ -5,6 +5,7 @@ import {
   refreshTokens,
 } from "@/lib/server/integrations/msgraph/oauth";
 import type { MsGraphConfig } from "@/lib/server/integrations/msgraph/schema";
+import { requestBodyText, requestUrl } from "@/lib/shared/request-url";
 
 const config: MsGraphConfig = {
   clientId: "cid",
@@ -23,7 +24,7 @@ interface Captured {
 function fakeFetch(status: number, json: unknown, cap?: Captured) {
   return (async (url: string | URL | Request, init?: RequestInit) => {
     if (cap) {
-      cap.url = String(url);
+      cap.url = requestUrl(url);
       cap.init = init ?? {};
     }
     return new Response(JSON.stringify(json), {
@@ -42,7 +43,7 @@ const TOKEN_JSON = {
 };
 
 function bodyOf(init: RequestInit): URLSearchParams {
-  return new URLSearchParams(String(init.body));
+  return new URLSearchParams(requestBodyText(init));
 }
 
 describe("buildAuthorizeUrl", () => {

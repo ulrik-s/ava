@@ -412,7 +412,7 @@ describe("DocumentBrowser", () => {
     fireEvent.click(screen.getByLabelText("Mappåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /Byt namn/i }));
     // En input ska nu finnas (med mappnamnet förifyllt)
-    const input = screen.getByDisplayValue("Inlagor") as HTMLInputElement;
+    const input = screen.getByDisplayValue("Inlagor");
     expect(input).toBeInTheDocument();
     fireEvent.change(input, { target: { value: "Avtal" } });
     const form = input.closest("form")!;

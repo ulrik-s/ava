@@ -57,7 +57,7 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
 
   async flagBilled(ids: ExpenseId[], invoiceId: InvoiceId): Promise<void> {
     if (!ids.length) return;
-    await this.delegate.updateMany({ where: { id: { in: ids } }, data: { invoiceId } as Partial<Expense> });
+    await this.delegate.updateMany({ where: { id: { in: ids } }, data: { invoiceId } });
   }
 
   async listUnfrozenForMatter(matterId: MatterId): Promise<Expense[]> {
@@ -81,14 +81,14 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.delegate.updateMany({
       where: { matterId, frozenByBillingRunId: null },
-      data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<Expense>,
+      data: { frozenAt: now, frozenByBillingRunId: billingRunId },
     });
   }
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
     await this.delegate.updateMany({
       where: { frozenByBillingRunId: billingRunId },
-      data: { frozenAt: null, frozenByBillingRunId: null } as Partial<Expense>,
+      data: { frozenAt: null, frozenByBillingRunId: null },
     });
   }
 
@@ -96,7 +96,7 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
     if (!ids.length) return;
     await this.delegate.updateMany({
       where: { id: { in: ids }, frozenByBillingRunId: null },
-      data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<Expense>,
+      data: { frozenAt: now, frozenByBillingRunId: billingRunId },
     });
   }
 

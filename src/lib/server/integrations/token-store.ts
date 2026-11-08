@@ -15,6 +15,7 @@
 
 import type { ZodType } from "zod";
 
+import { parseJsonWith } from "@/lib/shared/parse-json";
 import type { SecretsVault } from "../secrets/vault";
 
 export interface TokenStore<T> {
@@ -58,7 +59,7 @@ export class VaultTokenStore<T> implements TokenStore<T> {
   async load(): Promise<T | null> {
     const raw = await this.vault.get(this.key);
     if (!raw) return null;
-    return this.schema.parse(JSON.parse(raw));
+    return parseJsonWith(this.schema, raw);
   }
 
   async save(tokens: T): Promise<void> {

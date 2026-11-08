@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documentFolders, documentParts, documents, matters, users } from "@/lib/server/db/schema";
 import { DrizzleDocumentFolderRepository } from "@/lib/server/repositories/drizzle-document-folder-repository";
@@ -42,12 +41,10 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
         { id: uuidv7(), documentId: d1, matterId: mId, ordinal: 1, kind: "FUP", fromPage: 2, toPage: 3, source: "AUTO" },
         { id: uuidv7(), documentId: d1, matterId: mId, ordinal: 2, kind: "DOM", fromPage: 4, toPage: 4, source: "AUTO", deletedAt: new Date() },
       ],
-    } as DemoSource);
+    });
     const store = new LocalStore(source, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const docs = new InMemoryDocumentRepository(store as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const folders = new InMemoryDocumentFolderRepository(store as any);
+    const docs = new InMemoryDocumentRepository(store);
+    const folders = new InMemoryDocumentFolderRepository(store);
 
     const inRoot = await docs.listInFolder(mId, root, 1, 50);
     expect(inRoot.total).toBe(1);
@@ -75,9 +72,8 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
         { id: "d-a", matterId: "m", fileName: "a.pdf", storagePath: "documents/content/a", createdAt: new Date("2026-09-01") },
         { id: "d-b", matterId: "m", fileName: "b.pdf" },
       ],
-    } as DemoSource);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const docs = new InMemoryDocumentRepository(new LocalStore(source, async () => {}) as any);
+    });
+    const docs = new InMemoryDocumentRepository(new LocalStore(source, async () => {}));
     expect(await docs.listStoredContent()).toEqual([
       { id: "d-a", storagePath: "documents/content/a", createdAt: new Date("2026-09-01") },
       { id: "d-b", storagePath: "", createdAt: new Date(0) },

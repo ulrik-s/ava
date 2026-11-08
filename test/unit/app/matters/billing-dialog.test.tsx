@@ -136,14 +136,14 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     // Inga number-spinners alls (type=number ger role 'spinbutton').
     expect(screen.queryAllByRole("spinbutton")).toHaveLength(0);
-    const boxes = screen.getAllByRole("textbox") as HTMLInputElement[];
+    const boxes = screen.getAllByRole<HTMLInputElement>("textbox");
     expect(boxes[1]!.getAttribute("inputmode")).toBe("decimal");
   });
 
   it("tomt belopp när inget förslag finns: rutan är tom från början (#778)", () => {
     proposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
-    const boxes = screen.getAllByRole("textbox") as HTMLInputElement[];
+    const boxes = screen.getAllByRole<HTMLInputElement>("textbox");
     expect(boxes[1]!.value).toBe(""); // belopp tomt, inte "0"
   });
 

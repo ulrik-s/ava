@@ -16,18 +16,19 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadDemoSeed } from "../../src/lib/client/demo/demo-seed-loader";
+import { requestUrl } from "../../src/lib/shared/request-url";
 
 /** Filsystems-`fetch`: mappar `<baseUrl=""><path>` → fil i out-mappen. */
 function fileFetch(outDir: string): typeof fetch {
   return (async (url: string | URL | Request): Promise<Response> => {
-    const rel = String(url).replace(/^\/+/, "");
+    const rel = requestUrl(url).replace(/^\/+/, "");
     try {
       const body = await readFile(join(outDir, rel), "utf8");
       return new Response(body, { status: 200 });
     } catch {
       return new Response("", { status: 404 });
     }
-  }) as typeof fetch;
+  });
 }
 
 async function main(): Promise<void> {

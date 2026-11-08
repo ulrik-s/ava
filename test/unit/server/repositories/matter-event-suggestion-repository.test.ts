@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documents, matterEventSuggestions, matters } from "@/lib/server/db/schema";
 import { DrizzleMatterEventSuggestionRepository } from "@/lib/server/repositories/drizzle-matter-event-suggestion-repository";
@@ -29,9 +28,8 @@ describe("MatterEventSuggestionRepository — in-memory", () => {
         { id: uuidv7(), documentId: dId, title: "Tidig", startAt: new Date("2026-05-01"), status: "PENDING" },
         { id: uuidv7(), documentId: dId, title: "Avvisad", startAt: new Date("2026-04-01"), status: "REJECTED" },
       ],
-    } as DemoSource);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const repo = new InMemoryMatterEventSuggestionRepository(new LocalStore(source, async () => {}) as any);
+    });
+    const repo = new InMemoryMatterEventSuggestionRepository(new LocalStore(source, async () => {}));
 
     const list = await repo.listForMatter(mId, ORG);
     expect(list.map((r) => r.title)).toEqual(["Tidig", "Sen"]);

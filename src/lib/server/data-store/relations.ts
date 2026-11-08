@@ -38,7 +38,7 @@ function makeRel(getSource: GetSource): Rel {
   return (key, childField, parentField, kind = "many", relations) => {
     const cfg = omitUndefined({
       kind,
-      collection: () => (getSource()[key] ?? []) as readonly Record<string, unknown>[],
+      collection: () => (getSource()[key] ?? []),
       where: (p: Record<string, unknown>) => ({ [childField]: p[parentField] }),
       relations,
     });

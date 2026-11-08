@@ -29,6 +29,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { buildKostnadsrakningContext, withDocumentFields, type KrDocumentFields } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { primitiveText } from "@/lib/shared/primitive-text";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 
@@ -276,8 +277,8 @@ function useKostnadsrakningModal(props: Props) {
         fileName, bytes,
         matterNumber: props.matterNumber, matterTitle: props.matterTitle,
         clientName: props.clientName,
-        huvudforhandlingFormatted: String(ctx.templateContext.huvudforhandlingFormatted ?? ""),
-        totalInclFormatted: String(ctx.templateContext.totalInclFormatted ?? ""),
+        huvudforhandlingFormatted: primitiveText(ctx.templateContext.huvudforhandlingFormatted),
+        totalInclFormatted: primitiveText(ctx.templateContext.totalInclFormatted),
       });
       setDone({ filename: fileName, mailOpened });
       setTimeout(() => props.onClose(), 1500);

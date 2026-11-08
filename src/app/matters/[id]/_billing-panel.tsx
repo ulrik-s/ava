@@ -386,7 +386,7 @@ function useKrModalData(matterId: MatterId): KrModalData {
     organizationLogo: org.logo,
     organizationFooterSeal: org.footerSeal,
     defenderTitle: strOrUndef(me?.title),
-    expenses: expenses as KrModalData["expenses"],
+    expenses: expenses,
   }) as KrModalData;
 }
 
@@ -765,11 +765,11 @@ interface BillingListRow {
 /** Billing-run → listrad. Aconto visar sin sats (#878) så den varierande
  *  rättshjälpsavgiften syns per period; KR-raden länkar till sitt dokument. */
 function runListRow(r: BillingRunRow, docs: readonly MatterDocument[], client: DownloadClient): BillingListRow {
-  const typeLabel = BILLING_RUN_TYPE_LABELS[r.type as keyof typeof BILLING_RUN_TYPE_LABELS] ?? r.type;
+  const typeLabel = BILLING_RUN_TYPE_LABELS[r.type] ?? r.type;
   const rate = r.type === "ACCONTO" && r.clientShareBips != null ? ` (${r.clientShareBips / 100} %)` : "";
   return {
     key: r.id, date: runDateOf(r), type: `${typeLabel}${rate}`, recipient: r.recipient,
-    status: BILLING_RUN_STATUS_LABELS[r.status as keyof typeof BILLING_RUN_STATUS_LABELS] ?? r.status,
+    status: BILLING_RUN_STATUS_LABELS[r.status] ?? r.status,
     amountOre: r.amountOre, actions: <RunActions r={r} docs={docs} client={client} />,
   };
 }

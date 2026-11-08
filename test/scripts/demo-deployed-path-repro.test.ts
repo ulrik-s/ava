@@ -62,12 +62,11 @@ describe("deployed-path repro (prebakeJoins + ny store)", () => {
 
     const store = new DemoDataStore(baked);
     const ctx = buildContext({ dataStore: store, ports: noopPorts, principal: ADMIN });
-    const caller = appRouter.createCaller(ctx as never) as Any;
+    const caller = appRouter.createCaller(ctx) as Any;
 
     const { items: inv } = await caller.invoice.list({});
     const te = await caller.timeEntry.list({ pageSize: 100 });
     const { items: plans } = await caller.paymentPlan.list({});
-     
     console.log("REPRO counts:", { invoices: inv.length, timeEntries: te.entries.length, paymentPlans: plans.length });
 
     expect(inv.length).toBeGreaterThan(0);

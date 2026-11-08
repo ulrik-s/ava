@@ -182,7 +182,7 @@ export default function UsersPage() {
       <DataTable
         prefKey="list.users"
         columns={columns}
-        data={(users.data?.users ?? []) as UserRow[]}
+        data={(users.data?.users ?? [])}
         rowKey={(u) => u.id}
         emptyMessage="Inga användare."
       />

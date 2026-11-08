@@ -23,7 +23,7 @@ describe("createIndexDocumentHandler", () => {
     const readPages = vi.fn(async () => ["ett", "två"]);
     const pageIndex = { replacePages: vi.fn(async () => {}) };
     const getById = vi.fn(async () => doc);
-    await createIndexDocumentHandler({ documents: { getById } as never, readPages, pageIndex })(jobFor(DOC_ID));
+    await createIndexDocumentHandler({ documents: { getById }, readPages, pageIndex })(jobFor(DOC_ID));
     expect(readPages).toHaveBeenCalledTimes(1);
     expect(readPages).toHaveBeenCalledWith({ fileName: "a.pdf", storagePath: "documents/content/a.pdf", mimeType: "application/pdf" });
     expect(pageIndex.replacePages).toHaveBeenCalledWith(DOC_ID, ["ett", "två"]);
@@ -32,14 +32,14 @@ describe("createIndexDocumentHandler", () => {
   it("saknat/raderat dokument → no-op", async () => {
     const readPages = vi.fn(async () => ["x"]);
     const pageIndex = { replacePages: vi.fn(async () => {}) };
-    await createIndexDocumentHandler({ documents: { getById: async () => null } as never, readPages, pageIndex })(jobFor(DOC_ID));
+    await createIndexDocumentHandler({ documents: { getById: async () => null }, readPages, pageIndex })(jobFor(DOC_ID));
     expect(readPages).not.toHaveBeenCalled();
     expect(pageIndex.replacePages).not.toHaveBeenCalled();
   });
 
   it("ogiltig payload → kastar (pg-boss retry/dead-letter)", async () => {
     const handler = createIndexDocumentHandler({
-      documents: { getById: async () => null } as never, readPages: async () => [], pageIndex: { replacePages: async () => {} },
+      documents: { getById: async () => null }, readPages: async () => [], pageIndex: { replacePages: async () => {} },
     });
     await expect(handler({ ...jobFor(DOC_ID), data: {} })).rejects.toThrow();
   });

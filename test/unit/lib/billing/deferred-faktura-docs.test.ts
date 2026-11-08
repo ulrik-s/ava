@@ -27,7 +27,7 @@ const utils: DocUtils = {
 
 function harness(state: () => InvoiceNumberState) {
   const registered: Array<{ fileName: string }> = [];
-  const register: RegisterMut = { mutateAsync: async (i) => { registered.push(i as { fileName: string }); return {}; } };
+  const register: RegisterMut = { mutateAsync: async (i) => { registered.push(i); return {}; } };
   const unregister = registerInvoiceNumberResolver(async () => state());
   const store = new InMemoryDeferredFakturaStore();
   setDeferredFakturaStoreForTests(store);
@@ -66,7 +66,7 @@ describe("generateFakturaFromTemplate — fastställt nummer", () => {
 
   it("demo (ingen resolver) → direkt med det lokala numret", async () => {
     const registered: Array<{ fileName: string }> = [];
-    const register: RegisterMut = { mutateAsync: async (i) => { registered.push(i as { fileName: string }); return {}; } };
+    const register: RegisterMut = { mutateAsync: async (i) => { registered.push(i); return {}; } };
     expect(await generateFakturaFromTemplate(args(register))).toBe("generated");
     expect(registered[0]!.fileName).toContain("F-2026-0001");
   });
@@ -100,7 +100,7 @@ describe("processDeferredFakturaDocs — efter synk", () => {
     await generateFakturaFromTemplate({ ...args(h.register), invoice: { ...args(h.register).invoice, id: asId<"InvoiceId">("0190a1b2-0000-7000-8000-00000000f002") } });
     state = { state: "final", invoiceNumber: "F-2026-0004", ocrReference: null };
     let calls = 0;
-    const flaky: RegisterMut = { mutateAsync: async (i) => { calls++; if (calls === 1) throw new Error("nätfel"); h.registered.push(i as { fileName: string }); return {}; } };
+    const flaky: RegisterMut = { mutateAsync: async (i) => { calls++; if (calls === 1) throw new Error("nätfel"); h.registered.push(i); return {}; } };
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(await processDeferredFakturaDocs({ register: flaky, utils })).toBe(1);
     expect(await h.store.load()).toHaveLength(1);

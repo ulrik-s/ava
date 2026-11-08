@@ -43,7 +43,7 @@ function makeFileMock(node: Extract<FsNode, { kind: "file" }>, name: string): Fi
           } else if (data instanceof ArrayBuffer) {
             chunks.push(new Uint8Array(data));
           } else if (ArrayBuffer.isView(data)) {
-            const view = data as ArrayBufferView;
+            const view = data;
             chunks.push(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
           } else if (typeof data === "string") {
             chunks.push(new TextEncoder().encode(data));

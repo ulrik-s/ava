@@ -30,7 +30,7 @@ describe("DecimalInput", () => {
 
   it("null → tom ruta från början", () => {
     render(<DecimalInput value={null} onChange={() => {}} placeholder="Skriv in belopp" />);
-    expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("");
+    expect(screen.getByRole<HTMLInputElement>("textbox").value).toBe("");
   });
 
   it("rapporterar parsat tal och null vid tomt", () => {
@@ -53,15 +53,15 @@ describe("DecimalInput", () => {
       return <DecimalInput value={v} onChange={setV} />;
     }
     render(<Harness />);
-    const box = screen.getByRole("textbox") as HTMLInputElement;
+    const box = screen.getByRole<HTMLInputElement>("textbox");
     fireEvent.change(box, { target: { value: "12," } });
     expect(box.value).toBe("12,"); // inte "12" eller "0"
   });
 
   it("adopterar nytt value när föräldern ändrar det utifrån (förifyllning)", () => {
     const { rerender } = render(<DecimalInput value={null} onChange={() => {}} />);
-    expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("");
+    expect(screen.getByRole<HTMLInputElement>("textbox").value).toBe("");
     rerender(<DecimalInput value={1000} onChange={() => {}} />);
-    expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("1000");
+    expect(screen.getByRole<HTMLInputElement>("textbox").value).toBe("1000");
   });
 });

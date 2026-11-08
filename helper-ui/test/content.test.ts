@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { requestUrl } from "@/lib/shared/request-url";
 import { ContentStore } from "../src/engine/content-store.ts";
 import { fetchAndCacheContent, fileNameFromUrl, handleContent, type ContentDeps } from "../src/engine/content.ts";
 import { jsonRequest } from "./helpers.ts";
@@ -131,7 +132,7 @@ describe("fetchAndCacheContent", () => {
 
   function mockFetch(fn: (url: string, init?: RequestInit) => Response): () => void {
     const orig = globalThis.fetch;
-    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => fn(String(url), init)) as typeof fetch;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => fn(requestUrl(url), init)) as typeof fetch;
     return () => { globalThis.fetch = orig; };
   }
 

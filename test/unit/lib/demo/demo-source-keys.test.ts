@@ -87,7 +87,7 @@ describe("pathToSourceKey täcker ENTITY_REGISTRY", () => {
   it("undantagslistan innehåller bara entiteter som faktiskt finns", () => {
     // Skydd mot att en rad blir kvar efter att entiteten tagits in eller bytt namn.
     for (const name of NOT_YET_HYDRATED) {
-      const entry = ENTITY_REGISTRY[name as keyof typeof ENTITY_REGISTRY] as { gitPrefix: string } | undefined;
+      const entry = ENTITY_REGISTRY[name] as { gitPrefix: string } | undefined;
       expect(entry, `${name} finns i registret`).toBeDefined();
       expect(pathToSourceKey(`${entry?.gitPrefix ?? "saknas"}/x.json`)).toBeNull();
     }

@@ -14,6 +14,7 @@
  * (tester gör det), men demons väg går via `runSimulation`.
  */
 
+import { primitiveText } from "../../src/lib/shared/primitive-text";
 import type { SeedDataset } from "../scripts/seed-data";
 import type { GeneratorCaller } from "./backend-target";
 
@@ -48,13 +49,14 @@ function defined(obj: Row): Row {
 
 /** Date|sträng → ISO-sträng (zod-input vill ha sträng för date-fält). */
 function isoOrUndef(v: unknown): string | undefined {
-  if (v === null || v === undefined) return undefined;
-  return v instanceof Date ? v.toISOString() : String(v);
+  if (v instanceof Date) return v.toISOString();
+  const text = primitiveText(v);
+  return text === "" ? undefined : text;
 }
 
 /** Hämta en seed-collection (tål partiella test-seeds → []). */
 function pick(seed: SeedDataset, key: keyof SeedDataset): Row[] {
-  return ((seed[key] as Row[] | undefined) ?? []);
+  return ((seed[key]) ?? []);
 }
 
 async function createOrganizations(c: AnyCaller, rows: Row[]): Promise<void> {

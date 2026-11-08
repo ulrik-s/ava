@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { conflictChecks, contacts, matterContacts, matters, users } from "@/lib/server/db/schema";
 import { DrizzleConflictCheckRepository } from "@/lib/server/repositories/drizzle-conflict-check-repository";
@@ -38,12 +37,10 @@ describe("Conflict/MatterContact repos — in-memory", () => {
       conflictChecks: [
         { id: uuidv7(), searchTerm: "anna", searchType: "name", results: [], checkedById: uId, createdAt: new Date() },
       ],
-    } as DemoSource);
+    });
     const store = new LocalStore(source, async () => {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mc = new InMemoryMatterContactRepository(store as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cc = new InMemoryConflictCheckRepository(store as any);
+    const mc = new InMemoryMatterContactRepository(store);
+    const cc = new InMemoryConflictCheckRepository(store);
 
     const byNumber = await mc.findForConflict(ORG, "19850225");
     expect(byNumber).toHaveLength(1);
@@ -126,13 +123,12 @@ describe("MatterContactRepository — läs-/skriv-metoder (in-memory)", () => {
         { id: linkKli, matterId: mId, contactId: cKli, role: "KLIENT" },
         { id: linkMot, matterId: mId, contactId: cMot, role: "MOTPART" },
       ],
-    } as DemoSource);
+    });
     return new LocalStore(source, async () => {});
   }
 
   function repo(store: LocalStore): InMemoryMatterContactRepository {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return new InMemoryMatterContactRepository(store as any);
+    return new InMemoryMatterContactRepository(store);
   }
 
   it("getByIdInOrg: hittar i rätt org, null för annan org/saknad id", async () => {

@@ -91,7 +91,7 @@ function PaymentMethodView({
 }) {
   const risk = creditRiskFor(paymentMethod);
   const badgeClass = RISK_BADGE[risk];
-  const label = PAYMENT_METHOD_LABELS[paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? paymentMethod;
+  const label = PAYMENT_METHOD_LABELS[paymentMethod] ?? paymentMethod;
   const showShare = usesClientShare(paymentMethod);
   const cap = showShare ? capLabel(paymentMethod, rattsskyddMaxOre, rattshjalpMaxTimmar) : null;
   return (
@@ -345,7 +345,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
             onClick={() =>
               update.mutate({
                 id: matterId,
-                paymentMethod: method as Parameters<typeof update.mutate>[0]["paymentMethod"],
+                paymentMethod: method,
                 paymentMethodNote: note || null,
                 paymentMethodDecidedAt: decidedAt || null,
                 clientShareBips: clientShareFromPct(sharePct),

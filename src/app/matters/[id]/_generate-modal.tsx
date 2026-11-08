@@ -124,9 +124,9 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
     try {
       await runGenerate({
         templateId: generateTemplateId, format: generateFormat, recipientIds: generateRecipientIds,
-        templates: templates.data, matter: matter.data as GenMatter | undefined, org: org.data as GenOrg,
+        templates: templates.data, matter: matter.data as GenMatter | undefined, org: org.data,
         contacts, matterId,
-        registerDoc: (d) => register.mutateAsync(d as Parameters<typeof register.mutateAsync>[0]),
+        registerDoc: (d) => register.mutateAsync(d),
       });
       void utils.document.tree.invalidate({ matterId });
       onClose();
@@ -149,7 +149,7 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
             templates={templates.data?.map((t) => ({
               id: t.id,
               name: String(t.name),
-              category: (t.category as string | null) ?? null,
+              category: t.category ?? null,
             }))}
             value={generateTemplateId}
             onChange={setGenerateTemplateId}

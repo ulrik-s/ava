@@ -14,6 +14,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { UserRole } from "@/lib/shared/schemas/enums";
+import { primitiveText } from "../../src/lib/shared/primitive-text";
 import { CURRENT_SCHEMA_VERSION } from "../../src/lib/shared/schema-version";
 import { DEMO_META_PATH } from "../demo-config";
 import type { IdTranslator } from "../demo-generator/id-translator";
@@ -42,6 +43,17 @@ interface SeedShape {
   users: Array<Record<string, unknown>>;
 }
 
+function metaUser(u: Record<string, unknown>, translator: IdTranslator): DemoMetaUser {
+  const title = primitiveText(u.title);
+  return {
+    id: translator.toUuid(primitiveText(u.id)),
+    name: primitiveText(u.name),
+    email: primitiveText(u.email),
+    role: u.role as UserRole,
+    ...(title ? { title } : {}),
+  };
+}
+
 /**
  * @param seed Source-seed (FÖRE id-translation). Vi översätter till UUID
  *   lokalt via translator:n så meta.json matchar persisted data.
@@ -49,17 +61,11 @@ interface SeedShape {
 export function buildDemoMeta(seed: SeedShape, translator: IdTranslator, now: Date = new Date()): DemoMeta {
   const org = seed.organizations[0];
   if (!org) throw new Error("Seed saknar organization — kan inte bygga meta.json");
-  const orgRawId = String(org.id ?? "");
-  const orgName = String(org.name ?? "");
+  const orgRawId = primitiveText(org.id);
+  const orgName = primitiveText(org.name);
   if (!orgRawId || !orgName) throw new Error("Organization saknar id eller name");
 
-  const users: DemoMetaUser[] = seed.users.map((u) => ({
-    id: translator.toUuid(String(u.id ?? "")),
-    name: String(u.name ?? ""),
-    email: String(u.email ?? ""),
-    role: u.role as UserRole,
-    ...(u.title ? { title: String(u.title) } : {}),
-  }));
+  const users: DemoMetaUser[] = seed.users.map((u) => metaUser(u, translator));
   if (users.some((u) => !u.id || !u.name || !u.role)) {
     throw new Error("User-rad saknar id/name/role");
   }

@@ -10,7 +10,7 @@ import type { Delegate } from "@/lib/server/data-store/IDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 
 // Lös delegat-vy för att kringgå de branded id-typerna (UserId) i testdata.
-const loose = (d: unknown): Delegate => d as unknown as Delegate;
+const loose = (d: unknown): Delegate => d as Delegate;
 
 describe("LocalStore", () => {
   it("read-only: läser källan, mutation kastar, currentSource är samma referens", async () => {

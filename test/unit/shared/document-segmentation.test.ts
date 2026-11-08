@@ -146,7 +146,7 @@ describe("segmentPages", () => {
 
   it("LLM-taket: utöver taket bara heuristik (300 sidor tar inte evigheter)", async () => {
     const classify = vi.fn(async (): Promise<DocumentKind | null> => "RAPPORT");
-    const pages = Array.from({ length: 300 }, (_, i) => body(`${i % 2 === 0 ? "1 (2)" : "2 (2)"}`));
+    const pages = Array.from({ length: 300 }, (_, i) => body(i % 2 === 0 ? "1 (2)" : "2 (2)"));
     const parts = await segmentPages(pages, { fallbackKind: "OKLASSIFICERAT", classify });
     expect(classify).toHaveBeenCalledTimes(DEFAULT_MAX_LLM_CALLS);
     expect(parts).toEqual([{ kind: "RAPPORT", fromPage: 1, toPage: 300 }]);

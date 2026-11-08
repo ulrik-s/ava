@@ -44,7 +44,7 @@ export async function loadHandle(key: string): Promise<FileSystemDirectoryHandle
 }
 
 export async function deleteHandle(key: string): Promise<void> {
-  await tx<undefined>("readwrite", (s) => s.delete(key) as IDBRequest<undefined>);
+  await tx<undefined>("readwrite", (s) => s.delete(key));
 }
 
 /**

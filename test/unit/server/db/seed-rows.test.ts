@@ -37,12 +37,12 @@ describe("prepareSeedRow", () => {
     );
     expect(r.version).toBe(4);
     expect(r.createdAt).toBeInstanceOf(Date);
-    expect((r.createdAt as Date).getUTCFullYear()).toBe(2026);
-    expect((r.updatedAt as Date).getUTCMonth()).toBe(1); // februari
+    expect(r.createdAt.getUTCFullYear()).toBe(2026);
+    expect(r.updatedAt.getUTCMonth()).toBe(1); // februari
   });
 
   it("updatedAt faller tillbaka på createdAt när det saknas", () => {
     const r = prepareSeedRow({ id: "x", createdAt: "2026-03-03T00:00:00.000Z" }, NOW);
-    expect((r.updatedAt as Date).getTime()).toBe((r.createdAt as Date).getTime());
+    expect(r.updatedAt.getTime()).toBe(r.createdAt.getTime());
   });
 });

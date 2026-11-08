@@ -24,7 +24,7 @@ beforeEach(() => {
   sendMailMock = vi.fn(async () => ({ messageId: "<msg-123@example.com>" }));
   createTransportSpy = vi
     .spyOn(nodemailer, "createTransport")
-    .mockReturnValue({ sendMail: sendMailMock } as never);
+    .mockReturnValue({ sendMail: sendMailMock });
 });
 
 afterEach(() => {

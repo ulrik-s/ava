@@ -88,7 +88,7 @@ function isObjectLike(v: unknown): v is Record<string, unknown> {
 function readDef(proc: unknown): ProcedureDefLike {
   if (isObjectLike(proc) && "_def" in proc) {
     const def = proc._def;
-    if (isObjectLike(def)) return def as ProcedureDefLike;
+    if (isObjectLike(def)) return def;
   }
   return {};
 }

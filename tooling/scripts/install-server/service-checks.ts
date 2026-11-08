@@ -85,7 +85,7 @@ export interface ServiceCheckOpts {
 
 /** Kör alla relevanta tjänste-kontroller för den givna installationen. */
 export async function checkServices(cfg: ServerInstallConfig, opts: ServiceCheckOpts): Promise<ServiceCheck[]> {
-  const fetchFn = opts.fetchFn ?? (globalThis.fetch as FetchLike);
+  const fetchFn = opts.fetchFn ?? globalThis.fetch;
   const checks: Promise<ServiceCheck>[] = [
     checkWeb(opts.baseUrl, fetchFn),
     checkGitHttp(opts.baseUrl, opts.repoPath ?? "firma.git", fetchFn),

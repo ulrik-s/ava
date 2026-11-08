@@ -32,7 +32,7 @@ const itPg = url ? it : it.skip;
 function nodeFetch(input: string | URL, init?: RequestInit): Promise<Response> {
   const u = new URL(typeof input === "string" ? input : input.toString());
   const headers: Record<string, string> = {};
-  new Headers(init?.headers as HeadersInit | undefined).forEach((v, k) => { headers[k] = v; });
+  new Headers(init?.headers).forEach((v, k) => { headers[k] = v; });
   return new Promise((resolve, reject) => {
     const req = httpRequest(
       { hostname: u.hostname, port: u.port, path: u.pathname + u.search, method: init?.method ?? "GET", headers },

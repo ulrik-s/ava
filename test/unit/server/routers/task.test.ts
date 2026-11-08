@@ -61,14 +61,14 @@ describe("task.list", () => {
 describe("task.listForMatter (#1162)", () => {
   it("ärendet i org:en → alla användares uppgifter i ärendet (inte userId-scopat)", async () => {
     mockPrisma.matter.findFirst.mockResolvedValue({ id: "m-1", organizationId: "org-x" });
-    await makeCaller("u-anna", "org-x").listForMatter({ matterId: "m-1" as never });
+    await makeCaller("u-anna", "org-x").listForMatter({ matterId: "m-1" });
     const arg = mockPrisma.task.findMany.mock.calls[0]![0] as { where: Record<string, unknown> };
     expect(arg.where).toEqual({ matterId: "m-1", organizationId: "org-x" });
   });
 
   it("ärende i annan byrå → NOT_FOUND, inga uppgifter läses", async () => {
     mockPrisma.matter.findFirst.mockResolvedValue(null);
-    await expect(makeCaller().listForMatter({ matterId: "m-x" as never })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(makeCaller().listForMatter({ matterId: "m-x" })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mockPrisma.task.findMany).not.toHaveBeenCalled();
   });
 });

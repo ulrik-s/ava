@@ -41,7 +41,7 @@ function makeCaller(): ReturnType<typeof appRouter.createCaller> {
     paymentPlans: seed.paymentPlans,
     paymentPlanReminders: seed.paymentPlanReminders,
     payments: seed.payments,
-  } as DemoSource);
+  });
 
   // Self-hosted-läget i prod har ALLTID en writeBack (FSA → OPFS) — utan den
   // blir alla delegates read-only och routerns create-anrop (t.ex.
@@ -260,7 +260,7 @@ describe("Seed-data smoke — varje meny-sida körs mot riktig DemoDataStore", (
     let totalPayments = 0;
     for (const p of plans) {
       const detail = await trpc.paymentPlan.getById({ id: (p as { id: string }).id });
-      const payments = ((detail as { invoice?: { payments?: unknown[] } }).invoice?.payments ?? []) as unknown[];
+      const payments = ((detail as { invoice?: { payments?: unknown[] } }).invoice?.payments ?? []);
       totalPayments += payments.length;
     }
     expect(totalPayments).toBeGreaterThan(0);

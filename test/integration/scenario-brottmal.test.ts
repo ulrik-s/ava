@@ -51,7 +51,7 @@ function makeStore(): { caller: ReturnType<typeof appRouter.createCaller>; sourc
     invoices: [], calendarEvents: [], tasks: [],
     documentTemplates: [], conflictChecks: [], offices: [],
     paymentPlans: [], paymentPlanReminders: [], payments: [],
-  } as DemoSource);
+  });
   const dataStore = new DemoDataStore(source, async () => { /* no-op */ });
   const ports = buildGitPorts(dataStore);
   const caller = appRouter.createCaller({

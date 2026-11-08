@@ -181,7 +181,7 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
   }
 
   private matchesRel(el: unknown, where: unknown): boolean {
-    return this.matches(el as Record<string, unknown>, (where ?? {}) as Record<string, unknown>);
+    return this.matches(el as Record<string, unknown>, (where ?? {}));
   }
 
   private eq(a: unknown, b: unknown): boolean {

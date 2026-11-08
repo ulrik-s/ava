@@ -17,7 +17,7 @@ vi.mock("@/lib/client/jobs/job-queue", () => ({
 }));
 
 function job(over: Partial<Job> & Pick<Job, "id" | "status">): Job {
-  return { kind: "classify-document", label: `J ${over.id}`, enqueuedAt: 0, ...over } as Job;
+  return { kind: "classify-document", label: `J ${over.id}`, enqueuedAt: 0, ...over };
 }
 
 function SummaryProbe() {

@@ -12,12 +12,14 @@
 import { Building2, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { orgImageSchema, type OrgImage } from "@/lib/shared/org-image";
+import { primitiveText } from "@/lib/shared/primitive-text";
 
 /** Läs en fil till en data-URL. */
 export function readFileAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
+    // readAsDataURL ger alltid en sträng; något annat blir "" och faller på schemat.
+    reader.onload = () => resolve(primitiveText(reader.result));
     reader.onerror = () => reject(new Error("Kunde inte läsa filen"));
     reader.readAsDataURL(file);
   });
