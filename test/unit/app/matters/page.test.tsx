@@ -27,6 +27,8 @@ const searchQuery = vi.fn((input: { term: string }) => ({ data: { contacts: inpu
 /** onSuccess från contacts.create — testet anropar den som servern hade gjort. */
 let contactCreated: ((c: { id: string; name: string }) => void) | undefined;
 const createMatterMutate = vi.fn();
+/** Byråns ärendetyper (org-inställning) — tom = fritext. */
+let matterTypes: string[] = [];
 const searchParamsGet = vi.fn((_: string): string | null => null);
 
 vi.mock("next/navigation", () => ({
@@ -52,6 +54,9 @@ vi.mock("@/lib/client/trpc", () => ({
         },
       },
     },
+    organization: {
+      getSettings: { useQuery: () => ({ data: { matterTypes } }) },
+    },
     user: {
       list: { useQuery: () => employeesQuery },
       current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
@@ -70,6 +75,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   searchParamsGet.mockReturnValue(null);
   mattersQuery.data = { matters: [], total: 0, pages: 0 };
+  matterTypes = [];
 });
 
 describe("MattersPage", () => {
@@ -200,6 +206,19 @@ describe("MattersPage", () => {
       }),
     );
     expect(screen.queryByLabelText(/målnummer/)).not.toBeInTheDocument();
+  });
+
+  it("byrån har ärendetyper → Ärendetyp väljs ur listan", () => {
+    matterTypes = ["Bodelning", "God man"];
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    const select = screen.getByLabelText("Ärendetyp");
+    expect(select.tagName).toBe("SELECT");
+    expect(screen.getByRole("option", { name: "God man" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Dödsbo" } });
+    fireEvent.change(select, { target: { value: "God man" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ matterType: "God man" }));
   });
 
   it("paginering: Nästa följt av Föregående går tillbaka till sida 1", () => {
