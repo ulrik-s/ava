@@ -38,6 +38,15 @@ export function isHourlyKind(kind: TimeEntryKind): kind is HourlyTimeEntryKind {
   return hourlyTimeEntryKindSchema.safeParse(kind).success;
 }
 
+/**
+ * Kategorin vars timpris posten får: förhandling prissätts som timarvode, en
+ * timbaserad kategori som sig själv, och beredskap (per dag) har inget timpris (null).
+ */
+export function rateKindOf(kind: TimeEntryKind): HourlyTimeEntryKind | null {
+  if (kind === "FORHANDLING") return "ARBETE";
+  return isHourlyKind(kind) ? kind : null;
+}
+
 /** Första nivån i kedjan (mest specifik först) som satt ett pris för `kind`. */
 function firstRate(kind: HourlyTimeEntryKind, chain: readonly LevelRates[]): number | undefined {
   for (const level of chain) {

@@ -96,7 +96,7 @@ describe("TimeSection — arvodeskategori (#953)", () => {
     expect(select).toHaveValue("ARBETE"); // default
     const values = Array.from((select as HTMLSelectElement).options).map((o) => o.value);
     expect(values).toEqual([
-      "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP",
+      "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP", "FORHANDLING",
     ]);
 
     fireEvent.change(select, { target: { value: "TIDSSPILLAN_OVRIG_TID" } });

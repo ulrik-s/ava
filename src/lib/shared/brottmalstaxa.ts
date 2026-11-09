@@ -245,17 +245,19 @@ export function payableCoverageEntries<T extends CoverageEntryLike>(entries: rea
  * ifrån varandra.
  */
 export function coverageEntryRateOre(kind: TimeEntryKind | null | undefined, date: Date | string): number {
-  switch (kind) {
-    case "TIDSSPILLAN": return tidsspillanFtaxForDate(date);
-    case "TIDSSPILLAN_OVRIG_TID": return tidsspillanOvrigFtaxForDate(date);
-    case "ARBETE_OBEKVAM_TID": return arbeteObekvamFtaxForDate(date);
-    case "ARBETE":
-    case "ADVOKATBEREDSKAP":
-    case null:
-    case undefined:
-      return timkostnadsnormFtaxForDate(date);
-  }
+  return (kind ? OWN_COVERAGE_NORM[kind] : undefined)?.(date) ?? timkostnadsnormFtaxForDate(date);
 }
+
+/**
+ * Kategorier med en EGEN årsnorm. Alla andra — timarvode, förhandling (som är
+ * arbete) och beredskap (värderas per dag, aldrig via den här) — ersätts på
+ * timkostnadsnormen.
+ */
+const OWN_COVERAGE_NORM: Readonly<Partial<Record<TimeEntryKind, (date: Date | string) => number>>> = {
+  TIDSSPILLAN: tidsspillanFtaxForDate,
+  TIDSSPILLAN_OVRIG_TID: tidsspillanOvrigFtaxForDate,
+  ARBETE_OBEKVAM_TID: arbeteObekvamFtaxForDate,
+};
 
 /** Kvoten utan F-skatt för ett givet datum (#950) — årsberoende. */
 function noFTaxQuotientForDate(date: Date | string): { num: number; den: number } {
