@@ -191,6 +191,18 @@ describe("MattersPage", () => {
     expect(screen.getByText("Arkiverat")).toBeInTheDocument();
   });
 
+  it("visar ärendetypen som egen kolumn — '—' när typ saknas", () => {
+    const row = (id: string, matterType: string | null) => ({
+      id, matterNumber: `2026-000${id}`, title: `Fall ${id}`, status: "ACTIVE", matterType,
+      contacts: [], _count: { documents: 0, timeEntries: 0, contacts: 0 },
+    });
+    mattersQuery.data = { matters: [row("1", "Bodelning"), row("2", null)], total: 2, pages: 1 };
+    render(<MattersPage />);
+    expect(screen.getByRole("columnheader", { name: /Ärendetyp/ })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Bodelning" })).toBeInTheDocument();
+    expect(screen.getAllByRole("cell", { name: "—" }).length).toBeGreaterThan(0);
+  });
+
   it("fyller alla fält i Nytt ärende-formuläret → create med komplett payload", () => {
     render(<MattersPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
