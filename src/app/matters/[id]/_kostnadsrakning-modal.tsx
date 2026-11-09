@@ -27,7 +27,7 @@ import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
-import { buildKostnadsrakningContext, withDocumentFields, type KrDocumentFields } from "@/lib/shared/kostnadsrakning";
+import { buildKostnadsrakningContext, hasHearingEntry, withDocumentFields, type KrDocumentFields } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { primitiveText } from "@/lib/shared/primitive-text";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
@@ -170,6 +170,15 @@ async function maybeComposeMail(opts: MailOpts): Promise<boolean> {
   });
 }
 
+/**
+ * Det räkningen faktiskt yrkar. Utan förhandling (ärendet lades ner, ingen
+ * "Deltagit i förhandling"-post) finns ingen förhandlingstid och ingen
+ * brottmålstaxa: räkningen är bara ärendets poster (timkostnadsnorm × tid).
+ */
+export function effectiveHearing(hearing: boolean, hufStart: string, hufEnd: string, isTaxe: boolean): { hufEnd: string; isTaxe: boolean } {
+  return hearing ? { hufEnd, isTaxe } : { hufEnd: hufStart, isTaxe: false };
+}
+
 type KostnContext = ReturnType<typeof buildKostnadsrakningContext>;
 type HelperState = ReturnType<typeof useHelper>;
 
@@ -198,6 +207,10 @@ function useKostnadsrakningModal(props: Props) {
   // För icke-taxa-ärenden räknas de in i arvodes-summan; för taxa-ärenden
   // visas de bara som specifikation (beloppet styrs av taxa).
   const timeEntries = trpc.timeEntry.list.useQuery({ matterId: props.matterId, pageSize: 100 });
+  // Förhandlingsklockan bara när ärendet haft en förhandling (en "Deltagit i
+  // förhandling"-post). Annars: bara ärendets poster, utan klocka och taxa.
+  const hearing = hasHearingEntry(timeEntries.data?.entries ?? []);
+  const claim = effectiveHearing(hearing, hufStart, hufEnd, isTaxe);
 
   // Auto-spara HUF-start (debounced 600 ms)
   useEffect(() => {
@@ -221,15 +234,15 @@ function useKostnadsrakningModal(props: Props) {
     }),
     ...omitUndefined({ courtName: props.courtName }),
     hufStart: new Date(hufStart),
-    hufEnd: new Date(hufEnd),
+    hufEnd: new Date(claim.hufEnd),
     yrkandeDate,
     taxaLevel: level,
     hasFTax,
-    isTaxeArende: isTaxe,
+    isTaxeArende: claim.isTaxe,
     expenses: props.expenses,
     // Låsta (redan fakturerade/redovisade) poster utelämnas av byggaren (#1205).
     timeEntries: timeEntries.data?.entries ?? [],
-  }, props)), [hufStart, hufEnd, yrkandeDate, level, isTaxe, hasFTax, props, timeEntries.data]);
+  }, props)), [hufStart, claim.hufEnd, yrkandeDate, level, claim.isTaxe, hasFTax, props, timeEntries.data]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };
@@ -262,7 +275,7 @@ function useKostnadsrakningModal(props: Props) {
       });
       const storagePath = `documents/content/${docId}.pdf`;
       const billingRunId = await props.createRun({
-        hufStart: new Date(hufStart).toISOString(), hufEnd: new Date(hufEnd).toISOString(), taxaLevel: level, isTaxeArende: isTaxe, hasFTax,
+        hufStart: new Date(hufStart).toISOString(), hufEnd: new Date(claim.hufEnd).toISOString(), taxaLevel: level, isTaxeArende: claim.isTaxe, hasFTax,
       });
       // Innehåll: in-memory blob-cache (öppna nu) + FSA (self-hosted) + demo-slab
       // (överlever reload). Metadata-raden skapas separat av recordDocument.
@@ -277,7 +290,7 @@ function useKostnadsrakningModal(props: Props) {
         fileName, bytes,
         matterNumber: props.matterNumber, matterTitle: props.matterTitle,
         clientName: props.clientName,
-        huvudforhandlingFormatted: primitiveText(ctx.templateContext.huvudforhandlingFormatted),
+        huvudforhandlingFormatted: hearing ? primitiveText(ctx.templateContext.huvudforhandlingFormatted) : "Ingen förhandling",
         totalInclFormatted: primitiveText(ctx.templateContext.totalInclFormatted),
       });
       setDone({ filename: fileName, mailOpened });
@@ -292,6 +305,7 @@ function useKostnadsrakningModal(props: Props) {
   return {
     hufStart, setHufStart, hufEnd, setHufEnd, isTaxe, setIsTaxe, level, setLevel,
     generating, error, done, helper, ctx, stoppaNu, generate,
+    hearing, entriesLoading: timeEntries.isLoading,
   };
 }
 
@@ -313,15 +327,19 @@ export function KostnadsrakningModal(props: Props) {
         </div>
 
         <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
-          <HufSection
-            hufStart={k.hufStart} setHufStart={k.setHufStart}
-            hufEnd={k.hufEnd} setHufEnd={k.setHufEnd}
-            onStoppaNu={k.stoppaNu}
-            hufFormatted={ctx.templateContext.huvudforhandlingFormatted as string}
-            hufMin={ctx.huvudforhandlingMinutes}
-          />
-          <ErsattningSection isTaxe={k.isTaxe} setIsTaxe={k.setIsTaxe} level={k.level} setLevel={k.setLevel} />
-          <TimeSpecSection ctx={ctx} isTaxe={k.isTaxe} />
+          {k.hearing ? (
+            <>
+              <HufSection
+                hufStart={k.hufStart} setHufStart={k.setHufStart}
+                hufEnd={k.hufEnd} setHufEnd={k.setHufEnd}
+                onStoppaNu={k.stoppaNu}
+                hufFormatted={ctx.templateContext.huvudforhandlingFormatted as string}
+                hufMin={ctx.huvudforhandlingMinutes}
+              />
+              <ErsattningSection isTaxe={k.isTaxe} setIsTaxe={k.setIsTaxe} level={k.level} setLevel={k.setLevel} />
+            </>
+          ) : <NoHearingNote loading={k.entriesLoading} />}
+          <TimeSpecSection ctx={ctx} isTaxe={k.hearing && k.isTaxe} />
           <PreviewSection ctx={ctx} />
           <HelperStatusNote helper={k.helper} />
           <StatusMessages error={k.error} done={k.done} />
@@ -330,12 +348,28 @@ export function KostnadsrakningModal(props: Props) {
         <ModalFooter
           done={k.done !== null}
           generating={k.generating}
-          hufMin={ctx.huvudforhandlingMinutes}
+          // Utan förhandling är 0 min rätt — bara med förhandling krävs en tid.
+          blocked={k.entriesLoading || (k.hearing && ctx.huvudforhandlingMinutes <= 0)}
           helperVersion={k.helper.version}
           onClose={props.onClose}
           onGenerate={() => void k.generate()}
         />
       </div>
+    </div>
+  );
+}
+
+/** Ärendet har ingen förhandlingspost: förklara varför klockan saknas. */
+function NoHearingNote({ loading }: { loading: boolean }) {
+  if (loading) return <p className="text-sm text-gray-500">Läser in ärendets poster…</p>;
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700" role="note">
+      <p className="font-semibold">Ingen förhandling</p>
+      <p className="mt-1 text-gray-600">
+        Ärendet har ingen post &quot;Deltagit i förhandling&quot;, så kostnadsräkningen tar bara med ärendets
+        registrerade tid och utlägg, ersatt enligt timkostnadsnormen. Hade ärendet en förhandling: registrera
+        en tidspost med kategorin &quot;Deltagit i förhandling&quot;, så visas förhandlingsklockan här.
+      </p>
     </div>
   );
 }
@@ -502,8 +536,10 @@ function StatusMessages({ error, done }: { error: string | null; done: { filenam
 }
 
 /** Footer: avbryt/stäng + generera-knappen. */
-function ModalFooter({ done, generating, hufMin, helperVersion, onClose, onGenerate }: {
-  done: boolean; generating: boolean; hufMin: number;
+function ModalFooter({ done, generating, blocked, helperVersion, onClose, onGenerate }: {
+  done: boolean; generating: boolean;
+  /** Inte redo: posterna läses in, eller förhandlingen saknar tid. */
+  blocked: boolean;
   helperVersion: HelperState["version"]; onClose: () => void; onGenerate: () => void;
 }) {
   return (
@@ -515,7 +551,7 @@ function ModalFooter({ done, generating, hufMin, helperVersion, onClose, onGener
       <button
         type="button"
         onClick={onGenerate}
-        disabled={generating || hufMin <= 0}
+        disabled={generating || blocked}
         className="w-full sm:w-auto px-6 py-3.5 bg-indigo-600 text-white text-base font-semibold rounded-lg shadow hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2 touch-manipulation order-1 sm:order-2"
       >
         {generating ? (

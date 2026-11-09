@@ -10,7 +10,7 @@
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
-import { KostnadsrakningModal } from "@/app/matters/[id]/_kostnadsrakning-modal";
+import { effectiveHearing, KostnadsrakningModal } from "@/app/matters/[id]/_kostnadsrakning-modal";
 import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/helper/use-helper", () => ({
@@ -26,13 +26,18 @@ vi.mock("@/lib/client/demo/persist-generated-doc", () => ({
 
 const noopMut = () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false });
 const recordMutateAsync = vi.fn().mockResolvedValue({});
+/** En "Deltagit i förhandling"-post — med den visas förhandlingsklockan. */
+const HEARING = { id: "te-h", date: "2026-03-01", minutes: 120, description: "Huvudförhandling", hourlyRate: 162_600, kind: "FORHANDLING" as const, billable: true };
+const ARBETE = { id: "te-a", date: "2026-02-20", minutes: 90, description: "Genomgång av handlingar", hourlyRate: 162_600, kind: "ARBETE" as const, billable: true };
+let entries: Array<typeof HEARING | typeof ARBETE> = [HEARING];
+let entriesLoading = false;
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ document: { list: { invalidate: vi.fn() }, tree: { invalidate: vi.fn(), refetch: vi.fn() } } }),
     matter: { update: { useMutation: noopMut } },
     kostnadsrakning: { record: { useMutation: () => ({ mutateAsync: recordMutateAsync, isPending: false }) } },
-    timeEntry: { list: { useQuery: () => ({ data: { entries: [] }, isLoading: false }) } },
+    timeEntry: { list: { useQuery: () => (entriesLoading ? { data: undefined, isLoading: true } : { data: { entries }, isLoading: false }) } },
   },
 }));
 
@@ -51,6 +56,49 @@ const baseProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  entries = [HEARING];
+  entriesLoading = false;
+});
+
+describe("KostnadsrakningModal — utan förhandling (ärendet lades ner)", () => {
+  beforeEach(() => { entries = [ARBETE]; });
+
+  it("visar ingen förhandlingsklocka och inget taxeval, utan en förklaring", () => {
+    render(<KostnadsrakningModal {...baseProps} />);
+    expect(screen.queryByText(/STOPPA NU/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Taxa \(brottmålstaxan/)).not.toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("Ingen förhandling");
+  });
+
+  it("Generera går utan förhandlingstid och yrkar bara ärendets poster: 0 min, ingen taxa", async () => {
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-2"));
+    render(<KostnadsrakningModal {...baseProps} createRun={createRun} />);
+    const generate = screen.getByRole("button", { name: /Generera/ });
+    expect(generate).toBeEnabled();
+    fireEvent.click(generate);
+    await waitFor(() => expect(createRun).toHaveBeenCalled());
+    const claim = createRun.mock.calls[0]?.[0] as { hufStart: string; hufEnd: string; isTaxeArende: boolean };
+    expect(claim.hufEnd).toBe(claim.hufStart);
+    expect(claim.isTaxeArende).toBe(false);
+    await waitFor(() => expect(recordMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ huvudforhandlingMinutes: 0 })));
+  });
+
+  it("medan posterna läses in går det inte att generera", () => {
+    entriesLoading = true;
+    render(<KostnadsrakningModal {...baseProps} />);
+    expect(screen.getByText(/Läser in ärendets poster/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Generera/ })).toBeDisabled();
+  });
+});
+
+describe("effectiveHearing", () => {
+  it("med förhandling: dialogens tider och taxeval", () => {
+    expect(effectiveHearing(true, "a", "b", true)).toEqual({ hufEnd: "b", isTaxe: true });
+  });
+
+  it("utan förhandling: 0 minuter och aldrig taxa", () => {
+    expect(effectiveHearing(false, "a", "b", true)).toEqual({ hufEnd: "a", isTaxe: false });
+  });
 });
 
 describe("KostnadsrakningModal", () => {

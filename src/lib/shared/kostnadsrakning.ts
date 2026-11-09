@@ -195,6 +195,21 @@ export interface KostnadsrakningResult {
   templateContext: Record<string, unknown>;
 }
 
+/**
+ * Räknas posten som arbete i en kostnadsräkning? En "Deltagit i förhandling"-post
+ * gör det inte: förhandlingstiden är klockans (huvudförhandlingen), och posten
+ * finns bara för att visa att ärendet haft en förhandling. Samma regel i
+ * dokumentet och i körningens värdering (billingRun), så beloppen aldrig skiljer.
+ */
+export function isKrWorkEntry(t: { kind?: TimeEntryKind | null | undefined }): boolean {
+  return t.kind !== "FORHANDLING";
+}
+
+/** Har ärendet haft en förhandling (någon "Deltagit i förhandling"-post)? */
+export function hasHearingEntry(entries: ReadonlyArray<{ kind?: TimeEntryKind | null | undefined }>): boolean {
+  return entries.some((t) => !isKrWorkEntry(t));
+}
+
 /** Icke-taxa-ärende: arvode = timkostnadsnorm × all billable arbetstid
  *  (timeEntries) + HUF. Returnerar TaxaResult så övriga delen av flowet
  *  är oförändrad. */
@@ -441,7 +456,8 @@ function valuateTimeLine(
  * eller ett polisförhör samma dag yrkas inte — arbetet yrkas i stället.
  */
 function billableTimeEntriesOf(input: BuildInput): TimeEntryInput[] {
-  const open = (input.timeEntries ?? []).filter((t) => t.billable !== false && !isLockedEntry(t, input.ownBillingRunId));
+  const open = (input.timeEntries ?? [])
+    .filter((t) => t.billable !== false && isKrWorkEntry(t) && !isLockedEntry(t, input.ownBillingRunId));
   return payableCoverageEntries(open);
 }
 
