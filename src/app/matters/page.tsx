@@ -17,6 +17,7 @@ interface MatterRow {
   id: string;
   matterNumber: string;
   title: string;
+  matterType?: string | null;
   status: MatterStatus;
   isTaxeArende?: boolean;
   paymentMethod?: PaymentMethod | null;
@@ -64,6 +65,11 @@ function CoverageCell({ m }: { m: MatterRow }) {
   );
 }
 
+/** Ärendetypen som text — "—" när ärendet saknar typ. */
+function matterTypeLabel(m: MatterRow): string {
+  return m.matterType || "—";
+}
+
 function statusLabel(s: string): string {
   return s === "ACTIVE" ? "Aktivt" : s === "CLOSED" ? "Stängt" : "Arkiverat";
 }
@@ -94,6 +100,10 @@ const matterColumns: Column<MatterRow>[] = [
       </span>
     ),
   },
+  // Byråns ärendetyp (organizations.matter_types); filtrera/gruppera på den.
+  { key: "matterType", label: "Ärendetyp", sortable: true, filterable: true, groupable: true,
+    sortValue: matterTypeLabel, filterValue: matterTypeLabel, groupValue: matterTypeLabel,
+    render: (m) => <span className="text-sm text-gray-500">{matterTypeLabel(m)}</span> },
   { key: "klient", label: "Klient", sortable: true, sortValue: (m) => m.contacts[0]?.contact?.name ?? "",
     render: (m) => <span className="text-sm text-gray-500">{m.contacts[0]?.contact?.name || "—"}</span> },
   { key: "status", label: "Status", sortable: true, sortValue: (m) => statusLabel(m.status),
