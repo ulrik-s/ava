@@ -141,6 +141,8 @@ function matterListArgs(p: { search: string; status: StatusFilter; employeeId: s
 interface NewMatterFormProps {
   form: MatterForm;
   setForm: (f: MatterForm) => void;
+  /** Byråns ärendetyper (org-inställning) — tom/saknad = fritext. */
+  matterTypes: readonly string[] | undefined;
   /** Vald klient (visas på knappen) — null = ingen vald. */
   client: PickedClient | null;
   onPickClient: () => void;
@@ -151,11 +153,30 @@ interface NewMatterFormProps {
   error: { message: string } | null | undefined;
 }
 
+/** Ärendetyp: val ur byråns lista, fritext om byrån inte har någon. */
+function MatterTypeField({ value, types = [], onChange }: { value: string; types: readonly string[] | undefined; onChange: (v: string) => void }) {
+  const id = useId();
+  const cls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">Ärendetyp</label>
+      {types.length > 0 ? (
+        <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={cls}>
+          <option value="">Välj ärendetyp…</option>
+          {types.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      ) : (
+        <input id={id} type="text" value={value} onChange={(e) => onChange(e.target.value)}
+          placeholder="T.ex. Familjerätt, Brottmål..." className={cls} />
+      )}
+    </div>
+  );
+}
+
 /** Nytt-ärende-formuläret (utbrutet ur MattersContent, #6-ratchet). Äger sina
  *  fält-id:n; presentational (form-state + submit som props). */
-function NewMatterForm({ form, setForm, client, onPickClient, onClearClient, employeesData, onSubmit, isPending, error }: NewMatterFormProps) {
+function NewMatterForm({ form, setForm, matterTypes, client, onPickClient, onClearClient, employeesData, onSubmit, isPending, error }: NewMatterFormProps) {
   const titleId = useId();
-  const matterTypeId = useId();
   const descriptionId = useId();
   const responsibleId = useId();
   return (
@@ -169,13 +190,7 @@ function NewMatterForm({ form, setForm, client, onPickClient, onClearClient, emp
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </div>
         <ClientField client={client} onPick={onPickClient} onClear={onClearClient} />
-        <div>
-          <label htmlFor={matterTypeId} className="block text-sm font-medium text-gray-700 mb-1">Ärendetyp</label>
-          <input id={matterTypeId} type="text" value={form.matterType}
-            onChange={(e) => setForm({ ...form, matterType: e.target.value })}
-            placeholder="T.ex. Familjerätt, Brottmål..."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        </div>
+        <MatterTypeField value={form.matterType} types={matterTypes} onChange={(matterType) => setForm({ ...form, matterType })} />
         <div>
           <label htmlFor={responsibleId} className="block text-sm font-medium text-gray-700 mb-1">Ansvarig advokat/jurist</label>
           <select id={responsibleId} value={form.responsibleLawyerId}
@@ -300,6 +315,7 @@ function MattersContent() {
   const matters = trpc.matter.list.useQuery(matterListArgs({ search, status: statusFilter, employeeId, page }));
 
   const employees = trpc.user.list.useQuery();
+  const orgSettings = trpc.organization.getSettings.useQuery();
   const utils = trpc.useUtils();
 
   const createMatter = trpc.matter.create.useMutation({
@@ -361,6 +377,7 @@ function MattersContent() {
         <NewMatterForm
           form={form}
           setForm={setForm}
+          matterTypes={orgSettings.data?.matterTypes}
           client={client}
           onPickClient={() => setPickerOpen(true)}
           onClearClient={() => { setClient(null); setForm({ ...form, klientId: "" }); }}
