@@ -274,6 +274,28 @@ export interface IBackupStore {
   openExport(name: BackupFileName): Promise<BackupExportStream | null>;
 }
 
+// ─── Förfrågningar från användarna → privat intag-repo ─────────────
+
+/** En issue i intag-repot, som servern ser den. */
+export interface FeedbackIssue {
+  number: number;
+  title: string;
+  body: string;
+  open: boolean;
+  labels: string[];
+  createdAt: string;
+}
+
+/**
+ * Intag-repot för användarnas buggar och förslag (GitHub, privat). Bara
+ * server-first med `AVA_FEEDBACK_GITHUB_TOKEN` + `AVA_FEEDBACK_REPO`.
+ */
+export interface IFeedbackSink {
+  create(issue: { title: string; body: string; labels: string[] }): Promise<{ number: number }>;
+  /** Senaste förfrågningarna (`user-request`), öppna och stängda. */
+  list(): Promise<FeedbackIssue[]>;
+}
+
 export interface IPorts {
   email: IEmailSender;
   documentAnalyzer: IDocumentAnalyzer;
@@ -284,6 +306,8 @@ export interface IPorts {
   ledger: ILedgerService;
   /** Backup på begäran (#1431) — bara server-first med backupkatalogerna monterade. */
   backup?: IBackupStore;
+  /** Förfrågningar från användarna — bara server-first med GitHub-token. */
+  feedback?: IFeedbackSink;
 }
 
 // Buffer-typen exporteras så impl:erna kan importera utan Node:

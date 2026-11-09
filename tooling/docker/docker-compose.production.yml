@@ -173,6 +173,10 @@ services:
       # Backup på begäran (#1431): "Ta backup nu" i Inställningar. Se volymerna nedan.
       AVA_BACKUP_EXPORT_DIR: /data/backup-exports
       AVA_BACKUP_REQUEST_DIR: /data/backup-requests
+      # Buggar och förslag → det PRIVATA intag-repot (docs/feedback-pipeline.md).
+      # Token med BARA Issues: write på det repot. Tomt = knappen syns inte.
+      AVA_FEEDBACK_GITHUB_TOKEN: "${AVA_FEEDBACK_GITHUB_TOKEN:-}"
+      AVA_FEEDBACK_REPO: "${AVA_FEEDBACK_REPO:-}"
     volumes:
       - content:/data/content
       # Eget volym: content är ett git-repo som kan speglas — hemligheter hör inte hemma där.

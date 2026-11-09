@@ -21,8 +21,9 @@ function sh(cwd: string, cmd: string, env: Record<string, string> = {}): { code:
   return { code: r.exitCode, out: `${r.stdout.toString()}${r.stderr.toString()}` };
 }
 
-const run = (): { code: number; out: string } =>
-  sh(clone, "bash tooling/scripts/deploy-latest-tag.sh", { AVA_DEPLOY_CMD: "bash fake-deploy.sh" });
+const run = (env: Record<string, string> = {}): { code: number; out: string } =>
+  sh(clone, "bash tooling/scripts/deploy-latest-tag.sh", { AVA_DEPLOY_CMD: "bash fake-deploy.sh", ...env });
+const lastCall = (): string | undefined => calls().split("\n").at(-2);
 const calls = (): string => { try { return readFileSync(join(clone, "deploy-calls.log"), "utf8"); } catch { return ""; } };
 const tag = (name: string): void => { sh(origin, `git tag ${name}`); };
 const commit = (msg: string): void => { sh(origin, `git commit -q --allow-empty -m '${msg}'`); };
@@ -43,8 +44,9 @@ beforeAll(() => {
     "#!/usr/bin/env bash",
     'echo "$*" >> deploy-calls.log',
     '[ ! -f fail-next ] || { rm -f fail-next; exit 1; }',
-    // En lyckad deploy lägger en release som pekar på taggens commit.
-    'sha="$(git rev-parse --short "${2}^{commit}")"; mkdir -p releases/"20260101T000000Z-$sha"',
+    // En lyckad deploy lägger en release som pekar på taggens commit (utan
+    // --tag: origin/main, som staging).
+    'sha="$(git rev-parse --short "${2:-origin/main}^{commit}")"; mkdir -p releases/"20260101T000000Z-$sha"',
     'ln -sfn "20260101T000000Z-$sha" releases/current',
   ].join("\n"));
 });
@@ -104,5 +106,45 @@ describe("deploy-latest-tag.sh", () => {
     symlinkSync("20260101T000000Z-bootstrap", join(clone, "releases/current"));
     expect(run().code).toBe(0);
     expect(calls().endsWith("--tag v0.13.0\n")).toBe(true);
+  });
+});
+
+describe("deploy-latest-tag.sh — staging (AVA_DEPLOY_TRACK=main)", () => {
+  const STAGING = { AVA_DEPLOY_TRACK: "main" };
+
+  it("main redan deployad (toppen = senaste taggen): inget händer", () => {
+    const r = run(STAGING);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("redan deployad");
+  });
+
+  it("ny commit på main deployas utan --tag, även utan ny tagg", () => {
+    commit("sju");
+    const before = calls();
+    expect(run(STAGING).code).toBe(0);
+    expect(calls()).toBe(`${before}\n`);
+    // Produktionen (taggläge) deployar inte en otaggad commit — bara taggen igen.
+    expect(run().out).toContain("ny version v0.13.0");
+  });
+
+  it("läget kan också stå i ava-server.env", () => {
+    commit("åtta");
+    writeFileSync(join(clone, "ava-server.env"), 'AVA_DEPLOY_TRACK="main"\n');
+    const before = calls();
+    expect(run().code).toBe(0);
+    expect(calls()).toBe(`${before}\n`);
+    rmSync(join(clone, "ava-server.env"));
+  });
+
+  it("en fallen commit körs inte om — nästa commit försöker igen", () => {
+    commit("nio");
+    writeFileSync(join(clone, "fail-next"), "");
+    expect(run(STAGING).code).toBe(1);
+    const again = run(STAGING);
+    expect(again.code).toBe(1);
+    expect(again.out).toContain("föll förra gången");
+    commit("tio");
+    expect(run(STAGING).code).toBe(0);
+    expect(lastCall()).toBe("");
   });
 });

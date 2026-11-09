@@ -8,6 +8,7 @@ import { documentRouter } from "./document";
 import { documentTemplateRouter } from "./documentTemplate";
 import { expectedReceivableRouter } from "./expectedReceivable";
 import { expenseRouter } from "./expense";
+import { feedbackRouter } from "./feedback";
 import { invoiceRouter } from "./invoice";
 import { invoiceDispatchRouter } from "./invoiceDispatch";
 import { kostnadsrakningRouter } from "./kostnadsrakning";
@@ -50,6 +51,7 @@ export const appRouter = router({
   serviceNote: serviceNoteRouter,
   todo: todoRouter,
   watchlist: watchlistRouter,
+  feedback: feedbackRouter,
   prefs: preferenceRouter,
   mail: mailRouter,
   sync: syncRouter,
