@@ -23,6 +23,9 @@
  *                         (valfria) backup på begäran från Inställningar (#1431):
  *                         exportkatalogen (read-only) + katalogen hostens
  *                         ava-backup-request.path bevakar
+ *   AVA_FEEDBACK_GITHUB_TOKEN + AVA_FEEDBACK_REPO
+ *                         (valfria) användarnas buggar/förslag → privat
+ *                         intag-repo (owner/repo); token med bara Issues: write
  *   AVA_LOG_LEVEL         (default info)  debug|info|warn|error — strukturerad
  *                         JSON-logg till stderr (#1080). `debug` ger en rad per
  *                         tRPC-anrop; `info` bara fel.
@@ -35,6 +38,7 @@
 import { loadContentDirFromEnv, makeContentStore } from "@/lib/server/adapters/git-content-store";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { backupDirsFromEnv, FsBackupStore } from "@/lib/server/backup/fs-backup-store";
+import { feedbackConfigFromEnv, GithubFeedbackSink } from "@/lib/server/feedback/github-feedback-sink";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { emailStatusLine } from "@/lib/server/integrations/email/disabled-email-sender";
 import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-service";
@@ -46,7 +50,7 @@ import { buildServerFirstJobHandlers, loadActiveSmtpConfig } from "@/lib/server/
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { startErrorReporting } from "@/lib/server/observability/posthog-sink";
-import type { IBackupStore, ILedgerService } from "@/lib/server/ports";
+import type { IBackupStore, IFeedbackSink, ILedgerService } from "@/lib/server/ports";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { createLogger, jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -81,6 +85,13 @@ function ledgerPort(): { ledger?: ILedgerService } {
   const ledger = fortnoxLedgerFromEnv();
   log(ledger ? "fortnox: konfigurerad" : "fortnox: av (AVA_FORTNOX_* / AVA_SECRETS_* saknas)");
   return ledger ? { ledger } : {};
+}
+
+/** Förfrågningar → intag-repot: kräver token + repo. Annars av. */
+function feedbackPort(): { feedback?: IFeedbackSink } {
+  const config = feedbackConfigFromEnv();
+  log(config ? `förfrågningar: till ${config.repo}` : "förfrågningar: av (AVA_FEEDBACK_* saknas)");
+  return config ? { feedback: new GithubFeedbackSink(config) } : {};
 }
 
 /** Backup på begäran (#1431): kräver båda backupkatalogerna. Annars av. */
@@ -129,6 +140,7 @@ function main(): void {
     lease: new InMemoryLeaseStore(),
     ...ledgerPort(),
     ...backupPort(),
+    ...feedbackPort(),
   };
 
   const api = buildServerFirstApi({

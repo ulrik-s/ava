@@ -35,6 +35,7 @@ import type { Capabilities } from "@/lib/shared/capabilities";
 import { requestIdFrom } from "@/lib/shared/observability/request-id";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { User } from "@/lib/shared/schemas/user";
+import { feedbackConfigFromEnv } from "../feedback/github-feedback-sink";
 import { verifyBearerToken, type BearerVerification, type BearerVerifyConfig } from "./bearer-claims";
 import { forwardedClaims, type ForwardedHeaderNames } from "./forwarded-claims";
 import { IDENTITY_TOKEN_HEADER, type IdentityConfig } from "./verified-identity";
@@ -49,7 +50,9 @@ export function serverCapabilities(): Capabilities {
   const llm = Boolean(process.env.AVA_LLM_ENDPOINT ?? process.env.AVA_LLM_MODEL);
   // Backup på begäran (#1431): bara när backupkatalogerna är monterade.
   const backup = backupDirsFromEnv() !== null;
-  return { sync: true, jobs: true, oidc: true, ledger: true, mailSync: true, llm, backup };
+  // Förfrågningar till intag-repot: bara med token + repo.
+  const feedback = feedbackConfigFromEnv() !== null;
+  return { sync: true, jobs: true, oidc: true, ledger: true, mailSync: true, llm, backup, feedback };
 }
 
 /**

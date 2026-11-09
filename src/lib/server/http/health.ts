@@ -42,7 +42,7 @@ export interface HealthResult {
 const SAFE_LABEL = /^[\w.+-]{1,64}$/;
 
 /** Versionsstämpeln ur miljön, eller undefined när den saknas eller ser konstig ut. */
-function releaseLabel(raw: string | undefined): string | undefined {
+export function releaseLabel(raw: string | undefined): string | undefined {
   const v = raw?.trim();
   return v && SAFE_LABEL.test(v) ? v : undefined;
 }
