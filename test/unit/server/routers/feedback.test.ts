@@ -9,7 +9,10 @@ import {
   feedbackRouter, FEEDBACK_PER_HOUR, issueBody, messagesFrom, mineFrom, neutralize, ownerMarker, REPLIES_PER_HOUR,
   replyBody, resetFeedbackRateLimit,
 } from "@/lib/server/routers/feedback";
-import { feedbackState, hasUnread, releaseFromLabels, TO_USER_MARKER, unreadCount, userReplyMarker, type FeedbackItem } from "@/lib/shared/feedback";
+import {
+  feedbackState, hasUnread, isFinished, lastActivity, releaseFromLabels, sortForList, TO_USER_MARKER, unreadCount,
+  userReplyMarker, type FeedbackItem,
+} from "@/lib/shared/feedback";
 import { setLogSink, nullSink, type LogRecord } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
 
@@ -188,6 +191,28 @@ describe("olästa meddelanden", () => {
   it("unreadCount räknar förfrågningar, inte meddelanden", () => {
     const items = [item(1, [["claude", "a"], ["ulrik", "b"]]), item(2, [["claude", "a"]]), item(3, [])];
     expect(unreadCount(items, { "2": "z" })).toBe(1);
+  });
+
+  it("sortForList: oläst, väntar på svar, pågående, avslutade — senaste aktivitet först inom grupp", () => {
+    const at = (number: number, state: FeedbackItem["state"], createdAt: string, msgs: Array<["claude" | "ulrik" | "du", string]> = []): FeedbackItem =>
+      ({ ...item(number, msgs), state, createdAt });
+    const list = [
+      at(1, "levererad", "2026-11-10T12:00:00Z"),
+      at(2, "pagar", "2026-11-01T00:00:00Z"),
+      at(3, "pagar", "2026-11-05T00:00:00Z"),
+      at(4, "vantar_pa_dig", "2026-11-01T00:00:00Z", [["claude", "2026-11-02T00:00:00Z"]]),
+      at(5, "undersokt", "2026-11-01T00:00:00Z", [["claude", "2026-11-03T00:00:00Z"]]),
+      at(6, "avslutad", "2026-11-11T00:00:00Z"),
+    ];
+    const seen = { "4": "2026-11-09T00:00:00Z" };
+    expect(sortForList(list, seen).map((i) => i.number)).toEqual([5, 4, 3, 2, 6, 1]);
+  });
+
+  it("isFinished och lastActivity", () => {
+    expect(isFinished({ ...item(1, []), state: "levererad" })).toBe(true);
+    expect(isFinished({ ...item(1, []), state: "pagar" })).toBe(false);
+    expect(lastActivity({ ...item(1, []), createdAt: "c" })).toBe("c");
+    expect(lastActivity(item(1, [["claude", "m"]]))).toBe("m");
   });
 
   it("messagesFrom utan kommentarer är tom", () => {
