@@ -357,11 +357,6 @@
       "count": 1
     }
   },
-  "src/components/diagnostics/error-report-button.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
   "src/components/documents/_document-row.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
@@ -530,26 +525,8 @@
       "count": 1
     }
   },
-  "src/lib/client/diagnostics/index.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    }
-  },
   "src/lib/client/diagnostics/issue-store.ts": {
     "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
-    }
-  },
-  "src/lib/client/diagnostics/log-buffer.ts": {
-    "@typescript-eslint/no-dynamic-delete": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
-  "src/lib/client/diagnostics/report.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
@@ -2042,11 +2019,6 @@
   "test/unit/components/documents-list-view.test.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
-    }
-  },
-  "test/unit/components/error-report-button.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
     }
   },
   "test/unit/components/external-edit-indicator.test.tsx": {
