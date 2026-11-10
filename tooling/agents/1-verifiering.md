@@ -24,9 +24,18 @@ brancher, issues, PR:er eller kommentarer.
 ## Vilka
 
 Högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `user-request` som saknar
-`undersökt`, `verifierad` och `blockerad`, äldst först. Av dem med
-`väntar-på-användaren` tar du bara de där användaren har svarat (se
-"Dialog med användaren" nedan). De andra väntar fortfarande.
+`verifierad` och `blockerad`, äldst först, och som är något av:
+
+- **Ny:** saknar `undersökt` och `väntar-på-användaren`.
+- **Besvarad:** har `väntar-på-användaren` och ett svar från användaren som är
+  nyare än den senaste frågan till hen (se "Dialog med användaren"). Det
+  gäller **även om `undersökt` redan är satt**, eftersom Ulrik kan ha frågat
+  användaren efter din rapport. Ta då bort både `väntar-på-användaren` och
+  `undersökt` (och `ej-bekräftad`), väg in svaret, och skriv en ny rapport
+  när allt är klart.
+
+Issues med `väntar-på-användaren` utan nytt svar väntar fortfarande. Rör dem
+inte (utom 7-dagarsgränsen nedan).
 
 ## För varje issue
 
