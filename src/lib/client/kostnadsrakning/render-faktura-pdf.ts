@@ -10,7 +10,8 @@
  *           "att betala".
  *   sida 2+ Specifikation — tidsspecifikation per arvodeskategori (omfattning,
  *           belopp och delsumma; timpriset står en gång i sammanställningen,
- *           #1439) + utläggsspecifikation, med automatisk sidbrytning.
+ *           #1439) + utläggsspecifikation med summarad (#1506), med automatisk
+ *           sidbrytning.
  *
  * Renderaren räknar INGENTING: den tar en färdig `FakturaView`
  * (`buildFakturaView` i `faktura-template.ts`), så bilagan som mejlas och
@@ -273,6 +274,23 @@ function specRow(c: Ctx, date: string, description: string, cells: readonly stri
   c.y -= 2;
 }
 
+/** Luft (pt) under sista postens nästa-rad-markör innan strecket före en
+ *  summarad (#1506) — strecket hamnar 16 pt under sista postens baslinje. */
+const SPEC_TOTAL_GAP = 2;
+
+/** En specifikationstabells summarad (#1200/#1506): tunt streck med luft under
+ *  sista posten, därefter fet etikett och talkolumnerna i tabellens kolumner.
+ *  Streck och summarad ryms alltid på samma sida. */
+function specTotal(c: Ctx, cols: readonly SpecCol[], label: string, cells: readonly string[]): void {
+  ensure(c, 30);
+  c.y -= SPEC_TOTAL_GAP;
+  rule(c);
+  c.y -= 11;
+  draw(c, label, { size: SPEC_SIZE, b: true });
+  drawCells(c, cols, cells, { size: SPEC_SIZE, b: true });
+  c.y -= 20;
+}
+
 /** En kategoris deltabell (#1200): rubrik, poster och fet delsumma. */
 function drawTimeGroup(c: Ctx, g: FakturaView["timeGroups"][number]): void {
   ensure(c, 70);
@@ -280,13 +298,7 @@ function drawTimeGroup(c: Ctx, g: FakturaView["timeGroups"][number]): void {
   c.y -= 14;
   specHead(c, TIME_COLS);
   for (const l of g.lines) specRow(c, l.date, l.description, [l.hours, l.amount], TIME_COLS);
-  ensure(c, 24);
-  c.y += 4;
-  rule(c);
-  c.y -= 11;
-  draw(c, g.subtotalLabel, { size: 9, b: true });
-  drawCells(c, TIME_COLS, [g.hours, g.amount], { size: 9, b: true });
-  c.y -= 20;
+  specTotal(c, TIME_COLS, g.subtotalLabel, [g.hours, g.amount]);
 }
 
 function drawTimeSpec(c: Ctx, v: FakturaView): void {
@@ -304,6 +316,7 @@ function drawExpenseSpec(c: Ctx, v: FakturaView): void {
   c.y -= 16;
   specHead(c, EXPENSE_COLS);
   for (const l of v.expenseLines) specRow(c, l.date, l.description, [l.net, l.gross], EXPENSE_COLS);
+  specTotal(c, EXPENSE_COLS, "Summa utlägg", [v.expenseNetTotal, v.expenseGrossTotal]);
 }
 
 /** Specifikationen börjar ALLTID på ny sida, efter sammanställningen. */
