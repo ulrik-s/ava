@@ -101,18 +101,32 @@ describe("FeedbackButton — tabellen", () => {
     expect(screen.getByText("Inga förfrågningar ännu.")).toBeInTheDocument();
   });
 
-  it("en rad per förfrågan med status, release och röd prick för oläst", () => {
+  it("en rad per pågående förfrågan, oläst först, med röd prick; avslutade bakom en knapp", () => {
     items = [
       item({ number: 2, title: "Excel-export", kind: "feature", state: "levererad", release: "v0.5.0", canReply: false }),
+      item({ number: 3, title: "Pågår", state: "pagar", createdAt: "2026-11-10T11:00:00Z" }),
       item({ number: 1, state: "vantar_pa_dig", messages: [QUESTION] }),
     ];
     openDialog();
-    const [, delivered, waiting] = screen.getAllByRole("row");
-    if (!delivered || !waiting) throw new Error("två rader väntades");
-    expect(within(delivered).getByText("Levererad i v0.5.0")).toBeInTheDocument();
-    expect(within(delivered).queryByRole("img", { name: "Nytt meddelande" })).not.toBeInTheDocument();
-    expect(within(waiting).getByText("Väntar på ditt svar")).toBeInTheDocument();
-    expect(within(waiting).getByRole("img", { name: "Nytt meddelande" })).toBeInTheDocument();
+    const [, first, second, ...rest] = screen.getAllByRole("row");
+    if (!first || !second) throw new Error("två rader väntades");
+    expect(rest).toHaveLength(0);
+    expect(within(first).getByText("Väntar på ditt svar")).toBeInTheDocument();
+    expect(within(first).getByRole("img", { name: "Nytt meddelande" })).toBeInTheDocument();
+    expect(within(second).getByText("Under arbete")).toBeInTheDocument();
+    expect(screen.queryByText("Levererad i v0.5.0")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Visa avslutade (1)" }));
+    expect(screen.getByText("Levererad i v0.5.0")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dölj avslutade" }));
+    expect(screen.queryByText("Levererad i v0.5.0")).not.toBeInTheDocument();
+  });
+
+  it("med förfrågningar ligger formuläret bakom + Ny förfrågan", () => {
+    items = [item({})];
+    openDialog();
+    expect(screen.queryByLabelText("Rubrik")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+ Ny förfrågan" }));
+    expect(screen.getByLabelText("Rubrik")).toBeInTheDocument();
   });
 });
 
@@ -139,6 +153,7 @@ describe("FeedbackButton — dialogen", () => {
   it("en avslutad förfrågan går inte att svara på; tillbaka till listan", () => {
     items = [item({ state: "avslutad", canReply: false })];
     openDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Visa avslutade (1)" }));
     fireEvent.click(screen.getByRole("button", { name: /Fel summa/ }));
     expect(screen.getByText(/Inga meddelanden ännu/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Ditt svar")).not.toBeInTheDocument();

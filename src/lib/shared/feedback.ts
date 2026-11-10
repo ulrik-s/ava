@@ -88,6 +88,32 @@ export function userReplyMarker(userId: string): string {
   return `<!-- ava-user-reply:${userId} -->`;
 }
 
+/** Avslutad eller levererad — inget mer händer, så den kan ligga undanstoppad. */
+export function isFinished(item: FeedbackItem): boolean {
+  return item.state === "levererad" || item.state === "avslutad";
+}
+
+/** Senaste aktiviteten: senaste meddelandet, annars när förfrågan skickades. */
+export function lastActivity(item: FeedbackItem): string {
+  return item.messages.at(-1)?.createdAt ?? item.createdAt;
+}
+
+/** Hur angelägen raden är för användaren: lägre först. */
+function urgency(item: FeedbackItem, seen: Readonly<Record<string, string>>): number {
+  if (hasUnread(item, seen)) return 0;
+  if (item.state === "vantar_pa_dig") return 1;
+  return isFinished(item) ? 3 : 2;
+}
+
+/**
+ * Ordningen i listan: oläst först, sedan det som väntar på svar, sedan
+ * pågående, sist avslutade — inom varje grupp senaste aktivitet först.
+ */
+export function sortForList(items: readonly FeedbackItem[], seen: Readonly<Record<string, string>>): FeedbackItem[] {
+  return [...items].sort((a, b) =>
+    urgency(a, seen) - urgency(b, seen) || lastActivity(b).localeCompare(lastActivity(a)));
+}
+
 /** Hur många förfrågningar som har ett meddelande till användaren som inte lästs. */
 export function unreadCount(items: readonly FeedbackItem[], seen: Readonly<Record<string, string>>): number {
   return items.filter((i) => hasUnread(i, seen)).length;

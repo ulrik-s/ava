@@ -21,7 +21,7 @@ import {
 } from "@/lib/client/backend/server-feedback";
 import { cn } from "@/lib/client/utils";
 import {
-  FEEDBACK_STATE_LABEL, hasUnread, unreadCount,
+  FEEDBACK_STATE_LABEL, hasUnread, isFinished, lastActivity, sortForList, unreadCount,
   type FeedbackItem, type FeedbackKind, type FeedbackMessage, type MessageAuthor,
 } from "@/lib/shared/feedback";
 
@@ -34,11 +34,6 @@ function shortDate(iso: string): string {
   return new Date(iso).toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-/** Senaste aktiviteten: senaste meddelandet, annars när förfrågan skickades. */
-function lastActivity(item: FeedbackItem): string {
-  return item.messages.at(-1)?.createdAt ?? item.createdAt;
-}
-
 function UnreadDot({ label }: { label: string }) {
   return <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" role="img" aria-label={label} />;
 }
@@ -48,9 +43,8 @@ function StatusText({ item }: { item: FeedbackItem }) {
 }
 
 function RequestsTable({ items, seen, onOpen }: {
-  items: FeedbackItem[] | undefined; seen: Record<string, string>; onOpen: (n: number) => void;
+  items: FeedbackItem[]; seen: Record<string, string>; onOpen: (n: number) => void;
 }) {
-  if (!items || items.length === 0) return <p className="text-xs text-gray-400 italic">Inga förfrågningar ännu.</p>;
   return (
     <table className="w-full text-sm">
       <thead>
@@ -203,28 +197,62 @@ function LauncherButton({ iconOnly, unread, onClick }: { iconOnly: boolean; unre
   );
 }
 
+/** Ny förfrågan: formuläret direkt om listan är tom, annars bakom en knapp. */
+function NewRequest({ hasItems }: { hasItems: boolean }) {
+  const [show, setShow] = useState(!hasItems);
+  const [sent, setSent] = useState<number | null>(null);
+  if (sent !== null) {
+    return <p className="text-sm text-green-700" role="status">Tack! Din förfrågan är mottagen (nr {sent}). Du ser hur det går för den här nedanför.</p>;
+  }
+  if (!show) {
+    return (
+      <button type="button" onClick={() => setShow(true)}
+        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">+ Ny förfrågan</button>
+    );
+  }
+  return <FeedbackForm onSent={setSent} />;
+}
+
+/** Listan: angelägnast först; avslutade undanstoppade bakom en knapp. */
+function ListView({ items, seen, onOpen }: { items: FeedbackItem[]; seen: Record<string, string>; onOpen: (n: number) => void }) {
+  const [showFinished, setShowFinished] = useState(false);
+  const sorted = sortForList(items, seen);
+  const active = sorted.filter((i) => !isFinished(i));
+  const finished = sorted.filter(isFinished);
+  return (
+    <>
+      <NewRequest hasItems={items.length > 0} />
+      <h4 className="mt-5 mb-2 text-sm font-semibold text-gray-900">Dina förfrågningar</h4>
+      {items.length === 0 && <p className="text-xs text-gray-400 italic">Inga förfrågningar ännu.</p>}
+      {active.length > 0 && <RequestsTable items={active} seen={seen} onOpen={onOpen} />}
+      {finished.length > 0 && (
+        <button type="button" onClick={() => setShowFinished(!showFinished)} className="mt-3 text-xs text-gray-600 hover:text-gray-900">
+          {showFinished ? "Dölj avslutade" : `Visa avslutade (${finished.length})`}
+        </button>
+      )}
+      {showFinished && <div className="mt-2"><RequestsTable items={finished} seen={seen} onOpen={onOpen} /></div>}
+    </>
+  );
+}
+
 function FeedbackLauncher({ iconOnly }: { iconOnly: boolean }) {
   const [open, setOpen] = useState(false);
-  const [sent, setSent] = useState<number | null>(null);
   const [thread, setThread] = useState<number | null>(null);
   const mine = useMyFeedback();
   const { seen, markSeen } = useFeedbackSeen();
   const items = mine.data ?? [];
   const current = items.find((i) => i.number === thread);
-  const close = (): void => { setOpen(false); setSent(null); setThread(null); };
+  const close = (): void => { setOpen(false); setThread(null); };
   return (
     <>
       <LauncherButton iconOnly={iconOnly} unread={unreadCount(items, seen)} onClick={() => setOpen(true)} />
       <Modal open={open} title="Bugg eller förslag" onClose={close} widthClass="max-w-2xl">
-        {current ? <ThreadView item={current} onBack={() => setThread(null)} markSeen={markSeen} /> : (
-          <>
-            {sent === null
-              ? <FeedbackForm onSent={setSent} />
-              : <p className="text-sm text-green-700" role="status">Tack! Din förfrågan är mottagen (nr {sent}). Du ser hur det går för den här nedanför.</p>}
-            <h4 className="mt-5 mb-2 text-sm font-semibold text-gray-900">Dina förfrågningar</h4>
-            <RequestsTable items={mine.data} seen={seen} onOpen={setThread} />
-          </>
-        )}
+        {/* Lång lista: dialogen rullar inuti, aldrig utanför skärmen. */}
+        <div className="-mx-5 -my-5 max-h-[75vh] overflow-y-auto px-5 py-5">
+          {current
+            ? <ThreadView item={current} onBack={() => setThread(null)} markSeen={markSeen} />
+            : <ListView items={items} seen={seen} onOpen={setThread} />}
+        </div>
       </Modal>
     </>
   );
