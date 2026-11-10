@@ -25,12 +25,13 @@ export const feedbackInputSchema = z.object({
 export type FeedbackInput = z.infer<typeof feedbackInputSchema>;
 
 /** Var förfrågan befinner sig, sett från användaren. */
-export const FEEDBACK_STATES = ["mottagen", "vantar_pa_dig", "undersokt", "ej_bekraftad", "verifierad", "pagar", "levererad", "avslutad"] as const;
+export const FEEDBACK_STATES = ["mottagen", "vantar_pa_dig", "dubblett", "undersokt", "ej_bekraftad", "verifierad", "pagar", "levererad", "avslutad"] as const;
 export type FeedbackState = (typeof FEEDBACK_STATES)[number];
 
 export const FEEDBACK_STATE_LABEL: Readonly<Record<FeedbackState, string>> = {
   mottagen: "Mottagen",
   vantar_pa_dig: "Väntar på ditt svar",
+  dubblett: "Hanteras ihop med en tidigare förfrågan",
   undersokt: "Undersökt — väntar på beslut",
   ej_bekraftad: "Kunde inte bekräftas",
   verifierad: "Verifierad",
@@ -143,6 +144,8 @@ export const INTAKE_LABELS = {
   verified: "verifierad",
   /** En fråga till användaren väntar på svar (sätts av agenten eller Ulrik). */
   waitingForUser: "väntar-på-användaren",
+  /** Samma sak som en äldre förfrågan — följer originalet till leverans. */
+  duplicate: "dubblett",
   brokenDown: "nedbruten",
   delivered: "levererad",
 } as const;
@@ -150,6 +153,7 @@ export const INTAKE_LABELS = {
 /** Öppen issue: första etiketten i listan som finns avgör statusen. */
 const OPEN_STATE_BY_LABEL: ReadonlyArray<readonly [string, FeedbackState]> = [
   [INTAKE_LABELS.waitingForUser, "vantar_pa_dig"],
+  [INTAKE_LABELS.duplicate, "dubblett"],
   [INTAKE_LABELS.brokenDown, "pagar"],
   [INTAKE_LABELS.verified, "verifierad"],
   [INTAKE_LABELS.notConfirmed, "ej_bekraftad"],

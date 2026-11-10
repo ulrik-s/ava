@@ -17,14 +17,14 @@ du skriver rapporten. Lämna aldrig sådana frågor åt Ulrik eller nästa steg 
 rapporten.
 
 Du får bara skriva i `ulrik-s/ava-feedback` (kommentarer och etiketterna
-`undersökt`, `ej-bekräftad`, `väntar-på-användaren`, `blockerad`). I
+`undersökt`, `ej-bekräftad`, `väntar-på-användaren`, `dubblett`, `blockerad`). I
 `ulrik-s/ava` får du läsa kod och köra saker lokalt, men aldrig pusha, skapa
 brancher, issues, PR:er eller kommentarer.
 
 ## Vilka
 
 Högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `user-request` som saknar
-`verifierad` och `blockerad`, äldst först, och som är något av:
+`verifierad`, `dubblett` och `blockerad`, äldst först, och som är något av:
 
 - **Ny:** saknar `undersökt` och `väntar-på-användaren`.
 - **Besvarad:** har `väntar-på-användaren` och ett svar från användaren som är
@@ -49,13 +49,16 @@ inte (utom 7-dagarsgränsen nedan).
      hans beslut och förtydliganden, och de gäller. Men de är inte
      användarens svar, och användaren har aldrig sett dem. Har Ulrik avgjort
      en fråga behöver du inte fråga användaren om just den.
-2. Klona/uppdatera `ulrik-s/ava` och checka ut den release användaren körde
+2. **Dubblettkontroll, alltid först, för buggar och förslag.** Se avsnittet
+   "Dubbletter" nedan. Är det en dubblett: hantera den där och gå vidare till
+   nästa issue. Gör ingen egen undersökning och ställ inga egna frågor.
+3. Klona/uppdatera `ulrik-s/ava` och checka ut den release användaren körde
    (`git checkout <release>`; okänd → `main`).
 
 ### Bugg
 
-3. Hitta koden bakom sidan och funktionen användaren beskriver.
-4. Försök **återskapa** felet, i den här ordningen tills det lyckas:
+4. Hitta koden bakom sidan och funktionen användaren beskriver.
+5. Försök **återskapa** felet, i den här ordningen tills det lyckas:
    - Läs koden och resonera: finns en väg som ger det beskrivna beteendet?
    - Skriv ett litet test (enhet/komponent, `bun test`) som visar felet. Det
      stannar lokalt: committa eller pusha det aldrig.
@@ -64,18 +67,72 @@ inte (utom 7-dagarsgränsen nedan).
 
    Saknar du verktyg (t.ex. `bun install` fastnar i proxyn) räcker kodläsning,
    men säg det i rapporten.
-5. Kolla om felet redan är rättat: finns det kvar på `main`? Nämns det i
+6. Kolla om felet redan är rättat: finns det kvar på `main`? Nämns det i
    commits efter användarens release (`git log <release>..origin/main`)?
 
 ### Förslag
 
-3. Finns funktionen redan, kanske under ett annat namn eller på en annan
+4. Finns funktionen redan, kanske under ett annat namn eller på en annan
    sida? Sök i koden och i `docs/`.
-4. Har någon annan bett om samma sak? Sök bland intagets issues.
 5. Krockar det med advokatsekretess, GDPR, lagkrav, säkerhet eller hur AVA är
    byggt (local-first, byrå-scoping)?
 6. Bedöm grovt storlek (liten/medel/stor) och nytta (hur många användare
    berörs, hur ofta).
+
+## Dubbletter
+
+Två användare kan beskriva samma sak med olika ord. Ingen av dem ska se den
+andras text eller namn. Båda ska ändå få besked, och samma sak ska bara
+byggas en gång.
+
+**Sök:** lista ALLA issues i intaget, öppna som stängda
+(`gh api "repos/ulrik-s/ava-feedback/issues?labels=user-request&state=all&per_page=100"`).
+Jämför med varje issue som är ÄLDRE än den du undersöker: rubrik, text,
+verifieringsrapporter (särskilt "Vad som ska byggas") och dialogen. Jämför
+innebörden, inte orden. "Tid i decimaltimmar" och "timmar med tiodecimal" är
+samma sak.
+
+**Avgör:**
+- **Samma sak** (samma problem, eller samma önskade ändring): dubblett av den
+  ÄLDSTA sådana issuen, *originalet*. Har originalet själv `dubblett`, följ
+  kedjan till dess original.
+- **Överlappar men är inte samma** (t.ex. original "decimaltid i
+  tidsregistreringen", ny "decimaltid även i rapporterna"): ingen
+  dubblett. Undersök den som vanligt, och skriv "Relaterad till #N" och vad
+  som skiljer i rapporten. "Vad som ska byggas" får bara innehålla
+  skillnaden.
+
+**Hantera en dubblett:**
+1. Rapport på dubbletten (till Ulrik, utan markör):
+
+   ```markdown
+   ## Verifieringsrapport
+
+   **Slutsats:** Dubblett av #N
+
+   **Varför samma sak:** kort, vad som är lika.
+
+   **Ny information:** det dubbletten tillför som originalet saknar (eller "Ingen").
+   ```
+
+2. Tillför dubbletten något nytt (en detalj, ett annat exempel, ett
+   önskemål): skriv det som en kort anteckning på ORIGINALET (utan markör,
+   så att originalets användare inte ser den): `Från dubbletten #M: …`.
+   Avidentifiera, utan namn. Påverkar det originalets omfång och
+   originalet redan är undersökt: ta bort `undersökt` från originalet, så
+   att det görs om med det nya (ställ då frågor till originalets användare om
+   det behövs).
+3. Till dubblettens användare (MED markören `<!-- till-anvandaren -->`, regel
+   2b): "Tack! Någon har redan föreslagit/rapporterat samma sak, så vi tar
+   hand om det tillsammans. Du får besked här när det är klart." Skriv
+   ingenting om den andra förfrågan, användaren eller byrån.
+4. Sätt `dubblett` och `undersökt` på dubbletten. Sätt aldrig `verifierad`:
+   Ulrik beslutar på originalet, och dubbletten följer det (loop 2).
+
+Har dubbletten redan en pågående dialog med sin användare: läs den först. Det
+användaren redan svarat är "ny information" (punkt 2). Lämna ingen fråga
+hängande. Ta bort `väntar-på-användaren` och skriv i meddelandet (punkt 3)
+att frågorna inte längre behövs.
 
 ## Dialog med användaren
 
