@@ -134,6 +134,37 @@ interface MatterForm {
   klientId: string;
   responsibleLawyerId: string;
   isTaxeArende: boolean;
+  /** Domstolens målnummer — frivilligt, trimmas vid submit (#1509). */
+  courtCaseNumber: string;
+}
+
+/** Trimmat värde, eller undefined när det bara är blanksteg/tomt. */
+function optionalTrimmed(v: string): string | undefined {
+  return v.trim() || undefined;
+}
+
+const EMPTY_MATTER_FORM: MatterForm = {
+  title: "",
+  description: "",
+  matterType: "",
+  klientId: "",
+  responsibleLawyerId: "",
+  isTaxeArende: false,
+  courtCaseNumber: "",
+};
+
+/** Formulär → `matter.create`-input: tomma fält utelämnas (utbrutet ur
+ *  MattersContent, max-lines/complexity-ratchet). */
+function matterCreateArgs(form: MatterForm) {
+  return {
+    title: form.title,
+    description: form.description || undefined,
+    matterType: form.matterType || undefined,
+    klientId: form.klientId || undefined,
+    responsibleLawyerId: form.responsibleLawyerId || undefined,
+    isTaxeArende: form.isTaxeArende || undefined,
+    courtCaseNumber: optionalTrimmed(form.courtCaseNumber),
+  };
 }
 
 /** Bygg query-args för matter.list (flyttar `|| undefined`-grenarna ut ur
@@ -189,6 +220,7 @@ function NewMatterForm({ form, setForm, matterTypes, client, onPickClient, onCle
   const titleId = useId();
   const descriptionId = useId();
   const responsibleId = useId();
+  const courtCaseNumberId = useId();
   return (
     <form onSubmit={onSubmit} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
       <h2 className="font-semibold text-gray-900 mb-4">Nytt ärende</h2>
@@ -212,6 +244,12 @@ function NewMatterForm({ form, setForm, matterTypes, client, onPickClient, onCle
             ))}
           </select>
           <p className="mt-1 text-xs text-gray-500">Styr ärendenummerserien (juristens prefix).</p>
+        </div>
+        <div>
+          <label htmlFor={courtCaseNumberId} className="block text-sm font-medium text-gray-700 mb-1">Målnummer</label>
+          <input id={courtCaseNumberId} type="text" value={form.courtCaseNumber}
+            onChange={(e) => setForm({ ...form, courtCaseNumber: e.target.value })}
+            placeholder="T.ex. B 1234-26" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </div>
         <div className="md:col-span-2">
           <label htmlFor={descriptionId} className="block text-sm font-medium text-gray-700 mb-1">Beskrivning</label>
@@ -335,25 +373,11 @@ function MattersContent() {
     },
   });
 
-  const [form, setForm] = useState<MatterForm>({
-    title: "",
-    description: "",
-    matterType: "",
-    klientId: "",
-    responsibleLawyerId: "",
-    isTaxeArende: false,
-  });
+  const [form, setForm] = useState<MatterForm>(EMPTY_MATTER_FORM);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    createMatter.mutate({
-      title: form.title,
-      description: form.description || undefined,
-      matterType: form.matterType || undefined,
-      klientId: form.klientId || undefined,
-      responsibleLawyerId: form.responsibleLawyerId || undefined,
-      isTaxeArende: form.isTaxeArende || undefined,
-    });
+    createMatter.mutate(matterCreateArgs(form));
   }
 
   return (
