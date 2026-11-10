@@ -32,9 +32,28 @@ describe("GithubFeedbackSink", () => {
       { number: 2, title: "pr", body: "", state: "closed", created_at: "2026-11-09T10:00:00Z", labels: [], pull_request: {} },
     ]);
     expect(await new GithubFeedbackSink(CONFIG, f.impl).list()).toEqual([
-      { number: 1, title: "a", body: "", open: true, labels: ["user-request"], createdAt: "2026-11-09T10:00:00Z" },
+      { number: 1, title: "a", body: "", open: true, labels: ["user-request"], createdAt: "2026-11-09T10:00:00Z", comments: 0 },
     ]);
     expect(f.calls[0]?.url).toContain("labels=user-request&state=all");
+  });
+
+  it("comments läser kommentarerna med app-märket (null när ingen app)", async () => {
+    const f = fakeFetch(200, [
+      { id: 1, body: "hej", created_at: "2026-11-10T08:00:00Z", performed_via_github_app: { slug: "claude" } },
+      { id: 2, body: null, created_at: "2026-11-10T09:00:00Z", performed_via_github_app: null },
+    ]);
+    expect(await new GithubFeedbackSink(CONFIG, f.impl).comments(7)).toEqual([
+      { id: 1, body: "hej", createdAt: "2026-11-10T08:00:00Z", viaApp: "claude" },
+      { id: 2, body: "", createdAt: "2026-11-10T09:00:00Z", viaApp: null },
+    ]);
+    expect(f.calls[0]?.url).toBe("https://api.github.com/repos/ulrik-s/ava-feedback/issues/7/comments?per_page=100");
+  });
+
+  it("comment postar texten som kommentar", async () => {
+    const f = fakeFetch(201, { id: 3 });
+    await new GithubFeedbackSink(CONFIG, f.impl).comment(7, "svar");
+    expect(f.calls[0]?.init?.method).toBe("POST");
+    expect(f.calls[0]?.init?.body).toBe(JSON.stringify({ body: "svar" }));
   });
 
   it("fel från GitHub ger status, inte token", async () => {

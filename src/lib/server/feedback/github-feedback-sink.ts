@@ -8,7 +8,7 @@
  */
 
 import { z } from "zod";
-import type { FeedbackIssue, IFeedbackSink } from "../ports";
+import type { FeedbackComment, FeedbackIssue, IFeedbackSink } from "../ports";
 
 const API = "https://api.github.com";
 /** `owner/repo` — inga konstigheter som kan bryta sig ut ur URL:en. */
@@ -35,7 +35,15 @@ const issueSchema = z.object({
   state: z.string(),
   created_at: z.string(),
   labels: z.array(z.object({ name: z.string() })),
+  comments: z.number().default(0),
   pull_request: z.unknown().optional(),
+});
+
+const commentSchema = z.object({
+  id: z.number(),
+  body: z.string().nullable(),
+  created_at: z.string(),
+  performed_via_github_app: z.object({ slug: z.string() }).nullish(),
 });
 
 /** Det enda av `fetch` adaptern använder — lätt att ersätta i tester. */
@@ -75,6 +83,22 @@ export class GithubFeedbackSink implements IFeedbackSink {
       open: r.state === "open",
       labels: r.labels.map((l) => l.name),
       createdAt: r.created_at,
+      comments: r.comments,
     }));
+  }
+
+  // ponytail: de 100 första kommentarerna per issue — en dialog blir aldrig så lång; sidbläddra annars.
+  async comments(number: number): Promise<FeedbackComment[]> {
+    const rows = z.array(commentSchema).parse(await this.call(`/issues/${number}/comments?per_page=100`));
+    return rows.map((c) => ({
+      id: c.id,
+      body: c.body ?? "",
+      createdAt: c.created_at,
+      viaApp: c.performed_via_github_app?.slug ?? null,
+    }));
+  }
+
+  async comment(number: number, body: string): Promise<void> {
+    await this.call(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body }) });
   }
 }

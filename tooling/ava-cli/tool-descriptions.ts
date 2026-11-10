@@ -219,7 +219,8 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "backup.status": "Visa om en backup pågår och vilken den senaste krypterade backupen är (tid, storlek, sha256). Bara för admin, bara på servern.",
   "backup.request": "Starta en krypterad backup av databasen och dokumenten nu (samma som nattjobbet). Vägras om en pågår eller om förra togs för mindre än tio minuter sedan. Bara för admin.",
   "feedback.submit": "Skicka en bugg eller ett förslag till utvecklarna (privat intag-repo). Ange typ, rubrik och beskrivning — inga klientuppgifter. Högst fem i timmen. Bara på servern.",
-  "feedback.mine": "Lista mina egna buggar och förslag och var de är: mottagen, godkänd, under arbete, levererad (med release) eller avslutad. Bara på servern.",
+  "feedback.mine": "Lista mina egna buggar och förslag, var de är (mottagen, väntar på mitt svar, undersökt, verifierad, under arbete, levererad med release, avslutad) och dialogen med Claude/Ulrik om dem. Bara på servern.",
+  "feedback.reply": "Svara i dialogen om en av mina öppna buggar/förslag, t.ex. på en fråga från Claude. Inga klientuppgifter. Högst 20 svar i timmen. Bara på servern.",
 
   // ── System ───────────────────────────────────────────────────────
   "system.capabilities": "Vad den här installationen kan (demo, self-hosted eller serverdrift) — styr vilka funktioner som är tillgängliga.",
