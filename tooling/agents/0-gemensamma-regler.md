@@ -75,16 +75,28 @@ sätt `blockerad` så att Ulrik ser det.
 | Lista issues | `gh api "repos/R/issues?labels=A,B&state=open&per_page=100"` (hoppa över poster med `pull_request`) |
 | Sök | `gh api -X GET search/issues -f q='repo:R "Intag: ava-feedback#12" in:body'` |
 | Läs issue | `gh api repos/R/issues/N` |
-| Kommentera | `gh api repos/R/issues/N/comments -f body=@fil.md` |
+| Kommentera | `gh api repos/R/issues/N/comments -F body=@fil.md` |
 | Sätt etikett | `gh api repos/R/issues/N/labels -f 'labels[]=X'` |
 | Ta bort etikett | se under tabellen (namnet måste URL-kodas) |
 | Skapa etikett | `gh api repos/R/labels -f name=X -f color=0e8a16` |
-| Skapa issue | `gh api repos/R/issues -f title=… -f body=@fil.md -f 'labels[]=A'` |
+| Skapa issue | `gh api repos/R/issues -f title=… -F body=@fil.md -f 'labels[]=A'` |
 | Stäng issue | `gh api -X PATCH repos/R/issues/N -f state=closed -f state_reason=completed` |
-| Skapa PR | `gh api repos/ulrik-s/ava/pulls -f title=… -f head=claude/… -f base=main -f body=@fil.md` |
+| Skapa PR | `gh api repos/ulrik-s/ava/pulls -f title=… -f head=claude/… -f base=main -F body=@fil.md` |
 | PR-diff | `gh api repos/ulrik-s/ava/pulls/N -H "Accept: application/vnd.github.diff"` |
 | CI-status | `gh api "repos/ulrik-s/ava/commits/<sha>/check-runs?per_page=100"` |
 | Merga | `gh api -X PUT repos/ulrik-s/ava/pulls/N/merge -f merge_method=squash -f sha=<granskad sha>` |
+
+**Text ur en fil:** använd `-F body=@fil.md` (stort F). Med `-f` (litet f)
+skickas texten bokstavligt, så issuen får bara sökvägen `@fil.md` och
+filen försvinner med din miljö. Läs alltid tillbaka det du skrivit och
+kontrollera att texten kom med:
+
+```bash
+gh api repos/R/issues/comments/<kommentar-id> --jq .body | head -3
+```
+
+Står bara en sökväg där: redigera kommentaren med rätt text
+(`gh api -X PATCH repos/R/issues/comments/<id> -F body=@fil.md`).
 
 Ta bort en etikett (namnet URL-kodas, t.ex. `behöver-ändras`):
 
