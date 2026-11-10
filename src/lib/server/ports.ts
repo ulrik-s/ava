@@ -284,6 +284,17 @@ export interface FeedbackIssue {
   open: boolean;
   labels: string[];
   createdAt: string;
+  /** Antal kommentarer — bara issues med kommentarer behöver läsas vidare. */
+  comments: number;
+}
+
+/** En kommentar på en issue i intag-repot. */
+export interface FeedbackComment {
+  id: number;
+  body: string;
+  createdAt: string;
+  /** GitHub-appen kommentaren skrevs via (`claude` = agenterna), annars null (Ulrik/servern). */
+  viaApp: string | null;
 }
 
 /**
@@ -294,6 +305,10 @@ export interface IFeedbackSink {
   create(issue: { title: string; body: string; labels: string[] }): Promise<{ number: number }>;
   /** Senaste förfrågningarna (`user-request`), öppna och stängda. */
   list(): Promise<FeedbackIssue[]>;
+  /** En issues kommentarer, äldst först. */
+  comments(number: number): Promise<FeedbackComment[]>;
+  /** Skriv en kommentar på en issue. */
+  comment(number: number, body: string): Promise<void>;
 }
 
 export interface IPorts {

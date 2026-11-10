@@ -25,11 +25,12 @@ export const feedbackInputSchema = z.object({
 export type FeedbackInput = z.infer<typeof feedbackInputSchema>;
 
 /** Var förfrågan befinner sig, sett från användaren. */
-export const FEEDBACK_STATES = ["mottagen", "undersokt", "ej_bekraftad", "verifierad", "pagar", "levererad", "avslutad"] as const;
+export const FEEDBACK_STATES = ["mottagen", "vantar_pa_dig", "undersokt", "ej_bekraftad", "verifierad", "pagar", "levererad", "avslutad"] as const;
 export type FeedbackState = (typeof FEEDBACK_STATES)[number];
 
 export const FEEDBACK_STATE_LABEL: Readonly<Record<FeedbackState, string>> = {
   mottagen: "Mottagen",
+  vantar_pa_dig: "Väntar på ditt svar",
   undersokt: "Undersökt — väntar på beslut",
   ej_bekraftad: "Kunde inte bekräftas",
   verifierad: "Verifierad",
@@ -37,6 +38,21 @@ export const FEEDBACK_STATE_LABEL: Readonly<Record<FeedbackState, string>> = {
   levererad: "Levererad",
   avslutad: "Avslutad",
 };
+
+/**
+ * Vem ett meddelande i dialogen kommer från. `claude` = verifieringsagenten,
+ * `ulrik` = Ulrik själv, `du` = användaren som skickade förfrågan.
+ */
+export const MESSAGE_AUTHORS = ["claude", "ulrik", "du"] as const;
+export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];
+
+export const feedbackMessageSchema = z.object({
+  id: z.number(),
+  from: z.enum(MESSAGE_AUTHORS),
+  body: z.string(),
+  createdAt: z.string(),
+});
+export type FeedbackMessage = z.infer<typeof feedbackMessageSchema>;
 
 export const feedbackItemSchema = z.object({
   number: z.number().int(),
@@ -46,8 +62,44 @@ export const feedbackItemSchema = z.object({
   createdAt: z.string(),
   /** Releasen den levererades i, om den finns (etiketten `release:vX.Y.Z`). */
   release: z.string().nullable(),
+  /** Dialogen med användaren (bara det som är till/från användaren), äldst först. */
+  messages: z.array(feedbackMessageSchema),
+  /** Går det att svara (öppen och inte levererad)? */
+  canReply: z.boolean(),
 });
 export type FeedbackItem = z.infer<typeof feedbackItemSchema>;
+
+/** Svar från användaren i dialogen. */
+export const feedbackReplySchema = z.object({
+  number: z.number().int().positive(),
+  body: z.string().trim().min(1, "Skriv ett svar.").max(5000),
+});
+export type FeedbackReply = z.infer<typeof feedbackReplySchema>;
+
+/**
+ * Markör först i en kommentar som är skriven TILL användaren (frågor från
+ * verifieringsagenten eller Ulrik). Bara sådana kommentarer — och användarens
+ * egna svar — visas i AVA; rapporter och interna anteckningar syns aldrig.
+ */
+export const TO_USER_MARKER = "<!-- till-anvandaren -->";
+
+/** Markör först i användarens svar (skrivs av servern, aldrig av användaren). */
+export function userReplyMarker(userId: string): string {
+  return `<!-- ava-user-reply:${userId} -->`;
+}
+
+/** Hur många förfrågningar som har ett meddelande till användaren som inte lästs. */
+export function unreadCount(items: readonly FeedbackItem[], seen: Readonly<Record<string, string>>): number {
+  return items.filter((i) => hasUnread(i, seen)).length;
+}
+
+/** Finns ett meddelande till användaren som är nyare än när hen senast läste? */
+export function hasUnread(item: FeedbackItem, seen: Readonly<Record<string, string>>): boolean {
+  const last = item.messages.filter((m) => m.from !== "du").at(-1);
+  if (!last) return false;
+  const seenAt = seen[String(item.number)];
+  return seenAt === undefined || last.createdAt > seenAt;
+}
 
 /**
  * Etiketterna i intag-repot. Samma namn som `tooling/agents/labels.json` och
@@ -63,12 +115,15 @@ export const INTAKE_LABELS = {
   notConfirmed: "ej-bekräftad",
   /** Ulriks beslut, satt för hand i GitHub — den enda grinden in i kedjan. */
   verified: "verifierad",
+  /** En fråga till användaren väntar på svar (sätts av agenten eller Ulrik). */
+  waitingForUser: "väntar-på-användaren",
   brokenDown: "nedbruten",
   delivered: "levererad",
 } as const;
 
 /** Öppen issue: första etiketten i listan som finns avgör statusen. */
 const OPEN_STATE_BY_LABEL: ReadonlyArray<readonly [string, FeedbackState]> = [
+  [INTAKE_LABELS.waitingForUser, "vantar_pa_dig"],
   [INTAKE_LABELS.brokenDown, "pagar"],
   [INTAKE_LABELS.verified, "verifierad"],
   [INTAKE_LABELS.notConfirmed, "ej_bekraftad"],

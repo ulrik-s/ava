@@ -76,6 +76,7 @@ Definieras i `tooling/agents/labels.json`. Skapas och uppdateras med
 |---|---|---|---|
 | ava-feedback | `user-request` | servern | Ny förfrågan från knappen |
 | ava-feedback | `bugg` / `förslag` | servern | Typ |
+| ava-feedback | `väntar-på-användaren` | loop 1 / Ulrik | En fråga till användaren väntar på svar (i AVA) |
 | ava-feedback | `undersökt` | loop 1 | Verifieringsrapporten finns |
 | ava-feedback | `ej-bekräftad` | loop 1 | Buggen/behovet kunde inte bekräftas |
 | ava-feedback | `verifierad` | **Ulrik** | Sant och värt att bygga — får brytas ner |
@@ -105,6 +106,36 @@ gh issue edit <nr> -R ulrik-s/ava-feedback --add-label verifierad
 
 Är rapporten "Ej bekräftad" kan du ändå verifiera, om du vet bättre. Du kan
 också fråga användaren, eller stänga issuen (användaren ser då *Avslutad*).
+
+### Dialog med användaren
+
+Användaren läser och svarar i AVA: "Bugg eller förslag" i sidomenyn visar en
+tabell över hens förfrågningar, och en **röd prick** (på knappen och på raden)
+när något nytt har skrivits till hen. Ett klick öppnar dialogen, där hen kan
+svara. Knappen hämtar läget var 5:e minut. "Senast läst" sparas i
+användarens inställningar (`feedback.seen`), så pricken försvinner på alla
+enheter.
+
+Vad användaren ser styrs av markörer först i kommentaren:
+
+| Kommentar börjar med | Visas för användaren som | Skrivs av |
+|---|---|---|
+| `<!-- till-anvandaren -->` | **Claude** (via Claudes app) eller **Ulrik** (annars) | verifieringsagenten, eller du |
+| `<!-- ava-user-reply:<id> -->` | **Du** (bara för den användaren) | AVA-servern, när användaren svarar |
+| allt annat (rapporter, anteckningar) | syns inte | |
+
+Verifieringsagenten frågar användaren när svaret bara finns hos hen, sätter
+`väntar-på-användaren` (användaren ser *Väntar på ditt svar*) och fortsätter
+när hen har svarat. Högst två frågerundor, och efter 7 dagar utan svar skrivs
+rapporten ändå.
+
+**Skriva till användaren själv:**
+
+```bash
+printf '%s\n' '<!-- till-anvandaren -->' 'Hej! Gäller det alla fakturor eller bara den från i måndags?' > fraga.md
+gh issue comment <nr> -R ulrik-s/ava-feedback --body-file fraga.md
+gh issue edit <nr> -R ulrik-s/ava-feedback --add-label väntar-på-användaren
+```
 
 ## Uppsättning (en gång)
 
