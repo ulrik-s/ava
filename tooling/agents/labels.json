@@ -4,6 +4,7 @@
     { "name": "bugg", "color": "d73a4a", "description": "Användaren rapporterar ett fel" },
     { "name": "förslag", "color": "a2eeef", "description": "Användaren föreslår en förbättring" },
     { "name": "väntar-på-användaren", "color": "fbca04", "description": "En fråga till användaren (i AVA) väntar på svar" },
+    { "name": "dubblett", "color": "cfd3d7", "description": "Samma sak som en äldre förfrågan; följer originalet" },
     { "name": "undersökt", "color": "c5def5", "description": "Verifieringsagenten har undersökt och skrivit sin rapport" },
     { "name": "ej-bekräftad", "color": "e99695", "description": "Verifieringsagenten kunde inte bekräfta buggen/behovet" },
     { "name": "verifierad", "color": "1d76db", "description": "ULRIKS beslut (satt för hand): sant och värt att bygga — nedbrytningen får ta den" },

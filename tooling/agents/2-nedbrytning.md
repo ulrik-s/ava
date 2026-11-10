@@ -24,6 +24,22 @@ För varje ÖPPEN issue i `ulrik-s/ava-feedback` med `nedbruten`:
    - **Någon stängd som "not planned" utan PR:** kommentera varför och sätt
      `blockerad`, så att Ulrik bestämmer.
 
+## A2. Dubbletter följer sitt original
+
+För varje ÖPPEN issue i `ulrik-s/ava-feedback` med `dubblett`: läs dess
+rapport ("Dubblett av #N") och originalet #N.
+
+- **Originalet är levererat** (`levererad` + `release:<tagg>`): sätt samma två
+  etiketter på dubbletten, skriv till dess användare (MED markören
+  `<!-- till-anvandaren -->`) "Det här är nu ute i AVA <tagg>. Tack för att du
+  hörde av dig!", och stäng dubbletten.
+- **Originalet är stängt utan leverans** (Ulrik avstod): kommentera på
+  dubbletten (utan markör) och sätt `blockerad`, så att Ulrik bestämmer vad
+  dubblettens användare ska få veta.
+- **Originalet pågår:** inget att göra.
+
+Bryt aldrig ner en dubblett (B nedan): den byggs genom sitt original.
+
 ## B. Nedbrytning av verifierade förfrågningar
 
 Ta högst 5 ÖPPNA issues i `ulrik-s/ava-feedback` som har `verifierad` men inte

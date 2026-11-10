@@ -239,6 +239,10 @@ describe("hjälpfunktioner", () => {
     // Ulriks beslut vinner över agentens bedömning — han kan verifiera ändå.
     [true, ["undersökt", "ej-bekräftad", "verifierad"], "verifierad"],
     [true, ["verifierad", "nedbruten"], "pagar"],
+    [true, ["undersökt", "dubblett"], "dubblett"],
+    // En fråga som väntar går före — användaren ska svara.
+    [true, ["dubblett", "väntar-på-användaren"], "vantar_pa_dig"],
+    [false, ["dubblett", "levererad"], "levererad"],
     [false, ["nedbruten"], "avslutad"],
     [false, ["levererad"], "levererad"],
   ] as const)("feedbackState(open=%s, %j) = %s", (open, labels, expected) => {
