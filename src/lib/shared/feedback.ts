@@ -25,12 +25,14 @@ export const feedbackInputSchema = z.object({
 export type FeedbackInput = z.infer<typeof feedbackInputSchema>;
 
 /** Var förfrågan befinner sig, sett från användaren. */
-export const FEEDBACK_STATES = ["mottagen", "godkand", "pagar", "levererad", "avslutad"] as const;
+export const FEEDBACK_STATES = ["mottagen", "undersokt", "ej_bekraftad", "verifierad", "pagar", "levererad", "avslutad"] as const;
 export type FeedbackState = (typeof FEEDBACK_STATES)[number];
 
 export const FEEDBACK_STATE_LABEL: Readonly<Record<FeedbackState, string>> = {
   mottagen: "Mottagen",
-  godkand: "Godkänd",
+  undersokt: "Undersökt — väntar på beslut",
+  ej_bekraftad: "Kunde inte bekräftas",
+  verifierad: "Verifierad",
   pagar: "Under arbete",
   levererad: "Levererad",
   avslutad: "Avslutad",
@@ -55,18 +57,29 @@ export const INTAKE_LABELS = {
   request: "user-request",
   bug: "bugg",
   feature: "förslag",
-  approved: "godkänd",
+  /** Verifieringsagenten har undersökt och skrivit sin rapport. */
+  investigated: "undersökt",
+  /** …och kunde inte bekräfta buggen/behovet. */
+  notConfirmed: "ej-bekräftad",
+  /** Ulriks beslut, satt för hand i GitHub — den enda grinden in i kedjan. */
+  verified: "verifierad",
   brokenDown: "nedbruten",
   delivered: "levererad",
 } as const;
 
+/** Öppen issue: första etiketten i listan som finns avgör statusen. */
+const OPEN_STATE_BY_LABEL: ReadonlyArray<readonly [string, FeedbackState]> = [
+  [INTAKE_LABELS.brokenDown, "pagar"],
+  [INTAKE_LABELS.verified, "verifierad"],
+  [INTAKE_LABELS.notConfirmed, "ej_bekraftad"],
+  [INTAKE_LABELS.investigated, "undersokt"],
+];
+
 /** Status ur issuens läge och etiketter. Levererad vinner över allt annat. */
 export function feedbackState(open: boolean, labels: readonly string[]): FeedbackState {
-  const has = (l: string): boolean => labels.includes(l);
-  if (has(INTAKE_LABELS.delivered)) return "levererad";
+  if (labels.includes(INTAKE_LABELS.delivered)) return "levererad";
   if (!open) return "avslutad";
-  if (has(INTAKE_LABELS.brokenDown)) return "pagar";
-  return has(INTAKE_LABELS.approved) ? "godkand" : "mottagen";
+  return OPEN_STATE_BY_LABEL.find(([label]) => labels.includes(label))?.[1] ?? "mottagen";
 }
 
 /** `release:v0.5.0` → `v0.5.0`. */

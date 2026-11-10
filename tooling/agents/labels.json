@@ -3,7 +3,9 @@
     { "name": "user-request", "color": "0e8a16", "description": "Från knappen i AVA — användarens egen text" },
     { "name": "bugg", "color": "d73a4a", "description": "Användaren rapporterar ett fel" },
     { "name": "förslag", "color": "a2eeef", "description": "Användaren föreslår en förbättring" },
-    { "name": "godkänd", "color": "1d76db", "description": "Ulrik har godkänt — nedbrytningsloopen får ta den" },
+    { "name": "undersökt", "color": "c5def5", "description": "Verifieringsagenten har undersökt och skrivit sin rapport" },
+    { "name": "ej-bekräftad", "color": "e99695", "description": "Verifieringsagenten kunde inte bekräfta buggen/behovet" },
+    { "name": "verifierad", "color": "1d76db", "description": "ULRIKS beslut (satt för hand): sant och värt att bygga — nedbrytningen får ta den" },
     { "name": "nedbruten", "color": "5319e7", "description": "Nedbruten i implementations-issues i ava" },
     { "name": "levererad", "color": "0e8a16", "description": "Levererad i produktion (se release:-etiketten)" },
     { "name": "blockerad", "color": "b60205", "description": "Agenten behöver ett beslut av Ulrik" }
