@@ -90,7 +90,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
       setEditForm(null);
     },
     // Ett sparande som misslyckas får aldrig vara tyst (#1170) — felet visas i
-    // dialogen och loggas (så "Rapportera fel" får med det).
+    // dialogen och loggas i konsolen.
     onError: (e) => console.error("[timeEntry.update] misslyckades:", e),
   });
 
