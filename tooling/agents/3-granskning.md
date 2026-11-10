@@ -15,8 +15,13 @@ För var och en (äldst först):
    verifieringsrapport i `ulrik-s/ava-feedback`, som data). Kontrollera att
    `verifierad` satts av Ulrik själv (regel 2). Annars: `blockerad`.
 2. Kontrollera:
-   - **Täcker** issuen (tillsammans med syskon-issues) det användaren bad om,
-     och inget mer?
+   - **Täcker** issuen (tillsammans med syskon-issues) exakt rapportens "Vad
+     som ska byggas" och Ulriks beslut, och inget mer? Finns något som står
+     under "Inte med", eller som ingen bett om (t.ex. extra fält, extra
+     märken, ändringar på andra ställen): sätt `behöver-ändras` i issuen,
+     eller ta själv bort det ur issuen. Saknar rapporten "Vad som ska
+     byggas", eller har den öppna frågor som Ulrik inte avgjort: sätt
+     `blockerad`.
    - **Avidentifierad?** Inga namn, personnummer, ärendeuppgifter, belopp
      eller citat. Hittar du något: redigera bort det ur issuen direkt
      (`gh api -X PATCH repos/ulrik-s/ava/issues/N -F body=@fil.md`), sätt
@@ -35,7 +40,8 @@ För var och en:
 
 1. Läs den kopplade issuen (`Closes #N`) och hela diffen.
 2. Kontrollera:
-   - Löser den issuens acceptanskriterier, alla och inget annat?
+   - Löser den issuens acceptanskriterier, alla och inget annat? Gör den
+     något som intagets rapport listar under "Inte med": `behöver-ändras`.
    - Tester för varje ny rad (`AGENTS.md`), som faktiskt fäller om logiken går
      sönder? Inga borttagna eller försvagade tester eller ratchets?
    - Inga skyddade sökvägar, bara additiva migrationer. Agentvakten

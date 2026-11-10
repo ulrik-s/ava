@@ -137,6 +137,23 @@ gh issue comment <nr> -R ulrik-s/ava-feedback --body-file fraga.md
 gh issue edit <nr> -R ulrik-s/ava-feedback --add-label väntar-på-användaren
 ```
 
+Du behöver inte ta bort `undersökt`. När användaren svarar tar
+verifieringsagenten issuen vid nästa körning, även om rapporten redan finns.
+Den skriver då en ny rapport med svaret inräknat.
+
+**Etiketternas livscykel under verifieringen:**
+
+```
+ny förfrågan ─► agenten undersöker
+                 ├─ frågor ─► väntar-på-användaren (INTE undersökt)
+                 │              │ användaren svarar i AVA
+                 │              ▼ nästa körning: tar bort väntar-…, fortsätter
+                 │              (högst 3 rundor; 7 dagar utan svar → Ej bekräftad)
+                 └─ klart ──► rapport + undersökt [+ ej-bekräftad] ─► du: verifierad
+du frågar efter rapporten ─► väntar-på-användaren ─► svar ─► agenten tar bort
+                              undersökt och skriver en ny rapport
+```
+
 ## Uppsättning (en gång)
 
 ### 1. Token för knappen
