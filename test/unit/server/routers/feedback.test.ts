@@ -83,7 +83,7 @@ describe("feedback.mine", () => {
     ({ number: n, title: `t${n}`, body, open, labels, createdAt: `2026-11-0${n}T10:00:00Z` });
 
   it("bara mina, nyast först, med status och release", async () => {
-    const mine1 = issue(1, `${ownerMarker("u-1")}\n…`, ["user-request", "bugg", "godkänd"]);
+    const mine1 = issue(1, `${ownerMarker("u-1")}\n…`, ["user-request", "bugg", "undersökt", "verifierad"]);
     const mine2 = issue(2, `${ownerMarker("u-1")}\n…`, ["user-request", "förslag", "levererad", "release:v0.5.0"], false);
     const other = issue(3, `${ownerMarker("u-2")}\n…`, ["user-request"]);
     // Någon klistrar in min markör i sin text — räknas inte, markören måste stå först.
@@ -91,7 +91,7 @@ describe("feedback.mine", () => {
     const items = await caller(fakeSink([mine1, mine2, other, forged]).sink).mine();
     expect(items.map((i) => [i.number, i.kind, i.state, i.release])).toEqual([
       [2, "feature", "levererad", "v0.5.0"],
-      [1, "bug", "godkand", null],
+      [1, "bug", "verifierad", null],
     ]);
   });
 
@@ -114,8 +114,11 @@ describe("hjälpfunktioner", () => {
 
   it.each([
     [true, [], "mottagen"],
-    [true, ["godkänd"], "godkand"],
-    [true, ["godkänd", "nedbruten"], "pagar"],
+    [true, ["undersökt"], "undersokt"],
+    [true, ["undersökt", "ej-bekräftad"], "ej_bekraftad"],
+    // Ulriks beslut vinner över agentens bedömning — han kan verifiera ändå.
+    [true, ["undersökt", "ej-bekräftad", "verifierad"], "verifierad"],
+    [true, ["verifierad", "nedbruten"], "pagar"],
     [false, ["nedbruten"], "avslutad"],
     [false, ["levererad"], "levererad"],
   ] as const)("feedbackState(open=%s, %j) = %s", (open, labels, expected) => {
