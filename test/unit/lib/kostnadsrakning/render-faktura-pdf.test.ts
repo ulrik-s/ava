@@ -10,7 +10,7 @@ import { renderFakturaPdf, toWinAnsi } from "@/lib/client/kostnadsrakning/render
 import { buildInvoiceSpecification } from "@/lib/shared/invoice-specification";
 import { orgImageSchema } from "@/lib/shared/org-image";
 import { asId } from "@/lib/shared/schemas/ids";
-import { pdfPageContents, pdfPageLines, pdfPageRuns, pdfPageTexts, type PdfLine, type PdfTextRun } from "../../../helpers/pdf-text";
+import { pdfPageContents, pdfPageLayouts, pdfPageTexts, type PdfLineItem, type PdfTextItem } from "../../../helpers/pdf-text";
 
 const head = (b: Uint8Array) => String.fromCharCode(b[0]!, b[1]!, b[2]!, b[3]!);
 
@@ -230,26 +230,27 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
     lines: [{ date: "2026-05-02", description: "Genomgång", hours: "2", amount: "3 252,00 kr" }],
   }];
 
-  /** Högerkanten (pt) för en fet 9-punkts körning. */
-  async function rightEdge(run: PdfTextRun | undefined): Promise<number> {
+  /** Högerkanten (pt) för en fet körning. */
+  async function rightEdge(run: PdfTextItem | undefined): Promise<number> {
     if (!run) return Number.NaN;
     const { PDFDocument, StandardFonts } = await import("pdf-lib");
     const bold = await (await PDFDocument.create()).embedFont(StandardFonts.HelveticaBold);
     return run.x + bold.widthOfTextAtSize(run.text, run.size);
   }
-  const find = (runs: readonly PdfTextRun[], text: string): PdfTextRun | undefined => runs.find((r) => r.text.replace(/\u00A0/g, " ") === text);
-  /** Strecket närmast ovanför baslinjen `y`. */
-  const ruleAbove = (lines: readonly PdfLine[], y: number): PdfLine | undefined =>
-    lines.filter((l) => l.y1 === l.y2 && l.y1 > y).sort((a, b) => a.y1 - b.y1)[0];
+  const find = (runs: readonly PdfTextItem[], text: string): PdfTextItem | undefined => runs.find((r) => r.text === text);
+  const isBold = (run: PdfTextItem | undefined): boolean => run?.font.includes("Bold") ?? false;
+  /** Strecket närmast ovanför baslinjen `y` (fakturan ritar bara vågräta streck). */
+  const ruleAbove = (lines: readonly PdfLineItem[], y: number): PdfLineItem | undefined =>
+    lines.filter((l) => l.y > y).sort((a, b) => a.y - b.y)[0];
 
   it("utläggsspecifikationen avslutas med en fet summarad i Netto- och Brutto-kolumnerna", async () => {
     const bytes = await renderFakturaPdf(withExpenses(2));
-    const [, runs = []] = await pdfPageRuns(bytes);
+    const [, { texts: runs } = { texts: [] }] = await pdfPageLayouts(bytes);
     const label = find(runs, "Summa utlägg");
     const net = find(runs, "1 800,00 kr");
     const gross = find(runs, "2 250,00 kr");
-    expect(label?.bold).toBe(true);
-    expect(net?.bold && gross?.bold).toBe(true);
+    expect(isBold(label)).toBe(true);
+    expect(isBold(net) && isBold(gross)).toBe(true);
     expect(net?.y).toBe(label?.y);
     expect(gross?.y).toBe(label?.y);
     // Exakt samma högerkant som kolumnrubrikerna (Netto 470, Brutto 545).
@@ -261,28 +262,26 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
 
   it("ett tunt streck med tydlig luft står mellan sista utlägget och summaraden", async () => {
     const bytes = await renderFakturaPdf(withExpenses(2));
-    const [, runs = []] = await pdfPageRuns(bytes);
-    const [, lines = []] = await pdfPageLines(bytes);
+    const [, { texts: runs, lines } = { texts: [], lines: [] }] = await pdfPageLayouts(bytes);
     const last = find(runs, "Utlägg 1");
     const label = find(runs, "Summa utlägg");
     const rule = ruleAbove(lines, label?.y ?? 0);
     expect(rule).toBeDefined();
-    expect(rule?.y1).toBeLessThan(last?.y ?? 0);
+    expect(rule?.y).toBeLessThan(last?.y ?? 0);
     // Strecket står minst 16 pt under sista postens baslinje (tidigare 10).
-    expect((last?.y ?? 0) - (rule?.y1 ?? 0)).toBeGreaterThanOrEqual(16);
+    expect((last?.y ?? 0) - (rule?.y ?? 0)).toBeGreaterThanOrEqual(16);
   });
 
   it("tidsspecifikationen: mer luft mellan sista posten och strecket före delsumman", async () => {
     const bytes = await renderFakturaPdf(view({ hasSpec: true, timeGroups }));
-    const [, runs = []] = await pdfPageRuns(bytes);
-    const [, lines = []] = await pdfPageLines(bytes);
+    const [, { texts: runs, lines } = { texts: [], lines: [] }] = await pdfPageLayouts(bytes);
     const last = find(runs, "Genomgång");
     const subtotal = find(runs, "Summa arvode");
     const rule = ruleAbove(lines, subtotal?.y ?? 0);
-    expect((last?.y ?? 0) - (rule?.y1 ?? 0)).toBeGreaterThanOrEqual(16);
+    expect((last?.y ?? 0) - (rule?.y ?? 0)).toBeGreaterThanOrEqual(16);
     // Delsumman: fet, i Tim/Belopp-kolumnerna (oförändrat).
-    expect(subtotal?.bold).toBe(true);
-    const amounts = runs.filter((r) => r.text.replace(/\u00A0/g, " ") === "3 252,00 kr" && r.bold);
+    expect(isBold(subtotal)).toBe(true);
+    const amounts = runs.filter((r) => r.text === "3 252,00 kr" && isBold(r));
     expect(amounts).toHaveLength(1);
     expect(await rightEdge(amounts[0])).toBeCloseTo(545, 3);
   });
@@ -297,13 +296,12 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
     // Prova många längder så att sista posten hamnar på varje tänkbar plats nära sidans fot.
     for (let n = 40; n <= 70; n++) {
       const bytes = await renderFakturaPdf(withExpenses(n));
-      const pages = await pdfPageRuns(bytes);
-      const pageLines = await pdfPageLines(bytes);
-      const at = pages.findIndex((runs) => find(runs, "Summa utlägg"));
-      const label = find(pages[at] ?? [], "Summa utlägg");
-      const rule = ruleAbove(pageLines[at] ?? [], label?.y ?? 0);
+      const pages = await pdfPageLayouts(bytes);
+      const page = pages.find((p) => find(p.texts, "Summa utlägg"));
+      const label = find(page?.texts ?? [], "Summa utlägg");
+      const rule = ruleAbove(page?.lines ?? [], label?.y ?? 0);
       expect(rule).toBeDefined();
-      expect((rule?.y1 ?? 0) - (label?.y ?? 0)).toBeLessThan(15);
+      expect((rule?.y ?? 0) - (label?.y ?? 0)).toBeLessThan(15);
     }
   });
 });
