@@ -25,7 +25,7 @@ import {
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
-const RISK_BADGE: Record<CreditRisk, string> = {
+export const RISK_BADGE: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",
   MEDIUM: "bg-yellow-50 text-yellow-700 border-yellow-200",
   HIGH: "bg-red-50 text-red-700 border-red-200",

@@ -24,6 +24,7 @@ import { ExpectedReceivablesSection } from "./_expected-receivables-section";
 import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
 import { matterDefaultLayout, matterPanels } from "./_matter-panels";
+import { MatterPaymentLine } from "./_matter-payment-line";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
 import { WatchSection } from "./_watch-section";
@@ -161,6 +162,8 @@ interface HeaderProps {
     description?: string | null | undefined;
     status: MatterStatus;
     isTaxeArende?: boolean | undefined;
+    paymentMethod: PaymentMethod;
+    clientShareBips?: number | null | undefined;
   };
   klient: MatterContact[];
   onOpenGenerate: () => void;
@@ -246,6 +249,7 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
             <span className="mr-2 font-mono text-sm font-normal text-gray-500">{m.matterNumber}</span>{m.title}
           </h1>
           <MatterClientLine klient={klient} matterType={m.matterType} />
+          <MatterPaymentLine paymentMethod={m.paymentMethod} clientShareBips={m.clientShareBips ?? null} />
         </div>
         <MatterHeaderActions
           m={m}
