@@ -70,6 +70,11 @@ den); för ett förslag: finns det, behövs det, storlek och nytta.
 Ulrik i så fall behöver ställa till användaren.
 ```
 
+Skicka rapporten med `-F body=@rapport.md` (regel 5, stort F). Läs sedan
+tillbaka kommentaren: den ska börja med `## Verifieringsrapport`. Står det
+något annat, rätta kommentaren innan du går vidare. Ulrik måste kunna läsa
+hela rapporten direkt i issuen.
+
 Sätt sedan `undersökt`. Är slutsatsen något annat än **Bekräftad**, sätt också
 `ej-bekräftad`. Ulrik bestämmer sedan: `verifierad`, en fråga till användaren
 eller stänga.

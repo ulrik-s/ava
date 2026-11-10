@@ -19,7 +19,7 @@ För var och en (äldst först):
      och inget mer?
    - **Avidentifierad?** Inga namn, personnummer, ärendeuppgifter, belopp
      eller citat. Hittar du något: redigera bort det ur issuen direkt
-     (`gh api -X PATCH repos/ulrik-s/ava/issues/N -f body=@fil.md`), sätt
+     (`gh api -X PATCH repos/ulrik-s/ava/issues/N -F body=@fil.md`), sätt
      `blockerad` och kommentera att Ulrik bör radera revisionerna.
    - **Lagom stor** för en PR? Mätbara acceptanskriterier? Testplan?
    - **Kräver den skyddade sökvägar** eller en destruktiv migration? Sätt då
