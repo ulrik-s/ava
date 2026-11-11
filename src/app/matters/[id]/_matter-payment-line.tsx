@@ -3,12 +3,12 @@
  * Utbruten ur MatterHeader på samma sätt som MatterClientLine (#199).
  */
 
-import { findInsuranceCompany, type MatterContactWithType } from "@/lib/shared/matter-insurance";
+import { findInsuranceCompany, type MatterContactWithRole } from "@/lib/shared/matter-insurance";
 import { paymentMethodSummary, SUMMARY_SEPARATOR } from "@/lib/shared/payment-method-summary";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 
-/** Ärendekontakt med namn — namnet visas för försäkringsbolaget. */
-export type NamedMatterContact = MatterContactWithType & { contact: { name: string } };
+/** Ärendekontakt med roll och namn — namnet visas för försäkringsbolaget. */
+export type NamedMatterContact = MatterContactWithRole & { contact: { name: string } };
 
 export function MatterPaymentLine({ paymentMethod, clientShareBips, contacts, separated }: {
   paymentMethod: PaymentMethod;

@@ -50,8 +50,8 @@ test("Fakturor, Avbetalningar, Användare och Kalender visar svenska etiketter",
 // Betalningssättet i ärendehuvudet (#1518): etikett, försäkringsbolag (vid
 // rättsskydd) och klientens andel, på raden under titeln.
 const PAYMENT_LINES = [
-  // Rättsskydd med Trygg-Hansa som kontakt, ingen andel satt.
-  { matterNumber: "2026-0012", text: "· Rättsskydd · Trygg-Hansa" },
+  // Rättsskydd där försäkringsbolaget är motpart: inget bolag visas, ingen andel satt.
+  { matterNumber: "2026-0012", text: "· Rättsskydd" },
   // Rättsskydd, självrisk 20 %, inget försäkringsbolag som kontakt.
   { matterNumber: "2026-0021", text: "· Rättsskydd · klienten betalar 20 %" },
   // Rättshjälp med 40 % klientandel.
