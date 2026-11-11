@@ -44,7 +44,9 @@ const noopMut = () => ({ mutate: vi.fn(), isPending: false });
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ timeEntry: { list: { invalidate: vi.fn() } } }),
+    useUtils: () => ({ timeEntry: { list: { invalidate: vi.fn() } }, matter: { coverageUsage: { invalidate: vi.fn() } } }),
+    // Takvarningen i tidssektionen (#1520) — under taket här.
+    matter: { coverageUsage: { useQuery: () => ({ data: { billableMinutes: 0, billableValueOre: 0 } }) } },
     timeEntry: {
       list: { useQuery: () => timeQuery },
       create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
