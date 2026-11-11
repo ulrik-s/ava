@@ -48,7 +48,7 @@ function coverageLabel(m: MatterRow): string {
   return "Inom tak";
 }
 
-/** Badge för täcknings-kolumnen: färgad procent + ⚠ vid ≥ 90 %. */
+/** Badge för täcknings-kolumnen: färgad procent + ⚠ när varningsgränsen nåtts. */
 function CoverageCell({ m }: { m: MatterRow }) {
   const s = rowCoverage(m);
   if (!s) return <span className="text-sm text-gray-400">—</span>;
