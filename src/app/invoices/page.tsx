@@ -4,8 +4,10 @@ import Link from "next/link";
 import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
+import { ShowHiddenToggle, useHiddenRows } from "@/components/ui/show-hidden-toggle";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
+import { isHiddenInvoice } from "@/lib/shared/hidden-billing-rows";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, type InvoiceStatus, type InvoiceType } from "@/lib/shared/schemas/enums";
 import { SieExportButton } from "./_sie-export-button";
 
@@ -20,7 +22,7 @@ function statusBadgeClass(status: InvoiceStatus): string {
     case "INSTALLMENT_PLAN": return "bg-indigo-100 text-indigo-700";
     case "CANCELLED": return "bg-gray-200 text-gray-600";
     case "BAD_DEBT": return "bg-red-100 text-red-700";
-    default: return "bg-gray-100 text-gray-600";
+    case "DRAFT": return "bg-gray-100 text-gray-600";
   }
 }
 
@@ -73,6 +75,24 @@ const invoiceColumns: Column<InvoiceRow>[] = [
     render: (i) => <Money ore={i.amount} basis="gross" className="font-mono" /> },
 ];
 
+/** Listan, med annullerade fakturor och kreditfakturor dolda från början (#1522).
+ *  Datan filtreras före `DataTable`, så summeringen räknar bara synliga rader. */
+function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
+  const { rows, toggle } = useHiddenRows(invoices, isHiddenInvoice);
+  return (
+    <>
+      <div className="mb-2 flex justify-end"><ShowHiddenToggle {...toggle} /></div>
+      <DataTable
+        prefKey="list.invoices"
+        columns={invoiceColumns}
+        data={rows}
+        rowKey={(i) => i.id}
+        emptyMessage="Inga fakturor ännu."
+      />
+    </>
+  );
+}
+
 export default function InvoicesPage() {
   const invoices = trpc.invoice.list.useQuery({});
 
@@ -97,13 +117,7 @@ export default function InvoicesPage() {
           <p className="text-sm text-gray-400">Laddar…</p>
         </div>
       ) : (
-        <DataTable
-          prefKey="list.invoices"
-          columns={invoiceColumns}
-          data={(invoices.data?.items ?? []) as InvoiceRow[]}
-          rowKey={(i) => i.id}
-          emptyMessage="Inga fakturor ännu."
-        />
+        <InvoicesTable invoices={(invoices.data?.items ?? []) as InvoiceRow[]} />
       )}
     </ListPage>
   );

@@ -8,7 +8,6 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import type { MatterEventSuggestion } from "@/lib/shared/schemas/document";
 import { matterEventSuggestionIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
 import { orgProcedure } from "../../trpc";
 
@@ -25,7 +24,7 @@ export const eventProcedures = {
     .mutation(async ({ ctx, input }) => {
       const ev = await ctx.repos.matterEventSuggestions.getByIdInOrg(input.eventId, ctx.orgId);
       if (!ev) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.repos.matterEventSuggestions.update(ev.id, { status: "REJECTED" } as Partial<MatterEventSuggestion>);
+      return ctx.repos.matterEventSuggestions.update(ev.id, { status: "REJECTED" });
     }),
 
   /** Markera händelsen som tillagd i kalender (UI-indikator). */
@@ -34,6 +33,6 @@ export const eventProcedures = {
     .mutation(async ({ ctx, input }) => {
       const ev = await ctx.repos.matterEventSuggestions.getByIdInOrg(input.eventId, ctx.orgId);
       if (!ev) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.repos.matterEventSuggestions.update(ev.id, { status: "ACCEPTED" } as Partial<MatterEventSuggestion>);
+      return ctx.repos.matterEventSuggestions.update(ev.id, { status: "ACCEPTED" });
     }),
 };

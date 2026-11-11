@@ -56,7 +56,7 @@ function clientVia(handler: (req: Request) => Promise<Response>, token: string) 
     "good-token": { email: USER.email, subject: "", issuer: "", name: USER.name },
   };
   const fetchImpl: AddinFetch = (input, init) => {
-    const headers = new Headers(init?.headers as HeadersInit | undefined);
+    const headers = new Headers(init?.headers);
     const auth = headers.get("authorization") ?? "";
     const claims = tokenToClaims[auth.replace(/^Bearer\s+/i, "")];
     if (claims) headers.set("x-auth-request-email", claims.email);

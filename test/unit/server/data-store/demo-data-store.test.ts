@@ -76,7 +76,7 @@ describe("DemoDataStore", () => {
 
   it("matters.create kastar ReadOnlyError", async () => {
     const ds = buildStore();
-    await expect(ds.matters.create({ data: {} as never })).rejects.toThrow(ReadOnlyError);
+    await expect(ds.matters.create({ data: {} })).rejects.toThrow(ReadOnlyError);
   });
 
   it("contacts.update kastar ReadOnlyError", async () => {
@@ -99,6 +99,6 @@ describe("DemoDataStore", () => {
 
   it("raw kastar — escape-hatch ej tillgänglig i demo-läget", () => {
     const ds = buildStore();
-    expect(() => (ds.raw as unknown as { $queryRaw: () => void }).$queryRaw()).toThrow();
+    expect(() => (ds.raw as { $queryRaw: () => void }).$queryRaw()).toThrow();
   });
 });

@@ -165,6 +165,11 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
     }));
   }
 
+  async lockForBooking(invoiceId: InvoiceId): Promise<void> {
+    // Samma transaktionslås som nummerserierna, med en egen nyckel per faktura.
+    await lockSeries(this.db, `ledger-booking:${invoiceId}`);
+  }
+
   async nextInvoiceNumber(organizationId: OrganizationId, year: number = stockholmYear(this.now())): Promise<string> {
     const prefix = invoiceNumberPrefix(year);
     // Ett nummer i taget per byrå (#1243): låset hålls till transaktionens slut.

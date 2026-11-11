@@ -10,7 +10,7 @@ import { renderFakturaPdf, toWinAnsi } from "@/lib/client/kostnadsrakning/render
 import { buildInvoiceSpecification } from "@/lib/shared/invoice-specification";
 import { orgImageSchema } from "@/lib/shared/org-image";
 import { asId } from "@/lib/shared/schemas/ids";
-import { pdfPageContents, pdfPageTexts } from "../../../helpers/pdf-text";
+import { pdfPageContents, pdfPageLayouts, pdfPageTexts, type PdfLineItem, type PdfTextItem } from "../../../helpers/pdf-text";
 
 const head = (b: Uint8Array) => String.fromCharCode(b[0]!, b[1]!, b[2]!, b[3]!);
 
@@ -27,7 +27,7 @@ const view = (over: Partial<FakturaView> = {}): FakturaView => ({
   summaryTotalLabel: "Summa inkl moms", summaryTotal: "8 130,00 kr",
   hasSplit: false, splitRows: [{ label: "Netto (exkl moms)", amount: "6 504,00 kr", style: "", muted: false }],
   totalLabel: "Att betala (inkl moms)", total: "8 130,00 kr",
-  hasSpec: false, timeLines: [], timeGroups: [], expenseLines: [], ...over,
+  hasSpec: false, timeLines: [], timeGroups: [], expenseLines: [], expenseNetTotal: "", expenseGrossTotal: "", ...over,
 });
 
 describe("toWinAnsi", () => {
@@ -216,5 +216,97 @@ describe("renderFakturaPdf — specifikationens rader (#1439)", () => {
     const [, page2 = []] = await pdfPageTexts(await renderFakturaPdf(view({ hasSpec: true, timeGroups: group("") })));
     expect(page2).toContain("2026-10-03");
     expect(page2).toContain("Summa arvode");
+  });
+});
+
+describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
+  const expense = (i: number) => ({ date: "2026-05-03", description: `Utlägg ${i}`, net: "900,00 kr", gross: "1 125,00 kr" });
+  const withExpenses = (n: number) => view({
+    hasSpec: true, expenseLines: Array.from({ length: n }, (_, i) => expense(i)),
+    expenseNetTotal: "1 800,00 kr", expenseGrossTotal: "2 250,00 kr",
+  });
+  const timeGroups = [{
+    label: "Arvode", subtotalLabel: "Summa arvode", hours: "2", amount: "3 252,00 kr",
+    lines: [{ date: "2026-05-02", description: "Genomgång", hours: "2", amount: "3 252,00 kr" }],
+  }];
+
+  /** Högerkanten (pt) för en fet körning. */
+  async function rightEdge(run: PdfTextItem | undefined): Promise<number> {
+    if (!run) return Number.NaN;
+    const { PDFDocument, StandardFonts } = await import("pdf-lib");
+    const bold = await (await PDFDocument.create()).embedFont(StandardFonts.HelveticaBold);
+    return run.x + bold.widthOfTextAtSize(run.text, run.size);
+  }
+  const find = (runs: readonly PdfTextItem[], text: string): PdfTextItem | undefined => runs.find((r) => r.text === text);
+  const isBold = (run: PdfTextItem | undefined): boolean => run?.font.includes("Bold") ?? false;
+  /** Strecket närmast ovanför baslinjen `y` (fakturan ritar bara vågräta streck). */
+  const ruleAbove = (lines: readonly PdfLineItem[], y: number): PdfLineItem | undefined =>
+    lines.filter((l) => l.y > y).sort((a, b) => a.y - b.y)[0];
+
+  it("utläggsspecifikationen avslutas med en fet summarad i Netto- och Brutto-kolumnerna", async () => {
+    const bytes = await renderFakturaPdf(withExpenses(2));
+    const [, { texts: runs } = { texts: [] }] = await pdfPageLayouts(bytes);
+    const label = find(runs, "Summa utlägg");
+    const net = find(runs, "1 800,00 kr");
+    const gross = find(runs, "2 250,00 kr");
+    expect(isBold(label)).toBe(true);
+    expect(isBold(net) && isBold(gross)).toBe(true);
+    expect(net?.y).toBe(label?.y);
+    expect(gross?.y).toBe(label?.y);
+    // Exakt samma högerkant som kolumnrubrikerna (Netto 470, Brutto 545).
+    expect(await rightEdge(net)).toBeCloseTo(470, 3);
+    expect(await rightEdge(gross)).toBeCloseTo(545, 3);
+    const headNet = find(runs, "Netto");
+    expect(await rightEdge(headNet)).toBeCloseTo(470, 3);
+  });
+
+  it("ett tunt streck med tydlig luft står mellan sista utlägget och summaraden", async () => {
+    const bytes = await renderFakturaPdf(withExpenses(2));
+    const [, { texts: runs, lines } = { texts: [], lines: [] }] = await pdfPageLayouts(bytes);
+    const last = find(runs, "Utlägg 1");
+    const label = find(runs, "Summa utlägg");
+    const rule = ruleAbove(lines, label?.y ?? 0);
+    expect(rule).toBeDefined();
+    expect(rule?.y).toBeLessThan(last?.y ?? 0);
+    // Strecket står minst 16 pt under sista postens baslinje (tidigare 10).
+    expect((last?.y ?? 0) - (rule?.y ?? 0)).toBeGreaterThanOrEqual(16);
+  });
+
+  it("tidsspecifikationen: mer luft mellan sista posten och strecket före delsumman", async () => {
+    const bytes = await renderFakturaPdf(view({ hasSpec: true, timeGroups }));
+    const [, { texts: runs, lines } = { texts: [], lines: [] }] = await pdfPageLayouts(bytes);
+    const last = find(runs, "Genomgång");
+    const subtotal = find(runs, "Summa arvode");
+    const rule = ruleAbove(lines, subtotal?.y ?? 0);
+    expect((last?.y ?? 0) - (rule?.y ?? 0)).toBeGreaterThanOrEqual(16);
+    // Delsumman: fet, i Tim/Belopp-kolumnerna (oförändrat).
+    expect(isBold(subtotal)).toBe(true);
+    const amounts = runs.filter((r) => r.text === "3 252,00 kr" && isBold(r));
+    expect(amounts).toHaveLength(1);
+    expect(await rightEdge(amounts[0])).toBeCloseTo(545, 3);
+  });
+
+  it("utan utlägg ritas ingen utläggssummarad", async () => {
+    const texts = (await pdfPageTexts(await renderFakturaPdf(view({ hasSpec: true, timeGroups })))).flat();
+    expect(texts).toContain("Summa arvode");
+    expect(texts).not.toContain("Summa utlägg");
+  });
+
+  /** Sidans nedre marginal i mallen (`BOTTOM` i render-faktura-pdf.ts). */
+  const PAGE_BOTTOM_MARGIN = 64;
+
+  it("streck och summarad hålls ihop vid sidbrytning", async () => {
+    // Prova många längder så att sista posten hamnar på varje tänkbar plats nära sidans fot.
+    for (let n = 40; n <= 70; n++) {
+      const bytes = await renderFakturaPdf(withExpenses(n));
+      const pages = await pdfPageLayouts(bytes);
+      const page = pages.find((p) => find(p.texts, "Summa utlägg"));
+      const label = find(page?.texts ?? [], "Summa utlägg");
+      const rule = ruleAbove(page?.lines ?? [], label?.y ?? 0);
+      expect(rule).toBeDefined();
+      expect((rule?.y ?? 0) - (label?.y ?? 0)).toBeLessThan(15);
+      // Summaraden (och därmed strecket ovanför) får inte hamna under sidans nedre marginal.
+      expect(label?.y ?? 0).toBeGreaterThanOrEqual(PAGE_BOTTOM_MARGIN);
+    }
   });
 });

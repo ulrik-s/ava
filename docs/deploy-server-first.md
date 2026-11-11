@@ -186,7 +186,7 @@ Kontrollera status:
 
 ```bash
 docker compose -f tooling/docker/docker-compose.production.yml ps
-curl -s https://ava.byra.se/readyz     # {"status":"ok","checks":{"database":{"ok":true}}}
+curl -s https://ava.byra.se/readyz     # {"status":"ok","checks":{"database":{"ok":true}},"release":"v0.2.0"}
 ```
 
 ### Vad som INTE finns
@@ -439,6 +439,34 @@ releaser.
 Byggcachen töms med flit varje gång (#1166): en gång gav den gammal CSS i prod
 — nya regler saknades trots rätt källkod och nya JS-chunkar, och inget larmade.
 
+### Deploy via tagg (utan hand)
+
+Servern hämtar själv: `ava-deploy.timer` kör `deploy-latest-tag.sh` var femte
+minut, och finns en ny `v*`-tagg i `origin` körs `deploy-prod.sh --tag <v…>`.
+Ingen nyckel i GitHub, ingen väg in till servern. Timern installeras av
+`deploy-prod.sh` vid nästa manuella deploy (en gång; sedan håller den sig
+själv uppdaterad).
+
+```bash
+# På en utvecklardator, när main är grön och ska ut:
+git tag v1.2.0 && git push origin v1.2.0
+# → release.yml bygger GitHub-releasen; inom fem minuter deployar servern.
+```
+
+- Bara taggar som börjar på `v` räknas (`helper-v*` är helperns). **Högsta
+  versionen** vinner, inte senast skapade: `v1.10.0` > `v1.9.0`.
+- Pekar den deployade releasen (`releases/current`) redan på taggens commit
+  händer ingenting.
+- Faller deployen körs den **inte om** på samma tagg (markören
+  `releases/.deploy-failed`): rätta felet och kör `deploy-prod.sh --tag <v…>`
+  för hand, eller sätt en ny tagg. Loggen: `journalctl -u ava-deploy`.
+- `deploy-prod.sh` utan `--tag` deployar fortfarande `origin/main` för hand.
+  Rollback som i *Rollback* nedan.
+- **Staging** (`staging.ava-crm.io`): samma installation på en egen server,
+  med `AVA_DEPLOY_TRACK=main` i `ava-server.env`. Då deployar timern toppen
+  av `origin/main` varje gång main flyttar sig i stället för taggar. Se
+  [feedback-pipeline.md](./feedback-pipeline.md#staging).
+
 ### Releaser: varför klienten inte byggs där Caddy läser (#1369)
 
 ```
@@ -642,7 +670,7 @@ PostHogs biträdesavtal (DPA) innan nyckeln sätts. Vad som skickas: se
 AVA_POSTHOG_KEY=phc_<byråns-projekt-token>   # skapas på eu.posthog.com
 # AVA_POSTHOG_HOST=https://posthog.byran.se   # bara vid själv-hostad PostHog
 # AVA_ERROR_ENVIRONMENT=staging               # default production
-# AVA_RELEASE=<commit-sha>                    # server-versionen
+# AVA_RELEASE=<etikett>   # sätts annars av deploy-prod.sh (taggen); syns i /readyz
 ```
 
 ```bash

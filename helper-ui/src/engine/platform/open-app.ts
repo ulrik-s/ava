@@ -21,7 +21,7 @@ export function openCommand(platform: Platform, path: string): Command {
       // rundll32 url.dll,FileProtocolHandler triggar default-app utan
       // att öppna ett konsolfönster.
       return { cmd: "rundll32", args: ["url.dll,FileProtocolHandler", path] };
-    default:
+    case "other":
       throw new Error(`unsupported OS: ${platform}`);
   }
 }

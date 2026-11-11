@@ -48,7 +48,7 @@ export function resolveInstallPaths(platform: Platform, home: string, env: DataD
       return { binPath, servicePath: join(home, ".config", "systemd", "user", "ava-helper.service"), logDir: join(dataDir, "logs") };
     case "windows":
       return { binPath, servicePath: join(dataDir, "ava-helper-task.xml"), logDir: join(dataDir, "logs") };
-    default:
+    case "other":
       return null;
   }
 }
@@ -116,7 +116,7 @@ export function renderServiceFile(platform: Platform, paths: InstallPaths): stri
       return renderSystemdUnit(paths.binPath);
     case "windows":
       return renderWindowsTaskXml(paths.binPath);
-    default:
+    case "other":
       return "";
   }
 }
@@ -136,7 +136,7 @@ export function registerArgs(platform: Platform, paths: InstallPaths): Array<{ c
       ];
     case "windows":
       return [{ cmd: "schtasks", args: ["/Create", "/F", "/TN", "AVA Helper", "/XML", paths.servicePath] }];
-    default:
+    case "other":
       return [];
   }
 }
@@ -149,7 +149,7 @@ export function unregisterArgs(platform: Platform, paths: InstallPaths): Array<{
       return [{ cmd: "systemctl", args: ["--user", "disable", "--now", "ava-helper"] }];
     case "windows":
       return [{ cmd: "schtasks", args: ["/Delete", "/F", "/TN", "AVA Helper"] }];
-    default:
+    case "other":
       return [];
   }
 }

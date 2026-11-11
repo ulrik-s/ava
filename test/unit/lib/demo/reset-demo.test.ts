@@ -19,7 +19,7 @@ function makeStorage(init: Record<string, string> = {}): Storage {
     setItem: (k: string, v: string) => { m.set(k, v); },
     removeItem: (k: string) => { m.delete(k); },
     clear: () => m.clear(),
-  } as Storage;
+  };
 }
 
 interface OpfsMock {

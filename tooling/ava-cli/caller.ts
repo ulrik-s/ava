@@ -73,7 +73,7 @@ function seededSource(): DemoSource {
     // osynliga för CLI:t och MCP-ytan, hur väl seeden än fyller dem (#1021).
     billingRuns: seed.billingRuns,
     invoiceDispatches: seed.invoiceDispatches,
-  } as DemoSource);
+  });
 }
 
 /** Procedurer/callers är callable-objekt → `object`-test räcker inte. */

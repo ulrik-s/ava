@@ -96,7 +96,7 @@ describe("NewUserPage", () => {
     const { container } = render(<NewUserPage />);
     fireEvent.change(container.querySelectorAll("input")[0]!, { target: { value: "B" } });
     fireEvent.change(container.querySelector('input[type="email"]')!, { target: { value: "b@x.se" } });
-    const role = screen.getByRole("combobox") as HTMLSelectElement;
+    const role = screen.getByRole("combobox");
     fireEvent.change(role, { target: { value: "ADMIN" } });
     const passwords = container.querySelectorAll('input[type="password"]');
     fireEvent.change(passwords[0]!, { target: { value: "pp" } });
@@ -109,7 +109,7 @@ describe("NewUserPage", () => {
     const { container } = render(<NewUserPage />);
     fireEvent.change(screen.getByLabelText(/^Timarvode \(kr/), { target: { value: "3500" } });
     fireEvent.change(screen.getByLabelText(/^Tidsspillan \(kr/), { target: { value: "1487" } });
-    fireEvent.change(screen.getByLabelText(/Milersättning/), { target: { value: "3.50" } });
+    fireEvent.change(screen.getByLabelText(/Milersättning/), { target: { value: "25" } });
     fireEvent.change(container.querySelectorAll("input")[0]!, { target: { value: "X" } });
     fireEvent.change(container.querySelector('input[type="email"]')!, { target: { value: "x@x.se" } });
     const passwords = container.querySelectorAll('input[type="password"]');
@@ -119,7 +119,8 @@ describe("NewUserPage", () => {
     const arg = createMutate.mock.calls[0]![0];
     // kr/h lagras i öre, som tidsposterna — en karta per kategori (#1206).
     expect(arg.hourlyRates).toEqual({ ARBETE: 350000, TIDSSPILLAN: 148700 });
-    expect(arg.mileageRate).toBe(350);
+    // Inmatat i kr/mil, lagras i öre/km (#1527): 25 kr/mil = 250 öre/km.
+    expect(arg.mileageRate).toBe(250);
   });
 });
 

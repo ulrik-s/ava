@@ -21,6 +21,7 @@ import {
   userIdSchema,
   contactIdSchema,
 } from "@/lib/shared/schemas/ids";
+import { requireRefsInOrg } from "../auth/org-scope";
 import { router, protectedProcedure, TRPCError } from "../trpc";
 
 const createInput = z.object({
@@ -76,8 +77,8 @@ type ExistingEvent = { mirrorToOutlook?: boolean | undefined };
 function computeMirrorPatch(data: UpdateData, existing: ExistingEvent): Record<string, unknown> {
   const newFlag = data.mirrorToOutlook;
   const oldFlag = existing.mirrorToOutlook ?? false;
-  const flippedOn = newFlag === true && oldFlag === false;
-  const flippedOff = newFlag === false && oldFlag === true;
+  const flippedOn = newFlag === true && !oldFlag;
+  const flippedOff = newFlag === false && oldFlag;
   const otherFieldsChanged = Object.keys(data).some((k) => k !== "mirrorToOutlook");
 
   if (flippedOff) return { mirrorStatus: null, outlookEventId: null };
@@ -151,6 +152,10 @@ export const calendarRouter = router({
   create: protectedProcedure
     .input(createInput)
     .mutation(async ({ ctx, input }) => {
+      await requireRefsInOrg(
+        { repos: ctx.repos, orgId: asId<"OrganizationId">(ctx.user.organizationId) },
+        { matterId: input.matterId, userIds: [input.userId, ...(input.inviteeUserIds ?? [])] },
+      );
       // exactOptionalPropertyTypes: utelämna nycklar vars värde är undefined
       // (förr droppades de ändå av create). null behålls (nullish-fält).
       const cleanInput = Object.fromEntries(

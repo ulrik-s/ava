@@ -57,7 +57,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
         eq(matters.organizationId, organizationId),
-        status ? eq(paymentPlans.status, status as PaymentPlanStatus) : undefined,
+        status ? eq(paymentPlans.status, status) : undefined,
         isNull(paymentPlans.deletedAt),
       ));
     return rows.map((r) => r.id);

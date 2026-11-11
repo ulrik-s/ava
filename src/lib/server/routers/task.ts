@@ -14,6 +14,7 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { pageEnvelope } from "@/lib/shared/paginate";
 import { taskPrioritySchema, taskStatusSchema, type Task } from "@/lib/shared/schemas";
 import { asId, taskIdSchema, matterIdSchema, userIdSchema, type TaskId } from "@/lib/shared/schemas/ids";
+import { requireRefsInOrg } from "../auth/org-scope";
 import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure, TRPCError } from "../trpc";
 
@@ -85,7 +86,11 @@ export const taskRouter = router({
 
   create: protectedProcedure
     .input(createInput)
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
+      await requireRefsInOrg(
+        { repos: ctx.repos, orgId: asId<"OrganizationId">(ctx.user.organizationId) },
+        { matterId: input.matterId, userIds: [input.userId] },
+      );
       const { id, createdAt, ...rest } = input;
       return ctx.repos.tasks.create({
         ...rest,

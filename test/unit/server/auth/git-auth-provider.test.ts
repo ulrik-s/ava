@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import { GitAuthProvider, TEST_PRINCIPAL } from "@/lib/server/auth/git-auth-provider";
-import type { AuthProvider, Principal } from "@/lib/server/auth/principal";
+import type { AuthProvider } from "@/lib/server/auth/principal";
 import { asId } from "@/lib/shared/schemas/ids";
 
 describe("GitAuthProvider", () => {
@@ -49,7 +49,7 @@ describe("GitAuthProvider", () => {
   });
 
   it("getPrincipal med fullt config returnerar komplett Principal-shape", () => {
-    const p = new GitAuthProvider(TEST_PRINCIPAL).getPrincipal() as Principal;
+    const p = new GitAuthProvider(TEST_PRINCIPAL).getPrincipal();
     for (const key of ["id", "email", "name", "role", "organizationId"] as const) {
       expect(p[key], `fält ${key} ska vara satt`).toBeTruthy();
     }

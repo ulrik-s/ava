@@ -15,6 +15,7 @@
  * [ADR 0007]: ../../../docs/adr/0007-kundfordringar-konstaterad-kundforlust.md
  */
 
+import { primitiveText } from "./primitive-text";
 import { computeInvoiceLedger } from "./write-off-calc";
 
 type Row = Record<string, unknown>;
@@ -27,7 +28,7 @@ const MIGRATION_REASON = "Migrerad från BAD_DEBT-status (ADR 0007)";
 function paidByInvoiceId(payments: readonly Row[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const p of payments) {
-    const id = String(p.invoiceId ?? "");
+    const id = primitiveText(p.invoiceId);
     if (id) m.set(id, (m.get(id) ?? 0) + Number(p.amount ?? 0));
   }
   return m;
@@ -38,7 +39,7 @@ function creditedByInvoiceId(invoices: readonly Row[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const inv of invoices) {
     if (inv.invoiceType !== "CREDIT") continue;
-    const target = String(inv.creditedInvoiceId ?? "");
+    const target = primitiveText(inv.creditedInvoiceId);
     if (target) m.set(target, (m.get(target) ?? 0) + Math.abs(Number(inv.amount ?? 0)));
   }
   return m;
@@ -75,13 +76,13 @@ export function synthesizeBadDebtWriteOffs(
   payments: readonly Row[],
   writeOffs: readonly Row[],
 ): Row[] {
-  const haveWriteOff = new Set(writeOffs.map((w) => String(w.invoiceId ?? "")));
+  const haveWriteOff = new Set(writeOffs.map((w) => primitiveText(w.invoiceId)));
   const paid = paidByInvoiceId(payments);
   const credited = creditedByInvoiceId(invoices);
 
   const out: Row[] = [];
   for (const inv of invoices) {
-    const id = String(inv.id ?? "");
+    const id = primitiveText(inv.id);
     if (inv.status !== "BAD_DEBT" || !id || haveWriteOff.has(id)) continue;
     const row = migratedWriteOffFor(inv, id, paid, credited);
     if (row) out.push(row);

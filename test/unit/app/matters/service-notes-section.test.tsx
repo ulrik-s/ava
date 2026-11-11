@@ -102,7 +102,7 @@ describe("ServiceNotesSection", () => {
     ];
     render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByTitle("Redigera"));
-    const textarea = screen.getByPlaceholderText(/Vad hände/) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText<HTMLTextAreaElement>(/Vad hände/);
     expect(textarea.value).toBe("Gammal text"); // förifyllt
     fireEvent.change(textarea, { target: { value: "Ny text" } });
     fireEvent.click(screen.getByRole("button", { name: "Spara" }));

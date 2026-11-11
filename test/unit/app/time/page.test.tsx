@@ -107,9 +107,9 @@ describe("TimePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     // MatterCombobox är en sökbar <input>+<datalist> — välj via exakt etikett
     // ("<nr> — <titel>") → komponenten anropar onChange(matterId).
-    const matterInput = screen.getByRole("combobox") as HTMLInputElement;
+    const matterInput = screen.getByRole<HTMLInputElement>("combobox");
     fireEvent.change(matterInput, { target: { value: "2026-0001 — Test" } });
-    const desc = screen.getByLabelText(/Beskrivning/i) as HTMLInputElement;
+    const desc = screen.getByLabelText<HTMLInputElement>(/Beskrivning/i);
     fireEvent.change(desc, { target: { value: "Klientmöte" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(createMutate).toHaveBeenCalled();
@@ -122,7 +122,7 @@ describe("TimePage", () => {
   it("togglar debiterbar-checkbox", () => {
     render(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
-    const checkbox = screen.getByRole("checkbox") as HTMLInputElement;
+    const checkbox = screen.getByRole<HTMLInputElement>("checkbox");
     expect(checkbox.checked).toBe(true);
     fireEvent.click(checkbox);
     expect(checkbox.checked).toBe(false);
@@ -132,7 +132,7 @@ describe("TimePage", () => {
     render(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
-    const numberInput = screen.getByLabelText(/minuter/i) as HTMLInputElement;
+    const numberInput = screen.getByLabelText<HTMLInputElement>(/minuter/i);
     fireEvent.change(numberInput, { target: { value: "120" } });
     expect(numberInput.value).toBe("120");
   });

@@ -41,8 +41,8 @@ const QTY_RIGHT = 395;
 const RECIPIENT_X = 365;
 const SPEC_DATE_X = 77;
 const SPEC_DESC_X = 168;
+/** Timkolumnens högerkant — även tidssektionens summa (#1505). */
 const SPEC_HOURS_RIGHT = 510;
-const SPEC_SUM_RIGHT = 527;
 const SPEC_TOP = 93;
 const SPEC_BOTTOM = 770;
 const SPEC_SIZE = 11;
@@ -204,32 +204,55 @@ function drawSpecRow(w: PdfWriter, c: SpecCursor, row: { date: string; lines: st
   c.top += height + 2.5;
 }
 
-function drawSum(w: PdfWriter, c: SpecCursor, sum: string): void {
-  c.ensure(SPEC_LEADING);
-  w.text("Summa", LEFT, c.top, { font: "bold", size: SPEC_SIZE });
-  w.text(sum, SPEC_SUM_RIGHT, c.top, { font: "bold", size: SPEC_SIZE, align: "right" });
-  c.top += 48;
+/** Talkolumnen/-kolumnerna en summa står under: streckets vänsterkant och summans högerkant. */
+interface SumColumn {
+  left: number;
+  right: number;
 }
+
+/** Strecket ritas så här långt ovanför markören (luft mot sista posten, #1505). */
+const SUM_RULE_RAISE = 4;
+/** Summans baslinje under markören — luft mellan strecket och summan. */
+const SUM_BASELINE_DROP = 10;
+const SUM_RULE_THICKNESS = 0.5;
+/** Luft efter summan, före nästa avsnitt. */
+const SUM_SPACE_AFTER = 48;
+
+/** Tunt streck över talkolumnen, sedan fet "Summa" — hålls ihop vid sidbrytning. */
+function drawSum(w: PdfWriter, c: SpecCursor, sum: string, column: SumColumn): void {
+  c.ensure(SUM_BASELINE_DROP + SPEC_LEADING);
+  w.rule(column.left, column.right, c.top - SUM_RULE_RAISE, SUM_RULE_THICKNESS);
+  const baseline = c.top + SUM_BASELINE_DROP;
+  w.text("Summa", LEFT, baseline, { font: "bold", size: SPEC_SIZE });
+  w.text(sum, column.right, baseline, { font: "bold", size: SPEC_SIZE, align: "right" });
+  c.top = baseline + SUM_SPACE_AFTER;
+}
+
+/** Avstånd mellan beskrivning och första talkolumnen. */
+const SPEC_COLUMN_GAP = 30;
+const TIME_SUM_COLUMN: SumColumn = { left: SPEC_HOURS_RIGHT - SPEC_COLUMN_GAP, right: SPEC_HOURS_RIGHT };
 
 function drawTimeSection(w: PdfWriter, c: SpecCursor, section: KrSpecSection): void {
   drawSectionHeading(w, c, section.heading);
   for (const r of section.rows) {
-    const lines = w.wrap(r.description, "regular", SPEC_SIZE, SPEC_HOURS_RIGHT - SPEC_DESC_X - 30);
+    const lines = w.wrap(r.description, "regular", SPEC_SIZE, TIME_SUM_COLUMN.left - SPEC_DESC_X);
     drawSpecRow(w, c, { date: r.date, lines }, [[r.quantity, SPEC_HOURS_RIGHT]]);
   }
-  drawSum(w, c, section.sum);
+  drawSum(w, c, section.sum, TIME_SUM_COLUMN);
 }
 
 const EXP_QTY_RIGHT = 445;
 const EXP_PRICE_RIGHT = 485;
+const EXP_AMOUNT_RIGHT = 527;
+const EXPENSE_SUM_COLUMN: SumColumn = { left: EXP_QTY_RIGHT - SPEC_COLUMN_GAP, right: EXP_AMOUNT_RIGHT };
 
 function drawExpenseSection(w: PdfWriter, c: SpecCursor, spec: KrExpenseSpec): void {
   drawSectionHeading(w, c, "Utlägg");
   for (const r of spec.rows) {
-    const lines = w.wrap(r.description, "regular", SPEC_SIZE, EXP_QTY_RIGHT - SPEC_DESC_X - 30);
-    drawSpecRow(w, c, { date: r.date, lines }, [[r.quantity, EXP_QTY_RIGHT], [r.unitPrice, EXP_PRICE_RIGHT], [r.amount, SPEC_SUM_RIGHT]]);
+    const lines = w.wrap(r.description, "regular", SPEC_SIZE, EXPENSE_SUM_COLUMN.left - SPEC_DESC_X);
+    drawSpecRow(w, c, { date: r.date, lines }, [[r.quantity, EXP_QTY_RIGHT], [r.unitPrice, EXP_PRICE_RIGHT], [r.amount, EXP_AMOUNT_RIGHT]]);
   }
-  drawSum(w, c, spec.sum);
+  drawSum(w, c, spec.sum, EXPENSE_SUM_COLUMN);
 }
 
 /** "Sida N" centrerat nederst på sida 2 och framåt — sida 1 får inget nummer. */

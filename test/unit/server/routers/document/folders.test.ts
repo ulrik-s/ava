@@ -8,7 +8,6 @@
 
 import { describe, it, expect, vi } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
@@ -30,9 +29,9 @@ function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG) {
     documentFolders: [],
     documents: [],
     ...seed,
-  } as DemoSource);
+  });
   const store = new LocalStore(source, async () => {});
-  const repos = buildInMemoryRepositories(store as unknown as IDataStore);
+  const repos = buildInMemoryRepositories(store);
   const ctx = {
     user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
     dataStore: store, repos, orgId,
@@ -187,5 +186,89 @@ describe("document.breadcrumb", () => {
     const { caller } = makeCaller();
     const path = await caller.breadcrumb({ folderId: "x" });
     expect(path).toEqual([]);
+  });
+});
+
+describe("mappoperationernas behörighet (#1449)", () => {
+  // m1 = egen byrå, m2 = egen byrå (annat ärende), mx = annan byrå.
+  const seed = (): Partial<DemoSource> => ({
+    matters: [
+      { id: "m1", organizationId: ORG, matterNumber: "2026-1", title: "T" },
+      { id: "m2", organizationId: ORG, matterNumber: "2026-2", title: "U" },
+      { id: "mx", organizationId: "org-x", matterNumber: "X-1", title: "X" },
+    ],
+    documentFolders: [
+      { id: "f1", name: "Egen", matterId: "m1", parentId: null },
+      { id: "f2", name: "Annat ärende", matterId: "m2", parentId: null },
+      { id: "fx", name: "Främmande", matterId: "mx", parentId: null },
+    ],
+    documents: [
+      { id: "d1", matterId: "m1", folderId: null, fileName: "a.pdf" },
+      { id: "dx", matterId: "mx", folderId: "fx", fileName: "x.pdf" },
+    ],
+  });
+
+  it("renameFolder nekar en mapp i en annan byrå", async () => {
+    const { caller, store } = makeCaller(seed());
+    await expect(caller.renameFolder({ id: "fx", name: "Kapad" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(folders(store).find((f) => f.id === "fx")!.name).toBe("Främmande");
+  });
+
+  it("renameFolder nekar en mapp som inte finns", async () => {
+    const { caller } = makeCaller(seed());
+    await expect(caller.renameFolder({ id: "nope", name: "N" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("deleteFolder nekar en mapp i en annan byrå", async () => {
+    const { caller, store } = makeCaller(seed());
+    await expect(caller.deleteFolder({ id: "fx" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(folders(store).some((f) => f.id === "fx")).toBe(true);
+    expect(docs(store).find((d) => d.id === "dx")!.folderId).toBe("fx");
+  });
+
+  it("moveDocument nekar ett dokument i en annan byrå", async () => {
+    const { caller, store } = makeCaller(seed());
+    await expect(caller.moveDocument({ documentId: "dx", folderId: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(docs(store).find((d) => d.id === "dx")!.folderId).toBe("fx");
+  });
+
+  it("moveDocument nekar en målmapp i ett annat ärende", async () => {
+    const { caller, store } = makeCaller(seed());
+    await expect(caller.moveDocument({ documentId: "d1", folderId: "f2" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(docs(store).find((d) => d.id === "d1")!.folderId).toBeNull();
+  });
+
+  it("moveDocument nekar en målmapp i en annan byrå", async () => {
+    const { caller } = makeCaller(seed());
+    await expect(caller.moveDocument({ documentId: "d1", folderId: "fx" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("moveFolder nekar en mapp i en annan byrå", async () => {
+    const { caller, store } = makeCaller(seed());
+    await expect(caller.moveFolder({ folderId: "fx", targetParentId: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(folders(store).find((f) => f.id === "fx")!.parentId).toBeNull();
+  });
+
+  it("moveFolder nekar ett mål i ett annat ärende", async () => {
+    const { caller, store } = makeCaller(seed());
+    await expect(caller.moveFolder({ folderId: "f1", targetParentId: "f2" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(folders(store).find((f) => f.id === "f1")!.parentId).toBeNull();
+  });
+
+  it("createFolder nekar en förälder i ett annat ärende", async () => {
+    const { caller, store } = makeCaller(seed());
+    await expect(caller.createFolder({ matterId: "m1", name: "Ny", parentId: "f2" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(folders(store).some((f) => f.name === "Ny")).toBe(false);
+  });
+
+  it("createFolder tillåter en förälder i samma ärende", async () => {
+    const { caller, store } = makeCaller(seed());
+    await caller.createFolder({ matterId: "m1", name: "Under", parentId: "f1" });
+    expect(folders(store).find((f) => f.name === "Under")!.parentId).toBe("f1");
+  });
+
+  it("breadcrumb nekar en mapp i en annan byrå", async () => {
+    const { caller } = makeCaller(seed());
+    await expect(caller.breadcrumb({ folderId: "fx" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

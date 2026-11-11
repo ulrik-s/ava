@@ -65,6 +65,8 @@ export const organizations = pgTable("organizations", {
   /** Byråns vokabulär av giltiga dokument-etiketter (#621). Dokument får bara
    *  bära taggar ur denna lista; hanteras i org-inställningarna. */
   documentTags: jsonb("document_tags").notNull().default([]).$type<string[]>(),
+  /** Byråns ärendetyper — valen i "Ärendetyp" när ett ärende läggs upp. */
+  matterTypes: jsonb("matter_types").notNull().default([]).$type<string[]>(),
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: integer("acconto_threshold_ore"),
@@ -133,6 +135,10 @@ export const matters = pgTable("matters", {
   matterNumber: text("matter_number").notNull(),
   responsibleLawyerId: uuid("responsible_lawyer_id").$type<UserId>(),
   courtCaseNumber: text("court_case_number"),
+  /** Målnumret före senaste bytet (#1510) — sökbart; bara ett sparas. */
+  previousCourtCaseNumber: text("previous_court_case_number"),
+  /** Försäkringsbolagets referens (#1511) — sökbar; en per ärende. */
+  insuranceReference: text("insurance_reference"),
   title: text("title").notNull(),
   description: text("description"),
   status: text("status").notNull().default("ACTIVE").$type<MatterStatus>(),
@@ -270,7 +276,7 @@ export const timeEntries = pgTable("time_entries", {
   description: text("description").notNull(),
   hourlyRate: integer("hourly_rate").notNull(),
   /** ARBETE (default) eller TIDSSPILLAN (#891) — styr slutregleringens norm. */
-  kind: text("kind").$type<"ARBETE" | "ARBETE_OBEKVAM_TID" | "TIDSSPILLAN" | "TIDSSPILLAN_OVRIG_TID">(),
+  kind: text("kind").$type<"ARBETE" | "ARBETE_OBEKVAM_TID" | "TIDSSPILLAN" | "TIDSSPILLAN_OVRIG_TID" | "FORHANDLING">(),
   /** Byråns standardåtgärd posten registrerades ur (#956) — spårbarhet: går att
    *  se vilka poster som kommer ur en standard och om tiden justerats. */
   standardAtgardId: text("standard_atgard_id"),

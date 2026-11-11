@@ -12,6 +12,8 @@
  * (vendor eller byrå-admin), inte från slutanvändare.
  */
 
+import { primitiveText } from "@/lib/shared/primitive-text";
+
 /** Hämta ett värde via dotterminerad path. `events.0.id` läses som arr[0].id. */
 export function lookup(root: unknown, path: string): unknown {
   const parts = path.split(".");
@@ -25,11 +27,18 @@ export function lookup(root: unknown, path: string): unknown {
   return cur;
 }
 
+/** Textform av ett templatevärde: primitiva som de är, objekt som JSON — aldrig "[object Object]". */
+function templateText(v: unknown): string {
+  if (v !== null && typeof v === "object") return JSON.stringify(v);
+  return primitiveText(v);
+}
+
 const FILTERS: Record<string, (v: unknown) => unknown> = {
-  upper: (v) => String(v ?? "").toUpperCase(),
-  lower: (v) => String(v ?? "").toLowerCase(),
+  upper: (v) => templateText(v).toUpperCase(),
+  lower: (v) => templateText(v).toLowerCase(),
   date: (v) => {
-    try { return new Date(String(v)).toISOString().slice(0, 10); } catch { return String(v ?? ""); }
+    const d = v instanceof Date ? v : new Date(templateText(v));
+    try { return d.toISOString().slice(0, 10); } catch { return templateText(v); }
   },
   json: (v) => JSON.stringify(v),
 };
@@ -44,10 +53,7 @@ export function template(input: string, ctx: Record<string, unknown>): unknown {
   const single = input.match(SINGLE);
   if (single) return resolveOne(single[1] ?? "", ctx);
 
-  return input.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
-    const v = resolveOne(expr, ctx);
-    return v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
-  });
+  return input.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr: string) => templateText(resolveOne(expr, ctx)));
 }
 
 function resolveOne(expr: string, ctx: Record<string, unknown>): unknown {
@@ -66,7 +72,7 @@ function resolveOne(expr: string, ctx: Record<string, unknown>): unknown {
  */
 export function templateValue<T>(input: T, ctx: Record<string, unknown>): T {
   if (typeof input === "string") return template(input, ctx) as T;
-  if (Array.isArray(input)) return input.map((v) => templateValue(v, ctx)) as T;
+  if (Array.isArray(input)) return input.map((v: unknown) => templateValue(v, ctx)) as T;
   if (input && typeof input === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(input as Record<string, unknown>)) {

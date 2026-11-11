@@ -214,8 +214,8 @@ describe("documentTemplate — behörighet för icke-admin (#1370)", () => {
     const caller = makeCaller("org-a", role);
     mockPrisma.documentTemplate.findFirst.mockResolvedValue(TEMPLATE_A);
     await expect(caller.create({ name: "Fullmakt", content: "…" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(caller.update({ id: "tpl-1" as never, name: "Kapad" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(caller.delete({ id: "tpl-1" as never })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.update({ id: "tpl-1", name: "Kapad" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.delete({ id: "tpl-1" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(mockPrisma.documentTemplate.create).not.toHaveBeenCalled();
     expect(mockPrisma.documentTemplate.update).not.toHaveBeenCalled();
     expect(mockPrisma.documentTemplate.delete).not.toHaveBeenCalled();

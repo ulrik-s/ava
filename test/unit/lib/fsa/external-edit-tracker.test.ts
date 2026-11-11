@@ -26,7 +26,6 @@ class FakeHandle {
     this.bytes = newBytes;
     this.lastModified = lastModified;
   }
-   
   async getFile(): Promise<{ lastModified: number; arrayBuffer: () => Promise<ArrayBuffer> }> {
     const bytes = this.bytes;
     return {
@@ -44,7 +43,7 @@ describe("ExternalEditTracker", () => {
     const handle = new FakeHandle(new Uint8Array([1, 2]), 1000);
     const onCommit = vi.fn();
     const tracker = new ExternalEditTracker({ pollIntervalMs: 100, debounceMs: 500, onCommit });
-    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle as never });
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle });
 
     // Inga ändringar → ingen commit
     await vi.advanceTimersByTimeAsync(2000);
@@ -56,7 +55,7 @@ describe("ExternalEditTracker", () => {
     const handle = new FakeHandle(new Uint8Array([1]), 1000);
     const onCommit = vi.fn();
     const tracker = new ExternalEditTracker({ pollIntervalMs: 50, debounceMs: 300, onCommit });
-    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle as never });
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle });
 
     handle.setSave(new Uint8Array([2]), 2000);
     await vi.advanceTimersByTimeAsync(100);  // poll detekterar
@@ -76,7 +75,7 @@ describe("ExternalEditTracker", () => {
     const handle = new FakeHandle(new Uint8Array([1]), 1000);
     const onCommit = vi.fn();
     const tracker = new ExternalEditTracker({ pollIntervalMs: 50, debounceMs: 300, onCommit });
-    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle as never });
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle });
 
     handle.setSave(new Uint8Array([2]), 2000);
     await vi.advanceTimersByTimeAsync(100);
@@ -100,7 +99,7 @@ describe("ExternalEditTracker", () => {
     const handle = new FakeHandle(new Uint8Array([1]), 1000);
     const onCommit = vi.fn();
     const tracker = new ExternalEditTracker({ pollIntervalMs: 50, debounceMs: 10_000, onCommit });
-    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle as never });
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle });
 
     handle.setSave(new Uint8Array([2]), 2000);
     await vi.advanceTimersByTimeAsync(100);
@@ -114,7 +113,7 @@ describe("ExternalEditTracker", () => {
   it("getSession() returnerar pågående edit-session-info för UI", async () => {
     const handle = new FakeHandle(new Uint8Array([1]), 1000);
     const tracker = new ExternalEditTracker({ pollIntervalMs: 50, debounceMs: 500, onCommit: vi.fn() });
-    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle as never });
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle });
 
     expect(tracker.getSession("doc-1")).toBeNull();
 
@@ -131,7 +130,7 @@ describe("ExternalEditTracker", () => {
     const handle = new FakeHandle(new Uint8Array([1]), 1000);
     const onCommit = vi.fn();
     const tracker = new ExternalEditTracker({ pollIntervalMs: 50, debounceMs: 200, onCommit });
-    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle as never });
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: handle });
 
     tracker.dispose();
     handle.setSave(new Uint8Array([2]), 2000);

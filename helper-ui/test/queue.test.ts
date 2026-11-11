@@ -11,6 +11,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
 import superjson from "superjson";
 
+import { requestUrl } from "@/lib/shared/request-url";
 import { asId, type DocumentId } from "@/lib/shared/schemas/ids";
 
 import { backoffMs, conflictLabel, defaultQueueDeps, UploadQueue, type QueueDeps } from "../src/engine/queue.ts";
@@ -387,7 +388,7 @@ describe("defaultQueueDeps", () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const orig = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      calls.push({ url: String(url), init: init ?? {} });
+      calls.push({ url: requestUrl(url), init: init ?? {} });
       return new Response("", { status: 200 });
     }) as typeof fetch;
     try {
@@ -408,7 +409,7 @@ describe("defaultQueueDeps", () => {
     const calls: Array<{ url: string; auth: string | null }> = [];
     const orig = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      calls.push({ url: String(url), auth: new Headers(init?.headers).get("authorization") });
+      calls.push({ url: requestUrl(url), auth: new Headers(init?.headers).get("authorization") });
       return new Response(JSON.stringify([{ result: { data: superjson.serialize({ id: "d1", version: 4 }) } }]), {
         status: 200, headers: { "content-type": "application/json" },
       });

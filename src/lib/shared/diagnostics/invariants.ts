@@ -6,7 +6,7 @@
  * Tanken: fel ska *självupptäckas* så fort datat är inläst, inte upptäckas
  * först när en användare snubblar på dem. Klienten kör invarianterna efter
  * hydrering/mutation och matar resultatet till issue-storen ([[issue-store]]),
- * som driver "Rapportera fel"-UI:t.
+ * som dedupar och loggar varje nytt fel en gång i konsolen.
  *
  * Modulen är medvetet fri från React, DOM och I/O så den kan köras både i
  * webbläsaren och i node-tester (och i framtiden server-side).

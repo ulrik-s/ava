@@ -49,9 +49,9 @@ describe("TrpcSyncTransport (#sync-bridge, end-to-end)", () => {
           url: "http://ava.test/api/trpc",
           transformer: superjson,
           fetch: (input, init) => {
-            const headers = new Headers(init?.headers as HeadersInit | undefined);
+            const headers = new Headers(init?.headers);
             headers.set("X-Auth-Request-Email", "anna@byra.se");
-            return handler(new Request(input as string, { ...init, headers } as RequestInit));
+            return handler(new Request(input, { ...init, headers } as RequestInit));
           },
         }),
       ],

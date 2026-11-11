@@ -20,7 +20,7 @@ import {
 const fetchMock = vi.fn();
 beforeEach(() => {
   fetchMock.mockReset();
-  globalThis.fetch = fetchMock as unknown as typeof fetch;
+  globalThis.fetch = fetchMock;
 });
 
 function ok(body: unknown): Response {

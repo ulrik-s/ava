@@ -5,6 +5,7 @@ import {
   refreshTokens,
 } from "@/lib/server/integrations/fortnox/oauth";
 import type { FortnoxConfig } from "@/lib/server/integrations/fortnox/schema";
+import { requestUrl } from "@/lib/shared/request-url";
 
 const config: FortnoxConfig = {
   clientId: "cid",
@@ -23,7 +24,7 @@ interface Captured {
 function fakeFetch(status: number, json: unknown, cap?: Captured) {
   return (async (url: string | URL | Request, init?: RequestInit) => {
     if (cap) {
-      cap.url = String(url);
+      cap.url = requestUrl(url);
       cap.init = init ?? {};
     }
     return new Response(JSON.stringify(json), {

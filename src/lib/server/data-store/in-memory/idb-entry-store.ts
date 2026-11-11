@@ -176,7 +176,7 @@ export class IdbEntryStore<T> {
     for (const legacy of this.opts.location.legacy) await this.importLegacy(legacy);
     return this.run([ENTRY_STORE], "readonly", (tx) => {
       const req = tx.objectStore(ENTRY_STORE).getAll();
-      return () => req.result;
+      return (): unknown[] => req.result;
     });
   }
 

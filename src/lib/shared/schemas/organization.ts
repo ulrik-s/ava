@@ -32,6 +32,8 @@ export const organizationSchema = z.object({
   /** Byråns vokabulär av giltiga dokument-etiketter (#621). Dokument får bara
    *  bära taggar ur denna lista; redigeras i org-inställningarna. */
   documentTags: z.array(z.string()).default([]),
+  /** Byråns ärendetyper — valen i "Ärendetyp" när ett ärende läggs upp. */
+  matterTypes: z.array(z.string()).default([]),
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: z.number().int().nonnegative().nullish(),

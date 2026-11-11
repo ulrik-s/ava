@@ -8,6 +8,7 @@ import {
   HELPER_PING_PREFIX,
   HELPER_PORT,
   isAllowedOrigin,
+  isExecutableFileName,
   isSafeFileName,
   parsePingVersion,
 } from "@/lib/shared/helper/protocol";
@@ -56,8 +57,10 @@ describe("isAllowedOrigin", () => {
     expect(isAllowedOrigin("http://localhost:3000")).toBe(true);
     expect(isAllowedOrigin("http://127.0.0.1:8080")).toBe(true);
   });
-  it("tillåter *.github.io", () => {
+  it("tillåter demons origin men inte andra *.github.io (#1448)", () => {
     expect(isAllowedOrigin("https://ulrik-s.github.io")).toBe(true);
+    expect(isAllowedOrigin("https://evil.github.io")).toBe(false);
+    expect(isAllowedOrigin("http://ulrik-s.github.io")).toBe(false);
   });
   it("blockerar okänt + tom", () => {
     expect(isAllowedOrigin("https://evil.example.com")).toBe(false);
@@ -66,5 +69,25 @@ describe("isAllowedOrigin", () => {
   it("tillåter extra origins (trimmade)", () => {
     expect(isAllowedOrigin("https://firma.ava.se", [" https://firma.ava.se "])).toBe(true);
     expect(isAllowedOrigin("https://firma.ava.se", ["https://annan.se"])).toBe(false);
+  });
+});
+
+describe("isExecutableFileName (#1448)", () => {
+  it("spärrar program och skript, oavsett skiftläge", () => {
+    for (const name of ["x.exe", "Faktura.PDF.exe", "a.bat", "a.ps1", "a.vbs", "a.js", "a.hta", "a.lnk", "a.msi", "a.app", "a.sh", "a.iso", "a.jar"]) {
+      expect(isExecutableFileName(name)).toBe(true);
+    }
+  });
+
+  it("spärrar Windows-tricken: avslutande punkt/blanksteg och alternativ dataström", () => {
+    expect(isExecutableFileName("x.exe.")).toBe(true);
+    expect(isExecutableFileName("x.exe . ")).toBe(true);
+    expect(isExecutableFileName("x.txt:evil.exe")).toBe(true);
+  });
+
+  it("släpper dokument, media, e-post och filer utan ändelse", () => {
+    for (const name of ["Stämning.docx", "beslut.pdf", "bilaga.xlsx", "förhör.mp3", "film.mp4", "mail.msg", "mail.eml", "arkiv.zip", "README"]) {
+      expect(isExecutableFileName(name)).toBe(false);
+    }
   });
 });

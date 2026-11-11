@@ -43,6 +43,16 @@ describe("bookUnbookedPayments", () => {
     ]);
   });
 
+  it("pushen lyckas men write-back fallerar → felet namnger verifikatet (#1453)", async () => {
+    const connector = { capabilities: () => caps(true), pushVoucher: async () => ({ externalId: "A/8" }) };
+    const out = await bookUnbookedPayments({
+      payments: [{ id: "a", amount: 1, paidAt: "2026-09-01" }],
+      invoice, connector, markBooked: async () => { throw new Error("db nere"); },
+    });
+    expect(out[0]?.externalId).toBeNull();
+    expect(out[0]?.error).toMatch(/^Verifikatet A\/8 skapades.*\(db nere\).*Bokför inte igen/);
+  });
+
   it("connector utan pushVoucher → fel per betalning", async () => {
     const out = await bookUnbookedPayments({
       payments: [{ id: "a", amount: 1, paidAt: "2026-09-01" }],

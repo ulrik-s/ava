@@ -19,7 +19,7 @@ describe("Document upload — integration mot fake FSA", () => {
   it("uploadDocumentToFsa skriver PDF-bytes till rätt fil", async () => {
     const fsa = makeFakeFsa();
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34]); // "%PDF-1.4"
-    const file = new File([bytes as unknown as BlobPart], "stamning.pdf", { type: "application/pdf" });
+    const file = new File([bytes], "stamning.pdf", { type: "application/pdf" });
 
     const result = await uploadDocumentToFsa({
       handle: fsa.root,

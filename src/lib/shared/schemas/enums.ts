@@ -84,6 +84,12 @@ export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
  *   TIDSSPILLAN_OVRIG_TID — "Tidsspillan helg/kväll": all annan tid, lägre norm
  *                           (DVFS 2025:4 § 4); bara 07–22 ersätts (§ 2)
  *   ADVOKATBEREDSKAP      — garantiersättning PER DAG (DVFS 2025:9 § 1)
+ *   FORHANDLING           — "Deltagit i förhandling": markerar att ärendet haft
+ *                           en förhandling. Prissätts som timarvode. I
+ *                           kostnadsräkningen är förhandlingstiden klockans
+ *                           (HUF), så posten räknas inte också som arbete där
+ *                           (`isKrWorkEntry`). Utan en sådan post skapas
+ *                           kostnadsräkningen utan förhandlingsklocka.
  *
  * `ADVOKATBEREDSKAP` bryter mönstret: den ersätts per DAG, inte per timme, och
  * en post är ett dygns beredskap (`minutes` = 0 — beredskap är inte arbetad
@@ -96,6 +102,7 @@ export const TIME_ENTRY_KIND_LABELS = {
   TIDSSPILLAN: "Tidsspillan",
   TIDSSPILLAN_OVRIG_TID: "Tidsspillan helg/kväll",
   ADVOKATBEREDSKAP: "Advokatberedskap — garantiersättning per dag",
+  FORHANDLING: "Deltagit i förhandling",
 } as const satisfies Record<string, string>;
 export const timeEntryKindSchema = enumFromLabels(TIME_ENTRY_KIND_LABELS);
 export type TimeEntryKind = z.infer<typeof timeEntryKindSchema>;

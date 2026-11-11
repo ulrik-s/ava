@@ -1,8 +1,8 @@
 /**
  * Webbplatser användaren godkänt att använda helpern (#1149).
  *
- * Helpern svarar bara på anrop från godkända origins (CORS). localhost och
- * `*.github.io` (demon) är alltid godkända, `AVA_HELPER_ORIGINS` (headless/CLI)
+ * Helpern svarar bara på anrop från godkända origins (#1448). localhost och
+ * demons origin är alltid godkända, `AVA_HELPER_ORIGINS` (headless/CLI)
  * likaså — men en byrås egen AVA (t.ex. `https://ava-crm.io`) kan inte bakas in
  * i en gemensam build. Därför trust-on-first-use: första gången en okänd
  * https-webbplats anropar helpern frågar skalet användaren, och ett "Tillåt"

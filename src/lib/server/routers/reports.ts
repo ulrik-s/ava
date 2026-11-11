@@ -480,7 +480,7 @@ export const reportsRouter = router({
 
       const result = billedPerLawyer({
         userId: input.userId,
-        invoices: toInvoiceInputs(invoices as RawInvoice[], writtenOffDates(writeOffs as Array<{ invoiceId?: string; writtenOffAt?: unknown }>)),
+        invoices: toInvoiceInputs(invoices, writtenOffDates(writeOffs)),
         frozenWork: buildFrozenWork(timeEntries as RawTimeEntry[], runToInvoice),
         period: { from: fromDate, to: toDate },
         prevPeriod,
@@ -547,8 +547,8 @@ export const reportsRouter = router({
       }
       const shared: FirmShared = {
         invoiceInputs: toInvoiceInputs(
-          invoices as RawInvoice[],
-          writtenOffDates(writeOffs as Array<{ invoiceId?: string; writtenOffAt?: unknown }>),
+          invoices,
+          writtenOffDates(writeOffs),
         ),
         frozenWork: buildFrozenWork(frozenTime as RawTimeEntry[], runToInvoice),
         period: { from: fromDate, to: toDate },
@@ -557,9 +557,9 @@ export const reportsRouter = router({
 
       const lawyers = await Promise.all(users.map((u) => firmLawyerRow(ctx.repos, org, u, shared)));
       const scoped = scopeArToPeriod(
-        invoices as Record<string, unknown>[],
-        payments as Record<string, unknown>[],
-        writeOffs as Record<string, unknown>[],
+        invoices,
+        payments,
+        writeOffs,
         { from: fromDate, to: toDate },
       );
       return {
@@ -592,9 +592,9 @@ export const reportsRouter = router({
       // Scopa till fakturor utställda i perioden (ADR 0007 #4, uppdaterat) så
       // panelen följer rapport-filtret som de övriga rapporterna.
       let scoped = scopeArToPeriod(
-        invoices as Record<string, unknown>[],
-        payments as Record<string, unknown>[],
-        writeOffs as Record<string, unknown>[],
+        invoices,
+        payments,
+        writeOffs,
         { from: fromDate, to: toDate },
       );
 

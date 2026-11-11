@@ -1,6 +1,7 @@
 "use client";
 
 import { z } from "zod";
+import { safeParseJsonWith } from "@/lib/shared/parse-json";
 
 /**
  * Tunna wrappers runt Microsoft Graph `/me/events` (Outlook Calendar).
@@ -77,13 +78,10 @@ async function graphFetch(
 }
 
 async function expectOk<S extends z.ZodType>(res: Response, label: string, schema: S): Promise<z.infer<S>> {
-  if (res.ok) return schema.parse(await res.json()) as z.infer<S>;
+  if (res.ok) return schema.parse(await res.json());
   const body = await res.text().catch(() => "");
-  let msg = body;
-  try {
-    const parsed = graphErrorBodySchema.safeParse(JSON.parse(body));
-    if (parsed.success && parsed.data.error?.message) msg = parsed.data.error.message;
-  } catch { /* använd rå body */ }
+  const parsed = safeParseJsonWith(graphErrorBodySchema, body);
+  const msg = parsed.success && parsed.data.error?.message ? parsed.data.error.message : body;
   throw new Error(`${label}: ${res.status} ${res.statusText}${msg ? ` — ${msg}` : ""}`);
 }
 

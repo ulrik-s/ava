@@ -15,6 +15,7 @@ import { canTransition } from "@/lib/shared/invoice-state-machine";
 import { dispatchChannelSchema, dispatchStatusSchema, type DispatchStatus, type InvoiceDispatch } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { asId, type InvoiceId, invoiceDispatchIdSchema, invoiceIdSchema, type MatterId } from "@/lib/shared/schemas/ids";
+import { assertAdmin } from "../auth/assert-admin";
 import { logMatterNote } from "../billing/matter-note";
 import { callTime, newRowId } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
@@ -123,6 +124,7 @@ export const invoiceDispatchRouter = router({
       return dispatch;
     }),
 
+  /** Workerns statusrapport — bara administratör (#1450). */
   updateStatus: orgProcedure
     .input(z.object({
       dispatchId: invoiceDispatchIdSchema,
@@ -131,6 +133,7 @@ export const invoiceDispatchRouter = router({
       error: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      assertAdmin(ctx);
       const dispatch = await ctx.repos.invoiceDispatches.getById(input.dispatchId);
       if (!dispatch) throw new TRPCError({ code: "NOT_FOUND" });
       await assertInvoiceInOrg(ctx, dispatch.invoiceId);

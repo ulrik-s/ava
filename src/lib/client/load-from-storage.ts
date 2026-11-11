@@ -12,6 +12,7 @@
  */
 
 import type { z } from "zod";
+import { safeParseJsonWith } from "@/lib/shared/parse-json";
 
 export function loadFromStorage<S extends z.ZodType>(
   key: string,
@@ -22,8 +23,8 @@ export function loadFromStorage<S extends z.ZodType>(
   try {
     const raw = localStorage.getItem(key);
     if (raw === null) return fallback;
-    const parsed = schema.safeParse(JSON.parse(raw));
-    return parsed.success ? (parsed.data as z.infer<S>) : fallback;
+    const parsed = safeParseJsonWith(schema, raw);
+    return parsed.success ? parsed.data : fallback;
   } catch {
     return fallback;
   }

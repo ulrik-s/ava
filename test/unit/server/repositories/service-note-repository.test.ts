@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { matters, serviceNotes, users } from "@/lib/server/db/schema";
 import { DrizzleServiceNoteRepository } from "@/lib/server/repositories/drizzle-service-note-repository";
@@ -27,7 +26,7 @@ describe("ServiceNoteRepository — in-memory", () => {
       serviceNotes: [
         { id: sn1, matterId: mId, organizationId: org, authorId: userId, date: "2026-06-15", time: "09:30", text: "A" },
       ],
-    } as DemoSource);
+    });
     const repo = new InMemoryServiceNoteRepository(new LocalStore(source, async () => {}));
     const list = await repo.listByMatter(mId, org);
     expect(list).toHaveLength(1);

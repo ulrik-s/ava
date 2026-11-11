@@ -11,12 +11,10 @@
 
 import { VatDisplayProvider } from "@/lib/client/vat/vat-display-context";
 import { DemoBootstrap } from "./demo-bootstrap";
-import { DiagnosticsRegistrar } from "./diagnostics-registrar";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <DemoBootstrap>
-      <DiagnosticsRegistrar />
       <VatDisplayProvider>{children}</VatDisplayProvider>
     </DemoBootstrap>
   );

@@ -25,6 +25,17 @@ export const matterSchema = z.object({
    * Fri sträng (format varierar per domstol, t.ex. "B 1234-26").
    */
   courtCaseNumber: z.string().nullish(),
+  /**
+   * Målnumret före senaste bytet (#1510). Sätts automatiskt av `matter.update`
+   * när målnumret byts från ett ifyllt värde till ett annat; bara ett sparas.
+   * Sökbart i ärendelistan, men matchar INTE domstolsbetalningar.
+   */
+  previousCourtCaseNumber: z.string().nullish(),
+  /**
+   * Försäkringsbolagets referensnummer (#1511). En per ärende; redigeras i
+   * ärendehuvudet när ärendet har ett försäkringsbolag som kontakt. Sökbart.
+   */
+  insuranceReference: z.string().nullish(),
   title: z.string(),
   description: z.string().nullish(),
   status: matterStatusSchema.default("ACTIVE"),
@@ -55,7 +66,7 @@ export const matterSchema = z.object({
   rattsskyddSjalvriskMinOre: z.number().int().nonnegative().nullish(),
   /**
    * Rättshjälpens timtak (rättshjälpslagen: 100 tim, kan utökas). Null = ej satt;
-   * UI defaultar 100 för rättshjälpsärenden. Vid ≥90 % flaggas ärendet (#793).
+   * UI defaultar 100. Flaggas vid 80 tim / 10 tim före utökat tak (#793, #1519).
    */
   rattshjalpMaxTimmar: z.number().int().positive().nullish(),
   /**

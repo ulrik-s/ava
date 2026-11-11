@@ -3,6 +3,8 @@
   // bun:test-typer i app-bygget: ärver repots strikta flaggor, lägger till
   // bun-types + jest-dom-matchers-augmentering.
   "extends": "../tsconfig.json",
+  // Ärver även #1469-flaggorna (verbatimModuleSyntax, noUncheckedSideEffectImports,
+  // noUnusedLocals, noUnusedParameters) — testkoden hålls lika strikt som src/.
   "compilerOptions": {
     "types": ["bun-types", "@testing-library/jest-dom"],
     "noEmit": true,

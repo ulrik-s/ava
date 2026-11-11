@@ -4,7 +4,7 @@
  * skapar tid prissätter på samma sätt.
  */
 import { advokatberedskapFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { isHourlyKind, resolveHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
+import { rateKindOf, resolveHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
 import type { TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
@@ -29,8 +29,8 @@ export interface RateSubject {
 export async function entryRateOre(
   repos: Pick<Repositories, "matters" | "organizations">, orgId: OrganizationId, entry: RateSubject,
 ): Promise<number> {
-  const kind = entry.kind ?? "ARBETE";
-  if (!isHourlyKind(kind)) return advokatberedskapFtaxForDate(entry.date ?? new Date());
+  const kind = rateKindOf(entry.kind ?? "ARBETE");
+  if (kind === null) return advokatberedskapFtaxForDate(entry.date ?? new Date());
   const [matter, org] = await Promise.all([
     repos.matters.getByIdInOrg(entry.matterId, orgId),
     repos.organizations.getById(orgId),

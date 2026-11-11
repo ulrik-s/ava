@@ -120,7 +120,7 @@ describe("activateUpdate", () => {
 
 describe("watchForTakeover (#1355)", () => {
   it("en annan flik lät en ny version ta över en styrd sida → varje gång meddelas", () => {
-    const container = Object.assign(new FakeContainer(), { controller: {} as unknown });
+    const container = Object.assign(new FakeContainer(), { controller: {} });
     const onTakeover = vi.fn();
     watchForTakeover(container, onTakeover);
     container.fireControllerChange();
@@ -129,7 +129,7 @@ describe("watchForTakeover (#1355)", () => {
   });
 
   it("första installationens claim (ingen styrde sidan) är ingen ny version; nästa byte är det", () => {
-    const container = Object.assign(new FakeContainer(), { controller: null as unknown });
+    const container = Object.assign(new FakeContainer(), { controller: null });
     const onTakeover = vi.fn();
     watchForTakeover(container, onTakeover);
     container.fireControllerChange();

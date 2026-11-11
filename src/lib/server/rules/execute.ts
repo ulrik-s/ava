@@ -9,6 +9,7 @@
  */
 
 import jsonLogic from "json-logic-js";
+import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { AvaEvent } from "../events/schema";
@@ -62,7 +63,7 @@ function templateContext(ctx: ExecutionContext, loopBindings?: Record<string, un
 function evalPredicate(predicate: unknown, data: Record<string, unknown>): boolean {
   if (predicate == null) return true;
   try {
-    return !!jsonLogic.apply(predicate as never, data);
+    return !!jsonLogic.apply(predicate, data);
   } catch {
     return false;
   }
@@ -108,7 +109,7 @@ type StepHandler<K extends RuleStep["do"]> = (
 const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
   "emit": async ({ step, ctx, tctx }) => {
     await ctx.dataStore.events.emit({
-      type: step.eventType as never,
+      type: step.eventType,
       source: "rule",
       actor: { kind: "rule", id: ctx.rule.id },
       causedBy: ctx.event.id,
@@ -120,7 +121,7 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
 
   "email.send": async ({ step, ctx, tctx }) => {
     const to = String(templateValue(step.to, tctx));
-    const vars = templateValue(step.vars ?? {}, tctx) as Record<string, unknown>;
+    const vars = templateValue(step.vars ?? {}, tctx);
     const idempotencyKey = step.idempotencyKey ? String(templateValue(step.idempotencyKey, tctx)) : undefined;
     const sent = await ctx.handlers.sendEmail(omitUndefined({
       template: step.template,
@@ -143,7 +144,7 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
 
   "matter.update": async ({ step, ctx, tctx }) => {
     const matterId = String(templateValue(step.matterId, tctx));
-    const patch = templateValue(step.patch, tctx) as Record<string, unknown>;
+    const patch = templateValue(step.patch, tctx);
     await ctx.handlers.updateMatter(matterId, patch);
     return undefined;
   },
@@ -171,10 +172,10 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
   },
 
   "for-each": async ({ step, ctx, tctx, depth, loopBindings }) => {
-    const items = lookup(tctx, step.items);
-    if (!Array.isArray(items)) throw new Error(`for-each.items "${step.items}" är inte en array`);
+    const items = z.array(z.unknown()).safeParse(lookup(tctx, step.items));
+    if (!items.success) throw new Error(`for-each.items "${step.items}" är inte en array`);
     let totalNested = 0;
-    for (const item of items) {
+    for (const item of items.data) {
       const newBindings = { ...(loopBindings ?? {}), [step.as]: item };
       const sub = await runSteps(step.body, ctx, depth + 1, newBindings);
       totalNested += sub.stepsRan;

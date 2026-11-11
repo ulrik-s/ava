@@ -50,7 +50,7 @@ describe("startEngine (in-process, headless)", () => {
     const { base, dir } = await boot();
     const r = await fetch(`${base}/config`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Origin: "http://localhost:3000" },
       body: JSON.stringify({ oidcIssuer: "http://localhost:8089/realms/ava" }),
     });
     expect(r.status).toBe(200);
@@ -64,7 +64,7 @@ describe("startEngine (in-process, headless)", () => {
     const { base } = await boot({ logDir });
     await fetch(`${base}/config`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Origin: "http://localhost:3000" },
       body: JSON.stringify({ oidcIssuer: "https://login.example/v2.0" }),
     });
     const text = await readFile(join(logDir, "helper.log"), "utf8");
@@ -91,7 +91,30 @@ describe("startEngine (in-process, headless)", () => {
 
   test("okänd route → 404", async () => {
     const { base } = await boot();
-    expect((await fetch(`${base}/nope`)).status).toBe(404);
+    expect((await fetch(`${base}/nope`, { headers: { Origin: "http://localhost:3000" } })).status).toBe(404);
+  });
+
+  test("okänd webbsida når inte /config — 403 och ingen config skrivs (#1448)", async () => {
+    const { base, dir } = await boot();
+    const r = await fetch(`${base}/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://evil.github.io" },
+      body: JSON.stringify({ oidcIssuer: "https://evil.example/" }),
+    });
+    expect(r.status).toBe(403);
+    expect(r.headers.get("access-control-allow-origin")).toBeNull();
+    await expect(readFile(join(dir, "helper-config.json"), "utf8")).rejects.toThrow();
+  });
+
+  test("ett text/plain-anrop (utan preflight) tas inte emot som JSON (#1448)", async () => {
+    const { base, dir } = await boot();
+    const r = await fetch(`${base}/config`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain", Origin: "http://localhost:3000" },
+      body: JSON.stringify({ oidcIssuer: "https://evil.example/" }),
+    });
+    expect(r.status).toBe(400);
+    await expect(readFile(join(dir, "helper-config.json"), "utf8")).rejects.toThrow();
   });
 
   test("stop() stänger servern (anslutning vägras därefter)", async () => {

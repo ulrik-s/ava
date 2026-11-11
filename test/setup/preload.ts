@@ -23,7 +23,7 @@ import { assertNoHelperTraffic, guardFetch } from "./helper-network-guard";
 // testet självt binder en användare (eller släpper bindningen).
 bindLocalNamespace(SHARED_NAMESPACE);
 
-expect.extend(matchers as unknown as Parameters<typeof expect.extend>[0]);
+expect.extend(matchers);
 
 // happy-dom enforce:ar HTML5-constraint-validation vid form-submit (ett tomt
 // `required`-fält blockerar submit); jsdom gjorde inte det. Stäng av så

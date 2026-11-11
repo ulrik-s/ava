@@ -243,7 +243,7 @@ describe("CachingSyncDataStore (#415)", () => {
 
     it("delar seed-referensen (clone fyller source efter create)", async () => {
       const source: { matters?: Record<string, unknown>[] } = {};
-      const ds = CachingSyncDataStore.createEphemeral({ transport: noSyncTransport, seed: source as never });
+      const ds = CachingSyncDataStore.createEphemeral({ transport: noSyncTransport, seed: source });
       // Simulera att clone fyller den delade source-refen efteråt.
       source.matters = [matter(uuidv7())];
       const list = await ds.store.matters.findMany({});
@@ -355,7 +355,7 @@ describe("CachingSyncDataStore — räddning av rader med icke-uuid-id (2026-09-
       id: "muej7b11-aa11bb", matterId: "muej7b10-x81kd2", contactId: "muej66a9-jd9ieu", role: "CLIENT",
       createdAt: "2026-09-23T19:05:01.000Z",
     }],
-  } as never);
+  });
 
   it("köar raderna med uuid och rätt referenser — nästa reconcile pushar dem till servern", async () => {
     const transport = new FakeTransport();

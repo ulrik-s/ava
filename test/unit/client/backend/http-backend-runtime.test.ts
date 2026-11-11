@@ -10,7 +10,7 @@
  * som GitBackendRuntime, fast routrarna körs på servern.
  */
 
-import { createTRPCClient, type TRPCLink } from "@trpc/client";
+import { createTRPCClient } from "@trpc/client";
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import {
   HttpBackendRuntime,
@@ -31,7 +31,7 @@ const ANNA = uuidv7();
 /** Klient byggd via runtime:ns länk (samma väg som web-app-providern). */
 function clientVia(fetch: HttpBackendFetch) {
   const link = new HttpBackendRuntime({ baseUrl: "https://byra.example", fetch }).createLink();
-  return createTRPCClient<AppRouter>({ links: [link as TRPCLink<AppRouter>] });
+  return createTRPCClient<AppRouter>({ links: [link] });
 }
 
 describe("serverTrpcEndpoint", () => {
@@ -65,7 +65,7 @@ describe("HttpBackendRuntime (#411) — end-to-end mot server-runtimen", () => {
   const fetchVia = (email?: string): HttpBackendFetch => (input, init) => {
     const headers = new Headers(init?.headers);
     if (email) headers.set("X-Auth-Request-Email", email);
-    return handler(new Request(input as string, { ...init, headers }));
+    return handler(new Request(input, { ...init, headers }));
   };
 
   it("server-verifierad principal → user.current end-to-end", async () => {

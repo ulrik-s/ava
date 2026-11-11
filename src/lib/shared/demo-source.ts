@@ -66,7 +66,7 @@ export function prebakeJoins(source: DemoSource): DemoSource {
       ...mc,
       contact: contactsById.get(mc.contactId as string) ?? null,
       matter: mattersById.get(mc.matterId as string) ?? null,
-    })) as readonly Record<string, unknown>[];
+    }));
   }
 
   for (const key of ["documents", "timeEntries", "expenses", "invoices"] as const) {
@@ -75,7 +75,7 @@ export function prebakeJoins(source: DemoSource): DemoSource {
     out[key] = (rows as Array<{ matterId: string }>).map((row) => ({
       ...row,
       matter: mattersById.get(row.matterId) ?? null,
-    })) as readonly Record<string, unknown>[];
+    }));
   }
 
   if (out.documents) {
@@ -86,7 +86,7 @@ export function prebakeJoins(source: DemoSource): DemoSource {
       const isDone = analysisStatus === "COMPLETED" || analysisStatus === "DONE";
       const analyzedAt = (row.analyzedAt as Date | string | undefined) ?? (isDone ? uploadedAt : null);
       return { ...row, createdAt, analyzedAt };
-    }) as readonly Record<string, unknown>[];
+    });
   }
 
   applyBadDebtWriteOffMigration(out);

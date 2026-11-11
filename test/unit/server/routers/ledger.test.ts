@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest-compat";
+import { Mutex } from "@/lib/server/concurrency/mutex";
 import type { ILedgerService } from "@/lib/server/ports";
 import { ledgerRouter } from "@/lib/server/routers/ledger";
 import { DEFAULT_LEDGER_ACCOUNT_MAP } from "@/lib/shared/accounting/account-map";
@@ -12,13 +13,40 @@ interface Opts {
   ledger?: Partial<ILedgerService>;
 }
 
+/**
+ * En transaktion med fakturans bokföringslås som i Postgres (#1453): låset tas
+ * av `lockForBooking` och hålls till transaktionens slut.
+ */
+function lockingTransaction<R extends { invoices: object }>(repos: R, locks: { taken: number }) {
+  const lock = new Mutex();
+  return async <T,>(fn: (tx: R) => Promise<T>): Promise<T> => {
+    let release = (): void => {};
+    const lockForBooking = async (): Promise<void> => {
+      locks.taken++;
+      await new Promise<void>((acquired) => {
+        void lock.runExclusive(() => new Promise<void>((done) => { release = done; acquired(); }));
+      });
+    };
+    try {
+      return await fn({ ...repos, invoices: { ...repos.invoices, lockForBooking } });
+    } finally {
+      release();
+    }
+  };
+}
+
 function setup(o: Opts = {}) {
-  const update = vi.fn(async (_id: string, patch: Record<string, unknown>) => patch);
   const invoice = o.invoice === undefined
     ? { id: INV_ID, amount: 12500, vatOre: 2500, vatBreakdown: null, invoiceDate: "2026-09-25", invoiceNumber: "F-1", status: "SENT", fortnoxId: null, matter: { matterNumber: "M-1" }, payments: [] }
     : o.invoice;
+  // Write-back syns i nästa läsning, som i databasen.
+  const update = vi.fn(async (_id: string, patch: Record<string, unknown>) => {
+    if (invoice) Object.assign(invoice, patch);
+    return patch;
+  });
   let n = 6;
-  const push = vi.fn(async () => ({ externalId: `A/${++n}` }));
+  // Ett nätanrop tar tid — utan låset hinner ett andra anrop läsa fakturan obokförd.
+  const push = vi.fn(async () => { await new Promise((r) => setTimeout(r, 5)); return { externalId: `A/${++n}` }; });
   const updatePayment = vi.fn(async (_id: string, patch: Record<string, unknown>) => patch);
   const ledger: ILedgerService = {
     status: async () => ({ configured: true, connected: true }),
@@ -27,17 +55,19 @@ function setup(o: Opts = {}) {
     connector: () => ({ capabilities: () => ({ pushVoucher: true, pushInvoice: false, pullPayments: false, exportSie: false }), pushVoucher: push }),
     ...o.ledger,
   };
+  const repos = {
+    invoices: { getByIdFull: async () => (invoice ? { ...invoice } : null), update },
+    payments: { update: updatePayment },
+    organizations: { getById: async () => ({ ledgerAccountMap: o.ledgerAccountMap === undefined ? DEFAULT_LEDGER_ACCOUNT_MAP : o.ledgerAccountMap }) },
+  };
+  const locks = { taken: 0 };
   const ctx = {
     user: { id: "u1", email: "a@b.se", name: "A", role: o.role ?? "LAWYER", organizationId: "org-1" },
-    repos: {
-      invoices: { getByIdFull: async () => invoice, update },
-      payments: { update: updatePayment },
-      organizations: { getById: async () => ({ ledgerAccountMap: o.ledgerAccountMap === undefined ? DEFAULT_LEDGER_ACCOUNT_MAP : o.ledgerAccountMap }) },
-    },
+    repos: { ...repos, transaction: lockingTransaction(repos, locks) },
     ports: { ledger },
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- minimal ctx-attrapp
-  return { caller: ledgerRouter.createCaller(ctx as any), update, updatePayment, push, ledger };
+  return { caller: ledgerRouter.createCaller(ctx as any), update, updatePayment, push, ledger, locks };
 }
 
 describe("ledger.status / anslutning", () => {
@@ -74,6 +104,25 @@ describe("ledger.bookInvoice", () => {
     expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/7", payments: [] });
     expect(push).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledWith(INV_ID, { fortnoxId: "A/7" });
+  });
+
+  it("två samtidiga anrop (dubbelklick, två flikar) ger ett verifikat (#1453)", async () => {
+    const { caller, push, update, locks } = setup();
+    const [a, b] = await Promise.all([caller.bookInvoice({ invoiceId: INV_ID }), caller.bookInvoice({ invoiceId: INV_ID })]);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(a.externalId).toBe("A/7");
+    expect(b.externalId).toBe("A/7");
+    expect(locks.taken).toBe(2);
+  });
+
+  it("verifikatet skapat men write-back misslyckas → felet säger vilket och att inte bokföra igen (#1453)", async () => {
+    const { caller, update, push } = setup();
+    update.mockImplementationOnce(async () => { throw new Error("databasen svarar inte"); });
+    await expect(caller.bookInvoice({ invoiceId: INV_ID })).rejects.toThrow(
+      /Verifikatet A\/7 skapades.*databasen svarar inte.*Bokför inte igen.*A\/7/,
+    );
+    expect(push).toHaveBeenCalledTimes(1);
   });
 
   it("redan bokförd → samma verifikat, ingen ny push", async () => {

@@ -83,10 +83,10 @@ async function krContextFor(c: Any, run: Any): Promise<KostnadsrakningResult> {
     // följa med hufEnd om de fälten någon gång får riktiga förhandlingstider.
     yrkandeDate: date,
     hasFTax: true,
-    timeEntries: (te.entries ?? []) as Any,
+    timeEntries: (te.entries ?? []),
     // Posterna run:en frös är dess underlag; övriga låsta (t.ex. rådgivningen) utelämnas (#1205).
     ownBillingRunId: run.id,
-    expenses: (ex.expenses ?? []) as Any,
+    expenses: (ex.expenses ?? []),
   });
   return result;
 }

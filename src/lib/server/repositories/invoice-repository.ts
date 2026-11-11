@@ -93,6 +93,13 @@ export interface InvoiceRepository extends Repository<Invoice> {
    * Server-impl:en tar ett lås per byrå som hålls till transaktionens slut.
    */
   nextInvoiceNumber(organizationId: OrganizationId, year?: number): Promise<string>;
+  /**
+   * Lås fakturan för bokföring till transaktionens slut (#1453): två samtidiga
+   * bokföringar av samma faktura (dubbelklick, två flikar) körs efter varandra,
+   * så den andra ser den första ens verifikat-id och skickar inget nytt.
+   * In-memory-impl:en är en no-op (en process, ingen bokföringsconnector).
+   */
+  lockForBooking(invoiceId: InvoiceId): Promise<void>;
   /** Summa krediterat på en faktura: |belopp| av dess kreditnotor, org-scopat (öre). */
   sumCreditNotesFor(invoiceId: InvoiceId, organizationId: OrganizationId): Promise<number>;
   /** Kreditnotan för en faktura (`creditedInvoiceId = id`) — null om ej krediterad. */

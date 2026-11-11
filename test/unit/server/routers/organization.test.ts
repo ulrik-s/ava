@@ -367,7 +367,7 @@ describe("organization.updateSettings", () => {
   });
 
   it("avvisar en bild som inte är PNG/JPEG-data-URL", async () => {
-    await expect(makeCaller("org-a").updateSettings({ logo: "data:image/svg+xml;base64,PHN2Zz4=" as never })).rejects.toThrow();
+    await expect(makeCaller("org-a").updateSettings({ logo: "data:image/svg+xml;base64,PHN2Zz4=" })).rejects.toThrow();
   });
 
   it("avvisar en okänd kategori och ett negativt pris", async () => {
@@ -420,6 +420,15 @@ describe("organization.updateSettings", () => {
     expect(data.standardAtgarder[0]).toMatchObject({ id: "inledande", description: "Inledande åtgärder", minutes: 45 });
   });
 
+  it("normaliserar ärendetyperna: trimmar, slänger tomma, dedupar, behåller ordningen", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
+    await makeCaller("org-a").updateSettings({ matterTypes: [" Övrigt ", "", "Bodelning", "Övrigt"] });
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ matterTypes: ["Övrigt", "Bodelning"] }) }),
+    );
+  });
+
   it("avvisar en standardåtgärd med ogiltig tid (0 eller negativ)", async () => {
     mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
     await expect(makeCaller("org-a").updateSettings({
@@ -447,8 +456,8 @@ describe("organization — behörighet för icke-admin (#1370)", () => {
     const caller = makeCaller("org-a", role);
     mockPrisma.office.findFirst.mockResolvedValue(MAIN_OFFICE);
     await expect(caller.addOffice({ name: "Filial", isMain: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(caller.updateOffice({ id: "off-main" as never, name: "Kapat" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(caller.deleteOffice({ id: "off-main" as never })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.updateOffice({ id: "off-main", name: "Kapat" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.deleteOffice({ id: "off-main" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(mockPrisma.office.create).not.toHaveBeenCalled();
     expect(mockPrisma.office.update).not.toHaveBeenCalled();
     expect(mockPrisma.office.updateMany).not.toHaveBeenCalled();
@@ -456,14 +465,14 @@ describe("organization — behörighet för icke-admin (#1370)", () => {
   });
 
   it("LAWYER: create (uppläggning av en byrå) nekas", async () => {
-    await expect(makeCaller("org-a", "LAWYER").create({ id: "00000000-0000-7000-8000-000000000001" as never, name: "Ny byrå" }))
+    await expect(makeCaller("org-a", "LAWYER").create({ id: "00000000-0000-7000-8000-000000000001", name: "Ny byrå" }))
       .rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(mockPrisma.organization.create).not.toHaveBeenCalled();
   });
 
   it("ADMIN: create lägger upp byrån", async () => {
     mockPrisma.organization.create.mockResolvedValue({ id: "org-new", name: "Ny byrå" });
-    await makeCaller("org-a", "ADMIN").create({ id: "00000000-0000-7000-8000-000000000001" as never, name: "Ny byrå" });
+    await makeCaller("org-a", "ADMIN").create({ id: "00000000-0000-7000-8000-000000000001", name: "Ny byrå" });
     expect(mockPrisma.organization.create).toHaveBeenCalled();
   });
 
@@ -480,6 +489,7 @@ describe("organization — behörighet för icke-admin (#1370)", () => {
     ["timpriserna", { hourlyRates: { ARBETE: 1 } }],
     ["aconto-gränsen", { accontoThresholdOre: 1 }],
     ["standardåtgärderna", { standardAtgarder: [] as never[] }],
+    ["ärendetyperna", { matterTypes: ["Bodelning"] }],
   ])("LAWYER: ändring av %s nekas (FORBIDDEN) och inget skrivs", async (_label, patch) => {
     mockPrisma.organization.findFirst.mockResolvedValue({ ...CURRENT, standardAtgarder: [{ id: "x" }] });
     await expect(makeCaller("org-a", "LAWYER").updateSettings(patch)).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringMatching(/Endast administratörer/) });

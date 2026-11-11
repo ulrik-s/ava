@@ -114,12 +114,22 @@ interface KnownBug {
 }
 
 /**
- * Kända, öppna buggar som en avvikelse kan bero på — tom just nu (#1397,
- * #1399 och #1402 är fixade). Hittar simuleringen en bugg som inte fixas
- * direkt läggs den till här och tas bort med fixen; `AVA_SIM_STRICT=1`
- * räknar dem som fel redan innan.
+ * Kända, öppna buggar som en avvikelse kan bero på. Hittar simuleringen en
+ * bugg som inte fixas direkt läggs den till här och tas bort med fixen;
+ * `AVA_SIM_STRICT=1` räknar dem som fel redan innan.
  */
-const KNOWN_BUGS: readonly KnownBug[] = [];
+const KNOWN_BUGS: readonly KnownBug[] = [
+  // Ett enda snapshot, sista skrivning vinner (#1464): en flik köar en procedur
+  // offline, en annan flik kvitterar den, och den första skriver sedan sitt
+  // snapshot med de provisoriska raderna (serverns id:n skiljer sig) innan den
+  // hunnit reconcile:a. Efter en omstart finns ingen köpost som pekar ut dem,
+  // och pullen rensar inte lokala rader som saknas på servern. Seeds 658635,
+  // 872448 (80 vågor).
+  {
+    issue: "#1464",
+    matches: (d) => d.what === "finns bara här" && (d.entity === "billingRun" || d.entity === "serviceNote"),
+  },
+];
 
 function knownBug(d: Divergence): string | null {
   if (STRICT) return null;

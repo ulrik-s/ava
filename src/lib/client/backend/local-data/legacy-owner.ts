@@ -11,6 +11,7 @@
 
 import { z } from "zod";
 import { PLACEHOLDER_AUTHOR_EMAILS, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import { safeParseJsonWith } from "@/lib/shared/parse-json";
 import type { LocalScope } from "./local-namespace";
 
 /** localStorage-nyckeln där ägaren sparas. */
@@ -54,7 +55,7 @@ function storedOwner(storage: OwnerStorage): LegacyOwner | null {
   try {
     const raw = storage.getItem(LEGACY_OWNER_KEY);
     if (raw === null) return null;
-    const parsed = legacyOwnerSchema.safeParse(JSON.parse(raw));
+    const parsed = safeParseJsonWith(legacyOwnerSchema, raw);
     // Trasig post → ingen ägare (aldrig en gissning som kan ge fel användare datan).
     return parsed.success ? parsed.data : { kind: "none" };
   } catch {

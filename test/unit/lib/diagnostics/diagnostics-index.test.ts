@@ -1,10 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
-import {
-  issueStore,
-  reportSelfDetected,
-  issueRepo,
-  collectMeta,
-} from "@/lib/client/diagnostics";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { issueStore, reportSelfDetected } from "@/lib/client/diagnostics";
 import type { InvariantViolation } from "@/lib/shared/diagnostics/invariants";
 
 const v: InvariantViolation = {
@@ -35,34 +30,5 @@ describe("reportSelfDetected", () => {
     expect(issueStore.count()).toBe(0);
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
-  });
-});
-
-describe("issueRepo", () => {
-  afterEach(() => { delete process.env.NEXT_PUBLIC_ISSUE_REPO; });
-
-  it("faller tillbaka på ulrik-s/ava utan override", () => {
-    expect(issueRepo()).toEqual({ owner: "ulrik-s", repo: "ava" });
-  });
-
-  it("respekterar NEXT_PUBLIC_ISSUE_REPO-override", () => {
-    process.env.NEXT_PUBLIC_ISSUE_REPO = "acme/support";
-    expect(issueRepo()).toEqual({ owner: "acme", repo: "support" });
-  });
-
-  it("faller tillbaka vid ogiltig override", () => {
-    process.env.NEXT_PUBLIC_ISSUE_REPO = "inte-en-repo-spec!!";
-    expect(issueRepo()).toEqual({ owner: "ulrik-s", repo: "ava" });
-  });
-});
-
-describe("collectMeta", () => {
-  it("ger ett objekt (utan window)", () => {
-    // happy-dom har global window; ta bort den för att testa SSR-vägen.
-    vi.stubGlobal("window", undefined);
-    const meta = collectMeta();
-    expect(meta).toBeTypeOf("object");
-    expect(meta.url).toBeUndefined(); // ingen window
-    vi.unstubAllGlobals();
   });
 });

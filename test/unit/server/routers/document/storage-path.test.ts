@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
 import { kostnadsrakningRouter } from "@/lib/server/routers/kostnadsrakning";
@@ -38,7 +38,7 @@ function setup(role: Role = "LAWYER", queued = false) {
       id: "d-git", organizationId: ORG, matterId: "m1", fileName: "kapad.bin",
       mimeType: "application/octet-stream", sizeBytes: 3, storagePath: ".git/index", version: 1,
     }],
-  } as DemoSource);
+  });
   const store = new DemoDataStore(source, async () => {});
   const repos = buildInMemoryRepositories(store);
   const blobs = new Map<string, Uint8Array>([[".git/index", new Uint8Array([1, 2, 3])]]);
@@ -120,12 +120,12 @@ describe("kostnadsrakning.record — sökvägen (#1372)", () => {
 
 describe("document.downloadContent / missingContent — sökvägen (#1372)", () => {
   it("ett dokument med en sökväg av fel form (skriven före fixen) läses aldrig", async () => {
-    await expect(setup("ADMIN").docs.downloadContent({ documentId: "d-git" as never })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(setup("ADMIN").docs.downloadContent({ documentId: "d-git" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("missingContent tar inte emot sökvägar av fel form (ingen existens-sond i .git)", async () => {
     const { docs } = setup("LAWYER");
-    await expect(docs.missingContent({ storagePaths: [".git/index" as never] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(docs.missingContent({ storagePaths: [".git/index"] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(await docs.missingContent({ storagePaths: [contentStoragePath(SHA) as never] })).toEqual({ missing: [contentStoragePath(SHA)] });
   });
 });

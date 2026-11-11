@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { json, parseJsonBody, textError } from "../src/engine/http.ts";
+import { isJsonContentType, json, parseJsonBody, textError } from "../src/engine/http.ts";
 import { jsonRequest, mkRequest } from "./helpers.ts";
 
 describe("textError", () => {
@@ -30,7 +30,24 @@ describe("parseJsonBody", () => {
     expect(body).toEqual({ x: 5 });
   });
   test("null vid ogiltig JSON", async () => {
-    const body = await parseJsonBody(mkRequest("/x", { method: "POST", body: "not-json" }));
+    const body = await parseJsonBody(mkRequest("/x", { method: "POST", body: "not-json", headers: { "Content-Type": "application/json" } }));
     expect(body).toBeNull();
+  });
+  test("null när Content-Type inte är JSON, även om bodyn är giltig JSON (#1448)", async () => {
+    const body = await parseJsonBody(mkRequest("/x", { method: "POST", body: '{"x":5}', headers: { "Content-Type": "text/plain" } }));
+    expect(body).toBeNull();
+  });
+});
+
+describe("isJsonContentType (#1448)", () => {
+  test("godtar application/json med och utan parametrar", () => {
+    expect(isJsonContentType("application/json")).toBe(true);
+    expect(isJsonContentType("Application/JSON; charset=utf-8")).toBe(true);
+  });
+
+  test("avvisar text/plain, form och saknad header", () => {
+    expect(isJsonContentType("text/plain")).toBe(false);
+    expect(isJsonContentType("application/x-www-form-urlencoded")).toBe(false);
+    expect(isJsonContentType(null)).toBe(false);
   });
 });

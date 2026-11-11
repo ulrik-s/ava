@@ -35,7 +35,7 @@ jobs:
   # måste följa Conventional Commits (skydd om någon committat utan hooken).
   commitlint:
     name: Commit messages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     if: github.event_name == 'pull_request'
     timeout-minutes: 5
     steps:
@@ -48,7 +48,7 @@ jobs:
   # ───────────────── Statisk analys ─────────────────
   static:
     name: Static analysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -65,6 +65,8 @@ jobs:
       # Se docs/quality.md.
       - run: bun run lint:complexity-strict
       - run: bun run deps:check
+      # Filstorleksspärren (ratchet): inga nya filer > 400 rader, baslinjen får bara krympa.
+      - run: bun run file-size
       # Gating: fäller på strukturfynd (döda filer, oanvända/olistade deps).
       # Export-/typ-fynd är "warn" i knip.json (rådgivande) tills #3/#4 städat dem.
       - run: bun run knip
@@ -73,7 +75,7 @@ jobs:
       - run: bun run db:check-migrations
       - name: Upload jscpd report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: jscpd-report
           path: reports/jscpd/
@@ -83,7 +85,7 @@ jobs:
   # externa tjänster behövs.
   unit:
     name: Unit / komponent / integration
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -92,7 +94,7 @@ jobs:
       - run: bun run test:cov
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage
           path: coverage/
@@ -104,7 +106,7 @@ jobs:
   # docker-compose.test.yml får en `server`-tjänst när #410 landar.
   repository-postgres:
     name: Repository (Postgres)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -126,7 +128,7 @@ jobs:
   # (grund för self-hosted server-first + #421/#422). Demon/git orörda.
   server-first-e2e:
     name: Server-first (deploy E2E)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -287,7 +289,7 @@ jobs:
         run: bash tooling/scripts/caddy-e2e/caddy-prod-e2e.sh
       - name: Upload Playwright report (prod-klienten)
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-prod-client-report
           path: reports/playwright-prod-client/
@@ -307,7 +309,7 @@ jobs:
   # någon kommer ihåg den hinner ruttna mellan gångerna den behövs.
   restore-drill:
     name: Återställningsövning (backup → förstör → återställ)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -329,7 +331,7 @@ jobs:
   # + web-health, och kör Playwright-batteriet. Regressionsskydd för auth.
   e2e-oidc:
     name: E2E (OIDC login)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     timeout-minutes: 20
     env:
       CI: "true"
@@ -340,7 +342,7 @@ jobs:
       - run: bun run e2e:oidc
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-oidc-report
           path: reports/playwright-oidc/
@@ -353,7 +355,7 @@ jobs:
   # Speglar `bun run build:demo` lokalt. (#420)
   demo-build:
     name: Demo build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     if: github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
@@ -383,7 +385,7 @@ jobs:
   # rapporterar varje förfrågan utanför den egna originen.
   demo-e2e:
     name: Demo E2E (browser-smoke)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     if: github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
@@ -421,7 +423,7 @@ jobs:
           --config tooling/config/playwright-demo.config.ts
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-demo-report
           path: reports/playwright-demo/
@@ -437,7 +439,7 @@ jobs:
   # långsammare än de andra; #911 befordrade demo-build + demo-e2e, inte den här.)
   conflict-e2e:
     name: Keep-both konflikt-E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     if: github.event_name == 'pull_request'
     timeout-minutes: 25
     env:
@@ -449,7 +451,7 @@ jobs:
       - run: bun run e2e:conflict
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-conflict-report
           path: reports/playwright-conflict/

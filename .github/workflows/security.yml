@@ -40,13 +40,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Initiera CodeQL
-        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
           languages: javascript-typescript
           build-mode: none # ren JS/TS → ingen kompilering behövs
           queries: security-and-quality
       - name: Analysera
-        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
           category: "/language:javascript-typescript"
 
@@ -79,17 +79,13 @@ jobs:
       #
       # (De två image-size-undantagen är BORTA sedan #970 — html-to-docx är
       # ersatt av en egen DOCX-skrivare, så paketet finns inte längre i trädet.)
-      # braces (high, GHSA-vfj7-8cjw-p6xm, 2026-09-18): stackspill vid djupt
-      #   nästlade glob-mönster → DoS. Ingen rättad version finns. Bara i
-      #   devDep-kedjan eslint-config-next → @next/eslint-plugin-next → fast-glob
-      #   → micromatch → braces: körs av lint på våra egna mönster, aldrig i
-      #   server/klient. Undantaget godkänt av Ulrik 2026-10-03; tas bort i #1442
-      #   så fort braces/micromatch släpper en rättning.
+      # (braces GHSA-vfj7-8cjw-p6xm, sprintf-js GHSA-hp3w-g68c-fv3c och
+      # http-cache-semantics GHSA-ch52-4w7c-c8xp DROGS TILLBAKA av GitHub i
+      # november 2026 → undantagen borttagna 2026-11-08, #1442/#1444/#1467.)
       - name: bun audit (roten)
         run: |
           bun audit --audit-level=low \
-            --ignore GHSA-67mh-4wv8-2f99 \
-            --ignore GHSA-vfj7-8cjw-p6xm
+            --ignore GHSA-67mh-4wv8-2f99
 
       # helper-ui har egen lockfil och låg helt UTANFÖR grinden fram till #966 —
       # den innehöll då 27 sårbarheter, varav en critical (node-tar).
@@ -100,16 +96,9 @@ jobs:
       # (node-forge, GHSA-86w9-cpqp-85rv, åtgärdades i stället för att undantas:
       # cert-bygget i src/engine/tls/certs.ts använder nu @peculiar/asn1-x509 +
       # node:crypto, så paketet finns inte längre i trädet.)
-      # http-cache-semantics (high, GHSA-ch52-4w7c-c8xp): max-stale kan lämna ut
-      #   cachade svar mellan användare. Ingen rättad version finns. Bara i
-      #   BYGG-/installationskedjan electron(-builder) → @electron/get → got →
-      #   cacheable-request (laddar ner Electron-binären); devDeps, paketeras
-      #   inte i appen. Undantaget godkänt av Ulrik 2026-10-03; tas bort i #1444
-      #   så fort en rättning finns.
+      # Inga undantag: per advisory med skäl och uppföljningsärende, som i roten.
       - name: bun audit (helper-ui)
-        run: |
-          bun audit --audit-level=low \
-            --ignore GHSA-ch52-4w7c-c8xp
+        run: bun audit --audit-level=low
         working-directory: helper-ui
 
       - name: Full rapport (informativ, fäller inte)

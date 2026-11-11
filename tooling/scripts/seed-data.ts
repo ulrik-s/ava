@@ -873,7 +873,7 @@ function buildPaymentPlans({ currentUserId, invoices }: {
     paymentPlanReminders.push(...planReminders(p, planId));
 
     // Patcha invoice-statusen OCH datumen så den matchar planen (#1021).
-    const inv = invoices.find((x) => (x as { id: string }).id === p.invoiceId) as Record<string, unknown> | undefined;
+    const inv = invoices.find((x) => (x as { id: string }).id === p.invoiceId);
     if (inv) {
       inv.status = invoiceStatusForPlan(p.status);
       backdateInvoiceBeforePlan(inv, planStart);
@@ -1286,7 +1286,7 @@ export function seedToFiles(dataset: SeedDataset): Array<{ path: string; data: R
     const entry = ENTITY_REGISTRY[entityName];
     if (!entry) continue;
     for (const row of dataset[key]) {
-      const data = row as Record<string, unknown>;
+      const data = row;
       const path = entry.gitPath(data.id as string, data);
       out.push({ path, data });
     }

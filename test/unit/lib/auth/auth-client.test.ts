@@ -60,6 +60,18 @@ describe("createAuthClient", () => {
     await expect(c.bootstrap({ secret: "wrong", email: "a@b" })).rejects.toThrow(/Felaktig bootstrap/);
   });
 
+  it("faller tillbaka på HTTP-status när felkroppen saknar `error` (#1469)", async () => {
+    const f = mockFetch(() => jsonRes(502, { detail: "gateway" }));
+    const c = createAuthClient({ fetchFn: f });
+    await expect(c.status()).rejects.toThrow(/HTTP 502/);
+  });
+
+  it("faller tillbaka på HTTP-status när felkroppen inte är JSON", async () => {
+    const f = mockFetch(() => new Response("<html>", { status: 500, headers: { "Content-Type": "text/html" } }));
+    const c = createAuthClient({ fetchFn: f });
+    await expect(c.status()).rejects.toThrow(/HTTP 500/);
+  });
+
   it("custom baseUrl används", async () => {
     const f = mockFetch((url) => {
       expect(url).toBe("https://example.com/api/status");

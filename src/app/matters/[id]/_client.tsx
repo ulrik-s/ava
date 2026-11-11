@@ -14,6 +14,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
+import type { MatterContactWithType } from "@/lib/shared/matter-insurance";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -23,14 +24,18 @@ import { CourtCaseNumberField } from "./_court-case-number-field";
 import { ExpectedReceivablesSection } from "./_expected-receivables-section";
 import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
+import { InsuranceReferenceField } from "./_insurance-reference-field";
 import { matterDefaultLayout, matterPanels } from "./_matter-panels";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
 import { WatchSection } from "./_watch-section";
 
-/** Ärendets målnummer som sträng (getById-typen saknar fältet i select-typen). */
-function courtCaseOf(m: unknown): string {
-  return (m as { courtCaseNumber?: string | null }).courtCaseNumber ?? "";
+type ReferenceKey = "courtCaseNumber" | "previousCourtCaseNumber" | "insuranceReference";
+
+/** Ärendets referensfält (målnummer, tidigare målnummer, försäkringsreferens)
+ *  som sträng (getById-typen saknar fälten i select-typen). */
+function referenceOf(m: unknown, key: ReferenceKey = "courtCaseNumber"): string {
+  return (m as Partial<Record<ReferenceKey, string | null>>)[key] ?? "";
 }
 
 /**
@@ -86,7 +91,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
             <div className="mb-1">
               <Link href="/matters" className="text-xs text-blue-600 hover:underline">&larr; Tillbaka till ärenden</Link>
             </div>
-            <MatterHeader matter={m} klient={klient} onOpenGenerate={() => setShowGenerateModal(true)} />
+            <MatterHeader matter={m} klient={klient} contacts={m.contacts} onOpenGenerate={() => setShowGenerateModal(true)} />
           </>
         )}
       />
@@ -163,6 +168,8 @@ interface HeaderProps {
     isTaxeArende?: boolean | undefined;
   };
   klient: MatterContact[];
+  /** Alla ärendets kontakter — styr om försäkringsreferensen visas (#1511). */
+  contacts: readonly MatterContactWithType[];
   onOpenGenerate: () => void;
 }
 
@@ -223,7 +230,7 @@ function MatterHeaderActions({ m, isPending, onClose, onReopen, onGenerate }: {
   );
 }
 
-function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
+function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderProps) {
   const utils = trpc.useUtils();
   const updateStatus = trpc.matter.update.useMutation({
     onSuccess: () => utils.matter.getById.invalidate({ id: m.id }),
@@ -256,7 +263,10 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
         />
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <CourtCaseNumberField key={courtCaseOf(m)} matterId={asId<"MatterId">(m.id)} value={courtCaseOf(m)} />
+        <CourtCaseNumberField key={referenceOf(m)} matterId={asId<"MatterId">(m.id)} value={referenceOf(m)}
+          previous={referenceOf(m, "previousCourtCaseNumber")} />
+        <InsuranceReferenceField key={`ins-${referenceOf(m, "insuranceReference")}`} matterId={asId<"MatterId">(m.id)}
+          value={referenceOf(m, "insuranceReference")} contacts={contacts} />
         {m.description && <p className="min-w-0 flex-1 truncate text-sm text-gray-600" title={m.description}>{m.description}</p>}
       </div>
     </div>

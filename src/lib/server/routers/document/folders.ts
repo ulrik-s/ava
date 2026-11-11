@@ -8,7 +8,6 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import type { DocumentFolder } from "@/lib/shared/schemas/document";
 import {
   matterIdSchema,
   documentFolderIdSchema,
@@ -16,7 +15,7 @@ import {
   type DocumentFolderId,
 } from "@/lib/shared/schemas/ids";
 import { orgProcedure } from "../../trpc";
-import { assertMatterAccess } from "./shared";
+import { assertDocAccess, assertFolderAccess, assertFolderInMatter, assertMatterAccess } from "./shared";
 
 export const folderProcedures = {
   createFolder: orgProcedure
@@ -29,25 +28,27 @@ export const folderProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       await assertMatterAccess(ctx, input.matterId);
+      await assertFolderInMatter(ctx, input.parentId, input.matterId);
       return ctx.repos.documentFolders.create({
         name: input.name,
         matterId: input.matterId,
         parentId: input.parentId,
-      } as Partial<DocumentFolder>);
+      });
     }),
 
   renameFolder: orgProcedure
     .input(z.object({ id: documentFolderIdSchema, name: z.string().min(1) }))
-    .mutation(({ ctx, input }) =>
-      ctx.repos.documentFolders.update(input.id, { name: input.name } as Partial<DocumentFolder>),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      await assertFolderAccess(ctx, input.id);
+      return ctx.repos.documentFolders.update(input.id, { name: input.name });
+    }),
 
   /** Flyttar innehåll till parent och raderar mappen. */
   deleteFolder: orgProcedure
     .input(z.object({ id: documentFolderIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      const folder = await ctx.repos.documentFolders.getByIdOrThrow(input.id);
-      const parentId = (folder.parentId as DocumentFolderId | null | undefined) ?? null;
+      const folder = await assertFolderAccess(ctx, input.id);
+      const parentId = folder.parentId ?? null;
       await ctx.repos.documents.reassignFolder(input.id, parentId);
       await ctx.repos.documentFolders.reassignParent(input.id, parentId);
       await ctx.repos.documentFolders.hardDelete(input.id);
@@ -58,14 +59,18 @@ export const folderProcedures = {
     .input(z.object({ documentId: documentIdSchema, folderId: documentFolderIdSchema.nullable() }))
     // Mapp-placering är organisations-metadata, inte dokumentets innehåll →
     // bumpar INTE versionen (ADR 0023; jfr klassificering/taggar).
-    .mutation(({ ctx, input }) =>
-      ctx.repos.documents.updateMetadata(input.documentId, { folderId: input.folderId }),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      const doc = await assertDocAccess(ctx, input.documentId);
+      await assertFolderInMatter(ctx, input.folderId, doc.matterId);
+      return ctx.repos.documents.updateMetadata(input.documentId, { folderId: input.folderId });
+    }),
 
   /** Flyttar en mapp; blockerar cykler (mapp-in-i-sig-själv/descendant). */
   moveFolder: orgProcedure
     .input(z.object({ folderId: documentFolderIdSchema, targetParentId: documentFolderIdSchema.nullable() }))
     .mutation(async ({ ctx, input }) => {
+      const folder = await assertFolderAccess(ctx, input.folderId);
+      await assertFolderInMatter(ctx, input.targetParentId, folder.matterId);
       if (input.targetParentId) {
         let checkId: DocumentFolderId | null = input.targetParentId;
         while (checkId) {
@@ -76,11 +81,11 @@ export const folderProcedures = {
             });
           }
           const parent = await ctx.repos.documentFolders.getById(checkId);
-          checkId = (parent?.parentId as DocumentFolderId | null | undefined) ?? null;
+          checkId = (parent?.parentId) ?? null;
         }
       }
       return ctx.repos.documentFolders.update(
-        input.folderId, { parentId: input.targetParentId } as Partial<DocumentFolder>,
+        input.folderId, { parentId: input.targetParentId },
       );
     }),
 
@@ -88,13 +93,16 @@ export const folderProcedures = {
   breadcrumb: orgProcedure
     .input(z.object({ folderId: documentFolderIdSchema }))
     .query(async ({ ctx, input }) => {
+      const start = await ctx.repos.documentFolders.getById(input.folderId);
+      if (!start) return [];
+      await assertMatterAccess(ctx, start.matterId);
       const path: { id: string; name: string }[] = [];
       let currentId: DocumentFolderId | null = input.folderId;
       while (currentId) {
         const folder = await ctx.repos.documentFolders.getById(currentId);
         if (!folder) break;
         path.unshift({ id: folder.id, name: folder.name });
-        currentId = (folder.parentId as DocumentFolderId | null | undefined) ?? null;
+        currentId = folder.parentId ?? null;
       }
       return path;
     }),

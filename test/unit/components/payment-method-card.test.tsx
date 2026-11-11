@@ -150,9 +150,9 @@ describe("PaymentMethodCard", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "PRIVAT" } });
-    const noteArea = screen.getByPlaceholderText(/Trygg-Hansa/i) as HTMLTextAreaElement;
+    const noteArea = screen.getByPlaceholderText<HTMLTextAreaElement>(/Trygg-Hansa/i);
     fireEvent.change(noteArea, { target: { value: "Privatfaktura" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(updateMutate).toHaveBeenCalledWith(
@@ -175,6 +175,23 @@ describe("PaymentMethodCard", () => {
     updateOpts?.onSuccess();
     expect(utilsMock.serviceNote.list.invalidate).toHaveBeenCalled();
     expect(utilsMock.watchlist.list.invalidate).toHaveBeenCalled();
+  });
+
+  it("hjälptexten för rättshjälpens tak beskriver varning vid 80 tim / 10 tim före utökat tak (#1519)", () => {
+    render(
+      <PaymentMethodCard
+        matterId={asId<"MatterId">("m1")}
+        paymentMethod="RATTSHJALP"
+        paymentMethodNote={null}
+        paymentMethodDecidedAt={null}
+        clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
+    expect(screen.getByText(/Varnar vid 80 tim, eller 10 tim före ett utökat tak/)).toBeInTheDocument();
+    expect(screen.queryByText(/Varnar vid 90 %/)).not.toBeInTheDocument();
   });
 
   it("visar beslutsdatum när satt", () => {
@@ -235,7 +252,7 @@ describe("PaymentMethodCard", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
-    const shareInput = screen.getByPlaceholderText(/t\.ex\. 25/i) as HTMLInputElement;
+    const shareInput = screen.getByPlaceholderText<HTMLInputElement>(/t\.ex\. 25/i);
     expect(shareInput.value).toBe("20");
     fireEvent.change(shareInput, { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
@@ -257,7 +274,7 @@ describe("PaymentMethodCard", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
-    const shareInput = screen.getByPlaceholderText(/t\.ex\. 25/i) as HTMLInputElement;
+    const shareInput = screen.getByPlaceholderText<HTMLInputElement>(/t\.ex\. 25/i);
     fireEvent.change(shareInput, { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(updateMutate).toHaveBeenCalledWith(
@@ -290,7 +307,7 @@ describe("PaymentMethodCard", () => {
       fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
       const details = screen.getByText("Avvikande timpris för ärendet").closest("details");
       expect(details?.open).toBe(false);
-      const arbete = screen.getByLabelText(/^Timarvode \(kr\/h/) as HTMLInputElement;
+      const arbete = screen.getByLabelText<HTMLInputElement>(/^Timarvode \(kr\/h/);
       expect(arbete.placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
       fireEvent.change(arbete, { target: { value: "3 000" } });
       fireEvent.click(screen.getByRole("button", { name: "Spara" }));

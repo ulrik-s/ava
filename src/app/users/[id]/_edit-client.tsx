@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
+import { mileageRateFromFormValue, mileageRateToFormValue } from "@/lib/shared/mileage-rate";
 import { UserForm, type UserFormState } from "../_user-form";
 
 const roleLabels: Record<string, string> = {
@@ -38,7 +39,7 @@ function useEditUser(id: string) {
         role: user.data.role,
         matterNumberPrefix: (user.data as { matterNumberPrefix?: string | null }).matterNumberPrefix ?? "",
         hourlyRates: user.data.hourlyRates,
-        mileageRate: user.data.mileageRate != null ? String(user.data.mileageRate / 100) : "",
+        mileageRate: mileageRateToFormValue(user.data.mileageRate),
         password: "",
         confirmPassword: "",
       });
@@ -78,7 +79,7 @@ function useEditUser(id: string) {
       matterNumberPrefix: form.matterNumberPrefix || null,
       // Hela kartan i öre (som tidsposterna); ett tömt fält följer byråns pris igen.
       hourlyRates: form.hourlyRates,
-      mileageRate: form.mileageRate ? Math.round(Number(form.mileageRate) * 100) : undefined,
+      mileageRate: mileageRateFromFormValue(form.mileageRate),
       password: form.password || undefined,
     } as Parameters<typeof updateUser.mutate>[0]);
   }

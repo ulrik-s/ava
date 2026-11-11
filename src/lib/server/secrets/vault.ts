@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { parseJsonWith } from "@/lib/shared/parse-json";
 import { decryptSecret, encryptSecret, loadMasterKey } from "./crypto";
 
 /**
@@ -45,7 +46,7 @@ export class EncryptedFileVault implements SecretsVault {
   private async loadMap(): Promise<Record<string, string>> {
     const blob = await this.fs.read(this.filePath);
     if (!blob) return {};
-    return secretsMapSchema.parse(JSON.parse(decryptSecret(blob, this.key)));
+    return parseJsonWith(secretsMapSchema, decryptSecret(blob, this.key));
   }
 
   private async saveMap(map: Record<string, string>): Promise<void> {

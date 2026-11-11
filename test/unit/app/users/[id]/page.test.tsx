@@ -69,7 +69,7 @@ beforeEach(() => {
     email: "anna@x.se",
     role: "LAWYER",
     hourlyRates: { ARBETE: 250000 }, // öre = 2 500 kr/h
-    mileageRate: 2500,
+    mileageRate: 250, // öre/km = 25 kr/mil
   };
   userQuery.isLoading = false;
   userQuery.error = null;
@@ -114,6 +114,23 @@ describe("EditUserPage", () => {
     });
   });
 
+  it("visar milersättningen i kr/mil och sparar tillbaka i öre/km (#1527)", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /Redigera användare/i });
+    expect(screen.getByLabelText(/Milersättning \(kr\/mil\)/)).toHaveValue("25");
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(updateMutate.mock.calls[0]?.[0]).toMatchObject({ mileageRate: 250 });
+  });
+
+  it("tomt milersättningsfält sparar inget värde", async () => {
+    userQuery.data = { ...userQuery.data, mileageRate: null };
+    renderPage();
+    await screen.findByRole("heading", { name: /Redigera användare/i });
+    expect(screen.getByLabelText(/Milersättning/)).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(updateMutate.mock.calls[0]?.[0]).toMatchObject({ mileageRate: undefined });
+  });
+
   it("delete-knapp anropar deleteUser efter bekräftelse", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     renderPage();
@@ -137,10 +154,10 @@ describe("EditUserPage", () => {
   it("ändrar roll och timpriser, submittar med nya värden", async () => {
     renderPage();
     await screen.findByRole("heading", { name: /Redigera användare/i });
-    const roleSelect = screen.getByRole("combobox") as HTMLSelectElement;
+    const roleSelect = screen.getByRole<HTMLSelectElement>("combobox");
     expect(roleSelect.value).toBe("LAWYER");
     fireEvent.change(roleSelect, { target: { value: "ADMIN" } });
-    const hourlyInput = screen.getByDisplayValue("2500") as HTMLInputElement;
+    const hourlyInput = screen.getByDisplayValue<HTMLInputElement>("2500");
     fireEvent.change(hourlyInput, { target: { value: "3000" } });
     fireEvent.change(screen.getByLabelText(/^Tidsspillan helg\/kväll/), { target: { value: "975" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
@@ -154,9 +171,9 @@ describe("EditUserPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: /Redigera användare/i });
     // Byråns tidsspillan går före juristens eget timarvode …
-    expect((screen.getByLabelText(/^Tidsspillan \(kr/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 1\s487 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan \(kr/).placeholder).toMatch(/^ärvs: 1\s487 kr\/h$/);
     // … men utan byråpris ärvs juristens timarvode.
-    expect((screen.getByLabelText(/^Timarvode helg\/kväll/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode helg\/kväll/).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
   });
 
   it("inkluderar lösenord i submit när matchande", async () => {

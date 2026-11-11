@@ -44,6 +44,8 @@ function toOrgSettings(org: Organization) {
     ...nullableOrgFields(org),
     /** Byråns vokabulär av giltiga dokument-etiketter (#621). */
     documentTags: org.documentTags ?? [],
+    /** Byråns ärendetyper (valen när ett ärende läggs upp). */
+    matterTypes: org.matterTypes,
     /** Gränsbelopp (öre) för aconto-utskick (#885). */
     accontoThresholdOre: org.accontoThresholdOre ?? null,
     /** Byråns timpris per kategori (öre/h, #1206). */
@@ -62,6 +64,11 @@ function toOrgSettings(org: Organization) {
  * de övriga fälten är oförändrade.
  */
 const MEMBER_SETTINGS: ReadonlySet<string> = new Set(["documentTags"]);
+
+/** Trimma, släng tomma, dedupa (set-semantik, ordningen behålls). */
+function normalizeVocabulary(list: readonly string[]): string[] {
+  return [...new Set(list.map((t) => t.trim()).filter(Boolean))];
+}
 
 /** Objektets nycklar i sorterad ordning — jämförelsen ska inte bero på ordningen. */
 function sortedKeys(_key: string, v: unknown): unknown {
@@ -118,6 +125,8 @@ export const organizationRouter = router({
         /** Byråns vokabulär av giltiga dokument-etiketter (#621). Hela listan
          *  ersätts (set-semantik); dedupas + tomma rensas. */
         documentTags: z.array(z.string()).optional(),
+        /** Byråns ärendetyper. Hela listan ersätts; dedupas + tomma rensas. */
+        matterTypes: z.array(z.string()).optional(),
         /** Gränsbelopp (öre) för aconto-utskick (#885). */
         accontoThresholdOre: z.number().int().nonnegative().optional(),
         /** Timpris per kategori (öre/h, #1206). HELA kartan ersätts; en
@@ -133,9 +142,8 @@ export const organizationRouter = router({
       // Normalisera vokabulären: trimma, släng tomma, dedupa (set-semantik).
       const patch = omitUndefined(input);
       assertMayChangeSettings(ctx.user.role, await ctx.repos.organizations.getById(orgId), patch);
-      if (patch.documentTags) {
-        patch.documentTags = [...new Set(patch.documentTags.map((t) => t.trim()).filter(Boolean))];
-      }
+      if (patch.documentTags) patch.documentTags = normalizeVocabulary(patch.documentTags);
+      if (patch.matterTypes) patch.matterTypes = normalizeVocabulary(patch.matterTypes);
       if (patch.standardAtgarder) patch.standardAtgarder = normalizeStandardAtgarder(patch.standardAtgarder);
       return ctx.repos.organizations.update(orgId, patch satisfies Partial<Organization>);
     }),

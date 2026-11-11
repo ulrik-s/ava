@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
 import { bytesToBase64 } from "@/lib/shared/content-address";
@@ -46,7 +46,7 @@ function makeFirm() {
       id: "d1", organizationId: ORG, matterId: "m1", fileName: "minnesanteckning.txt",
       mimeType: "text/plain", sizeBytes: 1, storagePath: "documents/content/seed", version: 1,
     }],
-  } as DemoSource);
+  });
   const store = new DemoDataStore(source, async () => {});
   const repos = buildInMemoryRepositories(store);
   const blobs = new Map<string, Uint8Array>();

@@ -18,7 +18,7 @@ import { useCanSeeBackup } from "@/lib/client/backend/server-backup";
 import { trpc } from "@/lib/client/trpc";
 import type { OrgImage } from "@/lib/shared/org-image";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
-import { DocumentTagsSection } from "./_document-tags-section";
+import { DocumentTagsSection, MatterTypesSection } from "./_document-tags-section";
 import { settingsLayout } from "./_settings-layout";
 import { StandardAtgarderSection } from "./_standard-atgarder-section";
 
@@ -480,6 +480,7 @@ export default function SettingsPage() {
     { id: "views", title: "Standardvyer", render: () => <><PanelIntro text="Org-globala kolumn- och sort-defaults för listor (admin). Personliga val vinner." /><OrgDefaultsSection /></> },
     { id: "ledger", title: "Bokföring", render: () => <><PanelIntro text="Fortnox och konto-mappning (BAS) som SIE-exporten och Fortnox bokför mot (admin)." /><FortnoxSection /><LedgerAccountsSection /></> },
     { id: "tags", title: "Dokument-etiketter", render: () => <><PanelIntro text="Giltiga etiketter som dokument kan taggas med — av AI:n och handläggarna (admin)." /><DocumentTagsSection /></> },
+    { id: "matter-types", title: "Ärendetyper", render: () => <><PanelIntro text="Typerna ett ärende kategoriseras efter när det läggs upp (admin)." /><MatterTypesSection /></> },
     { id: "atgarder", title: "Standardåtgärder", render: () => <><PanelIntro text="Åtgärder som förekommer i varje ärende — samma beskrivning och tidsåtgång för alla (admin)." /><StandardAtgarderSection /></> },
     ...(canSeeBackup ? [BACKUP_PANEL] : []),
   ];

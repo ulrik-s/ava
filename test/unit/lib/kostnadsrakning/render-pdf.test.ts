@@ -10,7 +10,7 @@ import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pd
 import { buildKostnadsrakningContext, type BuildInput, type TimeEntryInput } from "@/lib/shared/kostnadsrakning";
 import { FOOTER_SEPARATOR } from "@/lib/shared/kostnadsrakning-document";
 import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/kostnadsrakning-template";
-import { pdfPageContents, pdfPageTexts } from "../../../helpers/pdf-text";
+import { pdfPageContents, pdfPageLayouts, pdfPageTexts, type PdfLineItem, type PdfPageLayout, type PdfTextItem } from "../../../helpers/pdf-text";
 import { BROKEN_PNG, TINY_JPEG, TINY_PNG } from "../../../helpers/tiny-images";
 
 const ORG = {
@@ -135,6 +135,82 @@ describe("renderKostnadsrakningPdf — arbetsredogörelsen", () => {
   it("tecken som WinAnsi saknar ersätts i stället för att spräcka PDF:en", async () => {
     const pages = await render({ ...FORSVARARE, timeEntries: [{ id: "u", date: "2026-06-10", description: "Resa A → B ≥ 2 mil 🚗", minutes: 60, kind: "ARBETE" }] });
     expect(pages[1]).toContain("Resa A -> B ? 2 mil ?");
+  });
+});
+
+describe("arbetsredogörelsens summarader (#1505)", () => {
+  /** Avståndet sista post → summa före #1505 (radhöjd 12,6 + 2,5). */
+  const OLD_GAP = 15.1;
+
+  async function rightEdge(item: PdfTextItem): Promise<number> {
+    const { PDFDocument, StandardFonts } = await import("pdf-lib");
+    const name = item.font === "Times-Bold" ? StandardFonts.TimesRomanBold : StandardFonts.TimesRoman;
+    const font = await (await PDFDocument.create()).embedFont(name);
+    return item.x + font.widthOfTextAtSize(item.text, item.size);
+  }
+
+  /** Summaraden ("Summa" + beloppet) och raden före den. */
+  function sumRow(page: PdfPageLayout, nth = 0): { label: PdfTextItem; value: PdfTextItem; previous: PdfTextItem } {
+    const labels = page.texts.flatMap((t, i) => (t.text === "Summa" ? [i] : []));
+    const at = labels[nth] ?? -1;
+    const [previous, label, value] = [page.texts[at - 1], page.texts[at], page.texts[at + 1]];
+    if (!previous || !label || !value) throw new Error("ingen summarad");
+    return { label, value, previous };
+  }
+
+  function ruleBetween(page: PdfPageLayout, above: number, below: number): PdfLineItem | undefined {
+    return page.lines.find((l) => l.y < above && l.y > below);
+  }
+
+  async function specPage(input: BuildInput = FORSVARARE): Promise<PdfPageLayout> {
+    const [, p2] = await pdfPageLayouts(await renderBytes(input));
+    if (!p2) throw new Error("ingen arbetsredogörelse");
+    return p2;
+  }
+
+  it("tidssektionens summa är högerjusterad i timkolumnen, fet", async () => {
+    const page = await specPage();
+    for (const nth of [0, 1]) {
+      const { label, value, previous } = sumRow(page, nth);
+      expect(previous.text).toMatch(/^\d+,\d\d$/); // sista postens timmar
+      expect(await rightEdge(value)).toBeCloseTo(await rightEdge(previous), 3);
+      expect([label.font, value.font]).toEqual(["Times-Bold", "Times-Bold"]);
+    }
+  });
+
+  it("utläggssektionens summa står i beloppskolumnen", async () => {
+    const { value, previous } = sumRow(await specPage(), 2);
+    expect(previous.text).toBe("152");
+    expect(await rightEdge(value)).toBeCloseTo(await rightEdge(previous), 3);
+  });
+
+  it("ett tunt streck över talkolumnen, med luft mot sista posten och mot summan", async () => {
+    const page = await specPage();
+    for (const nth of [0, 1, 2]) {
+      const { value, previous } = sumRow(page, nth);
+      expect(previous.y - value.y).toBeGreaterThan(OLD_GAP + 5);
+      const rule = ruleBetween(page, previous.y, value.y);
+      if (!rule) throw new Error("inget streck före summan");
+      expect(previous.y - rule.y).toBeGreaterThan(5);
+      expect(rule.y - value.y).toBeGreaterThan(8);
+      expect(rule.x1).toBeGreaterThan(400); // inte hela sidbredden
+      expect(rule.x2).toBeCloseTo(await rightEdge(value), 0);
+    }
+  });
+
+  it("strecket och summan hamnar på samma sida även när sektionen slutar vid sidslutet", async () => {
+    let movedToNewPage = 0;
+    for (let n = 34; n <= 42; n++) {
+      const pages = (await pdfPageLayouts(await renderBytes({ ...FORSVARARE, timeEntries: arbete(n), expenses: [] }))).slice(1);
+      const last = pages.at(-1);
+      if (!last) throw new Error("ingen arbetsredogörelse");
+      const label = last.texts.find((t) => t.text === "Summa");
+      if (!label) throw new Error("summan saknas på sista sidan");
+      expect(ruleBetween(last, label.y + 20, label.y)).toBeDefined();
+      pages.slice(0, -1).forEach((p) => expect(p.lines.filter((l) => l.x1 > 400)).toEqual([]));
+      if (pages.length > 1 && !last.texts.some((t) => t.text === "2026-06-10")) movedToNewPage++;
+    }
+    expect(movedToNewPage).toBeGreaterThan(0);
   });
 });
 

@@ -45,7 +45,7 @@ export class InMemoryRepository<Row extends RowBase> implements Repository<Row> 
   }
 
   async create(data: Partial<Row>): Promise<Row> {
-    return (await this.delegate.create({ data: { version: 1, ...data } as Partial<Row> })) as Row;
+    return (await this.delegate.create({ data: { version: 1, ...data } })) as Row;
   }
 
   async update(id: Row["id"], patch: Partial<Row>): Promise<Row> {

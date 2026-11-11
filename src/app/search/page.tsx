@@ -259,7 +259,7 @@ export default function DocumentSearchPage() {
         scope={scope}
         isFetching={results.isFetching}
         docTypes={docTypes.data}
-        resultsData={results.data as SearchData | undefined}
+        resultsData={results.data}
         searchTerm={searchTerm}
         selectedTypes={selectedTypes}
         onToggleType={toggleType}
@@ -267,7 +267,7 @@ export default function DocumentSearchPage() {
       />
 
       {searchTerm && results.data && (
-        <SearchResults searchTerm={searchTerm} data={results.data as SearchData} fromCache={scope === "offline"} />
+        <SearchResults searchTerm={searchTerm} data={results.data} fromCache={scope === "offline"} />
       )}
 
       {results.error && (

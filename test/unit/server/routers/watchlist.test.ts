@@ -46,7 +46,7 @@ describe("watchlist.list", () => {
   });
 
   it("med matterId: bara det ärendets poster (#1167)", async () => {
-    const { items } = await caller().list({ mine: false, matterId: "m1" as never });
+    const { items } = await caller().list({ mine: false, matterId: "m1" });
     expect(items.length).toBeGreaterThan(0);
     expect(items.every((i) => i.matterId === "m1")).toBe(true);
     expect(items.some((i) => i.title.includes("Frist i A"))).toBe(true);

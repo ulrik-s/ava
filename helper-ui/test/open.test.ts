@@ -51,6 +51,17 @@ function openReq(body: unknown): Request {
 }
 
 describe("handleOpen", () => {
+  test("vägrar öppna ett program — 400, inget hämtas eller startas (#1448)", async () => {
+    const rec = recorder();
+    for (const fileName of ["x.exe", "Faktura.pdf.exe", "x.exe.", "a.txt:b.exe", "skript.ps1"]) {
+      const res = await handleOpen(openReq({ downloadUrl: "https://evil/x", fileName }), rec.deps);
+      expect(res.status).toBe(400);
+      expect(await res.text()).toBe("file type not allowed\n");
+    }
+    expect(rec.downloaded).toHaveLength(0);
+    expect(rec.opened).toHaveLength(0);
+  });
+
   test("hämtar + öppnar + svarar 200 med path (statisk källa)", async () => {
     const rec = recorder();
     const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);

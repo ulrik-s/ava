@@ -30,7 +30,7 @@ export class InMemoryOfficeRepository extends InMemoryRepository<Office> impleme
   async demoteMains(organizationId: OrganizationId): Promise<void> {
     await this.delegate.updateMany({
       where: { organizationId, isMain: true },
-      data: { isMain: false } as Partial<Office>,
+      data: { isMain: false },
     });
   }
 }

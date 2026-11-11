@@ -7,7 +7,6 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
@@ -41,9 +40,9 @@ function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG) {
     documentFolders: [],
     documents: [],
     ...seed,
-  } as DemoSource);
+  });
   const store = new LocalStore(source, async () => {});
-  const repos = buildInMemoryRepositories(store as unknown as IDataStore);
+  const repos = buildInMemoryRepositories(store);
   const ctx = {
     user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
     dataStore: store, repos, orgId, ports: mockPorts,
@@ -114,7 +113,7 @@ describe("document.search", () => {
         } as never,
       ],
       estimatedTotalHits: 1,
-    } as never);
+    });
 
     const { caller } = makeCaller({}, "org-a");
     const res = await caller.search({ query: "test" });
@@ -129,7 +128,7 @@ describe("document.search", () => {
     mockPorts.searchIndex.search.mockResolvedValue({
       hits: [{ id: "d1", fileName: "a.pdf", matterId: "m1", matterNumber: "1", matterTitle: "X", page: 3 } as never],
       estimatedTotalHits: 1,
-    } as never);
+    });
     const matterId = "0195f3b2-0000-7000-8000-000000000001";
     const { caller } = makeCaller({}, "org-a");
     const res = await caller.search({ query: "a", matterId });
@@ -149,7 +148,7 @@ describe("document.search", () => {
         } as never,
       ],
       estimatedTotalHits: 1,
-    } as never);
+    });
 
     const { caller } = makeCaller();
     const res = await caller.search({ query: "x" });

@@ -25,7 +25,7 @@ import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/radgivning-entry";
 import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/rattshjalp";
 import type { Invoice, Payment, PaymentPlan, TimeEntry, WriteOff } from "@/lib/shared/schemas/billing";
 import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
-import { invoiceStatusSchema, invoiceTypeSchema, type InvoiceStatus } from "@/lib/shared/schemas/enums";
+import { invoiceStatusSchema, invoiceTypeSchema } from "@/lib/shared/schemas/enums";
 import {
   asId,
   matterIdSchema,
@@ -41,6 +41,7 @@ import type { Matter } from "@/lib/shared/schemas/matter";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/whole-kronor";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
+import { assertAdmin } from "../auth/assert-admin";
 import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
 import { logMatterNote } from "../billing/matter-note";
@@ -82,7 +83,7 @@ function ensureWritableOff<T extends { status?: string } | null>(inv: T): NonNul
       message: "Endast utställda fakturor kan skrivas av (ej DRAFT/CANCELLED).",
     });
   }
-  return inv as NonNullable<T>;
+  return inv;
 }
 
 /**
@@ -490,7 +491,7 @@ export const invoiceRouter = router({
 
         // Härled status efter avskrivningen och persistera om återstoden stängdes.
         const after = computeInvoiceLedger(inv.amount, paid, credited, writtenOff + amount);
-        const derived = deriveInvoiceStatus(inv.status as InvoiceStatus, after);
+        const derived = deriveInvoiceStatus(inv.status, after);
         if (derived !== inv.status) {
           await repos.invoices.update(inv.id, { status: derived });
         }
@@ -521,8 +522,8 @@ export const invoiceRouter = router({
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
       // Tillståndsmaskin (#350): blockera omöjliga övergångar (t.ex. DRAFT→BAD_DEBT
       // utan att ha skickats). Se [ADR 0015].
-      if (!canTransition(inv.status as InvoiceStatus, input.status)) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: transitionErrorMessage(inv.status as InvoiceStatus, input.status) });
+      if (!canTransition(inv.status, input.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: transitionErrorMessage(inv.status, input.status) });
       }
       return ctx.repos.transaction(async (repos) => {
         const updated = await repos.invoices.update(input.invoiceId, { status: input.status });
@@ -539,10 +540,14 @@ export const invoiceRouter = router({
    * IDEMPOTENT: skriver ALDRIG över en redan satt `fortnoxId` — det är
    * dubbelbokförings-skyddet (en omkörd peer-cykel får inte boka om). Redan
    * märkt → returnera oförändrad rad.
+   *
+   * Bara administratör (#1450): ett påhittat id stoppar annars den riktiga
+   * bokföringen, eftersom ett satt id aldrig skrivs över.
    */
   markFortnoxBooked: orgProcedure
     .input(z.object({ invoiceId: invoiceIdSchema, fortnoxId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
+      assertAdmin(ctx);
       // Migrerad till repository-sömmen (ADR 0020). Org-scope via getByIdInOrg.
       const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });

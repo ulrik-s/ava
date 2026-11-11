@@ -67,6 +67,14 @@ const eslintConfig = defineConfig([
           message:
             "Dubbel-cast (`<T><U>x`) är förbjuden — den raderar typsäkerheten. Använd riktiga typer (#562, ADR 0026).",
         },
+        {
+          // Rå JSON.parse ger `any` som sedan castas. All extern text ska gå
+          // genom zod: parseJsonWith/safeParseJsonWith i src/lib/shared/parse-json.ts (#1469).
+          selector:
+            "CallExpression[callee.type='MemberExpression'][callee.object.name='JSON'][callee.property.name='parse']",
+          message:
+            "Direkt JSON.parse är förbjuden — använd parseJsonWith(schema, text) / safeParseJsonWith(schema, text) från @/lib/shared/parse-json så värdet valideras med zod (#1469).",
+        },
       ],
       // Promise-säkerhet: oavsiktligt obevakade promises, async-callbacks i
       // synkron/void-kontext, och `await` på icke-thenables är vanliga
@@ -74,12 +82,46 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": "error",
       "@typescript-eslint/await-thenable": "error",
+      // Uttömmande switch (#1469): en switch över en union/enum måste täcka
+      // alla medlemmar explicit (en `default` räknas inte som täckning). Att
+      // lägga till en unionsmedlem blir då ett lint-fel på varje switch som
+      // glömt den — i stället för en tyst fall-igenom i produktion.
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
       // Utvärderade men uppskjutna (#9): no-unnecessary-condition (~105 brott)
       // och strict-boolean-expressions (~529) är för stora för ett svep —
       // ratchas per katalog i uppföljnings-issue. Typinfon ovan är redan på, så
       // de tillkommer utan extra parser-overhead när de aktiveras.
       // Underscore-prefix = avsiktligt oanvänd (signaturkrav, framtida bruk).
       // Skiljer medvetna platshållare från faktiskt bortglömd kod.
+      // ── strictTypeChecked-urval med baslinje (#1469, steg 2) ──────────
+      // Reglerna nedan är `error`; dagens skuld ligger i eslint-suppressions.json
+      // (bulk-suppression) och betas av med `bun run lint:prune`. NYA brott
+      // fäller CI. no-base-to-string och JSON.parse-förbudet baselineades
+      // INTE — de rättades (riktiga "[object Object]"-buggar resp. ovaliderad
+      // extern data).
+      "@typescript-eslint/no-base-to-string": "error",
+      "@typescript-eslint/no-deprecated": "error",
+      "@typescript-eslint/no-unnecessary-condition": "error",
+      "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      "@typescript-eslint/require-await": "error",
+      "@typescript-eslint/no-unnecessary-type-conversion": "error",
+      "@typescript-eslint/no-misused-spread": "error",
+      "@typescript-eslint/no-dynamic-delete": "error",
+      "@typescript-eslint/prefer-promise-reject-errors": "error",
+      "@typescript-eslint/no-redundant-type-constituents": "error",
+      "@typescript-eslint/only-throw-error": "error",
+      "@typescript-eslint/use-unknown-in-catch-callback-variable": "error",
+      "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
+      "@typescript-eslint/no-unnecessary-template-expression": "error",
+      "@typescript-eslint/unified-signatures": "error",
+      "@typescript-eslint/no-unnecessary-type-parameters": "error",
+      "@typescript-eslint/restrict-template-expressions": [
+        "error",
+        { allowNumber: true, allowBoolean: false, allowNullish: false, allowAny: false, allowNever: false, allowRegExp: false },
+      ],
+      "@typescript-eslint/restrict-plus-operands": "error",
+      "@typescript-eslint/unbound-method": "error",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         {
@@ -97,6 +139,22 @@ const eslintConfig = defineConfig([
       ],
       "max-params": ["error", 5],
       "max-nested-callbacks": ["error", 4],
+    },
+  },
+  {
+    // `any` får inte läcka in i produktionskoden (#1469): värden av typen
+    // `any` (från otypade bibliotek, JSON.parse, `catch (e)` utan typ …) får
+    // varken tilldelas, anropas, indexeras, returneras eller skickas vidare.
+    // Smalna med zod/typvakter i stället. Gäller bara src/ tills vidare —
+    // test/ och tooling/ har otypade testhjälpare som typas i en uppföljning
+    // (se #1469).
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/no-unsafe-argument": "error",
     },
   },
   {

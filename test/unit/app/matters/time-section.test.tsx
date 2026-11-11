@@ -96,7 +96,7 @@ describe("TimeSection — arvodeskategori (#953)", () => {
     expect(select).toHaveValue("ARBETE"); // default
     const values = Array.from((select as HTMLSelectElement).options).map((o) => o.value);
     expect(values).toEqual([
-      "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP",
+      "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP", "FORHANDLING",
     ]);
 
     fireEvent.change(select, { target: { value: "TIDSSPILLAN_OVRIG_TID" } });
@@ -212,7 +212,7 @@ describe("TimeSection — standardåtgärder (#956)", () => {
   it("väljaren listar byråns AKTIVA åtgärder med tiden synlig", () => {
     render(<TimeSection matterId={matterId} />);
     fireEvent.click(screen.getByText("+ Registrera tid"));
-    const select = screen.getByLabelText("Standardåtgärd") as HTMLSelectElement;
+    const select = screen.getByLabelText<HTMLSelectElement>("Standardåtgärd");
     const labels = Array.from(select.options).map((o) => o.textContent);
     expect(labels[0]).toBe("— egen beskrivning —"); // fritext är default
     // Tiden formateras med appens `formatMinutes` (0:30), samma som i tidslistan.

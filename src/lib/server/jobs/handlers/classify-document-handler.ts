@@ -103,7 +103,7 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
 
   return async (job): Promise<void> => {
     const { documentId } = documentJobSchema.parse(job.data);
-    const doc = (await deps.documents.getById(documentId)) as Document | null;
+    const doc = await deps.documents.getById(documentId);
     if (!doc) return; // raderat innan jobbet kördes → no-op
     const fields = classifiableFields(doc);
     // Sidorna läses EN gång och indexeras (#1215) — även om klassificeringen

@@ -39,16 +39,16 @@ describe("readStoredTheme", () => {
   });
 
   it("inget sparat val → följer OS-inställningen", () => {
-    const matchMedia = vi.spyOn(window, "matchMedia").mockReturnValue({ matches: true } as MediaQueryList);
+    const matchMedia = vi.spyOn(window, "matchMedia").mockReturnValue({ matches: true });
     expect(readStoredTheme()).toBe("dark");
-    matchMedia.mockReturnValue({ matches: false } as MediaQueryList);
+    matchMedia.mockReturnValue({ matches: false });
     expect(readStoredTheme()).toBe("light");
     matchMedia.mockRestore();
   });
 
   it("ogiltigt sparat värde ignoreras", () => {
     localStorage.setItem("ava.theme", "lila");
-    const matchMedia = vi.spyOn(window, "matchMedia").mockReturnValue({ matches: false } as MediaQueryList);
+    const matchMedia = vi.spyOn(window, "matchMedia").mockReturnValue({ matches: false });
     expect(readStoredTheme()).toBe("light");
     matchMedia.mockRestore();
   });

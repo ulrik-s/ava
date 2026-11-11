@@ -90,7 +90,7 @@ describe("createGraphEvent", () => {
     }) as unknown as typeof fetch;
 
     const res = await createGraphEvent(
-      { subject: "x", start: { dateTime: "x", timeZone: "UTC" }, end: { dateTime: "x", timeZone: "UTC" } } as GraphEventBody,
+      { subject: "x", start: { dateTime: "x", timeZone: "UTC" }, end: { dateTime: "x", timeZone: "UTC" } },
       { token: "tok", fetchFn },
     );
     expect(res.id).toBe("g-1");
@@ -103,7 +103,7 @@ describe("createGraphEvent", () => {
 
     await expect(
       createGraphEvent(
-        { subject: "x", start: { dateTime: "x", timeZone: "UTC" }, end: { dateTime: "x", timeZone: "UTC" } } as GraphEventBody,
+        { subject: "x", start: { dateTime: "x", timeZone: "UTC" }, end: { dateTime: "x", timeZone: "UTC" } },
         { token: "bad", fetchFn },
       ),
     ).rejects.toThrow(/Token expired/);

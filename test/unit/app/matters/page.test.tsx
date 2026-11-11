@@ -27,6 +27,8 @@ const searchQuery = vi.fn((input: { term: string }) => ({ data: { contacts: inpu
 /** onSuccess från contacts.create — testet anropar den som servern hade gjort. */
 let contactCreated: ((c: { id: string; name: string }) => void) | undefined;
 const createMatterMutate = vi.fn();
+/** Byråns ärendetyper (org-inställning) — tom = fritext. */
+let matterTypes: string[] = [];
 const searchParamsGet = vi.fn((_: string): string | null => null);
 
 vi.mock("next/navigation", () => ({
@@ -52,6 +54,9 @@ vi.mock("@/lib/client/trpc", () => ({
         },
       },
     },
+    organization: {
+      getSettings: { useQuery: () => ({ data: { matterTypes } }) },
+    },
     user: {
       list: { useQuery: () => employeesQuery },
       current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
@@ -70,6 +75,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   searchParamsGet.mockReturnValue(null);
   mattersQuery.data = { matters: [], total: 0, pages: 0 };
+  matterTypes = [];
 });
 
 describe("MattersPage", () => {
@@ -142,7 +148,7 @@ describe("MattersPage", () => {
 
   it("uppdaterar sökfältet", () => {
     render(<MattersPage />);
-    const search = screen.getByPlaceholderText(/Sök ärenden/i) as HTMLInputElement;
+    const search = screen.getByPlaceholderText<HTMLInputElement>(/Sök ärenden/i);
     fireEvent.change(search, { target: { value: "bodel" } });
     expect(search.value).toBe("bodel");
   });
@@ -185,6 +191,18 @@ describe("MattersPage", () => {
     expect(screen.getByText("Arkiverat")).toBeInTheDocument();
   });
 
+  it("visar ärendetypen som egen kolumn — '—' när typ saknas", () => {
+    const row = (id: string, matterType: string | null) => ({
+      id, matterNumber: `2026-000${id}`, title: `Fall ${id}`, status: "ACTIVE", matterType,
+      contacts: [], _count: { documents: 0, timeEntries: 0, contacts: 0 },
+    });
+    mattersQuery.data = { matters: [row("1", "Bodelning"), row("2", null)], total: 2, pages: 1 };
+    render(<MattersPage />);
+    expect(screen.getByRole("columnheader", { name: /Ärendetyp/ })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Bodelning" })).toBeInTheDocument();
+    expect(screen.getAllByRole("cell", { name: "—" }).length).toBeGreaterThan(0);
+  });
+
   it("fyller alla fält i Nytt ärende-formuläret → create med komplett payload", () => {
     render(<MattersPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
@@ -193,13 +211,48 @@ describe("MattersPage", () => {
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Misshandel" } });
     fireEvent.click(screen.getByRole("checkbox")); // Taxeärende
     fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
-    // Målnummer sätts INTE vid uppläggning (#796) — det fylls i senare.
     expect(createMatterMutate).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Tvist AB", matterType: "Brottmål", description: "Misshandel", isTaxeArende: true,
       }),
     );
-    expect(screen.queryByLabelText(/målnummer/)).not.toBeInTheDocument();
+  });
+
+  it("Målnummer-rutan visas alltid i Nytt ärende, även utan klient (#1509)", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    expect(screen.getByLabelText("Målnummer")).toBeInTheDocument();
+  });
+
+  it("tom/blank Målnummer-ruta → inget courtCaseNumber skickas (#1509)", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Tvist AB" } });
+    fireEvent.change(screen.getByLabelText("Målnummer"), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate.mock.calls[0]?.[0].courtCaseNumber).toBeUndefined();
+  });
+
+  it("ifyllt Målnummer skickas trimmat som courtCaseNumber (#1509)", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Tvist AB" } });
+    fireEvent.change(screen.getByLabelText("Målnummer"), { target: { value: "  B 1234-26 " } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ courtCaseNumber: "B 1234-26" }));
+  });
+
+  it("byrån har ärendetyper → Ärendetyp väljs ur listan", () => {
+    matterTypes = ["Bodelning", "God man"];
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    const select = screen.getByLabelText("Ärendetyp");
+    expect(select.tagName).toBe("SELECT");
+    expect(screen.getByRole("option", { name: "God man" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Dödsbo" } });
+    fireEvent.change(select, { target: { value: "God man" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ matterType: "God man" }));
   });
 
   it("paginering: Nästa följt av Föregående går tillbaka till sida 1", () => {
@@ -251,7 +304,7 @@ describe("MattersPage — Välj klient via sökdialog (#1128)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Ny klient/ }));
 
     const dialog = screen.getByRole("dialog", { name: "Ny klient" });
-    expect((within(dialog).getByLabelText(/Namn/) as HTMLInputElement).value).toBe("Nya Klienten AB");
+    expect((within(dialog).getByLabelText<HTMLInputElement>(/Namn/)).value).toBe("Nya Klienten AB");
     fireEvent.click(within(dialog).getByRole("button", { name: "OK" }));
     expect(createContactMutate).toHaveBeenCalledWith(expect.objectContaining({ name: "Nya Klienten AB" }));
 

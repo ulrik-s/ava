@@ -580,11 +580,22 @@ describe("invoice.setStatus", () => {
 // ─── markFortnoxBooked (#82) ─────────────────────────────────────
 
 describe("invoice.markFortnoxBooked", () => {
+  const ADMIN = { role: "ADMIN" };
+
+  it("nekar en vanlig användare (#1450) — ett påhittat id stoppar annars bokföringen", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", fortnoxId: null });
+
+    await expect(
+      makeCaller().markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
+  });
+
   it("sätter fortnoxId på obokförd faktura", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", fortnoxId: null });
     mockPrisma.invoice.update.mockResolvedValue({ id: "inv-1", fortnoxId: "A/1" });
 
-    const res = await makeCaller().markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" });
+    const res = await makeCaller("org-a", "user-1", ADMIN).markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" });
 
     expect(res.fortnoxId).toBe("A/1");
     // Repo.update bumpar version + updatedAt (ADR 0019), så matcha löst på fortnoxId.
@@ -599,7 +610,7 @@ describe("invoice.markFortnoxBooked", () => {
   it("idempotent: skriver INTE över befintlig fortnoxId", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", fortnoxId: "A/7" });
 
-    const res = await makeCaller().markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/99" });
+    const res = await makeCaller("org-a", "user-1", ADMIN).markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/99" });
 
     expect(res.fortnoxId).toBe("A/7"); // oförändrad
     expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
@@ -609,13 +620,13 @@ describe("invoice.markFortnoxBooked", () => {
     mockPrisma.invoice.findFirst.mockResolvedValue(null);
 
     await expect(
-      makeCaller("org-b").markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" }),
+      makeCaller("org-b", "user-1", ADMIN).markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("zod kräver icke-tom fortnoxId", async () => {
     await expect(
-      makeCaller().markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "" }),
+      makeCaller("org-a", "user-1", ADMIN).markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "" }),
     ).rejects.toThrow();
   });
 });

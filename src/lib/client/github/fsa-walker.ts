@@ -28,14 +28,13 @@ async function walk(dir: FileSystemDirectoryHandle, prefix: string, out: WalkedF
   // FileSystemDirectoryHandle:s default async-iteration ger
   // [name, handle]-tupler (samma som .entries()). Vi använder
   // .values() för att få handles direkt.
-   
   const handleWithValues = dir as FileSystemDirectoryHandle & { values: () => AsyncIterable<FileSystemHandle> };
   for await (const entry of handleWithValues.values()) {
     if (entry.kind === "directory") {
       if (IGNORED_DIRS.has(entry.name)) continue;
-      await walk(entry as FileSystemDirectoryHandle, `${prefix}${entry.name}/`, out);
+      await walk(entry, `${prefix}${entry.name}/`, out);
     } else {
-      const fh = entry as FileSystemFileHandle;
+      const fh = entry;
       const file = await fh.getFile();
       const bytes = new Uint8Array(await file.arrayBuffer());
       const sha = await gitBlobSha1(bytes);

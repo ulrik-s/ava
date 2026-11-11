@@ -259,7 +259,7 @@ describe("InvoiceDetailPage", () => {
     fireEvent.click(
       await waitFor(() => screen.getByRole("button", { name: /Skapa avbetalningsplan/i })),
     );
-    const skapaBtn = screen.getByRole("button", { name: /Skapa plan/i }) as HTMLButtonElement;
+    const skapaBtn = screen.getByRole<HTMLButtonElement>("button", { name: /Skapa plan/i });
     expect(skapaBtn.disabled).toBe(true);
   });
 
@@ -269,7 +269,7 @@ describe("InvoiceDetailPage", () => {
       await waitFor(() => screen.getByRole("button", { name: /^Kreditera$/i })),
     );
     expect(screen.getByRole("heading", { name: /Kreditera faktura/i })).toBeInTheDocument();
-    const noteArea = screen.getByPlaceholderText(/anledning/i) as HTMLTextAreaElement;
+    const noteArea = screen.getByPlaceholderText<HTMLTextAreaElement>(/anledning/i);
     fireEvent.change(noteArea, { target: { value: "Felaktig fakturering" } });
     const krediteraBtns = screen.getAllByRole("button", { name: /Kreditera/i });
     fireEvent.click(krediteraBtns[krediteraBtns.length - 1]!);
@@ -440,19 +440,19 @@ describe("InvoiceDetailPage", () => {
     fireEvent.click(
       await waitFor(() => screen.getByRole("button", { name: /Skapa avbetalningsplan/i })),
     );
-    const monthly = screen.getByLabelText(/Månadsbelopp/) as HTMLInputElement;
+    const monthly = screen.getByLabelText<HTMLInputElement>(/Månadsbelopp/);
     fireEvent.change(monthly, { target: { value: "1500" } });
     expect(monthly.value).toBe("1500");
 
-    const day = screen.getByLabelText(/Förfallodag/) as HTMLInputElement;
+    const day = screen.getByLabelText<HTMLInputElement>(/Förfallodag/);
     fireEvent.change(day, { target: { value: "15" } });
     expect(day.value).toBe("15");
 
-    const startDate = screen.getByLabelText(/Startdatum/) as HTMLInputElement;
+    const startDate = screen.getByLabelText<HTMLInputElement>(/Startdatum/);
     fireEvent.change(startDate, { target: { value: "2026-06-01" } });
     expect(startDate.value).toBe("2026-06-01");
 
-    const notes = screen.getByLabelText(/^Notering$/) as HTMLTextAreaElement;
+    const notes = screen.getByLabelText<HTMLTextAreaElement>(/^Notering$/);
     fireEvent.change(notes, { target: { value: "Avbetalningsplan" } });
     expect(notes.value).toBe("Avbetalningsplan");
 
@@ -495,11 +495,11 @@ describe("InvoiceDetailPage", () => {
     fireEvent.click(
       await waitFor(() => screen.getByRole("button", { name: /Registrera betalning/i })),
     );
-    const date = screen.getByLabelText(/Betalningsdatum/) as HTMLInputElement;
+    const date = screen.getByLabelText<HTMLInputElement>(/Betalningsdatum/);
     fireEvent.change(date, { target: { value: "2026-04-20" } });
-    const note = screen.getByLabelText(/^Notering$/) as HTMLInputElement;
+    const note = screen.getByLabelText<HTMLInputElement>(/^Notering$/);
     fireEvent.change(note, { target: { value: "Banköverföring" } });
-    const amount = screen.getByLabelText(/^Belopp/) as HTMLInputElement;
+    const amount = screen.getByLabelText<HTMLInputElement>(/^Belopp/);
     fireEvent.change(amount, { target: { value: "100" } });
     const sparaBtns = screen.getAllByRole("button", { name: /^Spara$/i });
     fireEvent.click(sparaBtns[sparaBtns.length - 1]!);

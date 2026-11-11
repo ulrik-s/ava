@@ -35,7 +35,7 @@ describe("TemplateEditor", () => {
 
   it("Spara mall är disabled när namn eller content saknas", () => {
     render(<TemplateEditor onSave={onSave} onCancel={onCancel} />);
-    const saveBtn = screen.getByRole("button", { name: /Spara mall/i }) as HTMLButtonElement;
+    const saveBtn = screen.getByRole<HTMLButtonElement>("button", { name: /Spara mall/i });
     expect(saveBtn.disabled).toBe(true);
   });
 
@@ -48,7 +48,7 @@ describe("TemplateEditor", () => {
         onCancel={onCancel}
       />,
     );
-    const inputs = screen.getAllByRole("textbox") as HTMLInputElement[];
+    const inputs = screen.getAllByRole<HTMLInputElement>("textbox");
     // namnfält
     fireEvent.change(inputs[0]!, { target: { value: "  Mitt avtal  " } });
     fireEvent.click(screen.getByRole("button", { name: /Spara mall/i }));
@@ -123,7 +123,7 @@ describe("TemplateEditor", () => {
         saving
       />,
     );
-    const btn = screen.getByRole("button", { name: /Sparar…/i }) as HTMLButtonElement;
+    const btn = screen.getByRole<HTMLButtonElement>("button", { name: /Sparar…/i });
     expect(btn.disabled).toBe(true);
   });
 });

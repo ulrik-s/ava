@@ -255,6 +255,24 @@ describe("MatterDetailPage", () => {
     expect(screen.queryByText(/Domstolsbetalningar/)).not.toBeInTheDocument();
   });
 
+  it("tidigare målnummer visas i ärendehuvudet när det finns (#1510)", async () => {
+    matterQuery.data = { ...M, courtCaseNumber: "T 2-26", previousCourtCaseNumber: "T 1-26" };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Tidigare målnr")).toBeInTheDocument());
+    expect(screen.getByText("T 1-26")).toBeInTheDocument();
+  });
+
+  it("försäkringsreferensen visas bara med försäkringsbolag som kontakt (#1511)", async () => {
+    const first = renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Målnummer")).toBeInTheDocument());
+    expect(screen.queryByLabelText("Försäkringsreferens")).not.toBeInTheDocument();
+    first.unmount();
+    const insurer = { id: "mc2", role: "MOTPART", contact: { id: "c2", name: "Bolaget", contactType: "INSURANCE_COMPANY", personalNumber: null, orgNumber: null } };
+    matterQuery.data = { ...M, contacts: [...M.contacts, insurer], insuranceReference: "SK-1" };
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Försäkringsreferens")).toHaveValue("SK-1"));
+  });
+
   it("Domstolsbetalningar-panelen finns bara i domstolsärenden eller med registrerade fordringar (#1213)", async () => {
     const panel = (c: HTMLElement) => c.querySelector('[data-panel="receivables"]');
     const first = renderPage();
@@ -456,7 +474,7 @@ describe("MatterDetailPage", () => {
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
     // Format-alternativen är nu "PDF (via utskrift)" / "HTML-fil" (värde docx).
-    const htmlRadio = screen.getByRole("radio", { name: /HTML/i }) as HTMLInputElement;
+    const htmlRadio = screen.getByRole<HTMLInputElement>("radio", { name: /HTML/i });
     fireEvent.click(htmlRadio);
     expect(htmlRadio.checked).toBe(true);
   });
@@ -517,7 +535,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "tpl1" } });
     fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));
     await waitFor(() => expect(openMock).toHaveBeenCalledWith("blob:fake", "_blank", "noopener,noreferrer"));
@@ -528,7 +546,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "tpl1" } });
     fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));
     await waitFor(() => expect(screen.getByText(/Mallen saknar innehåll/)).toBeInTheDocument());

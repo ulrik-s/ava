@@ -42,3 +42,42 @@ export async function pdfPageTexts(bytes: Uint8Array): Promise<string[][]> {
   const doc = await PDFDocument.load(bytes);
   return doc.getPages().map((page) => streamsOf(doc, page.node.get(PDFName.of("Contents"))).flatMap((s) => textRuns(decodeStream(s))));
 }
+
+/** En textkörning med teckensnitt (utan pdf-libs unika suffix), storlek och position. */
+export interface PdfTextItem {
+  text: string;
+  font: string;
+  size: number;
+  x: number;
+  y: number;
+}
+
+/** En rak linje (`m … l S`) — y i pdf-koordinater (nedifrån). */
+export interface PdfLineItem {
+  x1: number;
+  x2: number;
+  y: number;
+}
+
+/** Texterna och linjerna på en sida, i ritordning. */
+export interface PdfPageLayout {
+  texts: PdfTextItem[];
+  lines: PdfLineItem[];
+}
+
+const TEXT_RE = /\/([A-Za-z-]+?)-\d+ ([\d.]+) Tf[\s\S]*?1 0 0 1 ([\d.-]+) ([\d.-]+) Tm\s*<([0-9A-Fa-f]*)>\s*Tj/g;
+const LINE_RE = /([\d.-]+) ([\d.-]+) m\s*([\d.-]+) ([\d.-]+) l\s*S/g;
+
+function layoutOf(content: string): PdfPageLayout {
+  const texts = [...content.matchAll(TEXT_RE)].map((m) => ({
+    text: textRuns(`<${m[5] ?? ""}> Tj`)[0] ?? "",
+    font: m[1] ?? "", size: Number(m[2]), x: Number(m[3]), y: Number(m[4]),
+  }));
+  const lines = [...content.matchAll(LINE_RE)].map((m) => ({ x1: Number(m[1]), x2: Number(m[3]), y: Number(m[2]) }));
+  return { texts, lines };
+}
+
+/** Varje sidas text- och linjepositioner — för layouttester (#1505). */
+export async function pdfPageLayouts(bytes: Uint8Array): Promise<PdfPageLayout[]> {
+  return (await pdfPageContents(bytes)).map(layoutOf);
+}

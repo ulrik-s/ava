@@ -91,7 +91,7 @@ function PaymentMethodView({
 }) {
   const risk = creditRiskFor(paymentMethod);
   const badgeClass = RISK_BADGE[risk];
-  const label = PAYMENT_METHOD_LABELS[paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? paymentMethod;
+  const label = PAYMENT_METHOD_LABELS[paymentMethod] ?? paymentMethod;
   const showShare = usesClientShare(paymentMethod);
   const cap = showShare ? capLabel(paymentMethod, rattsskyddMaxOre, rattshjalpMaxTimmar) : null;
   return (
@@ -152,7 +152,7 @@ function CoverageCapField({ method, value, onChange }: { method: PaymentMethod; 
       <p className="mt-1 text-[11px] text-gray-400">
         {isAmount
           ? "Taket ur försäkringsbeslutet. Ärendet varnar vid 90 % av upparbetat värde."
-          : "Rättshjälpslagen: 100 tim (höj vid beviljad utökad rättshjälp). Varnar vid 90 %."}
+          : "Rättshjälpslagen: 100 tim (höj vid beviljad utökad rättshjälp). Varnar vid 80 tim, eller 10 tim före ett utökat tak."}
       </p>
     </div>
   );
@@ -345,7 +345,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
             onClick={() =>
               update.mutate({
                 id: matterId,
-                paymentMethod: method as Parameters<typeof update.mutate>[0]["paymentMethod"],
+                paymentMethod: method,
                 paymentMethodNote: note || null,
                 paymentMethodDecidedAt: decidedAt || null,
                 clientShareBips: clientShareFromPct(sharePct),
