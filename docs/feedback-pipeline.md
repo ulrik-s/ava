@@ -227,7 +227,8 @@ alltså med koden, och agenterna kan inte ändra dem (Agentvakten skyddar
 | 6 PR-vakt | varje timme, dygnet runt | `Läs och följ tooling/agents/6-pr-vakt.md i ulrik-s/ava.` (bara `ulrik-s/ava`) |
 
 PR-vakten ser till att alla öppna PR:er blir gröna och mergade:
-- startar om CI som hänger mer än 60 minuter,
+- startar om CI som hänger mer än 60 minuter (avbryter körningen eller, på
+  `claude/`-brancher, pushar en tom commit; annars `blockerad` åt Ulrik),
 - kör om flaky jobb,
 - rättar rött CI och konflikter på `claude/`-brancher,
 - granskar Dependabot-PR:er och Ulriks egna PR:er,
