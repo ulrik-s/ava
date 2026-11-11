@@ -4,7 +4,7 @@
  * - Anteckningar: rå ISO-tidpunkt i Datum (demogeneratorn skickade den som `date`).
  * - Fakturor: typen "CREDIT" i stället för "Kreditfaktura".
  * - Avbetalningar: radens status "AKTIVA" (filterknappens plural).
- * - Användare: "2.50 kr/km" med decimalpunkt.
+ * - Användare: "2.50 kr/km" med decimalpunkt; nu kr/mil med decimalkomma (#1527).
  * - Kalender: "Tasks" / "Ny task".
  */
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
@@ -38,8 +38,8 @@ test("Fakturor, Avbetalningar, Användare och Kalender visar svenska etiketter",
   await expect(page.getByRole("cell", { name: "Aktiv", exact: true }).first()).toBeVisible({ timeout: 30_000 });
 
   await page.goto(`${BASE}/users/`);
-  await expect(page.getByText(/^\d+,\d{2}\s?kr\/km$/).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/\d\.\d{2} kr\/km/)).toHaveCount(0);
+  await expect(page.getByText(/^\d+,\d{2}\s?kr\/mil$/).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/\d\.\d{2}\s?kr\/mil|kr\/km/)).toHaveCount(0);
 
   await page.goto(`${BASE}/calendar/`);
   await showPanel(page, "Uppgifter");
