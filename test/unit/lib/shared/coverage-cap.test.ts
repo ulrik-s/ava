@@ -80,6 +80,19 @@ describe("coverageStatus", () => {
     expect(coverageStatus({ ...rh, billableMinutes: 40 * 60 })?.nearCap).toBe(true);
   });
 
+  it("rättshjälp: varningsgränsen räknas i hela minuter (tak 12 → 576 min, inget flyttalsfel)", () => {
+    const rh = { ...base, method: "RATTSHJALP" as const, rattshjalpMaxTimmar: 12 };
+    expect(coverageStatus({ ...rh, billableMinutes: 575 })?.nearCap).toBe(false);
+    expect(coverageStatus({ ...rh, billableMinutes: 576 })?.nearCap).toBe(true);
+  });
+
+  it("rättshjälp: exakt 80 % ger varning för alla heltalstak 1–100", () => {
+    for (let cap = 1; cap <= 100; cap++) {
+      const s = coverageStatus({ ...base, method: "RATTSHJALP", rattshjalpMaxTimmar: cap, billableMinutes: 48 * cap });
+      expect(s?.nearCap).toBe(true);
+    }
+  });
+
   it("rättshjälp: overCap först vid 100 % av taket", () => {
     const rh = { ...base, method: "RATTSHJALP" as const, rattshjalpMaxTimmar: 150 };
     expect(coverageStatus({ ...rh, billableMinutes: 150 * 60 - 1 })?.overCap).toBe(false);

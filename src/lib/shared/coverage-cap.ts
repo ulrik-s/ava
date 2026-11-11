@@ -64,7 +64,9 @@ export function coverageStatus(input: CoverageCapInput): CoverageStatus | null {
   }
   if (input.method === "RATTSHJALP") {
     const capTimmar = input.rattshjalpMaxTimmar ?? DEFAULT_RATTSHJALP_TIMMAR;
-    return statusOf("hours", input.billableMinutes, capTimmar * 60, rattshjalpWarnTimmar(capTimmar) * 60);
+    // Gränsen i hela minuter: 0,8 · 60 i flyttal blir annars t.ex. 576.0000000000001.
+    const warnMinutes = Math.round(rattshjalpWarnTimmar(capTimmar) * 60);
+    return statusOf("hours", input.billableMinutes, capTimmar * 60, warnMinutes);
   }
   return null;
 }
