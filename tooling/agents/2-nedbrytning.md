@@ -67,6 +67,10 @@ Ta högst 5 ÖPPNA issues i `ulrik-s/ava-feedback` som har `verifierad` men inte
    - **Problem**: generellt beskrivet.
    - **Acceptanskriterier**: mätbara, i punktform.
    - **Troliga filer**: sökvägar.
+   - **Arkitektur**: förebilden, alltså befintlig kod som gör samma sorts sak
+     och som ändringen ska följa (fil:rad), och de ADR:er som gäller (regel
+     4b). Kräver ändringen något nytt (mönster, beroende, lager, ändrad ADR):
+     skapa INGA issues. Sätt `blockerad` på intag-issuen med ett ADR-utkast.
    - **Testplan**: vilka tester som ska finnas (enhet/komponent/E2E).
    - **Beroenden**: andra issues som måste vara klara först (`Beror på #N`).
    - Sist, på egen rad: `Intag: ava-feedback#<nr>`

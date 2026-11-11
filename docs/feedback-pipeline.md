@@ -91,6 +91,8 @@ Definieras i `tooling/agents/labels.json`. Skapas och uppdateras med
 | ava | `agent-pr` | loop 4 | PR från en agent (Agentvakten gäller) |
 | båda | `blockerad` | alla | Väntar på Ulrik, och ingen agent rör den |
 | ava | `människa-godkänd` | **Ulrik** | Agent-PR får röra skyddade sökvägar/migrationer |
+| ava | `arkitektur-rapport` | loop 5 | Veckans arkitekturgenomgång (siffror, avdrift, förslag) |
+| ava | `refaktorisering` | loop 5 | Förslag. Byggs först när **Ulrik** satt `granskad` |
 
 Användaren ser statusen i AVA: *Mottagen → Undersökt — väntar på beslut*
 (eller *Kunde inte bekräftas*) *→ Verifierad → Under arbete → Levererad i vX*.
@@ -221,6 +223,7 @@ alltså med koden, och agenterna kan inte ändra dem (Agentvakten skyddar
 | 2 Nedbrytning + uppföljning | varannan timme, 07–19 | `Läs och följ tooling/agents/2-nedbrytning.md i ulrik-s/ava.` |
 | 3 Granskning + merge | varje timme, 07–21 | `Läs och följ tooling/agents/3-granskning.md i ulrik-s/ava.` |
 | 4 Implementation | varje timme, 08–20 | `Läs och följ tooling/agents/4-implementation.md i ulrik-s/ava.` |
+| 5 Arkitektur | måndagar 06:00 | `Läs och följ tooling/agents/5-arkitektur.md i ulrik-s/ava.` (bara `ulrik-s/ava`) |
 
 En körning utan arbete avslutas efter en rad. Tätare schema ger snabbare
 leverans men drar mer av prenumerationen. Börja glest och öka när du ser hur
@@ -289,6 +292,38 @@ håller staging helt isär.
    inom fem minuter. `curl https://staging.ava-crm.io/readyz` visar
    `"release":"v0.4.0-3-gabc1234"`, alltså senaste taggen plus antal commits.
 6. **Backup** behövs inte (demodata). Sätt inte upp nattjobben där.
+
+## Arkitekturen i schack
+
+När användarnas önskemål byggs av agenter är risken att koden driver iväg: samma
+sak löst på två sätt, logik i fel lager, filer som växer. Två lager håller
+emot, ovanpå det CI redan kontrollerar (dependency-cruisers lagergränser,
+komplexitet < 8, jscpd, knip, täckning, Agentvakten).
+
+**1. Agenterna passar in i arkitekturen** (regel 4b i
+`tooling/agents/0-gemensamma-regler.md`).
+- Nedbrytningen anger för varje issue en **förebild**: befintlig kod som gör
+  samma sorts sak, plus de ADR:er som gäller.
+- Implementationen följer förebilden.
+- Granskningen letar aktivt efter avdrift och skickar tillbaka den.
+- Kräver något ett **nytt** mönster, beroende eller lager stoppas det
+  (`blockerad`) med ett **ADR-utkast**, och du bestämmer. Agenter inför
+  aldrig sådant själva.
+
+**2. Veckans arkitekturgenomgång** (loop 5, måndagar).
+1. Agenten mäter med `tooling/scripts/arch-metrics.ts`: storlek per område,
+   största filer, hotspots (churn × storlek), duplicering och beroenden.
+   Mätningen är deterministisk och skyddas av Agentvakten.
+2. Den jämför med förra veckan, läser veckans mergade PR:er och skriver en
+   rapport-issue (`arkitektur-rapport`): avdrift, det som är friskt, och siffrorna.
+3. Den föreslår **högst tre** små, beteendebevarande refaktoriseringar, som
+   issues med `refaktorisering`.
+
+**Du godkänner** ett förslag genom att sätta `granskad` på det (själv,
+inte via en agent). Då bygger implementationen det, men först när inga
+användarönskemål väntar. Det går genom samma granskning och samma tak på 10
+PR:er per dygn. Befintliga tester får inte ändras: de är kontraktet. Förslag
+du inte godkänner stängs efter fyra veckor.
 
 ## Releasa
 
