@@ -95,8 +95,8 @@ För varje öppen PR med `agent-pr` + `granskad` och utan `blockerad`:
    granskningen: ta bort `granskad`, sätt `att-granska` och granska om (B).
 2. Hämta CI för head-sha (`check-runs`):
    - Pågår något: vänta till nästa körning.
-   - Är något rött: ta bort `granskad`, sätt `behöver-ändras` och kommentera
-     vad som är rött.
+   - Är något rött: låt PR:en vara. PR-vakten (loop 6,
+     `tooling/agents/6-pr-vakt.md`) kör om, rättar och startar om CI.
    - Är allt grönt: merga med den granskade sha:n
      (`gh api -X PUT repos/ulrik-s/ava/pulls/N/merge -f merge_method=squash -f sha=<sha>`).
      GitHub vägrar om en krävd kontroll (bl.a. Agentvakt) inte är grön, eller

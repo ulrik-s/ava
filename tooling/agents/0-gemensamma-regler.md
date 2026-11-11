@@ -1,7 +1,7 @@
 # Gemensamma regler för agentkedjan
 
-Gäller alla fyra looparna (verifiering, nedbrytning, granskning,
-implementation). Varje loop läser den här filen först. Översikt:
+Gäller alla looparna (verifiering, nedbrytning, granskning,
+implementation, arkitektur, PR-vakt). Varje loop läser den här filen först. Översikt:
 `docs/feedback-pipeline.md`.
 
 ## Repon
@@ -168,6 +168,10 @@ Kod (`ava`), refaktoriseringsförslag (loop 5):
 Kod (`ava`), PR:er:
 `agent-pr` + `att-granska` → `granskad` (mergas när CI är grön) eller
 `behöver-ändras` → `att-granska` …
+
+Övriga PR:er (Dependabot, Ulriks egna) granskas och mergas av PR-vakten
+(loop 6): → `granskad` eller `behöver-ändras`. PR-vakten äger också rött CI,
+jobb som hänger och konflikter mot `main` för alla PR:er.
 
 `blockerad` (båda repona): agenten väntar på Ulrik. Rör inte en blockerad
 issue/PR förrän etiketten är borttagen.
