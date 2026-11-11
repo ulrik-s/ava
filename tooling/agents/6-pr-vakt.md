@@ -29,16 +29,28 @@ En körning med `status` `queued` eller `in_progress` vars `run_started_at`
 - Avbryt den: `gh api -X POST repos/ulrik-s/ava/actions/runs/<id>/cancel`.
   Nästa körning av PR-vakten ser den som avbruten och kör om den (steg 2).
 - Svarar GitHub att körningen redan är klar, eller att den inte kan avbrytas,
-  är det en spökkörning. Stäng och öppna då PR:en igen, så startar CI om på
-  samma sha. Det är två skrivningar, i två kommandon:
-  `gh api -X PATCH repos/ulrik-s/ava/pulls/N -f state=closed` och sedan
-  `gh api -X PATCH repos/ulrik-s/ava/pulls/N -f state=open`.
+  är det en spökkörning. Starta om CI så här:
+  - **`claude/`-branch:** pusha en tom commit
+    (`git commit --allow-empty -m "ci: starta om hängande CI"`), se
+    "Rätta en branch".
+  - **Annan branch:** sätt `blockerad` och kommentera att CI hänger, så att
+    Ulrik startar om den.
+
+  Stäng och öppna aldrig en PR för att starta om CI. Molnets regler
+  förbjuder det.
 
 Pågår CI och är yngre än 60 minuter: vänta till nästa körning.
 
 ## 2. Rött eller avbrutet CI
 
 En körning med `conclusion` `failure`, `cancelled` eller `timed_out`:
+
+**Undantag, Agentvakt:** säger dess logg att `granskad` saknas, eller att
+PR:en är `blockerad`, är det inget CI-fel. Det är granskningens tillstånd.
+Agentvakten körs om av sig själv när etiketten ändras. Gör ingenting med den.
+Kör inte om den och rätta ingenting. Är Agentvakt röd av något annat skäl,
+t.ex. skyddad sökväg eller taket på 10 PR:er: sätt `blockerad` och
+kommentera.
 
 1. **Kör om de fallerade jobben** när `run_attempt` är 1, eller när
    `conclusion` är `cancelled` eller `timed_out` och `run_attempt` är högst 3.
@@ -73,7 +85,8 @@ ratchet eller en spärr, och stäng inte av en kontroll.
 Finns inga check-runs alls på head-sha:n och PR:en är mer än 30 minuter
 gammal:
 - **Dependabot:** kommentera `@dependabot recreate` en gång.
-- **Annan PR:** stäng och öppna den igen (två kommandon, som i steg 1).
+- **`claude/`-branch:** pusha en tom commit, som i steg 1.
+- **Annan PR:** sätt `blockerad` och kommentera att CI aldrig startade.
 
 ## 5. Granskning av PR:er som inte är agent-PR:er
 
