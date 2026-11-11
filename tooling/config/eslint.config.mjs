@@ -23,15 +23,6 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    // ESLint 10-kompat: hårdkoda React-versionen. eslint-plugin-react
-    // (buntad av eslint-config-next) auto-detekterar annars versionen via
-    // context.getFilename(), som togs bort i ESLint 10 → krasch. Att ange
-    // versionen explicit kringgår detekteringen (och är snabbare). Kan tas
-    // bort när eslint-config-next buntar en ESLint-10-fixad eslint-plugin-react
-    // (jsx-eslint/eslint-plugin-react#3979, vercel/next.js#91702).
-    settings: { react: { version: "19.2" } },
-  },
-  {
     // Typ-medveten linting (#9). projectService låter typescript-eslint hitta
     // närmaste tsconfig.json per fil → ger typinfo till reglerna nedan.
     // Kostar lint-tid (~14s → ~21s) men möjliggör enforcement-golv som rent
