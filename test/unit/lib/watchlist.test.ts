@@ -48,6 +48,12 @@ describe("coverageItems", () => {
     expect(item?.detail).toContain("utökad rättshjälp");
   });
 
+  it("tar med ett rättshjälpsärende redan vid 80 tim (#1519)", () => {
+    expect(coverageItems([{ ...rattshjalp, billableMinutes: 80 * 60 - 1, billableValueOre: 0 }])).toEqual([]);
+    const [item] = coverageItems([{ ...rattshjalp, billableMinutes: 80 * 60, billableValueOre: 0 }]);
+    expect(item?.severity).toBe("approaching");
+  });
+
   // Passerat tak är redan en förlust — det måste rangordnas högre än ett
   // annalkande, annars hamnar det under i listan.
   it("markerar passerat tak som passed", () => {

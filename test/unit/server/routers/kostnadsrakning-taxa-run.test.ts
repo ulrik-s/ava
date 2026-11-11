@@ -30,7 +30,7 @@ const TAXA_95_NIVA1 = 563_500; // 1 tim 30 min – 1 tim 44 min, nivå 1 (2026)
 const yrkat = (exklOre: number): number => exklOre + roundToKronor(exklOre * 0.25);
 const HUF = { hufStart: "2026-09-22T09:00:00.000Z", hufEnd: "2026-09-22T10:35:00.000Z" }; // 95 min
 
-interface EntrySpec { id: string; minutes: number; kind?: "ADVOKATBEREDSKAP" | "TIDSSPILLAN" | "ARBETE"; hourlyRate?: number }
+interface EntrySpec { id: string; minutes: number; kind?: "ADVOKATBEREDSKAP" | "TIDSSPILLAN" | "ARBETE" | "FORHANDLING"; hourlyRate?: number }
 
 function setup(entries: readonly EntrySpec[], matterExtra: Record<string, unknown> = {}) {
   const ds = new DemoDataStore({
@@ -126,5 +126,40 @@ describe("createKostnadsrakning — taxeärende utan giltig huvudförhandling v�
     await expect(caller.billingRun.createKostnadsrakning({
       matterId: MATTER, hufStart: "2026-09-22T11:00:00.000Z", hufEnd: "2026-09-22T09:00:00.000Z",
     })).rejects.toThrow();
+  });
+});
+
+describe("\"Deltagit i förhandling\"-posten (FORHANDLING)", () => {
+  it("räknas inte som arbete i körningen — förhandlingstiden är klockans, aldrig dubbelt", async () => {
+    const without = setup([{ id: "a", minutes: 120 }], { isTaxeArende: false });
+    const withHearing = setup([{ id: "a", minutes: 120 }, { id: "h", minutes: 95, kind: "FORHANDLING" }], { isTaxeArende: false });
+    const claim = { matterId: MATTER, ...HUF, isTaxeArende: false };
+    const r1 = await without.caller.billingRun.createKostnadsrakning(claim);
+    const r2 = await withHearing.caller.billingRun.createKostnadsrakning(claim);
+    expect(r2.run.workValueOreAtRun).toBe(r1.run.workValueOreAtRun);
+  });
+
+  it("fryses ändå med körningen — den blir inte kvar som ofakturerat arbete", async () => {
+    const { caller } = setup([{ id: "h", minutes: 95, kind: "FORHANDLING" }], { isTaxeArende: false });
+    await caller.billingRun.createKostnadsrakning({ matterId: MATTER, ...HUF, isTaxeArende: false });
+    const { entries } = await caller.timeEntry.list({ matterId: MATTER, pageSize: 10 });
+    expect(entries.find((e) => e.id === "h")?.frozenAt).toBeTruthy();
+  });
+
+  it("nedlagt ärende: ingen förhandlingstid (start = slut), ingen taxa — bara posterna yrkas", async () => {
+    const { caller } = setup([{ id: "a", minutes: 120 }], { isTaxeArende: false });
+    const { run } = await caller.billingRun.createKostnadsrakning({
+      matterId: MATTER, hufStart: HUF.hufStart, hufEnd: HUF.hufStart, isTaxeArende: false,
+    });
+    expect(run.workValueOreAtRun).toBeGreaterThan(0);
+  });
+
+  it("en ny förhandlingspost får timarvodets pris, inte beredskapens dagbelopp", async () => {
+    const { caller } = setup([]);
+    await caller.organization.updateSettings({ hourlyRates: { ARBETE: 200_000 } });
+    const created = await caller.timeEntry.create({
+      matterId: MATTER, date: "2026-09-22", minutes: 95, description: "Huvudförhandling", kind: "FORHANDLING",
+    });
+    expect(created.hourlyRate).toBe(200_000);
   });
 });

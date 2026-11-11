@@ -255,6 +255,41 @@ describe("matter.update", () => {
     expect(m.paymentMethodDecidedAt).toBeNull();
   });
 
+  it("byte av målnummer sparar det gamla som tidigare målnummer, sökbart (#1510)", async () => {
+    const { caller, ds } = makeCaller({ matters: [matter({ courtCaseNumber: "T 1-26" })] });
+    type Row = { id: string; courtCaseNumber?: string | null; previousCourtCaseNumber?: string | null };
+    const row = () => (src(ds).matters as Row[]).find((x) => x.id === "matter-1");
+    await caller.update({ id: "matter-1", courtCaseNumber: "T 2-26" });
+    expect(row()).toMatchObject({ courtCaseNumber: "T 2-26", previousCourtCaseNumber: "T 1-26" });
+    expect((await caller.list({ search: "t 1-26" })).matters.map((m) => m.id)).toEqual(["matter-1"]);
+    await caller.update({ id: "matter-1", courtCaseNumber: "T 2-26" }); // samma värde igen
+    await caller.update({ id: "matter-1", title: "Ny titel" }); // målnumret utelämnat
+    expect(row()?.previousCourtCaseNumber).toBe("T 1-26");
+    await caller.update({ id: "matter-1", courtCaseNumber: null }); // tömt
+    expect(row()).toMatchObject({ courtCaseNumber: null, previousCourtCaseNumber: "T 1-26" });
+  });
+
+  it("försäkringsreferensen sparas, är sökbar och kan nollställas (#1511)", async () => {
+    const { caller, ds } = makeCaller({ matters: [matter()] });
+    type Row = { id: string; insuranceReference?: string | null };
+    const row = () => (src(ds).matters as Row[]).find((x) => x.id === "matter-1");
+    await caller.update({ id: "matter-1", insuranceReference: "SK-4711" });
+    expect(row()?.insuranceReference).toBe("SK-4711");
+    expect((await caller.list({ search: "sk-47" })).matters.map((m) => m.id)).toEqual(["matter-1"]);
+    await caller.update({ id: "matter-1", title: "Ny titel" }); // utelämnad → orörd
+    expect(row()?.insuranceReference).toBe("SK-4711");
+    await caller.update({ id: "matter-1", insuranceReference: null });
+    expect(row()?.insuranceReference).toBeNull();
+  });
+
+  it("första målnumret ger inget tidigare målnummer (#1510)", async () => {
+    const { caller, ds } = makeCaller({ matters: [matter()] });
+    await caller.update({ id: "matter-1", courtCaseNumber: "T 1-26" });
+    const m = (src(ds).matters as Array<{ id: string; previousCourtCaseNumber?: string | null }>).find((x) => x.id === "matter-1");
+    expect(m).toBeDefined();
+    expect(m?.previousCourtCaseNumber ?? null).toBeNull();
+  });
+
   it("vägrar uppdatera matter från annan org", async () => {
     const { caller } = makeCaller({ matters: [matter()] }, "org-b");
     await expect(caller.update({ id: "matter-1", status: "CLOSED" })).rejects.toMatchObject({ code: "NOT_FOUND" });

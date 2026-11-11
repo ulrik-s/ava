@@ -7,6 +7,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { z } from "zod";
 import { loadFromStorage } from "@/lib/client/load-from-storage";
 import { cn } from "@/lib/client/utils";
+import { FeedbackButton } from "./feedback-button";
 import { useSignOutFlow } from "./sign-out-flow";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -104,6 +105,7 @@ function UserSection({ userName, nameMargin = "mb-1", iconOnly = false }: { user
       {userName && !iconOnly && (
         <p className={cn("text-sm font-medium text-gray-900 truncate", nameMargin)}>{userName}</p>
       )}
+      <FeedbackButton iconOnly={iconOnly} />
       <LogoutButton iconOnly={iconOnly} />
     </div>
   );

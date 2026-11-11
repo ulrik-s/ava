@@ -2,7 +2,7 @@
  * Test för InvoicesPage — listrendering, status, tomt-läge.
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import InvoicesPage from "@/app/invoices/page";
 
@@ -90,6 +90,7 @@ describe("InvoicesPage", () => {
       },
     ]);
     render(<InvoicesPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (1)" })); // kreditfakturan dold från början (#1522)
     expect(screen.getByText("Faktura")).toBeInTheDocument();
     expect(screen.getByText("Aconto")).toBeInTheDocument();
     expect(screen.getByText("Kreditfaktura")).toBeInTheDocument(); // förr rått "CREDIT" (#1309)
@@ -133,10 +134,61 @@ describe("InvoicesPage", () => {
       { id: "i5", invoiceDate: new Date().toISOString(), invoiceType: "FINAL", status: "SENT", amount: -100, matter: { id: "m5", matterNumber: "5", title: "T" } },
     ]);
     render(<InvoicesPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (1)" })); // annullerad dold från början (#1522)
     expect(screen.getByText("Skapad")).toBeInTheDocument();
     expect(screen.getByText("Avbetalningsplan")).toBeInTheDocument();
     expect(screen.getByText("Annullerad")).toBeInTheDocument();
     expect(screen.getByText("Kundförlust")).toBeInTheDocument();
     expect(screen.getByText("Slutfaktura")).toBeInTheDocument();
+  });
+
+  describe("annullerade och kreditfakturor dolda från början (#1522)", () => {
+    const row = (id: string, status: string, invoiceType: string, amount: number): Record<string, unknown> => ({
+      id, invoiceNumber: `F-${id}`, invoiceDate: new Date("2026-03-01").toISOString(), invoiceType, status, amount,
+      matter: { id: "m1", matterNumber: "2026-0001", title: "T" },
+    });
+    const mixed = (): void => setInvoices([
+      row("1", "SENT", "STANDARD", 100000),
+      row("2", "CANCELLED", "STANDARD", 40000),
+      row("3", "DRAFT", "CREDIT", -40000),
+      row("4", "PAID", "FINAL", 25000),
+    ]);
+    const footer = (container: HTMLElement): string => container.querySelector("tfoot")?.textContent ?? "";
+
+    it("döljer annullerade och kreditfakturor och visar antalet på knappen", () => {
+      mixed();
+      render(<InvoicesPage />);
+      expect(screen.getByText("F-1")).toBeInTheDocument();
+      expect(screen.getByText("F-4")).toBeInTheDocument();
+      expect(screen.queryByText("F-2")).toBeNull();
+      expect(screen.queryByText("F-3")).toBeNull();
+      expect(screen.getByRole("button", { name: "Visa annullerade (2)" })).toBeInTheDocument();
+    });
+
+    it("klick visar de dolda med sin status och byter text; nytt klick döljer igen", () => {
+      mixed();
+      render(<InvoicesPage />);
+      fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (2)" }));
+      expect(screen.getByText("F-2")).toBeInTheDocument();
+      expect(screen.getByText("F-3")).toBeInTheDocument();
+      expect(screen.getByText("Annullerad")).toBeInTheDocument();
+      expect(screen.getByText("Kreditfaktura")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Dölj annullerade" }));
+      expect(screen.queryByText("F-2")).toBeNull();
+    });
+
+    it("summeringen räknar bara synliga rader", () => {
+      setInvoices([row("1", "SENT", "STANDARD", 100000), row("2", "CANCELLED", "STANDARD", 40000)]);
+      const { container } = render(<InvoicesPage />);
+      expect(footer(container)).toMatch(/1\s?000/);
+      fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (1)" }));
+      expect(footer(container)).toMatch(/1\s?400/);
+    });
+
+    it("ingen knapp när inget är dolt", () => {
+      setInvoices([row("1", "SENT", "STANDARD", 100000)]);
+      render(<InvoicesPage />);
+      expect(screen.queryByRole("button", { name: /annullerade/ })).toBeNull();
+    });
   });
 });

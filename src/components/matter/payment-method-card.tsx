@@ -152,7 +152,7 @@ function CoverageCapField({ method, value, onChange }: { method: PaymentMethod; 
       <p className="mt-1 text-[11px] text-gray-400">
         {isAmount
           ? "Taket ur försäkringsbeslutet. Ärendet varnar vid 90 % av upparbetat värde."
-          : "Rättshjälpslagen: 100 tim (höj vid beviljad utökad rättshjälp). Varnar vid 90 %."}
+          : "Rättshjälpslagen: 100 tim (höj vid beviljad utökad rättshjälp). Varnar vid 80 tim, eller 10 tim före ett utökat tak."}
       </p>
     </div>
   );

@@ -38,6 +38,7 @@ import {
   buildInvoiceSpecification, specExpenseLines, specTimeLines,
   type InvoiceSpecification, type SpecDeduction,
 } from "@/lib/shared/invoice-specification";
+import { isKrWorkEntry } from "@/lib/shared/kostnadsrakning";
 import { applyKrAction, canVoidKostnadsrakning, krStateOf, type KostnadsrakningAction, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -97,7 +98,9 @@ async function fetchUnfrozenWork(repos: Repositories, matterId: MatterId): Promi
 async function fetchUnfrozenKrWork(repos: Repositories, matterId: MatterId) {
   const te = await repos.timeEntries.listUnfrozenForMatter(matterId);
   const ex = await repos.expenses.listUnfrozenForMatter(matterId);
-  return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
+  // Förhandlingsposter värderas inte som arbete — tiden är huvudförhandlingens
+  // (samma regel som dokumentet). De fryses ändå med körningen (freezeWork).
+  return { timeEntries: te.filter(isKrWorkEntry), expenses: ex.filter((e) => e.kind !== "PRUTNING") };
 }
 
 /** Det arbete en kostnadsräkning frös vid inskick (#806) — underlag för dom/
@@ -105,7 +108,7 @@ async function fetchUnfrozenKrWork(repos: Repositories, matterId: MatterId) {
 async function fetchWorkByRun(repos: Repositories, billingRunId: BillingRunId): Promise<UnfrozenWork> {
   const te = await repos.timeEntries.listByBillingRun(billingRunId);
   const ex = await repos.expenses.listByBillingRun(billingRunId);
-  return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
+  return { timeEntries: te.filter(isKrWorkEntry), expenses: ex.filter((e) => e.kind !== "PRUTNING") };
 }
 
 /**

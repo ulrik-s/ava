@@ -39,4 +39,12 @@ describe("CourtCaseNumberField", () => {
     fireEvent.click(screen.getByRole("button", { name: "Spara målnummer" }));
     expect(updateMutate).toHaveBeenCalledWith({ id: "m1", courtCaseNumber: null });
   });
+
+  it("tidigare målnummer visas bara när det finns (#1510)", () => {
+    const { rerender } = render(<CourtCaseNumberField matterId={asId<"MatterId">("m1")} value="T 2-26" />);
+    expect(screen.queryByText("Tidigare målnr")).not.toBeInTheDocument();
+    rerender(<CourtCaseNumberField matterId={asId<"MatterId">("m1")} value="T 2-26" previous="T 1-26" />);
+    expect(screen.getByText("Tidigare målnr")).toBeInTheDocument();
+    expect(screen.getByText("T 1-26")).toBeInTheDocument();
+  });
 });

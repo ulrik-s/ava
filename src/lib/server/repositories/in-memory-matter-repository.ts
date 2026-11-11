@@ -27,6 +27,8 @@ function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<
             { title: ins(f.search) },
             { matterNumber: ins(f.search) },
             { courtCaseNumber: ins(f.search) },
+            { previousCourtCaseNumber: ins(f.search) },
+            { insuranceReference: ins(f.search) },
             { contacts: { some: { contact: { name: ins(f.search) } } } },
           ],
         }

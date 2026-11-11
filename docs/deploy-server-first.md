@@ -462,6 +462,10 @@ git tag v1.2.0 && git push origin v1.2.0
   för hand, eller sätt en ny tagg. Loggen: `journalctl -u ava-deploy`.
 - `deploy-prod.sh` utan `--tag` deployar fortfarande `origin/main` för hand.
   Rollback som i *Rollback* nedan.
+- **Staging** (`staging.ava-crm.io`): samma installation på en egen server,
+  med `AVA_DEPLOY_TRACK=main` i `ava-server.env`. Då deployar timern toppen
+  av `origin/main` varje gång main flyttar sig i stället för taggar. Se
+  [feedback-pipeline.md](./feedback-pipeline.md#staging).
 
 ### Releaser: varför klienten inte byggs där Caddy läser (#1369)
 

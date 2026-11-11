@@ -1,7 +1,7 @@
 /**
  * `IssueStore` — håller de självupptäckta invariant-överträdelser ([[invariants]])
- * som klienten hittat under sessionen. Driver "Rapportera fel"-knappens badge
- * (antal) och fyller felrapportens "Självupptäckta fel"-sektion.
+ * som klienten hittat under sessionen, så att varje fel bara loggas en gång
+ * (`reportSelfDetected`).
  *
  * Dedupar på `code` + serialiserad `context` så att samma fel som upptäcks om
  * och om igen (varje render/refetch) bara räknas en gång. Notifierar

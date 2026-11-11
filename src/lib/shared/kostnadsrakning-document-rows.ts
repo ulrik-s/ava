@@ -85,9 +85,11 @@ export const KR_KIND_HEADINGS: Readonly<Record<TimeEntryKind, string>> = {
   TIDSSPILLAN: "Tidsspillan",
   TIDSSPILLAN_OVRIG_TID: "Tidsspillan annan tid",
   ADVOKATBEREDSKAP: "Advokatberedskap",
+  // Når aldrig dokumentet (isKrWorkEntry) — förhandlingen står som huvudförhandling.
+  FORHANDLING: "Förhandling",
 };
 
-const KIND_ORDER: readonly TimeEntryKind[] = ["ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP"];
+const KIND_ORDER: readonly TimeEntryKind[] = ["ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP", "FORHANDLING"];
 
 const byKindOrder = (a: TimeEntryKind, b: TimeEntryKind): number => KIND_ORDER.indexOf(a) - KIND_ORDER.indexOf(b);
 

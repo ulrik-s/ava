@@ -29,11 +29,13 @@ export interface Capabilities {
    * katalogerna är monterade). Bara servern vet — av tills proben säger på.
    */
   backup: boolean;
+  /** Buggar och förslag till intag-repot — servern har en GitHub-token. */
+  feedback: boolean;
 }
 
 /** Demon: ingen server → alla server-beroende förmågor av. */
 export const DEMO_CAPABILITIES: Capabilities = {
-  sync: false, llm: false, jobs: false, ledger: false, mailSync: false, oidc: false, backup: false,
+  sync: false, llm: false, jobs: false, ledger: false, mailSync: false, oidc: false, backup: false, feedback: false,
 };
 
 /**
@@ -42,7 +44,7 @@ export const DEMO_CAPABILITIES: Capabilities = {
  * proben säger annat.
  */
 export const SELF_HOSTED_CAPABILITIES: Capabilities = {
-  sync: true, llm: true, jobs: true, ledger: true, mailSync: true, oidc: true, backup: false,
+  sync: true, llm: true, jobs: true, ledger: true, mailSync: true, oidc: true, backup: false, feedback: false,
 };
 
 /** Härled kapabiliteterna ur deploy-tiern (slice 1; ersätts av server-probe). */

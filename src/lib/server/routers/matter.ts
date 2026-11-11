@@ -2,6 +2,7 @@ import { z } from "zod";
 import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
 import { DEFAULT_MATTER_FOLDERS } from "@/lib/shared/default-matter-folders";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { previousCourtCaseNumberAfterChange } from "@/lib/shared/previous-court-case-number";
 import {
   matterRoleSchema,
   contactTypeSchema,
@@ -162,6 +163,13 @@ function applyOptionalDate(data: Record<string, unknown>, key: string, value: st
   if (d !== undefined) data[key] = d;
 }
 
+/** Byts målnumret från ett ifyllt värde till ett annat sparas det gamla som
+ *  tidigare målnummer (#1510). Annars rörs fältet inte. */
+function applyPreviousCourtCaseNumber(data: Record<string, unknown>, before: Matter, next: string | null | undefined): void {
+  const previous = previousCourtCaseNumberAfterChange(before.courtCaseNumber, next);
+  if (previous !== undefined) data.previousCourtCaseNumber = previous;
+}
+
 function buildMatterData(
   orgId: string,
   matterNumber: string,
@@ -302,6 +310,8 @@ export const matterRouter = router({
         responsibleLawyerId: userIdSchema.nullable().optional(),
         /** Domstolens målnummer (#173) — för avprickning av domstolsbetalningar. */
         courtCaseNumber: z.string().nullable().optional(),
+        /** Försäkringsbolagets referens (#1511); null rensar. */
+        insuranceReference: z.string().nullable().optional(),
         paymentMethod: paymentMethodSchema.optional(),
         paymentMethodNote: z.string().nullable().optional(),
         paymentMethodDecidedAt: z.string().nullable().optional(),
@@ -333,6 +343,7 @@ export const matterRouter = router({
       applyOptionalDate(data, "tvistUppkomDatum", tvistUppkomDatum);
       applyOptionalDate(data, "rattsskyddBeslutDatum", rattsskyddBeslutDatum);
       applyOptionalDate(data, "rattsskyddNekadAt", rattsskyddNekadAt);
+      applyPreviousCourtCaseNumber(data, before, input.courtCaseNumber);
       const updated = await ctx.repos.transaction(async (repos) => {
         // Jämför mot läget FÖRE uppdateringen — in-memory-lagret kan mutera `before`.
         await logBillingChanges(repos, ctx, before, input);

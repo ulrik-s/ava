@@ -1,0 +1,41 @@
+# Agentvakten (docs/feedback-pipeline.md): agent-PR:er får inte röra skyddade
+# sökvägar eller lägga till destruktiva migrationer utan `människa-godkänd`, och
+# högst 10 agent-PR:er per dygn. Logiken: tooling/scripts/agent-guard.ts.
+# Körs på ALLA PR:er (krävd check) — utan `agent-pr` passerar den direkt.
+name: Agentvakt
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: agent-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Agentvakt
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Vakten körs från main, aldrig från PR:ens egen (möjligen ändrade) version.
+          ref: ${{ github.event.pull_request.base.sha }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - name: Kontrollera agent-PR:en
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        # Första PR:en (den som inför vakten) har inget skript på main ännu.
+        run: |
+          if [ ! -f tooling/scripts/agent-guard.ts ]; then
+            echo "agentvakten finns inte på main ännu — inget att kontrollera"
+            exit 0
+          fi
+          bun tooling/scripts/agent-guard.ts "$PR"

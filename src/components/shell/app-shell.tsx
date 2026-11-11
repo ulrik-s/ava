@@ -10,7 +10,6 @@
  */
 
 import { usePathname } from "next/navigation";
-import { ErrorReportButton } from "@/components/diagnostics/error-report-button";
 import { ExternalEditIndicator } from "@/components/documents/external-edit-indicator";
 import { ExternalEditRegistrar } from "@/components/documents/external-edit-registrar";
 import { trpc } from "@/lib/client/trpc";
@@ -44,7 +43,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-      <ErrorReportButton />
     </div>
   );
 }

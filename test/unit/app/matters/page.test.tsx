@@ -191,6 +191,18 @@ describe("MattersPage", () => {
     expect(screen.getByText("Arkiverat")).toBeInTheDocument();
   });
 
+  it("visar ärendetypen som egen kolumn — '—' när typ saknas", () => {
+    const row = (id: string, matterType: string | null) => ({
+      id, matterNumber: `2026-000${id}`, title: `Fall ${id}`, status: "ACTIVE", matterType,
+      contacts: [], _count: { documents: 0, timeEntries: 0, contacts: 0 },
+    });
+    mattersQuery.data = { matters: [row("1", "Bodelning"), row("2", null)], total: 2, pages: 1 };
+    render(<MattersPage />);
+    expect(screen.getByRole("columnheader", { name: /Ärendetyp/ })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Bodelning" })).toBeInTheDocument();
+    expect(screen.getAllByRole("cell", { name: "—" }).length).toBeGreaterThan(0);
+  });
+
   it("fyller alla fält i Nytt ärende-formuläret → create med komplett payload", () => {
     render(<MattersPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
@@ -199,13 +211,35 @@ describe("MattersPage", () => {
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Misshandel" } });
     fireEvent.click(screen.getByRole("checkbox")); // Taxeärende
     fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
-    // Målnummer sätts INTE vid uppläggning (#796) — det fylls i senare.
     expect(createMatterMutate).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Tvist AB", matterType: "Brottmål", description: "Misshandel", isTaxeArende: true,
       }),
     );
-    expect(screen.queryByLabelText(/målnummer/)).not.toBeInTheDocument();
+  });
+
+  it("Målnummer-rutan visas alltid i Nytt ärende, även utan klient (#1509)", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    expect(screen.getByLabelText("Målnummer")).toBeInTheDocument();
+  });
+
+  it("tom/blank Målnummer-ruta → inget courtCaseNumber skickas (#1509)", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Tvist AB" } });
+    fireEvent.change(screen.getByLabelText("Målnummer"), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate.mock.calls[0]?.[0].courtCaseNumber).toBeUndefined();
+  });
+
+  it("ifyllt Målnummer skickas trimmat som courtCaseNumber (#1509)", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Tvist AB" } });
+    fireEvent.change(screen.getByLabelText("Målnummer"), { target: { value: "  B 1234-26 " } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ courtCaseNumber: "B 1234-26" }));
   });
 
   it("byrån har ärendetyper → Ärendetyp väljs ur listan", () => {
