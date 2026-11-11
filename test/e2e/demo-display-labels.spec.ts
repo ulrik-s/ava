@@ -6,6 +6,7 @@
  * - Avbetalningar: radens status "AKTIVA" (filterknappens plural).
  * - Användare: "2.50 kr/km" med decimalpunkt.
  * - Kalender: "Tasks" / "Ny task".
+ * - Fakturor: annullerade och kreditfakturor dolda från början (#1522).
  */
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
@@ -31,6 +32,8 @@ test("ärendenas anteckningar visar dag och klockslag, aldrig en rå ISO-tidpunk
 
 test("Fakturor, Avbetalningar, Användare och Kalender visar svenska etiketter", async ({ page }) => {
   await page.goto(`${BASE}/invoices/`);
+  // Kreditfakturor är dolda från början (#1522).
+  await page.getByRole("button", { name: /^Visa annullerade \(\d+\)$/ }).click({ timeout: 30_000 });
   await expect(page.getByText("Kreditfaktura").first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("CREDIT", { exact: true })).toHaveCount(0);
 
@@ -45,4 +48,17 @@ test("Fakturor, Avbetalningar, Användare och Kalender visar svenska etiketter",
   await showPanel(page, "Uppgifter");
   await expect(page.getByRole("heading", { name: "Uppgifter", level: 2 })).toBeVisible();
   await expect(page.getByRole("button", { name: /Ny uppgift/ })).toBeVisible();
+});
+
+test("Fakturor döljer annullerade och kreditfakturor tills man väljer att visa dem (#1522)", async ({ page }) => {
+  await page.goto(`${BASE}/invoices/`);
+  const show = page.getByRole("button", { name: /^Visa annullerade \(\d+\)$/ });
+  await expect(show).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("cell", { name: "Kreditfaktura", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "Annullerad", exact: true })).toHaveCount(0);
+
+  await show.click();
+  await expect(page.getByRole("cell", { name: "Kreditfaktura", exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Dölj annullerade" }).click();
+  await expect(page.getByRole("cell", { name: "Kreditfaktura", exact: true })).toHaveCount(0);
 });
