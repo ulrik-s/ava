@@ -67,7 +67,7 @@ describe("UsersPage", () => {
           email: "anna@x.se",
           role: "LAWYER",
           hourlyRates: { ARBETE: 300000 },
-          mileageRate: 2500,
+          mileageRate: 250, // öre/km
         },
         {
           id: "u2",
@@ -89,8 +89,8 @@ describe("UsersPage", () => {
     // "Advokat" finns både som roll och titel — matcha minst en
     expect(screen.getAllByText("Advokat").length).toBeGreaterThan(0);
     expect(screen.getByText("Assistent")).toBeInTheDocument();
-    // Svenskt decimalkomma (#1309) — förr "25.00 kr/km".
-    expect(screen.getByText(/^25,00\s?kr\/km$/)).toBeInTheDocument();
+    // Svenskt decimalkomma (#1309); kr/mil som Skatteverket (#1527) — förr "2,50 kr/km".
+    expect(screen.getByText(/^25,00\s?kr\/mil$/)).toBeInTheDocument();
   });
 });
 
