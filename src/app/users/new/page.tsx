@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { trpc } from "@/lib/client/trpc";
+import { mileageRateFromFormValue } from "@/lib/shared/mileage-rate";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { UserForm, type UserFormState } from "../_user-form";
 
@@ -47,7 +48,7 @@ export default function NewUserPage() {
       title: form.title || undefined,
       matterNumberPrefix: form.matterNumberPrefix || undefined,
       hourlyRates: form.hourlyRates,
-      mileageRate: form.mileageRate ? Math.round(Number(form.mileageRate) * 100) : undefined,
+      mileageRate: mileageRateFromFormValue(form.mileageRate),
       password: form.password || undefined,
     } as Parameters<typeof createUser.mutate>[0]);
   }
