@@ -273,6 +273,24 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByLabelText("Försäkringsreferens")).toHaveValue("SK-1"));
   });
 
+  it("ärendehuvudet visar betalningssätt, försäkringsbolag och klientens andel (#1518)", async () => {
+    const line = () => screen.getByTestId("matter-payment-line");
+    const first = renderPage();
+    await waitFor(() => expect(line()).toHaveTextContent(/^· Rättshjälp$/));
+    first.unmount();
+
+    const insurer = { id: "mc2", role: "MOTPART", contact: { id: "c2", name: "Bolaget", contactType: "INSURANCE_COMPANY", personalNumber: null, orgNumber: null } };
+    matterQuery.data = { ...M, paymentMethod: "RATTSSKYDD", clientShareBips: 2000, contacts: [...M.contacts, insurer] };
+    const rs = renderPage();
+    await waitFor(() => expect(line()).toHaveTextContent("· Rättsskydd · Bolaget · klienten betalar 20 %"));
+    rs.unmount();
+
+    // Utan klient och ärendetyp: ingen inledande avgränsare.
+    matterQuery.data = { ...M, contacts: [], matterType: null, clientShareBips: 1000 };
+    renderPage();
+    await waitFor(() => expect(line()).toHaveTextContent(/^Rättshjälp · klienten betalar 10 %$/));
+  });
+
   it("Domstolsbetalningar-panelen finns bara i domstolsärenden eller med registrerade fordringar (#1213)", async () => {
     const panel = (c: HTMLElement) => c.querySelector('[data-panel="receivables"]');
     const first = renderPage();

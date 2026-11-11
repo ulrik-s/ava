@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { hasInsuranceCompany } from "@/lib/shared/matter-insurance";
+import { findInsuranceCompany, hasInsuranceCompany } from "@/lib/shared/matter-insurance";
 
 describe("hasInsuranceCompany", () => {
   it("sant med minst ett försäkringsbolag bland kontakterna", () => {
@@ -17,5 +17,24 @@ describe("hasInsuranceCompany", () => {
     expect(hasInsuranceCompany([{ contact: { contactType: "COMPANY" } }])).toBe(false);
     expect(hasInsuranceCompany([])).toBe(false);
     expect(hasInsuranceCompany([{ contact: {} }, { contact: { contactType: null } }])).toBe(false);
+  });
+});
+
+describe("findInsuranceCompany (#1518)", () => {
+  const person = { contact: { name: "Klienten", contactType: "PERSON" } };
+  const first = { contact: { name: "Bolag A", contactType: "INSURANCE_COMPANY" } };
+  const second = { contact: { name: "Bolag B", contactType: "INSURANCE_COMPANY" } };
+
+  it("ger försäkringsbolaget med anroparens egen kontaktform", () => {
+    expect(findInsuranceCompany([person, first])?.contact.name).toBe("Bolag A");
+  });
+
+  it("ger det första när flera försäkringsbolag finns", () => {
+    expect(findInsuranceCompany([second, person, first])?.contact.name).toBe("Bolag B");
+  });
+
+  it("ger undefined utan försäkringsbolag", () => {
+    expect(findInsuranceCompany([person])).toBeUndefined();
+    expect(findInsuranceCompany([])).toBeUndefined();
   });
 });
