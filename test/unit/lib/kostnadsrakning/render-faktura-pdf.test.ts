@@ -292,6 +292,9 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
     expect(texts).not.toContain("Summa utlägg");
   });
 
+  /** Sidans nedre marginal i mallen (`BOTTOM` i render-faktura-pdf.ts). */
+  const PAGE_BOTTOM_MARGIN = 64;
+
   it("streck och summarad hålls ihop vid sidbrytning", async () => {
     // Prova många längder så att sista posten hamnar på varje tänkbar plats nära sidans fot.
     for (let n = 40; n <= 70; n++) {
@@ -302,6 +305,8 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
       const rule = ruleAbove(page?.lines ?? [], label?.y ?? 0);
       expect(rule).toBeDefined();
       expect((rule?.y ?? 0) - (label?.y ?? 0)).toBeLessThan(15);
+      // Summaraden (och därmed strecket ovanför) får inte hamna under sidans nedre marginal.
+      expect(label?.y ?? 0).toBeGreaterThanOrEqual(PAGE_BOTTOM_MARGIN);
     }
   });
 });
