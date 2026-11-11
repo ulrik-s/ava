@@ -296,7 +296,7 @@ håller staging helt isär.
 ## Arkitekturen i schack
 
 När användarnas önskemål byggs av agenter är risken att koden driver iväg: samma
-sak löst på två sätt, logik i fel lager, filer som växer. Två lager håller
+sak löst på två sätt, logik i fel lager, filer som växer. Tre lager håller
 emot, ovanpå det CI redan kontrollerar (dependency-cruisers lagergränser,
 komplexitet < 8, jscpd, knip, täckning, Agentvakten).
 
@@ -318,6 +318,21 @@ komplexitet < 8, jscpd, knip, täckning, Agentvakten).
    rapport-issue (`arkitektur-rapport`): avdrift, det som är friskt, och siffrorna.
 3. Den föreslår **högst tre** små, beteendebevarande refaktoriseringar, som
    issues med `refaktorisering`.
+
+**3. Mekaniska regler i CI.**
+- **Filstorleksspärren** (`bun run file-size`, i `quality:fast` och i CI:s
+  statiska analys): ingen produktionsfil över **400 rader**. De 25 filer som
+  redan var större står i `tooling/config/file-size-baseline.json` och får
+  krympa men aldrig växa. Krymper en fil måste baslinjen skärpas (`--update`
+  kan bara skärpa). Agentvakten låter en agent-PR ändra baslinjen bara åt
+  det strängare hållet.
+- **ADR:er blir regler:** varje vecka går genomgången igenom nästa ADR:er och
+  föreslår högst en ny regel i `dependency-cruiser.cjs` för en gräns som ADR:en
+  beskriver men som inte kontrolleras. Regel-PR:en rör `tooling/config/` och
+  behöver därför både din `granskad` (på förslaget) och din `människa-godkänd`
+  (på PR:en).
+- **Inga nya beroenden** i agent-PR:er: `package.json` och `bun.lock` är
+  skyddade av Agentvakten.
 
 **Du godkänner** ett förslag genom att sätta `granskad` på det (själv,
 inte via en agent). Då bygger implementationen det, men först när inga

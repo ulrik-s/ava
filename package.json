@@ -88,7 +88,8 @@
     "knip": "knip --config tooling/config/knip.json",
     "knip:report": "knip --config tooling/config/knip.json --no-exit-code",
     "quality": "bun run typecheck && bun run lint && bun run test:cov && bun run duplicates && bun run deps:check && bun run knip:report",
-    "quality:fast": "bun run typecheck && bun run lint && bun run test:fast",
+    "quality:fast": "bun run typecheck && bun run lint && bun run file-size && bun run test:fast",
+    "file-size": "bun tooling/scripts/file-size-ratchet.ts",
     "quality:report": "mkdir -p reports && bun run test:cov && bun run duplicates && bun run deps:check || true",
     "prepare": "husky"
   },

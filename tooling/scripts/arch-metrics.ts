@@ -140,7 +140,8 @@ function git(args: string[]): string {
 const jscpdSchema = z.object({ statistics: z.object({ total: z.object({ percentage: z.number() }) }) });
 const packageSchema = z.object({ dependencies: z.record(z.string(), z.string()).default({}), devDependencies: z.record(z.string(), z.string()).default({}) });
 
-function readSizes(): Map<string, number> {
+/** Radantal per produktionsfil (git-spårade .ts/.tsx under src/, inte tester). */
+export function readSourceSizes(): Map<string, number> {
   const paths = git(["ls-files", "src"]).split("\n").filter(isProductionSource);
   return new Map(paths.map((p) => [p, readFileSync(p, "utf8").split("\n").length]));
 }
@@ -157,7 +158,7 @@ function argValue(flag: string): string | undefined {
 
 function main(): void {
   const pkg = parseJsonWith(packageSchema, readFileSync("package.json", "utf8"));
-  const metrics = computeMetrics(readSizes(), parseNumstat(git(["log", "--since=7 days ago", "--numstat", "--format=", "--", "src"])), {
+  const metrics = computeMetrics(readSourceSizes(), parseNumstat(git(["log", "--since=7 days ago", "--numstat", "--format=", "--", "src"])), {
     duplicationPercent: readDuplication(),
     dependencies: Object.keys(pkg.dependencies).length + Object.keys(pkg.devDependencies).length,
     generatedAt: new Date().toISOString(),
