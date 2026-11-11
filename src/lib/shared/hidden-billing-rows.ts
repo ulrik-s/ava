@@ -4,7 +4,7 @@
  * tills användaren väljer att visa dem. Endast visning — inget ändras.
  */
 
-import type { InvoiceStatus, InvoiceType } from "@/lib/shared/schemas/enums";
+import type { BillingRunStatus, BillingRunType, InvoiceStatus, InvoiceType } from "@/lib/shared/schemas/enums";
 
 /** Det en faktura behöver för att avgöra om den döljs. */
 export interface HideableInvoice {
@@ -15,6 +15,18 @@ export interface HideableInvoice {
 /** En annullerad faktura (ADR 0015: terminal) eller en kreditfaktura döljs från början. */
 export function isHiddenInvoice(invoice: HideableInvoice): boolean {
   return invoice.status === "CANCELLED" || invoice.invoiceType === "CREDIT";
+}
+
+/** Det en faktureringshändelse (billing-run) behöver för att avgöra om den döljs. */
+export interface HideableBillingRun {
+  status: BillingRunStatus;
+  type: BillingRunType;
+}
+
+/** En annullerad körning (ADR 0034: `VOIDED`, t.ex. en ångrad kostnadsräkning)
+ *  eller en kreditering döljs från början i ärendets Fakturering-lista (#1523). */
+export function isHiddenBillingRun(run: HideableBillingRun): boolean {
+  return run.status === "VOIDED" || run.type === "CREDIT";
 }
 
 /** Rader uppdelade i de som visas från början och de som döljs. */
