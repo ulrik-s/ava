@@ -65,6 +65,8 @@ jobs:
       # Se docs/quality.md.
       - run: bun run lint:complexity-strict
       - run: bun run deps:check
+      # Filstorleksspärren (ratchet): inga nya filer > 400 rader, baslinjen får bara krympa.
+      - run: bun run file-size
       # Gating: fäller på strukturfynd (döda filer, oanvända/olistade deps).
       # Export-/typ-fynd är "warn" i knip.json (rådgivande) tills #3/#4 städat dem.
       - run: bun run knip

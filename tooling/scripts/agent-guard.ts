@@ -30,7 +30,7 @@ export const PROTECTED_PATHS: readonly RegExp[] = [
   /^tooling\/docker\//,
   /^tooling\/systemd\//,
   /^tooling\/agents\//,
-  /^tooling\/scripts\/(deploy|backup|restore|release|agent-guard|arch-metrics)/,
+  /^tooling\/scripts\/(deploy|backup|restore|release|agent-guard|arch-metrics|file-size-ratchet)/,
   /^tooling\/scripts\/lib\//,
   /^src\/lib\/server\/auth\//,
   /^src\/lib\/server\/http\/(forwarded|server-context|node-http|server-first-api)/,
@@ -52,6 +52,49 @@ export interface GuardInput {
   addedMigrationLines: readonly string[];
   /** Agent-PR:er skapade de senaste 24 h fram till och med den här. */
   agentPrsLast24h: number;
+  /** Ändrar PR:en filstorleksbaslinjen bara åt det strängare hållet? */
+  baselineOnlyTightens?: boolean;
+}
+
+/**
+ * Filstorleksspärrens baslinje (tooling/config/, skyddad). En agent som krympt
+ * en stor fil MÅSTE skärpa den, så just den filen får ändras i en agent-PR, men
+ * bara åt det strängare hållet (lägre radantal, borttagna rader). Aldrig nya
+ * filer, aldrig högre.
+ */
+export const FILE_SIZE_BASELINE = "tooling/config/file-size-baseline.json";
+
+function isProtectedChange(file: string, input: GuardInput): boolean {
+  if (file === FILE_SIZE_BASELINE && input.baselineOnlyTightens === true) return false;
+  return PROTECTED_PATHS.some((p) => p.test(file));
+}
+
+const BASELINE_ENTRY = /^([+-])\s*"([^"]+)":\s*(\d+),?\s*$/;
+
+/** Raderna i diffen som hör till `file` (mellan dess `---`/`+++`-rubrik och nästa fils). */
+function diffLinesOf(diff: string, file: string): string[] {
+  const out: string[] = [];
+  let inFile = false;
+  for (const line of diff.split("\n")) {
+    if (/^(\+\+\+|---) /.test(line)) inFile = line.endsWith(file);
+    else if (inFile) out.push(line);
+  }
+  return out;
+}
+
+/** Baslinjens rader med ett visst tecken (`+` tillagd, `-` borttagen): fil → radantal. */
+function baselineEntries(lines: readonly string[], sign: "+" | "-"): Map<string, number> {
+  return new Map(lines.flatMap((l) => {
+    const m = BASELINE_ENTRY.exec(l);
+    return m?.[1] === sign && m[2] ? [[m[2], Number(m[3])] as const] : [];
+  }));
+}
+
+/** Ändrar diffen baslinjen bara åt det strängare hållet? (Ingen ändring = sant.) */
+export function baselineDiffTightens(diff: string): boolean {
+  const lines = diffLinesOf(diff, FILE_SIZE_BASELINE);
+  const removed = baselineEntries(lines, "-");
+  return [...baselineEntries(lines, "+")].every(([path, n]) => (removed.get(path) ?? -1) >= n);
 }
 
 /** Vad som bryter mot reglerna — tom lista = godkänd. */
@@ -64,7 +107,7 @@ export function guardViolations(input: GuardInput): string[] {
   if (!input.labels.includes("granskad")) out.push("Inte godkänd av granskningsloopen ännu (etiketten granskad saknas).");
   if (input.labels.includes("blockerad")) out.push("Blockerad — väntar på Ulrik.");
   if (input.labels.includes("människa-godkänd")) return out;
-  for (const f of input.files.filter((file) => PROTECTED_PATHS.some((p) => p.test(file)))) {
+  for (const f of input.files.filter((file) => isProtectedChange(file, input))) {
     out.push(`Skyddad sökväg: ${f} (kräver etiketten människa-godkänd).`);
   }
   for (const line of input.addedMigrationLines.filter((l) => DESTRUCTIVE_SQL.test(l))) {
@@ -102,10 +145,12 @@ function main(pr: string): number {
   const created = new Date(view.createdAt).getTime();
   const since = new Date(created - 24 * 3_600_000).toISOString();
   const recent = parseJsonWith(prListSchema, gh(["pr", "list", "--state", "all", "--label", "agent-pr", "--limit", "100", "--search", `created:>=${since}`, "--json", "number,createdAt"]));
+  const diff = gh(["pr", "diff", pr]);
   const violations = guardViolations({
     labels: view.labels.map((l) => l.name),
     files: view.files.map((f) => f.path),
-    addedMigrationLines: addedMigrationLines(gh(["pr", "diff", pr])),
+    addedMigrationLines: addedMigrationLines(diff),
+    baselineOnlyTightens: baselineDiffTightens(diff),
     agentPrsLast24h: recent.filter((p) => new Date(p.createdAt).getTime() <= created).length,
   });
   for (const v of violations) console.error(`✗ ${v}`);

@@ -46,9 +46,25 @@ Finns ingen: avsluta.
    Befintliga tester ändras inte, utom att de flyttas eller byter namn
    tillsammans med koden. De är kontraktet. Behöver ett test ändras i
    sak: stopp, beteendet ändras.
+   **Regelförslag** (`refaktorisering` som gäller
+   `tooling/config/dependency-cruiser.cjs`): ändra bara den filen, med den
+   föreslagna regeln, och kör `bun run deps:check`. Är något i koden fel
+   mot regeln: stopp, det är ett fynd för Ulrik och inget du rättar. Skriv
+   i PR:en att den rör en skyddad sökväg och väntar på Ulriks
+   `människa-godkänd` (Agentvakten är röd tills dess).
 5. Verifiera lokalt med `bun run quality:fast`, och för appändringar även
    `bun run build:demo`. Rött: rätta. Går det inte efter rimligt försök, se
    "Fastnar" nedan.
+
+   **Filstorleksspärren** (`bun run file-size`, ingår i `quality:fast`):
+   ingen produktionsfil får gå över 400 rader, och filerna i baslinjen
+   (`tooling/config/file-size-baseline.json`) får inte växa.
+   - Skulle din ändring göra det: dela upp filen efter förebilden, t.ex. bryt
+     ut en komponent, hook eller hjälpfunktion till en egen fil. Höj aldrig
+     baslinjen.
+   - Har du krympt en fil i baslinjen säger spärren att baslinjen är för
+     generös. Kör då `bun run file-size --update`, som bara kan skärpa, och ta
+     med ändringen i PR:en. Agentvakten tillåter just den ändringen.
 6. Commit (Conventional Commits, svenska, body-rader ≤ 100 tecken; en
    refaktorisering är `refactor(...)`), push, och skapa PR mot `main` via
    `gh api` (regel 5):

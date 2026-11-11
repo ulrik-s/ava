@@ -3,7 +3,7 @@
  * migrationer och fler än tio per dygn — vanliga PR:er påverkas aldrig.
  */
 import { describe, expect, it } from "vitest-compat";
-import { AGENT_PR_PER_DAY, addedMigrationLines, guardViolations, type GuardInput } from "../../tooling/scripts/agent-guard";
+import { AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, guardViolations, type GuardInput } from "../../tooling/scripts/agent-guard";
 
 const BASE: GuardInput = { labels: ["agent-pr", "granskad"], files: ["src/app/matters/page.tsx"], addedMigrationLines: [], agentPrsLast24h: 1 };
 
@@ -51,6 +51,31 @@ describe("granskning krävs", () => {
 
   it("blockerad stoppas även om den är granskad", () => {
     expect(guardViolations({ ...BASE, labels: ["agent-pr", "granskad", "blockerad"] })).toEqual([expect.stringContaining("Blockerad")]);
+  });
+});
+
+describe("filstorleksbaslinjen", () => {
+  const head = (body: string[]) => [`--- a/${FILE_SIZE_BASELINE}`, `+++ b/${FILE_SIZE_BASELINE}`, ...body].join("\n");
+
+  it("sänkt radantal och borttagen rad: strängare → tillåtet för agenten", () => {
+    const diff = head(['-  "src/a.ts": 520,', '+  "src/a.ts": 480,', '-  "src/b.ts": 410,']);
+    expect(baselineDiffTightens(diff)).toBe(true);
+    expect(guardViolations({ ...BASE, files: [FILE_SIZE_BASELINE], baselineOnlyTightens: true })).toEqual([]);
+  });
+
+  it("höjt radantal eller ny fil: luckras upp → skyddad sökväg", () => {
+    expect(baselineDiffTightens(head(['-  "src/a.ts": 480,', '+  "src/a.ts": 520,']))).toBe(false);
+    expect(baselineDiffTightens(head(['+  "src/ny.ts": 450,']))).toBe(false);
+    expect(guardViolations({ ...BASE, files: [FILE_SIZE_BASELINE], baselineOnlyTightens: false })).toEqual([expect.stringContaining(FILE_SIZE_BASELINE)]);
+  });
+
+  it("rader i andra filer räknas inte; ingen ändring alls är strängt nog", () => {
+    expect(baselineDiffTightens(["+++ b/src/x.ts", '+  "src/a.ts": 999,'].join("\n"))).toBe(true);
+    expect(baselineDiffTightens("")).toBe(true);
+  });
+
+  it("spärrskriptet själv är skyddat", () => {
+    expect(guardViolations({ ...BASE, files: ["tooling/scripts/file-size-ratchet.ts"] })).toHaveLength(1);
   });
 });
 

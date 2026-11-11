@@ -70,7 +70,9 @@ För varje fynd: vad, var (fil:rad), varför det är avdrift, hur allvarligt.
 Vad som ser bra ut i veckans ändringar.
 
 ## Förslag
-De refaktoriseringar du föreslår (länkar till issues nedan), eller "Inga".
+De refaktoriseringar och det regelförslag du föreslår (länkar till issues nedan), eller "Inga".
+
+ADR-genomgång: t.o.m. NNNN
 
 <!-- arch-metrics
 <innehållet i nu.json>
@@ -103,6 +105,38 @@ kontrollerar att det var han). Issuen ska innehålla:
   och gröna".
 - **Troliga filer.**
 - Sist, på egen rad: `Arkitekturrapport: #<rapportens nr>`
+
+**Stora filer:** filerna i `tooling/config/file-size-baseline.json` var
+redan över 400 rader när spärren infördes. De får inte växa, men de är
+fortfarande för stora. Är en av dem också en hotspot är en uppdelning ett bra
+förslag (brytas ut efter förebild, testerna oförändrade). Implementationen
+skärper då baslinjen.
+
+## 5. Regelförslag (högst ett per vecka)
+
+ADR:erna beskriver gränser i arkitekturen, men bara en del av dem kontrolleras
+mekaniskt av `tooling/config/dependency-cruiser.cjs`. Gå igenom ADR:erna i
+nummerordning, med start efter den som förra veckans rapport tog upp
+("ADR-genomgång: t.o.m. NNNN" i rapporten). Hitta EN gräns som:
+
+- går att uttrycka som ett importförbud mellan sökvägar (dependency-cruisers
+  `from`/`to`), och
+- inte redan finns som regel, och
+- koden redan följer (`bun run deps:check` med regeln tillagd lokalt är grönt).
+  Annars är det ett fynd för rapporten, och inget regelförslag.
+
+Föreslå regeln som en issue med `agent-task` + `refaktorisering`. Ta med:
+- ADR:en,
+- regeln färdigskriven som ett objekt i `forbidden` (namn, kommentar, `from`,
+  `to`),
+- att `bun run deps:check` är grönt med den,
+- att PR:en rör `tooling/config/` och därför också behöver Ulriks
+  `människa-godkänd`.
+
+Skriv i rapporten "ADR-genomgång: t.o.m. NNNN" (den sista ADR du gått igenom),
+så att nästa vecka fortsätter därifrån.
+
+Räkna regelförslaget in i taket på tre förslag per vecka.
 
 Ligger förra veckans förslag kvar ogodkända (utan `granskad`), föreslå inte
 samma sak igen. Nämn dem i rapporten i stället. Är de äldre än fyra veckor:
