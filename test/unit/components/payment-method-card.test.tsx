@@ -177,6 +177,23 @@ describe("PaymentMethodCard", () => {
     expect(utilsMock.watchlist.list.invalidate).toHaveBeenCalled();
   });
 
+  it("hjälptexten för rättshjälpens tak beskriver varning vid 80 tim / 10 tim före utökat tak (#1519)", () => {
+    render(
+      <PaymentMethodCard
+        matterId={asId<"MatterId">("m1")}
+        paymentMethod="RATTSHJALP"
+        paymentMethodNote={null}
+        paymentMethodDecidedAt={null}
+        clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
+    expect(screen.getByText(/Varnar vid 80 tim, eller 10 tim före ett utökat tak/)).toBeInTheDocument();
+    expect(screen.queryByText(/Varnar vid 90 %/)).not.toBeInTheDocument();
+  });
+
   it("visar beslutsdatum när satt", () => {
     render(
       <PaymentMethodCard

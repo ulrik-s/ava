@@ -66,7 +66,7 @@ export const matterSchema = z.object({
   rattsskyddSjalvriskMinOre: z.number().int().nonnegative().nullish(),
   /**
    * Rättshjälpens timtak (rättshjälpslagen: 100 tim, kan utökas). Null = ej satt;
-   * UI defaultar 100 för rättshjälpsärenden. Vid ≥90 % flaggas ärendet (#793).
+   * UI defaultar 100. Flaggas vid 80 tim / 10 tim före utökat tak (#793, #1519).
    */
   rattshjalpMaxTimmar: z.number().int().positive().nullish(),
   /**

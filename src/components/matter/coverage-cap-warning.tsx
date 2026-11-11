@@ -2,7 +2,8 @@
 
 /**
  * Varningsbadge när ett rättshjälps-/rättsskyddsärende närmar sig taket (#793).
- * Visas vid ≥ 90 % av taket — påminner om att begära utökad rättshjälp / utökat
+ * Visas när varningsgränsen i `coverageStatus` nås — påminner om att begära
+ * utökad rättshjälp / utökat
  * rättsskydd. Self-gating: renderar null för andra betalningssätt / under taket.
  */
 
