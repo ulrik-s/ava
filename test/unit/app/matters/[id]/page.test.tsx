@@ -262,6 +262,17 @@ describe("MatterDetailPage", () => {
     expect(screen.getByText("T 1-26")).toBeInTheDocument();
   });
 
+  it("försäkringsreferensen visas bara med försäkringsbolag som kontakt (#1511)", async () => {
+    const first = renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Målnummer")).toBeInTheDocument());
+    expect(screen.queryByLabelText("Försäkringsreferens")).not.toBeInTheDocument();
+    first.unmount();
+    const insurer = { id: "mc2", role: "MOTPART", contact: { id: "c2", name: "Bolaget", contactType: "INSURANCE_COMPANY", personalNumber: null, orgNumber: null } };
+    matterQuery.data = { ...M, contacts: [...M.contacts, insurer], insuranceReference: "SK-1" };
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Försäkringsreferens")).toHaveValue("SK-1"));
+  });
+
   it("Domstolsbetalningar-panelen finns bara i domstolsärenden eller med registrerade fordringar (#1213)", async () => {
     const panel = (c: HTMLElement) => c.querySelector('[data-panel="receivables"]');
     const first = renderPage();

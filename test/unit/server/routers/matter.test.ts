@@ -269,6 +269,19 @@ describe("matter.update", () => {
     expect(row()).toMatchObject({ courtCaseNumber: null, previousCourtCaseNumber: "T 1-26" });
   });
 
+  it("försäkringsreferensen sparas, är sökbar och kan nollställas (#1511)", async () => {
+    const { caller, ds } = makeCaller({ matters: [matter()] });
+    type Row = { id: string; insuranceReference?: string | null };
+    const row = () => (src(ds).matters as Row[]).find((x) => x.id === "matter-1");
+    await caller.update({ id: "matter-1", insuranceReference: "SK-4711" });
+    expect(row()?.insuranceReference).toBe("SK-4711");
+    expect((await caller.list({ search: "sk-47" })).matters.map((m) => m.id)).toEqual(["matter-1"]);
+    await caller.update({ id: "matter-1", title: "Ny titel" }); // utelämnad → orörd
+    expect(row()?.insuranceReference).toBe("SK-4711");
+    await caller.update({ id: "matter-1", insuranceReference: null });
+    expect(row()?.insuranceReference).toBeNull();
+  });
+
   it("första målnumret ger inget tidigare målnummer (#1510)", async () => {
     const { caller, ds } = makeCaller({ matters: [matter()] });
     await caller.update({ id: "matter-1", courtCaseNumber: "T 1-26" });

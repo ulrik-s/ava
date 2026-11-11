@@ -8,34 +8,18 @@
  * endast läsning, när målnumret har bytts.
  */
 
-import { useId, useState } from "react";
-import { trpc } from "@/lib/client/trpc";
 import type { MatterId } from "@/lib/shared/schemas/ids";
+import { MatterReferenceField } from "./_matter-reference-field";
 
 export function CourtCaseNumberField({ matterId, value, previous = "" }: { matterId: MatterId; value: string; previous?: string }) {
-  const id = useId();
-  const [text, setText] = useState(value);
-  const utils = trpc.useUtils();
-  const update = trpc.matter.update.useMutation({
-    onSuccess: () => void utils.matter.getById.invalidate({ id: matterId }),
-  });
   return (
-    <div className="flex items-center gap-2">
-      <label htmlFor={id} className="text-xs font-medium text-gray-500">Målnummer</label>
-      <input id={id} value={text} onChange={(e) => setText(e.target.value)} placeholder="t.ex. T 1234-26"
-        className="w-36 rounded border border-gray-300 px-2 py-0.5 text-sm font-mono" />
-      {text !== value && (
-        <button onClick={() => update.mutate({ id: matterId, courtCaseNumber: text || null })}
-          disabled={update.isPending}
-          className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
-          Spara målnummer
-        </button>
-      )}
+    <MatterReferenceField matterId={matterId} field="courtCaseNumber" value={value}
+      label="Målnummer" placeholder="t.ex. T 1234-26" saveLabel="Spara målnummer">
       {previous && (
         <span className="text-xs text-gray-500">
           Tidigare målnr <span className="font-mono text-gray-700">{previous}</span>
         </span>
       )}
-    </div>
+    </MatterReferenceField>
   );
 }

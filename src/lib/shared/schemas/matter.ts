@@ -31,6 +31,11 @@ export const matterSchema = z.object({
    * Sökbart i ärendelistan, men matchar INTE domstolsbetalningar.
    */
   previousCourtCaseNumber: z.string().nullish(),
+  /**
+   * Försäkringsbolagets referensnummer (#1511). En per ärende; redigeras i
+   * ärendehuvudet när ärendet har ett försäkringsbolag som kontakt. Sökbart.
+   */
+  insuranceReference: z.string().nullish(),
   title: z.string(),
   description: z.string().nullish(),
   status: matterStatusSchema.default("ACTIVE"),
