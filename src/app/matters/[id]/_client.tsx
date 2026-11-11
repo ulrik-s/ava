@@ -26,6 +26,7 @@ import { GenerateModal } from "./_generate-modal";
 import { InsuranceReferenceField } from "./_insurance-reference-field";
 import { matterDefaultLayout, matterPanels } from "./_matter-panels";
 import { MatterPaymentLine, type NamedMatterContact } from "./_matter-payment-line";
+import { RattshjalpCapWarning } from "./_rattshjalp-cap-warning";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
 import { WatchSection } from "./_watch-section";
@@ -67,7 +68,8 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   const klient = m.contacts.filter((c: { role: string }) => c.role === "KLIENT");
 
   const panels = matterPanels({
-    time: () => <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} paymentMethod={m.paymentMethod} matterStatus={m.status} />,
+    time: () => <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} paymentMethod={m.paymentMethod}
+      rattshjalpMaxTimmar={m.rattshjalpMaxTimmar} matterStatus={m.status} />,
     expenses: () => <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />,
     billing: () => <BillingPanel matterId={id} matter={m} />,
     receivables: () => <ExpectedReceivablesSection matterId={id} isCourtMatter={isCourtMatter(m)} />,
@@ -168,6 +170,8 @@ interface HeaderProps {
     isTaxeArende?: boolean | undefined;
     paymentMethod: PaymentMethod;
     clientShareBips?: number | null | undefined;
+    /** Takvarningen i huvudet (#1520) — bara rättshjälp. */
+    rattshjalpMaxTimmar?: number | null | undefined;
   };
   klient: MatterContact[];
   /** Alla ärendets kontakter — styr om försäkringsreferensen visas (#1511)
@@ -249,7 +253,7 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
 
   return (
     // Kompakt (#1185): panelerna ska få höjden, inte huvudet.
-    <div className="bg-white rounded-lg border border-gray-200 px-4 py-2 mb-2 shrink-0">
+    <div data-testid="matter-header" className="bg-white rounded-lg border border-gray-200 px-4 py-2 mb-2 shrink-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div className="min-w-0">
           <h1 className="text-lg font-bold text-gray-900 truncate">
@@ -276,6 +280,8 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
           value={referenceOf(m, "insuranceReference")} contacts={contacts} />
         {m.description && <p className="min-w-0 flex-1 truncate text-sm text-gray-600" title={m.description}>{m.description}</p>}
       </div>
+      <RattshjalpCapWarning matterId={asId<"MatterId">(m.id)} paymentMethod={m.paymentMethod}
+        rattshjalpMaxTimmar={m.rattshjalpMaxTimmar} layout="compact" />
     </div>
   );
 }

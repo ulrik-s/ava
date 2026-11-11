@@ -43,6 +43,8 @@ const stubs = {
 };
 
 const receivablesQuery: { data: unknown[] } = { data: [] };
+// Upparbetat mot taket — styr takvarningen (#793/#1520).
+const coverageQuery = { data: { billableMinutes: 0, billableValueOre: 0 }, isLoading: false };
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -53,7 +55,7 @@ vi.mock("@/lib/client/trpc", () => ({
       addNewContact: { useMutation: () => stubs.addNewContact },
       removeContact: { useMutation: () => stubs.removeContact },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      coverageUsage: { useQuery: () => ({ data: { billableMinutes: 0, billableValueOre: 0 }, isLoading: false }) },
+      coverageUsage: { useQuery: () => coverageQuery },
     },
     watchlist: {
       // WatchSection: ärendets övriga signaler (#1167).
@@ -221,6 +223,7 @@ beforeEach(() => {
   matterQuery.data = M;
   matterQuery.isLoading = false;
   matterQuery.error = null;
+  coverageQuery.data = { billableMinutes: 0, billableValueOre: 0 };
   timeQuery.data = { entries: [], totalMinutes: 0 };
   expenseQuery.data = { expenses: [], totalAmount: 0 };
   templatesQuery.data = undefined;
@@ -295,6 +298,41 @@ describe("MatterDetailPage", () => {
     matterQuery.data = { ...M, contacts: [], matterType: null, clientShareBips: 1000 };
     renderPage();
     await waitFor(() => expect(line()).toHaveTextContent(/^Rättshjälp · klienten betalar 10 %$/));
+  });
+
+  describe("takvarningen i huvudet och tidssektionen (#1520)", () => {
+    const WARNING = /Närmar sig taket|Taket passerat/;
+    const header = () => screen.getByTestId("matter-header");
+    const panel = (c: HTMLElement, id: string): HTMLElement => {
+      const el = c.querySelector<HTMLElement>(`[data-panel="${id}"]`);
+      if (!el) throw new Error(`panelen ${id} saknas`);
+      return el;
+    };
+
+    it("rättshjälp över tröskeln: varningen i huvudet, i tidssektionen och som förut i Betalningssätt", async () => {
+      matterQuery.data = { ...M, rattshjalpMaxTimmar: 100 };
+      coverageQuery.data = { billableMinutes: 85 * 60, billableValueOre: 0 };
+      const { container } = renderPage();
+      await waitFor(() => expect(within(header()).getByText("⚠ Närmar sig taket (85 %)")).toBeInTheDocument());
+      expect(within(panel(container, "time")).getByText(WARNING)).toBeInTheDocument();
+      expect(within(panel(container, "payment")).getByText(WARNING)).toBeInTheDocument();
+    });
+
+    it("rättshjälp under tröskeln: ingen varning någonstans", async () => {
+      coverageQuery.data = { billableMinutes: 79 * 60, billableValueOre: 0 };
+      renderPage();
+      await waitFor(() => expect(header()).toBeInTheDocument());
+      expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
+    });
+
+    it("rättsskydd: varningen bara i Betalningssätt, inte i huvudet eller tidssektionen", async () => {
+      matterQuery.data = { ...M, paymentMethod: "RATTSSKYDD", rattsskyddMaxOre: 10_000_000 };
+      coverageQuery.data = { billableMinutes: 100 * 60, billableValueOre: 9_500_000 };
+      const { container } = renderPage();
+      await waitFor(() => expect(within(panel(container, "payment")).getByText(WARNING)).toBeInTheDocument());
+      expect(within(header()).queryByText(WARNING)).not.toBeInTheDocument();
+      expect(within(panel(container, "time")).queryByText(WARNING)).not.toBeInTheDocument();
+    });
   });
 
   it("Domstolsbetalningar-panelen finns bara i domstolsärenden eller med registrerade fordringar (#1213)", async () => {
