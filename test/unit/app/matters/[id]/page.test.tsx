@@ -276,6 +276,30 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByLabelText("Försäkringsreferens")).toHaveValue("SK-1"));
   });
 
+  it("ärendehuvudet visar betalningssätt, försäkringsbolag och klientens andel (#1518)", async () => {
+    const line = () => screen.getByTestId("matter-payment-line");
+    const first = renderPage();
+    await waitFor(() => expect(line()).toHaveTextContent(/^· Rättshjälp$/));
+    first.unmount();
+
+    const insurer = { id: "mc2", role: "FORSAKRINGSBOLAG", contact: { id: "c2", name: "Bolaget", contactType: "INSURANCE_COMPANY", personalNumber: null, orgNumber: null } };
+    matterQuery.data = { ...M, paymentMethod: "RATTSSKYDD", clientShareBips: 2000, contacts: [...M.contacts, insurer] };
+    const rs = renderPage();
+    await waitFor(() => expect(line()).toHaveTextContent("· Rättsskydd · Bolaget · klienten betalar 20 %"));
+    rs.unmount();
+
+    // Försäkringsbolag som motpart visas inte som rättsskyddsbolaget.
+    matterQuery.data = { ...M, paymentMethod: "RATTSSKYDD", clientShareBips: 2000, contacts: [...M.contacts, { ...insurer, role: "MOTPART" }] };
+    const adverse = renderPage();
+    await waitFor(() => expect(line()).toHaveTextContent(/^· Rättsskydd · klienten betalar 20 %$/));
+    adverse.unmount();
+
+    // Utan klient och ärendetyp: ingen inledande avgränsare.
+    matterQuery.data = { ...M, contacts: [], matterType: null, clientShareBips: 1000 };
+    renderPage();
+    await waitFor(() => expect(line()).toHaveTextContent(/^Rättshjälp · klienten betalar 10 %$/));
+  });
+
   describe("takvarningen i huvudet och tidssektionen (#1520)", () => {
     const WARNING = /Närmar sig taket|Taket passerat/;
     const header = () => screen.getByTestId("matter-header");

@@ -50,6 +50,27 @@ test("Fakturor, Avbetalningar, Användare och Kalender visar svenska etiketter",
   await expect(page.getByRole("button", { name: /Ny uppgift/ })).toBeVisible();
 });
 
+// Betalningssättet i ärendehuvudet (#1518): etikett, försäkringsbolag (vid
+// rättsskydd) och klientens andel, på raden under titeln.
+const PAYMENT_LINES = [
+  // Rättsskydd där försäkringsbolaget är motpart: inget bolag visas, ingen andel satt.
+  { matterNumber: "2026-0012", text: "· Rättsskydd" },
+  // Rättsskydd, självrisk 20 %, inget försäkringsbolag som kontakt.
+  { matterNumber: "2026-0021", text: "· Rättsskydd · klienten betalar 20 %" },
+  // Rättshjälp med 40 % klientandel.
+  { matterNumber: "2026-0010", text: "· Rättshjälp · klienten betalar 40 %" },
+] as const;
+
+for (const { matterNumber, text } of PAYMENT_LINES) {
+  test(`ärendehuvudet visar betalningssättet: ${text}`, async ({ page }) => {
+    const seed = await fetchDemoSeed(page, BASE);
+    const matter = seed.matters.find((m) => m.matterNumber === matterNumber);
+    expect(matter, matterNumber).toBeDefined();
+    await page.goto(`${BASE}/matters/${matter?.id ?? ""}/`);
+    await expect(page.getByTestId("matter-payment-line")).toHaveText(text, { timeout: 30_000 });
+  });
+}
+
 test("Fakturor döljer annullerade och kreditfakturor tills man väljer att visa dem (#1522)", async ({ page }) => {
   await page.goto(`${BASE}/invoices/`);
   const show = page.getByRole("button", { name: /^Visa annullerade \(\d+\)$/ });

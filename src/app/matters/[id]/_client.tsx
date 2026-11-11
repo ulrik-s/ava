@@ -14,7 +14,6 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
-import type { MatterContactWithType } from "@/lib/shared/matter-insurance";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -26,6 +25,7 @@ import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
 import { InsuranceReferenceField } from "./_insurance-reference-field";
 import { matterDefaultLayout, matterPanels } from "./_matter-panels";
+import { MatterPaymentLine, type NamedMatterContact } from "./_matter-payment-line";
 import { RattshjalpCapWarning } from "./_rattshjalp-cap-warning";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
@@ -168,13 +168,15 @@ interface HeaderProps {
     description?: string | null | undefined;
     status: MatterStatus;
     isTaxeArende?: boolean | undefined;
+    paymentMethod: PaymentMethod;
+    clientShareBips?: number | null | undefined;
     /** Takvarningen i huvudet (#1520) — bara rättshjälp. */
-    paymentMethod?: PaymentMethod | null | undefined;
     rattshjalpMaxTimmar?: number | null | undefined;
   };
   klient: MatterContact[];
-  /** Alla ärendets kontakter — styr om försäkringsreferensen visas (#1511). */
-  contacts: readonly MatterContactWithType[];
+  /** Alla ärendets kontakter — styr om försäkringsreferensen visas (#1511)
+   *  och ger försäkringsbolaget i betalningsraden (#1518). */
+  contacts: readonly NamedMatterContact[];
   onOpenGenerate: () => void;
 }
 
@@ -257,7 +259,11 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
           <h1 className="text-lg font-bold text-gray-900 truncate">
             <span className="mr-2 font-mono text-sm font-normal text-gray-500">{m.matterNumber}</span>{m.title}
           </h1>
-          <MatterClientLine klient={klient} matterType={m.matterType} />
+          <div className="flex flex-wrap items-baseline">
+            <MatterClientLine klient={klient} matterType={m.matterType} />
+            <MatterPaymentLine paymentMethod={m.paymentMethod} clientShareBips={m.clientShareBips}
+              contacts={contacts} separated={klient.length > 0 || Boolean(m.matterType)} />
+          </div>
         </div>
         <MatterHeaderActions
           m={m}
