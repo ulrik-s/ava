@@ -4,14 +4,15 @@
  * Inline-redigering av ärendets målnummer (domstolens referens). Visas i
  * ärendehuvudet för ALLA ärenden (#1134) — även vanliga tvister har målnummer.
  * Används också som matchningsnyckel för domstolsbetalningar (#175) och är
- * sökbart i ärendelistan.
+ * sökbart i ärendelistan. Ett tidigare målnummer (#1510) visas bredvid,
+ * endast läsning, när målnumret har bytts.
  */
 
 import { useId, useState } from "react";
 import { trpc } from "@/lib/client/trpc";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
-export function CourtCaseNumberField({ matterId, value }: { matterId: MatterId; value: string }) {
+export function CourtCaseNumberField({ matterId, value, previous = "" }: { matterId: MatterId; value: string; previous?: string }) {
   const id = useId();
   const [text, setText] = useState(value);
   const utils = trpc.useUtils();
@@ -29,6 +30,11 @@ export function CourtCaseNumberField({ matterId, value }: { matterId: MatterId; 
           className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
           Spara målnummer
         </button>
+      )}
+      {previous && (
+        <span className="text-xs text-gray-500">
+          Tidigare målnr <span className="font-mono text-gray-700">{previous}</span>
+        </span>
       )}
     </div>
   );

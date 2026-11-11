@@ -25,6 +25,12 @@ export const matterSchema = z.object({
    * Fri sträng (format varierar per domstol, t.ex. "B 1234-26").
    */
   courtCaseNumber: z.string().nullish(),
+  /**
+   * Målnumret före senaste bytet (#1510). Sätts automatiskt av `matter.update`
+   * när målnumret byts från ett ifyllt värde till ett annat; bara ett sparas.
+   * Sökbart i ärendelistan, men matchar INTE domstolsbetalningar.
+   */
+  previousCourtCaseNumber: z.string().nullish(),
   title: z.string(),
   description: z.string().nullish(),
   status: matterStatusSchema.default("ACTIVE"),
