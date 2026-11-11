@@ -310,6 +310,8 @@ export const matterRouter = router({
         responsibleLawyerId: userIdSchema.nullable().optional(),
         /** Domstolens målnummer (#173) — för avprickning av domstolsbetalningar. */
         courtCaseNumber: z.string().nullable().optional(),
+        /** Försäkringsbolagets referens (#1511); null rensar. */
+        insuranceReference: z.string().nullable().optional(),
         paymentMethod: paymentMethodSchema.optional(),
         paymentMethodNote: z.string().nullable().optional(),
         paymentMethodDecidedAt: z.string().nullable().optional(),

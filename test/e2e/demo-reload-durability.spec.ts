@@ -68,3 +68,22 @@ test("byt målnummer → tidigare målnummer visas och är sökbart", async ({ p
   await page.getByPlaceholder("Sök ärenden...").fill(oldNumber);
   await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible({ timeout: 25_000 });
 });
+
+// #1511: på ett ärende med försäkringsbolag som kontakt finns fältet
+// "Försäkringsreferens" i ärendehuvudet; referensen sparas och är sökbar.
+test("försäkringsreferens på ärende med försäkringsbolag → sökbar i ärendelistan", async ({ page }) => {
+  await seedDemoLogin(page, BASE);
+  const title = "Trafikskada Ek mot Folksam"; // seed: försäkringsbolaget är motpart
+  const reference = `SK-${Date.now()}`;
+  await page.goto(`${BASE}/matters/`);
+  await page.getByRole("row").filter({ hasText: title }).getByRole("link", { name: title }).click();
+  const field = page.getByLabel("Försäkringsreferens");
+  await expect(field).toBeVisible({ timeout: 25_000 });
+  await field.fill(reference);
+  await page.getByRole("button", { name: "Spara försäkringsreferens" }).click();
+  await expect(page.getByRole("button", { name: "Spara försäkringsreferens" })).toHaveCount(0);
+
+  await page.goto(`${BASE}/matters/`);
+  await page.getByPlaceholder("Sök ärenden...").fill(reference);
+  await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible({ timeout: 25_000 });
+});

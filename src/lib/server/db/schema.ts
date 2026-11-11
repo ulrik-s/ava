@@ -137,6 +137,8 @@ export const matters = pgTable("matters", {
   courtCaseNumber: text("court_case_number"),
   /** Målnumret före senaste bytet (#1510) — sökbart; bara ett sparas. */
   previousCourtCaseNumber: text("previous_court_case_number"),
+  /** Försäkringsbolagets referens (#1511) — sökbar; en per ärende. */
+  insuranceReference: text("insurance_reference"),
   title: text("title").notNull(),
   description: text("description"),
   status: text("status").notNull().default("ACTIVE").$type<MatterStatus>(),
