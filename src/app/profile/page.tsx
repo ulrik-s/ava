@@ -13,6 +13,9 @@ import { useEffect, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { IntegrationsSection, useIntegrationsAvailable } from "@/components/settings/integrations-section";
 import { trpc } from "@/lib/client/trpc";
+import { mileageRateFromKrPerMil, mileageRateKrPerMil } from "@/lib/shared/mileage-rate";
+import { Field } from "./_field";
+import { MileageFields, type MileageFormValue } from "./_mileage-fields";
 import { profileLayout } from "./_profile-layout";
 
 export default function ProfilePage() {
@@ -21,7 +24,7 @@ export default function ProfilePage() {
   const updateUser = trpc.user.update.useMutation({ onSuccess: () => utils.user.current.invalidate() });
   const integrationsAvailable = useIntegrationsAvailable();
 
-  const [form, setForm] = useState({ name: "", title: "" });
+  const [form, setForm] = useState<ProfileForm>({ name: "", title: "", vehicleType: null, mileageKrPerMil: null });
   const [formReady, setFormReady] = useState(false);
 
   useEffect(() => {
@@ -31,6 +34,8 @@ export default function ProfilePage() {
         setForm({
           name: me.data.name ?? "",
           title: me.data.title ?? "",
+          vehicleType: me.data.vehicleType,
+          mileageKrPerMil: mileageRateKrPerMil(me.data.mileageRate),
         });
         setFormReady(true);
       });
@@ -44,7 +49,11 @@ export default function ProfilePage() {
 
   const saveProfile = () => {
     // E-posten skickas inte: den är inloggningens identitet och ändras bara av admin (#1371).
-    updateUser.mutate({ id: u.id, name: form.name, title: form.title || null });
+    // Biltyp och milersättning (#1528): beloppet lagras i öre/km; tomt fält rensar det.
+    updateUser.mutate({
+      id: u.id, name: form.name, title: form.title || null, vehicleType: form.vehicleType,
+      mileageRate: form.mileageKrPerMil != null ? mileageRateFromKrPerMil(form.mileageKrPerMil) : null,
+    });
   };
 
   const panels = [
@@ -70,7 +79,7 @@ export default function ProfilePage() {
   );
 }
 
-type ProfileForm = { name: string; title: string };
+type ProfileForm = { name: string; title: string } & MileageFormValue;
 
 function ProfileBasicsSection({ form, setForm, email, role, onSave, saving, saveError }: {
   form: ProfileForm;
@@ -102,6 +111,7 @@ function ProfileBasicsSection({ form, setForm, email, role, onSave, saving, save
             className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
           />
         </Field>
+        <MileageFields value={form} onChange={(mileage) => setForm({ ...form, ...mileage })} />
         <Field label="E-post">
           <div className="text-sm text-gray-700">{email}
             <span className="text-xs text-gray-400 ml-2">(används för inloggningen — ändras av admin)</span>
@@ -125,14 +135,5 @@ function ProfileBasicsSection({ form, setForm, email, role, onSave, saving, save
         {saveError && <span className="text-xs text-red-600">{saveError}</span>}
       </div>
     </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="text-xs font-medium text-gray-500 mb-1 block">{label}</span>
-      {children}
-    </label>
   );
 }

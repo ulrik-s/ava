@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { userRoleSchema } from "@/lib/shared/schemas/enums";
+import { userRoleSchema, vehicleTypeSchema, type VehicleType } from "@/lib/shared/schemas/enums";
 import { hourlyRatesSchema, type HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { userIdSchema, asId, type UserId } from "@/lib/shared/schemas/ids";
 import { matterNumberPrefixSchema, type User } from "@/lib/shared/schemas/user";
@@ -15,7 +15,7 @@ import { router, protectedProcedure } from "../trpc";
 function pickList(u: User) {
   return {
     id: u.id, email: u.email, name: u.name, title: u.title ?? null, role: u.role,
-    hourlyRates: u.hourlyRates ?? {}, mileageRate: u.mileageRate ?? null,
+    hourlyRates: u.hourlyRates ?? {}, mileageRate: u.mileageRate ?? null, vehicleType: u.vehicleType ?? null,
     matterNumberPrefix: u.matterNumberPrefix ?? null, createdAt: u.createdAt,
   };
 }
@@ -39,6 +39,8 @@ export interface UserProfile {
   /** Juristens egna timpriser per kategori (öre/h, #1206); tom = ärver byråns. */
   hourlyRates: HourlyRates;
   mileageRate: number | null;
+  /** Biltyp för milersättningen (#1528); null = inte vald. */
+  vehicleType: VehicleType | null;
   matterNumberPrefix: string | null;
   createdAt: Date;
 }
@@ -89,6 +91,7 @@ export const userRouter = router({
         role: ctx.user.role,
         hourlyRates: {},
         mileageRate: null,
+        vehicleType: null,
         matterNumberPrefix: null,
         createdAt: new Date(),
       };
@@ -151,7 +154,7 @@ export const userRouter = router({
 
   /**
    * Uppdatera en användare. Användaren kan ändra sina EGNA fält
-   * (namn, titel, sats). Endast ADMIN kan ändra role, e-post (inloggningens
+   * (namn, titel, sats, biltyp och milersättning). Endast ADMIN kan ändra role, e-post (inloggningens
    * identitet, #1371) eller annan användares data.
    */
   update: protectedProcedure
@@ -164,6 +167,8 @@ export const userRouter = router({
       /** Timpris per kategori (öre/h, #1206). HELA kartan ersätts. */
       hourlyRates: hourlyRatesSchema.optional(),
       mileageRate: z.number().nullable().optional(),
+      /** Biltyp för milersättningen (#1528); null rensar den. */
+      vehicleType: vehicleTypeSchema.nullable().optional(),
       /** Ärendenummer-prefix (#174); null rensar den. Byte fortsätter serien. */
       matterNumberPrefix: matterNumberPrefixSchema.nullable().optional(),
       password: z.string().min(6).optional(),

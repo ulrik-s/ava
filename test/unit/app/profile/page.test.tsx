@@ -28,6 +28,8 @@ const meData = {
   title: "Advokat",
   email: "anna@firma.se",
   role: "LAWYER",
+  vehicleType: null as string | null,
+  mileageRate: null as number | null,
 };
 const meQuery = { data: meData as unknown, isLoading: false };
 const updateMutate = vi.fn();
@@ -44,6 +46,8 @@ vi.mock("@/lib/client/trpc", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  meData.vehicleType = null;
+  meData.mileageRate = null;
 });
 
 describe("ProfilePage", () => {
@@ -84,6 +88,54 @@ describe("ProfilePage", () => {
       id: "u1",
       name: "Anna Advokat",
       title: "Advokat",
+      vehicleType: null,
+      mileageRate: null,
     });
+  });
+});
+
+describe("ProfilePage — biltyp och milersättning (#1528)", () => {
+  it("visar Biltyp med tre val och Milersättning (kr/mil)", async () => {
+    render(<ProfilePage />);
+    await screen.findByDisplayValue("Anna Advokat");
+    const select = screen.getByLabelText("Biltyp");
+    expect([...select.querySelectorAll("option")].map((o) => o.textContent)).toEqual([
+      "Ingen vald", "Egen bil", "Förmånsbil, helt el", "Förmånsbil, ej helt el",
+    ]);
+    expect(screen.getByLabelText("Milersättning (kr/mil)")).toHaveValue("");
+  });
+
+  it("val av biltyp fyller i Skatteverkets nivå", async () => {
+    render(<ProfilePage />);
+    await screen.findByDisplayValue("Anna Advokat");
+    const select = screen.getByLabelText("Biltyp");
+    const rate = screen.getByLabelText("Milersättning (kr/mil)");
+    fireEvent.change(select, { target: { value: "OWN_CAR" } });
+    expect(rate).toHaveValue("25");
+    fireEvent.change(select, { target: { value: "COMPANY_CAR_ELECTRIC" } });
+    expect(rate).toHaveValue("9.5");
+    fireEvent.change(select, { target: { value: "COMPANY_CAR_OTHER" } });
+    expect(rate).toHaveValue("12");
+    // "Ingen vald" behåller beloppet.
+    fireEvent.change(select, { target: { value: "" } });
+    expect(rate).toHaveValue("12");
+  });
+
+  it("överskrivet belopp (decimalkomma) sparas i öre/km tillsammans med biltypen", async () => {
+    render(<ProfilePage />);
+    await screen.findByDisplayValue("Anna Advokat");
+    fireEvent.change(screen.getByLabelText("Biltyp"), { target: { value: "OWN_CAR" } });
+    fireEvent.change(screen.getByLabelText("Milersättning (kr/mil)"), { target: { value: "18,50" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
+    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ vehicleType: "OWN_CAR", mileageRate: 185 }));
+  });
+
+  it("sparat värde visas när profilen laddas", async () => {
+    meData.vehicleType = "COMPANY_CAR_ELECTRIC";
+    meData.mileageRate = 95;
+    render(<ProfilePage />);
+    await screen.findByDisplayValue("Anna Advokat");
+    expect(screen.getByLabelText("Biltyp")).toHaveValue("COMPANY_CAR_ELECTRIC");
+    expect(screen.getByLabelText("Milersättning (kr/mil)")).toHaveValue("9.5");
   });
 });

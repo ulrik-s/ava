@@ -24,6 +24,20 @@ export const USER_ROLE_LABELS = {
 export const userRoleSchema = enumFromLabels(USER_ROLE_LABELS);
 export type UserRole = z.infer<typeof userRoleSchema>;
 
+// ─── Biltyp för milersättning (#1528) ─────────────────────────────────────
+
+/**
+ * Juristens biltyp under Min profil. Väljer Skatteverkets schablon för
+ * milersättningen (`MILEAGE_RATE_ORE_PER_MIL_BY_VEHICLE` i `mileage-rate.ts`).
+ */
+export const VEHICLE_TYPE_LABELS = {
+  OWN_CAR: "Egen bil",
+  COMPANY_CAR_ELECTRIC: "Förmånsbil, helt el",
+  COMPANY_CAR_OTHER: "Förmånsbil, ej helt el",
+} as const satisfies Record<string, string>;
+export const vehicleTypeSchema = enumFromLabels(VEHICLE_TYPE_LABELS);
+export type VehicleType = z.infer<typeof vehicleTypeSchema>;
+
 // ─── Matter status ────────────────────────────────────────────────────────
 
 export const MATTER_STATUS_LABELS = {

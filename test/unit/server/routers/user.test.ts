@@ -246,6 +246,41 @@ describe("admin-only checks", () => {
   });
 });
 
+describe("user.update — biltyp och milersättning (#1528)", () => {
+  it("LAWYER sparar sin egen biltyp och milersättning", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a", email: "a@b.com" });
+    mockPrisma.user.update.mockResolvedValue({});
+    await makeCallerWithRole("LAWYER", "u1").update({ id: "u1", vehicleType: "COMPANY_CAR_ELECTRIC", mileageRate: 95 });
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ vehicleType: "COMPANY_CAR_ELECTRIC", mileageRate: 95 }),
+    }));
+  });
+
+  it("null rensar biltypen", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a", email: "a@b.com" });
+    mockPrisma.user.update.mockResolvedValue({});
+    await makeCallerWithRole("LAWYER", "u1").update({ id: "u1", vehicleType: null });
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ vehicleType: null }),
+    }));
+  });
+
+  it("LAWYER kan inte ändra en annan användares biltyp", async () => {
+    await expect(
+      makeCallerWithRole("LAWYER", "u1").update({ id: "u2", vehicleType: "OWN_CAR" }),
+    ).rejects.toThrow(/bara ändra din egen profil/i);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("avvisar en okänd biltyp", async () => {
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      makeCallerWithRole("LAWYER", "u1").update({ id: "u1", vehicleType: "BUSS" as any }),
+    ).rejects.toThrow();
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("user.current", () => {
   it("returnerar ctx.user om saknas i tabellen (demo-läget)", async () => {
     mockPrisma.user.findFirst.mockResolvedValue(null);
@@ -262,6 +297,21 @@ describe("user.current", () => {
     const me = await makeCallerWithRole("LAWYER", "u1").current();
     expect(me.id).toBe("u1");
     expect(me.hourlyRates).toEqual({ ARBETE: 250000 });
+  });
+
+  it("returnerar biltyp och milersättning; utan biltyp → null (#1528)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({
+      id: "u1", organizationId: "org-a", email: "u1@x", name: "U1", role: "LAWYER",
+      mileageRate: 250, vehicleType: "OWN_CAR", createdAt: new Date(),
+    });
+    const me = await makeCallerWithRole("LAWYER", "u1").current();
+    expect(me.vehicleType).toBe("OWN_CAR");
+    expect(me.mileageRate).toBe(250);
+
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a", email: "u1@x", name: "U1", role: "LAWYER", createdAt: new Date() });
+    expect((await makeCallerWithRole("LAWYER", "u1").current()).vehicleType).toBeNull();
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    expect((await makeCallerWithRole("LAWYER", "u1").current()).vehicleType).toBeNull();
   });
 });
 

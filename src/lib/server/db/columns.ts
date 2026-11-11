@@ -10,7 +10,8 @@
  * Org-scopade entiteter lägger till `organization_id`.
  */
 
-import { boolean, integer, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, integer, jsonb, timestamp, uuid } from "drizzle-orm/pg-core";
+import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 
 export const baseColumns = {
   id: uuid("id").primaryKey(),
@@ -27,3 +28,9 @@ export const orgScopedColumns = {
 
 /** Återanvändbar boolean-default-helper (håller tabell-defs läsbara). */
 export const boolDefault = (name: string, value: boolean) => boolean(name).notNull().default(value);
+
+/** Monetärt öre-belopp (bigint → ingen int4-overflow för stora fakturor). */
+export const ore = (name: string) => bigint(name, { mode: "number" });
+
+/** Timpris per kategori (#1206) — samma jsonb-karta på byrå, jurist och ärende. */
+export const hourlyRatesColumn = () => jsonb("hourly_rates").notNull().default({}).$type<HourlyRates>();

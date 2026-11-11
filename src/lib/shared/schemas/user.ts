@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { baseFields, optionalDateLike } from "./common";
-import { userRoleSchema } from "./enums";
+import { userRoleSchema, vehicleTypeSchema } from "./enums";
 import { hourlyRatesSchema } from "./hourly-rates";
 import { userIdSchema, organizationIdSchema } from "./ids";
 
@@ -32,6 +32,8 @@ export const userSchema = z.object({
   /** Juristens timpris per kategori (öre/h) — vinner över byråns (#1206). */
   hourlyRates: hourlyRatesSchema.default({}),
   mileageRate: z.number().int().nullish(),
+  /** Biltyp för milersättningen (#1528); juristen väljer den under Min profil. */
+  vehicleType: vehicleTypeSchema.nullish(),
   active: z.boolean().default(true),
   /** bcrypt-hash. Frivilligt — fattas för demo-användare och Azure-only. */
   passwordHash: z.string().nullish(),
