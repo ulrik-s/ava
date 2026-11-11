@@ -10,6 +10,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { patchFirmaConfig } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import { mileageRateOrePerMil } from "@/lib/shared/mileage-rate";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 
 const roleLabels: Record<string, string> = {
@@ -81,7 +82,7 @@ function buildUserColumns(opts: {
       render: (u) => <span className="text-sm text-gray-500">{userRateLabel(u.hourlyRates)}</span> },
     { key: "mileageRate", label: "Milersättning", sortable: true, align: "right",
       sortValue: (u) => u.mileageRate ?? -1,
-      render: (u) => <span className="text-sm text-gray-500">{u.mileageRate != null ? `${formatCurrency(u.mileageRate)}/km` : "—"}</span> },
+      render: (u) => <span className="text-sm text-gray-500">{u.mileageRate != null ? `${formatCurrency(mileageRateOrePerMil(u.mileageRate))}/mil` : "—"}</span> },
   ];
   if (!opts.isAdmin) return base;
   return [

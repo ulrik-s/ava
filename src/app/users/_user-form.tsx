@@ -93,7 +93,7 @@ export function UserForm({
           </p>
         </FormField>
         <UserRatesField form={form} setForm={setForm} />
-        <FormField id={mileageRateId} label="Milersättning (kr/km)">
+        <FormField id={mileageRateId} label="Milersättning (kr/mil)">
           <input id={mileageRateId} type="text" inputMode="decimal" value={form.mileageRate}
             onChange={(e) => setForm({ ...form, mileageRate: e.target.value })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />

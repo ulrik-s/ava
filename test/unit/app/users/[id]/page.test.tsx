@@ -69,7 +69,7 @@ beforeEach(() => {
     email: "anna@x.se",
     role: "LAWYER",
     hourlyRates: { ARBETE: 250000 }, // öre = 2 500 kr/h
-    mileageRate: 2500,
+    mileageRate: 250, // öre/km = 25 kr/mil
   };
   userQuery.isLoading = false;
   userQuery.error = null;
@@ -112,6 +112,23 @@ describe("EditUserPage", () => {
       email: "anna@x.se",
       role: "LAWYER",
     });
+  });
+
+  it("visar milersättningen i kr/mil och sparar tillbaka i öre/km (#1527)", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /Redigera användare/i });
+    expect(screen.getByLabelText(/Milersättning \(kr\/mil\)/)).toHaveValue("25");
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(updateMutate.mock.calls[0]?.[0]).toMatchObject({ mileageRate: 250 });
+  });
+
+  it("tomt milersättningsfält sparar inget värde", async () => {
+    userQuery.data = { ...userQuery.data, mileageRate: null };
+    renderPage();
+    await screen.findByRole("heading", { name: /Redigera användare/i });
+    expect(screen.getByLabelText(/Milersättning/)).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(updateMutate.mock.calls[0]?.[0]).toMatchObject({ mileageRate: undefined });
   });
 
   it("delete-knapp anropar deleteUser efter bekräftelse", async () => {

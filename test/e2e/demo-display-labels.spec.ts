@@ -4,8 +4,9 @@
  * - Anteckningar: rå ISO-tidpunkt i Datum (demogeneratorn skickade den som `date`).
  * - Fakturor: typen "CREDIT" i stället för "Kreditfaktura".
  * - Avbetalningar: radens status "AKTIVA" (filterknappens plural).
- * - Användare: "2.50 kr/km" med decimalpunkt.
+ * - Användare: "2.50 kr/km" med decimalpunkt; nu kr/mil med decimalkomma (#1527).
  * - Kalender: "Tasks" / "Ny task".
+ * - Fakturor: annullerade och kreditfakturor dolda från början (#1522).
  */
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
@@ -31,6 +32,8 @@ test("ärendenas anteckningar visar dag och klockslag, aldrig en rå ISO-tidpunk
 
 test("Fakturor, Avbetalningar, Användare och Kalender visar svenska etiketter", async ({ page }) => {
   await page.goto(`${BASE}/invoices/`);
+  // Kreditfakturor är dolda från början (#1522).
+  await page.getByRole("button", { name: /^Visa annullerade \(\d+\)$/ }).click({ timeout: 30_000 });
   await expect(page.getByText("Kreditfaktura").first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("CREDIT", { exact: true })).toHaveCount(0);
 
@@ -38,8 +41,8 @@ test("Fakturor, Avbetalningar, Användare och Kalender visar svenska etiketter",
   await expect(page.getByRole("cell", { name: "Aktiv", exact: true }).first()).toBeVisible({ timeout: 30_000 });
 
   await page.goto(`${BASE}/users/`);
-  await expect(page.getByText(/^\d+,\d{2}\s?kr\/km$/).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/\d\.\d{2} kr\/km/)).toHaveCount(0);
+  await expect(page.getByText(/^\d+,\d{2}\s?kr\/mil$/).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/\d\.\d{2}\s?kr\/mil|kr\/km/)).toHaveCount(0);
 
   await page.goto(`${BASE}/calendar/`);
   await showPanel(page, "Uppgifter");
@@ -67,3 +70,16 @@ for (const { matterNumber, text } of PAYMENT_LINES) {
     await expect(page.getByTestId("matter-payment-line")).toHaveText(text, { timeout: 30_000 });
   });
 }
+
+test("Fakturor döljer annullerade och kreditfakturor tills man väljer att visa dem (#1522)", async ({ page }) => {
+  await page.goto(`${BASE}/invoices/`);
+  const show = page.getByRole("button", { name: /^Visa annullerade \(\d+\)$/ });
+  await expect(show).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("cell", { name: "Kreditfaktura", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "Annullerad", exact: true })).toHaveCount(0);
+
+  await show.click();
+  await expect(page.getByRole("cell", { name: "Kreditfaktura", exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Dölj annullerade" }).click();
+  await expect(page.getByRole("cell", { name: "Kreditfaktura", exact: true })).toHaveCount(0);
+});
