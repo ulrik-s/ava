@@ -15,6 +15,7 @@ import type { MatterStatus, PaymentMethod, TimeEntryKind } from "@/lib/shared/sc
 import type { BillingRunId, InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 import type { StandardAtgard } from "@/lib/shared/standard-atgard";
 import { useMarkRadgivning, type MarkRadgivning } from "./_radgivning-entry";
+import { RattshjalpCapWarning } from "./_rattshjalp-cap-warning";
 import { StandardAtgardSuggestions } from "./_standard-atgard-suggestions";
 
 interface Props {
@@ -26,6 +27,8 @@ interface Props {
   /** Driver förslagen om avslutande standardåtgärder (#958) — ett stängt ärende
    *  är i sitt avslutningsskede även utan kostnadsräkning. */
   matterStatus?: MatterStatus | undefined;
+  /** Rättshjälpens timtak — takvarningen vid tidsregistreringen (#1520). */
+  rattshjalpMaxTimmar?: number | null | undefined;
 }
 
 /** Ärenden där kategorin styr vilken ÅRSNORM slutregleringen värderar posten på. */
@@ -61,7 +64,7 @@ function fmtDateTime(v: Date | string | null | undefined): string {
 }
 
 // eslint-disable-next-line max-lines-per-function -- TODO: refactor (struktur är tabular: kolumndefs + 2 modaler)
-export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatus }: Props) {
+export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatus, rattshjalpMaxTimmar }: Props) {
   const isCoverage = isCoverageMethod(paymentMethod);
   const atgarder = useStandardAtgarder(paymentMethod);
   const radgivning = useMarkRadgivning(matterId, paymentMethod);
@@ -75,9 +78,15 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [createForm, setCreateForm] = useState<EditForm>(emptyForm);
 
+  /** Tidslistan + upparbetat mot taket (#1520) — takvarningen följer med direkt. */
+  function refreshTime(): void {
+    void utils.timeEntry.list.invalidate({ matterId });
+    void utils.matter.coverageUsage.invalidate({ matterId });
+  }
+
   const createTimeEntry = trpc.timeEntry.create.useMutation({
     onSuccess: () => {
-      void utils.timeEntry.list.invalidate({ matterId });
+      refreshTime();
       setShowCreate(false);
       setCreateForm(emptyForm());
     },
@@ -85,7 +94,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
 
   const updateTimeEntry = trpc.timeEntry.update.useMutation({
     onSuccess: () => {
-      void utils.timeEntry.list.invalidate({ matterId });
+      refreshTime();
       setEditingId(null);
       setEditForm(null);
     },
@@ -95,7 +104,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   });
 
   const deleteTimeEntry = trpc.timeEntry.delete.useMutation({
-    onSuccess: () => utils.timeEntry.list.invalidate({ matterId }),
+    onSuccess: refreshTime,
     onError: (e) => { console.error("[timeEntry.delete] misslyckades:", e); alert(`Kunde inte ta bort: ${e.message}`); },
   });
 
@@ -187,6 +196,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
       />
 
       <div className="p-4">
+        <RattshjalpCapWarning matterId={matterId} paymentMethod={paymentMethod} rattshjalpMaxTimmar={rattshjalpMaxTimmar} />
         <DataTable
           prefKey={`list.matter-time.${matterId}`}
           columns={columns}
