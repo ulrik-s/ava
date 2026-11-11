@@ -26,9 +26,8 @@ import type { DocumentPartSource } from "@/lib/shared/schemas/document";
 import type {
   AmountRounding, BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, InvoiceStatus,
   ConflictCheckStatus, InvoiceType, MatterRole, MatterStatus, PaymentMethod, PaymentPlanStatus, ReminderType,
-  SuggestionStatus, UserRole,
+  SuggestionStatus, UserRole, VehicleType,
 } from "@/lib/shared/schemas/enums";
-import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type {
   AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId,
   DocumentAnalysisSuggestionId, DocumentFolderId, DocumentId, DocumentPartId,
@@ -38,13 +37,7 @@ import type {
 } from "@/lib/shared/schemas/ids";
 import type { SettlementView } from "@/lib/shared/settlement-view";
 import type { StandardAtgard } from "@/lib/shared/standard-atgard";
-import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
-
-/** Monetärt öre-belopp (bigint → ingen int4-overflow för stora fakturor). */
-const ore = (name: string) => bigint(name, { mode: "number" });
-
-/** Timpris per kategori (#1206) — samma jsonb-karta på byrå, jurist och ärende. */
-const hourlyRatesColumn = () => jsonb("hourly_rates").notNull().default({}).$type<HourlyRates>();
+import { baseColumns, boolDefault, hourlyRatesColumn, ore, orgScopedColumns } from "./columns";
 
 export const organizations = pgTable("organizations", {
   ...baseColumns,
@@ -99,6 +92,8 @@ export const users = pgTable("users", {
   /** Juristens timpris per kategori (öre/h) — vinner över byråns (#1206). */
   hourlyRates: hourlyRatesColumn(),
   mileageRate: integer("mileage_rate"),
+  /** Biltyp för milersättningen (#1528) — null = inte vald. */
+  vehicleType: text("vehicle_type").$type<VehicleType>(),
   active: boolDefault("active", true),
   passwordHash: text("password_hash"),
   azureOid: text("azure_oid"),

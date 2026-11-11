@@ -20,13 +20,13 @@ describe("UserRepository — in-memory", () => {
     const org2 = asId<"OrganizationId">("org-2");
     const store = new LocalStore({
       users: [
-        { id: u1, organizationId: org1, email: "a@x", name: "Beta" },
+        { id: u1, organizationId: org1, email: "a@x", name: "Beta", vehicleType: "OWN_CAR", mileageRate: 250 },
         { id: u2, organizationId: org1, email: "b@x", name: "Alfa" },
         { id: asId<"UserId">(uuidv7()), organizationId: org2, email: "c@x", name: "Gamma" },
       ],
     }, async () => {});
     const repo = new InMemoryUserRepository(store);
-    expect(await repo.getByIdInOrg(u1, org1)).toMatchObject({ id: u1 });
+    expect(await repo.getByIdInOrg(u1, org1)).toMatchObject({ id: u1, vehicleType: "OWN_CAR", mileageRate: 250 }); // #1528
     expect(await repo.getByIdInOrg(u1, org2)).toBeNull(); // fel org
     const list = await repo.listByOrg(org1);
     expect(list).toHaveLength(2);
@@ -69,6 +69,21 @@ describe("UserRepository — Drizzle (pglite)", () => {
     const list = await repo.listByOrg(org);
     expect(list).toHaveLength(2);
     expect(list.map((u) => u.name)).toEqual(["Alfa", "Beta"]);
+  });
+
+  it("vehicle_type läses och skrivs (#1528)", async () => {
+    const db = handle.db;
+    const id = asId<"UserId">(uuidv7());
+    const org = asId<"OrganizationId">(uuidv7());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(users).values(v({ id, organizationId: org, email: `bil-${id}@x`, name: "Bil", vehicleType: "COMPANY_CAR_OTHER", mileageRate: 120 }));
+    const repo = new DrizzleUserRepository(handle.db);
+    expect(await repo.getByIdInOrg(id, org)).toMatchObject({ vehicleType: "COMPANY_CAR_OTHER", mileageRate: 120 });
+    await repo.update(id, { vehicleType: "COMPANY_CAR_ELECTRIC", mileageRate: 95 });
+    expect(await repo.getByIdInOrg(id, org)).toMatchObject({ vehicleType: "COMPANY_CAR_ELECTRIC", mileageRate: 95 });
+    await repo.update(id, { vehicleType: null });
+    expect((await repo.getByIdInOrg(id, org))?.vehicleType).toBeNull();
   });
 
   it("listByLoginEmail: över alla byråer, samma normalisering som det unika indexet (#1408)", async () => {

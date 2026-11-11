@@ -14,7 +14,7 @@
   "src/lib/client/kostnadsrakning/faktura-template.ts": 453,
   "src/lib/server/data-store/in-memory/caching-sync-data-store.ts": 423,
   "src/lib/server/data-store/in-memory/mutation-queue.ts": 406,
-  "src/lib/server/db/schema.ts": 731,
+  "src/lib/server/db/schema.ts": 726,
   "src/lib/server/routers/billingRun.ts": 1179,
   "src/lib/server/routers/document/core.ts": 408,
   "src/lib/server/routers/invoice.ts": 558,
