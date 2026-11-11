@@ -224,6 +224,17 @@ alltså med koden, och agenterna kan inte ändra dem (Agentvakten skyddar
 | 3 Granskning + merge | varje timme, 07–21 | `Läs och följ tooling/agents/3-granskning.md i ulrik-s/ava.` |
 | 4 Implementation | varje timme, 08–20 | `Läs och följ tooling/agents/4-implementation.md i ulrik-s/ava.` |
 | 5 Arkitektur | måndagar 06:00 | `Läs och följ tooling/agents/5-arkitektur.md i ulrik-s/ava.` (bara `ulrik-s/ava`) |
+| 6 PR-vakt | varje timme, dygnet runt | `Läs och följ tooling/agents/6-pr-vakt.md i ulrik-s/ava.` (bara `ulrik-s/ava`) |
+
+PR-vakten ser till att alla öppna PR:er blir gröna och mergade:
+- startar om CI som hänger mer än 60 minuter,
+- kör om flaky jobb,
+- rättar rött CI och konflikter på `claude/`-brancher,
+- granskar Dependabot-PR:er och Ulriks egna PR:er,
+- mergar det som är granskat och grönt.
+
+Andra PR:er än Dependabots som rör skyddade sökvägar mergar den bara med
+Ulriks `människa-godkänd`.
 
 En körning utan arbete avslutas efter en rad. Tätare schema ger snabbare
 leverans men drar mer av prenumerationen. Börja glest och öka när du ser hur
