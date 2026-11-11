@@ -73,6 +73,25 @@ sätt `blockerad` så att Ulrik ser det.
 - Högst 10 agent-PR:er per dygn.
 - En agent-PR kan bara mergas med `granskad` och utan `blockerad`.
 
+## 4b. Arkitekturen — passa in, uppfinn inte
+
+Användarnas önskemål ska byggas **in i** den arkitektur som finns, inte bredvid
+den. Avdrift ("samma sak löst på två sätt", nya lager, egna små ramverk) är det
+som gör koden ohanterlig.
+
+- **Läs innan du bygger:** `docs/architecture.md`, och de ADR:er i
+  `docs/adr/` som rör delen du ändrar (sök på modulens namn).
+- **Hitta förebilden:** innan du skriver ny kod, leta upp hur samma sorts sak
+  redan är gjord (en liknande router, komponent, hook, tabellkolumn eller
+  inställning) och gör likadant. Återanvänd befintliga komponenter och
+  hjälpfunktioner. Kopiera dem inte, och skriv inga parallella varianter.
+- **Kräver det något nytt** (ett nytt mönster, en ny abstraktion eller
+  tjänst, ett nytt lager, ett nytt npm-beroende, en ändring av en ADR): gör
+  INTE det själv. Sätt `blockerad` och skriv ett **ADR-utkast** som kommentar,
+  med kontext, beslut, alternativ och konsekvenser, så att Ulrik bestämmer.
+- **Gränserna i `tooling/config/dependency-cruiser.cjs`** (lagren) och
+  komplexitetsgränsen gäller. Gå aldrig runt dem.
+
 ## 5. GitHub i molnet: bara `gh api` (REST)
 
 `gh` är inloggad, men GraphQL-kommandona (`gh pr create`, `gh issue list`,
@@ -128,6 +147,9 @@ Intag (`ava-feedback`):
 
 Kod (`ava`), issues:
 `agent-task` + `att-granska` → `granskad` → `pågår` → stängd via PR
+
+Kod (`ava`), refaktoriseringsförslag (loop 5):
+`agent-task` + `refaktorisering` → (**Ulrik**) `granskad` → `pågår` → stängd via PR
 
 Kod (`ava`), PR:er:
 `agent-pr` + `att-granska` → `granskad` (mergas när CI är grön) eller

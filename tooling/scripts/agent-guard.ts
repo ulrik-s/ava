@@ -30,7 +30,7 @@ export const PROTECTED_PATHS: readonly RegExp[] = [
   /^tooling\/docker\//,
   /^tooling\/systemd\//,
   /^tooling\/agents\//,
-  /^tooling\/scripts\/(deploy|backup|restore|release|agent-guard)/,
+  /^tooling\/scripts\/(deploy|backup|restore|release|agent-guard|arch-metrics)/,
   /^tooling\/scripts\/lib\//,
   /^src\/lib\/server\/auth\//,
   /^src\/lib\/server\/http\/(forwarded|server-context|node-http|server-first-api)/,

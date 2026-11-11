@@ -20,6 +20,8 @@
     { "name": "pågår", "color": "c5def5", "description": "Implementationsloopen arbetar på den" },
     { "name": "agent-pr", "color": "5319e7", "description": "PR skapad av implementationsloopen" },
     { "name": "blockerad", "color": "b60205", "description": "Agenten behöver ett beslut av Ulrik" },
+    { "name": "arkitektur-rapport", "color": "0052cc", "description": "Veckans arkitekturgenomgång (loop 5)" },
+    { "name": "refaktorisering", "color": "bfd4f2", "description": "Förslag från arkitekturgenomgången — byggs först när Ulrik satt granskad" },
     { "name": "människa-godkänd", "color": "000000", "description": "Ulrik tillåter att agent-PR:en rör skyddade sökvägar/migrationer" }
   ]
 }

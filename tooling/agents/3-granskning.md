@@ -27,12 +27,19 @@ För var och en (äldst först):
      (`gh api -X PATCH repos/ulrik-s/ava/issues/N -F body=@fil.md`), sätt
      `blockerad` och kommentera att Ulrik bör radera revisionerna.
    - **Lagom stor** för en PR? Mätbara acceptanskriterier? Testplan?
+   - **Arkitektur (regel 4b):** pekar fältet "Arkitektur" ut en verklig
+     förebild (öppna den: gör den samma sorts sak?) och rätt ADR:er? Kräver
+     issuen i själva verket något nytt (mönster, beroende, lager) som inte
+     står där: sätt `blockerad` med ett ADR-utkast.
    - **Kräver den skyddade sökvägar** eller en destruktiv migration? Sätt då
      `blockerad` med en förklaring.
 3. Utfall:
    - Bra (eller bra efter små förtydliganden du själv gör i issuen): ta bort
      `att-granska`, sätt `granskad`, kommentera kort vad du kontrollerat.
    - Felaktig i grunden: kommentera konkret och sätt `blockerad`.
+
+Sätt ALDRIG `granskad` på en issue med `refaktorisering`. Den godkänner bara
+Ulrik (loop 5).
 
 ## B. PR:er med `agent-pr` + `att-granska`
 
@@ -51,6 +58,26 @@ För var och en:
      roller), validering med zod, ingen XSS (`dangerouslySetInnerHTML`), inga
      nya externa anrop.
    - Kodkvalitet enligt `AGENTS.md`: typer utan `any`/`as`, komplexitet < 8.
+   - **Arkitektur (regel 4b):** följer koden förebilden i issuens
+     "Arkitektur"? Leta aktivt efter avdrift. Avdrift är något av följande:
+     - en ny komponent, hook, hjälpfunktion eller router som gör ungefär det
+       som en befintlig redan gör, i stället för att återanvända den,
+     - kopierad kod,
+     - ett nytt mönster för något som redan har ett,
+     - logik i fel lager, t.ex. affärsregler i en React-komponent i stället
+       för i `src/lib/shared`,
+     - ett nytt beroende,
+     - en ändring som går emot en ADR.
+
+     Avdrift ger `behöver-ändras`, med en hänvisning till det befintliga som
+     ska användas. Kräver uppgiften verkligen något nytt: `blockerad` med ett
+     ADR-utkast.
+   - **Refaktorisering** (`refaktorisering`): beteendet är oförändrat.
+     Befintliga tester är ändrade i sak bara om de flyttats eller bytt namn med
+     koden. Nya tester är okej. Ett ändrat testvärde eller en borttagen
+     kontroll ger `behöver-ändras`. Diffen gör det issuen föreslår och inget
+     annat. (En refaktorisering har ingen intag-issue, så kontrollen mot "Inte
+     med" gäller inte.)
 3. Utfall:
    - **Godkänd:** ta bort `att-granska`, sätt `granskad`, och kommentera en
      sammanfattning som slutar med raden `Granskad commit: <head-sha>`.
