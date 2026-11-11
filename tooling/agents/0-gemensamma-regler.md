@@ -133,6 +133,20 @@ gh api -X DELETE "repos/R/issues/N/labels/$(jq -rn --arg l 'behöver-ändras' '$
 
 Brancher du pushar MÅSTE börja med `claude/`; andra vägras av molnet.
 
+**En skrivning per kommando.** Molnets behörighetskontroll bedömer varje
+kommando, och ett kommando med många skrivningar till GitHub (loopar,
+`for n in …`, kedjor med `&&` eller `;`) nekas som "External System
+Writes".
+- Gör varje skrivning (etikett, kommentar, stängning, ny issue, PR, merge)
+  som ett **eget**, enkelt `gh api`-kommando, en issue i taget, i den ordning
+  stegen står.
+- Läsningar får du gärna samla i ett kommando.
+
+Nekas en skrivning: försök inte igen, och gå inte runt den med andra verktyg
+(t.ex. GitHub-MCP). Gör de andra stegen som inte beror på den, och avsluta
+med en lista över exakt vilka skrivningar som inte blev gjorda, så att Ulrik
+kan göra dem för hand.
+
 ## 6. Hur repot arbetar
 
 Följ `AGENTS.md`: Conventional Commits, tester för varje rad, komplexitet

@@ -16,9 +16,12 @@ För varje ÖPPEN issue i `ulrik-s/ava-feedback` med `nedbruten`:
    `closed` med `commit_id`) och deras merge-commits. Ta fram den lägsta
    `v*`-taggen som innehåller ALLA merge-commits (`git fetch --tags` +
    `git tag --contains <sha> --list 'v*' --sort=v:refname`).
-   - **Finns en sådan tagg** (Ulrik har släppt): skapa vid behov etiketten
-     `release:<tagg>` i intag-repot, sätt `levererad` + `release:<tagg>`,
-     kommentera "Levererad i <tagg>." och stäng issuen.
+   - **Finns en sådan tagg** (Ulrik har släppt): gör de här stegen som
+     separata kommandon, ett i taget och en issue i taget (regel 5):
+     1. skapa etiketten `release:<tagg>` i intag-repot, om den inte finns,
+     2. sätt `levererad` + `release:<tagg>` på issuen,
+     3. kommentera "Levererad i <tagg>.",
+     4. stäng issuen (`state_reason` `completed`).
    - **Ingen tagg ännu:** kommentera EN gång (kolla att kommentaren inte redan
      finns) "Klart och ute på staging, väntar på nästa release." Stäng inte.
    - **Någon stängd som "not planned" utan PR:** kommentera varför och sätt
