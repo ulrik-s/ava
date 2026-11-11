@@ -2,6 +2,7 @@ import { z } from "zod";
 import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
 import { DEFAULT_MATTER_FOLDERS } from "@/lib/shared/default-matter-folders";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { previousCourtCaseNumberAfterChange } from "@/lib/shared/previous-court-case-number";
 import {
   matterRoleSchema,
   contactTypeSchema,
@@ -160,6 +161,13 @@ function toDateOrNull(v: string | null | undefined): Date | null | undefined {
 function applyOptionalDate(data: Record<string, unknown>, key: string, value: string | null | undefined): void {
   const d = toDateOrNull(value);
   if (d !== undefined) data[key] = d;
+}
+
+/** Byts målnumret från ett ifyllt värde till ett annat sparas det gamla som
+ *  tidigare målnummer (#1510). Annars rörs fältet inte. */
+function applyPreviousCourtCaseNumber(data: Record<string, unknown>, before: Matter, next: string | null | undefined): void {
+  const previous = previousCourtCaseNumberAfterChange(before.courtCaseNumber, next);
+  if (previous !== undefined) data.previousCourtCaseNumber = previous;
 }
 
 function buildMatterData(
@@ -333,6 +341,7 @@ export const matterRouter = router({
       applyOptionalDate(data, "tvistUppkomDatum", tvistUppkomDatum);
       applyOptionalDate(data, "rattsskyddBeslutDatum", rattsskyddBeslutDatum);
       applyOptionalDate(data, "rattsskyddNekadAt", rattsskyddNekadAt);
+      applyPreviousCourtCaseNumber(data, before, input.courtCaseNumber);
       const updated = await ctx.repos.transaction(async (repos) => {
         // Jämför mot läget FÖRE uppdateringen — in-memory-lagret kan mutera `before`.
         await logBillingChanges(repos, ctx, before, input);

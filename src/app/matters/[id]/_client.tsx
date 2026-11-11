@@ -28,9 +28,11 @@ import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
 import { WatchSection } from "./_watch-section";
 
-/** Ärendets målnummer som sträng (getById-typen saknar fältet i select-typen). */
-function courtCaseOf(m: unknown): string {
-  return (m as { courtCaseNumber?: string | null }).courtCaseNumber ?? "";
+type CourtCaseKey = "courtCaseNumber" | "previousCourtCaseNumber";
+
+/** Ärendets (tidigare) målnummer som sträng (getById-typen saknar fälten i select-typen). */
+function courtCaseOf(m: unknown, key: CourtCaseKey = "courtCaseNumber"): string {
+  return (m as Partial<Record<CourtCaseKey, string | null>>)[key] ?? "";
 }
 
 /**
@@ -256,7 +258,8 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
         />
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <CourtCaseNumberField key={courtCaseOf(m)} matterId={asId<"MatterId">(m.id)} value={courtCaseOf(m)} />
+        <CourtCaseNumberField key={courtCaseOf(m)} matterId={asId<"MatterId">(m.id)} value={courtCaseOf(m)}
+          previous={courtCaseOf(m, "previousCourtCaseNumber")} />
         {m.description && <p className="min-w-0 flex-1 truncate text-sm text-gray-600" title={m.description}>{m.description}</p>}
       </div>
     </div>

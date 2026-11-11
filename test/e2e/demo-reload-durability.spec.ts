@@ -42,3 +42,29 @@ test("nytt ärende med målnummer → målnumret syns i ärendehuvudet", async (
   await page.getByRole("row").filter({ hasText: title }).getByRole("link", { name: title }).click();
   await expect(page.getByLabel("Målnummer")).toHaveValue("T 9876-26", { timeout: 25_000 });
 });
+
+// #1510: byts målnumret sparas det gamla som "Tidigare målnr" (visas i
+// ärendehuvudet) och ärendet går att söka fram på det gamla numret.
+test("byt målnummer → tidigare målnummer visas och är sökbart", async ({ page }) => {
+  await seedDemoLogin(page, BASE);
+  const stamp = Date.now();
+  const title = `Tidigare målnr e2e ${stamp}`;
+  const oldNumber = `T ${stamp}-26`;
+  await page.goto(`${BASE}/matters/?new=1`);
+  await page.getByLabel("Titel *").fill(title);
+  await page.getByLabel("Målnummer").fill(oldNumber);
+  await page.getByRole("button", { name: "Skapa ärende" }).click();
+  await expect(page.getByLabel("Titel *")).toHaveCount(0);
+
+  await page.getByRole("row").filter({ hasText: title }).getByRole("link", { name: title }).click();
+  const field = page.getByLabel("Målnummer");
+  await expect(field).toHaveValue(oldNumber, { timeout: 25_000 });
+  await field.fill(`B ${stamp}-26`);
+  await page.getByRole("button", { name: "Spara målnummer" }).click();
+  await expect(page.getByText("Tidigare målnr")).toBeVisible();
+  await expect(page.getByText(oldNumber, { exact: true })).toBeVisible();
+
+  await page.goto(`${BASE}/matters/`);
+  await page.getByPlaceholder("Sök ärenden...").fill(oldNumber);
+  await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible({ timeout: 25_000 });
+});

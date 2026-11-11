@@ -135,6 +135,8 @@ export const matters = pgTable("matters", {
   matterNumber: text("matter_number").notNull(),
   responsibleLawyerId: uuid("responsible_lawyer_id").$type<UserId>(),
   courtCaseNumber: text("court_case_number"),
+  /** Målnumret före senaste bytet (#1510) — sökbart; bara ett sparas. */
+  previousCourtCaseNumber: text("previous_court_case_number"),
   title: text("title").notNull(),
   description: text("description"),
   status: text("status").notNull().default("ACTIVE").$type<MatterStatus>(),

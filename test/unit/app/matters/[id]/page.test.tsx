@@ -255,6 +255,13 @@ describe("MatterDetailPage", () => {
     expect(screen.queryByText(/Domstolsbetalningar/)).not.toBeInTheDocument();
   });
 
+  it("tidigare målnummer visas i ärendehuvudet när det finns (#1510)", async () => {
+    matterQuery.data = { ...M, courtCaseNumber: "T 2-26", previousCourtCaseNumber: "T 1-26" };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Tidigare målnr")).toBeInTheDocument());
+    expect(screen.getByText("T 1-26")).toBeInTheDocument();
+  });
+
   it("Domstolsbetalningar-panelen finns bara i domstolsärenden eller med registrerade fordringar (#1213)", async () => {
     const panel = (c: HTMLElement) => c.querySelector('[data-panel="receivables"]');
     const first = renderPage();
