@@ -258,6 +258,24 @@ describe("buildFakturaView — sammanställningen är en uträkning (#1200)", ()
   });
 });
 
+describe("buildFakturaView — utläggens summarad (#1506)", () => {
+  it("netto- och bruttosumman = summan av posterna, formaterade som posterna", () => {
+    const s = realisticSpec();
+    const v = buildFakturaView({ invoice: invoice({ amount: s.payableOre }), recipient: "Klient AB", meta: META, spec: s }, ore);
+    expect(v.expenseNetTotal).toBe(String(90_000 + 50_000));
+    expect(v.expenseGrossTotal).toBe(String(112_500 + 50_000));
+    expect(Number(v.expenseNetTotal)).toBe(v.expenseLines.reduce((acc, l) => acc + Number(l.net), 0));
+    expect(Number(v.expenseGrossTotal)).toBe(v.expenseLines.reduce((acc, l) => acc + Number(l.gross), 0));
+  });
+
+  it("tomma när utlägg saknas — med och utan specifikation", () => {
+    const empty = buildFakturaView({ invoice: invoice(), recipient: "Klient AB", meta: META, spec: spec() }, ore);
+    expect([empty.expenseNetTotal, empty.expenseGrossTotal]).toEqual(["", ""]);
+    const none = buildFakturaView({ invoice: invoice(), recipient: "Klient AB", meta: META, spec: null }, ore);
+    expect([none.expenseNetTotal, none.expenseGrossTotal]).toEqual(["", ""]);
+  });
+});
+
 describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
   it("nollrader utelämnas (inga utlägg → ingen utläggs-/utläggsmomsrad)", () => {
     const s = buildInvoiceSpecification({

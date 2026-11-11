@@ -150,6 +150,10 @@ export interface FakturaView {
   /** Tidsposterna per arvodeskategori, i kategori-ordning (#1200). */
   timeGroups: FakturaTimeGroup[];
   expenseLines: FakturaExpenseRow[];
+  /** Utläggsspecifikationens summarad (#1506): summan av posternas netto resp.
+   *  brutto, formaterade som posterna. Tomma när utlägg saknas. */
+  expenseNetTotal: string;
+  expenseGrossTotal: string;
 }
 
 const svDate = (d: Date | string | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
@@ -246,7 +250,7 @@ function groupByKind(lines: readonly SpecLine[]): Array<{ kind: TimeEntryKind; l
     .filter((g) => g.lines.length > 0);
 }
 
-const sumOf = (lines: readonly SpecLine[], pick: (l: SpecLine) => number): number => lines.reduce((s, l) => s + pick(l), 0);
+const sumOf = <T>(lines: readonly T[], pick: (l: T) => number): number => lines.reduce((s, l) => s + pick(l), 0);
 
 /** Omfattningen: timmar ("2,5") — eller antal dygn för per-dygns-kategorier. */
 function quantityLabel(kind: TimeEntryKind, lines: readonly SpecLine[]): string {
@@ -398,6 +402,15 @@ function specTables(spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView
   };
 }
 
+type SpecExpense = InvoiceSpecification["expenseLines"][number];
+
+/** Utläggens summarad (#1506) — posternas netto/brutto summerade, tomma utan utlägg. */
+function expenseTotals(spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView, "expenseNetTotal" | "expenseGrossTotal"> {
+  const lines: readonly SpecExpense[] = spec?.expenseLines ?? [];
+  if (lines.length === 0) return { expenseNetTotal: "", expenseGrossTotal: "" };
+  return { expenseNetTotal: fc(sumOf(lines, (l) => l.netOre)), expenseGrossTotal: fc(sumOf(lines, (l) => l.grossOre)) };
+}
+
 /** Faktura-huvudets fält (rubrik/nr/datum/mottagare/org). Utbrutet → håller
  *  `buildFakturaView` under param- och komplexitetsgränsen. */
 function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "footnote" | "invoiceNumber" | "ocr" | "date" | "matterNumber" | "matterTitle" | "recipient" | "organizationName" | "organizationOrgNumber" | "logo"> {
@@ -434,5 +447,6 @@ export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatCurrency
     totalLabel: a.breakdown?.totalLabel ?? "Att betala (inkl moms)",
     total: fc(a.breakdown ? a.breakdown.totalOre : a.invoice.amount),
     ...specTables(spec, fc),
+    ...expenseTotals(spec, fc),
   };
 }
