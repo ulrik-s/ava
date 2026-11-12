@@ -4,6 +4,7 @@
  * diagrammen (`docs/agent-flow.md`).
  */
 import { labelDefs, type LabelDef } from "./load";
+import { agentAllowRules, ruleCommand } from "./permissions";
 import type { Flow, Machine, State, Timeout } from "./schema";
 
 export const LABELS_PATH = "tooling/agents/labels.json";
@@ -116,6 +117,16 @@ export function renderDocs(flow: Flow): string {
     `i ett tillstånd med en agent startas agenten igen (knuffen), utom med ${flow.nudge.skip_flags.map((f) => `\`${f}\``).join(" eller ") || "—"}.`,
     "",
     ...Object.entries(flow.machines).flatMap(([name, m]) => [machineSection(name, m), ""]),
+    "## Förhandsgodkända skrivningar",
+    "",
+    "Agenterna skriver till GitHub med EXAKT de här formerna (N = numret, en etikett per kommando, inga",
+    "`--jq` eller `$(…)`). De är förhandsgodkända i `.claude/settings.json`, som ett test håller lika med",
+    "den här listan. `verifierad` och `människa-godkänd` sätter bara Ulrik.",
+    "",
+    "```bash",
+    ...agentAllowRules(flow).map(ruleCommand),
+    "```",
+    "",
     "## Rutiner",
     "",
     "| Id | Rutin | Prompt | Startas av (utöver schemat) |",

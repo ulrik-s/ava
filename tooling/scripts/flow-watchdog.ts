@@ -80,7 +80,9 @@ export function cancelHung(gh: GitHub, now: number, minutes: number, enforce: bo
   const ids = hungRuns(gh.activeRuns(), now, minutes);
   for (const id of ids) {
     log(`körning ${id} hänger > ${minutes} min${enforce ? " — avbryts" : " (bara rapport)"}`);
-    if (enforce) gh.cancelRun(id);
+    if (!enforce) continue;
+    // En spökkörning (köad men inte startad) går inte att avbryta (409); den får inte stoppa klockan.
+    try { gh.cancelRun(id); } catch (e) { log(`körning ${id} kunde inte avbrytas: ${e instanceof Error ? e.message : String(e)}`); }
   }
   return ids;
 }

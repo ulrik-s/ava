@@ -172,22 +172,26 @@ Står bara en sökväg där: redigera kommentaren med rätt text
 Ta bort en etikett (namnet URL-kodas, t.ex. `behöver-ändras`):
 
 ```bash
-gh api -X DELETE "repos/R/issues/N/labels/$(jq -rn --arg l 'behöver-ändras' '$l|@uri')"
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/beh%C3%B6ver-%C3%A4ndras
 ```
 
-**Granskningsetiketter och merge: skriv EXAKT så här.** De här kommandona är
-förhandsgodkända i `.claude/settings.json`. Molnets behörighetskontroll har
-annars stoppat dem slumpvis ("Self-Approval", "Merge Without Review"). Regeln
-matchar bara exakt den här formen: inga `--jq`, inga citattecken runt
-sökvägen, en etikett per kommando, och inget `$(…)`.
+(Alla URL-kodade namn står i listan i `docs/agent-flow.md`. Skriv dem ordagrant,
+utan `$(…)`; annars matchar kommandot inte den förhandsgodkända formen.)
+
+**Etiketter, kommentarer i intaget, merge och klockan: skriv EXAKT som i
+listan "Förhandsgodkända skrivningar" i `docs/agent-flow.md`.** De formerna
+är förhandsgodkända i `.claude/settings.json`; molnets behörighetskontroll
+har annars stoppat dem slumpvis ("Self-Approval", "Merge Without Review",
+"External System Writes"). Regeln matchar bara exakt formen: inga `--jq`,
+inga citattecken runt sökvägen, en etikett per kommando, inget `$(…)`, och
+ta bort med URL-kodat namn. De vanligaste:
 
 ```bash
 gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=granskad'
-gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=att-granska'
-gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=behöver-ändras'
-gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/granskad
 gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/att-granska
 gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/beh%C3%B6ver-%C3%A4ndras
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=undersökt'
+gh api repos/ulrik-s/ava-feedback/issues/N/comments -F body=@fil.md
 gh api -X PUT repos/ulrik-s/ava/pulls/N/merge -f merge_method=squash -f sha=<granskad sha>
 ```
 

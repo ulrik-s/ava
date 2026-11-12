@@ -4,8 +4,10 @@ name: Release (full package)
 # auto-genererade release-noter.
 #
 # Tagga `vX.Y.Z` → bygg alla artefakter → en GitHub-release med allt bifogat.
-# `workflow_dispatch` kör en DRY-RUN (bygger allt, publicerar INGET) så
-# pipelinen kan valideras utan att klippa en riktig release.
+# `workflow_dispatch` på en gren kör en DRY-RUN (bygger allt, publicerar
+# INGET). På en `v*`-tagg publicerar den — så startar flödesvaktens
+# automatiska tagg releasen (en tagg skapad med repots token startar inte
+# workflows av sig själv; tooling/scripts/flow-release.ts).
 #
 # Helper-paketeringen är medvetet UTELÄMNAD här: helpern är numera EN
 # Electron-app (ADR 0030, ingen fristående Bun-binär) som byggs/signeras med

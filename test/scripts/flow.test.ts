@@ -49,6 +49,8 @@ version: 1
 ulrik: u
 ci: { hang_minutes: 5 }
 nudge: { after: 2h }
+health: { stuck_after: 6h }
+release: { every: 20h, types: [feat] }
 routines: {}
 machines:
   m:
@@ -145,11 +147,13 @@ describe("övergångar", () => {
     expect(decide(codePr, { label: "agent-pr", current: [], previous: null, byUlrik: false })).toEqual({ kind: "ignore" });
   });
 
-  it("föregående tillstånd räknas fram ur händelseloggen, inklusive vaktens egna borttagningar", () => {
+  it("föregående tillstånd är det senast satta, även om det tagits bort sedan", () => {
     const events = [ev(1, "att-granska"), ev(2, "granskad"), ev(3, "att-granska", false), ev(4, "pågår"), ev(5, "agent-task")];
     expect(previousStateLabel(events, 4, codeIssue)).toBe("granskad");
     expect(previousStateLabel(events, 2, codeIssue)).toBe("att-granska");
-    expect(previousStateLabel([ev(1, "att-granska"), ev(2, "att-granska", false)], 3, codeIssue)).toBeNull();
+    // Borttaget före nästa: räknas fortfarande som föregående (agenterna tar bort det gamla först).
+    expect(previousStateLabel([ev(1, "att-granska"), ev(2, "att-granska", false)], 3, codeIssue)).toBe("att-granska");
+    expect(previousStateLabel([], 3, codeIssue)).toBeNull();
     expect(previousStateLabel([ev(1, "undersökt"), ev(2, "verifierad")], 3, intake)).toBe("verifierad");
   });
 
