@@ -9,7 +9,7 @@ import type { FetchFn } from "../../tooling/scripts/flow/dispatch";
 import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
 import { loadFlow } from "../../tooling/scripts/flow/load";
 import { handleLabel } from "../../tooling/scripts/flow-guard";
-import { runNudges, runTimeouts, watchItems } from "../../tooling/scripts/flow-watchdog";
+import { cancelHung, runNudges, runTimeouts, watchItems } from "../../tooling/scripts/flow-watchdog";
 
 const flow = loadFlow();
 const HOUR = 3_600_000;
@@ -179,5 +179,19 @@ describe("scenario: en implementation i ava", () => {
     const started = await runNudges(flow, codePr, items, { now: gh.now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: () => {} });
     expect(started).toBe(1);
     expect(fired).toHaveLength(1);
+  });
+});
+
+describe("scenario: CI som hänger", () => {
+  it("en spökkörning som inte går att avbryta (409) stoppar inte klockan", () => {
+    const run: GhRunner = (args) => {
+      const line = args.join(" ");
+      if (line.includes("/cancel")) throw new Error("gh: Cannot cancel a workflow run that has not been queued yet. (HTTP 409)");
+      if (line.includes("status=queued")) return JSON.stringify({ workflow_runs: [{ id: 1, status: "queued", run_started_at: "2026-11-01T00:00:00Z" }] });
+      return JSON.stringify({ workflow_runs: [] });
+    };
+    const lines: string[] = [];
+    expect(cancelHung(gitHub("ulrik-s/ava", run), Date.parse("2026-11-20T00:00:00Z"), 60, true, (l) => lines.push(l))).toEqual([1]);
+    expect(lines.at(-1)).toContain("kunde inte avbrytas");
   });
 });
