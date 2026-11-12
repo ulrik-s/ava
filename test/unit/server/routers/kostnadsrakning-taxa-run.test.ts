@@ -158,7 +158,7 @@ describe("\"Deltagit i förhandling\"-posten (FORHANDLING)", () => {
     const { caller } = setup([]);
     await caller.organization.updateSettings({ hourlyRates: { ARBETE: 200_000 } });
     const created = await caller.timeEntry.create({
-      matterId: MATTER, date: "2026-09-22", minutes: 95, description: "Huvudförhandling", kind: "FORHANDLING",
+      matterId: MATTER, date: "2026-09-22", minutes: 96, description: "Huvudförhandling", kind: "FORHANDLING",
     });
     expect(created.hourlyRate).toBe(200_000);
   });

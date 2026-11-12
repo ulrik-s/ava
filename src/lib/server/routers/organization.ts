@@ -7,7 +7,7 @@ import type { UserRole } from "@/lib/shared/schemas/enums";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import type { Office, Organization } from "@/lib/shared/schemas/organization";
-import { normalizeStandardAtgarder, standardAtgardSchema } from "@/lib/shared/standard-atgard";
+import { normalizeStandardAtgarder, standardAtgarderInputSchema } from "@/lib/shared/standard-atgard";
 import { assertAdmin } from "../auth/assert-admin";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
 import { newRowId } from "../queued-call";
@@ -134,7 +134,7 @@ export const organizationRouter = router({
         hourlyRates: hourlyRatesSchema.optional(),
         /** Byråns standardåtgärder (#956). HELA listan ersätts — admin redigerar
          *  den som en enhet, så en borttagen post försvinner. */
-        standardAtgarder: z.array(standardAtgardSchema).optional(),
+        standardAtgarder: standardAtgarderInputSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -168,7 +168,7 @@ export const organizationRouter = router({
         /** Byråns timpris per kategori (#1206) — setup-/seed-väg. */
         hourlyRates: hourlyRatesSchema.optional(),
         /** Byråns standardåtgärder (#956) — setup-/seed-väg (ADR 0003). */
-        standardAtgarder: z.array(standardAtgardSchema).optional(),
+        standardAtgarder: standardAtgarderInputSchema.optional(),
       })
     )
     .mutation(({ ctx, input }) => {

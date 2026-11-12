@@ -14,6 +14,7 @@
 
 import { z } from "zod";
 import { paymentMethodSchema, timeEntryKindSchema, type PaymentMethod } from "./schemas/enums";
+import { isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE } from "./time-hours";
 
 /**
  * När åtgärden normalt hör hemma i uppdraget. Styr var den FÖRESLÅS — den kan
@@ -53,6 +54,19 @@ export const standardAtgardSchema = z.object({
 });
 
 export type StandardAtgard = z.infer<typeof standardAtgardSchema>;
+
+/**
+ * Listan som INDATA när byrån sparar sina standardåtgärder (#1544): varje
+ * åtgärds tid måste vara ett tillåtet värde (`time-hours`). Regeln ligger här
+ * och inte på `standardAtgardSchema`, som även läser sparade byråer — en äldre
+ * åtgärd på t.ex. 20 minuter ska fortfarande gå att läsa.
+ */
+export const standardAtgarderInputSchema = z.array(standardAtgardSchema).superRefine((list, ctx) => {
+  list.forEach((a, i) => {
+    if (isAllowedMinutes(a.minutes)) return;
+    ctx.addIssue({ code: "custom", path: [i, "minutes"], message: `Standardåtgärden ”${a.description}”: ${TIME_NOT_ALLOWED_MESSAGE}` });
+  });
+});
 
 /**
  * Byråns åtgärder som gäller ett ärende: aktiva, och antingen utan

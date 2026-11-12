@@ -178,7 +178,7 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
     // som vanliga time-entries med "[tidsspillan]"-prefix.
     const tidsspillanPosts = [
       { d: "2026-02-05", min: 30, desc: "[tidsspillan] Väntan på klient i häktet" },
-      { d: "2026-02-12", min: 25, desc: "[tidsspillan] Väntan på klient i häktet" },
+      { d: "2026-02-12", min: 24, desc: "[tidsspillan] Väntan på klient i häktet" }, // 0,4 h (#1544)
       { d: "2026-04-10", min: 45, desc: "[tidsspillan] Restid TR HUF dag 1" },
       { d: "2026-04-11", min: 45, desc: "[tidsspillan] Restid TR HUF dag 2" },
       { d: "2026-04-12", min: 30, desc: "[tidsspillan] Restid TR HUF dag 3" },
@@ -190,15 +190,15 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
       });
     }
     const sum = tidsspillanPosts.reduce((s, p) => s + p.min, 0);
-    expect(sum).toBe(175); // 2h 55min totalt
+    expect(sum).toBe(174); // 2,9 h totalt
   });
 
   // ─── 5. Verifiera timkostnadsnorm-beräkningen ──────────────────────
-  it("5. Beräkna ersättning: 40h förarbete + 8h HUF + 175 min tidsspillan", async () => {
+  it("5. Beräkna ersättning: 40h förarbete + 8h HUF + 174 min tidsspillan", async () => {
     // Totalt arbete (faktisk arbetstid):  40h × 60 + 480 min = 2880 min
-    // Tidsspillan:                        175 min
+    // Tidsspillan:                        174 min
     const arbete = 40 * 60 + 480;
-    const tidsspillan = 175;
+    const tidsspillan = 174;
     expect(arbete).toBe(2880);
 
     const result = computeTimkostnadsnorm({
@@ -210,16 +210,16 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
     // Arbete: 2 880 min × 162 600 öre/h ÷ 60 = 7 804 800 öre = 78 048 kr exkl moms
     expect(result.rateOrePerH).toBe(162_600);
     expect(result.arbete).toBe(7_804_800);
-    // Tidsspillan: 175 min × 162 600 öre/h ÷ 60 = 474 250 öre = 4 742,50 kr exkl moms
-    expect(result.tidsspillan).toBe(474_250);
-    // Totalt: 8 279 050 öre exkl moms = 82 790,50 kr
-    expect(result.total).toBe(8_279_050);
+    // Tidsspillan: 174 min × 162 600 öre/h ÷ 60 = 471 540 öre = 4 715,40 kr exkl moms
+    expect(result.tidsspillan).toBe(471_540);
+    // Totalt: 8 276 340 öre exkl moms = 82 763,40 kr
+    expect(result.total).toBe(8_276_340);
 
-    // Moms 25 %: 2 069 763 öre → inkl 10 348 813 öre
+    // Moms 25 %: 2 069 085 öre → inkl 10 345 425 öre
     const moms = Math.round(result.total * 0.25);
-    expect(moms).toBe(2_069_763);
+    expect(moms).toBe(2_069_085);
     const inklMoms = result.total + moms;
-    expect(inklMoms).toBe(10_348_813); // 103 488,13 kr
+    expect(inklMoms).toBe(10_345_425); // 103 454,25 kr
   });
 
   // ─── 6. Utan F-skatt: 1237/1626-justering ──────────────────────────
@@ -266,8 +266,8 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
     expect(times.entries.length).toBe(9 + 3 + 5); // förarbete + HUF + tidsspillan
     expect(exps.expenses.length).toBe(4);
 
-    // Total minutes 40*60 + 480 + 175 = 3055
-    expect(times.totalMinutes).toBe(3055);
+    // Total minutes 40*60 + 480 + 174 = 3054
+    expect(times.totalMinutes).toBe(3054);
 
     const r = await state.caller.billingRun.createFinal({
       matterId: state.matterId!,
@@ -280,17 +280,17 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
     });
     expect(r.invoice.invoiceType).toBe("FINAL");
 
-    // Routerns gross-beräkning: 3055 min × 162 600 öre/h ÷ 60 = 8 279 050 öre
+    // Routerns gross-beräkning: 3054 min × 162 600 öre/h ÷ 60 = 8 276 340 öre
     // (× minuter ÷ 60, INT-aritmetik, kan ge ±1 öre rundningsskillnad)
     const expectedTime = times.entries.reduce(
       (s, t) => s + Math.round((t.minutes * TIMKOSTNADSNORM_FTAX_ORE_PER_H) / 60), 0,
     );
-    expect(expectedTime).toBe(8_279_050);
-    // Fakturan avrundar varje tidspost till hela kronor (#1438) → 82 792 kr.
+    expect(expectedTime).toBe(8_276_340);
+    // Fakturan avrundar varje tidspost till hela kronor (#1438) → 82 764 kr.
     const invoicedTime = times.entries.reduce(
       (s, t) => s + Math.round((t.minutes * TIMKOSTNADSNORM_FTAX_ORE_PER_H) / 6000) * 100, 0,
     );
-    expect(invoicedTime).toBe(8_279_200);
+    expect(invoicedTime).toBe(8_276_400);
     // Alla fakturor lägger på 25 % moms på arvodet (#782), i hela kronor (#1438).
     // Utläggen 3 × 70 + 19 (19,20) = 229 kr + 57 kr moms (57,25) = 28 600 öre brutto.
     // Inget acconto-avdrag → fakturabeloppet (netto) = brutto; run bär brutto-värdet.
