@@ -128,7 +128,7 @@ stateDiagram-v2
 | Id | Rutin | Prompt | Startas av (utöver schemat) |
 |---|---|---|---|
 | L1 | AVA - 1 - Verification - User Feedback | `tooling/agents/1-verifiering.md` | `GitHub: ava-feedback issues.opened` |
-| L2 | AVA - 2 - Breakdown - User Feedback | `tooling/agents/2-nedbrytning.md` | `intake.verifierad`<br>`intake.dubblett` |
+| L2 | AVA - 2 - Breakdown - User Feedback | `tooling/agents/2-nedbrytning.md` | `intake.verifierad`<br>`intake.dubblett`<br>`GitHub: ava release.published` |
 | L3 | AVA - 3 - Review - User Feedback | `tooling/agents/3-granskning.md` | `code-issue.att-granska`<br>`code-issue.behover-andras`<br>`code-pr.att-granska`<br>`code-pr.granskad` |
 | L4 | AVA - 4 - Implementation - User Feedback | `tooling/agents/4-implementation.md` | `code-issue.granskad`<br>`code-pr.behover-andras` |
 | L5 | AVA - 5 - Architecture - Weekly | `tooling/agents/5-arkitektur.md` | — |
