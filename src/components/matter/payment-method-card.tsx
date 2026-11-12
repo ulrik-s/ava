@@ -8,22 +8,23 @@
  * behöver bedöma risken att få in pengarna.
  */
 
-import { useId, useState } from "react";
-import { formatKrPerHour, HourlyRatesFields } from "@/components/billing/hourly-rates-fields";
+import { useState } from "react";
+import { formatKrPerHour } from "@/components/billing/hourly-rates-fields";
 import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-billing-side-effects";
 import {
   PAYMENT_METHOD_LABELS,
-  paymentMethodOptions,
   creditRiskFor,
   CREDIT_RISK_LABELS,
   type CreditRisk,
 } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import {
-  HOURLY_TIME_ENTRY_KINDS, paymentMethodSchema, TIME_ENTRY_KIND_LABELS, type PaymentMethod,
+  HOURLY_TIME_ENTRY_KINDS, TIME_ENTRY_KIND_LABELS, type PaymentMethod,
 } from "@/lib/shared/schemas/enums";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type { MatterId } from "@/lib/shared/schemas/ids";
+import { PaymentMethodFields, usesClientShare } from "./payment-method-fields";
+import { usePaymentMethodForm, type PaymentMethodInitial } from "./use-payment-method-form";
 
 const RISK_BADGE: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",
@@ -32,36 +33,11 @@ const RISK_BADGE: Record<CreditRisk, string> = {
   UNKNOWN: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
-interface Props {
+interface Props extends PaymentMethodInitial {
   matterId: MatterId;
-  paymentMethod: PaymentMethod;
-  paymentMethodNote: string | null;
   paymentMethodDecidedAt: Date | string | null;
-  /** Klientens andel i bips (2500 = 25 %); null = ej satt (#778). */
-  clientShareBips: number | null;
-  /** Rättsskyddets maxbelopp i öre; null = ej satt (#793). */
-  rattsskyddMaxOre: number | null;
-  /** Rättshjälpens timtak; null → 100 tim (#793). */
-  rattshjalpMaxTimmar: number | null;
-  /** Rättsskydd: tvistdatum (arbete före = ej täckt) + bolagets beslutsdatum (#810). */
-  tvistUppkomDatum?: Date | string | null | undefined;
-  rattsskyddBeslutDatum?: Date | string | null | undefined;
-  /** Rättsskydd: datum då rättsskydd nekades (#811). */
-  rattsskyddNekadAt?: Date | string | null | undefined;
-  /** Ärendets avvikande timpriser per kategori (öre/h, #1206); saknad = följ jurist/byrå. */
-  hourlyRates?: HourlyRates | undefined;
   /** Anropas efter en lyckad sparning, t.ex. för att stänga dialogen i ärendehuvudet (#1499). */
   onSaved?: (() => void) | undefined;
-}
-
-/** ISO-datum (yyyy-mm-dd) ur ett valfritt datumfält, tomt om saknas. */
-function isoDate(d: Date | string | null | undefined): string {
-  return d ? new Date(d).toISOString().slice(0, 10) : "";
-}
-
-/** Betalningssätt där klienten betalar en %-sats → visa/redigera andelen. */
-function usesClientShare(method: PaymentMethod): boolean {
-  return method === "RATTSSKYDD" || method === "RATTSHJALP";
 }
 
 /** Läsvy: nuvarande betalningssätt + kreditrisk-badge + ev. notering/datum. */
@@ -135,92 +111,6 @@ function PaymentMethodView({
   );
 }
 
-/** Tak-fältet: rättsskyddets maxbelopp (kr) eller rättshjälpens timtak. */
-function CoverageCapField({ method, value, onChange }: { method: PaymentMethod; value: string; onChange: (v: string) => void }) {
-  const isAmount = method === "RATTSSKYDD";
-  return (
-    <div>
-      <label className="block text-xs font-medium mb-1">
-        {isAmount ? "Försäkringens maxbelopp (kr)" : "Rättshjälpens tak (timmar)"}
-      </label>
-      <input
-        type="text"
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={isAmount ? "t.ex. 75000" : "100"}
-        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-      />
-      <p className="mt-1 text-[11px] text-gray-400">
-        {isAmount
-          ? "Taket ur försäkringsbeslutet. Ärendet varnar vid 90 % av upparbetat värde."
-          : "Rättshjälpslagen: 100 tim (höj vid beviljad utökad rättshjälp). Varnar vid 80 tim, eller 10 tim före ett utökat tak."}
-      </p>
-    </div>
-  );
-}
-
-/** Visar rätt tak-fält för valt betalningssätt (utbrutet → editor-komplexitet ≤8). */
-function CoverageCapFields({ method, rsMaxKr, setRsMaxKr, rhMaxTim, setRhMaxTim }: {
-  method: PaymentMethod;
-  rsMaxKr: string; setRsMaxKr: (v: string) => void;
-  rhMaxTim: string; setRhMaxTim: (v: string) => void;
-}) {
-  if (method === "RATTSSKYDD") return <CoverageCapField method={method} value={rsMaxKr} onChange={setRsMaxKr} />;
-  if (method === "RATTSHJALP") return <CoverageCapField method={method} value={rhMaxTim} onChange={setRhMaxTim} />;
-  return null;
-}
-
-/** Rättsskyddets datum ur bolagets beslut (#810): tvistdatum (arbete före = ej
- *  täckt) + beslutsdatum (retroaktivt täcks ≤6 h). Endast för rättsskydd. */
-function RattsskyddDates({ method, tvist, setTvist, beslut, setBeslut, nekad, setNekad }: {
-  method: PaymentMethod;
-  tvist: string; setTvist: (v: string) => void;
-  beslut: string; setBeslut: (v: string) => void;
-  nekad: string; setNekad: (v: string) => void;
-}) {
-  if (method !== "RATTSSKYDD") return null;
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      <label className="block text-xs font-medium">Tvist uppkom (datum)
-        <input type="date" value={tvist} onChange={(e) => setTvist(e.target.value)}
-          className="mt-1 w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
-      </label>
-      <label className="block text-xs font-medium">Försäkringens beslut (datum)
-        <input type="date" value={beslut} onChange={(e) => setBeslut(e.target.value)}
-          className="mt-1 w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
-      </label>
-      <label className="block text-xs font-medium col-span-2">Rättsskydd nekat (datum)
-        <input type="date" value={nekad} onChange={(e) => setNekad(e.target.value)}
-          className="mt-1 w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
-      </label>
-    </div>
-  );
-}
-
-/** %-andels-fältet (självrisk/avgift). Utbrutet så editorn håller sig ≤100 rader. */
-function ClientShareField({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div>
-      <label htmlFor={id} className="block text-xs font-medium mb-1">
-        Klientens andel att betala (%)
-      </label>
-      <input
-        id={id}
-        type="text"
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="t.ex. 25"
-        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-      />
-      <p className="mt-1 text-[11px] text-gray-400">
-        Självrisk/avgift av upparbetat värde. Kan ändras under ärendets gång (t.ex. vid ändrad inkomst).
-      </p>
-    </div>
-  );
-}
-
 /** Ärendets satta priser som "Timarvode 3 000 kr/h · Tidsspillan 1 500 kr/h". */
 function matterRateSummary(rates: HourlyRates | undefined): string {
   return HOURLY_TIME_ENTRY_KINDS
@@ -242,43 +132,9 @@ function MatterRateBadge({ hourlyRates }: { hourlyRates: HourlyRates | undefined
   );
 }
 
-/** Öre → kronor som text för ett formulärfält; null → tomt. */
-function krText(ore: number | null | undefined): string {
-  return ore != null ? String(ore / 100) : "";
-}
-
-/**
- * Ärendets avvikande timpriser — ovanligt, så de ligger hopfällda längst ned och
- * tar ingen plats i vardagen. Tomt fält = den registrerande juristens pris, annars
- * byråns (placeholdern visar byråns — juristens beror på vem som skriver tid).
- */
-function MatterRateField({ value, onChange }: { value: HourlyRates; onChange: (v: HourlyRates) => void }) {
-  const org = trpc.organization.getSettings.useQuery();
-  return (
-    <details open={Object.keys(value).length > 0} className="rounded border border-gray-200 px-3 py-2">
-      <summary className="cursor-pointer text-xs font-medium text-gray-600">Avvikande timpris för ärendet</summary>
-      <p className="mt-2 mb-2 text-[11px] text-gray-500">Tomt = juristens pris, annars byråns. Gäller tid som registreras efter ändringen.</p>
-      <HourlyRatesFields value={value} onChange={onChange} parents={[org.data?.hourlyRates]} />
-    </details>
-  );
-}
-
-/** Redigeringsformulär: äger sitt formulär-state + spar-mutationen. */
+/** Redigeringsformulär: betalningsfälten + spar-mutationen (state i `usePaymentMethodForm`). */
 function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId; initial: Props; onDone: () => void }) {
-  const [method, setMethod] = useState(initial.paymentMethod);
-  const [note, setNote] = useState(initial.paymentMethodNote ?? "");
-  const [decidedAt, setDecidedAt] = useState(isoDate(initial.paymentMethodDecidedAt));
-  // %-sats redigeras i procent (bips/100); tomt fält → null. Tillåt komma-decimal.
-  const [sharePct, setSharePct] = useState(initial.clientShareBips != null ? String(initial.clientShareBips / 100) : "");
-  // Tak: rättsskydd i kr (öre/100), rättshjälp i timmar. Tomt fält → null.
-  const [rsMaxKr, setRsMaxKr] = useState(krText(initial.rattsskyddMaxOre));
-  const [rhMaxTim, setRhMaxTim] = useState(initial.rattshjalpMaxTimmar != null ? String(initial.rattshjalpMaxTimmar) : "");
-  const [tvist, setTvist] = useState(isoDate(initial.tvistUppkomDatum));
-  const [beslut, setBeslut] = useState(isoDate(initial.rattsskyddBeslutDatum));
-  const [nekad, setNekad] = useState(isoDate(initial.rattsskyddNekadAt));
-  const [rates, setRates] = useState<HourlyRates>(initial.hourlyRates ?? {});
-  const [methodId, decidedAtId, noteId, shareId] = [useId(), useId(), useId(), useId()];
-
+  const form = usePaymentMethodForm(initial);
   const utils = trpc.useUtils();
   const update = trpc.matter.update.useMutation({
     onSuccess: () => {
@@ -293,71 +149,14 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Ändra betalningssätt</p>
       <div className="space-y-3">
-        <div>
-          <label htmlFor={methodId} className="block text-xs font-medium mb-1">Betalningssätt</label>
-          <select
-            id={methodId}
-            value={method}
-            onChange={(e) => setMethod(paymentMethodSchema.parse(e.target.value))}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-          >
-            {paymentMethodOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-        {usesClientShare(method) && (
-          <ClientShareField id={shareId} value={sharePct} onChange={setSharePct} />
-        )}
-        <CoverageCapFields method={method} rsMaxKr={rsMaxKr} setRsMaxKr={setRsMaxKr} rhMaxTim={rhMaxTim} setRhMaxTim={setRhMaxTim} />
-        <RattsskyddDates method={method} tvist={tvist} setTvist={setTvist} beslut={beslut} setBeslut={setBeslut} nekad={nekad} setNekad={setNekad} />
-        <div>
-          <label htmlFor={decidedAtId} className="block text-xs font-medium mb-1">
-            Beslutsdatum (om rättshjälp/rättsskydd beviljats)
-          </label>
-          <input
-            id={decidedAtId}
-            type="date"
-            value={decidedAt}
-            onChange={(e) => setDecidedAt(e.target.value)}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div>
-          <label htmlFor={noteId} className="block text-xs font-medium mb-1">
-            Notering (t.ex. försäkringsbolag, försäkringsnummer, beslutsnummer)
-          </label>
-          <textarea
-            id={noteId}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-            placeholder="T.ex. Trygg-Hansa, nr. TH-2024-4455 · Självrisk 20% · Maxbelopp 75 000 kr"
-          />
-        </div>
-        <MatterRateField value={rates} onChange={setRates} />
+        <PaymentMethodFields value={form.values} onChange={form.setValues} />
         <div className="flex gap-2 justify-end">
           <button onClick={onDone} className="px-3 py-1.5 text-sm border border-gray-300 rounded">
             Avbryt
           </button>
           <button
             disabled={update.isPending}
-            onClick={() =>
-              update.mutate({
-                id: matterId,
-                paymentMethod: method,
-                paymentMethodNote: note || null,
-                paymentMethodDecidedAt: decidedAt || null,
-                clientShareBips: clientShareFromPct(sharePct),
-                rattsskyddMaxOre: oreFromKr(rsMaxKr),
-                rattshjalpMaxTimmar: positiveIntOrNull(rhMaxTim),
-                tvistUppkomDatum: tvist || null,
-                rattsskyddBeslutDatum: beslut || null,
-                rattsskyddNekadAt: nekad || null,
-                hourlyRates: rates,
-              })
-            }
+            onClick={() => update.mutate({ id: matterId, ...form.toUpdateInput() })}
             className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
           >
             {update.isPending ? "Sparar…" : "Spara"}
@@ -376,31 +175,4 @@ export function PaymentMethodCard(props: Props) {
   return (
     <PaymentMethodView {...props} onEdit={() => setEditing(true)} />
   );
-}
-
-/** Procent-textfält → bips (null om tomt/ogiltigt). Tillåter komma-decimal. */
-function clientShareFromPct(pct: string): number | null {
-  const trimmed = pct.trim().replace(",", ".");
-  if (trimmed === "") return null;
-  const n = Number.parseFloat(trimmed);
-  if (!Number.isFinite(n) || n < 0 || n > 100) return null;
-  return Math.round(n * 100);
-}
-
-/** Kr-textfält → öre (null om tomt/ogiltigt/negativt). Tillåter komma-decimal. */
-function oreFromKr(kr: string): number | null {
-  const trimmed = kr.trim().replace(/\s/g, "").replace(",", ".");
-  if (trimmed === "") return null;
-  const n = Number.parseFloat(trimmed);
-  if (!Number.isFinite(n) || n < 0) return null;
-  return Math.round(n * 100);
-}
-
-/** Heltals-textfält → positivt heltal (null om tomt/ogiltigt/≤0). */
-function positiveIntOrNull(s: string): number | null {
-  const trimmed = s.trim().replace(",", ".");
-  if (trimmed === "") return null;
-  const n = Number.parseFloat(trimmed);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n);
 }
