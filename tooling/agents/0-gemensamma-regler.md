@@ -103,7 +103,7 @@ sätt `blockerad` så att Ulrik ser det.
 
 - Rör inte skyddade sökvägar: `.github/`, `tooling/config/`, `tooling/docker/`,
   `tooling/systemd/`, `tooling/agents/`, deploy-/backup-/release-skript,
-  `src/lib/server/auth/`, serverns HTTP-förtroendegräns, feedback-koden,
+  `.claude/`, `src/lib/server/auth/`, serverns HTTP-förtroendegräns, feedback-koden,
   `package.json`, `bun.lock`, `AGENTS.md`. Behövs det: sätt `blockerad` och
   förklara. Ulrik sätter `människa-godkänd` om han håller med.
   **Undantag:** att skärpa `tooling/config/file-size-baseline.json` med
@@ -174,6 +174,25 @@ Ta bort en etikett (namnet URL-kodas, t.ex. `behöver-ändras`):
 ```bash
 gh api -X DELETE "repos/R/issues/N/labels/$(jq -rn --arg l 'behöver-ändras' '$l|@uri')"
 ```
+
+**Granskningsetiketter och merge: skriv EXAKT så här.** De här kommandona är
+förhandsgodkända i `.claude/settings.json`. Molnets behörighetskontroll har
+annars stoppat dem slumpvis ("Self-Approval", "Merge Without Review"). Regeln
+matchar bara exakt den här formen: inga `--jq`, inga citattecken runt
+sökvägen, en etikett per kommando, och inget `$(…)`.
+
+```bash
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=granskad'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=att-granska'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=behöver-ändras'
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/granskad
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/att-granska
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/beh%C3%B6ver-%C3%A4ndras
+gh api -X PUT repos/ulrik-s/ava/pulls/N/merge -f merge_method=squash -f sha=<granskad sha>
+```
+
+Ändra aldrig `.claude/settings.json`. Den är skyddad (Agentvakten), och
+`människa-godkänd` får aldrig förhandsgodkännas.
 
 Brancher du pushar MÅSTE börja med `claude/`; andra vägras av molnet.
 
