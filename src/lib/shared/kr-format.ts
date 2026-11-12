@@ -1,5 +1,6 @@
 /**
- * `kr-format` — svensk tal-/beloppsformatering för kostnadsräkningen (#1218).
+ * `kr-format` — svensk tal-/beloppsformatering för kostnadsräkningen (#1218)
+ * och tid i decimaltimmar i appens vyer (#1542).
  *
  * Samlad här så att sammanställningen, arbetsredogörelsen och de äldre
  * vy-fälten (`arvodeExclFormatted` m.fl.) formaterar på exakt samma sätt.
@@ -36,6 +37,21 @@ export function formatRateKr(ore: number): string {
 /** Ett antal (t.ex. 16 mil) — heltal utan decimaler, annars upp till två. */
 export function formatQuantity(n: number): string {
   return UP_TO_TWO_DECIMALS.format(n);
+}
+
+/**
+ * Minuter → decimaltimmar med svenskt decimalkomma, högst två decimaler och
+ * inga onödiga (#1542): 90 → `"1,5"`, 15 → `"0,25"`, 120 → `"2"`. Äldre tid
+ * utanför 6-minutersrutnätet visas avrundad till två decimaler (37 → `"0,62"`);
+ * bara visningen avrundas, aldrig de lagrade minuterna. Utan enhet.
+ */
+export function formatDecimalHours(minutes: number): string {
+  return UP_TO_TWO_DECIMALS.format(minutes / 60);
+}
+
+/** Som `formatDecimalHours` men med enheten: `"1,5 h"` — där siffran står ensam. */
+export function formatDecimalHoursWithUnit(minutes: number): string {
+  return `${formatDecimalHours(minutes)} h`;
 }
 
 /** Minuter → `"1 tim 25 min"` / `"50 min"` / `"3 tim"` (`"0 min"` för 0). */

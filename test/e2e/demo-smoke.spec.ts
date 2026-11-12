@@ -200,9 +200,9 @@ test("matter-detalj visar tabell-rader för fakturor/utlägg/tider", async ({ pa
   const expense = rowsForMatter(seed, "expenses", matterId)[0];
   await showPanel(page, "Utlägg");
   await expect(body, "Utlägg ska visas på matter-detalj").toContainText(expense?.description ?? "", opts);
-  // Tid-rad: HH:MM-format
+  // Tid-rad: decimaltimmar (#1542), totalen i rubriken "(totalt 1,5 h)"
   await showPanel(page, "Tid");
-  await expect(body, "Tid-rader ska visas").toContainText(/\d+:\d{2}/, opts);
+  await expect(body, "Tid-rader ska visas").toContainText(/\(totalt \d[\d\s]*(,\d{1,2})? h\)/, opts);
   // Inga "NaN kr" eller "Invalid Date" från brutna fält
   await expect(body, "Inga NaN-belopp").not.toContainText(/NaN kr|Invalid Date/, opts);
 });

@@ -217,9 +217,9 @@ describe("TimeSection — standardåtgärder (#956)", () => {
     const select = screen.getByLabelText<HTMLSelectElement>("Standardåtgärd");
     const labels = Array.from(select.options).map((o) => o.textContent);
     expect(labels[0]).toBe("— egen beskrivning —"); // fritext är default
-    // Tiden formateras med appens `formatMinutes` (0:30), samma som i tidslistan.
-    expect(labels).toContain("Inledande åtgärder och genomgång av handlingar (0:30)");
-    expect(labels).toContain("Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman (0:45)");
+    // Tiden visas i decimaltimmar (#1542), samma formatterare som i tidslistan.
+    expect(labels).toContain("Inledande åtgärder och genomgång av handlingar (0,5 h)");
+    expect(labels).toContain("Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman (0,75 h)");
     // Avställda åtgärder föreslås inte.
     expect(labels.some((l) => l?.includes("Avställd"))).toBe(false);
   });

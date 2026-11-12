@@ -7,8 +7,9 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
-import { formatMinutes, formatCurrency } from "@/lib/client/utils";
+import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, type UserId } from "@/lib/shared/schemas/ids";
@@ -187,11 +188,11 @@ function SummaryCard({ report }: { report: Report }) {
         </div>
         <div>
           <div className="text-gray-500 text-xs uppercase">Totalt tid</div>
-          <div className="font-mono font-medium">{formatMinutes(totals.totalMinutes)}</div>
+          <div className="font-mono font-medium">{formatDecimalHoursWithUnit(totals.totalMinutes)}</div>
         </div>
         <div>
           <div className="text-gray-500 text-xs uppercase">Debiterbart</div>
-          <div className="font-mono font-medium">{formatMinutes(totals.billableMinutes)}</div>
+          <div className="font-mono font-medium">{formatDecimalHoursWithUnit(totals.billableMinutes)}</div>
         </div>
         <div>
           <div className="text-gray-500 text-xs uppercase">Arbetsvärde</div>
@@ -217,12 +218,12 @@ const mattersTableColumns: Column<MatterRow>[] = [
     render: (m) => <span className="text-gray-600">{m.client ?? "—"}</span> },
   { key: "payment", label: "Betalning", sortable: true, sortValue: (m) => labelForPaymentMethod(m.paymentMethod),
     render: (m) => <PaymentBadge method={m.paymentMethod} /> },
-  { key: "totalMinutes", label: "Tid", sortable: true, align: "right", sortValue: (m) => m.totalMinutes,
-    summary: (rs) => <span className="font-mono">{formatMinutes(rs.reduce((s, r) => s + r.totalMinutes, 0))}</span>,
-    render: (m) => <span className="font-mono">{formatMinutes(m.totalMinutes)}</span> },
-  { key: "billableMinutes", label: "Deb. tid", sortable: true, align: "right", sortValue: (m) => m.billableMinutes,
-    summary: (rs) => <strong className="font-mono">{formatMinutes(rs.reduce((s, r) => s + r.billableMinutes, 0))}</strong>,
-    render: (m) => <strong className="font-mono">{formatMinutes(m.billableMinutes)}</strong> },
+  { key: "totalMinutes", label: "Tid (h)", sortable: true, align: "right", sortValue: (m) => m.totalMinutes,
+    summary: (rs) => <span className="font-mono">{formatDecimalHours(rs.reduce((s, r) => s + r.totalMinutes, 0))}</span>,
+    render: (m) => <span className="font-mono">{formatDecimalHours(m.totalMinutes)}</span> },
+  { key: "billableMinutes", label: "Deb. tid (h)", sortable: true, align: "right", sortValue: (m) => m.billableMinutes,
+    summary: (rs) => <strong className="font-mono">{formatDecimalHours(rs.reduce((s, r) => s + r.billableMinutes, 0))}</strong>,
+    render: (m) => <strong className="font-mono">{formatDecimalHours(m.billableMinutes)}</strong> },
   { key: "workValueOre", label: "Arbetsvärde", sortable: true, align: "right", sortValue: (m) => m.workValueOre,
     summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.workValueOre, 0))}</span>,
     render: (m) => <span className="font-mono">{formatCurrency(m.workValueOre)}</span> },
@@ -266,12 +267,12 @@ const weeklyColumns: Column<WeekRow>[] = [
     render: (r) => <span className="font-mono">{r.isoYear}-v{String(r.week).padStart(2, "0")}</span> },
   { key: "period", label: "Period", sortable: true, sortValue: (r) => r.start,
     render: (r) => <span className="text-xs text-gray-500 whitespace-nowrap">{r.start.slice(5)} – {r.end.slice(5)}</span> },
-  { key: "totalMinutes", label: "Tid", sortable: true, align: "right", sortValue: (r) => r.totalMinutes,
-    summary: (rs) => <span className="font-mono">{formatMinutes(rs.reduce((s, r) => s + r.totalMinutes, 0))}</span>,
-    render: (r) => <span className="font-mono">{r.totalMinutes > 0 ? formatMinutes(r.totalMinutes) : "—"}</span> },
-  { key: "billableMinutes", label: "Deb. tid", sortable: true, align: "right", sortValue: (r) => r.billableMinutes,
-    summary: (rs) => <strong className="font-mono">{formatMinutes(rs.reduce((s, r) => s + r.billableMinutes, 0))}</strong>,
-    render: (r) => <span className="font-mono">{r.billableMinutes > 0 ? <strong>{formatMinutes(r.billableMinutes)}</strong> : "—"}</span> },
+  { key: "totalMinutes", label: "Tid (h)", sortable: true, align: "right", sortValue: (r) => r.totalMinutes,
+    summary: (rs) => <span className="font-mono">{formatDecimalHours(rs.reduce((s, r) => s + r.totalMinutes, 0))}</span>,
+    render: (r) => <span className="font-mono">{r.totalMinutes > 0 ? formatDecimalHours(r.totalMinutes) : "—"}</span> },
+  { key: "billableMinutes", label: "Deb. tid (h)", sortable: true, align: "right", sortValue: (r) => r.billableMinutes,
+    summary: (rs) => <strong className="font-mono">{formatDecimalHours(rs.reduce((s, r) => s + r.billableMinutes, 0))}</strong>,
+    render: (r) => <span className="font-mono">{r.billableMinutes > 0 ? <strong>{formatDecimalHours(r.billableMinutes)}</strong> : "—"}</span> },
   { key: "workValueOre", label: "Arbetsvärde", sortable: true, align: "right", sortValue: (r) => r.workValueOre,
     summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.workValueOre, 0))}</span>,
     render: (r) => <span className="font-mono">{r.workValueOre > 0 ? formatCurrency(r.workValueOre) : "—"}</span> },
