@@ -90,6 +90,8 @@
     "quality": "bun run typecheck && bun run lint && bun run test:cov && bun run duplicates && bun run deps:check && bun run knip:report",
     "quality:fast": "bun run typecheck && bun run lint && bun run file-size && bun run test:fast",
     "file-size": "bun tooling/scripts/file-size-ratchet.ts",
+    "flow:gen": "bun tooling/scripts/flow-gen.ts --write",
+    "flow:check": "bun tooling/scripts/flow-gen.ts",
     "quality:report": "mkdir -p reports && bun run test:cov && bun run duplicates && bun run deps:check || true",
     "prepare": "husky"
   },

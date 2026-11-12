@@ -23,10 +23,13 @@ brancher, issues, PR:er eller kommentarer.
 
 ## Vilka
 
-Högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `user-request` som saknar
-`verifierad`, `dubblett` och `blockerad`, äldst först, och som är något av:
+Högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `user-request` som är i
+tillståndet **mottagen** eller **undersökt** (alltså saknar `verifierad`,
+`nedbruten`, `levererad` och `dubblett`) och saknar `blockerad`, äldst först,
+och som är något av:
 
-- **Ny:** saknar `undersökt` och `väntar-på-användaren`.
+- **Ny:** i tillståndet mottagen (ingen av `undersökt`, `verifierad`,
+  `nedbruten`, `levererad`, `dubblett`) och utan `väntar-på-användaren`.
 - **Besvarad:** har `väntar-på-användaren` och ett svar från användaren som är
   nyare än den senaste frågan till hen (se "Dialog med användaren"). Det
   gäller **även om `undersökt` redan är satt**, eftersom Ulrik kan ha frågat
@@ -126,7 +129,7 @@ samma sak.
    2b): "Tack! Någon har redan föreslagit/rapporterat samma sak, så vi tar
    hand om det tillsammans. Du får besked här när det är klart." Skriv
    ingenting om den andra förfrågan, användaren eller byrån.
-4. Sätt `dubblett` och `undersökt` på dubbletten. Sätt aldrig `verifierad`:
+4. Sätt `dubblett` på dubbletten (det är dess tillstånd). Sätt aldrig `verifierad`:
    Ulrik beslutar på originalet, och dubbletten följer det (loop 2).
 
 Har dubbletten redan en pågående dialog med sin användare: läs den först. Det

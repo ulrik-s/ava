@@ -218,19 +218,23 @@ kommentarer.
 
 ## 7. Etiketterna (tillståndsmaskinen)
 
-Intag (`ava-feedback`):
-`user-request` → (loop 1, ev. `väntar-på-användaren` ⇄ svar) → (loop 1) `undersökt` [+ `ej-bekräftad`] → (**Ulrik**) `verifierad`
-→ (loop 2) `nedbruten` → (loop 2) `levererad` + `release:vX.Y.Z` (stängd)
+Flödet står i **`tooling/agents/flow.yaml`** (diagram och tabeller:
+`docs/agent-flow.md`). Läs det när du är osäker på vart en sak får gå.
 
-Kod (`ava`), issues:
-`agent-task` + `att-granska` → `granskad` → `pågår` → stängd via PR
-
-Kod (`ava`), refaktoriseringsförslag (loop 5):
-`agent-task` + `refaktorisering` → (**Ulrik**) `granskad` → `pågår` → stängd via PR
-
-Kod (`ava`), PR:er:
-`agent-pr` + `att-granska` → `granskad` (mergas när CI är grön) eller
-`behöver-ändras` → `att-granska` …
+- **Exakt ett tillstånd** per issue/PR, i båda repona. Sätt bara nästa
+  tillstånds etikett. **Flödesvakten** (en GitHub Action) tar bort det
+  gamla, och den stoppar en otillåten övergång: den tar bort din etikett,
+  lägger tillbaka den gamla och kommenterar varför. Får du en sådan
+  kommentar har du gjort fel. Läs flödet och gör inte om det.
+- **Flaggor** läggs ovanpå tillståndet och tas inte bort av vakten:
+  `blockerad`, `väntar-på-användaren`, `ej-bekräftad`, typerna (`bugg`,
+  `förslag`, `agent-task`, `agent-pr`, `refaktorisering` …) och
+  `release:vX`.
+- **Bara Ulrik** sätter `verifierad` och `människa-godkänd`, och
+  `granskad` på en `refaktorisering`. Vakten stoppar en agent som försöker.
+- **Timeouter** sköter vakten själv varje timme. `väntar-på-användaren`
+  tas bort efter 7 dagar. `pågår` utan öppen PR går tillbaka till
+  `granskad` efter 4 timmar. CI som hänger mer än 60 minuter avbryts.
 
 Övriga PR:er (Dependabot, Ulriks egna) granskas och mergas av PR-vakten
 (loop 6): → `granskad` eller `behöver-ändras`. PR-vakten äger också rött CI,
@@ -258,8 +262,6 @@ Skriv en kort kommentar om varför du tog bort `blockerad`. Agentkommentarer
 Använd inte `blockerad` för att vänta på ett beroende. Skriv `Beror på #N`
 i issuen. Loop 4 väntar själv tills beroendet är stängt.
 
-I kodrepot ska en issue/PR ha exakt ett tillstånd: ta bort det gamla när du
-sätter nästa. I intaget ligger `undersökt` och `verifierad` kvar som historik.
 
 ## 8. Var sparsam
 

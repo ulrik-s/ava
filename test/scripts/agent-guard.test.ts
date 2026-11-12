@@ -3,7 +3,7 @@
  * migrationer och fler än tio per dygn — vanliga PR:er påverkas aldrig.
  */
 import { describe, expect, it } from "vitest-compat";
-import { AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, guardViolations, type GuardInput } from "../../tooling/scripts/agent-guard";
+import { AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, guardViolations, type GuardInput, humanApproved, trustedLabels } from "../../tooling/scripts/agent-guard";
 
 const BASE: GuardInput = { labels: ["agent-pr", "granskad"], files: ["src/app/matters/page.tsx"], addedMigrationLines: [], agentPrsLast24h: 1 };
 
@@ -16,7 +16,7 @@ describe("guardViolations", () => {
     expect(guardViolations(BASE)).toEqual([]);
   });
 
-  it.each([".github/workflows/ci.yml", "tooling/scripts/deploy-prod.sh", "src/lib/server/auth/principal.ts", "tooling/agents/3-implementation.md", "package.json", "tooling/scripts/arch-metrics.ts", ".claude/settings.json"])(
+  it.each([".github/workflows/ci.yml", "tooling/scripts/deploy-prod.sh", "src/lib/server/auth/principal.ts", "tooling/agents/3-implementation.md", "package.json", "tooling/scripts/arch-metrics.ts", ".claude/settings.json", "tooling/scripts/flow-guard.ts", "tooling/scripts/flow/transition.ts"])(
     "skyddad sökväg %s stoppas", (file) => {
       expect(guardViolations({ ...BASE, files: [file] })).toEqual([expect.stringContaining(file)]);
     },
@@ -90,5 +90,29 @@ describe("addedMigrationLines", () => {
       " oförändrad",
     ].join("\n");
     expect(addedMigrationLines(diff)).toEqual(["ALTER TABLE a ADD COLUMN b text;"]);
+  });
+});
+
+describe("människa-godkänd måste vara satt av Ulrik själv", () => {
+  const ev = (event: string, actor = "ulrik-s", viaApp = false) => ({ event, label: "människa-godkänd", actor, viaApp });
+
+  it("Ulrik själv: godkänd", () => {
+    expect(humanApproved([ev("labeled")])).toBe(true);
+  });
+
+  it("satt via appen (en agent), av någon annan, eller borttagen: inte godkänd", () => {
+    expect(humanApproved([ev("labeled", "ulrik-s", true)])).toBe(false);
+    expect(humanApproved([ev("labeled", "någon")])).toBe(false);
+    expect(humanApproved([ev("labeled"), ev("unlabeled")])).toBe(false);
+    expect(humanApproved([])).toBe(false);
+  });
+
+  it("trustedLabels tar bort en etikett som en agent satt, och läser bara loggen när det behövs", () => {
+    let reads = 0;
+    const events = () => { reads++; return [ev("labeled", "ulrik-s", true)]; };
+    expect(trustedLabels(["agent-pr", "granskad"], events)).toEqual(["agent-pr", "granskad"]);
+    expect(reads).toBe(0);
+    expect(trustedLabels(["agent-pr", "människa-godkänd"], events)).toEqual(["agent-pr"]);
+    expect(trustedLabels(["agent-pr", "människa-godkänd"], () => [ev("labeled")])).toEqual(["agent-pr", "människa-godkänd"]);
   });
 });

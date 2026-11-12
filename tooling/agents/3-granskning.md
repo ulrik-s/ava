@@ -103,6 +103,6 @@ För varje öppen PR med `agent-pr` + `granskad` och utan `blockerad`:
      om sha:n inte längre är head. Ett sådant fel är rätt, så forcera aldrig.
 
 Godkänn eller merga aldrig en PR som har `blockerad`, saknar `Closes #N`, eller
-vars issue inte är `granskad`.
+vars issue inte är `pågår` eller `granskad`.
 
 Avsluta med en rad: granskade issues och PR:er, mergade PR:er.
