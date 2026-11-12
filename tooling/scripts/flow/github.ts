@@ -70,7 +70,14 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
           .workflow_runs.map((r) => ({ id: r.id, status: r.status, startedAt: r.run_started_at })));
     },
     addLabel(n: number, label: string): void { run(["api", `repos/${repo}/issues/${n}/labels`, "-f", `labels[]=${label}`]); },
-    removeLabel(n: number, label: string): void { run(["api", "-X", "DELETE", `repos/${repo}/issues/${n}/labels/${enc(label)}`]); },
+    /** Ta bort en etikett. Är den redan borta (404) är målet nått — inget fel. */
+    removeLabel(n: number, label: string): void {
+      try {
+        run(["api", "-X", "DELETE", `repos/${repo}/issues/${n}/labels/${enc(label)}`]);
+      } catch (e) {
+        if (!(e instanceof Error && e.message.includes("HTTP 404"))) throw e;
+      }
+    },
     comment(n: number, body: string): void { run(["api", `repos/${repo}/issues/${n}/comments`, "-f", `body=${body}`]); },
     cancelRun(id: number): void { run(["api", "-X", "POST", `repos/${repo}/actions/runs/${id}/cancel`]); },
   };
