@@ -63,6 +63,13 @@ beforeEach(() => {
 describe("KostnadsrakningModal — utan förhandling (ärendet lades ner)", () => {
   beforeEach(() => { entries = [ARBETE]; });
 
+  it("tidsspecifikationen visar tiden i decimaltimmar (#1543)", () => {
+    render(<KostnadsrakningModal {...baseProps} />);
+    const summary = screen.getByText("Tidsspecifikation").parentElement?.textContent ?? "";
+    expect(summary).toContain("1,5 h + HUF 0 h");
+    expect(summary).toContain("= 1,5 h");
+  });
+
   it("visar ingen förhandlingsklocka och inget taxeval, utan en förklaring", () => {
     render(<KostnadsrakningModal {...baseProps} />);
     expect(screen.queryByText(/STOPPA NU/)).not.toBeInTheDocument();

@@ -26,7 +26,7 @@ import { toIsoDate, toLocalTime } from "./iso-date";
 import { buildKrDocument, krArvodePart, type KrArvodeBasis, type KrArvodePart, type KrDocumentView, type KrHuvudforhandling } from "./kostnadsrakning-document";
 import { timeAmountOre } from "./kostnadsrakning-document-rows";
 import { krClaim, type KrClaim } from "./kr-claim";
-import { formatHours, formatMinutes, formatOreAsKr } from "./kr-format";
+import { formatDecimalHoursWithUnit, formatOreAsKr } from "./kr-format";
 import { omitUndefined } from "./omit-undefined";
 import type { OrgImage } from "./org-image";
 import { radgivningTextRad } from "./rattshjalp";
@@ -347,7 +347,7 @@ function buildKrTemplateContext(a: KrTemplateArgs, document: KrDocumentView): Re
     hufStart: toIsoDateTime(a.start),
     hufEnd: toIsoDateTime(a.end),
     huvudforhandlingMinutes: a.huvudforhandlingMinutes,
-    huvudforhandlingFormatted: formatMinutes(a.huvudforhandlingMinutes),
+    huvudforhandlingFormatted: formatDecimalHoursWithUnit(a.huvudforhandlingMinutes),
     taxaLevel: a.level,
     taxaApplies: a.taxa.kind === "taxa-applies",
     // Rättshjälp/övrigt värderas på timkostnadsnormen (ej brottmålstaxan) — styr
@@ -380,17 +380,17 @@ function buildKrTemplateContext(a: KrTemplateArgs, document: KrDocumentView): Re
     totalInclFormatted: formatOreAsKr(a.totalInclVat),
     timeLines: a.timeLines.map((t) => ({
       ...t,
-      minutesFormatted: formatMinutes(t.minutes),
+      minutesFormatted: formatDecimalHoursWithUnit(t.minutes),
       // Per rad (#891): antal (h), á-pris (kr/h) och totalt (kr). Tomt á-pris/totalt
       // för taxa-ärenden (rateOrePerH = 0) → mallen visar bara tiden.
-      hoursFormatted: formatHoursDecimal(t.minutes),
+      hoursFormatted: formatDecimalHoursWithUnit(t.minutes),
       rateFormatted: t.rateOrePerH > 0 ? `${formatOreAsKr(t.rateOrePerH)}/h` : "",
       amountFormatted: t.rateOrePerH > 0 ? formatOreAsKr(t.amountOre) : "",
     })),
     billableArbetsMinutes: a.billableArbetsMinutes,
-    billableArbetsFormatted: formatMinutes(a.billableArbetsMinutes),
+    billableArbetsFormatted: formatDecimalHoursWithUnit(a.billableArbetsMinutes),
     totalArbetsMinutes: a.totalArbetsMinutes,
-    totalArbetsFormatted: formatMinutes(a.totalArbetsMinutes),
+    totalArbetsFormatted: formatDecimalHoursWithUnit(a.totalArbetsMinutes),
     forordnande: forordnandeContext(a.input.forordnande?.forhor, a.ford),
   };
 }
@@ -633,7 +633,7 @@ const UTANFOR_TEXT = {
 /** Rad för överskjutande tidsspillan, eller null när inget ersätts i kategorin. */
 function tidsspillanRad(label: string, minutes: number, rateOre: number): Record<string, string> | null {
   if (minutes <= 0) return null;
-  return { label, minutesFormatted: formatMinutes(minutes), rateFormatted: `${formatOreAsKr(rateOre)}/h`, amountFormatted: formatOreAsKr(timeAmountOre(minutes, rateOre)) };
+  return { label, minutesFormatted: formatDecimalHoursWithUnit(minutes), rateFormatted: `${formatOreAsKr(rateOre)}/h`, amountFormatted: formatOreAsKr(timeAmountOre(minutes, rateOre)) };
 }
 
 /** Kostnadsräkningens förordnande-avsnitt: förhören, taxan och tidsspillan. */
@@ -643,9 +643,9 @@ function forordnandeContext(forhor: readonly Forhor[] | undefined, ford: Forordn
     date: toIsoDate(f.start),
     start: toLocalTime(f.start),
     end: toLocalTime(f.end),
-    minutesFormatted: formatMinutes(forhorMinutes(f)),
+    minutesFormatted: formatDecimalHoursWithUnit(forhorMinutes(f)),
   }));
-  const base = { forhorLines, forhorTotalFormatted: formatMinutes(ford.forhorMinutes) };
+  const base = { forhorLines, forhorTotalFormatted: formatDecimalHoursWithUnit(ford.forhorMinutes) };
   if (ford.kind === "utanfor-taxan") return { ...base, taxaApplies: false, utanforText: UTANFOR_TEXT[ford.reason] };
   const ts = ford.tidsspillan;
   const d = ford.taxa;
@@ -654,8 +654,8 @@ function forordnandeContext(forhor: readonly Forhor[] | undefined, ford: Forordn
     taxaApplies: true,
     intervalLabel: d.intervalLabel,
     taxaAmountFormatted: formatOreAsKr(d.ersattningExclVat),
-    tidsspillanTotalFormatted: formatMinutes(ts.ingarOvrigMinutes + ts.ingarVardagMinutes + ts.extraOvrigMinutes + ts.extraVardagMinutes),
-    tidsspillanIngarFormatted: formatMinutes(ts.ingarOvrigMinutes + ts.ingarVardagMinutes),
+    tidsspillanTotalFormatted: formatDecimalHoursWithUnit(ts.ingarOvrigMinutes + ts.ingarVardagMinutes + ts.extraOvrigMinutes + ts.extraVardagMinutes),
+    tidsspillanIngarFormatted: formatDecimalHoursWithUnit(ts.ingarOvrigMinutes + ts.ingarVardagMinutes),
     tidsspillanRader: [
       tidsspillanRad("Tidsspillan vardag 08–18", ts.extraVardagMinutes, ts.vardagRateOre),
       tidsspillanRad("Tidsspillan annan tid", ts.extraOvrigMinutes, ts.ovrigRateOre),
@@ -676,13 +676,6 @@ export function diffMinutes(start: Date, end: Date): number {
 function toIsoDateTime(d: Date): string {
   return `${toIsoDate(d)} ${toLocalTime(d)}`;
 }
-
-/** Minuter → decimaltimmar, "4,00 h" (antal-kolumnen i tidsspecifikationen, #891). */
-export function formatHoursDecimal(m: number): string {
-  return `${formatHours(m)} h`;
-}
-
-export { formatMinutes };
 
 function vatRateLabel(bp: number): string {
   return bp === 0 ? "0 %"

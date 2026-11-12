@@ -8,7 +8,7 @@
  * yrkar (Σ radbelopp i öre) — formateringen avrundar ingenting.
  */
 
-import { formatHours, formatOreAsKr, formatPlainKr, formatQuantity, formatRateKr } from "./kr-format";
+import { formatDecimalHours, formatOreAsKr, formatPlainKr, formatQuantity, formatRateKr } from "./kr-format";
 import { type TimeEntryKind } from "./schemas/enums";
 
 /** En tidsrad som dokumentet behöver (struktur-kompatibel med `TimeLine`). */
@@ -131,7 +131,7 @@ function groupLines(lines: readonly KrTimeLineLike[]): Group[] {
 function groupQuantity(g: Group): string {
   return isPerDay(g.kind)
     ? `${g.count} dygn á ${formatRateKr(g.unitOre)}`
-    : `${formatHours(g.minutes)} á ${formatRateKr(g.unitOre)}`;
+    : `${formatDecimalHours(g.minutes)} á ${formatRateKr(g.unitOre)}`;
 }
 
 /** Löpande räkning: en sammanställningsrad per kategori och á-pris. */
@@ -145,7 +145,7 @@ export function hourlyRowSpecs(lines: readonly KrTimeLineLike[]): KrRowSpec[] {
 
 /** En sammanställningsrad för tid à timpris (t.ex. tidsspillan utöver taxan). */
 export function timeRowSpec(label: string, minutes: number, rateOre: number): KrRowSpec {
-  return { label, quantity: `${formatHours(minutes)} á ${formatRateKr(rateOre)}`, amountOre: timeAmountOre(minutes, rateOre) };
+  return { label, quantity: `${formatDecimalHours(minutes)} á ${formatRateKr(rateOre)}`, amountOre: timeAmountOre(minutes, rateOre) };
 }
 
 /** Beloppet för minuter à timpris (öre), avrundat till helt öre — samma uttryck
@@ -165,11 +165,11 @@ export function expenseSummaryRows(lines: readonly KrExpenseLineLike[], exclVatO
 }
 
 function specQuantity(l: KrTimeLineLike): string {
-  return isPerDay(l.kind) ? "1 dygn" : formatHours(l.minutes);
+  return isPerDay(l.kind) ? "1 dygn" : formatDecimalHours(l.minutes);
 }
 
 function sectionSum(kind: TimeEntryKind, lines: readonly KrTimeLineLike[]): string {
-  return isPerDay(kind) ? `${lines.length} dygn` : formatHours(lines.reduce((s, l) => s + l.minutes, 0));
+  return isPerDay(kind) ? `${lines.length} dygn` : formatDecimalHours(lines.reduce((s, l) => s + l.minutes, 0));
 }
 
 /**

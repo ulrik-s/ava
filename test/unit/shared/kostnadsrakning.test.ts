@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildKostnadsrakningContext, diffMinutes, formatMinutes } from "@/lib/shared/kostnadsrakning";
+import { buildKostnadsrakningContext, diffMinutes } from "@/lib/shared/kostnadsrakning";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const baseInput = {
@@ -28,16 +28,6 @@ describe("diffMinutes", () => {
   it("samma tid → 0", () => {
     const d = new Date();
     expect(diffMinutes(d, d)).toBe(0);
-  });
-});
-
-describe("formatMinutes", () => {
-  it("formaterar timmar och minuter", () => {
-    expect(formatMinutes(0)).toBe("0 min");
-    expect(formatMinutes(35)).toBe("35 min");
-    expect(formatMinutes(60)).toBe("1 tim");
-    expect(formatMinutes(95)).toBe("1 tim 35 min");
-    expect(formatMinutes(225)).toBe("3 tim 45 min");
   });
 });
 
@@ -147,7 +137,7 @@ describe("templateContext — formaterad data för Handlebars", () => {
     expect(c.matterNumber).toBe("2026-0016");
     expect(c.defenderName).toBe("Anna Advokat");
     expect(c.courtName).toBe("Stockholms tingsrätt");
-    expect(c.huvudforhandlingFormatted).toBe("1 tim 35 min");
+    expect(c.huvudforhandlingFormatted).toBe("1,58 h");
     expect(c.taxaApplies).toBe(true);
     expect(c.arvodeInclFormatted).toContain("kr");
     expect(c.totalInclFormatted).toContain("kr");
@@ -221,8 +211,8 @@ describe("buildKostnadsrakningContext — timeLines i taxa-ärende", () => {
   it("timeLines visas och formateras i templateContext", () => {
     const lines = r.templateContext.timeLines as Array<Record<string, unknown>>;
     expect(lines).toHaveLength(1);
-    expect(lines[0]!.minutesFormatted).toBe("1 tim 30 min");
-    expect(r.templateContext.billableArbetsFormatted).toBe("1 tim 30 min");
+    expect(lines[0]!.minutesFormatted).toBe("1,5 h");
+    expect(r.templateContext.billableArbetsFormatted).toBe("1,5 h");
   });
 
   it("arvodet styrs fortfarande av taxan (oförändrat mot utan tidsposter)", () => {

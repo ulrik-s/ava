@@ -14,7 +14,17 @@
  */
 
 import Handlebars from "handlebars";
+import { formatDecimalHours } from "@/lib/shared/kr-format";
+
+/**
+ * Hjälpfunktioner som mallredigeraren dokumenterar. Skickas per anrop (inte
+ * `registerHelper`), så att ingen global Handlebars-state ändras.
+ * `{{formatHours minutes}}` → decimaltimmar som i resten av appen (#1543).
+ */
+const HELPERS = {
+  formatHours: (minutes: unknown): string => formatDecimalHours(Number(minutes)),
+};
 
 export function renderHandlebars(template: string, context: Record<string, unknown>): string {
-  return Handlebars.compile(template)(context);
+  return Handlebars.compile(template)(context, { helpers: HELPERS });
 }

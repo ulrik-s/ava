@@ -46,7 +46,7 @@ describe("defaultTemplateFor", () => {
     expect(taxa).toContain("Brottmålstaxa (DVFS 2025:6)");
     expect(taxa).toContain("ARVODE ENLIGT BROTTMÅLSTAXAN");
     expect(lopande).not.toContain("Brottmålstaxa");
-    expect(lopande).toMatch(/ARVODE<\/td><td class="num">2,00 á /);
+    expect(lopande).toMatch(/ARVODE<\/td><td class="num">2 á /);
   });
 });
 

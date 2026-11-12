@@ -80,7 +80,7 @@ const VARIABLE_REFERENCE = [
       { key: "{{formatDate date}}", desc: "Datum → 16 april 2026" },
       { key: "{{formatDateShort date}}", desc: "Datum → 2026-04-16" },
       { key: "{{formatAmount amountInOre}}", desc: "Öre → 1 250,00 kr" },
-      { key: "{{formatHours minutes}}", desc: "Minuter → 1,5 tim" },
+      { key: "{{formatHours minutes}}", desc: "Minuter → decimaltimmar, 90 → 1,5" },
     ],
   },
 ];
