@@ -7,7 +7,6 @@
   "src/app/matters/page.tsx": 448,
   "src/app/settings/page.tsx": 508,
   "src/components/documents/document-browser.tsx": 775,
-  "src/components/matter/payment-method-card.tsx": 407,
   "src/components/shell/demo-bootstrap.tsx": 578,
   "src/components/ui/data-table.tsx": 734,
   "src/lib/client/jobs/job-queue.ts": 419,
