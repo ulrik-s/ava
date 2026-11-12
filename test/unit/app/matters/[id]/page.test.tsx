@@ -185,8 +185,8 @@ vi.mock("@/components/matter/events-panel", () => ({
   EventsPanel: () => <div data-testid="events" />,
 }));
 vi.mock("@/components/matter/payment-method-card", () => ({
-  PaymentMethodCard: ({ paymentMethod }: { paymentMethod: string }) => (
-    <div data-testid="pmc">{paymentMethod}</div>
+  PaymentMethodCard: ({ paymentMethod, onSaved }: { paymentMethod: string; onSaved?: () => void }) => (
+    <div data-testid="pmc">{paymentMethod}<button type="button" onClick={onSaved}>Spara (mock)</button></div>
   ),
 }));
 
@@ -308,14 +308,18 @@ describe("MatterDetailPage", () => {
       if (!el) throw new Error(`panelen ${id} saknas`);
       return el;
     };
+    const openPaymentDialog = (): HTMLElement => {
+      fireEvent.click(within(header()).getByRole("button", { name: "Ändra betalningssätt" }));
+      return screen.getByRole("dialog", { name: "Betalningssätt" });
+    };
 
-    it("rättshjälp över tröskeln: varningen i huvudet, i tidssektionen och som förut i Betalningssätt", async () => {
+    it("rättshjälp över tröskeln: varningen i huvudet, i tidssektionen och som förut i betalningsdialogen", async () => {
       matterQuery.data = { ...M, rattshjalpMaxTimmar: 100 };
       coverageQuery.data = { billableMinutes: 85 * 60, billableValueOre: 0 };
       const { container } = renderPage();
       await waitFor(() => expect(within(header()).getByText("⚠ Närmar sig taket (85 %)")).toBeInTheDocument());
       expect(within(panel(container, "time")).getByText(WARNING)).toBeInTheDocument();
-      expect(within(panel(container, "payment")).getByText(WARNING)).toBeInTheDocument();
+      expect(within(openPaymentDialog()).getByText(WARNING)).toBeInTheDocument();
     });
 
     it("rättshjälp under tröskeln: ingen varning någonstans", async () => {
@@ -325,12 +329,14 @@ describe("MatterDetailPage", () => {
       expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
     });
 
-    it("rättsskydd: varningen bara i Betalningssätt, inte i huvudet eller tidssektionen", async () => {
+    it("rättsskydd: varningen bara i betalningsdialogen, inte i huvudet eller tidssektionen", async () => {
       matterQuery.data = { ...M, paymentMethod: "RATTSSKYDD", rattsskyddMaxOre: 10_000_000 };
       coverageQuery.data = { billableMinutes: 100 * 60, billableValueOre: 9_500_000 };
       const { container } = renderPage();
-      await waitFor(() => expect(within(panel(container, "payment")).getByText(WARNING)).toBeInTheDocument());
+      await waitFor(() => expect(header()).toBeInTheDocument());
       expect(within(header()).queryByText(WARNING)).not.toBeInTheDocument();
+      await waitFor(() => expect(within(openPaymentDialog()).getByText(WARNING)).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: "Stäng" }));
       expect(within(panel(container, "time")).queryByText(WARNING)).not.toBeInTheDocument();
     });
   });
@@ -362,12 +368,16 @@ describe("MatterDetailPage", () => {
     expect(screen.getAllByRole("link", { name: "Anna" }).length).toBeGreaterThan(0);
   });
 
-  it("renderar PaymentMethodCard med paymentMethod", async () => {
-    renderPage();
-    await waitFor(() => {
-      const pmc = screen.getByTestId("pmc");
-      expect(pmc).toHaveTextContent("RATTSHJALP");
-    });
+  it("Betalningssätt är ingen flik; Ändra i huvudet öppnar kortet i en dialog som stängs vid spara (#1499)", async () => {
+    const { container } = renderPage();
+    const edit = await waitFor(() => within(screen.getByTestId("matter-header")).getByRole("button", { name: "Ändra betalningssätt" }));
+    expect(container.querySelector('[data-panel="payment"]')).toBeNull();
+    expect(screen.queryByTestId("pmc")).not.toBeInTheDocument();
+    fireEvent.click(edit);
+    const dialog = screen.getByRole("dialog", { name: "Betalningssätt" });
+    expect(within(dialog).getByTestId("pmc")).toHaveTextContent("RATTSHJALP");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara (mock)" }));
+    expect(screen.queryByRole("dialog", { name: "Betalningssätt" })).not.toBeInTheDocument();
   });
 
   it("renderar mockade barnkomponenter", async () => {

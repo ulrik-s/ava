@@ -6,7 +6,7 @@
  * Vi mockar trpc-hooken så testet inte behöver en riktig server.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
@@ -175,6 +175,22 @@ describe("PaymentMethodCard", () => {
     updateOpts?.onSuccess();
     expect(utilsMock.serviceNote.list.invalidate).toHaveBeenCalled();
     expect(utilsMock.watchlist.list.invalidate).toHaveBeenCalled();
+  });
+
+  it("onSaved anropas efter en lyckad sparning, inte vid Avbryt (#1499)", () => {
+    const onSaved = vi.fn();
+    render(
+      <PaymentMethodCard
+        matterId={asId<"MatterId">("m1")} paymentMethod="PENDING" paymentMethodNote={null} paymentMethodDecidedAt={null}
+        clientShareBips={null} rattsskyddMaxOre={null} rattshjalpMaxTimmar={null} onSaved={onSaved}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
+    expect(onSaved).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
+    act(() => updateOpts?.onSuccess());
+    expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
   it("hjälptexten för rättshjälpens tak beskriver varning vid 80 tim / 10 tim före utökat tak (#1519)", () => {

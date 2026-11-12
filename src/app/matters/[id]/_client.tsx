@@ -5,17 +5,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 import { PanelPage } from "@/components/layout/panel-page";
-import { CoverageCapWarning } from "@/components/matter/coverage-cap-warning";
 import { EventsPanel } from "@/components/matter/events-panel";
-import { PaymentMethodCard } from "@/components/matter/payment-method-card";
-import { RattsskyddNekadBanner } from "@/components/matter/rattsskydd-nekad-banner";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
-import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { asId } from "@/lib/shared/schemas/ids";
 import { BillingPanel } from "./_billing-panel";
 import { ContactsSection } from "./_contacts-section";
@@ -25,6 +21,7 @@ import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
 import { InsuranceReferenceField } from "./_insurance-reference-field";
 import { matterDefaultLayout, matterPanels } from "./_matter-panels";
+import { MatterPaymentEdit, type PaymentEditMatter } from "./_matter-payment-edit";
 import { MatterPaymentLine, type NamedMatterContact } from "./_matter-payment-line";
 import { MatterTypeField } from "./_matter-type-field";
 import { RattshjalpCapWarning } from "./_rattshjalp-cap-warning";
@@ -74,7 +71,6 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
     expenses: () => <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />,
     billing: () => <BillingPanel matterId={id} matter={m} />,
     receivables: () => <ExpectedReceivablesSection matterId={id} isCourtMatter={isCourtMatter(m)} />,
-    payment: () => <MatterPaymentMethod matterId={id} matter={m} />,
     watch: () => <WatchSection matterId={id} />,
     contacts: () => <ContactsSection matterId={id} contacts={m.contacts} />,
     documents: () => <DocumentBrowser matterId={id} />,
@@ -105,55 +101,6 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   );
 }
 
-/** Adapter: samlar nullish-coalescing för betalkortet så MatterDetailClient
- *  håller sig under komplexitetsgränsen (#199). */
-function MatterPaymentMethod({ matterId, matter }: {
-  matterId: ReturnType<typeof asId<"MatterId">>;
-  matter: {
-    paymentMethod: PaymentMethod;
-    paymentMethodNote?: string | null | undefined;
-    paymentMethodDecidedAt?: Date | string | null | undefined;
-    clientShareBips?: number | null | undefined;
-    rattsskyddMaxOre?: number | null | undefined;
-    rattshjalpMaxTimmar?: number | null | undefined;
-    tvistUppkomDatum?: Date | string | null | undefined;
-    rattsskyddBeslutDatum?: Date | string | null | undefined;
-    rattsskyddNekadAt?: Date | string | null | undefined;
-    hourlyRates?: HourlyRates | undefined;
-  };
-}) {
-  const rattsskyddMaxOre = matter.rattsskyddMaxOre ?? null;
-  const rattshjalpMaxTimmar = matter.rattshjalpMaxTimmar ?? null;
-  return (
-    <>
-      <CoverageCapWarning
-        matterId={matterId}
-        paymentMethod={matter.paymentMethod}
-        rattsskyddMaxOre={rattsskyddMaxOre}
-        rattshjalpMaxTimmar={rattshjalpMaxTimmar}
-      />
-      <RattsskyddNekadBanner
-        matterId={matterId}
-        paymentMethod={matter.paymentMethod}
-        rattsskyddNekadAt={matter.rattsskyddNekadAt}
-      />
-      <PaymentMethodCard
-        matterId={matterId}
-        paymentMethod={matter.paymentMethod}
-        paymentMethodNote={matter.paymentMethodNote ?? null}
-        paymentMethodDecidedAt={matter.paymentMethodDecidedAt ?? null}
-        clientShareBips={matter.clientShareBips ?? null}
-        rattsskyddMaxOre={rattsskyddMaxOre}
-        rattshjalpMaxTimmar={rattshjalpMaxTimmar}
-        tvistUppkomDatum={matter.tvistUppkomDatum}
-        rattsskyddBeslutDatum={matter.rattsskyddBeslutDatum}
-        hourlyRates={matter.hourlyRates}
-        rattsskyddNekadAt={matter.rattsskyddNekadAt}
-      />
-    </>
-  );
-}
-
 type MatterContact = {
   id: string;
   role: MatterRole;
@@ -161,7 +108,7 @@ type MatterContact = {
 };
 
 interface HeaderProps {
-  matter: {
+  matter: PaymentEditMatter & {
     id: string;
     matterNumber: string;
     title: string;
@@ -169,7 +116,6 @@ interface HeaderProps {
     description?: string | null | undefined;
     status: MatterStatus;
     isTaxeArende?: boolean | undefined;
-    paymentMethod: PaymentMethod;
     clientShareBips?: number | null | undefined;
     /** Takvarningen i huvudet (#1520) — bara rättshjälp. */
     rattshjalpMaxTimmar?: number | null | undefined;
@@ -265,6 +211,7 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
             <MatterClientLine matterId={m.id} klient={klient} matterType={m.matterType} />
             <MatterPaymentLine paymentMethod={m.paymentMethod} clientShareBips={m.clientShareBips}
               contacts={contacts} separated={klient.length > 0 || Boolean(m.matterType)} />
+            <MatterPaymentEdit matterId={asId<"MatterId">(m.id)} matter={m} />
           </div>
         </div>
         <MatterHeaderActions

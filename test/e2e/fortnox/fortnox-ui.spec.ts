@@ -72,11 +72,13 @@ async function createMatterWithNewClient(page: Page): Promise<void> {
 }
 
 async function setPrivatePayment(page: Page): Promise<void> {
-  const card = page.locator("div.bg-white", { has: page.getByText("Betalningssätt", { exact: true }) }).last();
-  await card.getByRole("button", { name: "Ändra" }).click();
-  await page.getByLabel("Betalningssätt", { exact: true }).selectOption("PRIVAT");
-  const editor = page.locator("div", { has: page.getByText("Ändra betalningssätt") }).last();
-  await editor.getByRole("button", { name: "Spara", exact: true }).click();
+  // Betalningssättet ändras från ärendehuvudet, i en dialog (#1499).
+  await page.getByTestId("matter-header").getByRole("button", { name: "Ändra betalningssätt" }).click();
+  const dialog = page.getByRole("dialog", { name: "Betalningssätt" });
+  await dialog.getByRole("button", { name: "Ändra", exact: true }).click();
+  await dialog.getByLabel("Betalningssätt", { exact: true }).selectOption("PRIVAT");
+  await dialog.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(dialog).toBeHidden();
   await expect(page.getByRole("button", { name: "+ Skapa faktura" })).toBeVisible({ timeout: 20_000 });
 }
 

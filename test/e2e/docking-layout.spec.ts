@@ -182,7 +182,7 @@ test("smal grupp: dolda flikar nås via en tydlig knapp, även med tangentbordet
   // än den rymmer.
   await page.setViewportSize({ width: 1024, height: 768 });
   await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
-  for (const t of ["Kontakter", "Betalningssätt", "Händelser"]) {
+  for (const t of ["Kontakter", "Anteckningar", "Händelser"]) {
     await page.getByRole("tab", { name: new RegExp(`^${t}`) }).dragTo(page.getByRole("tab", { name: /^Utlägg/ }));
   }
   const more = groupOf(page, "Tid").getByRole("button", { name: /^\d+ dold(a)? flik(ar)?$/ });

@@ -3,7 +3,7 @@
 /**
  * Rättshjälpens takvarning där man arbetar i ärendet (#1520): i ärendehuvudet
  * (oavsett vilken panel som är öppen) och i tidssektionen. Bara rättshjälp:
- * rättsskyddets varning visas som förut bara i panelen Betalningssätt.
+ * rättsskyddets varning visas bara i betalningsdialogen från huvudet (#1499).
  * Självstängande som `InsuranceReferenceField` — null för andra betalningssätt.
  */
 

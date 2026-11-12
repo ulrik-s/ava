@@ -52,10 +52,12 @@ test("faktura skapad offline får serverns nummer — ingen dubblett, dokumentet
   expect(taken).toMatch(/^F-\d{4}-\d{4}$/);
 
   // Juristen byter till rättshjälp offline → rådgivningsfakturan skapas lokalt.
-  await page.getByRole("tab", { name: /^Betalningssätt/ }).first().click();
-  await page.getByRole("button", { name: "Ändra", exact: true }).first().click();
-  await page.getByRole("combobox", { name: "Betalningssätt" }).selectOption("RATTSHJALP");
-  await page.getByRole("button", { name: "Spara", exact: true }).click();
+  await page.getByTestId("matter-header").getByRole("button", { name: "Ändra betalningssätt" }).click();
+  const dialog = page.getByRole("dialog", { name: "Betalningssätt" });
+  await dialog.getByRole("button", { name: "Ändra", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Betalningssätt" }).selectOption("RATTSHJALP");
+  await dialog.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(dialog).toBeHidden();
   await expect(page.getByTestId("sync-pill")).toContainText(/ändring(ar)? väntar/, { timeout: 15_000 });
 
   await context.setOffline(false);
