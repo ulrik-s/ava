@@ -25,7 +25,7 @@ let runsData: { runs: BillingRunRow[] } = { runs: [] };
 let runsLoading = false;
 interface ProposalData { workValueOre: number; priorAccontoSumOre: number; timeEntries: Array<{ id: string; description: string; minutes: number; hourlyRate: number; billable: boolean; valueOre: number }>; expenses: Array<{ id: string; description: string; amount: number; billable: boolean }> }
 let proposalData: ProposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
-interface InvoiceRow { id: string; amount: number; status: string; payments: Array<{ amount: number }>; invoiceNumber?: string }
+interface InvoiceRow { id: string; amount: number; status: string; payments: Array<{ amount: number }>; invoiceNumber?: string; invoiceType?: string }
 let invoiceListData: InvoiceRow[] = [];
 let coverageSplitData: { clientOre: number } | undefined = undefined;
 const refetch = vi.fn();
@@ -480,5 +480,55 @@ describe("BillingPanel — informationsrutorna är borta (#1221)", () => {
     invalidate.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Generera" }));
     await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(6));
+  });
+});
+
+describe("BillingPanel — Fakturering-listan döljer annullerade och krediteringar (#1523)", () => {
+  const run = (id: string, type: string, status: string): BillingRunRow => ({
+    id, type, status, recipient: "KLIENT", amountOre: 1000, createdAt: "2026-03-01",
+    invoiceId: `inv-${id}`, invoice: { id: `inv-${id}`, invoiceNumber: `F-${id}` },
+  });
+  const invoice = (id: string, status: string, invoiceType: string): InvoiceRow => ({
+    id, amount: 1000, status, invoiceType, payments: [], invoiceNumber: `F-${id}`,
+  });
+  const panel = () => render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
+
+  beforeEach(() => {
+    runsData = { runs: [run("r1", "ACCONTO", "SENT"), run("r2", "KOSTNADSRAKNING", "VOIDED"), run("r3", "CREDIT", "SENT")] };
+    invoiceListData = [invoice("s1", "SENT", "STANDARD"), invoice("s2", "CANCELLED", "STANDARD"), invoice("s3", "SENT", "CREDIT")];
+  });
+
+  it("annullerade körningar, krediteringar, annullerade fakturor och kreditfakturor är dolda från början", () => {
+    panel();
+    expect(screen.getByText("F-r1")).toBeInTheDocument();
+    expect(screen.getByText("F-s1")).toBeInTheDocument();
+    for (const hidden of ["F-r2", "F-r3", "F-s2", "F-s3"]) expect(screen.queryByText(hidden)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Visa annullerade (4)" })).toBeInTheDocument();
+  });
+
+  it("knappen tar fram dem med sin status och döljer dem igen", () => {
+    panel();
+    fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (4)" }));
+    for (const shown of ["F-r2", "F-r3", "F-s2", "F-s3"]) expect(screen.getByText(shown)).toBeInTheDocument();
+    expect(screen.getByText("Kreditering")).toBeInTheDocument();
+    expect(screen.getAllByText("Annullerad").length).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: "Dölj annullerade" }));
+    expect(screen.queryByText("F-r2")).not.toBeInTheDocument();
+  });
+
+  it("ingen knapp när inget är dolt", () => {
+    runsData = { runs: [run("r1", "ACCONTO", "SENT")] };
+    invoiceListData = [];
+    panel();
+    expect(screen.getByText("F-r1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /annullerade/ })).not.toBeInTheDocument();
+  });
+
+  it("bara dolda rader: tom tabell med knappen, inte 'Inga fakturor ännu.'", () => {
+    runsData = { runs: [run("r2", "KOSTNADSRAKNING", "VOIDED")] };
+    invoiceListData = [];
+    panel();
+    expect(screen.queryByText("Inga fakturor ännu.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Visa annullerade (1)" })).toBeInTheDocument();
   });
 });

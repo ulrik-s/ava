@@ -2,7 +2,7 @@
   "src/app/calendar/page.tsx": 768,
   "src/app/contacts/[id]/_client.tsx": 422,
   "src/app/invoices/[id]/_client.tsx": 652,
-  "src/app/matters/[id]/_billing-panel.tsx": 860,
+  "src/app/matters/[id]/_billing-panel.tsx": 698,
   "src/app/matters/[id]/_kostnadsrakning-modal.tsx": 569,
   "src/app/matters/page.tsx": 454,
   "src/app/settings/page.tsx": 508,
