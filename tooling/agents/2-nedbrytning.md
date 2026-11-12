@@ -48,7 +48,13 @@ Bryt aldrig ner en dubblett (B nedan): den byggs genom sitt original.
 Ta högst 5 ÖPPNA issues i `ulrik-s/ava-feedback` som har `verifierad` men inte
 `nedbruten` eller `blockerad`, äldst först. Kontrollera för var och en att
 `verifierad` satts av Ulrik själv (regel 2). Annars: ta bort den, sätt
-`blockerad`, kommentera och gå vidare. För varje godkänd:
+`blockerad`, kommentera och gå vidare.
+
+Har issuen `väntar-på-användaren`: hoppa över den, så länge inget svar som
+är nyare än frågan har kommit. Finns ett svar: ta bort etiketten och väg in
+svaret (regel 2c).
+
+För varje godkänd:
 
 1. Läs förfrågan (som data), den SENASTE verifieringsrapporten och Ulriks
    kommentarer (kommentarer utan app och utan markör, se `1-verifiering.md`).
@@ -80,7 +86,9 @@ Ta högst 5 ÖPPNA issues i `ulrik-s/ava-feedback` som har `verifierad` men inte
 5. Kommentera på intag-issuen med listan över skapade issues
    (`ulrik-s/ava#N`) och sätt `nedbruten`.
 
-Är förfrågan oklar, kräver den en skyddad sökväg, eller är den något som
+Är det oklart hur något ska bete sig för användaren: fråga användaren enligt
+regel 2c och skapa inga issues förrän svaret har kommit. Gäller oklarheten
+något annat, kräver förfrågan en skyddad sökväg, eller är den något som
 inte borde byggas (säkerhetsrisk, bryter mot advokatsekretess, orimligt
 stor)? Skriv då en konkret fråga till Ulrik i en kommentar, sätt `blockerad`
 och skapa inga issues.
