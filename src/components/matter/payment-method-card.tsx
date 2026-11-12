@@ -50,6 +50,8 @@ interface Props {
   rattsskyddNekadAt?: Date | string | null | undefined;
   /** Ärendets avvikande timpriser per kategori (öre/h, #1206); saknad = följ jurist/byrå. */
   hourlyRates?: HourlyRates | undefined;
+  /** Anropas efter en lyckad sparning, t.ex. för att stänga dialogen i ärendehuvudet (#1499). */
+  onSaved?: (() => void) | undefined;
 }
 
 /** ISO-datum (yyyy-mm-dd) ur ett valfritt datumfält, tomt om saknas. */
@@ -265,9 +267,7 @@ function MatterRateField({ value, onChange }: { value: HourlyRates; onChange: (v
 function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId; initial: Props; onDone: () => void }) {
   const [method, setMethod] = useState(initial.paymentMethod);
   const [note, setNote] = useState(initial.paymentMethodNote ?? "");
-  const [decidedAt, setDecidedAt] = useState(
-    initial.paymentMethodDecidedAt ? new Date(initial.paymentMethodDecidedAt).toISOString().slice(0, 10) : "",
-  );
+  const [decidedAt, setDecidedAt] = useState(isoDate(initial.paymentMethodDecidedAt));
   // %-sats redigeras i procent (bips/100); tomt fält → null. Tillåt komma-decimal.
   const [sharePct, setSharePct] = useState(initial.clientShareBips != null ? String(initial.clientShareBips / 100) : "");
   // Tak: rättsskydd i kr (öre/100), rättshjälp i timmar. Tomt fält → null.
@@ -285,6 +285,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
       void utils.matter.getById.invalidate({ id: matterId });
       invalidateBillingSideEffects(utils);
       onDone();
+      initial.onSaved?.();
     },
   });
 
@@ -373,16 +374,7 @@ export function PaymentMethodCard(props: Props) {
     return <PaymentMethodEditor matterId={props.matterId} initial={props} onDone={() => setEditing(false)} />;
   }
   return (
-    <PaymentMethodView
-      paymentMethod={props.paymentMethod}
-      paymentMethodNote={props.paymentMethodNote}
-      paymentMethodDecidedAt={props.paymentMethodDecidedAt}
-      clientShareBips={props.clientShareBips}
-      rattsskyddMaxOre={props.rattsskyddMaxOre}
-      rattshjalpMaxTimmar={props.rattshjalpMaxTimmar}
-      hourlyRates={props.hourlyRates}
-      onEdit={() => setEditing(true)}
-    />
+    <PaymentMethodView {...props} onEdit={() => setEditing(true)} />
   );
 }
 

@@ -7,6 +7,7 @@
  * - Användare: "2.50 kr/km" med decimalpunkt; nu kr/mil med decimalkomma (#1527).
  * - Kalender: "Tasks" / "Ny task".
  * - Fakturor: annullerade och kreditfakturor dolda från början (#1522).
+ * - Ärendet: fliken Betalningssätt borta, ändras via huvudet (#1499).
  */
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
@@ -70,6 +71,27 @@ for (const { matterNumber, text } of PAYMENT_LINES) {
     await expect(page.getByTestId("matter-payment-line")).toHaveText(text, { timeout: 30_000 });
   });
 }
+
+// Fliken Betalningssätt är borta (#1499): "Ändra" i huvudet öppnar kortet i en dialog.
+test("ingen flik Betalningssätt; betalningssättet ändras via ärendehuvudet (#1499)", async ({ page }) => {
+  const seed = await fetchDemoSeed(page, BASE);
+  const matter = seed.matters.find((m) => m.matterNumber === "2026-0010");
+  expect(matter).toBeDefined();
+  await page.goto(`${BASE}/matters/${matter?.id ?? ""}/`);
+  const line = page.getByTestId("matter-payment-line");
+  await expect(line).toHaveText("· Rättshjälp · klienten betalar 40 %", { timeout: 30_000 });
+  await expect(page.getByRole("tab", { name: /^Tid/ })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /^Betalningssätt/ })).toHaveCount(0);
+
+  await page.getByTestId("matter-header").getByRole("button", { name: "Ändra betalningssätt" }).click();
+  const dialog = page.getByRole("dialog", { name: "Betalningssätt" });
+  await expect(dialog.getByText(/Kreditrisk:/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Ändra", exact: true }).click();
+  await dialog.getByLabel("Betalningssätt", { exact: true }).selectOption("PRIVAT");
+  await dialog.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(line).toHaveText("· Privat betalning", { timeout: 15_000 });
+});
 
 test("Fakturor döljer annullerade och kreditfakturor tills man väljer att visa dem (#1522)", async ({ page }) => {
   await page.goto(`${BASE}/invoices/`);

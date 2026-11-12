@@ -3,6 +3,8 @@
 /**
  * Ärendesidans paneler och standardlayouter (#1185, pilot). Id:na sparas i
  * användarnas layouter — byt aldrig namn på ett id; lägg till nya i stället.
+ * Ett borttaget id (t.ex. "payment", #1499) rensas ur sparade layouter av
+ * `reconcileLayout`.
  */
 
 import type { ReactNode } from "react";
@@ -11,14 +13,14 @@ import type { PanelDef } from "@/components/layout/panel-def";
 
 /** Panelernas id — samma lista i registret och standardlayouterna. */
 export const MATTER_PANEL_IDS = [
-  "time", "expenses", "billing", "receivables", "payment", "watch",
+  "time", "expenses", "billing", "receivables", "watch",
   "contacts", "documents", "events", "suggestions", "notes",
 ] as const;
 export type MatterPanelId = (typeof MATTER_PANEL_IDS)[number];
 
 const TITLES: Record<MatterPanelId, string> = {
   time: "Tid", expenses: "Utlägg", billing: "Fakturering", receivables: "Domstolsbetalningar",
-  payment: "Betalningssätt", watch: "Att bevaka", contacts: "Kontakter", documents: "Dokument",
+  watch: "Att bevaka", contacts: "Kontakter", documents: "Dokument",
   events: "Händelser", suggestions: "Förslag", notes: "Anteckningar",
 };
 
@@ -35,10 +37,10 @@ export function matterPanels(content: Record<MatterPanelId, () => ReactNode>): P
 export const matterDefaultLayout: DefaultLayout = (add, screen) => {
   if (screen === "laptop") {
     addGroup(add, ["time", "expenses", "billing", "receivables"]);
-    addGroup(add, ["watch", "payment", "contacts"], { referencePanel: "time", direction: "right" });
+    addGroup(add, ["watch", "contacts"], { referencePanel: "time", direction: "right" });
   } else {
     addGroup(add, ["time", "expenses"]);
-    addGroup(add, ["billing", "receivables", "payment"], { referencePanel: "time", direction: "right" });
+    addGroup(add, ["billing", "receivables"], { referencePanel: "time", direction: "right" });
     addGroup(add, ["watch", "contacts"], { referencePanel: "billing", direction: "right" });
   }
   addGroup(add, ["documents", "events", "suggestions", "notes"], { referencePanel: "watch", direction: "below" });
