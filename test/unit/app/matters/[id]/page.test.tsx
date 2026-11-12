@@ -270,10 +270,18 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByLabelText("Målnummer")).toBeInTheDocument());
     expect(screen.queryByLabelText("Försäkringsreferens")).not.toBeInTheDocument();
     first.unmount();
-    const insurer = { id: "mc2", role: "MOTPART", contact: { id: "c2", name: "Bolaget", contactType: "INSURANCE_COMPANY", personalNumber: null, orgNumber: null } };
+    const insurer = { id: "mc2", role: "FORSAKRINGSBOLAG", contact: { id: "c2", name: "Bolaget", contactType: "INSURANCE_COMPANY", personalNumber: null, orgNumber: null } };
     matterQuery.data = { ...M, contacts: [...M.contacts, insurer], insuranceReference: "SK-1" };
     renderPage();
     await waitFor(() => expect(screen.getByLabelText("Försäkringsreferens")).toHaveValue("SK-1"));
+  });
+
+  it("försäkringsreferensen döljs när försäkringsbolaget bara är motpart (#1532)", async () => {
+    const adverse = { id: "mc2", role: "MOTPART", contact: { id: "c2", name: "Bolaget", contactType: "INSURANCE_COMPANY", personalNumber: null, orgNumber: null } };
+    matterQuery.data = { ...M, contacts: [...M.contacts, adverse], insuranceReference: "SK-1" };
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Målnummer")).toBeInTheDocument());
+    expect(screen.queryByLabelText("Försäkringsreferens")).not.toBeInTheDocument();
   });
 
   it("ärendehuvudet visar betalningssätt, försäkringsbolag och klientens andel (#1518)", async () => {

@@ -69,14 +69,23 @@ test("byt målnummer → tidigare målnummer visas och är sökbart", async ({ p
   await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible({ timeout: 25_000 });
 });
 
-// #1511: på ett ärende med försäkringsbolag som kontakt finns fältet
-// "Försäkringsreferens" i ärendehuvudet; referensen sparas och är sökbar.
-test("försäkringsreferens på ärende med försäkringsbolag → sökbar i ärendelistan", async ({ page }) => {
+// #1511 + #1532: fältet "Försäkringsreferens" visas bara när ett försäkringsbolag
+// är kontakt i en annan roll än motpart/motpartsombud; referensen sparas och är sökbar.
+test("försäkringsreferens: dold när bolaget är motpart, visas med försäkringsbolag → sökbar", async ({ page }) => {
   await seedDemoLogin(page, BASE);
   const title = "Trafikskada Ek mot Folksam"; // seed: försäkringsbolaget är motpart
   const reference = `SK-${Date.now()}`;
   await page.goto(`${BASE}/matters/`);
   await page.getByRole("row").filter({ hasText: title }).getByRole("link", { name: title }).click();
+  await expect(page.getByLabel("Målnummer")).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByLabel("Försäkringsreferens")).toHaveCount(0);
+
+  await showPanel(page, "Kontakter");
+  await page.getByRole("button", { name: "+ Lägg till" }).click();
+  await page.getByLabel("Roll i ärendet").selectOption("FORSAKRINGSBOLAG");
+  await page.getByPlaceholder("Namn, personnummer eller organisationsnummer").fill("Trygg-Hansa");
+  await page.getByRole("list", { name: "Träffar" }).getByRole("button", { name: /Trygg-Hansa/ }).first().click();
+
   const field = page.getByLabel("Försäkringsreferens");
   await expect(field).toBeVisible({ timeout: 25_000 });
   await field.fill(reference);

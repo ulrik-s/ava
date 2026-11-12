@@ -1,22 +1,34 @@
 /**
- * Villkoret för försäkringsreferensen (#1511): ärendet har ett försäkringsbolag.
+ * Villkoret för försäkringsreferensen (#1511, #1532) och bolaget i ärendehuvudet
+ * (#1518): ett försäkringsbolag som inte står på motsidan.
  */
 
 import { describe, it, expect } from "vitest-compat";
 import { findInsuranceCompany, hasInsuranceCompany } from "@/lib/shared/matter-insurance";
 
-describe("hasInsuranceCompany", () => {
-  it("sant med minst ett försäkringsbolag bland kontakterna", () => {
-    expect(hasInsuranceCompany([
-      { contact: { contactType: "PERSON" } },
-      { contact: { contactType: "INSURANCE_COMPANY" } },
-    ])).toBe(true);
+describe("hasInsuranceCompany (#1532)", () => {
+  const insurer = (role: "FORSAKRINGSBOLAG" | "OVRIG" | "MOTPART" | "MOTPARTSOMBUD") =>
+    ({ role, contact: { contactType: "INSURANCE_COMPANY" } }) as const;
+
+  it("sant med ett försäkringsbolag i annan roll än motsidan", () => {
+    expect(hasInsuranceCompany([{ role: "KLIENT", contact: { contactType: "PERSON" } }, insurer("FORSAKRINGSBOLAG")])).toBe(true);
+    expect(hasInsuranceCompany([insurer("OVRIG")])).toBe(true);
+  });
+
+  it("falskt när försäkringsbolaget är motpart eller motpartsombud", () => {
+    expect(hasInsuranceCompany([insurer("MOTPART")])).toBe(false);
+    expect(hasInsuranceCompany([insurer("MOTPARTSOMBUD")])).toBe(false);
+    expect(hasInsuranceCompany([insurer("MOTPART"), insurer("MOTPARTSOMBUD")])).toBe(false);
+  });
+
+  it("sant när ett av flera försäkringsbolag står utanför motsidan", () => {
+    expect(hasInsuranceCompany([insurer("MOTPART"), insurer("FORSAKRINGSBOLAG")])).toBe(true);
   });
 
   it("falskt utan försäkringsbolag, utan kontakter och utan kontakttyp", () => {
-    expect(hasInsuranceCompany([{ contact: { contactType: "COMPANY" } }])).toBe(false);
+    expect(hasInsuranceCompany([{ role: "OVRIG", contact: { contactType: "COMPANY" } }])).toBe(false);
     expect(hasInsuranceCompany([])).toBe(false);
-    expect(hasInsuranceCompany([{ contact: {} }, { contact: { contactType: null } }])).toBe(false);
+    expect(hasInsuranceCompany([{ role: "OVRIG", contact: {} }, { role: "OVRIG", contact: { contactType: null } }])).toBe(false);
   });
 });
 
@@ -48,11 +60,5 @@ describe("findInsuranceCompany (#1518)", () => {
 
   it("ger försäkringsbolag i vanlig roll", () => {
     expect(findInsuranceCompany([{ ...first, role: "OMBUD" }])?.contact.name).toBe("Bolag A");
-  });
-});
-
-describe("hasInsuranceCompany oavsett roll (#1511 oförändrad)", () => {
-  it("sant även när försäkringsbolaget är motpart", () => {
-    expect(hasInsuranceCompany([{ contact: { contactType: "INSURANCE_COMPANY" } }])).toBe(true);
   });
 });
