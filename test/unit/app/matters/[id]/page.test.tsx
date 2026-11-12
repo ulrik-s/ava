@@ -246,11 +246,22 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByText(/Saknas/)).toBeInTheDocument());
   });
 
-  it("målnummer visas + kan redigeras även i icke-domstolsärende (#1134)", async () => {
+  it("målnummer visas som text även i icke-domstolsärende (#1134, #1566)", async () => {
     matterQuery.data = { ...M, courtCaseNumber: "T 3288-26" };
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText("Målnummer")).toHaveValue("T 3288-26"));
+    await waitFor(() => expect(screen.getByTestId("matter-court-case-number")).toHaveTextContent("Målnummer: T 3288-26"));
     expect(screen.queryByText(/Domstolsbetalningar/)).not.toBeInTheDocument();
+  });
+
+  it("ärendehuvudet är en läsvy: inga textrutor, saknade uppgifter med streck (#1566)", async () => {
+    matterQuery.data = { ...M, matterType: "", description: null };
+    renderPage();
+    const header = await waitFor(() => screen.getByTestId("matter-header"));
+    expect(within(header).queryAllByRole("textbox")).toHaveLength(0);
+    expect(within(header).getByTestId("matter-type")).toHaveTextContent("Ärendetyp: –");
+    expect(within(header).getByTestId("matter-court-case-number")).toHaveTextContent("Målnummer: –");
+    expect(within(header).getByTestId("matter-description")).toHaveTextContent("Beskrivning: –");
+    expect(within(header).queryByRole("button", { name: /^Spara/ })).not.toBeInTheDocument();
   });
 
   it("tidigare målnummer visas i ärendehuvudet när det finns (#1510)", async () => {
@@ -262,21 +273,21 @@ describe("MatterDetailPage", () => {
 
   it("försäkringsreferensen visas bara med försäkringsbolag som kontakt (#1511)", async () => {
     const first = renderPage();
-    await waitFor(() => expect(screen.getByLabelText("Målnummer")).toBeInTheDocument());
-    expect(screen.queryByLabelText("Försäkringsreferens")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("matter-court-case-number")).toBeInTheDocument());
+    expect(screen.queryByTestId("matter-insurance-reference")).not.toBeInTheDocument();
     first.unmount();
     const insurer = { id: "mc2", role: "FORSAKRINGSBOLAG", contact: { id: "c2", name: "Bolaget", contactType: "INSURANCE_COMPANY", personalNumber: null, orgNumber: null } };
     matterQuery.data = { ...M, contacts: [...M.contacts, insurer], insuranceReference: "SK-1" };
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText("Försäkringsreferens")).toHaveValue("SK-1"));
+    await waitFor(() => expect(screen.getByTestId("matter-insurance-reference")).toHaveTextContent("Försäkringsreferens: SK-1"));
   });
 
   it("försäkringsreferensen döljs när försäkringsbolaget bara är motpart (#1532)", async () => {
     const adverse = { id: "mc2", role: "MOTPART", contact: { id: "c2", name: "Bolaget", contactType: "INSURANCE_COMPANY", personalNumber: null, orgNumber: null } };
     matterQuery.data = { ...M, contacts: [...M.contacts, adverse], insuranceReference: "SK-1" };
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText("Målnummer")).toBeInTheDocument());
-    expect(screen.queryByLabelText("Försäkringsreferens")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("matter-court-case-number")).toBeInTheDocument());
+    expect(screen.queryByTestId("matter-insurance-reference")).not.toBeInTheDocument();
   });
 
   it("ärendehuvudet visar betalningssätt, försäkringsbolag och klientens andel (#1518)", async () => {
@@ -297,10 +308,10 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(line()).toHaveTextContent(/^· Rättsskydd · klienten betalar 20 %$/));
     adverse.unmount();
 
-    // Utan klient och ärendetyp: ingen inledande avgränsare.
+    // Utan klient och ärendetyp: "Ärendetyp: –" står före, så avgränsaren är kvar (#1566).
     matterQuery.data = { ...M, contacts: [], matterType: null, clientShareBips: 1000 };
     renderPage();
-    await waitFor(() => expect(line()).toHaveTextContent(/^Rättshjälp · klienten betalar 10 %$/));
+    await waitFor(() => expect(line()).toHaveTextContent(/^· Rättshjälp · klienten betalar 10 %$/));
   });
 
   describe("takvarningen i huvudet och tidssektionen (#1520)", () => {
@@ -441,11 +452,11 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByText("Arkiverat")).toBeInTheDocument());
   });
 
-  it("renderar matterType (redigerbar, fetstil #1521) + description", async () => {
+  it("renderar matterType (text i fetstil #1521/#1566) + description", async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText("Ärendetyp")).toHaveValue("Familjerätt"));
-    expect(screen.getByLabelText("Ärendetyp")).toHaveClass("font-bold");
-    expect(screen.getByText("En bodelning")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("matter-type")).toHaveTextContent(/^Familjerätt$/));
+    expect(screen.getByTestId("matter-type")).toHaveClass("font-bold");
+    expect(screen.getByTestId("matter-description")).toHaveTextContent("Beskrivning: En bodelning");
   });
 
   it("'+ Lägg till' kontakt öppnar sökdialogen; Avbryt stänger (#1136)", async () => {
