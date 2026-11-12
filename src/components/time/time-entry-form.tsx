@@ -1,5 +1,6 @@
 "use client";
 
+import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
 import { trpc } from "@/lib/client/trpc";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
@@ -113,7 +114,7 @@ interface FormProps {
 /** Tidpost-formuläret — delat av ärendets tidsektion och /time. */
 export function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, isCoverage, atgarder, onSubmit, onCancel }: FormProps) {
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
+    <form onSubmit={(e) => { e.preventDefault(); if (!hasInvalidHours(e.currentTarget)) onSubmit(); }}>
       {isTaxeArende && (
         <div className="text-xs text-indigo-900 bg-indigo-50 border border-indigo-200 rounded px-3 py-2 mb-3">
           <strong>Taxeärende</strong> — arvodet ersätts enligt Domstolsverkets
@@ -148,7 +149,7 @@ export function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, 
         </div>
         <div>
           <label htmlFor="time-minutes" className="block text-xs text-gray-500 mb-1">
-            {isPerDayKind(form.kind) ? "Omfattning" : "Tid (minuter) *"}
+            {isPerDayKind(form.kind) ? "Omfattning" : "Tid (h) *"}
           </label>
           {isPerDayKind(form.kind) ? (
             // Beredskap ersätts per dygn (#950) — det finns ingen tid att mata in,
@@ -157,8 +158,8 @@ export function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, 
               1 dygns beredskap
             </p>
           ) : (
-            <input id="time-minutes" type="text" inputMode="numeric" required value={form.minutes}
-              onChange={(e) => setForm({ ...form, minutes: parseInt(e.target.value) || 0 })}
+            <HoursInput id="time-minutes" minutes={form.minutes}
+              onChange={(minutes) => setForm({ ...form, minutes })}
               className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
           )}
         </div>

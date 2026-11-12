@@ -38,7 +38,7 @@ test("tidspost skapad offline körs om på servern — samma post, rätt använd
   await context.setOffline(true);
   const description = `Offline-tid ${Date.now()}`;
   await page.getByRole("button", { name: "+ Registrera tid" }).click();
-  await page.locator("#time-minutes").fill("24");
+  await page.locator("#time-minutes").fill("0,4"); // timmar (#1545) = 24 minuter
   await page.locator("#time-description").fill(description);
   await page.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(page.getByText(description).first()).toBeVisible({ timeout: 15_000 });

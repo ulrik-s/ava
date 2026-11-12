@@ -128,13 +128,26 @@ describe("TimePage", () => {
     expect(checkbox.checked).toBe(false);
   });
 
-  it("ändrar minuter via text-input (utan spinner, #798)", () => {
+  it("ändrar tiden i timmar via text-input (utan spinner, #798, #1545)", () => {
     render(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
-    const numberInput = screen.getByLabelText<HTMLInputElement>(/minuter/i);
-    fireEvent.change(numberInput, { target: { value: "120" } });
-    expect(numberInput.value).toBe("120");
+    const numberInput = screen.getByLabelText<HTMLInputElement>(/Tid \(h\)/);
+    fireEvent.change(numberInput, { target: { value: "2,5" } });
+    expect(numberInput.value).toBe("2,5");
+  });
+
+  it("registrerar 1,5 timmar som 90 minuter; 1,33 ger fel och sparas inte (#1545)", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    const hours = screen.getByLabelText<HTMLInputElement>(/Tid \(h\)/);
+    fireEvent.change(hours, { target: { value: "1,33" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Ändra värdet");
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(createMutate).not.toHaveBeenCalled();
+    fireEvent.change(hours, { target: { value: "1,5" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ minutes: 90 }));
   });
 
   it("Avbryt stänger formuläret", () => {

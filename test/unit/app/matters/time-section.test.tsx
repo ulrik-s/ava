@@ -117,10 +117,10 @@ describe("TimeSection — arvodeskategori (#953)", () => {
   it("beredskap byter ut minutfältet mot ett dygn och skickar noll minuter", () => {
     render(<TimeSection matterId={matterId} />);
     fireEvent.click(screen.getByText("+ Registrera tid"));
-    expect(screen.getByLabelText("Tid (minuter) *")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tid (h) *")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "ADVOKATBEREDSKAP" } });
-    expect(screen.queryByLabelText("Tid (minuter) *")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Tid (h) *")).not.toBeInTheDocument();
     expect(screen.getByText("1 dygns beredskap")).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Helgjour tingsrätten" } });
@@ -230,7 +230,7 @@ describe("TimeSection — standardåtgärder (#956)", () => {
     fireEvent.change(screen.getByLabelText("Standardåtgärd"), { target: { value: "avslutande-atgarder" } });
 
     expect(screen.getByPlaceholderText("Beskrivning *")).toHaveValue("Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman");
-    expect(screen.getByLabelText("Tid (minuter) *")).toHaveValue("45");
+    expect(screen.getByLabelText("Tid (h) *")).toHaveValue("0,75");
 
     fireEvent.click(screen.getByText("Spara"));
     expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({
@@ -243,7 +243,7 @@ describe("TimeSection — standardåtgärder (#956)", () => {
     render(<TimeSection matterId={matterId} />);
     fireEvent.click(screen.getByText("+ Registrera tid"));
     fireEvent.change(screen.getByLabelText("Standardåtgärd"), { target: { value: "inledande-atgarder" } });
-    fireEvent.change(screen.getByLabelText("Tid (minuter) *"), { target: { value: "75" } });
+    fireEvent.change(screen.getByLabelText("Tid (h) *"), { target: { value: "1,25" } });
 
     fireEvent.click(screen.getByText("Spara"));
     // Kopplingen behålls så byrån kan se att tiden avvikit från huvudregeln.
@@ -290,7 +290,7 @@ describe("TimeSection — förslag om standardåtgärder (#958)", () => {
 
     // Formuläret öppnas ifyllt med byråns huvudregel …
     expect(screen.getByPlaceholderText("Beskrivning *")).toHaveValue("Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman");
-    expect(screen.getByLabelText("Tid (minuter) *")).toHaveValue("45");
+    expect(screen.getByLabelText("Tid (h) *")).toHaveValue("0,75");
     expect(screen.getByLabelText("Standardåtgärd")).toHaveValue("avslutande-atgarder");
     // … men INGET är sparat förrän användaren godkänner.
     expect(createMutate).not.toHaveBeenCalled();
@@ -379,5 +379,40 @@ describe("TimeSection — Markera som rådgivning (#1207)", () => {
     expect(markMutate).toHaveBeenCalledTimes(1);
     expect(markMutate.mock.calls[0]![0]).toEqual({ id: expect.stringMatching(/^t[123]$/) });
     confirmSpy.mockRestore();
+  });
+});
+
+describe("TimeSection — tid i timmar med decimal (#1545)", () => {
+  const openCreate = (): HTMLElement => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+    fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Telefonsamtal" } });
+    return screen.getByLabelText("Tid (h) *");
+  };
+
+  it("ny post har 0,5 timmar som standard", () => {
+    expect(openCreate()).toHaveValue("0,5");
+  });
+
+  it.each(["1,5", "1.5"])("%s sparas som 90 minuter", (value) => {
+    fireEvent.change(openCreate(), { target: { value } });
+    fireEvent.click(screen.getByText("Spara"));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ matterId, minutes: 90 }));
+  });
+
+  it("1,33 ger ett felmeddelande och sparas inte", () => {
+    const input = openCreate();
+    fireEvent.change(input, { target: { value: "1,33" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Ändra värdet");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    fireEvent.click(screen.getByText("Spara"));
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("en befintlig post visas i timmar när den ändras", () => {
+    render(<TimeSection matterId={matterId} />);
+    const [, second] = screen.getAllByText("Ändra"); // raden med 90 minuter
+    if (second) fireEvent.click(second);
+    expect(screen.getByLabelText("Tid (h) *")).toHaveValue("1,5");
   });
 });

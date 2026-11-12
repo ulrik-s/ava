@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import {
-  searchMatters, getRestToken, mailContext, persistCreds, runSave, renderResults, bootstrap,
+  searchMatters, getRestToken, mailContext, persistCreds, runSave, renderResults, bootstrap, timeFieldMinutes,
   type OfficeLike, type MatterHit,
 } from "@/lib/client/addin/taskpane-controller";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -166,6 +166,19 @@ describe("renderResults", () => {
   });
 });
 
+describe("timeFieldMinutes (#1545)", () => {
+  it("tid i timmar → minuter; komma och punkt", () => {
+    expect(timeFieldMinutes("0,25")).toEqual({ ok: true, minutes: 15 });
+    expect(timeFieldMinutes("1.5")).toEqual({ ok: true, minutes: 90 });
+  });
+  it("tomt fält → ingen tidspost (0 minuter)", () => {
+    expect(timeFieldMinutes("  ")).toEqual({ ok: true, minutes: 0 });
+  });
+  it("otillåtet värde → fel, ingen avrundning", () => {
+    expect(timeFieldMinutes("0,33").ok).toBe(false);
+  });
+});
+
 describe("bootstrap/initForm", () => {
   function setupDom(): void {
     document.body.innerHTML = `
@@ -219,6 +232,45 @@ describe("bootstrap/initForm", () => {
 
       expect(set).toHaveBeenCalledWith("ava_server", "https://srv"); // persistCreds
       expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({ matterId: "m1" }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /** Sök + välj ärendet, fyll tidsfältet och klicka Spara. */
+  async function saveWithTime(hours: string): Promise<void> {
+    setupDom();
+    listQueryMock.mockResolvedValue({ matters: [{ id: "m1", matterNumber: "2026-7", title: "Tvist" }] });
+    bootstrap(makeOffice({ roaming: { ava_server: "https://srv", ava_pat: "PAT-9" } }).office);
+    const q = document.getElementById("q") as HTMLInputElement;
+    q.value = "tvist";
+    q.dispatchEvent(new Event("input"));
+    await vi.advanceTimersByTimeAsync(350);
+    (document.querySelector("#results .matter") as HTMLElement).click();
+    (document.getElementById("minutes") as HTMLInputElement).value = hours;
+    (document.getElementById("save") as HTMLButtonElement).click();
+    await vi.advanceTimersByTimeAsync(1);
+  }
+
+  it("tidsfältet i timmar: 0,25 skickas som 15 minuter (#1545)", async () => {
+    vi.useFakeTimers();
+    try {
+      saveIncomingMailMock.mockClear();
+      await saveWithTime("0,25");
+      expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({ time: { minutes: 15 } }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ett otillåtet värde ger felstatus och ingen tidspost (#1545)", async () => {
+    vi.useFakeTimers();
+    try {
+      saveIncomingMailMock.mockClear();
+      await saveWithTime("0,33");
+      expect(saveIncomingMailMock).not.toHaveBeenCalled();
+      expect(document.getElementById("status")?.textContent).toContain("Ändra värdet");
+      expect(document.getElementById("status")?.className).toContain("err");
     } finally {
       vi.useRealTimers();
     }
