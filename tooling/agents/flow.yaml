@@ -225,7 +225,8 @@ routines:
     name: AVA - 2 - Breakdown - User Feedback
     prompt: tooling/agents/2-nedbrytning.md
     trigger_id: trig_01TnVuo291SKkYqn3f8752qn
-    events: []
+    events:
+      - "GitHub: ava release.published"
   L3:
     name: AVA - 3 - Review - User Feedback
     prompt: tooling/agents/3-granskning.md
