@@ -411,7 +411,7 @@ describe("MatterDetailPage", () => {
   it("visar tidregistrering-totalt", async () => {
     timeQuery.data = { entries: [], totalMinutes: 90 };
     renderPage();
-    await waitFor(() => expect(screen.getByText(/1:30/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/1,5 h/)).toBeInTheDocument());
   });
 
   // Regression: när time-entry-listans `user`-join returnerar null (t.ex. mot

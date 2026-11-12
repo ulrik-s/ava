@@ -1,8 +1,8 @@
 "use client";
 
 import { trpc } from "@/lib/client/trpc";
-import { formatMinutes } from "@/lib/client/utils";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
+import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import { applicableStandardAtgarder, type StandardAtgard } from "@/lib/shared/standard-atgard";
 
@@ -130,7 +130,7 @@ export function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, 
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm">
             <option value="">— egen beskrivning —</option>
             {atgarder.map((a) => (
-              <option key={a.id} value={a.id}>{a.description} ({formatMinutes(a.minutes)})</option>
+              <option key={a.id} value={a.id}>{a.description} ({formatDecimalHoursWithUnit(a.minutes)})</option>
             ))}
           </select>
           <p className="mt-1 text-xs text-gray-500">

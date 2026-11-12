@@ -12,7 +12,7 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { formatMinutes } from "@/lib/client/utils";
+import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import type { MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import { suggestedStandardAtgarder, type StandardAtgard } from "@/lib/shared/standard-atgard";
@@ -67,7 +67,7 @@ export function StandardAtgardSuggestions({ matterId, paymentMethod, matterStatu
         {suggestions.map((a) => (
           <button key={a.id} type="button" onClick={() => onPick(a)}
             className="rounded border border-blue-300 bg-white px-2 py-1 text-left hover:bg-blue-100">
-            {a.description} <span className="font-mono text-blue-700">({formatMinutes(a.minutes)})</span>
+            {a.description} <span className="font-mono text-blue-700">({formatDecimalHoursWithUnit(a.minutes)})</span>
           </button>
         ))}
       </div>

@@ -15,7 +15,7 @@
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
-import { formatMinutes } from "@/lib/client/utils";
+import { formatDecimalHours } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import {
   STANDARD_ATGARD_STAGE_LABELS, type StandardAtgard, type StandardAtgardStage,
@@ -92,8 +92,8 @@ function AtgardTable({ list, isPending, onSave }: ListProps) {
   const columns: Column<StandardAtgard>[] = [
     { key: "description", label: "Beskrivning", sortable: true, sortValue: (a) => a.description, wrap: true,
       render: (a) => <span className={dim(a)}>{a.description}</span> },
-    { key: "minutes", label: "Tid", sortable: true, sortValue: (a) => a.minutes, align: "right",
-      render: (a) => <span className={`font-mono ${dim(a)}`}>{formatMinutes(a.minutes)}</span> },
+    { key: "minutes", label: "Tid (h)", sortable: true, sortValue: (a) => a.minutes, align: "right",
+      render: (a) => <span className={`font-mono ${dim(a)}`}>{formatDecimalHours(a.minutes)}</span> },
     { key: "stage", label: "Skede", sortable: true, sortValue: (a) => STANDARD_ATGARD_STAGE_LABELS[a.stage], groupable: true,
       render: (a) => <span className={`text-xs ${dim(a)}`}>{STANDARD_ATGARD_STAGE_LABELS[a.stage]}</span> },
     { key: "kind", label: "Kategori", sortable: true, sortValue: (a) => TIME_ENTRY_KIND_LABELS[a.kind], groupable: true,

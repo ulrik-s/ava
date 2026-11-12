@@ -91,6 +91,15 @@ describe("TimeSection — arvodeskategori (#953)", () => {
     expect(screen.getByText("Genomgång av handlingar").closest("td")).toHaveClass("whitespace-normal");
   });
 
+  it("tiden visas i decimaltimmar — rader, summa och totalt (#1542)", () => {
+    render(<TimeSection matterId={matterId} />);
+    expect(screen.getByText("Tid (h)")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();   // 120 min
+    expect(screen.getByText("1,5")).toBeInTheDocument(); // 90 min
+    expect(screen.getAllByText("4,5").length).toBeGreaterThan(0); // summaraden
+    expect(screen.getByText("(totalt 4,5 h)")).toBeInTheDocument();
+  });
+
   it("formuläret erbjuder alla arvodeskategorier och skickar den valda", () => {
     render(<TimeSection matterId={matterId} />);
     fireEvent.click(screen.getByText("+ Registrera tid"));
@@ -217,9 +226,9 @@ describe("TimeSection — standardåtgärder (#956)", () => {
     const select = screen.getByLabelText<HTMLSelectElement>("Standardåtgärd");
     const labels = Array.from(select.options).map((o) => o.textContent);
     expect(labels[0]).toBe("— egen beskrivning —"); // fritext är default
-    // Tiden formateras med appens `formatMinutes` (0:30), samma som i tidslistan.
-    expect(labels).toContain("Inledande åtgärder och genomgång av handlingar (0:30)");
-    expect(labels).toContain("Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman (0:45)");
+    // Tiden visas i decimaltimmar (0,5 h), samma formatterare som i tidslistan (#1542).
+    expect(labels).toContain("Inledande åtgärder och genomgång av handlingar (0,5 h)");
+    expect(labels).toContain("Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman (0,75 h)");
     // Avställda åtgärder föreslås inte.
     expect(labels.some((l) => l?.includes("Avställd"))).toBe(false);
   });
@@ -281,6 +290,7 @@ describe("TimeSection — förslag om standardåtgärder (#958)", () => {
     render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" matterStatus="ACTIVE" />);
     expect(screen.getByText(/som inte är registrerade/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Avslutande åtgärder inklusive mottagande av dom/ })).toBeInTheDocument();
+    expect(screen.getByText("(0,75 h)")).toBeInTheDocument(); // decimaltimmar (#1542)
   });
 
   it("klicket FÖRIFYLLER formuläret — inget sparas", () => {

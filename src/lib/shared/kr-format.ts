@@ -38,6 +38,20 @@ export function formatQuantity(n: number): string {
   return UP_TO_TWO_DECIMALS.format(n);
 }
 
+/**
+ * Minuter → decimaltimmar med svenskt decimalkomma, utan onödiga decimaler och
+ * högst två (#1542): 90 → `"1,5"`, 15 → `"0,25"`, 120 → `"2"`, 37 → `"0,62"`.
+ * Ren presentation — lagrade minuter avrundas aldrig om.
+ */
+export function formatDecimalHours(minutes: number): string {
+  return UP_TO_TWO_DECIMALS.format(minutes / 60);
+}
+
+/** Som {@link formatDecimalHours} men med enheten: 90 → `"1,5 h"`. */
+export function formatDecimalHoursWithUnit(minutes: number): string {
+  return `${formatDecimalHours(minutes)} h`;
+}
+
 /** Minuter → `"1 tim 25 min"` / `"50 min"` / `"3 tim"` (`"0 min"` för 0). */
 export function formatMinutes(m: number): string {
   if (m <= 0) return "0 min";

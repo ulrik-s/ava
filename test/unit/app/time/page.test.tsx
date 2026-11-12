@@ -66,7 +66,7 @@ describe("TimePage", () => {
     timeQuery.data.totalMinutes = 90;
     render(<TimePage />);
     expect(screen.getByRole("heading", { name: /Tidregistrering/i })).toBeInTheDocument();
-    expect(screen.getByText(/1:30/)).toBeInTheDocument();
+    expect(screen.getByText("Totalt: 1,5 h")).toBeInTheDocument(); // decimaltimmar (#1542)
   });
 
   it("listar tidsposter", () => {
@@ -75,7 +75,7 @@ describe("TimePage", () => {
         {
           id: "t1",
           date: new Date("2026-04-15"),
-          minutes: 60,
+          minutes: 90,
           description: "Möte med klient",
           billable: true,
           user: { id: "u1", name: "Anna" },
@@ -84,10 +84,13 @@ describe("TimePage", () => {
       ],
       total: 1,
       pages: 1,
-      totalMinutes: 60,
+      totalMinutes: 90,
     };
     render(<TimePage />);
     expect(screen.getByText("Möte med klient")).toBeInTheDocument();
+    // Decimaltimmar (#1542): raden och summaraden "1,5" under rubriken "Tid (h)".
+    expect(screen.getAllByText("1,5").length).toBeGreaterThan(0);
+    expect(screen.getByText("Tid (h)")).toBeInTheDocument();
     expect(screen.getByText("Anna")).toBeInTheDocument();
     // Lång beskrivning bryter rad i stället för att rinna in i grannkolumnen (#1197).
     expect(screen.getByText("Möte med klient").closest("td")).toHaveClass("whitespace-normal");

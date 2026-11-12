@@ -50,7 +50,7 @@ describe("StandardAtgarderSection", () => {
     // så tabellen frågas ut för sig.
     const table = within(screen.getByRole("table"));
     expect(table.getByText("Inledande åtgärder och genomgång av handlingar")).toBeInTheDocument();
-    expect(table.getByText("0:30")).toBeInTheDocument();
+    expect(table.getByText("0,5")).toBeInTheDocument();
     expect(table.getByText("Inledande — vid uppdragets början")).toBeInTheDocument();
     // Avställda visas kvar (historiken refererar dem) men märks med Aktivera.
     expect(table.getByText("Gammal åtgärd")).toBeInTheDocument();

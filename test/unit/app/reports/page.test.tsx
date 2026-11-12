@@ -167,6 +167,21 @@ describe("ReportsPage", () => {
     expect(screen.getByText(/2026-0002 — Tvist/)).toBeInTheDocument();
   });
 
+  it("visar tid i decimaltimmar, med enhet i sammanfattningen och kolumnrubrikerna (#1542)", () => {
+    reportQuery.data = sampleReport;
+    render(<ReportsPage />);
+    // Sammanfattningen: 600 min → "10 h", 480 min → "8 h".
+    expect(screen.getByText("10 h")).toBeInTheDocument();
+    expect(screen.getByText("8 h")).toBeInTheDocument();
+    // Ärendetabellen: 300 min → "5", 240 min → "4"; veckotabellen 600 → "10".
+    expect(screen.getAllByText("5").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("4").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("10").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Tid (h)").length).toBe(2);
+    expect(screen.getAllByText("Deb. tid (h)").length).toBe(2);
+    expect(screen.queryByText(/\d+:\d{2}/)).toBeNull();
+  });
+
   it("visar tomtmeddelande när matters är tom lista", () => {
     reportQuery.data = {
       ...sampleReport,

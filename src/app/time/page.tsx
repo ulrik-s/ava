@@ -7,7 +7,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { periodFrom, periodTo } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
-import { formatMinutes } from "@/lib/client/utils";
+import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { TimeEntryEditModal, timeActionsColumn, useTimeEntryEditing } from "./_time-entry-editing";
 
@@ -34,9 +34,9 @@ const timeColumns: Column<TimeRow>[] = [
   },
   { key: "user", label: "Advokat", sortable: true, sortValue: (e) => e.user?.name ?? "",
     render: (e) => <span className="text-sm text-gray-900">{e.user?.name ?? "—"}</span> },
-  { key: "minutes", label: "Tid", sortable: true, align: "right", sortValue: (e) => e.minutes,
-    summary: (rows) => <span className="font-mono">{formatMinutes(rows.reduce((s, r) => s + r.minutes, 0))}</span>,
-    render: (e) => <span className="text-sm font-mono text-gray-900">{formatMinutes(e.minutes)}</span> },
+  { key: "minutes", label: "Tid (h)", sortable: true, align: "right", sortValue: (e) => e.minutes,
+    summary: (rows) => <span className="font-mono">{formatDecimalHours(rows.reduce((s, r) => s + r.minutes, 0))}</span>,
+    render: (e) => <span className="text-sm font-mono text-gray-900">{formatDecimalHours(e.minutes)}</span> },
   { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description, wrap: true,
     render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
   { key: "billable", label: "Deb.", sortable: true, sortValue: (e) => (e.billable ? 1 : 0),
@@ -194,7 +194,7 @@ export default function TimePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tidregistrering</h1>
           {timeEntries.data && (
-            <p className="text-sm text-gray-500 mt-1">Totalt: {formatMinutes(timeEntries.data.totalMinutes)}</p>
+            <p className="text-sm text-gray-500 mt-1">Totalt: {formatDecimalHoursWithUnit(timeEntries.data.totalMinutes)}</p>
           )}
         </div>
         <button onClick={() => setShowForm(!showForm)}

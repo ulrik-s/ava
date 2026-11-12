@@ -112,3 +112,42 @@ test("en milersättning läggs in i ärendet och syns i utläggslistan med moms"
   await expect(row).toContainText(/21,88/);
   await expect(row).toContainText(/109,38/);
 });
+
+/*
+ * #1542: registrerad tid visas i decimaltimmar med svenskt decimalkomma,
+ * aldrig som `H:MM`.
+ */
+const H_MM = /^\d+:\d{2}$/;
+
+test("tidssidan visar registrerad tid i decimaltimmar", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  await page.goto(`${base}/time/`);
+  await expect(page.getByText(/^Totalt: [\d\s\u00a0]+(,\d{1,2})? h$/)).toBeVisible({ timeout: 30_000 });
+  const table = page.getByRole("table").first();
+  await expect(table.getByRole("columnheader", { name: /Tid \(h\)/ })).toBeVisible();
+  const cells = (await table.locator("td").allInnerTexts()).map((c) => c.trim());
+  expect(cells.length).toBeGreaterThan(0);
+  expect(cells.filter((c) => H_MM.test(c))).toEqual([]);
+});
+
+test("en ny post på 90 minuter visas som 1,5 i ärendets tidslista", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const matterId = matterIdWith(await fetchDemoSeed(page, base), "timeEntries");
+  await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
+  const tid = page.getByRole("region", { name: "Tid" }).last();
+  await expect(tid).toBeVisible({ timeout: 25_000 });
+  await tid.getByRole("button", { name: /Registrera tid/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Registrera tid" });
+  const description = "E2E: decimaltimmar (#1542)";
+  await dialog.getByLabel("Tid (minuter) *").fill("90");
+  await dialog.getByLabel("Beskrivning *").fill(description);
+  await dialog.locator("button[type=submit]").click();
+  await expect(dialog).toHaveCount(0);
+
+  const row = tid.getByRole("row").filter({ hasText: description });
+  await expect(row.getByRole("cell", { name: "1,5", exact: true })).toBeVisible();
+  await expect(tid.getByText(/\(totalt [\d\s\u00a0]+(,\d{1,2})? h\)/)).toBeVisible();
+});

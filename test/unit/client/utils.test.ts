@@ -2,7 +2,7 @@
  * Tester för klient-utils. Fokus: pluralChanges (delad sv-pluralisering, #6).
  */
 import { describe, it, expect } from "vitest-compat";
-import { pluralChanges, formatMinutes, formatCurrency } from "@/lib/client/utils";
+import { pluralChanges, formatCurrency } from "@/lib/client/utils";
 
 describe("pluralChanges", () => {
   it("singular vid exakt 1", () => {
@@ -12,13 +12,6 @@ describe("pluralChanges", () => {
     expect(pluralChanges(0)).toBe("ändringar");
     expect(pluralChanges(2)).toBe("ändringar");
     expect(pluralChanges(42)).toBe("ändringar");
-  });
-});
-
-describe("formatMinutes", () => {
-  it("formaterar h:mm med nollpaddning", () => {
-    expect(formatMinutes(90)).toBe("1:30");
-    expect(formatMinutes(5)).toBe("0:05");
   });
 });
 

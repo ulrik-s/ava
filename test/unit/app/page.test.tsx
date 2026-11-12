@@ -121,15 +121,16 @@ describe("Dashboard", () => {
   it("listar tidsposter och total", () => {
     timeQuery.data = {
       entries: [
-        { id: "te1", minutes: 60, description: "Möte med klient", billable: true,
+        { id: "te1", minutes: 90, description: "Möte med klient", billable: true,
           matter: { id: "m1", matterNumber: "2026-0001", title: "Tvist" }, date: new Date() },
       ],
-      totalMinutes: 60,
+      totalMinutes: 90,
     };
     render(<Dashboard />);
     expect(screen.getByText("Möte med klient")).toBeInTheDocument();
-    // Total visas i headern som "(1:00)"
-    expect(screen.getAllByText(/1:00/).length).toBeGreaterThan(0);
+    // Decimaltimmar (#1542): raden "1,5 h" och totalen i headern "(1,5 h)".
+    expect(screen.getByText("1,5 h")).toBeInTheDocument();
+    expect(screen.getByText("(1,5 h)")).toBeInTheDocument();
   });
 
   it("dedupar 'Senaste ärenden' från timeEntries", () => {

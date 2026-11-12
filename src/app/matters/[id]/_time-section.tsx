@@ -9,8 +9,8 @@ import { Modal } from "@/components/ui/modal";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
-import { formatMinutes } from "@/lib/client/utils";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
+import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import type { MatterStatus, PaymentMethod, TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 import type { StandardAtgard } from "@/lib/shared/standard-atgard";
@@ -134,11 +134,11 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
       render: (e) => <span className="text-sm text-gray-500">{new Date(e.date).toLocaleDateString("sv-SE")}</span> },
     { key: "user", label: "Advokat", sortable: true, sortValue: (e) => e.user?.name ?? "",
       render: (e) => <span className="text-sm text-gray-900">{e.user?.name ?? "—"}</span> },
-    { key: "minutes", label: "Tid", sortable: true, align: "right", sortValue: (e) => e.minutes,
-      summary: (rows) => <span className="font-mono">{formatMinutes(rows.reduce((sum, r) => sum + r.minutes, 0))}</span>,
+    { key: "minutes", label: "Tid (h)", sortable: true, align: "right", sortValue: (e) => e.minutes,
+      summary: (rows) => <span className="font-mono">{formatDecimalHours(rows.reduce((sum, r) => sum + r.minutes, 0))}</span>,
       render: (e) => (
         <span className="text-sm text-gray-900">
-          {isPerDayKind(e.kind) ? "1 dygn" : formatMinutes(e.minutes)}
+          {isPerDayKind(e.kind) ? "1 dygn" : formatDecimalHours(e.minutes)}
         </span>
       ) },
     { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description ?? "", wrap: true,
@@ -179,7 +179,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
         <h2 className="font-semibold text-gray-900">
           Tidregistrering
           {timeEntries.data && (
-            <span className="ml-2 text-sm font-normal text-gray-500">(totalt {formatMinutes(timeEntries.data.totalMinutes)})</span>
+            <span className="ml-2 text-sm font-normal text-gray-500">(totalt {formatDecimalHoursWithUnit(timeEntries.data.totalMinutes)})</span>
           )}
         </h2>
         <button onClick={() => setShowCreate(true)} className="text-sm text-blue-600 hover:underline">
