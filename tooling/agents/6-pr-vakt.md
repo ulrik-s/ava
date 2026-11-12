@@ -49,7 +49,7 @@ En körning med `conclusion` `failure`, `cancelled` eller `timed_out`:
 PR:en är `blockerad`, är det inget CI-fel. Det är granskningens tillstånd.
 Agentvakten körs om av sig själv när etiketten ändras. Gör ingenting med den.
 Kör inte om den och rätta ingenting. Är Agentvakt röd av något annat skäl,
-t.ex. skyddad sökväg eller taket på 10 PR:er: sätt `blockerad` och
+t.ex. skyddad sökväg eller taket på 20 PR:er: sätt `blockerad` och
 kommentera.
 
 1. **Kör om de fallerade jobben** när `run_attempt` är 1, eller när

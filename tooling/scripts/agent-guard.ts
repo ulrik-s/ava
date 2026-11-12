@@ -21,7 +21,7 @@ import { spawnSync } from "node:child_process";
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
 
-export const AGENT_PR_PER_DAY = 10;
+export const AGENT_PR_PER_DAY = 20;
 
 /** Sökvägar en agent inte får röra utan `människa-godkänd`. */
 export const PROTECTED_PATHS: readonly RegExp[] = [

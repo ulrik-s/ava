@@ -55,7 +55,7 @@ automatiskt. Produktion får en ändring först när Ulrik sätter en `v*`-tagg.
   fäller en agent-PR som
   - rör skyddade sökvägar (CI, deploy, auth, agentpromptarna …),
   - innehåller en destruktiv migration,
-  - är fler än 10 på ett dygn,
+  - är fler än 20 på ett dygn,
   - eller inte har `granskad`.
 
   `människa-godkänd` (bara Ulrik) släpper de två första. Granskningsloopen
@@ -355,7 +355,7 @@ komplexitet < 8, jscpd, knip, täckning, Agentvakten).
 
 **Du godkänner** ett förslag genom att sätta `granskad` på det (själv,
 inte via en agent). Då bygger implementationen det, men först när inga
-användarönskemål väntar. Det går genom samma granskning och samma tak på 10
+användarönskemål väntar. Det går genom samma granskning och samma tak på 20
 PR:er per dygn. Befintliga tester får inte ändras: de är kontraktet. Förslag
 du inte godkänner stängs efter fyra veckor.
 
