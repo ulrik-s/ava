@@ -4,7 +4,7 @@
   "src/app/invoices/[id]/_client.tsx": 652,
   "src/app/matters/[id]/_billing-panel.tsx": 698,
   "src/app/matters/[id]/_kostnadsrakning-modal.tsx": 569,
-  "src/app/matters/page.tsx": 454,
+  "src/app/matters/page.tsx": 448,
   "src/app/settings/page.tsx": 508,
   "src/components/documents/document-browser.tsx": 775,
   "src/components/matter/payment-method-card.tsx": 407,

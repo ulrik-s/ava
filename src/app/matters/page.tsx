@@ -5,6 +5,7 @@ import { Suspense, useId, useState } from "react";
 import { ClientPickerDialog } from "@/components/contacts/client-picker-dialog";
 import type { PickedClient } from "@/components/contacts/new-client-dialog";
 import { ListPage } from "@/components/layout/list-page";
+import { MatterTypeSelect } from "@/components/matter/matter-type-select";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Pager } from "@/components/ui/pager";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
@@ -197,19 +198,12 @@ interface NewMatterFormProps {
 /** Ärendetyp: val ur byråns lista, fritext om byrån inte har någon. */
 function MatterTypeField({ value, types = [], onChange }: { value: string; types: readonly string[] | undefined; onChange: (v: string) => void }) {
   const id = useId();
-  const cls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
+  if (types.length > 0) return <MatterTypeSelect value={value} types={types} onChange={onChange} />;
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">Ärendetyp</label>
-      {types.length > 0 ? (
-        <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={cls}>
-          <option value="">Välj ärendetyp…</option>
-          {types.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-      ) : (
-        <input id={id} type="text" value={value} onChange={(e) => onChange(e.target.value)}
-          placeholder="T.ex. Familjerätt, Brottmål..." className={cls} />
-      )}
+      <input id={id} type="text" value={value} onChange={(e) => onChange(e.target.value)}
+        placeholder="T.ex. Familjerätt, Brottmål..." className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
     </div>
   );
 }
