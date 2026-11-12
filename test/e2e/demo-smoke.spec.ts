@@ -223,3 +223,17 @@ test("SPA-fallback redirectar till app-shellen vid 404", async ({ page }) => {
   // Slutligen ska vi se nav-länken till Ärenden (alltså sidebar:n är synlig)
   await expect(page.locator("nav").getByRole("link", { name: /Ärenden/ })).toBeVisible({ timeout: 15_000 });
 });
+
+// #1542: registrerad tid visas i decimaltimmar med svenskt decimalkomma,
+// aldrig som H:MM, och kolumnrubriken bär enheten "h".
+test("tidssidan visar registrerad tid i decimaltimmar", async ({ page }) => {
+  await page.goto(`${BASE}/time/`);
+  await expect(page.getByText(/^Totalt: \d[\d\s]*(,\d{1,2})? h$/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("columnheader", { name: /^Tid \(h\)/ })).toBeVisible();
+
+  const cells = page.locator("tbody td span.font-mono");
+  await expect(cells.first()).toBeVisible({ timeout: 30_000 });
+  const values = await cells.allInnerTexts();
+  expect(values.length).toBeGreaterThan(0);
+  for (const v of values) expect(v).toMatch(/^\d[\d\s]*(,\d{1,2})?$/);
+});
