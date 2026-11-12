@@ -242,6 +242,17 @@ describe("MattersPage", () => {
     expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ courtCaseNumber: "B 1234-26" }));
   });
 
+  it("byrån saknar ärendetyper → Ärendetyp är en fritext-ruta", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    const input = screen.getByLabelText("Ärendetyp");
+    expect(input.tagName).toBe("INPUT");
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Dödsbo" } });
+    fireEvent.change(input, { target: { value: "Egen typ" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ matterType: "Egen typ" }));
+  });
+
   it("byrån har ärendetyper → Ärendetyp väljs ur listan", () => {
     matterTypes = ["Bodelning", "God man"];
     render(<MattersPage />);
