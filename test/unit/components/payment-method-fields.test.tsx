@@ -85,6 +85,27 @@ describe("PaymentMethodFields", () => {
     expect(onChange).toHaveBeenCalledWith({ ...value, rates: { ARBETE: 300000 } });
   });
 
+  it("rättshjälp: takets hjälptext varnar vid 80 tim / 10 tim före utökat tak, inte vid 90 % (#1519)", () => {
+    renderFields({ method: "RATTSHJALP" });
+    expect(screen.getByText(/Varnar vid 80 tim, eller 10 tim före ett utökat tak/)).toBeInTheDocument();
+    expect(screen.queryByText(/Varnar vid 90 %/)).toBeNull();
+  });
+
+  it("avvikande timpris är hopfällt utan egna priser; placeholdern visar byråns pris (#1206)", () => {
+    renderFields();
+    const details = screen.getByText("Avvikande timpris för ärendet").closest("details");
+    expect(details?.open).toBe(false);
+    const arbete = screen.getByLabelText<HTMLInputElement>(/^Timarvode \(kr\/h/);
+    expect(arbete.placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
+  });
+
+  it("ett befintligt pris öppnar sektionen; töms det försvinner kategorin ur kartan (#1206)", () => {
+    const value = renderFields({ rates: { ARBETE: 300000, TIDSSPILLAN: 150000 } });
+    expect(screen.getByText("Avvikande timpris för ärendet").closest("details")?.open).toBe(true);
+    fireEvent.change(screen.getByLabelText(/^Timarvode \(kr\/h/), { target: { value: "" } });
+    expect(onChange).toHaveBeenCalledWith({ ...value, rates: { TIDSSPILLAN: 150000 } });
+  });
+
   it("visar de inskickade värdena", () => {
     renderFields({ sharePct: "25", rsMaxKr: "75000", note: "Bolag X", tvist: "2026-01-05" });
     expect(screen.getByLabelText<HTMLInputElement>(/Klientens andel/).value).toBe("25");
