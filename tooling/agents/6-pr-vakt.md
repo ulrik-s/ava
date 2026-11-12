@@ -12,7 +12,7 @@ mergad**. Du äger CI-hälsan:
 
 Gå igenom alla öppna PR:er som inte är utkast (äldst först):
 `gh api "repos/ulrik-s/ava/pulls?state=open&per_page=100"`. Hoppa över PR:er
-med `blockerad`. Gör för varje PR det **första** steget nedan som gäller, och
+med `blockerad` (men gå först igenom dem enligt regel 7 i de gemensamma reglerna). Gör för varje PR det **första** steget nedan som gäller, och
 gå sedan vidare till nästa PR.
 
 Läs status med REST:

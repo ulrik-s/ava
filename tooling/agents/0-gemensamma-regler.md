@@ -66,6 +66,10 @@ sätt `blockerad` så att Ulrik ser det.
   `src/lib/server/auth/`, serverns HTTP-förtroendegräns, feedback-koden,
   `package.json`, `bun.lock`, `AGENTS.md`. Behövs det: sätt `blockerad` och
   förklara. Ulrik sätter `människa-godkänd` om han håller med.
+  **Undantag:** att skärpa `tooling/config/file-size-baseline.json` med
+  `bun run file-size --update` är tillåtet. Agentvakten släpper igenom just
+  det. Blockera aldrig för det. Domaren är Agentvaktens logg: säger den bara
+  att `granskad` saknas, är sökvägarna i ordning.
 - Migrationer är **additiva**: `ADD COLUMN IF NOT EXISTS`, nya tabeller, nya
   index. Aldrig DROP, RENAME, typbyte, TRUNCATE eller DELETE. En release kan
   backas med en äldre tagg men databasen backas inte, så gammal kod måste
@@ -173,8 +177,26 @@ Kod (`ava`), PR:er:
 (loop 6): → `granskad` eller `behöver-ändras`. PR-vakten äger också rött CI,
 jobb som hänger och konflikter mot `main` för alla PR:er.
 
-`blockerad` (båda repona): agenten väntar på Ulrik. Rör inte en blockerad
-issue/PR förrän etiketten är borttagen.
+`blockerad` (båda repona): agenten väntar på Ulrik. Annars rör du inte en
+blockerad issue/PR. Men en blockering får aldrig bli en återvändsgränd, så
+börja **varje** körning med att gå igenom de blockerade poster din loop äger
+(loop 1 och 2: intaget, i sina respektive steg; loop 3: issues och agent-PR:er; loop 6: övriga PR:er). Ta
+bort `blockerad` och fortsätt flödet om något av detta gäller:
+
+1. **Ulrik har svarat.** Det finns en kommentar från `ulrik-s` med
+   `performed_via_github_app` = `null`, skriven efter att `blockerad`
+   sattes. Kontrollera tiden i händelseloggen. Följ hans svar. Är svaret
+   oklart: ställ EN konkret fråga och låt `blockerad` vara kvar.
+2. **Det som blockerade är klart.** Blockeringen gällde ett beroende
+   (`Beror på #N`, eller en annan PR/issue) som nu är stängd eller mergad.
+3. **Blockeringen var fel.** Skälet håller inte vid en ny kontroll, t.ex. en
+   skyddad sökväg som Agentvakten faktiskt tillåter (regel 4).
+
+Skriv en kort kommentar om varför du tog bort `blockerad`. Agentkommentarer
+(`performed_via_github_app` satt) räknas aldrig som Ulriks svar.
+
+Använd inte `blockerad` för att vänta på ett beroende. Skriv `Beror på #N`
+i issuen. Loop 4 väntar själv tills beroendet är stängt.
 
 I kodrepot ska en issue/PR ha exakt ett tillstånd: ta bort det gamla när du
 sätter nästa. I intaget ligger `undersökt` och `verifierad` kvar som historik.
