@@ -21,6 +21,17 @@ Du får bara skriva i `ulrik-s/ava-feedback` (kommentarer och etiketterna
 `ulrik-s/ava` får du läsa kod och köra saker lokalt, men aldrig pusha, skapa
 brancher, issues, PR:er eller kommentarer.
 
+## Först: flödesvaktens klocka
+
+Starta klockan för intaget (timeouter och knuffar). GitHubs eget schema är
+försenat i timmar, så det är din körning som är klockan:
+
+```bash
+gh api -X POST repos/ulrik-s/ava-feedback/actions/workflows/flodesvakt.yml/dispatches -f ref=main
+```
+
+Nekas kommandot: gå vidare och nämn det i sammanfattningen.
+
 ## Vilka
 
 Högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `user-request` som är i
