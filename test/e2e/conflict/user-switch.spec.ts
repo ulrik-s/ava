@@ -82,9 +82,11 @@ test("utloggning med en osynkad ändring → nästa användare ser den aldrig; s
 
   // Proxyns session är slut; bara juristens osynkade ändring ligger kvar lokalt.
   expect((await page.request.get("/oauth2/userinfo")).status()).toBe(401);
-  const afterLogout = await databases(page);
-  expect(afterLogout).not.toContain(`ava-local-store@${lawyer.organizationId}:${lawyer.principalId}`);
-  expect(afterLogout).not.toContain("ava-local-store");
+  // En radering som blockerades av en öppen anslutning slutförs när sidan
+  // lämnats (eller vid nästa start) — vänta in den i stället för att kapplöpa (#1561).
+  await expect.poll(() => databases(page), { timeout: 15_000 })
+    .not.toContain(`ava-local-store@${lawyer.organizationId}:${lawyer.principalId}`);
+  expect(await databases(page)).not.toContain("ava-local-store");
   expect(await queued(page, lawyer)).toBe(1);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("ava.firma") ?? "{}").principalId)).toBeUndefined();
 
@@ -104,7 +106,8 @@ test("utloggning med en osynkad ändring → nästa användare ser den aldrig; s
   // Admin loggar ut: inget osynkat → ingen fråga, allt hennes raderas.
   await page.getByRole("button", { name: "Logga ut" }).first().click();
   await expect(page).toHaveURL(/\/ava\/login\/\?signedOut=1$/, { timeout: 30_000 });
-  expect((await databases(page)).filter((n) => n.endsWith(`@${admin.organizationId}:${admin.principalId}`))).toEqual([]);
+  await expect.poll(async () => (await databases(page)).filter((n) => n.endsWith(`@${admin.organizationId}:${admin.principalId}`)), { timeout: 15_000 })
+    .toEqual([]);
 
   // Juristen tillbaka: hennes ändring synkas nu, i hennes namn.
   await context.clearCookies();
