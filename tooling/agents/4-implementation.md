@@ -2,7 +2,7 @@
 
 Läs först `tooling/agents/0-gemensamma-regler.md` och `AGENTS.md` och följ dem.
 
-Gör högst EN ny implementation per körning. Du mergar aldrig själv:
+Gör högst TRE nya implementationer per körning, en i taget. Du mergar aldrig själv:
 granskningsloopen mergar.
 
 ## 0. Taket
@@ -20,9 +20,9 @@ Pusha, ta bort `behöver-ändras`, sätt `att-granska` och kommentera vad du
 ändrat. Den nya head-sha:n gör att granskningen måste godkänna på nytt innan
 något kan mergas.
 
-Gjorde du något i steg 1: avsluta körningen.
+Gjorde du något i steg 1: gör högst två nya issues (steg 2) i samma körning.
 
-## 2. En ny issue
+## 2. Nya issues (högst tre, en i taget)
 
 Välj den äldsta öppna issuen i `ulrik-s/ava` med `agent-task` + `granskad`
 som saknar `pågår` och `blockerad`, och vars `Beror på #N` alla är stängda.
@@ -75,6 +75,10 @@ Finns ingen: avsluta.
      `refaktorisering` om issuen har den
      (`gh api repos/ulrik-s/ava/issues/<pr-nr>/labels …`).
 7. Ta bort `pågår` från issuen. PR:en bär tillståndet nu.
+8. Räkna taket igen (steg 0) och välj nästa issue enligt samma regler. Börja
+   från en ren `origin/main` med en ny branch, och ta aldrig en issue som
+   `Beror på` en issue du byggt i samma körning: den är inte mergad än.
+   Sluta efter tre PR:er, när taket är nått, eller när inget mer finns.
 
 ## Fastnar
 
