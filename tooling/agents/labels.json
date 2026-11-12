@@ -10,7 +10,8 @@
     { "name": "förslag", "color": "a2eeef", "description": "Användaren föreslår en förbättring" },
     { "name": "ej-bekräftad", "color": "e99695", "description": "Verifieringsagenten kunde inte bekräfta buggen/behovet" },
     { "name": "väntar-på-användaren", "color": "fbca04", "description": "En fråga till användaren (i AVA) väntar på svar" },
-    { "name": "blockerad", "color": "b60205", "description": "Agenten behöver ett beslut av Ulrik" }
+    { "name": "blockerad", "color": "b60205", "description": "Agenten behöver ett beslut av Ulrik" },
+    { "name": "agentstatus", "color": "0e8a16", "description": "Statussidan för agentkedjan (uppdateras av flödesvakten)" }
   ],
   "code": [
     { "name": "att-granska", "color": "fbca04", "description": "Väntar på granskningsloopen" },
