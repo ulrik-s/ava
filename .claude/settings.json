@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f labels[]=granskad)",
+      "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f 'labels[]=granskad')",
+      "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f labels[]=att-granska)",
+      "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f 'labels[]=att-granska')",
+      "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f labels[]=behöver-ändras)",
+      "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f 'labels[]=behöver-ändras')",
+      "Bash(gh api -X DELETE repos/ulrik-s/ava/issues/*/labels/granskad)",
+      "Bash(gh api -X DELETE repos/ulrik-s/ava/issues/*/labels/att-granska)",
+      "Bash(gh api -X DELETE repos/ulrik-s/ava/issues/*/labels/beh%C3%B6ver-%C3%A4ndras)",
+      "Bash(gh api -X PUT repos/ulrik-s/ava/pulls/*/merge -f merge_method=squash -f sha=*)"
+    ]
+  }
+}

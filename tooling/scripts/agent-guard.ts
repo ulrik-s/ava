@@ -26,6 +26,7 @@ export const AGENT_PR_PER_DAY = 20;
 /** Sökvägar en agent inte får röra utan `människa-godkänd`. */
 export const PROTECTED_PATHS: readonly RegExp[] = [
   /^\.github\//,
+  /^\.claude\//,
   /^tooling\/config\//,
   /^tooling\/docker\//,
   /^tooling\/systemd\//,

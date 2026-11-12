@@ -70,8 +70,11 @@ next-env.d.ts
 # Stray npm lockfile — this project uses Yarn (yarn.lock)
 package-lock.json
 
-# Local agent / dev-tooling state (inte del av kodbasen)
-.claude/
+# Local agent / dev-tooling state (inte del av kodbasen) — utom de delade
+# behörighetsreglerna för agentkedjan (skyddade av Agentvakten).
+.claude/*
+!.claude/settings.json
+!.claude/launch.json
 .claude-flow/
 docs/.claude-flow/
 .mcp.json

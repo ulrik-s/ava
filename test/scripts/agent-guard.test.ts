@@ -16,7 +16,7 @@ describe("guardViolations", () => {
     expect(guardViolations(BASE)).toEqual([]);
   });
 
-  it.each([".github/workflows/ci.yml", "tooling/scripts/deploy-prod.sh", "src/lib/server/auth/principal.ts", "tooling/agents/3-implementation.md", "package.json", "tooling/scripts/arch-metrics.ts"])(
+  it.each([".github/workflows/ci.yml", "tooling/scripts/deploy-prod.sh", "src/lib/server/auth/principal.ts", "tooling/agents/3-implementation.md", "package.json", "tooling/scripts/arch-metrics.ts", ".claude/settings.json"])(
     "skyddad sökväg %s stoppas", (file) => {
       expect(guardViolations({ ...BASE, files: [file] })).toEqual([expect.stringContaining(file)]);
     },
