@@ -15,15 +15,13 @@ import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schem
 import { asId } from "@/lib/shared/schemas/ids";
 import { BillingPanel } from "./_billing-panel";
 import { ContactsSection } from "./_contacts-section";
-import { CourtCaseNumberField } from "./_court-case-number-field";
 import { ExpectedReceivablesSection } from "./_expected-receivables-section";
 import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
-import { InsuranceReferenceField } from "./_insurance-reference-field";
+import { MatterHeaderDetails, MatterTypeText } from "./_matter-header-details";
 import { MatterHeaderEdit, type HeaderEditMatter } from "./_matter-header-edit";
 import { matterDefaultLayout, matterPanels } from "./_matter-panels";
 import { MatterPaymentLine, type NamedMatterContact } from "./_matter-payment-line";
-import { MatterTypeField } from "./_matter-type-field";
 import { RattshjalpCapWarning } from "./_rattshjalp-cap-warning";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
@@ -125,15 +123,15 @@ interface HeaderProps {
 }
 
 /** Klient + ärendetyp-raden under titeln. Utbruten ur MatterHeader så dess
- *  optional-chain/&&-grenar inte räknas in i komponentkomplexiteten (#199). */
-/** Klient + ärendetyp (fetstil, inline-redigerbar #1521) på raden under titeln. */
-function MatterClientLine({ matterId, klient, matterType }: { matterId: string; klient: MatterContact[]; matterType?: string | null | undefined }) {
+ *  optional-chain/&&-grenar inte räknas in i komponentkomplexiteten (#199).
+ *  Ärendetypen är text (#1566) och ändras i "Ändra"-dialogen. */
+function MatterClientLine({ klient, matterType }: { klient: MatterContact[]; matterType?: string | null | undefined }) {
   return (
     <div className="flex items-center gap-1 text-sm text-gray-500">
       {klient[0]?.contact && (
         <span>Klient: <EntityLink route="contacts" id={klient[0].contact.id} className="text-blue-600 hover:underline">{klient[0].contact.name}</EntityLink> ·</span>
       )}
-      <MatterTypeField key={`type-${matterType ?? ""}`} matterId={asId<"MatterId">(matterId)} value={matterType ?? ""} />
+      <MatterTypeText matterType={matterType} />
     </div>
   );
 }
@@ -205,9 +203,10 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
             <span className="mr-2 font-mono text-sm font-normal text-gray-500">{m.matterNumber}</span>{m.title}
           </h1>
           <div className="flex flex-wrap items-center">
-            <MatterClientLine matterId={m.id} klient={klient} matterType={m.matterType} />
+            <MatterClientLine klient={klient} matterType={m.matterType} />
+            {/* Ärendetypen (eller "Ärendetyp: –") står alltid före (#1566). */}
             <MatterPaymentLine paymentMethod={m.paymentMethod} clientShareBips={m.clientShareBips}
-              contacts={contacts} separated={klient.length > 0 || Boolean(m.matterType)} />
+              contacts={contacts} separated />
             <MatterHeaderEdit matterId={asId<"MatterId">(m.id)} contacts={contacts}
               matter={{ ...m, courtCaseNumber: referenceOf(m), insuranceReference: referenceOf(m, "insuranceReference") }} />
           </div>
@@ -220,13 +219,8 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
           onGenerate={onOpenGenerate}
         />
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <CourtCaseNumberField key={referenceOf(m)} matterId={asId<"MatterId">(m.id)} value={referenceOf(m)}
-          previous={referenceOf(m, "previousCourtCaseNumber")} />
-        <InsuranceReferenceField key={`ins-${referenceOf(m, "insuranceReference")}`} matterId={asId<"MatterId">(m.id)}
-          value={referenceOf(m, "insuranceReference")} contacts={contacts} />
-        {m.description && <p className="min-w-0 flex-1 truncate text-sm text-gray-600" title={m.description}>{m.description}</p>}
-      </div>
+      <MatterHeaderDetails courtCaseNumber={referenceOf(m)} previousCourtCaseNumber={referenceOf(m, "previousCourtCaseNumber")}
+        insuranceReference={referenceOf(m, "insuranceReference")} description={m.description} contacts={contacts} />
       <RattshjalpCapWarning matterId={asId<"MatterId">(m.id)} paymentMethod={m.paymentMethod}
         rattshjalpMaxTimmar={m.rattshjalpMaxTimmar} layout="compact" />
     </div>
