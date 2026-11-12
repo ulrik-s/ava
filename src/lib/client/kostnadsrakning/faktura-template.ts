@@ -27,6 +27,7 @@ import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } fro
 import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
 import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
 import { buildInvoiceSpecification, type InvoiceSpecification } from "@/lib/shared/invoice-specification";
+import { formatDecimalHours } from "@/lib/shared/kr-format";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
@@ -157,7 +158,6 @@ export interface FakturaView {
 }
 
 const svDate = (d: Date | string | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
-const svHours = (minutes: number): string => (minutes / 60).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
 
 type Fc = (ore: number) => string;
 
@@ -254,7 +254,7 @@ const sumOf = <T>(lines: readonly T[], pick: (l: T) => number): number => lines.
 
 /** Omfattningen: timmar ("2,5") — eller antal dygn för per-dygns-kategorier. */
 function quantityLabel(kind: TimeEntryKind, lines: readonly SpecLine[]): string {
-  return isPerDayKind(kind) ? `${lines.length} dygn` : svHours(sumOf(lines, (l) => l.minutes));
+  return isPerDayKind(kind) ? `${lines.length} dygn` : formatDecimalHours(sumOf(lines, (l) => l.minutes));
 }
 
 /** Priset per enhet ("1 500,00 kr/tim" eller "… kr/dygn"); tomt utan pris. */

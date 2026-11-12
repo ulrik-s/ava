@@ -83,8 +83,8 @@ describe("förordnandemål: FU nedlagd efter två förhör", () => {
     expect(html).toContain("Taxa, förhörstid 1 tim 15 min - 1 tim 29 min");
     expect(html).toMatch(/5\s106,00 kr/);
     // Tidsspillan med avdrag för den timme som ingår
-    expect(html).toContain("Tidsspillan totalt 3 tim, varav 1 tim ingår i taxan");
-    expect(html).toMatch(/TIDSSPILLAN UTÖVER TAXAN<\/td><td class="num">2,00 á 1\s487 kr/);
+    expect(html).toContain("Tidsspillan totalt 3 h, varav 1 h ingår i taxan");
+    expect(html).toMatch(/TIDSSPILLAN UTÖVER TAXAN<\/td><td class="num">2 á 1\s487 kr/);
     expect(html).toMatch(/2\s974,00 kr/);
     // Arbetet som utförts (ingår i taxan) + utlägg + totalen
     expect(html).toContain("Arvode (ingår i taxan)");

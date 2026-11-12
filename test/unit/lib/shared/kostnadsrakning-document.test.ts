@@ -10,7 +10,7 @@ import { buildKostnadsrakningContext, withDocumentFields, type BuildInput } from
 import { buildKrDocument, cityFromAddress, displayWebsite, vatNumberFromOrgNumber, type KrDocumentInput } from "@/lib/shared/kostnadsrakning-document";
 import { expenseSpec, hourlyRowSpecs, timeSpecSections, type KrTimeLineLike } from "@/lib/shared/kostnadsrakning-document-rows";
 import { krClaim, type KrClaim } from "@/lib/shared/kr-claim";
-import { formatHours, formatMinutes, formatOreAsKr, formatPlainKr, formatQuantity, formatRateKr } from "@/lib/shared/kr-format";
+import { formatDecimalHours, formatDecimalHoursWithUnit, formatOreAsKr, formatPlainKr, formatQuantity, formatRateKr } from "@/lib/shared/kr-format";
 import { roundToKronor } from "@/lib/shared/whole-kronor";
 import { TINY_JPEG, TINY_PNG } from "../../../helpers/tiny-images";
 
@@ -41,18 +41,18 @@ const BASE: KrDocumentInput = {
 describe("kr-format", () => {
   it("belopp, timmar, á-pris och antal i svensk form", () => {
     expect(nb(formatOreAsKr(5_097_510))).toBe("50 975,10 kr");
-    expect(formatHours(1881)).toBe("31,35");
+    expect(formatDecimalHours(1881)).toBe("31,35");
     expect(formatPlainKr(15_200)).toBe("152");
     expect(formatPlainKr(950)).toBe("9,50");
     expect(nb(formatRateKr(162_600))).toBe("1 626 kr");
     expect(formatQuantity(16)).toBe("16");
     expect(formatQuantity(2.5)).toBe("2,5");
   });
-  it("minuter i ord", () => {
-    expect(formatMinutes(0)).toBe("0 min");
-    expect(formatMinutes(50)).toBe("50 min");
-    expect(formatMinutes(180)).toBe("3 tim");
-    expect(formatMinutes(85)).toBe("1 tim 25 min");
+  it("minuter i decimaltimmar med enhet (#1543)", () => {
+    expect(formatDecimalHoursWithUnit(0)).toBe("0 h");
+    expect(formatDecimalHoursWithUnit(90)).toBe("1,5 h");
+    expect(formatDecimalHoursWithUnit(180)).toBe("3 h");
+    expect(formatDecimalHoursWithUnit(15)).toBe("0,25 h");
   });
   it("datum i ord och klockslag", () => {
     expect(toSwedishLongDate(DAY)).toBe("24 september 2026");
@@ -129,8 +129,8 @@ describe("sammanställningen — löpande räkning", () => {
     // Beloppet räknas på gruppens sammanlagda tid (oavrundat — avrundningen sker i krClaim).
     expect(rows).toEqual([
       { label: "ARVODE", quantity: "31,35 á 1 626 kr", amountOre: 5_097_510 },
-      { label: "ARVODE", quantity: "1,00 á 1 700 kr", amountOre: 170_000 },
-      { label: "TIDSSPILLAN", quantity: "14,10 á 1 487 kr", amountOre: 2_096_670 },
+      { label: "ARVODE", quantity: "1 á 1 700 kr", amountOre: 170_000 },
+      { label: "TIDSSPILLAN", quantity: "14,1 á 1 487 kr", amountOre: 2_096_670 },
       { label: "ADVOKATBEREDSKAP", quantity: "2 dygn á 2 500 kr", amountOre: 500_000 },
     ]);
   });
@@ -163,8 +163,8 @@ describe("sammanställningen — löpande räkning", () => {
     const huf = { start: new Date("2026-09-22T09:00:00"), end: new Date("2026-09-22T11:30:00"), minutes: 150, rateOrePerH: 162_600, amountOre: 406_500 };
     const d = buildKrDocument({ ...BASE, huf, timeLines: [line({})], claim: krClaim({ arvodeRowsOre: [569_100], expenseChargedNetOre: 0, expensePassThroughOre: 0 }) });
     expect(nb(d.summaryRows[0]?.amount ?? "")).toBe("5 691,00 kr");
-    expect(nb(d.summaryRows[0]?.quantity ?? "")).toBe("3,50 á 1 626 kr");
-    expect(d.specSections[0]?.rows[0]).toEqual({ date: "2026-09-22", description: "Huvudförhandling kl. 09:00–11:30", quantity: "2,50" });
+    expect(nb(d.summaryRows[0]?.quantity ?? "")).toBe("3,5 á 1 626 kr");
+    expect(d.specSections[0]?.rows[0]).toEqual({ date: "2026-09-22", description: "Huvudförhandling kl. 09:00–11:30", quantity: "2,5" });
   });
 });
 
@@ -213,10 +213,10 @@ describe("taxeärenden", () => {
     const d = buildKrDocument({ ...BASE, basis: { kind: "forordnande", ford }, forhor: [{ start: "2026-03-02T08:00:00", end: "2026-03-02T08:50:00" }] });
     expect(d.summaryRows.map((r) => [r.label, nb(r.quantity), nb(r.amount)])).toEqual([
       ["ARVODE ENLIGT TAXA I FÖRORDNANDEMÅL", "1,42 tim", "5 635,00 kr"],
-      ["TIDSSPILLAN UTÖVER TAXAN", "2,00 á 1 487 kr", "2 974,00 kr"],
-      ["TIDSSPILLAN ANNAN TID UTÖVER TAXAN", "0,50 á 975 kr", "487,50 kr"],
+      ["TIDSSPILLAN UTÖVER TAXAN", "2 á 1 487 kr", "2 974,00 kr"],
+      ["TIDSSPILLAN ANNAN TID UTÖVER TAXAN", "0,5 á 975 kr", "487,50 kr"],
     ]);
-    expect(d.notes[1]).toBe("Tidsspillan totalt 3 tim 30 min, varav 1 tim ingår i taxan.");
+    expect(d.notes[1]).toBe("Tidsspillan totalt 3,5 h, varav 1 h ingår i taxan.");
     expect(d.notes[2]).toMatch(/taxan får frångås/);
     expect(d.specSections[0]).toEqual({ heading: "Förhör under förundersökningen", rows: [{ date: "2026-03-02", description: "Förhör kl. 08:00–08:50", quantity: "0,83" }], sum: "0,83" });
     expect(d.hasSpecification).toBe(true);

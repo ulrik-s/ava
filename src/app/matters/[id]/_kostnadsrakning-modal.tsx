@@ -28,6 +28,7 @@ import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { buildKostnadsrakningContext, hasHearingEntry, withDocumentFields, type KrDocumentFields } from "@/lib/shared/kostnadsrakning";
+import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { primitiveText } from "@/lib/shared/primitive-text";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
@@ -467,11 +468,9 @@ function TimeSpecSection({ ctx, isTaxe }: { ctx: KostnContext; isTaxe: boolean }
       <h3 className="text-sm font-semibold text-gray-700 mb-2">Tidsspecifikation</h3>
       <div className="text-xs text-gray-600 mb-2">
         {ctx.timeLines.length} billable {ctx.timeLines.length === 1 ? "rad" : "rader"} — tot{" "}
-        <span className="font-mono">{Math.round(ctx.billableArbetsMinutes / 60 * 10) / 10} h</span>
-        {" + HUF "}
-        <span className="font-mono">{Math.round(ctx.huvudforhandlingMinutes / 60 * 10) / 10} h</span>
-        {" = "}
-        <span className="font-mono font-semibold">{Math.round(ctx.totalArbetsMinutes / 60 * 10) / 10} h</span>
+        <span className="font-mono">{formatDecimalHoursWithUnit(ctx.billableArbetsMinutes)}</span>{" + HUF "}
+        <span className="font-mono">{formatDecimalHoursWithUnit(ctx.huvudforhandlingMinutes)}</span>{" = "}
+        <span className="font-mono font-semibold">{formatDecimalHoursWithUnit(ctx.totalArbetsMinutes)}</span>
         {!isTaxe && " (grunden för icke-taxa-beräkningen)"}
       </div>
     </section>
