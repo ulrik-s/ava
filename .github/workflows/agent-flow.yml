@@ -49,6 +49,11 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - run: bun tooling/scripts/flow-guard.ts
+        env:
+          # Händelsestyrningen: startar tillståndets agent direkt. Saknas en
+          # hemlighet tar rutinen saken vid sin nästa schemalagda körning.
+          ROUTINE_TOKEN_L3: ${{ secrets.ROUTINE_TOKEN_L3 }}
+          ROUTINE_TOKEN_L4: ${{ secrets.ROUTINE_TOKEN_L4 }}
 
   clock:
     name: Flödesvakt (klocka)

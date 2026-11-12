@@ -12,6 +12,7 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
+import { dispatchTarget, type FetchFn, fire } from "./flow/dispatch";
 import { type GitHub, gitHub } from "./flow/github";
 import { loadFlow } from "./flow/load";
 import type { Flow, Machine } from "./flow/schema";
@@ -61,6 +62,16 @@ export function handleLabel(flow: Flow, payload: Payload, gh: GitHub, enforce: b
   return decision;
 }
 
+/** Startar agenten för tillståndet som etiketten satte. Ger true om den startades. */
+export async function dispatchLabel(flow: Flow, payload: Payload, env: Readonly<Record<string, string | undefined>>, fetchFn: FetchFn, log: Log): Promise<boolean> {
+  const item = payload.pull_request ?? payload.issue;
+  const machine = machineFor(flow, payload.repository.full_name, payload.pull_request ? "pulls" : "issues");
+  const target = machine && item ? dispatchTarget(flow, machine, payload.label.name) : null;
+  if (!target || !item) return false;
+  const text = `Flödesvakten: ${payload.repository.full_name}#${item.number} gick in i tillståndet ${payload.label.name}.`;
+  return fire(target, text, env[`ROUTINE_TOKEN_${target.id}`], fetchFn, log);
+}
+
 /** Städar alla öppna saker i en maskin till ett tillstånd var. Ger antal ändrade. */
 export function normalize(machine: Machine, gh: GitHub, enforce: boolean, log: Log): number {
   let changed = 0;
@@ -84,6 +95,7 @@ if (import.meta.main) {
     normalize(machine, gitHub(machine.repo), enforce, console.log);
   } else {
     const payload = parseJsonWith(payloadSchema, readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8"));
-    handleLabel(flow, payload, gitHub(payload.repository.full_name), enforce, console.log);
+    const decision = handleLabel(flow, payload, gitHub(payload.repository.full_name), enforce, console.log);
+    if (enforce && decision.kind === "allow") await dispatchLabel(flow, payload, process.env, fetch, console.log);
   }
 }

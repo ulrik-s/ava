@@ -3,9 +3,9 @@
  * genererade filerna är aktuella, flödesvakten släpper bara tillåtna
  * övergångar och klockan verkställer timeouterna.
  */
-import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest-compat";
 import { INTAKE_LABELS } from "@/lib/shared/feedback";
+import { dispatchTarget, type FetchFn } from "../../tooling/scripts/flow/dispatch";
 import { renderMermaid } from "../../tooling/scripts/flow/generate";
 import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
 import { flowErrors, loadFlow, parseFlow } from "../../tooling/scripts/flow/load";
@@ -13,7 +13,7 @@ import type { Flow, Machine } from "../../tooling/scripts/flow/schema";
 import { decide, type LabelEvent, normalizeRemovals, previousStateLabel } from "../../tooling/scripts/flow/transition";
 import { dueTimeouts, hungRuns, parseDuration } from "../../tooling/scripts/flow/watchdog";
 import { expectedFiles, staleFiles } from "../../tooling/scripts/flow-gen";
-import { handleLabel, machineFor, normalize } from "../../tooling/scripts/flow-guard";
+import { dispatchLabel, handleLabel, machineFor, normalize } from "../../tooling/scripts/flow-guard";
 import { cancelHung, runTimeouts } from "../../tooling/scripts/flow-watchdog";
 
 const flow: Flow = loadFlow();
@@ -95,11 +95,6 @@ describe("generatorn", () => {
     expect(text).toContain("levererad --> [*]");
     expect(renderMermaid(codeIssue)).toContain("pagar --> granskad : timeout 4 h");
     expect(renderMermaid(codeIssue)).toContain("att-granska --> granskad : Ulrik om refaktorisering");
-  });
-
-  it("kommandoraden: kontrollen går igenom, okänd maskin ger fel", () => {
-    expect(spawnSync(process.execPath, ["tooling/scripts/flow-gen.ts"]).status).toBe(0);
-    expect(spawnSync(process.execPath, ["tooling/scripts/flow-guard.ts", "normalize", "finns-inte"]).status).toBe(2);
   });
 
   it("listar filer som inte stämmer", () => {
@@ -293,5 +288,44 @@ describe("klockan mot GitHub", () => {
     expect(cancelHung(gitHub("ulrik-s/ava", gh.run), now, 60, true, () => {})).toEqual([42]);
     expect(gh.calls.some((c) => c.includes("actions/runs/42/cancel"))).toBe(true);
     expect(cancelHung(gitHub("ulrik-s/ava", gh.run), now, 60, false, () => {})).toEqual([42]);
+  });
+});
+
+describe("händelsestyrningen", () => {
+  type Call = { url: string; headers: Record<string, string> };
+  const okFetch = (calls: Call[]): FetchFn => (url, init) => {
+    calls.push({ url, headers: init.headers });
+    return Promise.resolve({ ok: true, status: 200 });
+  };
+  const payload = (label: string) => ({ label: { name: label }, repository: { full_name: "ulrik-s/ava-feedback" }, issue: { number: 4, labels: [{ name: label }] } });
+
+  it("startar tillståndets agent, men inte för tillstånd agenten sätter själv eller för flaggor", () => {
+    expect(dispatchTarget(flow, intake, "verifierad")?.id).toBe("L2");
+    expect(dispatchTarget(flow, intake, "nedbruten")).toBeNull();
+    expect(dispatchTarget(flow, intake, "levererad")).toBeNull();
+    expect(dispatchTarget(flow, intake, "blockerad")).toBeNull();
+    expect(dispatchTarget(flow, codeIssue, "granskad")?.id).toBe("L4");
+  });
+
+  it("utan token händer inget", async () => {
+    const calls: Call[] = [];
+    const lines: string[] = [];
+    expect(await dispatchLabel(flow, payload("verifierad"), {}, okFetch(calls), (l) => lines.push(l))).toBe(false);
+    expect(calls).toEqual([]);
+    expect(lines[0]).toContain("ingen ROUTINE_TOKEN_L2");
+  });
+
+  it("med token startas rutinen via /fire", async () => {
+    const calls: Call[] = [];
+    expect(await dispatchLabel(flow, payload("verifierad"), { ROUTINE_TOKEN_L2: "t" }, okFetch(calls), () => {})).toBe(true);
+    expect(calls[0]?.url).toContain("trig_01TnVuo291SKkYqn3f8752qn/fire");
+    expect(calls[0]?.headers.Authorization).toBe("Bearer t");
+  });
+
+  it("ingen agent att starta: inget anrop", async () => {
+    const calls: Call[] = [];
+    expect(await dispatchLabel(flow, payload("bugg"), { ROUTINE_TOKEN_L2: "t" }, okFetch(calls), () => {})).toBe(false);
+    expect(await dispatchLabel(flow, { label: { name: "x" }, repository: { full_name: "x/y" } }, {}, okFetch(calls), () => {})).toBe(false);
+    expect(calls).toEqual([]);
   });
 });

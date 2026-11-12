@@ -14,7 +14,10 @@
 #              GitHub-app-märke). Ulrik får alltid göra alla övergångar.
 #   timeout    Flödesvaktens klocka (varje timme): så länge får en sak stå i
 #              tillståndet/flaggan innan vakten gör något själv.
-#   agent      Rutinen som arbetar med saken i det tillståndet.
+#   agent      Rutinen som arbetar med saken i det tillståndet. Flödesvakten
+#              startar den direkt när saken går in i tillståndet (via
+#              rutinens API-token), om inte `dispatch: false` — för tillstånd
+#              som agenten själv sätter mitt i sitt arbete.
 
 version: 1
 ulrik: ulrik-s
@@ -53,6 +56,7 @@ machines:
         color: "5319e7"
         description: Nedbruten i implementations-issues i ava
         agent: L2
+        dispatch: false
         transitions:
           - to: levererad
       levererad:
@@ -134,6 +138,7 @@ machines:
         color: "c5def5"
         description: Implementationsloopen arbetar på den (tills PR:en mergas)
         agent: L4
+        dispatch: false
         transitions:
           - to: granskad
           - to: att-granska
@@ -206,36 +211,31 @@ machines:
         color: "b60205"
         description: Agenten behöver ett beslut av Ulrik
 
+# Rutinerna. De startas av flödesvakten när en sak går in i ett tillstånd
+# med deras agent (kräver hemligheten ROUTINE_TOKEN_<id> i repot), av
+# GitHub-händelser under `events`, och av sitt schema som reserv.
 routines:
   L1:
     name: AVA - 1 - Verification - User Feedback
     prompt: tooling/agents/1-verifiering.md
     trigger_id: trig_01Pt8BjCQCZPnje4DXrTx4QU
     events:
-      - ava-feedback issues.opened
-      - ava-feedback issue_comment.created
+      - "GitHub: ava-feedback issues.opened"
   L2:
     name: AVA - 2 - Breakdown - User Feedback
     prompt: tooling/agents/2-nedbrytning.md
     trigger_id: trig_01TnVuo291SKkYqn3f8752qn
-    events:
-      - ava-feedback issues.labeled verifierad
-      - ava release.published
+    events: []
   L3:
     name: AVA - 3 - Review - User Feedback
     prompt: tooling/agents/3-granskning.md
     trigger_id: trig_01Uojap85XQbybQMenuaVf1F
-    events:
-      - ava issues.labeled att-granska
-      - ava pull_request.labeled att-granska
-      - ava check_suite.completed
+    events: []
   L4:
     name: AVA - 4 - Implementation - User Feedback
     prompt: tooling/agents/4-implementation.md
     trigger_id: trig_019KfqBDJkYMiLG43Dr7QMo2
-    events:
-      - ava issues.labeled granskad
-      - ava pull_request.labeled behöver-ändras
+    events: []
   L5:
     name: AVA - 5 - Architecture - Weekly
     prompt: tooling/agents/5-arkitektur.md
@@ -245,9 +245,7 @@ routines:
     name: AVA - 6 - PR-vakt
     prompt: tooling/agents/6-pr-vakt.md
     trigger_id: trig_013of5P8fniW3JfmVty3gnJH
-    events:
-      - ava pull_request.opened
-      - ava workflow_run.completed
+    events: []
 
 ci:
   hang_minutes: 60

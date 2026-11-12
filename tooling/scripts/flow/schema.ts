@@ -34,6 +34,8 @@ const stateSchema = z.object({
   color: colorSchema.optional(),
   description: z.string(),
   agent: z.string().nullable(),
+  /** Starta agenten när saken går in i tillståndet (standard: ja). */
+  dispatch: z.boolean().default(true),
   transitions: z.array(transitionSchema).default([]),
   timeout: timeoutSchema.optional(),
 });
@@ -73,6 +75,8 @@ export const flowSchema = z.object({
 export type Flow = z.infer<typeof flowSchema>;
 /** En tillståndsmaskin: intaget, kod-issues eller PR:er. */
 export type Machine = Flow["machines"][string];
+/** En rutin (schemalagd agent). */
+export type Routine = Flow["routines"][string];
 /** Ett tillstånd i en maskin. */
 export type State = Machine["states"][string];
 /** En timeout på ett tillstånd eller en flagga. */

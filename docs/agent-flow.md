@@ -125,11 +125,11 @@ stateDiagram-v2
 
 ## Rutiner
 
-| Id | Rutin | Prompt | Startas av |
+| Id | Rutin | Prompt | Startas av (utöver schemat) |
 |---|---|---|---|
-| L1 | AVA - 1 - Verification - User Feedback | `tooling/agents/1-verifiering.md` | `ava-feedback issues.opened`<br>`ava-feedback issue_comment.created` |
-| L2 | AVA - 2 - Breakdown - User Feedback | `tooling/agents/2-nedbrytning.md` | `ava-feedback issues.labeled verifierad`<br>`ava release.published` |
-| L3 | AVA - 3 - Review - User Feedback | `tooling/agents/3-granskning.md` | `ava issues.labeled att-granska`<br>`ava pull_request.labeled att-granska`<br>`ava check_suite.completed` |
-| L4 | AVA - 4 - Implementation - User Feedback | `tooling/agents/4-implementation.md` | `ava issues.labeled granskad`<br>`ava pull_request.labeled behöver-ändras` |
+| L1 | AVA - 1 - Verification - User Feedback | `tooling/agents/1-verifiering.md` | `GitHub: ava-feedback issues.opened` |
+| L2 | AVA - 2 - Breakdown - User Feedback | `tooling/agents/2-nedbrytning.md` | `intake.verifierad`<br>`intake.dubblett` |
+| L3 | AVA - 3 - Review - User Feedback | `tooling/agents/3-granskning.md` | `code-issue.att-granska`<br>`code-issue.behover-andras`<br>`code-pr.att-granska`<br>`code-pr.granskad` |
+| L4 | AVA - 4 - Implementation - User Feedback | `tooling/agents/4-implementation.md` | `code-issue.granskad`<br>`code-pr.behover-andras` |
 | L5 | AVA - 5 - Architecture - Weekly | `tooling/agents/5-arkitektur.md` | — |
-| L6 | AVA - 6 - PR-vakt | `tooling/agents/6-pr-vakt.md` | `ava pull_request.opened`<br>`ava workflow_run.completed` |
+| L6 | AVA - 6 - PR-vakt | `tooling/agents/6-pr-vakt.md` | — |

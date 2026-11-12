@@ -93,10 +93,18 @@ function machineSection(name: string, m: Machine): string {
   ].join("\n");
 }
 
+/** Tillstånden som startar rutinen, som `maskin.tillstånd`. */
+function dispatchingStates(flow: Flow, id: string): string[] {
+  return Object.entries(flow.machines).flatMap(([name, m]) =>
+    Object.entries(m.states).filter(([, s]) => s.agent === id && s.dispatch && s.label !== null).map(([sid]) => `${name}.${sid}`));
+}
+
 /** `docs/agent-flow.md`. */
 export function renderDocs(flow: Flow): string {
-  const routines = Object.entries(flow.routines).map(([id, r]) =>
-    `| ${id} | ${r.name} | \`${r.prompt}\` | ${r.events.map((e) => `\`${e}\``).join("<br>") || "—"} |`);
+  const routines = Object.entries(flow.routines).map(([id, r]) => {
+    const starts = [...dispatchingStates(flow, id), ...r.events].map((e) => `\`${e}\``).join("<br>") || "—";
+    return `| ${id} | ${r.name} | \`${r.prompt}\` | ${starts} |`;
+  });
   return [
     "<!-- GENERERAD av `bun run flow:gen` ur tooling/agents/flow.yaml — redigera inte för hand. -->",
     "# Agentkedjans flöde",
@@ -109,7 +117,7 @@ export function renderDocs(flow: Flow): string {
     ...Object.entries(flow.machines).flatMap(([name, m]) => [machineSection(name, m), ""]),
     "## Rutiner",
     "",
-    "| Id | Rutin | Prompt | Startas av |",
+    "| Id | Rutin | Prompt | Startas av (utöver schemat) |",
     "|---|---|---|---|",
     ...routines,
     "",
