@@ -8,8 +8,11 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { chargedVatOre, expenseNetOre } from "@/lib/shared/expense-vat";
+import type { MileageExpensePayload } from "@/lib/shared/mileage-rate";
 import type { ExpenseId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
+import { MileageForm } from "./_mileage-form";
+import { VatPreview } from "./_vat-preview";
 
 interface Props {
   matterId: MatterId;
@@ -176,11 +179,13 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
   const utils = trpc.useUtils();
   const expenses = trpc.expense.list.useQuery({ matterId });
   const [showCreate, setShowCreate] = useState(false);
+  const [showMileage, setShowMileage] = useState(false);
   const [editingId, setEditingId] = useState<ExpenseId | null>(null);
   const [form, setForm] = useState<ExpenseForm>(initialForm);
 
   function resetClose(): void {
     setShowCreate(false);
+    setShowMileage(false);
     setEditingId(null);
     setForm(initialForm());
   }
@@ -214,7 +219,10 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
             <span className="ml-2 text-sm font-normal text-gray-500">(totalt {formatCurrency(expenses.data.totalAmount)})</span>
           )}
         </h2>
-        <button onClick={() => setShowCreate(true)} className="text-sm text-blue-600 hover:underline">+ Nytt utlägg</button>
+        <span className="flex gap-4">
+          <button onClick={() => setShowCreate(true)} className="text-sm text-blue-600 hover:underline">+ Nytt utlägg</button>
+          <button onClick={() => setShowMileage(true)} className="text-sm text-blue-600 hover:underline">+ Milersättning</button>
+        </span>
       </div>
 
       <div className="p-4">
@@ -231,6 +239,11 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
       <Modal open={showCreate} title="Nytt utlägg" onClose={resetClose} widthClass="max-w-xl">
         <ExpenseForm form={form} setForm={setForm} isPending={isPending} isTaxeArende={isTaxeArende}
           onSubmit={submitForm} onCancel={resetClose} submitLabel={isPending ? "Sparar..." : "Spara"} />
+      </Modal>
+
+      <Modal open={showMileage} title="Milersättning" onClose={resetClose} widthClass="max-w-xl">
+        <MileageForm isPending={isPending} onCancel={resetClose}
+          onSubmit={(payload: MileageExpensePayload) => createExpense.mutate({ matterId, ...payload })} />
       </Modal>
 
       <Modal open={editingId !== null} title="Ändra utlägg" onClose={resetClose} widthClass="max-w-xl">
@@ -324,22 +337,5 @@ function ExpenseForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSu
         </button>
       </div>
     </form>
-  );
-}
-
-/**
- * Vad KLIENTEN kommer att debiteras (#975) — inte vad byrån betalade. Ett utlägg
- * med 6 % ingående moms debiteras vidare med 25 % på nettot, så förhandsvisningen
- * måste visa den satsen; annars ser juristen ett belopp som inte hamnar på fakturan.
- */
-function VatPreview({ amount, vatRate, passThrough }: { amount: number; vatRate: number; passThrough: boolean }) {
-  if (!amount) return <span className="text-xs text-gray-400">Förhandsvisning</span>;
-  const netOre = expenseNetOre({ amount: Math.round(amount * 100), vatRate, vatIncluded: false, passThrough });
-  const vatOre = passThrough ? 0 : chargedVatOre(netOre);
-  return (
-    <span className="text-xs text-gray-600 font-mono">
-      Debiteras: {formatCurrency(netOre)} · moms {passThrough ? "0 %" : "25 %"}: {formatCurrency(vatOre)}
-      {" · inkl: "}{formatCurrency(netOre + vatOre)}
-    </span>
   );
 }

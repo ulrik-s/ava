@@ -54,3 +54,52 @@ export function mileageRateToFormValue(orePerKm: number | null | undefined): str
 export function mileageRateFromFormValue(krPerMil: string): number | undefined {
   return krPerMil ? mileageRateFromKrPerMil(Number(krPerMil)) : undefined;
 }
+
+/** En resa som milersättning i ett ärende (#1529). */
+export interface MileageTrip {
+  /** Resans datum, `YYYY-MM-DD`. */
+  date: string;
+  from: string;
+  to: string;
+  /** Antal mil, får ha decimaler. */
+  mil: number;
+  /** Ersättning i kr per mil för just den här resan. */
+  krPerMil: number;
+}
+
+/** Utläggets fält för en milersättning, i den form `expense.create` tar emot dem. */
+export interface MileageExpensePayload {
+  date: string;
+  /** Öre exkl. moms. */
+  amount: number;
+  description: string;
+  billable: true;
+  vatRate: 0;
+  vatIncluded: false;
+  passThrough: false;
+}
+
+const SV_DECIMAL = new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 2 });
+
+/** Milersättningens belopp i hela öre: mil × kr/mil. */
+export function mileageAmountOre(mil: number, krPerMil: number): number {
+  return Math.round(mil * krPerMil * 100);
+}
+
+/**
+ * Resan → ett vanligt debiterbart utlägg (#1529). Ingen ingående moms att räkna
+ * av (`vatRate` 0) och inget äkta utlägg, så 25 % läggs på vid debiteringen.
+ */
+export function mileageExpensePayload(trip: MileageTrip): MileageExpensePayload {
+  const mil = SV_DECIMAL.format(trip.mil);
+  const kr = SV_DECIMAL.format(trip.krPerMil);
+  return {
+    date: trip.date,
+    amount: mileageAmountOre(trip.mil, trip.krPerMil),
+    description: `Milersättning ${trip.from} – ${trip.to}, ${mil} mil à ${kr} kr`,
+    billable: true,
+    vatRate: 0,
+    vatIncluded: false,
+    passThrough: false,
+  };
+}

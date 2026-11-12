@@ -5,6 +5,8 @@
 import { describe, it, expect } from "vitest-compat";
 import {
   MILEAGE_RATE_ORE_PER_MIL_BY_VEHICLE,
+  mileageAmountOre,
+  mileageExpensePayload,
   mileageRateFromFormValue,
   mileageRateFromKrPerMil,
   mileageRateKrPerMil,
@@ -101,5 +103,31 @@ describe("biltypen i schemat (#1528)", () => {
     expect(userSchema.parse({ ...base, vehicleType: "OWN_CAR" }).vehicleType).toBe("OWN_CAR");
     expect(userSchema.parse({ ...base, vehicleType: null }).vehicleType).toBeNull();
     expect(userSchema.safeParse({ ...base, vehicleType: "BUSS" }).success).toBe(false);
+  });
+});
+
+describe("mileageExpensePayload (#1529)", () => {
+  const trip = { date: "2026-03-15", from: "A", to: "B", mil: 3.5, krPerMil: 25 };
+
+  it("3,5 mil à 25 kr → 8 750 öre exkl. moms med svensk decimal i beskrivningen", () => {
+    expect(mileageExpensePayload(trip)).toEqual({
+      date: "2026-03-15",
+      amount: 8750,
+      description: "Milersättning A – B, 3,5 mil à 25 kr",
+      billable: true,
+      vatRate: 0,
+      vatIncluded: false,
+      passThrough: false,
+    });
+  });
+
+  it("avrundar beloppet till hela öre och kr/mil med decimal", () => {
+    const p = mileageExpensePayload({ ...trip, mil: 1.23, krPerMil: 9.5 });
+    expect(p.amount).toBe(1169); // 11,685 kr → 1 168,5 öre → 1 169
+    expect(p.description).toBe("Milersättning A – B, 1,23 mil à 9,5 kr");
+  });
+
+  it("mileageAmountOre räknar mil × kr/mil i öre", () => {
+    expect(mileageAmountOre(2, 18.5)).toBe(3700);
   });
 });
