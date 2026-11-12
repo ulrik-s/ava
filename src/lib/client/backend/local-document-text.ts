@@ -60,14 +60,22 @@ export interface LocalDocumentTextOptions {
 }
 
 export class LocalDocumentTextStore {
-  private readonly kv: IdbKv;
   private readonly budgetBytes: number;
   private readonly now: () => number;
 
-  constructor(factory: IDBFactory = globalThis.indexedDB, opts: LocalDocumentTextOptions = {}) {
-    this.kv = new IdbKv(factory, opts.dbName ?? localDbName(LOCAL_DB.docText), STORE);
+  constructor(private readonly factory: IDBFactory = globalThis.indexedDB, private readonly opts: LocalDocumentTextOptions = {}) {
     this.budgetBytes = opts.budgetBytes ?? DOC_TEXT_BUDGET_BYTES;
     this.now = opts.now ?? Date.now;
+  }
+
+  /**
+   * Databasen slås upp vid VARJE anrop, inte när storen skapas (#1561): storen
+   * lever i förladdningen, och en skrivning efter utloggningen skulle annars
+   * återskapa den förra användarens databas. Utan inloggad kastar
+   * `localDbName` i stället.
+   */
+  private get kv(): IdbKv {
+    return new IdbKv(this.factory, this.opts.dbName ?? localDbName(LOCAL_DB.docText), STORE);
   }
 
   /** Har dokumentet redan sin text här? Då behöver den inte extraheras igen. */

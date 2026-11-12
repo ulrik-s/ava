@@ -8,14 +8,20 @@ import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { browserSignOutEnv, withinOrNull } from "@/lib/client/backend/local-data/browser-sign-out";
 import {
-  bindLocalNamespace, dbNameIn, LOCAL_DB, localScopeSchema, SHARED_NAMESPACE, unbindLocalNamespace, userNamespace,
+  bindLocalNamespace, dbNameIn, LOCAL_DB, localDbName, localScopeSchema, SHARED_NAMESPACE, unbindLocalNamespace, userNamespace,
 } from "@/lib/client/backend/local-data/local-namespace";
 import { onSignedOutElsewhere, SESSION_CHANNEL_NAME, sessionChannel } from "@/lib/client/backend/local-data/session-channel";
 import {
   completeSignOut, PENDING_SIGN_OUT_KEY, pendingSignOutRedirect, proxySignOutUrl, signedOutLandingPath, signOut,
   type SignOutEnv,
 } from "@/lib/client/backend/local-data/sign-out";
+import { LocalDocumentTextStore } from "@/lib/client/backend/local-document-text";
 import { IndexedDbPersistence } from "@/lib/server/data-store/in-memory/indexeddb-persistence";
+
+/** Är någon namnrymd bunden just nu? */
+function isBound(): boolean {
+  try { localDbName(LOCAL_DB.docText); return true; } catch { return false; }
+}
 
 const anna = localScopeSchema.parse({ organizationId: "org-1", principalId: "u-anna" });
 
@@ -69,6 +75,27 @@ describe("signOut", () => {
     expect(env.navigate).toHaveBeenCalledWith("/oauth2/sign_out?rd=%2Fava%2Flogin%2F%3FsignedOut%3D1");
     expect(localStorage.getItem(PENDING_SIGN_OUT_KEY)).toBe("1");
     expect(() => dbNameIn(userNamespace(anna), LOCAL_DB.localStore)).not.toThrow();
+  });
+
+  it("förladdningens dokumenttext återskapar inte en raderad databas efter utloggningen (#1561)", async () => {
+    bindLocalNamespace(userNamespace(anna));
+    const textDb = dbNameIn(userNamespace(anna), LOCAL_DB.docText);
+    const texts = new LocalDocumentTextStore(factory);
+    await texts.put("d1", "stämningsansökan");
+    // Under raderingen är namnrymden redan släppt: en bakgrundsskrivning kastar i stället för att återskapa.
+    const boundDuringDelete: boolean[] = [];
+    const deleteDatabase = factory.deleteDatabase.bind(factory);
+    factory.deleteDatabase = (name: string) => {
+      boundDuringDelete.push(isBound());
+      return deleteDatabase(name);
+    };
+
+    await signOut(makeEnv());
+
+    expect(boundDuringDelete.length).toBeGreaterThan(0);
+    expect(boundDuringDelete.every((bound) => !bound)).toBe(true);
+    await expect(texts.put("d2", "efter utloggningen")).rejects.toThrow();
+    expect((await factory.databases()).map((d) => d.name)).not.toContain(textDb);
   });
 
   it("med IdP-utloggning konfigurerad: rd pekar dit", async () => {

@@ -59,6 +59,10 @@ export interface SignOutEnv extends PurgeEnv {
 /** Rensa det som hör till den inloggade i den här webbläsaren. */
 async function forgetLocally(env: SignOutEnv): Promise<void> {
   const scope = activeLocalScope();
+  // Släpp namnrymden FÖRST (#1561): en bakgrundsskrivning (t.ex. förladdningens
+  // dokumenttext) under raderingen kastar då i stället för att återskapa en
+  // databas som just raderats. Rensningen nedan får namnrymden explicit.
+  unbindLocalNamespace();
   // Ett lagringsfel får inte hindra utloggningen (raderingar som inte gick görs om vid nästa start).
   if (scope) {
     await purgeLocalData(env, { factory: env.factory, ns: userNamespace(scope), adoptsLegacy: false })
@@ -67,7 +71,6 @@ async function forgetLocally(env: SignOutEnv): Promise<void> {
   forgetSignedInIdentity();
   for (const key of SESSION_LOCAL_STORAGE_KEYS) env.storage.removeItem(key);
   env.session.clear();
-  unbindLocalNamespace();
 }
 
 /** Var utloggningen slutar: demon → kontoväljaren; self-hosted → proxyns utloggning (offline: roten). */
