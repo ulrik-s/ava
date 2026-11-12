@@ -362,3 +362,18 @@ describe("knuffen", () => {
     expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: {}, fetchFn, log: () => {} })).toBe(0);
   });
 });
+
+describe("etiketter som redan är borta", () => {
+  const failing = (message: string): GhRunner => (args) => {
+    if (args.includes("DELETE")) throw new Error(message);
+    return "{}";
+  };
+
+  it("en etikett som redan tagits bort (404) är inget fel", () => {
+    expect(() => gitHub("ulrik-s/ava", failing("gh api: Label does not exist (HTTP 404)")).removeLabel(1, "att-granska")).not.toThrow();
+  });
+
+  it("andra fel kastas vidare", () => {
+    expect(() => gitHub("ulrik-s/ava", failing("gh api: Bad credentials (HTTP 401)")).removeLabel(1, "att-granska")).toThrow("HTTP 401");
+  });
+});
