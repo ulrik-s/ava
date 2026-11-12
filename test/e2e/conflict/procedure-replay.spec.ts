@@ -38,7 +38,7 @@ test("tidspost skapad offline körs om på servern — samma post, rätt använd
   await context.setOffline(true);
   const description = `Offline-tid ${Date.now()}`;
   await page.getByRole("button", { name: "+ Registrera tid" }).click();
-  await page.locator("#time-minutes").fill("25");
+  await page.locator("#time-minutes").fill("24");
   await page.locator("#time-description").fill(description);
   await page.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(page.getByText(description).first()).toBeVisible({ timeout: 15_000 });
@@ -53,14 +53,14 @@ test("tidspost skapad offline körs om på servern — samma post, rätt använd
   const { entries } = await admin.timeEntry.list.query({ matterId, pageSize: 100 });
   const created = entries.filter((e) => e.description === description);
   expect(created).toHaveLength(1);
-  expect(created[0]).toMatchObject({ minutes: 25, userId: me?.id });
+  expect(created[0]).toMatchObject({ minutes: 24, userId: me?.id });
 });
 
 test("offline-ändring av en tidspost som kollegan raderat återuppstår inte", async ({ page, context }) => {
   const admin = clientFor(await mintToken("admin", "admin"));
   const description = `Raderas under avbrottet ${Date.now()}`;
   const entry = await admin.timeEntry.create.mutate({
-    matterId, date: new Date().toISOString().slice(0, 10), minutes: 20, description,
+    matterId, date: new Date().toISOString().slice(0, 10), minutes: 18, description,
   });
 
   await login(page, "lawyer", "lawyer");

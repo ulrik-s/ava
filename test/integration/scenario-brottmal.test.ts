@@ -38,6 +38,7 @@ import { appRouter } from "@/lib/server/routers/_app";
 import { computeBrottmalstaxa, BROTTMALSTAXA_TABLE } from "@/lib/shared/brottmalstaxa";
 import { prebakeJoins } from "@/lib/shared/demo-source";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
+import { roundToAllowedMinutes } from "@/lib/shared/time-hours";
 
 const ORG_ID = "firma-ab";
 const ADMIN_USER = { id: "u-anna", email: "anna@firma.local", name: "Anna Advokat", role: "ADMIN" as const, organizationId: ORG_ID };
@@ -230,10 +231,12 @@ describe("Scenario: brottmål från förordnande till betald faktura", () => {
     const minutes = Math.round((D.hufEnd.getTime() - D.hufStart.getTime()) / 60_000);
     expect(minutes).toBe(130); // 2 tim 10 min
 
+    // Tidsposten registreras på ett tillåtet värde (#1544): 130 min → 2,2 h.
+    // Taxan räknas på förhandlingens klockslag (steg 8), inte på tidsposten.
     const te = await state.caller.timeEntry.create({
       matterId: state.matterId!,
       date: D.hufStart.toISOString().slice(0, 10),
-      minutes,
+      minutes: roundToAllowedMinutes(minutes),
       description: "Huvudförhandling i Stockholms tingsrätt",
       billable: true,
     });
@@ -432,7 +435,7 @@ describe("Scenario: brottmål från förordnande till betald faktura", () => {
     expect(m.entries.length).toBe(7);
 
     const totalMin = m.entries.reduce((s, e) => s + e.minutes, 0);
-    expect(totalMin).toBe(90 + 120 + 75 + 105 + 130 + 180 + 90); // = 790 min
-    expect(m.totalMinutes).toBe(790);
+    expect(totalMin).toBe(90 + 120 + 75 + 105 + 132 + 180 + 90); // = 792 min (HUF 2,2 h)
+    expect(m.totalMinutes).toBe(792);
   });
 });

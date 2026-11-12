@@ -102,7 +102,7 @@ describe("DrizzleProcedureReplayer", () => {
 
   it("samtidiga omkörningar som avvisas: samma avvisning, sparad en gång", async () => {
     const id = uuidv7();
-    const update = call("timeEntry.update", { id, minutes: 10 }, [id]);
+    const update = call("timeEntry.update", { id, minutes: 12 }, [id]);
     const [a, b] = await Promise.all([replayer.replay(update, ctx), replayer.replay(update, ctx)]);
     expect(a).toMatchObject({ status: "rejected", code: "NOT_FOUND" });
     expect(b).toMatchObject({ status: "rejected", code: "NOT_FOUND" });
@@ -110,7 +110,7 @@ describe("DrizzleProcedureReplayer", () => {
   });
 
   it("en avvisning efter att en samtidig omkörning sparat sitt utfall: det sparade utfallet gäller", async () => {
-    const update = call("timeEntry.update", { id: uuidv7(), minutes: 10 });
+    const update = call("timeEntry.update", { id: uuidv7(), minutes: 12 });
     // Den andra omkörningen hinner spara "accepted" medan den här körs och avvisas.
     const racing = new DrizzleProcedureReplayer(handle.db, {
       ...repos,
@@ -139,7 +139,7 @@ describe("DrizzleProcedureReplayer", () => {
 
   it("en rad som raderats på servern: uppdateringen avvisas och svaret är en tombstone (ingen återuppståndelse)", async () => {
     const id = uuidv7();
-    const res = await replayer.replay(call("timeEntry.update", { id, minutes: 10 }, [id]), ctx);
+    const res = await replayer.replay(call("timeEntry.update", { id, minutes: 12 }, [id]), ctx);
     expect(res).toMatchObject({ status: "rejected", code: "NOT_FOUND" });
     expect(res.rows).toEqual([{ entity: "timeEntry", row: { id }, deleted: true }]);
     expect(await repos.timeEntries.getById(asId<"TimeEntryId">(id))).toBeNull();
@@ -147,7 +147,7 @@ describe("DrizzleProcedureReplayer", () => {
 
   it("avvisningen minns: samma mutationId ger samma utfall utan att köras igen", async () => {
     const id = uuidv7();
-    const c = call("timeEntry.update", { id, minutes: 10 }, [id]);
+    const c = call("timeEntry.update", { id, minutes: 12 }, [id]);
     await replayer.replay(c, ctx);
     const stored = (await handle.db.select().from(syncReplays)).filter((r) => r.mutationId === c.mutationId);
     expect(stored).toHaveLength(1);

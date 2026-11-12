@@ -11,6 +11,7 @@ import {
   invoiceIdSchema,
   type OrganizationId,
 } from "@/lib/shared/schemas/ids";
+import { isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE } from "@/lib/shared/time-hours";
 import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
 import { loadRadgivningStatus, markEntryAsRadgivning, type MarkRadgivningCall } from "../billing/radgivning-entry";
@@ -103,9 +104,10 @@ export const timeEntryRouter = router({
          * Arbetad tid i minuter. Noll är tillåtet BARA för per-dygns-kategorier
          * (advokatberedskap, #950) — beredskap är inte arbetad tid, och att
          * hitta på minuter för den hade förorenat varje timbaserad summa:
-         * upparbetat, rättsskyddets timtak, rapporterna.
+         * upparbetat, rättsskyddets timtak, rapporterna. Bara tillåtna
+         * tidsvärden (#1544, `time-hours`).
          */
-        minutes: z.number().min(0),
+        minutes: z.number().min(0).refine(isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE),
         description: z.string().min(1),
         billable: z.boolean().default(true),
         /** ARBETE (default), TIDSSPILLAN (#891) eller ADVOKATBEREDSKAP (#950). */
@@ -161,7 +163,7 @@ export const timeEntryRouter = router({
       z.object({
         id: timeEntryIdSchema,
         date: z.string().optional(),
-        minutes: z.number().min(1).optional(),
+        minutes: z.number().min(1).refine(isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE).optional(),
         description: z.string().min(1).optional(),
         billable: z.boolean().optional(),
         /** Arvodeskategori (#953) — styr vilken årsnorm slutregleringen värderar

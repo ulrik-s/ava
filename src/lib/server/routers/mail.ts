@@ -14,6 +14,7 @@
 
 import { z } from "zod";
 import { asId, documentFolderIdSchema, type MatterId, matterIdSchema, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE } from "@/lib/shared/time-hours";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { entryRateOre } from "../billing/time-entry-rate";
 import { emit, type EmitCtx } from "../events/emit";
@@ -41,7 +42,8 @@ function emlFileName(subject: string): string {
 }
 
 const timeInput = z.object({
-  minutes: z.number().int().min(1),
+  /** Bara tillåtna tidsvärden (#1544). */
+  minutes: z.number().int().min(1).refine(isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE),
   description: z.string().min(1).optional(),
 });
 
