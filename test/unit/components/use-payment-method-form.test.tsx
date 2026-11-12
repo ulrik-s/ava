@@ -111,6 +111,11 @@ describe("paymentUpdateInput", () => {
     expect(paymentUpdateInput(values({ sharePct: "0" })).clientShareBips).toBe(0);
     expect(paymentUpdateInput(values({ sharePct: "100" })).clientShareBips).toBe(10000);
   });
+
+  it("mellanslag inne i ett tal tolkas som tusentalsavgränsning, som i övriga talfält", () => {
+    const input = paymentUpdateInput(values({ sharePct: "1 2", rhMaxTim: "1 20" }));
+    expect(input).toMatchObject({ clientShareBips: 1200, rattshjalpMaxTimmar: 120 });
+  });
 });
 
 describe("usePaymentMethodForm", () => {

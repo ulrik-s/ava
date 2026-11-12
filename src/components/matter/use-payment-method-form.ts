@@ -8,6 +8,7 @@
  */
 
 import { useState } from "react";
+import { parseDecimal } from "@/components/ui/decimal-input";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 
@@ -96,24 +97,16 @@ export function paymentFormFromMatter(initial: PaymentMethodInitial): PaymentMet
   };
 }
 
-/** Textfält → tal med komma-decimal; null om tomt/ogiltigt. */
-function parseDecimal(s: string): number | null {
-  const trimmed = s.trim().replace(",", ".");
-  if (trimmed === "") return null;
-  const n = Number.parseFloat(trimmed);
-  return Number.isFinite(n) ? n : null;
-}
-
 /** Procent-textfält → bips (null om tomt/ogiltigt eller utanför 0–100). */
 function clientShareFromPct(pct: string): number | null {
   const n = parseDecimal(pct);
-  return n != null && n >= 0 && n <= 100 ? Math.round(n * 100) : null;
+  return n != null && n <= 100 ? Math.round(n * 100) : null;
 }
 
 /** Kr-textfält → öre (null om tomt/ogiltigt/negativt). Mellanslag ("75 000") tillåts. */
 function oreFromKr(kr: string): number | null {
-  const n = parseDecimal(kr.replace(/\s/g, ""));
-  return n != null && n >= 0 ? Math.round(n * 100) : null;
+  const n = parseDecimal(kr);
+  return n != null ? Math.round(n * 100) : null;
 }
 
 /** Heltals-textfält → positivt heltal (null om tomt/ogiltigt/≤0). */
