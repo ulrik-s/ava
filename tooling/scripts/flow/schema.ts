@@ -69,6 +69,13 @@ export const flowSchema = z.object({
   machines: z.record(z.string(), machineSchema),
   routines: z.record(z.string(), routineSchema),
   ci: z.object({ hang_minutes: z.number().int().positive() }),
+  /**
+   * Knuffen: står en sak längre än `after` i ett tillstånd vars agent startas
+   * (dispatch), startar klockan agenten igen — en gång per `after`. Täcker
+   * missade händelser och agenter som kraschat. Saker med någon av
+   * `skip_flags` väntar på en människa och knuffas inte.
+   */
+  nudge: z.object({ after: durationSchema, skip_flags: z.array(z.string()).default([]) }),
 });
 
 /** Hela flödet, validerat. */
@@ -79,5 +86,7 @@ export type Machine = Flow["machines"][string];
 export type Routine = Flow["routines"][string];
 /** Ett tillstånd i en maskin. */
 export type State = Machine["states"][string];
+/** Knuffen (se flowSchema). */
+export type Nudge = Flow["nudge"];
 /** En timeout på ett tillstånd eller en flagga. */
 export type Timeout = NonNullable<State["timeout"]>;
