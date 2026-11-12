@@ -1,6 +1,6 @@
 # Agentvakten (docs/feedback-pipeline.md): agent-PR:er får inte röra skyddade
 # sökvägar eller lägga till destruktiva migrationer utan `människa-godkänd`, och
-# högst 10 agent-PR:er per dygn. Logiken: tooling/scripts/agent-guard.ts.
+# högst 20 agent-PR:er per dygn. Logiken: tooling/scripts/agent-guard.ts.
 # Körs på ALLA PR:er (krävd check) — utan `agent-pr` passerar den direkt.
 name: Agentvakt
 

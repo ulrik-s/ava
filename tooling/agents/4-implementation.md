@@ -9,7 +9,7 @@ granskningsloopen mergar.
 
 Räkna agent-PR:er de senaste 24 timmarna:
 `gh api -X GET search/issues -f q='repo:ulrik-s/ava is:pr label:agent-pr created:>=<nu minus 24 h, ISO>' --jq .total_count`.
-Är det 10 eller fler: gör bara steg 1 (befintliga PR:er) och skapa ingen ny.
+Är det 20 eller fler: gör bara steg 1 (befintliga PR:er) och skapa ingen ny.
 
 ## 1. Befintliga PR:er först
 
