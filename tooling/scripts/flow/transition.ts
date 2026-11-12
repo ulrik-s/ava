@@ -37,19 +37,16 @@ export interface LabelChange {
 export const isUlrik = (e: LabelEvent, ulrik: string): boolean => e.actor === ulrik && !e.viaApp;
 
 /**
- * Tillståndsetiketten saken bar strax före händelsen `beforeId`, framräknad
- * ur händelseloggen. Bar den flera (från före flödesvakten) gäller den som
- * kommit längst i flow.yaml:s ordning. Ingen = starttillståndet (null).
+ * Tillståndet saken senast gick in i före händelsen `beforeId`: den senast
+ * SATTA tillståndsetiketten, oavsett om den tagits bort sedan. Agenterna tar
+ * bort det gamla innan de sätter det nya ("ta bort att-granska, sätt
+ * granskad"), och en borttagning får inte göra en övergång till ett hopp från
+ * start — eller öppna en väg runt en regel ("ta bort undersökt, sätt
+ * verifierad"). Inget satt tidigare = starttillståndet (null).
  */
 export function previousStateLabel(events: readonly LabelEvent[], beforeId: number, machine: Machine): string | null {
-  const order = stateLabels(machine);
-  const present = new Set<string>();
-  for (const e of events) {
-    if (e.id >= beforeId || !order.includes(e.label)) continue;
-    if (e.added) present.add(e.label);
-    else present.delete(e.label);
-  }
-  return order.filter((l) => present.has(l)).at(-1) ?? null;
+  const states = new Set(stateLabels(machine));
+  return events.filter((e) => e.id < beforeId && e.added && states.has(e.label)).at(-1)?.label ?? null;
 }
 
 function flagDecision(machine: Machine, change: LabelChange): Decision {

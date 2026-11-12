@@ -24,6 +24,7 @@ stateDiagram-v2
   mottagen --> undersokt
   mottagen --> dubblett
   undersokt --> verifierad : Ulrik
+  undersokt --> dubblett
   verifierad --> nedbruten
   nedbruten --> levererad
   levererad --> [*]
@@ -33,7 +34,7 @@ stateDiagram-v2
 | Tillstånd | Etikett | Agent | Får gå till | Timeout |
 |---|---|---|---|---|
 | mottagen | — | L1 | undersokt, dubblett | — |
-| undersokt | `undersökt` | — | verifierad (Ulrik) | — |
+| undersokt | `undersökt` | — | verifierad (Ulrik), dubblett | — |
 | verifierad | `verifierad` | L2 | nedbruten | — |
 | nedbruten | `nedbruten` | L2 | levererad | — |
 | levererad | `levererad` | — | — | — |
@@ -47,6 +48,7 @@ stateDiagram-v2
 | `ej-bekräftad` | alla | — | Verifieringsagenten kunde inte bekräfta buggen/behovet |
 | `väntar-på-användaren` | alla | 7 d → tas bort | En fråga till användaren (i AVA) väntar på svar |
 | `blockerad` | alla | — | Agenten behöver ett beslut av Ulrik |
+| `agentstatus` | alla | — | Statussidan för agentkedjan (uppdateras av flödesvakten) |
 
 ## code-issue (`ulrik-s/ava`, issues)
 
@@ -123,6 +125,62 @@ stateDiagram-v2
 | `agent-pr` | alla | — | PR skapad av implementationsloopen |
 | `människa-godkänd` | Ulrik | — | Ulrik tillåter att agent-PR:en rör skyddade sökvägar/migrationer |
 | `blockerad` | alla | — | Agenten behöver ett beslut av Ulrik |
+
+## Förhandsgodkända skrivningar
+
+Agenterna skriver till GitHub med EXAKT de här formerna (N = numret, en etikett per kommando, inga
+`--jq` eller `$(…)`). De är förhandsgodkända i `.claude/settings.json`, som ett test håller lika med
+den här listan. `verifierad` och `människa-godkänd` sätter bara Ulrik.
+
+```bash
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/agentstatus
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/blockerad
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/bugg
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/dubblett
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/ej-bekr%C3%A4ftad
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/f%C3%B6rslag
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/levererad
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/nedbruten
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/unders%C3%B6kt
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/user-request
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/v%C3%A4ntar-p%C3%A5-anv%C3%A4ndaren
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/verifierad
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/agent-pr
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/agent-task
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/arkitektur-rapport
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/att-granska
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/beh%C3%B6ver-%C3%A4ndras
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/blockerad
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/granskad
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/p%C3%A5g%C3%A5r
+gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/refaktorisering
+gh api -X POST repos/ulrik-s/ava-feedback/actions/workflows/flodesvakt.yml/dispatches -f ref=main
+gh api -X POST repos/ulrik-s/ava/actions/workflows/agent-flow.yml/dispatches -f ref=main
+gh api -X PUT repos/ulrik-s/ava/pulls/N/merge -f merge_method=squash -f sha=*
+gh api repos/ulrik-s/ava-feedback/issues/N/comments -F body=@*
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=agentstatus'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=blockerad'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=bugg'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=dubblett'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=ej-bekräftad'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=förslag'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=levererad'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=nedbruten'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=release:v*'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=undersökt'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=user-request'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=väntar-på-användaren'
+gh api repos/ulrik-s/ava-feedback/labels -f name=release:v* -f color=0e8a16
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=agent-pr'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=agent-task'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=arkitektur-rapport'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=att-granska'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=behöver-ändras'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=blockerad'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=granskad'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=pågår'
+gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=refaktorisering'
+```
 
 ## Rutiner
 

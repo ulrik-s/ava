@@ -44,6 +44,8 @@ machines:
         transitions:
           - to: verifierad
             by: ulrik
+          # Omverifiering (Ulrik eller en dubblett tog bort undersökt) kan sluta som dubblett.
+          - to: dubblett
       verifierad:
         label: verifierad
         color: "1d76db"
@@ -94,6 +96,9 @@ machines:
       blockerad:
         color: "b60205"
         description: Agenten behöver ett beslut av Ulrik
+      agentstatus:
+        color: "0e8a16"
+        description: Statussidan för agentkedjan (uppdateras av flödesvakten)
 
   code-issue:
     repo: ulrik-s/ava
@@ -259,3 +264,19 @@ nudge:
   skip_flags:
     - blockerad
     - väntar-på-användaren
+
+# Hälsokontrollen (statussidan "Agentkedjans status" i ava-feedback): en sak
+# som stått så här länge i ett agenttillstånd trots knuffar larmar, med push.
+health:
+  stuck_after: 6h
+
+# Automatisk tagg: högst en per period, när main har ändringar av de här
+# typerna sedan senaste taggen och CI är grön. Stoppas med repovariabeln
+# AUTO_RELEASE=off i ulrik-s/ava.
+release:
+  every: 20h
+  types:
+    - feat
+    - fix
+    - refactor
+    - perf
