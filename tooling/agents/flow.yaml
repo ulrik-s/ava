@@ -250,3 +250,12 @@ routines:
 
 ci:
   hang_minutes: 60
+
+# Knuffen: står en sak längre än så här i ett tillstånd med en agent, startar
+# klockan agenten igen (en gång per period). Saker som väntar på en människa
+# (flaggorna nedan) knuffas inte.
+nudge:
+  after: 2h
+  skip_flags:
+    - blockerad
+    - väntar-på-användaren

@@ -3,7 +3,7 @@
  * med en flagga, och vilka CI-körningar hänger. Rena funktioner — GitHub-
  * anropen ligger i `flow-watchdog.ts`.
  */
-import type { Machine, Timeout } from "./schema";
+import type { Machine, Nudge, Timeout } from "./schema";
 
 const HOUR = 3_600_000;
 
@@ -66,6 +66,31 @@ export function dueTimeouts(machine: Machine, items: readonly WatchItem[], now: 
     }
   }
   return out;
+}
+
+/** Tillståndsetiketter vars agent startas (dispatch) — de som kan knuffas. */
+export function nudgeLabels(machine: Machine): string[] {
+  return Object.values(machine.states).flatMap((s) => (s.label !== null && s.agent !== null && s.dispatch ? [s.label] : []));
+}
+
+/** En knuff: starta agenten för saken i tillståndet `label` igen. */
+export interface NudgeAction { number: number; label: string; hours: number }
+
+/**
+ * Saker som stått för länge i ett tillstånd med en agent. Knuffas en gång per
+ * `nudge.after` (klockan går varje timme): när åldern passerar 2 h, 4 h, 6 h …
+ */
+export function dueNudges(machine: Machine, nudge: Nudge, items: readonly WatchItem[], now: number): NudgeAction[] {
+  const period = parseDuration(nudge.after);
+  const labels = new Set(nudgeLabels(machine));
+  return items.flatMap((item) => {
+    if (item.labels.some((l) => nudge.skip_flags.includes(l))) return [];
+    const label = item.labels.find((l) => labels.has(l));
+    const since = label === undefined ? undefined : item.labeledAt[label];
+    if (label === undefined || since === undefined) return [];
+    const age = now - new Date(since).getTime();
+    return age >= period && age % period < HOUR ? [{ number: item.number, label, hours: Math.floor(age / HOUR) }] : [];
+  });
 }
 
 /** En CI-körning (GitHub Actions). */

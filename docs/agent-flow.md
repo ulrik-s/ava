@@ -4,7 +4,8 @@
 Varje sak har exakt ett tillstånd (en etikett). Flödesvakten
 (`.github/workflows/agent-flow.yml`) stoppar otillåtna övergångar, tar bort det
 gamla tillståndet och sköter timeouterna. Flaggor läggs ovanpå tillståndet.
-CI som hänger mer än 60 minuter avbryts.
+CI som hänger mer än 60 minuter avbryts. Står en sak längre än 2h
+i ett tillstånd med en agent startas agenten igen (knuffen), utom med `blockerad` eller `väntar-på-användaren`.
 
 ## intake (`ulrik-s/ava-feedback`, issues)
 
