@@ -28,7 +28,8 @@ export function findInsuranceCompany<T extends MatterContactWithRole>(contacts: 
   return contacts.find((c) => isInsuranceCompany(c) && CONFLICT_SIDE[c.role] !== "ADVERSE");
 }
 
-/** Sant när minst en av ärendets kontakter är ett försäkringsbolag (oavsett roll). */
-export function hasInsuranceCompany(contacts: readonly MatterContactWithType[]): boolean {
-  return contacts.some(isInsuranceCompany);
+/** Sant när ärendet har ett försäkringsbolag som inte står på motsidan
+ *  (#1532) — samma regel som `findInsuranceCompany`. */
+export function hasInsuranceCompany(contacts: readonly MatterContactWithRole[]): boolean {
+  return findInsuranceCompany(contacts) !== undefined;
 }

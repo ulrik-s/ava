@@ -1,6 +1,7 @@
 /**
  * Tester för InsuranceReferenceField (#1511) — försäkringsreferens i
- * ärendehuvudet, bara när ett försäkringsbolag är kontakt på ärendet.
+ * ärendehuvudet, bara när ett försäkringsbolag är kontakt på ärendet och inte
+ * står på motsidan (#1532).
  */
 
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -25,11 +26,20 @@ vi.mock("@/lib/client/trpc", () => ({
 beforeEach(() => { vi.clearAllMocks(); });
 
 const MID = asId<"MatterId">("m1");
-const INSURER = [{ contact: { contactType: "INSURANCE_COMPANY" } }];
+const INSURER = [{ role: "FORSAKRINGSBOLAG", contact: { contactType: "INSURANCE_COMPANY" } }] as const;
 
 describe("InsuranceReferenceField", () => {
   it("döljs när ärendet saknar försäkringsbolag", () => {
-    render(<InsuranceReferenceField matterId={MID} value="" contacts={[{ contact: { contactType: "PERSON" } }]} />);
+    render(<InsuranceReferenceField matterId={MID} value="" contacts={[{ role: "KLIENT", contact: { contactType: "PERSON" } }]} />);
+    expect(screen.queryByLabelText("Försäkringsreferens")).not.toBeInTheDocument();
+  });
+
+  it("döljs när försäkringsbolaget bara är motpart eller motpartsombud (#1532)", () => {
+    const adverse = [
+      { role: "MOTPART", contact: { contactType: "INSURANCE_COMPANY" } },
+      { role: "MOTPARTSOMBUD", contact: { contactType: "INSURANCE_COMPANY" } },
+    ] as const;
+    render(<InsuranceReferenceField matterId={MID} value="SK-123" contacts={adverse} />);
     expect(screen.queryByLabelText("Försäkringsreferens")).not.toBeInTheDocument();
   });
 
