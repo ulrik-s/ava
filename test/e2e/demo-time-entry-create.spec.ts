@@ -140,5 +140,5 @@ test("tidssidan: tid i timmar — 1,33 ger fel, 1,5 sparas och visas som 1,5", a
   await hours.fill("1,5");
   await expect(page.getByRole("alert").filter({ hasText: "Ändra värdet" })).toHaveCount(0);
   await page.getByRole("button", { name: "Spara", exact: true }).click();
-  await expect(page.getByRole("row", { name: new RegExp(description.replace(/[()]/g, "\\$&")) })).toContainText("1,5");
+  await expect(page.getByRole("row").filter({ hasText: description })).toContainText("1,5");
 });
