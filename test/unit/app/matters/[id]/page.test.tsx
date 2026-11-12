@@ -184,11 +184,6 @@ vi.mock("@/components/matter/suggestions-panel", () => ({
 vi.mock("@/components/matter/events-panel", () => ({
   EventsPanel: () => <div data-testid="events" />,
 }));
-vi.mock("@/components/matter/payment-method-card", () => ({
-  PaymentMethodCard: ({ paymentMethod, onSaved }: { paymentMethod: string; onSaved?: () => void }) => (
-    <div data-testid="pmc">{paymentMethod}<button type="button" onClick={onSaved}>Spara (mock)</button></div>
-  ),
-}));
 
 const M = {
   id: "m1",
@@ -317,8 +312,8 @@ describe("MatterDetailPage", () => {
       return el;
     };
     const openPaymentDialog = (): HTMLElement => {
-      fireEvent.click(within(header()).getByRole("button", { name: "Ändra betalningssätt" }));
-      return screen.getByRole("dialog", { name: "Betalningssätt" });
+      fireEvent.click(within(header()).getByRole("button", { name: "Ändra ärende" }));
+      return screen.getByRole("dialog", { name: "Ändra ärende" });
     };
 
     it("rättshjälp över tröskeln: varningen i huvudet, i tidssektionen och som förut i betalningsdialogen", async () => {
@@ -376,16 +371,18 @@ describe("MatterDetailPage", () => {
     expect(screen.getAllByRole("link", { name: "Anna" }).length).toBeGreaterThan(0);
   });
 
-  it("Betalningssätt är ingen flik; Ändra i huvudet öppnar kortet i en dialog som stängs vid spara (#1499)", async () => {
+  it("Betalningssätt är ingen flik; en enda Ändra i huvudet öppnar ärendedialogen (#1499, #1565)", async () => {
     const { container } = renderPage();
-    const edit = await waitFor(() => within(screen.getByTestId("matter-header")).getByRole("button", { name: "Ändra betalningssätt" }));
+    const header = await waitFor(() => screen.getByTestId("matter-header"));
     expect(container.querySelector('[data-panel="payment"]')).toBeNull();
-    expect(screen.queryByTestId("pmc")).not.toBeInTheDocument();
-    fireEvent.click(edit);
-    const dialog = screen.getByRole("dialog", { name: "Betalningssätt" });
-    expect(within(dialog).getByTestId("pmc")).toHaveTextContent("RATTSHJALP");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Spara (mock)" }));
-    expect(screen.queryByRole("dialog", { name: "Betalningssätt" })).not.toBeInTheDocument();
+    expect(within(header).queryByRole("button", { name: "Ändra betalningssätt" })).not.toBeInTheDocument();
+    fireEvent.click(within(header).getByRole("button", { name: "Ändra ärende" }));
+    const dialog = screen.getByRole("dialog", { name: "Ändra ärende" });
+    expect(within(dialog).getByLabelText("Titel")).toHaveValue("Bodelning Lindström");
+    expect(within(dialog).getByLabelText("Betalningssätt")).toHaveValue("RATTSHJALP");
+    expect(within(dialog).getAllByRole("button", { name: "Spara" })).toHaveLength(1);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("dialog", { name: "Ändra ärende" })).not.toBeInTheDocument();
   });
 
   it("renderar mockade barnkomponenter", async () => {

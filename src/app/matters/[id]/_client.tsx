@@ -20,8 +20,8 @@ import { ExpectedReceivablesSection } from "./_expected-receivables-section";
 import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
 import { InsuranceReferenceField } from "./_insurance-reference-field";
+import { MatterHeaderEdit, type HeaderEditMatter } from "./_matter-header-edit";
 import { matterDefaultLayout, matterPanels } from "./_matter-panels";
-import { MatterPaymentEdit, type PaymentEditMatter } from "./_matter-payment-edit";
 import { MatterPaymentLine, type NamedMatterContact } from "./_matter-payment-line";
 import { MatterTypeField } from "./_matter-type-field";
 import { RattshjalpCapWarning } from "./_rattshjalp-cap-warning";
@@ -108,12 +108,9 @@ type MatterContact = {
 };
 
 interface HeaderProps {
-  matter: PaymentEditMatter & {
+  matter: Omit<HeaderEditMatter, ReferenceKey> & {
     id: string;
     matterNumber: string;
-    title: string;
-    matterType?: string | null | undefined;
-    description?: string | null | undefined;
     status: MatterStatus;
     isTaxeArende?: boolean | undefined;
     clientShareBips?: number | null | undefined;
@@ -211,7 +208,8 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
             <MatterClientLine matterId={m.id} klient={klient} matterType={m.matterType} />
             <MatterPaymentLine paymentMethod={m.paymentMethod} clientShareBips={m.clientShareBips}
               contacts={contacts} separated={klient.length > 0 || Boolean(m.matterType)} />
-            <MatterPaymentEdit matterId={asId<"MatterId">(m.id)} matter={m} />
+            <MatterHeaderEdit matterId={asId<"MatterId">(m.id)} contacts={contacts}
+              matter={{ ...m, courtCaseNumber: referenceOf(m), insuranceReference: referenceOf(m, "insuranceReference") }} />
           </div>
         </div>
         <MatterHeaderActions
