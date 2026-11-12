@@ -65,7 +65,7 @@ test("rättshjälp över taket: varningen i huvudet med en annan panel öppen oc
   // Hela taket i en post → över tröskeln oavsett vad ärendet redan har.
   await tid.getByRole("button", { name: /Registrera tid/ }).click();
   const dialog = page.getByRole("dialog", { name: "Registrera tid" });
-  await dialog.getByLabel("Tid (minuter) *").fill(String(matter.capTimmar * 60));
+  await dialog.getByLabel("Tid (h) *").fill(String(matter.capTimmar));
   await dialog.getByLabel("Beskrivning *").fill("E2E: huvudförhandling (#1520)");
   await dialog.locator("button[type=submit]").click();
   await expect(dialog).toHaveCount(0);
@@ -111,4 +111,34 @@ test("en milersättning läggs in i ärendet och syns i utläggslistan med moms"
   await expect(row).toContainText(/87,50/);
   await expect(row).toContainText(/21,88/);
   await expect(row).toContainText(/109,38/);
+});
+
+/*
+ * #1545: tid matas in i timmar med decimal. "1,33" är inte ett tillåtet värde
+ * (6-minutersintervall och kvartar) och ger ett fel i stället för att avrundas;
+ * "1,5" sparas och raden visar "1,5".
+ */
+test("tidssidan: tid i timmar — 1,33 ger fel, 1,5 sparas och visas som 1,5", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const matter = seed.matters.find((m) => m.status === "ACTIVE" && m.matterNumber);
+  expect(matter, "demon har ett aktivt ärende").toBeDefined();
+
+  await page.goto(`${base}/time/`, { waitUntil: "load" });
+  await page.getByRole("button", { name: /\+ Registrera tid/ }).click();
+  await page.getByLabel("Ärende *").fill(`${matter?.matterNumber ?? ""} — ${matter?.title ?? ""}`);
+  const description = "E2E: tid i timmar (#1545)";
+  await page.getByLabel("Beskrivning *").fill(description);
+
+  const hours = page.getByLabel("Tid (h) *");
+  await hours.fill("1,33");
+  await expect(page.getByRole("alert").filter({ hasText: "Ändra värdet" })).toBeVisible();
+  await page.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(page.getByText(description)).toHaveCount(0);
+
+  await hours.fill("1,5");
+  await expect(page.getByRole("alert").filter({ hasText: "Ändra värdet" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(page.getByRole("row", { name: new RegExp(description.replace(/[()]/g, "\\$&")) })).toContainText("1,5");
 });

@@ -61,7 +61,7 @@ describe("StandardAtgarderSection", () => {
   it("ny åtgärd får ett läsbart slug-id ur beskrivningen", () => {
     render(<StandardAtgarderSection />);
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Avslutande åtgärder inklusive dom" } });
-    fireEvent.change(screen.getByLabelText("Minuter"), { target: { value: "45" } });
+    fireEvent.change(screen.getByLabelText("Tid (h)"), { target: { value: "0,75" } });
     fireEvent.change(screen.getByLabelText("Skede"), { target: { value: "CLOSING" } });
     fireEvent.click(screen.getByText("Lägg till"));
 
@@ -109,7 +109,19 @@ describe("StandardAtgarderSection", () => {
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "   " } });
     expect(button).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Åtgärd" } });
-    fireEvent.change(screen.getByLabelText("Minuter"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Tid (h)"), { target: { value: "0" } });
     expect(button).toBeDisabled();
+  });
+
+  it("en otillåten tid (0,33) visar ett fel och går inte att lägga till (#1545)", () => {
+    render(<StandardAtgarderSection />);
+    fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Åtgärd" } });
+    fireEvent.change(screen.getByLabelText("Tid (h)"), { target: { value: "0,33" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Ändra värdet");
+    expect(screen.getByText("Lägg till")).toBeDisabled();
+    fireEvent.keyDown(screen.getByLabelText("Beskrivning"), { key: "Enter" });
+    expect(updateMutate).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Tid (h)"), { target: { value: "0,75" } });
+    expect(screen.getByText("Lägg till")).toBeEnabled();
   });
 });

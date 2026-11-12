@@ -14,6 +14,7 @@
 
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { HoursInput } from "@/components/ui/hours-input";
 import { trpc } from "@/lib/client/trpc";
 import { formatDecimalHours } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type TimeEntryKind } from "@/lib/shared/schemas/enums";
@@ -130,10 +131,12 @@ function AtgardActions({ a, list, isPending, onSave }: ListProps & { a: Standard
 
 function AddAtgardForm({ list, isPending, onSave }: ListProps) {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [hoursValid, setHoursValid] = useState(true);
   const description = draft.description.trim();
+  const canAdd = description !== "" && hoursValid && draft.minutes > 0;
 
   const add = (): void => {
-    if (!description || draft.minutes <= 0) return;
+    if (!canAdd) return;
     const id = slugId(description, new Set(list.map((a) => a.id)));
     onSave([...list, { ...draft, description, id, paymentMethods: [], billable: true, active: true }]);
     setDraft(emptyDraft());
@@ -150,9 +153,9 @@ function AddAtgardForm({ list, isPending, onSave }: ListProps) {
           className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
       </div>
       <div className="col-span-2">
-        <label htmlFor="sa-min" className="block text-xs text-gray-500 mb-1">Minuter</label>
-        <input id="sa-min" type="number" min={1} step={5} value={draft.minutes}
-          onChange={(e) => setDraft({ ...draft, minutes: Number.parseInt(e.target.value, 10) || 0 })}
+        <label htmlFor="sa-min" className="block text-xs text-gray-500 mb-1">Tid (h)</label>
+        <HoursInput id="sa-min" minutes={draft.minutes} onValidChange={setHoursValid}
+          onChange={(minutes) => setDraft({ ...draft, minutes })}
           className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
       </div>
       <div className="col-span-2">
@@ -172,7 +175,7 @@ function AddAtgardForm({ list, isPending, onSave }: ListProps) {
         </select>
       </div>
       <div className="col-span-1">
-        <button type="button" onClick={add} disabled={isPending || !description || draft.minutes <= 0}
+        <button type="button" onClick={add} disabled={isPending || !canAdd}
           className="w-full px-2 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
           Lägg till
         </button>
