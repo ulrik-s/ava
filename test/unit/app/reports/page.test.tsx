@@ -167,6 +167,16 @@ describe("ReportsPage", () => {
     expect(screen.getByText(/2026-0002 — Tvist/)).toBeInTheDocument();
   });
 
+  it("tid visas i decimaltimmar med enhet i rubrikerna (#1542)", () => {
+    reportQuery.data = sampleReport;
+    render(<ReportsPage />);
+    expect(screen.getByText("10 h")).toBeInTheDocument(); // totalt 600 min
+    expect(screen.getByText("8 h")).toBeInTheDocument(); // debiterbart 480 min
+    expect(screen.getAllByRole("columnheader", { name: /^Tid \(h\)/ }).length).toBe(2);
+    expect(screen.getAllByRole("columnheader", { name: /^Deb\. tid \(h\)/ }).length).toBe(2);
+    expect(screen.queryByText(/\b\d+:\d\d\b/)).toBeNull();
+  });
+
   it("visar tomtmeddelande när matters är tom lista", () => {
     reportQuery.data = {
       ...sampleReport,

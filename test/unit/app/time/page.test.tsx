@@ -66,7 +66,7 @@ describe("TimePage", () => {
     timeQuery.data.totalMinutes = 90;
     render(<TimePage />);
     expect(screen.getByRole("heading", { name: /Tidregistrering/i })).toBeInTheDocument();
-    expect(screen.getByText(/1:30/)).toBeInTheDocument();
+    expect(screen.getByText("Totalt: 1,5 h")).toBeInTheDocument();
   });
 
   it("listar tidsposter", () => {

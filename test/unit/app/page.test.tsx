@@ -128,8 +128,9 @@ describe("Dashboard", () => {
     };
     render(<Dashboard />);
     expect(screen.getByText("Möte med klient")).toBeInTheDocument();
-    // Total visas i headern som "(1:00)"
-    expect(screen.getAllByText(/1:00/).length).toBeGreaterThan(0);
+    // Decimaltimmar (#1542): raden "1 h" och totalen i headern "(1 h)".
+    expect(screen.getByText("1 h")).toBeInTheDocument();
+    expect(screen.getByText("(1 h)")).toBeInTheDocument();
   });
 
   it("dedupar 'Senaste ärenden' från timeEntries", () => {

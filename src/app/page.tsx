@@ -21,7 +21,7 @@ import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { formatMinutes } from "@/lib/client/utils";
+import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { dashboardLayout } from "./_dashboard-layout";
 
 function todayYmd(): string {
@@ -281,7 +281,7 @@ function TimeCard({ ymd }: { ymd: string }) {
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           <Clock size={16} className="text-gray-500" /> Tidrapportering
           {entries.data && (
-            <span className="text-xs font-normal text-gray-500">({formatMinutes(entries.data.totalMinutes)})</span>
+            <span className="text-xs font-normal text-gray-500">({formatDecimalHoursWithUnit(entries.data.totalMinutes)})</span>
           )}
         </h2>
         <Link href="/time" className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
@@ -304,7 +304,7 @@ function TimeList({ entries, ymd }: { entries: TimeQueryLike; ymd: string }) {
       {entries.data?.entries.map((e) => (
         <EntityLink key={e.id} route="matters" id={e.matter.id}
           className="block px-6 py-3 hover:bg-gray-50 flex items-center gap-3">
-          <span className="text-sm font-mono text-gray-700 w-14 text-right">{formatMinutes(e.minutes)}</span>
+          <span className="text-sm font-mono text-gray-700 w-16 text-right">{formatDecimalHoursWithUnit(e.minutes)}</span>
           <div className="flex-1 min-w-0">
             <p className="text-sm text-gray-900 truncate">{e.description}</p>
             <p className="text-xs text-gray-500 truncate">{e.matter.matterNumber} — {e.matter.title}</p>

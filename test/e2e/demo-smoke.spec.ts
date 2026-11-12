@@ -200,9 +200,9 @@ test("matter-detalj visar tabell-rader för fakturor/utlägg/tider", async ({ pa
   const expense = rowsForMatter(seed, "expenses", matterId)[0];
   await showPanel(page, "Utlägg");
   await expect(body, "Utlägg ska visas på matter-detalj").toContainText(expense?.description ?? "", opts);
-  // Tid-rad: HH:MM-format
+  // Tid-rad: decimaltimmar (#1542), totalen i rubriken "(totalt 1,5 h)"
   await showPanel(page, "Tid");
-  await expect(body, "Tid-rader ska visas").toContainText(/\d+:\d{2}/, opts);
+  await expect(body, "Tid-rader ska visas").toContainText(/\(totalt \d[\d\s]*(,\d{1,2})? h\)/, opts);
   // Inga "NaN kr" eller "Invalid Date" från brutna fält
   await expect(body, "Inga NaN-belopp").not.toContainText(/NaN kr|Invalid Date/, opts);
 });
@@ -222,4 +222,18 @@ test("SPA-fallback redirectar till app-shellen vid 404", async ({ page }) => {
   // 404.html → location.replace → app-shell hydraterar
   // Slutligen ska vi se nav-länken till Ärenden (alltså sidebar:n är synlig)
   await expect(page.locator("nav").getByRole("link", { name: /Ärenden/ })).toBeVisible({ timeout: 15_000 });
+});
+
+// #1542: registrerad tid visas i decimaltimmar med svenskt decimalkomma,
+// aldrig som H:MM, och kolumnrubriken bär enheten "h".
+test("tidssidan visar registrerad tid i decimaltimmar", async ({ page }) => {
+  await page.goto(`${BASE}/time/`);
+  await expect(page.getByText(/^Totalt: \d[\d\s]*(,\d{1,2})? h$/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("columnheader", { name: /^Tid \(h\)/ })).toBeVisible();
+
+  const cells = page.locator("tbody td span.font-mono");
+  await expect(cells.first()).toBeVisible({ timeout: 30_000 });
+  const values = await cells.allInnerTexts();
+  expect(values.length).toBeGreaterThan(0);
+  for (const v of values) expect(v).toMatch(/^\d[\d\s]*(,\d{1,2})?$/);
 });

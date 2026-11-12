@@ -1,9 +1,9 @@
 /**
- * Test för utils.ts — cn() för class-merging, formatMinutes, formatCurrency.
+ * Test för utils.ts — cn() för class-merging, formatCurrency.
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { cn, formatMinutes, formatCurrency } from "@/lib/client/utils";
+import { cn, formatCurrency } from "@/lib/client/utils";
 
 describe("cn()", () => {
   it("kombinerar klasser till en sträng", () => {
@@ -25,28 +25,6 @@ describe("cn()", () => {
 
   it("returnerar tom sträng utan input", () => {
     expect(cn()).toBe("");
-  });
-});
-
-describe("formatMinutes()", () => {
-  it("formaterar < 60 min korrekt", () => {
-    expect(formatMinutes(30)).toBe("0:30");
-    expect(formatMinutes(5)).toBe("0:05");
-  });
-
-  it("formaterar timmar:minuter", () => {
-    expect(formatMinutes(60)).toBe("1:00");
-    expect(formatMinutes(90)).toBe("1:30");
-    expect(formatMinutes(125)).toBe("2:05");
-  });
-
-  it("hanterar 0", () => {
-    expect(formatMinutes(0)).toBe("0:00");
-  });
-
-  it("padding på minutdelen", () => {
-    expect(formatMinutes(61)).toBe("1:01");
-    expect(formatMinutes(605)).toBe("10:05");
   });
 });
 
