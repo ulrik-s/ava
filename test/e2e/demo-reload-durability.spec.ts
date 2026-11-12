@@ -8,7 +8,7 @@
  * till "Skapar..." medan den pågår, så att vänta på att "Skapa ärende" försvinner
  * laddade förut om MITT i sparandet — det var det #1386 såg.
  */
-import { DEMO_BASE_URL as BASE, seedDemoLogin, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL as BASE, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 test("nytt ärende med klient → omedelbar omladdning → ärendet och klienten finns kvar", async ({ page }) => {
   await seedDemoLogin(page, BASE);
@@ -86,4 +86,35 @@ test("försäkringsreferens på ärende med försäkringsbolag → sökbar i är
   await page.goto(`${BASE}/matters/`);
   await page.getByPlaceholder("Sök ärenden...").fill(reference);
   await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible({ timeout: 25_000 });
+});
+
+// #1521: ärendetypen i ärendehuvudet är fetstil och inline-redigerbar; byråns
+// ärendetyper föreslås (datalist) men fritext tillåts.
+test("ärendetyp byts i ärendehuvudet → ur byråns lista och fritt skriven", async ({ page }) => {
+  await seedDemoLogin(page, BASE);
+  const stamp = Date.now();
+  const listed = `Lista ${stamp}`;
+  const free = `Fritext ${stamp}`;
+  await page.goto(`${BASE}/settings/`);
+  await showPanel(page, "Ärendetyper");
+  const draft = page.getByPlaceholder("Ny ärendetyp, t.ex. Bodelning");
+  await draft.fill(listed);
+  await draft.press("Enter");
+  await expect(page.getByLabel(`Ta bort ${listed}`)).toBeVisible({ timeout: 25_000 });
+
+  await page.goto(`${BASE}/matters/`);
+  const title = "Vårdnadstvist Andersson";
+  await page.getByRole("row").filter({ hasText: title }).getByRole("link", { name: title }).click();
+  const field = page.getByLabel("Ärendetyp");
+  await expect(field).toHaveValue("Familjerätt", { timeout: 25_000 });
+  await expect(field).toHaveCSS("font-weight", "700");
+  await expect(page.locator(`datalist option[value="${listed}"]`)).toHaveCount(1);
+
+  for (const value of [listed, free]) {
+    await field.fill(value);
+    await page.getByRole("button", { name: "Spara ärendetyp" }).click();
+    await expect(page.getByRole("button", { name: "Spara ärendetyp" })).toHaveCount(0);
+    await expect(page.getByLabel("Ärendetyp")).toHaveValue(value);
+  }
+  await expect(page.locator(`datalist option[value="${free}"]`)).toHaveCount(0);
 });

@@ -26,6 +26,7 @@ import { GenerateModal } from "./_generate-modal";
 import { InsuranceReferenceField } from "./_insurance-reference-field";
 import { matterDefaultLayout, matterPanels } from "./_matter-panels";
 import { MatterPaymentLine, type NamedMatterContact } from "./_matter-payment-line";
+import { MatterTypeField } from "./_matter-type-field";
 import { RattshjalpCapWarning } from "./_rattshjalp-cap-warning";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
@@ -182,14 +183,15 @@ interface HeaderProps {
 
 /** Klient + ärendetyp-raden under titeln. Utbruten ur MatterHeader så dess
  *  optional-chain/&&-grenar inte räknas in i komponentkomplexiteten (#199). */
-function MatterClientLine({ klient, matterType }: { klient: MatterContact[]; matterType?: string | null | undefined }) {
+/** Klient + ärendetyp (fetstil, inline-redigerbar #1521) på raden under titeln. */
+function MatterClientLine({ matterId, klient, matterType }: { matterId: string; klient: MatterContact[]; matterType?: string | null | undefined }) {
   return (
-    <p className="text-sm text-gray-500">
+    <div className="flex items-center gap-1 text-sm text-gray-500">
       {klient[0]?.contact && (
-        <>Klient: <EntityLink route="contacts" id={klient[0].contact.id} className="text-blue-600 hover:underline">{klient[0].contact.name}</EntityLink></>
+        <span>Klient: <EntityLink route="contacts" id={klient[0].contact.id} className="text-blue-600 hover:underline">{klient[0].contact.name}</EntityLink> ·</span>
       )}
-      {matterType && <>{klient.length > 0 ? " · " : ""}{matterType}</>}
-    </p>
+      <MatterTypeField key={`type-${matterType ?? ""}`} matterId={asId<"MatterId">(matterId)} value={matterType ?? ""} />
+    </div>
   );
 }
 
@@ -259,8 +261,8 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
           <h1 className="text-lg font-bold text-gray-900 truncate">
             <span className="mr-2 font-mono text-sm font-normal text-gray-500">{m.matterNumber}</span>{m.title}
           </h1>
-          <div className="flex flex-wrap items-baseline">
-            <MatterClientLine klient={klient} matterType={m.matterType} />
+          <div className="flex flex-wrap items-center">
+            <MatterClientLine matterId={m.id} klient={klient} matterType={m.matterType} />
             <MatterPaymentLine paymentMethod={m.paymentMethod} clientShareBips={m.clientShareBips}
               contacts={contacts} separated={klient.length > 0 || Boolean(m.matterType)} />
           </div>

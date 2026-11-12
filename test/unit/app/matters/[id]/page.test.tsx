@@ -426,9 +426,10 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByText("Arkiverat")).toBeInTheDocument());
   });
 
-  it("renderar matterType + description", async () => {
+  it("renderar matterType (redigerbar, fetstil #1521) + description", async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText(/Familjerätt/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText("Ärendetyp")).toHaveValue("Familjerätt"));
+    expect(screen.getByLabelText("Ärendetyp")).toHaveClass("font-bold");
     expect(screen.getByText("En bodelning")).toBeInTheDocument();
   });
 
