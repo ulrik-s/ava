@@ -82,3 +82,33 @@ test("rättshjälp över taket: varningen i huvudet med en annan panel öppen oc
   await expect(page.getByRole("region", { name: "Utlägg" }).last()).toBeVisible();
   await expect(header.getByText(WARNING)).toBeVisible();
 });
+
+/*
+ * #1529: milersättning som utlägg. Juristen anger resan i ärendets Utlägg-sektion
+ * och raden syns i listan med mil × kr/mil exkl. moms och 25 % pålagd moms.
+ */
+test("en milersättning läggs in i ärendet och syns i utläggslistan med moms", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const matterId = matterIdWith(await fetchDemoSeed(page, base), "expenses");
+
+  await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
+  await showPanel(page, "Utlägg");
+  const utlagg = page.getByRole("region", { name: "Utlägg" }).last();
+  await expect(utlagg).toBeVisible({ timeout: 25_000 });
+  await utlagg.getByRole("button", { name: "+ Milersättning" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Milersättning" });
+  await dialog.getByLabel("Från *").fill("E2E-start");
+  await dialog.getByLabel("Till *").fill("E2E-mål");
+  await dialog.getByLabel("Antal mil *").fill("3,5");
+  await dialog.getByLabel("Kr/mil *").fill("25");
+  await dialog.locator("button[type=submit]").click();
+  await expect(dialog).toHaveCount(0);
+
+  const row = utlagg.getByRole("row").filter({ hasText: "Milersättning E2E-start – E2E-mål, 3,5 mil à 25 kr" });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText(/87,50/);
+  await expect(row).toContainText(/21,88/);
+  await expect(row).toContainText(/109,38/);
+});
