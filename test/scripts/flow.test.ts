@@ -11,10 +11,10 @@ import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
 import { flowErrors, loadFlow, parseFlow } from "../../tooling/scripts/flow/load";
 import type { Flow, Machine } from "../../tooling/scripts/flow/schema";
 import { decide, type LabelEvent, normalizeRemovals, previousStateLabel } from "../../tooling/scripts/flow/transition";
-import { dueTimeouts, hungRuns, parseDuration } from "../../tooling/scripts/flow/watchdog";
+import { dueNudges, dueTimeouts, hungRuns, parseDuration } from "../../tooling/scripts/flow/watchdog";
 import { expectedFiles, staleFiles } from "../../tooling/scripts/flow-gen";
 import { dispatchLabel, handleLabel, machineFor, normalize } from "../../tooling/scripts/flow-guard";
-import { cancelHung, runTimeouts } from "../../tooling/scripts/flow-watchdog";
+import { cancelHung, runNudges, runTimeouts } from "../../tooling/scripts/flow-watchdog";
 
 const flow: Flow = loadFlow();
 const machine = (name: string): Machine => {
@@ -48,6 +48,7 @@ describe("flow.yaml", () => {
 version: 1
 ulrik: u
 ci: { hang_minutes: 5 }
+nudge: { after: 2h }
 routines: {}
 machines:
   m:
@@ -327,5 +328,37 @@ describe("händelsestyrningen", () => {
     expect(await dispatchLabel(flow, payload("bugg"), { ROUTINE_TOKEN_L2: "t" }, okFetch(calls), () => {})).toBe(false);
     expect(await dispatchLabel(flow, { label: { name: "x" }, repository: { full_name: "x/y" } }, {}, okFetch(calls), () => {})).toBe(false);
     expect(calls).toEqual([]);
+  });
+});
+
+describe("knuffen", () => {
+  const now = new Date("2026-11-20T12:00:00Z").getTime();
+  const item = (labels: string[], hoursAgo: number) => ({
+    number: 3, labels, hasOpenPr: false,
+    labeledAt: Object.fromEntries(labels.map((l) => [l, new Date(now - hoursAgo * 3_600_000 - 60_000).toISOString()])),
+  });
+
+  it("knuffar en sak som stått still i ett agenttillstånd, en gång per period", () => {
+    expect(dueNudges(codePr, flow.nudge, [item(["behöver-ändras"], 2)], now)).toEqual([{ number: 3, label: "behöver-ändras", hours: 2 }]);
+    expect(dueNudges(codePr, flow.nudge, [item(["behöver-ändras"], 3)], now)).toEqual([]);
+    expect(dueNudges(codePr, flow.nudge, [item(["behöver-ändras"], 4)], now)).toHaveLength(1);
+    expect(dueNudges(codePr, flow.nudge, [item(["behöver-ändras"], 1)], now)).toEqual([]);
+  });
+
+  it("knuffar inte det som väntar på en människa, tillstånd utan agent eller utan tidpunkt", () => {
+    expect(dueNudges(codePr, flow.nudge, [item(["behöver-ändras", "blockerad"], 2)], now)).toEqual([]);
+    expect(dueNudges(intake, flow.nudge, [item(["undersökt"], 2)], now)).toEqual([]);
+    expect(dueNudges(intake, flow.nudge, [item(["nedbruten"], 2)], now)).toEqual([]);
+    expect(dueNudges(codePr, flow.nudge, [{ number: 3, labels: ["behöver-ändras"], labeledAt: {}, hasOpenPr: false }], now)).toEqual([]);
+  });
+
+  it("startar agenten med token, loggar utan", async () => {
+    const urls: string[] = [];
+    const fetchFn: FetchFn = (url) => { urls.push(url); return Promise.resolve({ ok: true, status: 200 }); };
+    const lines: string[] = [];
+    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l) => lines.push(l) })).toBe(1);
+    expect(urls[0]).toContain("trig_019KfqBDJkYMiLG43Dr7QMo2/fire");
+    expect(lines[0]).toContain("knuff L4");
+    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: {}, fetchFn, log: () => {} })).toBe(0);
   });
 });

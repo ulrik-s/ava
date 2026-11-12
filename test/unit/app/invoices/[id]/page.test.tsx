@@ -406,6 +406,30 @@ describe("InvoiceDetailPage", () => {
     expect(legacy.textContent?.replace(/\s/g, "")).toContain("208,33");
   });
 
+  it("tidsspecifikationen visar tiden i decimaltimmar (#1543)", async () => {
+    invoiceQuery.data = { ...baseInvoice, invoiceType: "FINAL", timeEntries: [
+      { id: "t1", date: new Date("2026-03-01"), description: "Möte", minutes: 90, hourlyRate: 100_000 },
+      { id: "t2", date: new Date("2026-03-02"), description: "Brev", minutes: 15, hourlyRate: 100_000 },
+    ] };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Möte")).toBeInTheDocument());
+    expect(screen.getByText("Möte").closest("tr")?.textContent).toContain("1,5 h");
+    expect(screen.getByText("Brev").closest("tr")?.textContent).toContain("0,25 h");
+  });
+
+  it("slutregleringens specifikation visar rader och summa i decimaltimmar (#1543)", async () => {
+    const settlementBreakdown = { timeLines: [
+      { date: "2026-03-01", description: "Möte", minutes: 90, amountOre: 150_000 },
+      { date: "2026-03-02", description: "Brev", minutes: 15, amountOre: 25_000 },
+    ], rows: [], totalLabel: "Att betala", totalOre: 175_000 };
+    invoiceQuery.data = { ...baseInvoice, invoiceType: "FINAL", settlementBreakdown };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Möte")).toBeInTheDocument());
+    expect(screen.getByText("Möte").closest("tr")?.textContent).toContain("1,5 h");
+    expect(screen.getByText("Brev").closest("tr")?.textContent).toContain("0,25 h");
+    expect(screen.getByText("Summa").closest("tr")?.textContent).toContain("1,75 h");
+  });
+
   it("renderar PAID-status utan Registrera betalning-knapp", async () => {
     invoiceQuery.data = { ...baseInvoice, status: "PAID" };
     renderPage();

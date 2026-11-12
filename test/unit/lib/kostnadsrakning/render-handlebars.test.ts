@@ -6,6 +6,11 @@ import { describe, it, expect } from "vitest-compat";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 
 describe("renderHandlebars", () => {
+  it("{{formatHours minutes}} ger decimaltimmar som resten av appen (#1543)", () => {
+    expect(renderHandlebars("{{formatHours a}}|{{formatHours b}}|{{formatHours c}}|{{formatHours d}}", { a: 90, b: 15, c: 120, d: 37 }))
+      .toBe("1,5|0,25|2|0,62");
+  });
+
   it("ersätter enkla variabler", () => {
     expect(renderHandlebars("Hej {{name}}!", { name: "Anna" })).toBe("Hej Anna!");
   });

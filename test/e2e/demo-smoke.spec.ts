@@ -237,3 +237,16 @@ test("tidssidan visar registrerad tid i decimaltimmar", async ({ page }) => {
   expect(values.length).toBeGreaterThan(0);
   for (const v of values) expect(v).toMatch(/^\d[\d\s]*(,\d{1,2})?$/);
 });
+
+// #1543: fakturans tidsspecifikation visar tiden i decimaltimmar, som resten
+// av appen ("1,5 h", "2 h") — aldrig med punkt eller fast en decimal ("2.0 h").
+test("faktura-detalj visar tidsspecifikationen i decimaltimmar", async ({ page }) => {
+  const seed = await fetchDemoSeed(page, BASE);
+  const entry = seed.timeEntries.find((te) => te.invoiceId && te.minutes && te.minutes % 60 === 0);
+  expect(entry, "demodatan ska ha en fakturerad tidspost med hela timmar").toBeDefined();
+  await page.goto(`${BASE}/invoices/${entry?.invoiceId ?? ""}/`, { waitUntil: "domcontentloaded" });
+  const row = page.locator("tr", { hasText: entry?.description ?? "" }).first();
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await expect(row).toContainText(`${(entry?.minutes ?? 0) / 60} h`);
+  await expect(page.locator("body")).not.toContainText(/\d\.\d h/);
+});

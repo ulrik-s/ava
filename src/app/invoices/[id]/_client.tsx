@@ -18,6 +18,7 @@ import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { specCardTotals, specLineOre } from "@/lib/shared/invoice-specification";
+import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
 import { INVOICE_STATUS_LABELS, type AmountRounding } from "@/lib/shared/schemas/enums";
@@ -174,7 +175,6 @@ function PrimarySpecCard({ inv }: { inv: Inv }) {
 /** Slutregleringens persisterade vy (#876): tidsspec-tabell + beloppstrappa + total,
  *  renderad ur `settlementBreakdown` så den är IDENTISK med faktura-dokumentet. */
 function SettlementBreakdownCard({ view }: { view: SettlementView }) {
-  const hours = (m: number) => (m / 60).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
   // Á-pris (#891): härlett per rad (belopp/timmar) — arbete och tidsspillan har olika
   // taxor, så per-rad-priset visas i stället för en gemensam timkostnad.
   const aPrisOre = (l: SettlementView["timeLines"][number]) => (l.minutes > 0 ? Math.round(l.amountOre / (l.minutes / 60)) : 0);
@@ -201,7 +201,7 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
                 <td className="py-1.5 whitespace-nowrap">{new Date(l.date).toLocaleDateString("sv-SE")}</td>
                 <td className="py-1.5">{l.description}</td>
                 <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(aPrisOre(l))}/h</td>
-                <td className="py-1.5 text-right whitespace-nowrap">{hours(l.minutes)} h</td>
+                <td className="py-1.5 text-right whitespace-nowrap">{formatDecimalHoursWithUnit(l.minutes)}</td>
                 <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(l.amountOre)}</td>
               </tr>
             ))}
@@ -210,7 +210,7 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
             <tr className="border-t border-gray-200 font-medium">
               <td className="py-1.5" colSpan={2}>Summa</td>
               <td></td>
-              <td className="py-1.5 text-right whitespace-nowrap">{hours(totalMinutes)} h</td>
+              <td className="py-1.5 text-right whitespace-nowrap">{formatDecimalHoursWithUnit(totalMinutes)}</td>
               <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(totalAmount)}</td>
             </tr>
           </tfoot>
@@ -591,7 +591,7 @@ function SpecificationCard({ timeEntries, expenses, rounding }: { timeEntries: S
                 <tr key={t.id}>
                   <td className="py-1.5 whitespace-nowrap">{new Date(t.date).toLocaleDateString("sv-SE")}</td>
                   <td className="py-1.5">{t.description}</td>
-                  <td className="py-1.5 text-right whitespace-nowrap">{(t.minutes / 60).toFixed(1)} h</td>
+                  <td className="py-1.5 text-right whitespace-nowrap">{formatDecimalHoursWithUnit(t.minutes)}</td>
                   <td className="py-1.5 text-right"><Money ore={t.hourlyRate ?? 0} basis="net" className="font-mono" /></td>
                   <td className="py-1.5 text-right"><Money ore={lineFor(t)} basis="net" className="font-mono" /></td>
                 </tr>

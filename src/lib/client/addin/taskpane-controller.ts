@@ -13,6 +13,7 @@
 import { createAddinClient } from "@/lib/client/addin/addin-client";
 import { saveIncomingMail, type MailSaverClient } from "@/lib/client/addin/save-incoming-mail";
 import type { MatterId } from "@/lib/shared/schemas/ids";
+import { parseHoursToMinutes, type ParsedHours } from "@/lib/shared/time-hours";
 
 // ─── Smal Office.js-yta (det subset task-panen faktiskt rör) ──────────
 
@@ -189,12 +190,20 @@ export function initForm(office: OfficeLike): void {
 
   $("save").addEventListener("click", () => {
     if (!selected) return;
+    const time = timeFieldMinutes($("minutes").value);
+    if (!time.ok) { setStatus(time.error, "err"); return; }
     persistCreds(office, $("server").value.trim(), $("pat").value.trim());
-    void runSave({ office, client: client(), matter: selected, minutes: parseInt($("minutes").value, 10), setStatus, setSaving });
+    void runSave({ office, client: client(), matter: selected, minutes: time.minutes, setStatus, setSaving });
   });
 }
 
 // ─── Småhjälpare ──────────────────────────────────────────────────────
+
+/** Tidsfältet i timmar (#1545): tomt → ingen tidspost (0 min), annars den
+ *  gemensamma regeln — ett otillåtet värde ger ett fel, aldrig en avrundning. */
+export function timeFieldMinutes(raw: string): ParsedHours {
+  return raw.trim() === "" ? { ok: true, minutes: 0 } : parseHoursToMinutes(raw);
+}
 
 /** fn får returnera Promise (async-handlers) — vi void:ar den i setTimeout så
  *  no-misused-promises är nöjd och den flytande promise:n är medveten. */

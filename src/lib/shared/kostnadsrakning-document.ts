@@ -26,7 +26,7 @@ import {
   type KrExpenseLineLike, type KrExpenseSpec, type KrRowSpec, type KrSpecSection, type KrSummaryRow, type KrTimeLineLike,
 } from "./kostnadsrakning-document-rows";
 import type { KrClaim } from "./kr-claim";
-import { formatHours, formatMinutes, formatOreAsKr } from "./kr-format";
+import { formatDecimalHours, formatDecimalHoursWithUnit, formatOreAsKr } from "./kr-format";
 import type { OrgImage } from "./org-image";
 
 /** Byråns uppgifter som dokumentet visar (brevhuvud, sidfot, bankgiro, ort). */
@@ -186,7 +186,7 @@ function brottmalRows(basis: Extract<KrArvodeBasis, { kind: "brottmalstaxa" }>, 
   if (basis.taxa.kind !== "taxa-applies") return [];
   const beredskap = lines.filter((l) => l.kind === "ADVOKATBEREDSKAP" && l.amountOre > 0);
   return [
-    { label: "ARVODE ENLIGT BROTTMÅLSTAXAN", quantity: `${formatHours(huf.minutes)} tim`, amountOre: basis.taxa.ersattningExclVat },
+    { label: "ARVODE ENLIGT BROTTMÅLSTAXAN", quantity: `${formatDecimalHours(huf.minutes)} tim`, amountOre: basis.taxa.ersattningExclVat },
     ...tidsspillanUtoverRows(basis.tidsspillan),
     ...hourlyRowSpecs(beredskap),
   ];
@@ -204,7 +204,7 @@ type ForordnandeTaxa = Extract<ForordnandeResult, { kind: "taxa" }>;
 
 function forordnandeRows(ford: ForordnandeTaxa): KrRowSpec[] {
   return [
-    { label: "ARVODE ENLIGT TAXA I FÖRORDNANDEMÅL", quantity: `${formatHours(ford.forhorMinutes)} tim`, amountOre: ford.taxa.ersattningExclVat },
+    { label: "ARVODE ENLIGT TAXA I FÖRORDNANDEMÅL", quantity: `${formatDecimalHours(ford.forhorMinutes)} tim`, amountOre: ford.taxa.ersattningExclVat },
     ...tidsspillanUtoverRows(ford.tidsspillan),
   ];
 }
@@ -214,7 +214,7 @@ function forordnandeNotes(ford: ForordnandeTaxa): string[] {
   const total = ts.ingarOvrigMinutes + ts.ingarVardagMinutes + ts.extraOvrigMinutes + ts.extraVardagMinutes;
   const notes = [
     `Förundersökningen har avslutats utan åtal — förordnandemål (DVFS 2025:5). Taxa, förhörstid ${ford.taxa.intervalLabel}.`,
-    `Tidsspillan totalt ${formatMinutes(total)}, varav ${formatMinutes(ts.ingarOvrigMinutes + ts.ingarVardagMinutes)} ingår i taxan.`,
+    `Tidsspillan totalt ${formatDecimalHoursWithUnit(total)}, varav ${formatDecimalHoursWithUnit(ts.ingarOvrigMinutes + ts.ingarVardagMinutes)} ingår i taxan.`,
   ];
   if (ford.gransvardeOverskrids) notes.push("Arbetet överstiger taxans gränsvärde — taxan får frångås (10 §). Överväg löpande räkning.");
   return notes;
@@ -250,8 +250,8 @@ function forhorSection(forhor: readonly Forhor[] | undefined): KrSpecSection[] {
   if (!forhor || forhor.length === 0) return [];
   return [{
     heading: "Förhör under förundersökningen",
-    rows: forhor.map((f) => ({ date: toIsoDate(f.start), description: `Förhör kl. ${toLocalTime(f.start)}–${toLocalTime(f.end)}`, quantity: formatHours(forhorMinutes(f)) })),
-    sum: formatHours(forhor.reduce((s, f) => s + forhorMinutes(f), 0)),
+    rows: forhor.map((f) => ({ date: toIsoDate(f.start), description: `Förhör kl. ${toLocalTime(f.start)}–${toLocalTime(f.end)}`, quantity: formatDecimalHours(forhorMinutes(f)) })),
+    sum: formatDecimalHours(forhor.reduce((s, f) => s + forhorMinutes(f), 0)),
   }];
 }
 

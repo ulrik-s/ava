@@ -3,7 +3,7 @@
   "src/app/contacts/[id]/_client.tsx": 422,
   "src/app/invoices/[id]/_client.tsx": 652,
   "src/app/matters/[id]/_billing-panel.tsx": 698,
-  "src/app/matters/[id]/_kostnadsrakning-modal.tsx": 569,
+  "src/app/matters/[id]/_kostnadsrakning-modal.tsx": 568,
   "src/app/matters/page.tsx": 448,
   "src/app/settings/page.tsx": 508,
   "src/components/documents/document-browser.tsx": 775,
@@ -21,7 +21,7 @@
   "src/lib/server/routers/matter.ts": 448,
   "src/lib/server/routers/reports.ts": 624,
   "src/lib/shared/brottmalstaxa.ts": 537,
-  "src/lib/shared/kostnadsrakning.ts": 692,
+  "src/lib/shared/kostnadsrakning.ts": 685,
   "src/lib/shared/schemas/billing.ts": 407,
   "src/lib/shared/watchlist.ts": 481
 }

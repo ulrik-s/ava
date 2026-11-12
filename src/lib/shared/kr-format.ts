@@ -1,6 +1,6 @@
 /**
  * `kr-format` — svensk tal-/beloppsformatering för kostnadsräkningen (#1218)
- * och tid i decimaltimmar i appens vyer (#1542).
+ * och tid i decimaltimmar i appens vyer (#1542), fakturor och kostnadsräkningar (#1543).
  *
  * Samlad här så att sammanställningen, arbetsredogörelsen och de äldre
  * vy-fälten (`arvodeExclFormatted` m.fl.) formaterar på exakt samma sätt.
@@ -14,11 +14,6 @@ const UP_TO_TWO_DECIMALS = new Intl.NumberFormat("sv-SE", { minimumFractionDigit
 /** Öre → `"50 975,10 kr"` (alltid två decimaler). */
 export function formatOreAsKr(ore: number): string {
   return `${TWO_DECIMALS.format(ore / 100)} kr`;
-}
-
-/** Minuter → decimaltimmar med två decimaler, `"31,35"` (utan enhet). */
-export function formatHours(minutes: number): string {
-  return TWO_DECIMALS.format(minutes / 60);
 }
 
 /**
@@ -52,13 +47,4 @@ export function formatDecimalHours(minutes: number): string {
 /** Som `formatDecimalHours` men med enheten: `"1,5 h"` — där siffran står ensam. */
 export function formatDecimalHoursWithUnit(minutes: number): string {
   return `${formatDecimalHours(minutes)} h`;
-}
-
-/** Minuter → `"1 tim 25 min"` / `"50 min"` / `"3 tim"` (`"0 min"` för 0). */
-export function formatMinutes(m: number): string {
-  if (m <= 0) return "0 min";
-  const h = Math.floor(m / 60);
-  const rest = m % 60;
-  if (h === 0) return `${rest} min`;
-  return rest === 0 ? `${h} tim` : `${h} tim ${rest} min`;
 }

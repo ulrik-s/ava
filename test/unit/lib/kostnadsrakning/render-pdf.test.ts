@@ -62,9 +62,9 @@ describe("renderKostnadsrakningPdf — sida 1 (sammanställning)", () => {
 
   it("sammanställningen: grå rubrikrad, kategorirader med á-pris, utlägg och summor", async () => {
     const [p1 = []] = await render(FORSVARARE);
-    expect(p1).toEqual(expect.arrayContaining(["Enligt bifogad specifikation", "tid/antal", "kr", "ARVODE", "1,50 á 1 626 kr", "TIDSSPILLAN", "1,50 á 1 487 kr", "UTLÄGG"]));
+    expect(p1).toEqual(expect.arrayContaining(["Enligt bifogad specifikation", "tid/antal", "kr", "ARVODE", "1,5 á 1 626 kr", "TIDSSPILLAN", "1,5 á 1 487 kr", "UTLÄGG"]));
     // 1,5 h à 1 626 = 2 439 kr; tidsspillan 1,5 h à 1 487 = 2 230,50 → 2 231 kr (hela kronor, #1218); utlägg 152 kr.
-    expect(p1.join("|")).toMatch(/2\s439,00 kr\|TIDSSPILLAN\|1,50 á 1\s487 kr\|2\s231,00 kr\|UTLÄGG\|152,00 kr/);
+    expect(p1.join("|")).toMatch(/2\s439,00 kr\|TIDSSPILLAN\|1,5 á 1\s487 kr\|2\s231,00 kr\|UTLÄGG\|152,00 kr/);
     expect(p1).toEqual(expect.arrayContaining(["Belopp exkl. moms", "Moms (25%)", "Belopp inkl. moms"]));
     expect(p1.join("|")).toContain("Teststad den 24 juni 2026|Test Testsson|Advokat");
   });
@@ -113,8 +113,8 @@ describe("renderKostnadsrakningPdf — arbetsredogörelsen", () => {
     expect(pages).toHaveLength(2);
     const p2 = pages[1] ?? [];
     expect(p2[0]).toBe("ARBETSREDOGÖRELSE");
-    expect(p2.join("|")).toContain("Arvode|2026-06-10|Genomgång av handlingar|0,50");
-    expect(p2.join("|")).toContain("Summa|1,50|Tidsspillan");
+    expect(p2.join("|")).toContain("Arvode|2026-06-10|Genomgång av handlingar|0,5");
+    expect(p2.join("|")).toContain("Summa|1,5|Tidsspillan");
     expect(p2.join("|")).toContain("Utlägg|2026-06-11|Milersättning t/r|16|9,50|152|Summa|152");
     expect(p2.at(-1)).toBe("Sida 2");
   });
@@ -172,7 +172,7 @@ describe("arbetsredogörelsens summarader (#1505)", () => {
     const page = await specPage();
     for (const nth of [0, 1]) {
       const { label, value, previous } = sumRow(page, nth);
-      expect(previous.text).toMatch(/^\d+,\d\d$/); // sista postens timmar
+      expect(previous.text).toMatch(/^\d+(,\d{1,2})?$/); // sista postens timmar i decimaltimmar (#1543)
       expect(await rightEdge(value)).toBeCloseTo(await rightEdge(previous), 3);
       expect([label.font, value.font]).toEqual(["Times-Bold", "Times-Bold"]);
     }

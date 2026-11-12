@@ -67,6 +67,9 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - env:
           NORMALIZE: ${{ github.event.inputs.normalize }}
+          # Knuffen startar agenten igen för saker som stått still (flow.yaml: nudge).
+          ROUTINE_TOKEN_L3: ${{ secrets.ROUTINE_TOKEN_L3 }}
+          ROUTINE_TOKEN_L4: ${{ secrets.ROUTINE_TOKEN_L4 }}
         run: |
           if [ -n "$NORMALIZE" ]; then
             bun tooling/scripts/flow-guard.ts normalize "$NORMALIZE"

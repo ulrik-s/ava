@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { ListPage } from "@/components/layout/list-page";
 import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { periodFrom, periodTo } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
@@ -102,7 +103,7 @@ function TimeEntryForm({ form, setForm, mattersData, isPending, onSubmit }: Time
   const descriptionFieldId = useId();
   const matters = mattersData ? mattersData.matters : [];
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
+    <form onSubmit={(e) => { e.preventDefault(); if (!hasInvalidHours(e.currentTarget)) onSubmit(); }}
       className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
@@ -124,9 +125,9 @@ function TimeEntryForm({ form, setForm, mattersData, isPending, onSubmit }: Time
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </div>
         <div>
-          <label htmlFor={minutesFieldId} className="block text-sm text-gray-500 mb-1">Tid (minuter) *</label>
-          <input id={minutesFieldId} type="text" inputMode="numeric" required value={form.minutes}
-            onChange={(e) => setForm({ ...form, minutes: parseInt(e.target.value) || 0 })}
+          <label htmlFor={minutesFieldId} className="block text-sm text-gray-500 mb-1">Tid (h) *</label>
+          <HoursInput id={minutesFieldId} minutes={form.minutes}
+            onChange={(minutes) => setForm({ ...form, minutes })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </div>
         <div>
