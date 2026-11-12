@@ -20,10 +20,12 @@ För varje ÖPPEN issue i `ulrik-s/ava-feedback` med `nedbruten`:
      separata kommandon, ett i taget och en issue i taget (regel 5):
      1. skapa etiketten `release:<tagg>` i intag-repot, om den inte finns,
      2. sätt `levererad` + `release:<tagg>` på issuen,
-     3. kommentera "Levererad i <tagg>.",
-     4. stäng issuen (`state_reason` `completed`).
+     3. kommentera "Levererad i <tagg>.".
+
+     Stäng inte issuen själv. En GitHub Action i intag-repot stänger den
+     när `levererad` sätts. Du får inte stänga issues i molnet.
    - **Ingen tagg ännu:** kommentera EN gång (kolla att kommentaren inte redan
-     finns) "Klart och ute på staging, väntar på nästa release." Stäng inte.
+     finns) "Klart och mergat, kommer med nästa release." Stäng inte.
    - **Någon stängd som "not planned" utan PR:** kommentera varför och sätt
      `blockerad`, så att Ulrik bestämmer.
 
@@ -35,7 +37,7 @@ rapport ("Dubblett av #N") och originalet #N.
 - **Originalet är levererat** (`levererad` + `release:<tagg>`): sätt samma två
   etiketter på dubbletten, skriv till dess användare (MED markören
   `<!-- till-anvandaren -->`) "Det här är nu ute i AVA <tagg>. Tack för att du
-  hörde av dig!", och stäng dubbletten.
+  hörde av dig!". Stäng den inte: Actionen gör det (se A).
 - **Originalet är stängt utan leverans** (Ulrik avstod): kommentera på
   dubbletten (utan markör) och sätt `blockerad`, så att Ulrik bestämmer vad
   dubblettens användare ska få veta.
