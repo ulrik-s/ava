@@ -76,7 +76,7 @@ Definieras i `tooling/agents/labels.json`. Skapas och uppdateras med
 |---|---|---|---|
 | ava-feedback | `user-request` | servern | Ny förfrågan från knappen |
 | ava-feedback | `bugg` / `förslag` | servern | Typ |
-| ava-feedback | `väntar-på-användaren` | loop 1 / Ulrik | En fråga till användaren väntar på svar (i AVA) |
+| ava-feedback | `väntar-på-användaren` | loop 1–4 / Ulrik | En fråga till användaren väntar på svar (i AVA) |
 | ava-feedback | `dubblett` | loop 1 | Samma sak som en äldre förfrågan. Byggs inte separat, och får originalets leverans (loop 2). Användaren ser *Hanteras ihop med en tidigare förfrågan* |
 | ava-feedback | `undersökt` | loop 1 | Verifieringsrapporten finns |
 | ava-feedback | `ej-bekräftad` | loop 1 | Buggen/behovet kunde inte bekräftas |
@@ -131,6 +131,13 @@ Verifieringsagenten frågar användaren när svaret bara finns hos hen, sätter
 `väntar-på-användaren` (användaren ser *Väntar på ditt svar*) och fortsätter
 när hen har svarat. Högst två frågerundor, och efter 7 dagar utan svar skrivs
 rapporten ändå.
+
+Även efter `verifierad` frågar agenterna användaren, inte dig, om **hur något
+ska bete sig** (regel 2c i `tooling/agents/0-gemensamma-regler.md`). Det gäller
+nedbrytning, granskning och implementation. Frågan har färdiga alternativ
+inom det du verifierat. Svaret dyker upp i AVA, och agenten fortsätter
+själv när det kommer. Du får bara frågor om arkitektur, säkerhet, skyddade
+sökvägar och omfång.
 
 **Skriva till användaren själv:**
 
