@@ -73,9 +73,8 @@ async function createMatterWithNewClient(page: Page): Promise<void> {
 
 async function setPrivatePayment(page: Page): Promise<void> {
   // Betalningssättet ändras från ärendehuvudet, i en dialog (#1499).
-  await page.getByTestId("matter-header").getByRole("button", { name: "Ändra betalningssätt" }).click();
-  const dialog = page.getByRole("dialog", { name: "Betalningssätt" });
-  await dialog.getByRole("button", { name: "Ändra", exact: true }).click();
+  await page.getByTestId("matter-header").getByRole("button", { name: "Ändra ärende" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ändra ärende" });
   await dialog.getByLabel("Betalningssätt", { exact: true }).selectOption("PRIVAT");
   await dialog.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(dialog).toBeHidden();

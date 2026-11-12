@@ -127,3 +127,36 @@ test("ärendetyp byts i ärendehuvudet → ur byråns lista och fritt skriven", 
   }
   await expect(page.locator(`datalist option[value="${free}"]`)).toHaveCount(0);
 });
+
+// #1565: en enda "Ändra" i ärendehuvudet öppnar en dialog där ärendetyp (ur
+// byråns lista), målnummer och betalningssätt ändras och sparas med EN "Spara".
+test("Ändra ärende: ärendetyp, målnummer och betalningssätt sparas och står kvar efter omladdning", async ({ page }) => {
+  await seedDemoLogin(page, BASE);
+  const stamp = Date.now();
+  const listed = `Dialog ${stamp}`;
+  const caseNumber = `T ${stamp}-26`;
+  await page.goto(`${BASE}/settings/`);
+  await showPanel(page, "Ärendetyper");
+  const draft = page.getByPlaceholder("Ny ärendetyp, t.ex. Bodelning");
+  await draft.fill(listed);
+  await draft.press("Enter");
+  await expect(page.getByLabel(`Ta bort ${listed}`)).toBeVisible({ timeout: 25_000 });
+
+  await page.goto(`${BASE}/matters/`);
+  const title = "Vårdnadstvist Andersson";
+  await page.getByRole("row").filter({ hasText: title }).getByRole("link", { name: title }).click();
+  const header = page.getByTestId("matter-header");
+  await header.getByRole("button", { name: "Ändra ärende" }).click({ timeout: 25_000 });
+  const dialog = page.getByRole("dialog", { name: "Ändra ärende" });
+  await dialog.getByLabel("Ärendetyp").selectOption(listed);
+  await dialog.getByLabel("Målnummer").fill(caseNumber);
+  await dialog.getByLabel("Betalningssätt", { exact: true }).selectOption("PRIVAT");
+  await expect(dialog.getByRole("button", { name: "Spara", exact: true })).toHaveCount(1);
+  await dialog.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.reload();
+  await expect(header.getByLabel("Ärendetyp")).toHaveValue(listed, { timeout: 25_000 });
+  await expect(header.getByLabel("Målnummer")).toHaveValue(caseNumber);
+  await expect(page.getByTestId("matter-payment-line")).toContainText("Privat betalning");
+});

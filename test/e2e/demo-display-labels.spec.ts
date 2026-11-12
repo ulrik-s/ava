@@ -72,7 +72,7 @@ for (const { matterNumber, text } of PAYMENT_LINES) {
   });
 }
 
-// Fliken Betalningssätt är borta (#1499): "Ändra" i huvudet öppnar kortet i en dialog.
+// Fliken Betalningssätt är borta (#1499): "Ändra" i huvudet öppnar ärendedialogen (#1565).
 test("ingen flik Betalningssätt; betalningssättet ändras via ärendehuvudet (#1499)", async ({ page }) => {
   const seed = await fetchDemoSeed(page, BASE);
   const matter = seed.matters.find((m) => m.matterNumber === "2026-0010");
@@ -83,10 +83,8 @@ test("ingen flik Betalningssätt; betalningssättet ändras via ärendehuvudet (
   await expect(page.getByRole("tab", { name: /^Tid/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /^Betalningssätt/ })).toHaveCount(0);
 
-  await page.getByTestId("matter-header").getByRole("button", { name: "Ändra betalningssätt" }).click();
-  const dialog = page.getByRole("dialog", { name: "Betalningssätt" });
-  await expect(dialog.getByText(/Kreditrisk:/)).toBeVisible();
-  await dialog.getByRole("button", { name: "Ändra", exact: true }).click();
+  await page.getByTestId("matter-header").getByRole("button", { name: "Ändra ärende" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ändra ärende" });
   await dialog.getByLabel("Betalningssätt", { exact: true }).selectOption("PRIVAT");
   await dialog.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(dialog).toBeHidden();
