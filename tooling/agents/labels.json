@@ -1,27 +1,27 @@
 {
   "intake": [
+    { "name": "undersökt", "color": "c5def5", "description": "Verifieringsagenten har undersökt och skrivit sin rapport — väntar på Ulrik" },
+    { "name": "verifierad", "color": "1d76db", "description": "ULRIKS beslut (satt för hand) — sant och värt att bygga; nedbrytningen får ta den" },
+    { "name": "nedbruten", "color": "5319e7", "description": "Nedbruten i implementations-issues i ava" },
+    { "name": "levererad", "color": "0e8a16", "description": "Levererad i produktion (se release:-etiketten); stängs av en Action" },
+    { "name": "dubblett", "color": "cfd3d7", "description": "Samma sak som en äldre förfrågan; följer originalet" },
     { "name": "user-request", "color": "0e8a16", "description": "Från knappen i AVA — användarens egen text" },
     { "name": "bugg", "color": "d73a4a", "description": "Användaren rapporterar ett fel" },
     { "name": "förslag", "color": "a2eeef", "description": "Användaren föreslår en förbättring" },
-    { "name": "väntar-på-användaren", "color": "fbca04", "description": "En fråga till användaren (i AVA) väntar på svar" },
-    { "name": "dubblett", "color": "cfd3d7", "description": "Samma sak som en äldre förfrågan; följer originalet" },
-    { "name": "undersökt", "color": "c5def5", "description": "Verifieringsagenten har undersökt och skrivit sin rapport" },
     { "name": "ej-bekräftad", "color": "e99695", "description": "Verifieringsagenten kunde inte bekräfta buggen/behovet" },
-    { "name": "verifierad", "color": "1d76db", "description": "ULRIKS beslut (satt för hand): sant och värt att bygga — nedbrytningen får ta den" },
-    { "name": "nedbruten", "color": "5319e7", "description": "Nedbruten i implementations-issues i ava" },
-    { "name": "levererad", "color": "0e8a16", "description": "Levererad i produktion (se release:-etiketten)" },
+    { "name": "väntar-på-användaren", "color": "fbca04", "description": "En fråga till användaren (i AVA) väntar på svar" },
     { "name": "blockerad", "color": "b60205", "description": "Agenten behöver ett beslut av Ulrik" }
   ],
   "code": [
-    { "name": "agent-task", "color": "5319e7", "description": "Implementations-issue skapad av nedbrytningsloopen" },
     { "name": "att-granska", "color": "fbca04", "description": "Väntar på granskningsloopen" },
-    { "name": "granskad", "color": "0e8a16", "description": "Godkänd av granskningsloopen" },
     { "name": "behöver-ändras", "color": "d93f0b", "description": "Granskningen begär ändringar" },
-    { "name": "pågår", "color": "c5def5", "description": "Implementationsloopen arbetar på den" },
-    { "name": "agent-pr", "color": "5319e7", "description": "PR skapad av implementationsloopen" },
-    { "name": "blockerad", "color": "b60205", "description": "Agenten behöver ett beslut av Ulrik" },
-    { "name": "arkitektur-rapport", "color": "0052cc", "description": "Veckans arkitekturgenomgång (loop 5)" },
+    { "name": "granskad", "color": "0e8a16", "description": "Godkänd av granskningsloopen" },
+    { "name": "pågår", "color": "c5def5", "description": "Implementationsloopen arbetar på den (tills PR:en mergas)" },
+    { "name": "agent-task", "color": "5319e7", "description": "Implementations-issue skapad av nedbrytningsloopen" },
     { "name": "refaktorisering", "color": "bfd4f2", "description": "Förslag från arkitekturgenomgången — byggs först när Ulrik satt granskad" },
+    { "name": "arkitektur-rapport", "color": "0052cc", "description": "Veckans arkitekturgenomgång (loop 5)" },
+    { "name": "blockerad", "color": "b60205", "description": "Agenten behöver ett beslut av Ulrik" },
+    { "name": "agent-pr", "color": "5319e7", "description": "PR skapad av implementationsloopen" },
     { "name": "människa-godkänd", "color": "000000", "description": "Ulrik tillåter att agent-PR:en rör skyddade sökvägar/migrationer" }
   ]
 }

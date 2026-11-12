@@ -74,7 +74,9 @@ Finns ingen: avsluta.
    - sätt sedan etiketterna `agent-pr` + `att-granska` på PR:en, plus
      `refaktorisering` om issuen har den
      (`gh api repos/ulrik-s/ava/issues/<pr-nr>/labels …`).
-7. Ta bort `pågår` från issuen. PR:en bär tillståndet nu.
+7. Låt `pågår` ligga kvar på issuen: den stängs när PR:en mergas
+   (`Closes #N`). Har ingen PR öppnats inom 4 timmar lägger flödesvakten
+   tillbaka issuen i kön (`granskad`).
 8. Räkna taket igen (steg 0) och välj nästa issue enligt samma regler. Börja
    från en ren `origin/main` med en ny branch, och ta aldrig en issue som
    `Beror på` en issue du byggt i samma körning: den är inte mergad än.

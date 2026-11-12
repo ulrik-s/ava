@@ -1,0 +1,253 @@
+# Agentkedjans flöde — den ENDA källan till tillstånd, etiketter, övergångar,
+# villkor och timeouter. Redigera här och kör `bun run flow:gen`; det skriver
+# om tooling/agents/labels.json och docs/agent-flow.md (diagrammet).
+# Testerna fäller om de genererade filerna inte stämmer med den här filen.
+#
+# Begrepp:
+#   tillstånd  En etikett som säger var saken står. EXAKT ett åt gången:
+#              flödesvakten tar bort det gamla när ett nytt sätts.
+#              `label: null` = start (ingen tillståndsetikett).
+#   flagga     En etikett som läggs ovanpå tillståndet, t.ex. en paus
+#              (`blockerad`, `väntar-på-användaren`) eller en typ (`bugg`).
+#   by         Vem som får göra övergången: `any` (agenter och Ulrik) eller
+#              `ulrik` (bara Ulrik själv, kontrolleras i händelseloggen: inget
+#              GitHub-app-märke). Ulrik får alltid göra alla övergångar.
+#   timeout    Flödesvaktens klocka (varje timme): så länge får en sak stå i
+#              tillståndet/flaggan innan vakten gör något själv.
+#   agent      Rutinen som arbetar med saken i det tillståndet.
+
+version: 1
+ulrik: ulrik-s
+
+machines:
+  intake:
+    repo: ulrik-s/ava-feedback
+    items: issues
+    description: En förfrågan från knappen i AVA.
+    start: mottagen
+    states:
+      mottagen:
+        label: null
+        description: Ny eller återställd för omverifiering.
+        agent: L1
+        transitions:
+          - to: undersokt
+          - to: dubblett
+      undersokt:
+        label: undersökt
+        color: "c5def5"
+        description: Verifieringsagenten har undersökt och skrivit sin rapport — väntar på Ulrik
+        agent: null
+        transitions:
+          - to: verifierad
+            by: ulrik
+      verifierad:
+        label: verifierad
+        color: "1d76db"
+        description: ULRIKS beslut (satt för hand) — sant och värt att bygga; nedbrytningen får ta den
+        agent: L2
+        transitions:
+          - to: nedbruten
+      nedbruten:
+        label: nedbruten
+        color: "5319e7"
+        description: Nedbruten i implementations-issues i ava
+        agent: L2
+        transitions:
+          - to: levererad
+      levererad:
+        label: levererad
+        color: "0e8a16"
+        description: Levererad i produktion (se release:-etiketten); stängs av en Action
+        agent: null
+        transitions: []
+      dubblett:
+        label: dubblett
+        color: "cfd3d7"
+        description: Samma sak som en äldre förfrågan; följer originalet
+        agent: L2
+        transitions:
+          - to: levererad
+    flags:
+      user-request:
+        color: "0e8a16"
+        description: Från knappen i AVA — användarens egen text
+      bugg:
+        color: "d73a4a"
+        description: Användaren rapporterar ett fel
+      förslag:
+        color: "a2eeef"
+        description: Användaren föreslår en förbättring
+      ej-bekräftad:
+        color: "e99695"
+        description: Verifieringsagenten kunde inte bekräfta buggen/behovet
+      väntar-på-användaren:
+        color: "fbca04"
+        description: En fråga till användaren (i AVA) väntar på svar
+        timeout:
+          after: 7d
+          comment: Användaren har inte svarat på 7 dagar. Flödesvakten tog bort väntar-på-användaren; agenten går vidare utan svaret.
+      blockerad:
+        color: "b60205"
+        description: Agenten behöver ett beslut av Ulrik
+
+  code-issue:
+    repo: ulrik-s/ava
+    items: issues
+    description: En implementations-issue (eller ett refaktoriseringsförslag) i ava.
+    start: ny
+    states:
+      ny:
+        label: null
+        description: Utan granskningstillstånd (vanliga issues stannar här).
+        agent: null
+        transitions:
+          - to: att-granska
+          - to: granskad
+            by: ulrik
+      att-granska:
+        label: att-granska
+        color: "fbca04"
+        description: Väntar på granskningsloopen
+        agent: L3
+        transitions:
+          - to: granskad
+            unless_flag: refaktorisering
+          - to: behover-andras
+      behover-andras:
+        label: behöver-ändras
+        color: "d93f0b"
+        description: Granskningen begär ändringar
+        agent: L3
+        transitions:
+          - to: att-granska
+      granskad:
+        label: granskad
+        color: "0e8a16"
+        description: Godkänd av granskningsloopen
+        agent: L4
+        transitions:
+          - to: pagar
+          - to: att-granska
+      pagar:
+        label: pågår
+        color: "c5def5"
+        description: Implementationsloopen arbetar på den (tills PR:en mergas)
+        agent: L4
+        transitions:
+          - to: granskad
+          - to: att-granska
+        timeout:
+          after: 4h
+          to: granskad
+          unless: open_pr
+          comment: Ingen öppen PR efter 4 timmar i pågår. Flödesvakten lade tillbaka issuen i kön (granskad).
+    flags:
+      agent-task:
+        color: "5319e7"
+        description: Implementations-issue skapad av nedbrytningsloopen
+      refaktorisering:
+        color: "bfd4f2"
+        description: Förslag från arkitekturgenomgången — byggs först när Ulrik satt granskad
+      arkitektur-rapport:
+        color: "0052cc"
+        description: Veckans arkitekturgenomgång (loop 5)
+      blockerad:
+        color: "b60205"
+        description: Agenten behöver ett beslut av Ulrik
+
+  code-pr:
+    repo: ulrik-s/ava
+    items: pulls
+    description: En PR i ava — agentens egen, Dependabots eller Ulriks.
+    start: ny
+    states:
+      ny:
+        label: null
+        description: Nyöppnad, inget granskningstillstånd ännu.
+        agent: L6
+        transitions:
+          - to: att-granska
+          - to: granskad
+          - to: behover-andras
+      att-granska:
+        label: att-granska
+        color: "fbca04"
+        description: Väntar på granskningsloopen
+        agent: L3
+        transitions:
+          - to: granskad
+          - to: behover-andras
+      behover-andras:
+        label: behöver-ändras
+        color: "d93f0b"
+        description: Granskningen begär ändringar
+        agent: L4
+        transitions:
+          - to: att-granska
+          - to: granskad
+      granskad:
+        label: granskad
+        color: "0e8a16"
+        description: Godkänd av granskningsloopen
+        agent: L3
+        transitions:
+          - to: att-granska
+          - to: behover-andras
+    flags:
+      agent-pr:
+        color: "5319e7"
+        description: PR skapad av implementationsloopen
+      människa-godkänd:
+        color: "000000"
+        description: Ulrik tillåter att agent-PR:en rör skyddade sökvägar/migrationer
+        by: ulrik
+      blockerad:
+        color: "b60205"
+        description: Agenten behöver ett beslut av Ulrik
+
+routines:
+  L1:
+    name: AVA - 1 - Verification - User Feedback
+    prompt: tooling/agents/1-verifiering.md
+    trigger_id: trig_01Pt8BjCQCZPnje4DXrTx4QU
+    events:
+      - ava-feedback issues.opened
+      - ava-feedback issue_comment.created
+  L2:
+    name: AVA - 2 - Breakdown - User Feedback
+    prompt: tooling/agents/2-nedbrytning.md
+    trigger_id: trig_01TnVuo291SKkYqn3f8752qn
+    events:
+      - ava-feedback issues.labeled verifierad
+      - ava release.published
+  L3:
+    name: AVA - 3 - Review - User Feedback
+    prompt: tooling/agents/3-granskning.md
+    trigger_id: trig_01Uojap85XQbybQMenuaVf1F
+    events:
+      - ava issues.labeled att-granska
+      - ava pull_request.labeled att-granska
+      - ava check_suite.completed
+  L4:
+    name: AVA - 4 - Implementation - User Feedback
+    prompt: tooling/agents/4-implementation.md
+    trigger_id: trig_019KfqBDJkYMiLG43Dr7QMo2
+    events:
+      - ava issues.labeled granskad
+      - ava pull_request.labeled behöver-ändras
+  L5:
+    name: AVA - 5 - Architecture - Weekly
+    prompt: tooling/agents/5-arkitektur.md
+    trigger_id: trig_01TAQW7uZ8sTom38Rsr4HTbg
+    events: []
+  L6:
+    name: AVA - 6 - PR-vakt
+    prompt: tooling/agents/6-pr-vakt.md
+    trigger_id: trig_013of5P8fniW3JfmVty3gnJH
+    events:
+      - ava pull_request.opened
+      - ava workflow_run.completed
+
+ci:
+  hang_minutes: 60

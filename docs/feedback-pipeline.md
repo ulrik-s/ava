@@ -1,9 +1,15 @@
 # Från användarens förfrågan till produktion
 
-Användarna rapporterar buggar och föreslår förbättringar direkt i AVA. Fyra
-schemalagda Claude-agenter i molnet verifierar, bryter ner, granskar och
-implementerar dem. Allt går via CI till `main`, som deployas till **staging**
-automatiskt. Produktion får en ändring först när Ulrik sätter en `v*`-tagg.
+Användarna rapporterar buggar och föreslår förbättringar direkt i AVA.
+Claude-agenter i molnet verifierar, bryter ner, granskar och implementerar
+dem. Allt går via CI till `main`. Produktion får en ändring först när Ulrik
+sätter en `v*`-tagg.
+
+> **Flödet i detalj** — tillstånd, etiketter, vem som får flytta vad,
+> villkor och timeouter — står i `tooling/agents/flow.yaml` och ritas i
+> [`agent-flow.md`](agent-flow.md) (genererad: `bun run flow:gen`).
+> Flödesvakten (`.github/workflows/agent-flow.yml` här och `flodesvakt.yml` i
+> ava-feedback) håller etiketterna i takt med flödet.
 
 ```
  AVA: "Bugg eller förslag"

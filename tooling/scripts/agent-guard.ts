@@ -33,6 +33,7 @@ export const PROTECTED_PATHS: readonly RegExp[] = [
   /^tooling\/agents\//,
   /^tooling\/scripts\/(deploy|backup|restore|release|agent-guard|arch-metrics|file-size-ratchet)/,
   /^tooling\/scripts\/lib\//,
+  /^tooling\/scripts\/flow/,
   /^src\/lib\/server\/auth\//,
   /^src\/lib\/server\/http\/(forwarded|server-context|node-http|server-first-api)/,
   /^src\/lib\/server\/feedback\//,
@@ -140,6 +141,39 @@ const prViewSchema = z.object({
   createdAt: z.string(),
 });
 const prListSchema = z.array(z.object({ createdAt: z.string() }));
+const labelEventsSchema = z.array(z.array(z.object({
+  event: z.string(),
+  label: z.object({ name: z.string() }).optional(),
+  actor: z.object({ login: z.string() }).nullable(),
+  performed_via_github_app: z.unknown().nullable().optional(),
+})));
+
+/** En etiketthändelse: vem, och om det gjordes via en GitHub-app (en agent). */
+export interface HumanLabelEvent { event: string; label: string; actor: string; viaApp: boolean }
+
+export const ULRIK = "ulrik-s";
+
+/**
+ * `människa-godkänd` räknas bara om Ulrik själv satte den: agenterna agerar i
+ * hans namn via Claudes GitHub-app, så etiketten i sig bevisar ingenting.
+ * Den SISTA händelsen för etiketten avgör.
+ */
+export function humanApproved(events: readonly HumanLabelEvent[]): boolean {
+  const last = events.filter((e) => e.label === "människa-godkänd" && (e.event === "labeled" || e.event === "unlabeled")).at(-1);
+  return last !== undefined && last.event === "labeled" && last.actor === ULRIK && !last.viaApp;
+}
+
+function labelEvents(pr: string): HumanLabelEvent[] {
+  const pages = parseJsonWith(labelEventsSchema, gh(["api", `repos/${process.env.GH_REPO ?? ""}/issues/${pr}/events?per_page=100`, "--paginate", "--slurp"]));
+  return pages.flat().map((e) => ({ event: e.event, label: e.label?.name ?? "", actor: e.actor?.login ?? "", viaApp: e.performed_via_github_app != null }));
+}
+
+/** Etiketterna, utan `människa-godkänd` om den inte är satt av Ulrik själv. */
+export function trustedLabels(labels: readonly string[], events: () => readonly HumanLabelEvent[]): string[] {
+  if (!labels.includes("människa-godkänd") || humanApproved(events())) return [...labels];
+  console.error("✗ människa-godkänd är inte satt av Ulrik själv — räknas inte.");
+  return labels.filter((l) => l !== "människa-godkänd");
+}
 
 function main(pr: string): number {
   const view = parseJsonWith(prViewSchema, gh(["pr", "view", pr, "--json", "labels,files,createdAt"]));
@@ -148,7 +182,7 @@ function main(pr: string): number {
   const recent = parseJsonWith(prListSchema, gh(["pr", "list", "--state", "all", "--label", "agent-pr", "--limit", "100", "--search", `created:>=${since}`, "--json", "number,createdAt"]));
   const diff = gh(["pr", "diff", pr]);
   const violations = guardViolations({
-    labels: view.labels.map((l) => l.name),
+    labels: trustedLabels(view.labels.map((l) => l.name), () => labelEvents(pr)),
     files: view.files.map((f) => f.path),
     addedMigrationLines: addedMigrationLines(diff),
     baselineOnlyTightens: baselineDiffTightens(diff),
