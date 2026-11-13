@@ -14,6 +14,7 @@
  * vi i en omdirigerings-loop med demo-bootstrap.
  */
 import { useEffect, useState } from "react";
+import { AppVersion } from "@/components/shell/app-version";
 import { loadDemoMeta, type DemoMeta, type DemoMetaUser } from "@/lib/client/demo/demo-meta";
 import { loadFirmaConfig, patchFirmaConfig } from "@/lib/client/firma/firma-config";
 import { DEMO_PASSWORD } from "../../../tooling/demo-config";
@@ -95,19 +96,7 @@ export default function LoginPage() {
             {state.message}
           </p>
         )}
-        {state.kind === "info" && (
-          <div className="space-y-3">
-            <p className="text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded p-3">
-              {state.message}
-            </p>
-            <a
-              href={`${process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? ""}/`}
-              className="inline-block w-full text-center rounded-md bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium"
-            >
-              {state.action}
-            </a>
-          </div>
-        )}
+        {state.kind === "info" && <InfoView info={state} />}
         {state.kind === "ready" && (
           <LoginForm
             users={state.meta.users}
@@ -120,6 +109,24 @@ export default function LoginPage() {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/** Self-hosted-beskedet + knappen; efter utloggning även AVA:s version (#1579). */
+function InfoView({ info }: { info: LoginInfo }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded p-3">
+        {info.message}
+      </p>
+      <a
+        href={`${process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? ""}/`}
+        className="inline-block w-full text-center rounded-md bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium"
+      >
+        {info.action}
+      </a>
+      {info.signedOut && <AppVersion className="block text-center" />}
     </div>
   );
 }
