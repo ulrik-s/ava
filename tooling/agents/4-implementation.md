@@ -16,8 +16,8 @@ Räkna agent-PR:er de senaste 24 timmarna:
 PR:er med `agent-pr` och `behöver-ändras` (äldst först, högst en per körning):
 läs granskningens kommentarer och åtgärda dem på samma branch. Kör
 `bun run quality:fast`, och för appändringar även `bun run build:demo`.
-Pusha, ta bort `behöver-ändras`, sätt `att-granska` och kommentera vad du
-ändrat. Den nya head-sha:n gör att granskningen måste godkänna på nytt innan
+Pusha, sätt `att-granska` (flödesvakten tar bort `behöver-ändras`) och
+kommentera vad du ändrat. Den nya head-sha:n gör att granskningen måste godkänna på nytt innan
 något kan mergas.
 
 Gjorde du något i steg 1: gör högst två nya issues (steg 2) i samma körning.

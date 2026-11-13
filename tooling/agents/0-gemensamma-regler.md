@@ -227,7 +227,11 @@ Flödet står i **`tooling/agents/flow.yaml`** (diagram och tabeller:
 
 - **Exakt ett tillstånd** per issue/PR, i båda repona. Sätt bara nästa
   tillstånds etikett. **Flödesvakten** (en GitHub Action) tar bort det
-  gamla, och den stoppar en otillåten övergång: den tar bort din etikett,
+  gamla. **Ta aldrig själv bort den gamla tillståndsetiketten**, varken före
+  eller efter: nekas din nya etikett, eller avbryts körningen, står saken
+  annars utan tillstånd och ingen loop plockar upp den. Nekas den nya
+  etiketten: låt den gamla sitta kvar och ta med skrivningen i slutlistan
+  (regel 5). Vakten den stoppar en otillåten övergång: den tar bort din etikett,
   lägger tillbaka den gamla och kommenterar varför. Får du en sådan
   kommentar har du gjort fel. Läs flödet och gör inte om det.
 - **Flaggor** läggs ovanpå tillståndet och tas inte bort av vakten:
