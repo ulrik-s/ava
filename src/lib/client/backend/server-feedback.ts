@@ -10,7 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { trpc } from "@/lib/client/trpc";
-import type { FeedbackInput, FeedbackItem, FeedbackReply } from "@/lib/shared/feedback";
+import { anyClaudeWorking, type FeedbackInput, type FeedbackItem, type FeedbackReply } from "@/lib/shared/feedback";
 import { serverTrpcClient as server } from "./server-trpc-client";
 
 const MINE_KEY = ["server", "feedback.mine"] as const;
@@ -18,17 +18,25 @@ const MINE_KEY = ["server", "feedback.mine"] as const;
 /** Hur ofta knappen frågar efter nya meddelanden (den röda pricken). */
 export const FEEDBACK_POLL_MS = 5 * 60_000;
 
+/** …och medan Claude arbetar med en förfrågan: svaret ska synas så fort det finns. */
+export const FEEDBACK_WORKING_POLL_MS = 30_000;
+
+/** Intervallet för omhämtning: tätare medan Claude arbetar. */
+export function feedbackPollInterval(items: readonly FeedbackItem[] | undefined): number {
+  return anyClaudeWorking(items ?? []) ? FEEDBACK_WORKING_POLL_MS : FEEDBACK_POLL_MS;
+}
+
 /** Kan servern ta emot förfrågningar? */
 export function useFeedbackEnabled(): boolean {
   return useCapabilities().feedback;
 }
 
-/** Mina förfrågningar, deras status och dialog — hämtas om var 5:e minut och vid fokus. */
+/** Mina förfrågningar, deras status och dialog — hämtas om var 5:e minut (var 30:e s medan Claude arbetar) och vid fokus. */
 export function useMyFeedback() {
   return useQuery({
     queryKey: MINE_KEY,
     queryFn: (): Promise<FeedbackItem[]> => server().feedback.mine.query(),
-    refetchInterval: FEEDBACK_POLL_MS,
+    refetchInterval: (query) => feedbackPollInterval(query.state.data),
     refetchOnWindowFocus: true,
   });
 }

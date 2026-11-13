@@ -10,6 +10,8 @@ name: Flödesvakt
 on:
   issues:
     types: [labeled]
+  issue_comment:
+    types: [created]
   pull_request_target:
     types: [labeled]
   schedule:
@@ -95,3 +97,21 @@ jobs:
       - env:
           AUTO_RELEASE: ${{ vars.AUTO_RELEASE }}
         run: bun tooling/scripts/flow-release.ts
+
+  # Svar i kommentarer (användaren från AVA, eller Ulrik på något blockerat)
+  # startar rätt agent direkt — rutinernas egna GitHub-händelser täcker inte kommentarer.
+  comment:
+    name: Flödesvakt (svar)
+    if: github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - run: bun tooling/scripts/flow-comment.ts
+        env:
+          ROUTINE_TOKEN_L3: ${{ secrets.ROUTINE_TOKEN_L3 }}
+          ROUTINE_TOKEN_L4: ${{ secrets.ROUTINE_TOKEN_L4 }}

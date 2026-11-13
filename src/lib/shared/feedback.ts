@@ -99,10 +99,27 @@ export function lastActivity(item: FeedbackItem): string {
   return item.messages.at(-1)?.createdAt ?? item.createdAt;
 }
 
+/**
+ * Arbetar Claude med förfrågan just nu? Ja när den är ny (undersöks) eller när
+ * användaren skrev sist (svaret läses). Flödesvakten startar agenten inom
+ * någon minut i båda fallen. Ger texten som visas med den pulserande pricken.
+ */
+export function claudeWorkingText(item: FeedbackItem): string | null {
+  if (isFinished(item)) return null;
+  if (item.messages.at(-1)?.from === "du") return "Claude tittar på ditt svar…";
+  return item.state === "mottagen" ? "Claude undersöker din förfrågan…" : null;
+}
+
+/** Arbetar Claude med någon av förfrågningarna? Då hämtas listan om oftare. */
+export function anyClaudeWorking(items: readonly FeedbackItem[]): boolean {
+  return items.some((i) => claudeWorkingText(i) !== null);
+}
+
 /** Hur angelägen raden är för användaren: lägre först. */
 function urgency(item: FeedbackItem, seen: Readonly<Record<string, string>>): number {
   if (hasUnread(item, seen)) return 0;
-  if (item.state === "vantar_pa_dig") return 1;
+  // Har användaren redan svarat väntar den inte längre på hen.
+  if (item.state === "vantar_pa_dig" && claudeWorkingText(item) === null) return 1;
   return isFinished(item) ? 3 : 2;
 }
 

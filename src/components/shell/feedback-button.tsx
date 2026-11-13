@@ -21,7 +21,7 @@ import {
 } from "@/lib/client/backend/server-feedback";
 import { cn } from "@/lib/client/utils";
 import {
-  FEEDBACK_STATE_LABEL, hasUnread, isFinished, lastActivity, sortForList, unreadCount,
+  claudeWorkingText, FEEDBACK_STATE_LABEL, hasUnread, isFinished, lastActivity, sortForList, unreadCount,
   type FeedbackItem, type FeedbackKind, type FeedbackMessage, type MessageAuthor,
 } from "@/lib/shared/feedback";
 
@@ -38,7 +38,22 @@ function UnreadDot({ label }: { label: string }) {
   return <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" role="img" aria-label={label} />;
 }
 
+/** Pulserande prick + text medan Claude arbetar (stilla prick för den som valt bort rörelse). */
+function ClaudeWorking({ text }: { text: string }) {
+  return (
+    <span role="status" className="inline-flex items-center gap-1.5 text-blue-700">
+      <span aria-hidden="true" className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75 motion-reduce:hidden" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+      </span>
+      {text}
+    </span>
+  );
+}
+
 function StatusText({ item }: { item: FeedbackItem }) {
+  const working = claudeWorkingText(item);
+  if (working) return <ClaudeWorking text={working} />;
   return <>{FEEDBACK_STATE_LABEL[item.state]}{item.release ? ` i ${item.release}` : ""}</>;
 }
 
