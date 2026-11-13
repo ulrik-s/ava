@@ -11,6 +11,8 @@ export interface LoginInfo {
   kind: "info";
   message: string;
   action: string;
+  /** Sant bara efter en utloggning (`?signedOut=1`): då visas AVA:s version (#1579). */
+  signedOut: boolean;
 }
 
 /** Beskedet; efter en utloggning noteras att proxyns session är avslutad. */
@@ -19,6 +21,7 @@ export function selfHostedInfo(signedOut: boolean, storage: Pick<Storage, "remov
     return {
       kind: "info",
       action: "Till startsidan",
+      signedOut: false,
       message:
         "Self-hosted: inloggning sker via din identitetsleverantör (OIDC). " +
         "oauth2-proxy dirigerar dig dit automatiskt — den här sidan används " +
@@ -29,6 +32,7 @@ export function selfHostedInfo(signedOut: boolean, storage: Pick<Storage, "remov
   return {
     kind: "info",
     action: "Logga in igen",
+    signedOut: true,
     message: "Du är utloggad. Kopiorna av byråns data är borttagna från den här webbläsaren.",
   };
 }
