@@ -4,7 +4,7 @@
 
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { Sidebar } from "@/components/shell/sidebar";
 import { registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
 
@@ -286,5 +286,67 @@ describe("Sidebar — hopfällt ikon-läge (#1198)", () => {
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/)));
     const stored = JSON.parse(localStorage.getItem("ava.firma") ?? "{}");
     expect(stored.token).toBeUndefined();
+  });
+});
+
+describe("Sidebar — versionen i den utfällda menyn (#1578)", () => {
+  const ENV = ["NEXT_PUBLIC_AVA_VERSION", "NEXT_PUBLIC_AVA_VERSION_DATE"] as const;
+  const saved = ENV.map((k) => process.env[k]);
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_AVA_VERSION = "v0.7.11";
+    process.env.NEXT_PUBLIC_AVA_VERSION_DATE = "2026-11-13T08:16:45+01:00";
+  });
+  afterEach(() => {
+    ENV.forEach((k, i) => {
+      const v = saved[i];
+      if (v === undefined) Reflect.deleteProperty(process.env, k);
+      else process.env[k] = v;
+    });
+  });
+
+  const versions = (root: ParentNode = document): HTMLElement[] =>
+    Array.from(root.querySelectorAll<HTMLElement>("[data-app-version]"));
+  const region = (selector: string): HTMLElement => {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (!el) throw new Error(`saknas: ${selector}`);
+    return el;
+  };
+
+  it("utfällt huvud: versionstexten under 'Advokat CRM', i ett 64 px-huvud (h-16) med knappen sist", () => {
+    render(<Sidebar />);
+    const desktop = region("[data-desktop-sidebar]");
+    const [text] = versions(desktop);
+    expect(text?.textContent).toBe("v0.7.11 · 13 nov 2026");
+    expect(text?.className).toContain("text-xs");
+    expect(text?.className).toContain("text-gray-500");
+    expect(text?.previousElementSibling?.textContent).toBe("Advokat CRM");
+    const header = text?.closest(".h-16");
+    expect(header?.lastElementChild?.getAttribute("aria-label")).toBe("Fäll ihop menyn");
+    // Bara ett ställe: inte ikonmenyn eller mobilens toppremsa.
+    expect(versions()).toHaveLength(1);
+    expect(versions(region("[data-icon-sidebar]"))).toHaveLength(0);
+    expect(versions(region("div[data-mobile-topbar]"))).toHaveLength(0);
+  });
+
+  it("hopfälld meny: ingen versionstext", () => {
+    render(<Sidebar />);
+    fireEvent.click(screen.getByRole("button", { name: "Fäll ihop menyn" }));
+    expect(versions()).toHaveLength(0);
+  });
+
+  it("mobilens utfällda meny (överlägget): ingen versionstext", () => {
+    render(<Sidebar />);
+    fireEvent.click(screen.getByRole("button", { name: "Öppna meny" }));
+    const overlay = document.querySelector<HTMLElement>(".fixed.inset-0");
+    expect(overlay).not.toBeNull();
+    expect(versions(overlay ?? document)).toHaveLength(0);
+    expect(versions()).toHaveLength(1);
+  });
+
+  it("saknad version vid bygget: ingenting renderas", () => {
+    process.env.NEXT_PUBLIC_AVA_VERSION = "";
+    render(<Sidebar />);
+    expect(versions()).toHaveLength(0);
+    expect(screen.getAllByText("Advokat CRM").length).toBe(2);
   });
 });

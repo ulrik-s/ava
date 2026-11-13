@@ -7,9 +7,18 @@
  * - 768–1023 px (en halv skärm i en tiling-fönsterhanterare, surfplatta): en
  *   ikonmeny till vänster, alltid synlig (#1301). Förr fanns bara ☰ uppe till
  *   höger, och menyn "syntes inte till vänster".
+ * - AVA:s version (#1578) står bara i den utfällda desktopmenyns huvud. Den
+ *   bakas in vid bygget ur `git describe --tags`; förväntad text räknas fram
+ *   ur samma utcheckning. Saknar den taggar (grund klon) visas ingenting.
  */
 import type { Page } from "@playwright/test";
+import { formatAppVersion } from "../../src/lib/shared/app-version";
+import { readBuildVersion } from "../../tooling/scripts/build-version";
 import { DEMO_BASE_URL as BASE, seedDemoLogin, test, expect } from "./_demo-test";
+
+const build = readBuildVersion();
+const VERSION_TEXT = formatAppVersion(build.version, build.date);
+const versionText = (page: Page) => page.locator("[data-app-version]");
 
 /** Ligger elementet själv överst i sin mittpunkt (inget annat täcker det)? */
 async function isTopmost(page: Page, role: "button" | "link", name: string | RegExp): Promise<boolean> {
@@ -68,3 +77,28 @@ for (const [label, width, height] of [["halv skärm", 800, 900], ["kvarts skärm
     await expectMatters(page);
   });
 }
+
+test("1280 px: versionen står i den utfällda sidomenyns 64 px-huvud, inte efter Fäll ihop (#1578)", async ({ page }) => {
+  await openStart(page, 1280, 800);
+  const header = page.locator("[data-desktop-sidebar] > div").first();
+  expect((await header.boundingBox())?.height).toBe(64);
+  await expect(versionText(page)).toHaveCount(VERSION_TEXT ? 1 : 0);
+  if (VERSION_TEXT) await expect(versionText(page)).toHaveText(VERSION_TEXT);
+  await page.getByRole("button", { name: "Fäll ihop menyn" }).click();
+  await expect(page.getByRole("button", { name: "Fäll ut menyn" })).toBeVisible();
+  await expect(versionText(page)).toHaveCount(0);
+});
+
+test("900 px (ikonmenyn): ingen synlig versionstext (#1578)", async ({ page }) => {
+  await openStart(page, 900, 900);
+  await expect(page.getByRole("link", { name: "Ärenden", exact: true })).toBeVisible();
+  await expect(versionText(page)).toBeHidden();
+});
+
+test("390 px (telefon): ingen versionstext i toppremsan eller den öppnade menyn (#1578)", async ({ page }) => {
+  await openStart(page, 390, 844);
+  await expect(versionText(page)).toBeHidden();
+  await page.getByRole("button", { name: "Öppna meny" }).click();
+  await expect(page.getByRole("link", { name: /Ärenden/ }).first()).toBeVisible();
+  await expect(versionText(page)).toBeHidden();
+});
