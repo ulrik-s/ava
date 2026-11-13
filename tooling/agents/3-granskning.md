@@ -34,14 +34,21 @@ För var och en (äldst först):
    - **Kräver den skyddade sökvägar** eller en destruktiv migration? Sätt då
      `blockerad` med en förklaring.
 3. Utfall:
-   - Bra (eller bra efter små förtydliganden du själv gör i issuen): ta bort
-     `att-granska`, sätt `granskad`, kommentera kort vad du kontrollerat.
+   - Bra (eller bra efter små förtydliganden du själv gör i issuen): sätt
+     `granskad` (flödesvakten tar bort `att-granska`), kommentera kort vad du
+     kontrollerat.
    - Felaktig i grunden: kommentera konkret och sätt `blockerad`.
 
 Sätt ALDRIG `granskad` på en issue med `refaktorisering`. Den godkänner bara
 Ulrik (loop 5).
 
 ## B. PR:er med `agent-pr` + `att-granska`
+
+Ta också med öppna PR:er med `agent-pr` som saknar tillståndsetikett (varken
+`att-granska`, `granskad` eller `behöver-ändras`). De har tappat sitt
+tillstånd, t.ex. efter en nekad skrivning. Finns en godkännandekommentar från
+dig vars `Granskad commit:` är lika med nuvarande head-sha: sätt bara
+`granskad` och gå till C. Annars: granska som nedan.
 
 För var och en:
 
@@ -79,10 +86,11 @@ För var och en:
      annat. (En refaktorisering har ingen intag-issue, så kontrollen mot "Inte
      med" gäller inte.)
 3. Utfall:
-   - **Godkänd:** ta bort `att-granska`, sätt `granskad`, och kommentera en
-     sammanfattning som slutar med raden `Granskad commit: <head-sha>`.
-   - **Ändringar behövs:** kommentera konkret (fil:rad, vad och varför), ta
-     bort `att-granska` och sätt `behöver-ändras`.
+   - **Godkänd:** kommentera en sammanfattning som slutar med raden
+     `Granskad commit: <head-sha>`, och sätt sedan `granskad`. Ta inte bort
+     `att-granska` själv; flödesvakten gör det (regel 7).
+   - **Ändringar behövs:** kommentera konkret (fil:rad, vad och varför) och
+     sätt `behöver-ändras`. Flödesvakten tar bort `att-granska`.
    - **Har gått fram och tillbaka 3 gånger**, eller du är osäker på om det är
      rätt sak att bygga: sätt `blockerad` och skriv en fråga till Ulrik.
 
@@ -92,7 +100,8 @@ För varje öppen PR med `agent-pr` + `granskad` och utan `blockerad`:
 
 1. Läs `Granskad commit:` ur din senaste godkännandekommentar och jämför med
    PR:ens nuvarande head-sha. Skiljer de sig har någon pushat efter
-   granskningen: ta bort `granskad`, sätt `att-granska` och granska om (B).
+   granskningen: sätt `att-granska` (flödesvakten tar bort `granskad`) och
+   granska om (B).
 2. Hämta CI för head-sha (`check-runs`):
    - Pågår något: vänta till nästa körning.
    - Är något rött: låt PR:en vara. PR-vakten (loop 6,

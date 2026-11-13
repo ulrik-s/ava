@@ -124,8 +124,8 @@ med `granskad` men där head-sha:n inte är den granskade:
    (kontrollera i händelseloggen som i regel 2). Saknas den: kommentera en
    gång att PR:en väntar på Ulrik.
 5. Utfall:
-   - **Godkänd:** sätt `granskad`, ta bort `behöver-ändras` om den finns,
-     och kommentera en sammanfattning som slutar med raden
+   - **Godkänd:** sätt `granskad` (flödesvakten tar bort `behöver-ändras`
+     om den finns), och kommentera en sammanfattning som slutar med raden
      `Granskad commit: <head-sha>`.
    - **Fel:** kommentera konkret (fil:rad, vad och varför) och sätt
      `behöver-ändras`. Är det en Dependabot-PR med brytande ändringar som
