@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { readBuildVersion } from "./tooling/scripts/build-version";
 
 /**
  * Dual build target:
@@ -21,6 +22,12 @@ const demoBasePath = process.env.DEMO_BASE_PATH ?? "";
 // Exponera basePath som NEXT_PUBLIC_*-variabel så client-bundle:n vet
 // vad den ska prefixa absoluta URL:s med (t.ex. manifest.json).
 process.env.NEXT_PUBLIC_DEMO_BASE_PATH = demoBasePath;
+
+// AVA:s version och datum (#1578) bakas in på samma sätt: `git describe --tags`
+// och HEAD:s commit-datum. Tomma när git inte kan svara; då visas ingen version.
+const buildVersion = readBuildVersion();
+process.env.NEXT_PUBLIC_AVA_VERSION = buildVersion.version;
+process.env.NEXT_PUBLIC_AVA_VERSION_DATE = buildVersion.date;
 
 const baseConfig: NextConfig = {
   reactStrictMode: true,

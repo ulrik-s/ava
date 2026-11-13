@@ -7,6 +7,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { z } from "zod";
 import { loadFromStorage } from "@/lib/client/load-from-storage";
 import { cn } from "@/lib/client/utils";
+import { AppVersion } from "./app-version";
 import { FeedbackButton } from "./feedback-button";
 import { useSignOutFlow } from "./sign-out-flow";
 import { ThemeToggle } from "./theme-toggle";
@@ -138,14 +139,19 @@ function useCollapsed(): [boolean, () => void] {
   return [collapsed, toggle];
 }
 
-/** Sidofältets huvud: "AVA" (+ "Advokat CRM" i fullt läge) och växlingsknappen. */
+/** Sidofältets huvud: "AVA" (+ "Advokat CRM" och versionen i fullt läge, #1578) och växlingsknappen. */
 function SidebarHeader({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
   const toggleLabel = collapsed ? "Fäll ut menyn" : "Fäll ihop menyn";
   return (
     <div className={cn("flex h-16 items-center border-b border-gray-200", collapsed ? "flex-col justify-center gap-1 px-2" : "px-6")}>
       <h1 className={cn("font-bold text-gray-900", collapsed ? "text-base" : "text-xl")}>AVA</h1>
-      {!collapsed && <span className="ml-2 text-sm text-gray-500">Advokat CRM</span>}
+      {!collapsed && (
+        <div className="ml-2 flex min-w-0 flex-col">
+          <span className="text-sm text-gray-500">Advokat CRM</span>
+          <AppVersion className="truncate" />
+        </div>
+      )}
       <button
         onClick={onToggle}
         aria-label={toggleLabel}
