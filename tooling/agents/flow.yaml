@@ -226,6 +226,7 @@ routines:
     trigger_id: trig_01Pt8BjCQCZPnje4DXrTx4QU
     events:
       - "GitHub: ava-feedback issues.opened"
+      - "flödesvakten: användarens svar i AVA"
   L2:
     name: AVA - 2 - Breakdown - User Feedback
     prompt: tooling/agents/2-nedbrytning.md

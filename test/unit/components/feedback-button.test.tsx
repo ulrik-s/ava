@@ -162,3 +162,26 @@ describe("FeedbackButton — dialogen", () => {
     expect(screen.getByText("Dina förfrågningar")).toBeInTheDocument();
   });
 });
+
+describe("FeedbackButton — Claude arbetar", () => {
+  it("en ny förfrågan visar en pulserande status i listan", () => {
+    items = [item({ number: 1 })];
+    openDialog();
+    expect(screen.getByRole("status")).toHaveTextContent("Claude undersöker din förfrågan…");
+  });
+
+  it("efter användarens svar visar tråden att Claude tittar på svaret", () => {
+    items = [item({ number: 1, state: "vantar_pa_dig", messages: [QUESTION, { id: 12, from: "du", body: "Faktura 7", createdAt: "2026-11-10T09:00:00Z" }] })];
+    seen = { "1": "2026-11-10T09:00:00Z" };
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: /Fel summa/ }));
+    expect(screen.getByRole("status")).toHaveTextContent("Claude tittar på ditt svar…");
+  });
+
+  it("väntar förfrågan på användaren visas ingen pulserande status", () => {
+    items = [item({ number: 1, state: "vantar_pa_dig", messages: [QUESTION] })];
+    openDialog();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByText("Väntar på ditt svar")).toBeInTheDocument();
+  });
+});

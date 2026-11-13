@@ -19,7 +19,7 @@ vi.mock("@/lib/client/trpc", () => ({
 vi.mock("@/lib/client/capabilities/use-capabilities", () => ({ useCapabilities: () => ({ feedback: true }) }));
 vi.mock("@/lib/client/backend/server-trpc-client", () => ({ serverTrpcClient: () => ({}) }));
 
-const { useFeedbackSeen, SEEN_PREF_KEY } = await import("@/lib/client/backend/server-feedback");
+const { FEEDBACK_POLL_MS, FEEDBACK_WORKING_POLL_MS, feedbackPollInterval, useFeedbackSeen, SEEN_PREF_KEY } = await import("@/lib/client/backend/server-feedback");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -50,5 +50,15 @@ describe("useFeedbackSeen", () => {
     act(() => { result.current.markSeen(1, "2026-11-10T08:00:00Z"); });
     act(() => { result.current.markSeen(1, "2026-11-10T07:00:00Z"); });
     expect(saveMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("feedbackPollInterval", () => {
+  const base = { number: 1, title: "x", kind: "bug" as const, createdAt: "2026-11-09T10:00:00Z", release: null, messages: [], canReply: true };
+
+  it("var 30:e sekund medan Claude arbetar, annars var 5:e minut", () => {
+    expect(feedbackPollInterval([{ ...base, state: "mottagen" }])).toBe(FEEDBACK_WORKING_POLL_MS);
+    expect(feedbackPollInterval([{ ...base, state: "undersokt" }])).toBe(FEEDBACK_POLL_MS);
+    expect(feedbackPollInterval(undefined)).toBe(FEEDBACK_POLL_MS);
   });
 });
