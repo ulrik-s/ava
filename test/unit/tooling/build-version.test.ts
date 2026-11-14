@@ -35,6 +35,17 @@ describe("readBuildVersion", () => {
     expect(readBuildVersion(fakeGit({ "describe --tags": "v0.7.11" }))).toEqual({ version: "v0.7.11", date: "" });
   });
 
+  it("AVA_VERSION i miljön vinner över git (produktionen bygger utan git)", () => {
+    const git = fakeGit({ "describe --tags": "v0.0.1" });
+    expect(readBuildVersion(git, { AVA_VERSION: " v0.7.12 ", AVA_VERSION_DATE: "2026-11-14T01:45:00Z" })).toEqual({ version: "v0.7.12", date: "2026-11-14T01:45:00Z" });
+    expect(git.calls).toEqual([]);
+    expect(readBuildVersion(git, { AVA_VERSION: "v0.7.12" })).toEqual({ version: "v0.7.12", date: "" });
+  });
+
+  it("tom AVA_VERSION räknas inte: git används", () => {
+    expect(readBuildVersion(fakeGit({ "describe --tags": "v0.7.11" }), { AVA_VERSION: "  " })).toEqual({ version: "v0.7.11", date: "" });
+  });
+
   it("standardköraren kastar aldrig och ger strängar", () => {
     const v = readBuildVersion();
     expect(typeof v.version).toBe("string");

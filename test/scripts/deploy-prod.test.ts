@@ -72,6 +72,7 @@ case "$1" in
     case "$*" in
       *build-demo.sh*)
         [ -z "\${FAKE_BUILD_FAIL:-}" ] || exit 1
+        echo "version \${AVA_VERSION:-saknas}" >> "$FAKE_LOG"
         mkdir -p out/_next/static/chunks
         css=".bg-canvas{a:b}.x>span:before{a:b}"
         printf "%s" "\${FAKE_CSS:-\$css}" > out/_next/static/chunks/a.css
@@ -152,6 +153,13 @@ const at = (calls: string[], needle: string): number => calls.findIndex((c) => c
 const head = (): string => sh("git rev-parse --short HEAD", srv);
 
 describe("deploy-prod.sh — en lyckad deploy", () => {
+  it("versionen i gränssnittet räknas fram på värden och skickas in i bygget (containern saknar git, #1578)", () => {
+    pushCommit();
+    const { status, out, calls } = deploy([], { AVA_VERSION: "v9.9.9" });
+    expect(status, out).toBe(0);
+    expect(calls).toContain("version v9.9.9");
+  });
+
   it("bygger, migrerar, startar om servern och byter sedan klienten", () => {
     const sha = pushCommit();
     const { status, out, calls } = deploy();
@@ -167,7 +175,7 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     expect(backup).toBeGreaterThan(-1);
     expect(backup).toBeLessThan(build);
     // Prod-klienten byggs utan demodata (#1352) och på roten.
-    expect(calls[build]).toContain("-e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server oven/bun:1");
+    expect(calls[build]).toContain("-e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server -e AVA_VERSION -e AVA_VERSION_DATE oven/bun:1");
     expect(build).toBeLessThan(migrate);
     expect(migrate).toBeLessThan(up);
     expect(up).toBeLessThan(at(calls, "exec -T caddy wget"));
