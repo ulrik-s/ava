@@ -42,8 +42,10 @@ fliken så är allt borta.
   (`.mcp.json`), så varje Claude Code-session på repot — i terminalen, på
   [claude.ai/code](https://claude.ai/code) eller startad från mobilappen — kan
   svara på *"hur går det för byrån i år?"* direkt mot en seedad sandlåda.
-  Lokalt: `git clone … && bun install && claude`. Mot riktig data: sätt
-  `AVA_SERVER_URL` + `AVA_TOKEN` (PAT) mot en server-first-instans.
+  Lokalt: `git clone … && bun install && claude`. Mot riktig data: lägg
+  till byråns `https://<domän>/mcp` som koppling i Claude — var och en
+  loggar in med sitt eget Microsoft-konto och får sina egna rättigheter
+  ([docs/mcp-remote.md](docs/mcp-remote.md)).
 
 > Allt ovan är förifyllt med exempeldata i demon så att du kan se hur det
 > hänger ihop. I skarp drift sparas dina ändringar löpande i byråns arkiv.

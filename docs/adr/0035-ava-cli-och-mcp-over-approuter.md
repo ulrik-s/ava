@@ -1,6 +1,6 @@
 # ADR 0035 — `ava`-CLI + MCP-server över appRouter
 
-**Status:** Antagen · **Datum:** 2026-07-30, reviderad 2026-08-13 · **Issue:** #913, #1006
+**Status:** Antagen · **Datum:** 2026-07-30, reviderad 2026-08-13 och 2026-11-14 · **Issue:** #913, #1006, #1026
 
 ## Kontext
 
@@ -91,6 +91,28 @@ undviker `ui-imports-server-by-type-only` m.fl. utan undantag.
   PKCE, ADR 0028) är eget arbete.
 - Wiring till alla kvalitetsgrindar (knip-entries, `deps:check`-scope,
   coverage-ratchet) tas stegvis (#913).
+
+## Revision 2026-11-14: remote-MCP med OAuth (#1026)
+
+PAT:en via `AVA_TOKEN` ersätts för skarp användning av **remote-MCP på
+`/mcp` i server-first-processen** (`tooling/ava-cli/mcp-http.ts`, monterad i
+`src/bin/server-first.ts`). Det sker enligt MCP-spec:ens OAuth-modell: AVA är
+resursserver och publicerar RFC 9728-metadata, byråns IdP (Entra) är
+auktoriseringsserver.
+
+- **In-process, inte en egen tjänst:** verktygen kör `appRouter.createCaller(ctx)`
+  direkt. Det blir ingen ny container, ingen HTTP-hop och ingen dubbel deploy.
+- **Samma identitetsmodell som webben:** token:en verifieras med AVA:s
+  befintliga jose-väg (`bearer-claims.ts`), och användaren slås upp på e-post i
+  allowlisten. Roll, byrå och ändringslogg följer personen.
+- **Förtroendegränsen:** `/mcp` går förbi oauth2-proxy. Kontexten byggs ur en
+  ny request med bara Bearer-token:en, i `verified`-läge. Proxyns headers
+  används aldrig på den vägen.
+- **Ingen egen auktoriseringsserver:** Entra stöder inte dynamisk
+  klientregistrering, så Claude får ett fast klient-id (docs/mcp-remote.md).
+  En egen AS framför Entra vore mer kod att äga och behövs först om en klient
+  kräver DCR.
+- **stdio + PAT finns kvar** för utveckling och sandlådan.
 
 ## Alternativ som förkastades
 

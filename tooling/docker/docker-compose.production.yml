@@ -132,6 +132,13 @@ services:
       # servern inte kan nås förbi Caddy (ingen publicerad port, se nedan).
       # Se docs/deploy-server-first.md innan du slår på verified.
       AVA_IDENTITY: "${AVA_IDENTITY:-forwarded}"
+      # Remote-MCP för Claude (#1026) — av när AVA_MCP_RESOURCE är tom.
+      # Se docs/mcp-remote.md (Entra-appen, scopes, Claude-kopplingen).
+      AVA_MCP_RESOURCE: "${AVA_MCP_RESOURCE:-}"
+      AVA_MCP_ISSUER: "${AVA_MCP_ISSUER:-}"
+      AVA_MCP_AUDIENCE: "${AVA_MCP_AUDIENCE:-}"
+      AVA_MCP_SCOPES: "${AVA_MCP_SCOPES:-}"
+      AVA_MCP_JWKS_URI: "${AVA_MCP_JWKS_URI:-}"
       AVA_IDENTITY_ISSUER: "${OIDC_ISSUER_URL:-}"
       AVA_IDENTITY_AUDIENCE: "${AVA_IDENTITY_AUDIENCE:-${OAUTH2_PROXY_CLIENT_ID:-}}"
       # Utloggning hos IdP:n (#1347): end_session_endpoint som klienten skickar

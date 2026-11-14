@@ -125,6 +125,15 @@ export function createLocalCaller(principal: LocalPrincipal = DEFAULT_PRINCIPAL)
     ports: buildGitPorts(dataStore),
     repos: buildInMemoryRepositories(dataStore),
   });
+  return callerFromTrpc(caller);
+}
+
+/**
+ * En `appRouter.createCaller(ctx)` som `AvaCaller`. Delas av LOCAL och av
+ * remote-MCP i server-first-processen (mcp-http.ts), där ctx byggs per request
+ * ur användarens egen token.
+ */
+export function callerFromTrpc(caller: unknown): AvaCaller {
   return {
     invoke: (path, input) => asProcFn(resolveNode(caller, path), path)(input),
     close: () => Promise.resolve(),
