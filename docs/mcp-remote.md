@@ -13,9 +13,18 @@ MCP-spec:ens OAuth-modell. AVA är **resursserver**, byråns Entra-tenant är
 
 1. Claude anropar `/mcp` utan token. AVA svarar `401` med
    `WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource/mcp"`.
-2. Dokumentet (RFC 9728) pekar ut Entra-tenanten och scopet.
-3. Claude skickar användaren till Microsofts inloggning (med MFA och villkorsstyrd
-   åtkomst som vanligt) och får en access-token.
+2. Dokumentet (RFC 9728) pekar ut AVA:s egen auktoriseringsfasad
+   (`/.well-known/oauth-authorization-server`) och scopet.
+3. Claude skickar användaren via `/mcp/authorize` till Microsofts inloggning
+   (med MFA och villkorsstyrd åtkomst som vanligt) och hämtar access-token via
+   `/mcp/token`. Båda vidarebefordras till Entra.
+
+   **Varför en fasad:** Entras metadata saknar `code_challenge_methods_supported`,
+   och då måste en MCP-klient vägra. Claude visar "Anslutningsproblem" utan att
+   någon inloggning syns i Entra. Entra vägrar också `resource`-parametern
+   (AADSTS9010010). Fasaden (`tooling/ava-cli/mcp-oauth-facade.ts`) publicerar
+   metadata med PKCE och tar bort `resource`. Token:en utfärdas fortfarande av
+   Entra, och AVA lagrar ingenting.
 4. Varje anrop bär `Authorization: Bearer <token>`. server-first verifierar den
    (signatur mot Entras nycklar, issuer, `aud`, utgång) och slår upp användaren
    **på e-post** i byråns användarlista, precis som webbinloggningen.
