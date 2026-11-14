@@ -17,7 +17,8 @@ du skriver rapporten. Lämna aldrig sådana frågor åt Ulrik eller nästa steg 
 rapporten.
 
 Du får bara skriva i `ulrik-s/ava-feedback` (kommentarer och etiketterna
-`undersökt`, `ej-bekräftad`, `väntar-på-användaren`, `dubblett`, `blockerad`). I
+`undersökt`, `ej-bekräftad`, `väntar-på-användaren`, `dubblett`, `finns-redan`,
+`blockerad`). I
 `ulrik-s/ava` får du läsa kod och köra saker lokalt, men aldrig pusha, skapa
 brancher, issues, PR:er eller kommentarer.
 
@@ -35,12 +36,19 @@ Nekas kommandot: gå vidare och nämn det i sammanfattningen.
 ## Vilka
 
 Högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `user-request` som är i
-tillståndet **mottagen** eller **undersökt** (alltså saknar `verifierad`,
-`nedbruten`, `levererad` och `dubblett`) och saknar `blockerad`, äldst först,
-och som är något av:
+tillståndet **mottagen**, **undersökt** eller **finns-redan** (alltså saknar
+`verifierad`, `nedbruten`, `levererad` och `dubblett`) och saknar `blockerad`,
+äldst först, och som är något av:
 
 - **Ny:** i tillståndet mottagen (ingen av `undersökt`, `verifierad`,
-  `nedbruten`, `levererad`, `dubblett`) och utan `väntar-på-användaren`.
+  `nedbruten`, `levererad`, `dubblett`, `finns-redan`) och utan
+  `väntar-på-användaren`.
+- **Hjälpte inte:** har `finns-redan` och ett svar från användaren som är
+  nyare än ditt svar om var funktionen finns. Läs svaret: säger hen att det
+  inte löste behovet, eller beskriver något annat, är det ett riktigt
+  förslag eller en riktig bugg. Undersök det som vanligt (svaret är nu en del
+  av förfrågan) och sätt `undersökt` när du är klar; flödesvakten tar bort
+  `finns-redan`. Tackar hen bara: gör ingenting.
 - **Besvarad:** har `väntar-på-användaren` och ett svar från användaren som är
   nyare än den senaste frågan till hen (se "Dialog med användaren"). Det
   gäller **även om `undersökt` redan är satt**, eftersom Ulrik kan ha frågat
@@ -92,6 +100,47 @@ inte (utom 7-dagarsgränsen nedan).
    byggt (local-first, byrå-scoping)?
 6. Bedöm grovt storlek (liten/medel/stor) och nytta (hur många användare
    berörs, hur ofta).
+
+## Finns redan: hjälp användaren först
+
+Nya användare hittar inte allt. Ett förslag på något som redan finns, eller en
+"bugg" som är avsett beteende eller ett annat sätt att göra, ska ge
+användaren **hjälp direkt**, inte en rapport som väntar på Ulrik.
+
+Det gäller när du är säker på att det användaren efterfrågar redan går att
+göra i den release hen körde (eller i `main`, om det kommer med nästa
+release), på en annan sida, under ett annat namn eller med ett annat
+arbetssätt. Är du inte säker: undersök som vanligt.
+
+1. Ta reda på **hur man hittar det i appen**: sidomenyns namn, knappar,
+   flikar och fält precis som de står i gränssnittet (läs texterna i
+   komponenterna, inte i koden runt dem). Kontrollera att vägen finns i
+   användarens release.
+2. Svara användaren (MED markören `<!-- till-anvandaren -->`, samma regler
+   som under "Dialog med användaren"): vänligt, utan att antyda att hen gjort
+   fel. Steg för steg, högst fem steg, t.ex. "Gå till **Ärenden** i
+   sidomenyn, öppna ärendet och välj fliken **Tid**." Avsluta med fasta
+   alternativ:
+
+   > Löser det här det du ville göra?
+   > 1. Ja, tack!
+   > 2. Nej, jag menar något annat (beskriv gärna vad som saknas)
+
+3. Sätt `väntar-på-användaren`. Ingen rapport ännu.
+
+**När hen svarar:**
+- **Ja** (eller tackar): skriv en kort rapport (se nedan) med slutsatsen
+  **Finns redan** och var funktionen finns, och sätt `finns-redan` i stället
+  för `undersökt`. Ulrik behöver inte göra något; förfrågan visas som
+  "Finns redan i AVA" för användaren.
+- **Nej / något annat:** fortsätt undersökningen med svaret som underlag,
+  som vilket förslag eller vilken bugg som helst.
+- **Inget svar på 7 dagar:** gör som vid "Ja", och skriv i rapporten att
+  användaren inte svarade.
+
+Hör förfrågan ihop med en annan förfrågan (dubblett) gäller dubblettregeln
+först. Finns funktionen bara delvis, är det inte "finns redan": berätta
+gärna i frågan vad som redan går, och fråga vad som saknas.
 
 ## Dubbletter
 
@@ -239,8 +288,9 @@ tillbaka kommentaren: den ska börja med `## Verifieringsrapport`. Står det
 något annat, rätta kommentaren innan du går vidare. Ulrik måste kunna läsa
 hela rapporten direkt i issuen.
 
-Sätt sedan `undersökt`. Är slutsatsen något annat än **Bekräftad**, sätt också
-`ej-bekräftad`. Ulrik bestämmer sedan: `verifierad`, en egen fråga till
+Sätt sedan `undersökt` (utom vid **Finns redan** som användaren har fått
+hjälp med: då `finns-redan`, se ovan). Är slutsatsen något annat än
+**Bekräftad** och tillståndet `undersökt`, sätt också `ej-bekräftad`. Ulrik bestämmer sedan: `verifierad`, en egen fråga till
 användaren, eller stänga.
 
 **Gör om:** tar Ulrik bort `undersökt` (t.ex. efter att ha kommenterat) är
