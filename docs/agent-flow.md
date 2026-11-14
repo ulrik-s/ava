@@ -19,25 +19,31 @@ stateDiagram-v2
   state "verifierad<br/>L2" as verifierad
   state "nedbruten<br/>L2" as nedbruten
   state "levererad" as levererad
+  state "finns-redan" as finns-redan
   state "dubblett<br/>L2" as dubblett
   [*] --> mottagen
   mottagen --> undersokt
   mottagen --> dubblett
+  mottagen --> finns-redan
   undersokt --> verifierad : Ulrik
   undersokt --> dubblett
+  undersokt --> finns-redan
   verifierad --> nedbruten
   nedbruten --> levererad
   levererad --> [*]
+  finns-redan --> undersokt
+  finns-redan --> dubblett
   dubblett --> levererad
 ```
 
 | Tillstånd | Etikett | Agent | Får gå till | Timeout |
 |---|---|---|---|---|
-| mottagen | — | L1 | undersokt, dubblett | — |
-| undersokt | `undersökt` | — | verifierad (Ulrik), dubblett | — |
+| mottagen | — | L1 | undersokt, dubblett, finns-redan | — |
+| undersokt | `undersökt` | — | verifierad (Ulrik), dubblett, finns-redan | — |
 | verifierad | `verifierad` | L2 | nedbruten | — |
 | nedbruten | `nedbruten` | L2 | levererad | — |
 | levererad | `levererad` | — | — | — |
+| finns-redan | `finns-redan` | — | undersokt, dubblett | — |
 | dubblett | `dubblett` | L2 | levererad | — |
 
 | Flagga | Får sättas av | Timeout | Betyder |
@@ -139,6 +145,7 @@ gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/bugg
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/dubblett
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/ej-bekr%C3%A4ftad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/f%C3%B6rslag
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/finns-redan
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/levererad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/nedbruten
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/unders%C3%B6kt
@@ -163,6 +170,7 @@ gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=blockerad'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=bugg'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=dubblett'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=ej-bekräftad'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=finns-redan'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=förslag'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=levererad'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=nedbruten'
