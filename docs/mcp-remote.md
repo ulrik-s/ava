@@ -38,8 +38,9 @@ Görs i Entra-admin för byråns tenant av någon med rätt att registrera appar
 1. **Appregistrering för AVA:s API**: *App registrations → New registration*,
    till exempel "AVA MCP". Single tenant.
 2. **Exponera ett API**: *Expose an API → Application ID URI* `api://<klient-id>`,
-   och lägg till scopet `mcp` ("Läsa och ändra AVA som användaren").
-   Consent: *Admins and users*.
+   och lägg till scopet `mcp` ("Använda AVA via Claude som användaren").
+   Consent: *Admins only*. Då kan ingen koppla upp sig förrän en admin har
+   godkänt appen för byrån (steg 6).
 3. **v2-token**: i *Manifest*, sätt `"requestedAccessTokenVersion": 2`
    (under `api`). Då blir `iss` `https://login.microsoftonline.com/<tenant-id>/v2.0`
    och `aud` appens klient-id.
@@ -50,12 +51,15 @@ Görs i Entra-admin för byråns tenant av någon med rätt att registrera appar
    `maria.grosskopf@…` i AVA mot UPN `maria@…`.
 5. **Klient för Claude**: Entra stöder inte dynamisk klientregistrering, så
    Claude får ett fast klient-id. I samma app: *Authentication → Add a
-   platform → Web*, med redirect-URI:n som Claude anger för anpassade
-   kopplingar (i dag `https://claude.ai/api/mcp/auth_callback`, kontrollera
-   i Anthropics dokumentation). Skapa sedan en klienthemlighet under
-   *Certificates & secrets*. Under *API permissions* ska appens eget scope
-   `mcp` finnas. Ge gärna admin consent för tenanten, så slipper juristerna
-   godkänna själva.
+   platform → Web*, med **båda** Claudes redirect-URI:er:
+   `https://claude.ai/api/mcp/auth_callback` och
+   `https://claude.com/api/mcp/auth_callback` (Anthropic flyttar mot claude.com,
+   och Entra har krävt båda). Skapa sedan en klienthemlighet under
+   *Certificates & secrets*. Under *API permissions → Add a permission → APIs
+   my organization uses*, sök på appens klient-id och lägg till den delegerade
+   behörigheten `mcp`.
+6. **Admin consent**: *API permissions → Grant admin consent for <byrån>*.
+   Först då kan juristerna logga in via Claude.
 
 ## Uppsättning på servern
 
