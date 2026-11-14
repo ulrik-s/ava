@@ -27,8 +27,23 @@ export interface BuildVersion {
   date: string;
 }
 
-/** Läser version och commit-datum ur git. Kastar aldrig. */
-export function readBuildVersion(git: GitRunner = runGit): BuildVersion {
+/**
+ * Läser version och commit-datum. `AVA_VERSION` / `AVA_VERSION_DATE` i miljön
+ * vinner: produktionen bygger i en container utan git (`oven/bun`), så
+ * deploy-prod.sh räknar fram dem på värden och skickar in dem. Annars git.
+ * Kastar aldrig.
+ */
+export function readBuildVersion(git: GitRunner = runGit, env: Readonly<Record<string, string | undefined>> = process.env): BuildVersion {
+  return versionFromEnv(env) ?? versionFromGit(git);
+}
+
+/** `AVA_VERSION` / `AVA_VERSION_DATE` ur miljön, eller null om versionen saknas. */
+function versionFromEnv(env: Readonly<Record<string, string | undefined>>): BuildVersion | null {
+  const version = (env.AVA_VERSION ?? "").trim();
+  return version ? { version, date: (env.AVA_VERSION_DATE ?? "").trim() } : null;
+}
+
+function versionFromGit(git: GitRunner): BuildVersion {
   const version = git(["describe", "--tags"]) ?? "";
   const date = version ? (git(["log", "-1", "--format=%cI", "HEAD"]) ?? "") : "";
   return { version, date };
