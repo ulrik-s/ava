@@ -29,6 +29,9 @@
  *   AVA_LOG_LEVEL         (default info)  debug|info|warn|error — strukturerad
  *                         JSON-logg till stderr (#1080). `debug` ger en rad per
  *                         tRPC-anrop; `info` bara fel.
+ *   AVA_MCP_RESOURCE + AVA_MCP_ISSUER + AVA_MCP_AUDIENCE (+ AVA_MCP_SCOPES)
+ *                         (valfria) remote-MCP på /mcp för Claude (#1026), OAuth
+ *                         mot byråns IdP — se docs/mcp-remote.md
  *   AVA_POSTHOG_KEY       (valfri) PostHog-projektets token (phc_…) — tomt = av
  *                         (#1343). Värd: AVA_POSTHOG_HOST, default PostHog EU
  *                         (eu.i.posthog.com); amerikansk värd vägras.
@@ -51,9 +54,11 @@ import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { startErrorReporting } from "@/lib/server/observability/posthog-sink";
 import type { IBackupStore, IFeedbackSink, ILedgerService } from "@/lib/server/ports";
+import { appRouter } from "@/lib/server/routers/_app";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { createLogger, jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
+import { mountMcpFromEnv } from "../../tooling/ava-cli/mcp-http";
 
 function log(msg: string): void {
   console.log(`[server-first] ${msg}`);
@@ -149,7 +154,10 @@ function main(): void {
     ports,
     onError: (err) => log(`router-fel: ${String(err)}`),
   });
-  const server = serveFetchHandler(api.handler, { port: config.httpPort, hostname: config.httpHost });
+  // Remote-MCP (#1026): /mcp framför API:t, av tills AVA_MCP_RESOURCE är satt.
+  const mcp = mountMcpFromEnv(api, (ctx) => appRouter.createCaller(ctx));
+  const server = serveFetchHandler(mcp.handler, { port: config.httpPort, hostname: config.httpHost });
+  log(mcp.status);
   log(`lyssnar på ${config.httpHost}:${config.httpPort} (org ${config.organizationId})`);
   log(emailStatusLine());
 

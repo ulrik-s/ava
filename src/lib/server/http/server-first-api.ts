@@ -20,10 +20,11 @@ import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repo
 import { DrizzleSyncDevices } from "@/lib/server/sync/drizzle-sync-devices";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
+import type { Context } from "@/lib/server/trpc-core";
 import { handleBackupDownload } from "./backup-download";
 import { bearerConfigFromEnv, type BearerVerifyConfig } from "./bearer-claims";
 import { handleHealthRoute } from "./health";
-import { createServerContext } from "./server-context";
+import { createServerContext, type ServerContextDeps } from "./server-context";
 import { createServerTrpcHandler, type ServerTrpcHandlerDeps } from "./server-trpc-handler";
 import { identityConfigFromEnv, type IdentityConfig } from "./verified-identity";
 
@@ -58,6 +59,12 @@ export interface ServerFirstApi {
   pageIndex: IDocumentPageIndex;
   /** Stäng db-poolen vid nedstängning. */
   close: () => Promise<void>;
+  /**
+   * tRPC-kontexten för en request, som tRPC-anropen får den. `overrides`
+   * byter t.ex. identitetsläget — remote-MCP (tooling/ava-cli/mcp-http.ts)
+   * godtar bara en verifierad Bearer, aldrig proxyns headers.
+   */
+  contextFor: (req: Request, overrides?: Partial<ServerContextDeps>) => Promise<Context>;
 }
 
 /** Bygg server-first-API:t (handler + db-livscykel) ur en config. */
@@ -98,7 +105,9 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     const health = await handleHealthRoute(new URL(req.url).pathname, ping);
     return health ?? (await handleBackupDownload(req, download)) ?? trpc(req);
   };
-  return { handler, repos, pageIndex: search, close };
+  const contextFor = (req: Request, overrides: Partial<ServerContextDeps> = {}): Promise<Context> =>
+    createServerContext(req, { ...deps, ...overrides });
+  return { handler, repos, pageIndex: search, close, contextFor };
 }
 
 /** Env-nycklar för den körbara entryn. */

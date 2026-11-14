@@ -25,6 +25,19 @@
 		}
 	}
 
+	# ─── Remote-MCP för Claude (#1026): Bearer-token, INTE oauth2-proxy ─
+	# Claude loggar in användaren hos byråns IdP (Entra) och skickar en
+	# access-token. server-first verifierar den själv och IGNORERAR
+	# X-Auth-Request-* på de här vägarna (tooling/ava-cli/mcp-http.ts), så
+	# ingen forward_auth här. Av tills AVA_MCP_RESOURCE är satt (då 404 →
+	# tRPC-handlern svarar). Se docs/mcp-remote.md.
+	handle /mcp {
+		reverse_proxy server-first:3001
+	}
+	handle /.well-known/oauth-protected-resource* {
+		reverse_proxy server-first:3001
+	}
+
 	# ─── tRPC-API: kräver inloggad session ─────────────────────────────
 	handle /api/* {
 		forward_auth oauth2-proxy:4180 {
