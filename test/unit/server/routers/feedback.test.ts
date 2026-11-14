@@ -240,6 +240,9 @@ describe("hjälpfunktioner", () => {
     [true, ["undersökt", "ej-bekräftad", "verifierad"], "verifierad"],
     [true, ["verifierad", "nedbruten"], "pagar"],
     [true, ["undersökt", "dubblett"], "dubblett"],
+    [true, ["finns-redan"], "finns_redan"],
+    // Användaren svarade "det hjälpte inte" och verifieringen frågar igen.
+    [true, ["finns-redan", "väntar-på-användaren"], "vantar_pa_dig"],
     // En fråga som väntar går före — användaren ska svara.
     [true, ["dubblett", "väntar-på-användaren"], "vantar_pa_dig"],
     [false, ["dubblett", "levererad"], "levererad"],

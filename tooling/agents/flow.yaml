@@ -36,6 +36,7 @@ machines:
         transitions:
           - to: undersokt
           - to: dubblett
+          - to: finns-redan
       undersokt:
         label: undersökt
         color: "c5def5"
@@ -46,6 +47,8 @@ machines:
             by: ulrik
           # Omverifiering (Ulrik eller en dubblett tog bort undersökt) kan sluta som dubblett.
           - to: dubblett
+          # …eller med att användaren fick hjälp att hitta det som redan fanns.
+          - to: finns-redan
       verifierad:
         label: verifierad
         color: "1d76db"
@@ -67,6 +70,16 @@ machines:
         description: Levererad i produktion (se release:-etiketten); stängs av en Action
         agent: null
         transitions: []
+      finns-redan:
+        label: finns-redan
+        color: "bfdadc"
+        description: Funktionen finns redan (eller beteendet är avsett) och användaren har fått veta hur — inget att bygga
+        # Ingen agent: skriver användaren igen startar flödesvakten L1 (comments.ts).
+        agent: null
+        transitions:
+          # Användaren skrev att det inte löste behovet: undersök som vanligt.
+          - to: undersokt
+          - to: dubblett
       dubblett:
         label: dubblett
         color: "cfd3d7"

@@ -25,12 +25,13 @@ export const feedbackInputSchema = z.object({
 export type FeedbackInput = z.infer<typeof feedbackInputSchema>;
 
 /** Var förfrågan befinner sig, sett från användaren. */
-export const FEEDBACK_STATES = ["mottagen", "vantar_pa_dig", "dubblett", "undersokt", "ej_bekraftad", "verifierad", "pagar", "levererad", "avslutad"] as const;
+export const FEEDBACK_STATES = ["mottagen", "vantar_pa_dig", "finns_redan", "dubblett", "undersokt", "ej_bekraftad", "verifierad", "pagar", "levererad", "avslutad"] as const;
 export type FeedbackState = (typeof FEEDBACK_STATES)[number];
 
 export const FEEDBACK_STATE_LABEL: Readonly<Record<FeedbackState, string>> = {
   mottagen: "Mottagen",
   vantar_pa_dig: "Väntar på ditt svar",
+  finns_redan: "Finns redan i AVA",
   dubblett: "Hanteras ihop med en tidigare förfrågan",
   undersokt: "Undersökt — väntar på beslut",
   ej_bekraftad: "Kunde inte bekräftas",
@@ -89,9 +90,13 @@ export function userReplyMarker(userId: string): string {
   return `<!-- ava-user-reply:${userId} -->`;
 }
 
-/** Avslutad eller levererad — inget mer händer, så den kan ligga undanstoppad. */
+/**
+ * Avslutad, levererad eller fanns redan — inget mer händer, så den kan ligga
+ * undanstoppad. En `finns_redan` går fortfarande att svara på: skriver
+ * användaren att det inte hjälpte tar verifieringen upp den igen.
+ */
 export function isFinished(item: FeedbackItem): boolean {
-  return item.state === "levererad" || item.state === "avslutad";
+  return item.state === "levererad" || item.state === "avslutad" || item.state === "finns_redan";
 }
 
 /** Senaste aktiviteten: senaste meddelandet, annars när förfrågan skickades. */
@@ -163,6 +168,8 @@ export const INTAKE_LABELS = {
   waitingForUser: "väntar-på-användaren",
   /** Samma sak som en äldre förfrågan — följer originalet till leverans. */
   duplicate: "dubblett",
+  /** Fanns redan (eller var avsett beteende); användaren har fått veta hur. */
+  alreadyExists: "finns-redan",
   brokenDown: "nedbruten",
   delivered: "levererad",
 } as const;
@@ -170,6 +177,7 @@ export const INTAKE_LABELS = {
 /** Öppen issue: första etiketten i listan som finns avgör statusen. */
 const OPEN_STATE_BY_LABEL: ReadonlyArray<readonly [string, FeedbackState]> = [
   [INTAKE_LABELS.waitingForUser, "vantar_pa_dig"],
+  [INTAKE_LABELS.alreadyExists, "finns_redan"],
   [INTAKE_LABELS.duplicate, "dubblett"],
   [INTAKE_LABELS.brokenDown, "pagar"],
   [INTAKE_LABELS.verified, "verifierad"],

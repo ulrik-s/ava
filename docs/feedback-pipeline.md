@@ -84,6 +84,7 @@ Definieras i `tooling/agents/labels.json`. Skapas och uppdateras med
 | ava-feedback | `bugg` / `förslag` | servern | Typ |
 | ava-feedback | `väntar-på-användaren` | loop 1–4 / Ulrik | En fråga till användaren väntar på svar (i AVA) |
 | ava-feedback | `dubblett` | loop 1 | Samma sak som en äldre förfrågan. Byggs inte separat, och får originalets leverans (loop 2). Användaren ser *Hanteras ihop med en tidigare förfrågan* |
+| ava-feedback | `finns-redan` | loop 1 | Det efterfrågade fanns redan (eller var avsett beteende). Loop 1 har visat användaren vägen och hen har bekräftat det (eller inte svarat på 7 dagar). Inget byggs och Ulrik behöver inte besluta. Användaren ser *Finns redan i AVA*; skriver hen att det inte hjälpte undersöker loop 1 igen |
 | ava-feedback | `undersökt` | loop 1 | Verifieringsrapporten finns |
 | ava-feedback | `ej-bekräftad` | loop 1 | Buggen/behovet kunde inte bekräftas |
 | ava-feedback | `verifierad` | **Ulrik** | Sant och värt att bygga — får brytas ner |
