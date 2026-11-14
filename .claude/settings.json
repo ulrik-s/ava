@@ -50,7 +50,7 @@
       "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f 'labels[]=pågår')",
       "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f 'labels[]=refaktorisering')",
       "Bash(gh api -X DELETE repos/ulrik-s/ava-feedback/issues/*/labels/finns-redan)",
-      "Bash(gh api repos/ulrik-s/ava-feedback/issues/*/labels -f 'labels[]=finns-redan')",
+      "Bash(gh api repos/ulrik-s/ava-feedback/issues/*/labels -f 'labels[]=finns-redan')"
     ]
   }
 }
