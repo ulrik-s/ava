@@ -53,8 +53,18 @@ function labelErrors(name: string, m: Machine): string[] {
   for (const [id, s] of Object.entries(m.states)) {
     if (s.label !== null && s.color === undefined) out.push(`${name}.${id}: etiketten ${s.label} saknar färg`);
   }
+  // GitHub vägrar längre beskrivningar (HTTP 422), och setup-agent-labels.sh
+  // stannar då mitt i listan.
+  for (const l of labelDefs(m)) {
+    if (l.description.length > GITHUB_LABEL_DESCRIPTION_MAX) {
+      out.push(`${name}: etiketten ${l.name} har en beskrivning på ${l.description.length} tecken (GitHub tillåter ${GITHUB_LABEL_DESCRIPTION_MAX})`);
+    }
+  }
   return out;
 }
+
+/** GitHubs gräns för en etikettbeskrivning. */
+export const GITHUB_LABEL_DESCRIPTION_MAX = 100;
 
 function reachable(m: Machine): Set<string> {
   const seen = new Set<string>([m.start]);
