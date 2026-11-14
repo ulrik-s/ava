@@ -73,7 +73,7 @@ machines:
       finns-redan:
         label: finns-redan
         color: "bfdadc"
-        description: Funktionen finns redan (eller beteendet är avsett) och användaren har fått veta hur — inget att bygga
+        description: Fanns redan (eller avsett beteende); användaren har fått veta hur — inget att bygga
         # Ingen agent: skriver användaren igen startar flödesvakten L1 (comments.ts).
         agent: null
         transitions:

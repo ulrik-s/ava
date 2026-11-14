@@ -4,7 +4,7 @@
     { "name": "verifierad", "color": "1d76db", "description": "ULRIKS beslut (satt för hand) — sant och värt att bygga; nedbrytningen får ta den" },
     { "name": "nedbruten", "color": "5319e7", "description": "Nedbruten i implementations-issues i ava" },
     { "name": "levererad", "color": "0e8a16", "description": "Levererad i produktion (se release:-etiketten); stängs av en Action" },
-    { "name": "finns-redan", "color": "bfdadc", "description": "Funktionen finns redan (eller beteendet är avsett) och användaren har fått veta hur — inget att bygga" },
+    { "name": "finns-redan", "color": "bfdadc", "description": "Fanns redan (eller avsett beteende); användaren har fått veta hur — inget att bygga" },
     { "name": "dubblett", "color": "cfd3d7", "description": "Samma sak som en äldre förfrågan; följer originalet" },
     { "name": "user-request", "color": "0e8a16", "description": "Från knappen i AVA — användarens egen text" },
     { "name": "bugg", "color": "d73a4a", "description": "Användaren rapporterar ett fel" },
