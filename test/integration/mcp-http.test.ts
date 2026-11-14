@@ -28,7 +28,8 @@ const { Client, StreamableHTTPClientTransport } = await import("@modelcontextpro
 
 const CONFIG: McpHttpConfig = {
   resource: new URL("https://ava.example/mcp"),
-  authorizationServers: ["https://login.example/tenant/v2.0"],
+  authorizationServers: ["https://ava.example"],
+  upstream: () => Promise.resolve({ authorizationEndpoint: "https://login.example/authorize", tokenEndpoint: "https://login.example/token" }),
   scopes: ["api://ava/mcp"],
   verify: { issuer: "https://login.example/tenant/v2.0", jwks: () => Promise.reject(new Error("används inte")) },
 };
@@ -59,7 +60,7 @@ describe("remote-MCP över HTTP", () => {
       expect(res?.status).toBe(200);
       expect(await res?.json()).toEqual({
         resource: "https://ava.example/mcp",
-        authorization_servers: ["https://login.example/tenant/v2.0"],
+        authorization_servers: ["https://ava.example"],
         scopes_supported: ["api://ava/mcp"],
         bearer_methods_supported: ["header"],
         resource_name: "AVA",
@@ -171,6 +172,7 @@ describe("mcpHttpConfigFromEnv", () => {
     });
     expect(c?.scopes).toEqual(["api://ava/mcp", "offline_access"]);
     expect(c?.verify.audience).toEqual(["a", "b"]);
-    expect(c?.authorizationServers).toEqual(["https://login.example/t/v2.0"]);
+    // AVA:s egen fasad är auktoriseringsservern (Entras metadata duger inte för MCP).
+    expect(c?.authorizationServers).toEqual(["https://ava.example"]);
   });
 });

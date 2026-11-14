@@ -31,10 +31,10 @@
 	# X-Auth-Request-* på de här vägarna (tooling/ava-cli/mcp-http.ts), så
 	# ingen forward_auth här. Av tills AVA_MCP_RESOURCE är satt (då 404 →
 	# tRPC-handlern svarar). Se docs/mcp-remote.md.
-	handle /mcp {
-		reverse_proxy server-first:3001
-	}
-	handle /.well-known/oauth-protected-resource* {
+	# /mcp/authorize och /mcp/token är OAuth-fasaden framför Entra
+	# (mcp-oauth-facade.ts); de skickar bara vidare till IdP:ns endpoints.
+	@mcp path /mcp /mcp/* /.well-known/oauth-protected-resource* /.well-known/oauth-authorization-server*
+	handle @mcp {
 		reverse_proxy server-first:3001
 	}
 

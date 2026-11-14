@@ -4,9 +4,10 @@
  * desktop, mobil) kan koppla upp sig mot byråns riktiga data.
  *
  * Auth enligt MCP-spec:ens OAuth-modell: AVA är *resursserver*, byråns IdP
- * (Entra) är *auktoriseringsserver*. Klienten hittar IdP:n via
+ * (Entra) utfärdar token:en. Klienten hittar inloggningen via
  * `/.well-known/oauth-protected-resource/mcp` (RFC 9728), som 401-svaret pekar
- * på, loggar in användaren där och skickar sedan `Authorization: Bearer`.
+ * på. Auktoriseringsservern där är AVA:s egen tunna fasad framför IdP:n
+ * (mcp-oauth-facade.ts — Entras metadata duger inte för MCP-klienter).
  *
  * Förtroendegränsen: `/mcp` ligger UTANFÖR oauth2-proxy (Caddy släpper den
  * direkt till server-first), så klienten kan skicka vilka `X-Auth-Request-*`
@@ -24,14 +25,17 @@ import { discoveredJwks, parseAudience } from "@/lib/server/http/verified-identi
 import { type AvaCaller, callerFromTrpc } from "./caller";
 import { listProcedures, type ProcedureInfo } from "./introspect";
 import { buildAvaMcpServer } from "./mcp";
+import { createOAuthFacade, upstreamFromIssuer, type UpstreamEndpoints } from "./mcp-oauth-facade";
 
 export const PRM_PREFIX = "/.well-known/oauth-protected-resource";
 
 export interface McpHttpConfig {
   /** MCP-endpointens publika URL, t.ex. `https://ava-crm.io/mcp`. Dess path är rutten. */
   resource: URL;
-  /** Auktoriseringsservrarna (issuer-URL:er) klienten ska logga in hos. */
+  /** Auktoriseringsservrarna klienten ska logga in hos (AVA:s fasad = resursens origin). */
   authorizationServers: string[];
+  /** IdP:ns endpoints som fasaden skickar vidare till. */
+  upstream: () => Promise<UpstreamEndpoints>;
   /** Scopes klienten ska be om, t.ex. `api://<app-id>/mcp`. */
   scopes: string[];
   /** Hur access-token:en verifieras (issuer, audience, JWKS). */
@@ -60,7 +64,8 @@ export function mcpHttpConfigFromEnv(env: Env = process.env): McpHttpConfig | nu
   const jwksUri = envValue(env, "AVA_MCP_JWKS_URI");
   return {
     resource: new URL(resource),
-    authorizationServers: [issuer],
+    authorizationServers: [new URL(resource).origin],
+    upstream: upstreamFromIssuer(issuer),
     scopes: (envValue(env, "AVA_MCP_SCOPES") ?? "").split(/[\s,]+/).filter(Boolean),
     verify: { issuer, audience, jwks: jwksUri ? createRemoteJWKSet(new URL(jwksUri)) : discoveredJwks(issuer) },
   };
@@ -109,6 +114,7 @@ export function createMcpHttpHandler(deps: McpHttpDeps): (req: Request) => Promi
   const mcpPath = config.resource.pathname;
   const prmPaths = new Set([PRM_PREFIX, `${PRM_PREFIX}${mcpPath}`]);
   const callers = new WeakMap<object, AvaCaller>();
+  const oauth = createOAuthFacade({ resource: config.resource, scopes: config.scopes, upstream: config.upstream });
   // En McpServer per request (SDK:ns modell), byggd med just den requestens caller.
   const mcp = createMcpHandler((ctx) => {
     const caller = ctx.authInfo ? callers.get(ctx.authInfo) : undefined;
@@ -119,6 +125,8 @@ export function createMcpHttpHandler(deps: McpHttpDeps): (req: Request) => Promi
   return async (req) => {
     const path = new URL(req.url).pathname;
     if (prmPaths.has(path)) return Response.json(protectedResourceMetadata(config), { headers: { "access-control-allow-origin": "*" } });
+    const facade = await oauth(req);
+    if (facade) return facade;
     if (path !== mcpPath) return null;
     const authorization = req.headers.get("authorization");
     const identity = await verify(authorization);
