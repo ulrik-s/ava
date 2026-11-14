@@ -87,7 +87,9 @@ machines:
 
   it("vägrar etikettbeskrivningar som GitHub inte tar emot (> 100 tecken)", () => {
     const broken = structuredClone(loadFlow());
-    const state = Object.values(broken.machines.intake.states).find((st) => st.label !== null);
+    const intake = broken.machines.intake;
+    if (!intake) throw new Error("flow.yaml saknar intake");
+    const state = Object.values(intake.states).find((st) => st.label !== null);
     if (!state?.label) throw new Error("intake saknar tillstånd med etikett");
     const label = state.label;
     state.description = "x".repeat(101);
