@@ -156,7 +156,8 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "kostnadsrakning.record": "Registrera ett genererat kostnadsräkningsdokument. Filen har redan skrivits av klienten; här sparas metadata och händelsen skickas vidare.",
 
   // ── Mail ─────────────────────────────────────────────────────────
-  "mail.saveIncoming": "Spara ett inkommande mail som dokument på ett ärende, med valfri tidspost.",
+  "mail.saveIncoming": "Spara ett inkommande mail som dokument på ett ärende, med valfri tidspost. Med internetMessageId sparas samma mail inte två gånger i samma ärende.",
+  "mail.findSaved": "Kontrollera om ett mail (Internet Message-ID) redan är sparat på ett ärende.",
 
   // ── Ärenden ──────────────────────────────────────────────────────
   "matter.list": "Lista och sök byråns ärenden, valfritt filtrerat på status eller handläggare.",

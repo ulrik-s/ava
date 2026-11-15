@@ -97,7 +97,8 @@ test("sök på klientens efternamn: träffen visar klienten", async ({ page }, i
   await openPane(page, uniqueMail(info));
   await page.locator("#q").fill("Gustafsson");
   // Efternamnet kan också vara en motpart i ett annat ärende — klientens rad ska finnas bland träffarna.
-  await expect(page.locator("#results .matter .client", { hasText: "Klient: Greta Gustafsson" })).toBeVisible();
+  // Hon är klient på flera ärenden — minst en träff ska visa henne som klient.
+  await expect(page.locator("#results .matter .client", { hasText: "Klient: Greta Gustafsson" }).first()).toBeVisible();
 });
 
 test("AVA känner inte igen inloggningen: begripligt fel, inget kan sökas", async ({ page, baseURL }) => {
