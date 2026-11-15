@@ -37,14 +37,17 @@ export interface MatterHeaderDetailsProps {
   /** Ärendets kontakter — försäkringsreferensen visas bara med ett
    *  försäkringsbolag som inte står på motsidan (#1511/#1532). */
   contacts: readonly MatterContactWithRole[];
+  /** Ansvarig advokat/jurist (namnet), om ärendet har en. */
+  responsibleLawyerName?: string | null | undefined;
 }
 
-/** Målnummer (med tidigare målnr), försäkringsreferens och beskrivning. */
+/** Ansvarig, målnummer (med tidigare målnr), försäkringsreferens och beskrivning. */
 export function MatterHeaderDetails({
-  courtCaseNumber, previousCourtCaseNumber, insuranceReference, description, contacts,
+  courtCaseNumber, previousCourtCaseNumber, insuranceReference, description, contacts, responsibleLawyerName,
 }: MatterHeaderDetailsProps) {
   return (
     <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+      <LabeledValue label="Ansvarig" value={responsibleLawyerName} testId="matter-responsible-lawyer" />
       <LabeledValue label="Målnummer" value={courtCaseNumber} mono testId="matter-court-case-number" />
       {previousCourtCaseNumber && (
         <span className="text-xs text-gray-500">

@@ -182,6 +182,8 @@ function MatterHeaderActions({ m, isPending, onClose, onReopen, onGenerate }: {
 
 function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderProps) {
   const utils = trpc.useUtils();
+  const users = trpc.user.list.useQuery().data?.users;
+  const responsibleLawyerName = users?.find((u) => u.id === m.responsibleLawyerId)?.name;
   const updateStatus = trpc.matter.update.useMutation({
     onSuccess: () => utils.matter.getById.invalidate({ id: m.id }),
   });
@@ -220,7 +222,8 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
         />
       </div>
       <MatterHeaderDetails courtCaseNumber={referenceOf(m)} previousCourtCaseNumber={referenceOf(m, "previousCourtCaseNumber")}
-        insuranceReference={referenceOf(m, "insuranceReference")} description={m.description} contacts={contacts} />
+        insuranceReference={referenceOf(m, "insuranceReference")} description={m.description} contacts={contacts}
+        responsibleLawyerName={responsibleLawyerName} />
       <RattshjalpCapWarning matterId={asId<"MatterId">(m.id)} paymentMethod={m.paymentMethod}
         rattshjalpMaxTimmar={m.rattshjalpMaxTimmar} layout="compact" />
     </div>

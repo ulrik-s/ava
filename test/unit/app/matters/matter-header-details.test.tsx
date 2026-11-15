@@ -12,6 +12,14 @@ const ADVERSE = [{ role: "MOTPART", contact: { contactType: "INSURANCE_COMPANY" 
 const EMPTY = { courtCaseNumber: "", previousCourtCaseNumber: "", insuranceReference: "", contacts: [] };
 
 describe("MatterHeaderDetails", () => {
+  it("visar ansvarig advokat/jurist, med streck när ärendet saknar en", () => {
+    const { unmount } = render(<MatterHeaderDetails {...EMPTY} responsibleLawyerName="Ulrik Sjölin" />);
+    expect(screen.getByTestId("matter-responsible-lawyer").textContent).toBe("Ansvarig: Ulrik Sjölin");
+    unmount();
+    render(<MatterHeaderDetails {...EMPTY} />);
+    expect(screen.getByTestId("matter-responsible-lawyer").textContent).toBe(`Ansvarig: ${MISSING_VALUE}`);
+  });
+
   it("visar målnummer, tidigare målnr och beskrivning som text", () => {
     render(<MatterHeaderDetails {...EMPTY} courtCaseNumber="T 2-26" previousCourtCaseNumber="T 1-26" description="En bodelning" />);
     expect(screen.getByTestId("matter-court-case-number")).toHaveTextContent("Målnummer: T 2-26");

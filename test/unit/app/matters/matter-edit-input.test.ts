@@ -9,13 +9,14 @@ import {
 
 const VALUES: MatterDetailsValues = {
   title: "T", matterType: "Bodelning", courtCaseNumber: "T 1-26", insuranceReference: "SK-1", description: "B",
+  responsibleLawyerId: "u-anna",
 };
 const CTX = { matterTypes: ["Bodelning"], showInsuranceReference: true };
 
 describe("matterDetailsFromMatter", () => {
   it("tar ärendets värden och gör saknade till tomma", () => {
     expect(matterDetailsFromMatter({ title: "T", courtCaseNumber: "", insuranceReference: "" }))
-      .toEqual({ title: "T", matterType: "", courtCaseNumber: "", insuranceReference: "", description: "" });
+      .toEqual({ title: "T", matterType: "", courtCaseNumber: "", insuranceReference: "", description: "", responsibleLawyerId: "" });
     expect(matterDetailsFromMatter({ ...VALUES })).toEqual(VALUES);
   });
 });
@@ -24,7 +25,12 @@ describe("matterDetailsInput", () => {
   it("skickar alla uppgifter när typen är vald och referensen visas", () => {
     expect(matterDetailsInput(VALUES, CTX)).toEqual({
       title: "T", matterType: "Bodelning", courtCaseNumber: "T 1-26", insuranceReference: "SK-1", description: "B",
+      responsibleLawyerId: "u-anna",
     });
+  });
+
+  it("utan vald ansvarig skickas ingen responsibleLawyerId (ärendet tappar inte sin ansvarige)", () => {
+    expect(matterDetailsInput({ ...VALUES, responsibleLawyerId: "" }, CTX)).not.toHaveProperty("responsibleLawyerId");
   });
 
   it("tomma fält: målnummer och referens null, beskrivning tom sträng", () => {
