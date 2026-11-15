@@ -13,10 +13,12 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    # flow-release.ts startar den med ref=<taggen> (github.ref_name); `tag`
+    # behövs bara när man startar för hand från main.
     inputs:
       tag:
-        description: "Befintlig release-tagg att bygga för (t.ex. v0.7.17)"
-        required: true
+        description: "Befintlig release-tagg att bygga för (t.ex. v0.7.17); tomt = ref:en"
+        required: false
 
 permissions:
   contents: write
