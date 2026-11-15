@@ -16,6 +16,7 @@
 
 import { router } from "../trpc";
 import { coreProcedures } from "./document/core";
+import { detailsProcedures } from "./document/details";
 import { eventProcedures } from "./document/events";
 import { folderProcedures } from "./document/folders";
 import { leaseProcedures } from "./document/lease";
@@ -24,6 +25,7 @@ import { suggestionProcedures } from "./document/suggestions";
 
 export const documentRouter = router({
   ...coreProcedures,
+  ...detailsProcedures,
   ...folderProcedures,
   ...suggestionProcedures,
   ...eventProcedures,

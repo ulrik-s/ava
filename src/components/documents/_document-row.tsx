@@ -7,6 +7,8 @@ import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/shared/schemas/ids";
+import { DocumentDetailsDialog } from "./_document-details-dialog";
+import { DOCUMENT_RECIPIENT_LABELS } from "./_document-details-input";
 import { DocumentPartsList, documentKindsLabel, type DocumentPartView } from "./_document-parts";
 import { DocumentTags } from "./_document-tags";
 import { formatFileSize } from "./_drag-helpers";
@@ -193,6 +195,7 @@ interface ActionItemsOpts {
   onExternal: () => void;
   onReanalyze: () => void;
   onDelete: () => void;
+  onEditDetails: () => void;
 }
 
 /** "Visa"/"Ladda ner": demo → direkt GH-href; self-hosted → hämta via servern
@@ -217,6 +220,7 @@ function buildActionItems(o: ActionItemsOpts): ActionMenuItem[] {
     { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: o.onOpenInEditor, disabled: o.isDisabled, title: o.uploadingTitle ?? "Öppna i din browser" },
     { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: o.onExternal, disabled: o.isDisabled, title: o.uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
     ...viewDownloadItems(o),
+    { key: "details", label: "Redigera uppgifter…", icon: <span aria-hidden>✏️</span>, onSelect: o.onEditDetails, disabled: o.isDisabled, title: o.uploadingTitle ?? "Ändra titel, filnamn, dokumenttyp, riktning och mottagare" },
     // ADR 0027: LLM-analys är en server-förmåga → dölj affordansen utan den.
     ...(o.llm
       ? [{ key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: o.onReanalyze, disabled: o.isDisabled || o.reanalyzePending, title: o.uploadingTitle ?? "Kör AI-analys på nytt" }]
@@ -262,15 +266,22 @@ export function DocumentActions({
   const isDisabled = !!disabled;
   const uploadingTitle = isDisabled ? "Vänta tills uppladdningen är klar" : undefined;
   const { llm } = useCapabilities();
+  const [editing, setEditing] = useState(false);
   const items = buildActionItems({
     isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle, llm, serverMode,
     onOpenInEditor: () => void openViaServerOrGh(),
     onView: () => void openViaServerOrGh(),
     onExternal: () => void onExternalEdit(),
     onReanalyze, onDelete,
+    onEditDetails: () => setEditing(true),
   });
 
-  return <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" />;
+  return (
+    <>
+      <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" />
+      <DocumentDetailsDialog docId={doc.id} doc={doc} open={editing} onClose={() => setEditing(false)} />
+    </>
+  );
 }
 
 // readFromFsa flyttad till `@/lib/client/fsa/read-from-fsa` (delas med
@@ -297,11 +308,7 @@ function DirectionBadge({ direction }: { direction?: "INKOMMANDE" | "UTGAENDE" |
   );
 }
 
-/** Mänskliga etiketter för dokumentets motpart/mottagare (#901). */
-export const DOCUMENT_RECIPIENT_LABELS: Record<string, string> = {
-  DOMSTOL: "Domstol", MOTPART: "Motpart", KLIENT: "Klient",
-  FORSAKRING: "Försäkring", MYNDIGHET: "Myndighet", OVRIGT: "Övrigt",
-};
+export { DOCUMENT_RECIPIENT_LABELS } from "./_document-details-input";
 
 /** Mottagar-badge (#901): "till/från Domstol". Null → inget. */
 function RecipientBadge({ recipient, direction }: { recipient?: DocumentRecord["recipient"]; direction?: DocumentRecord["direction"] }) {
