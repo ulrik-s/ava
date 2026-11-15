@@ -282,6 +282,29 @@ describe("panelen", () => {
     }
   });
 
+  it("går AVA-token inte att hämta vid Spara: felet visas och inget sparas", async () => {
+    vi.useFakeTimers();
+    try {
+      setupDom();
+      listQueryMock.mockResolvedValue({ matters: [{ id: "m1", matterNumber: "2026-7", title: "Tvist" }] });
+      let calls = 0;
+      // Första token (vid start och sök) går bra; vid Spara har inloggningen gått ut.
+      const tokens: AddinTokens = { ...makeTokens(), ava: () => (++calls <= 2 ? Promise.resolve("ava-token") : Promise.reject(authError("token-expired"))) };
+      bootstrap(makeOffice(), tokens, OPTS);
+      const q = document.getElementById("q") as HTMLInputElement;
+      q.value = "tvist";
+      q.dispatchEvent(new Event("input"));
+      await vi.advanceTimersByTimeAsync(350);
+      (document.querySelector("#results .matter") as HTMLElement).click();
+      (document.getElementById("save") as HTMLButtonElement).click();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(saveIncomingMailMock).not.toHaveBeenCalled();
+      expect(document.getElementById("status")?.textContent).toContain("gått ut");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("sökfel visas begripligt", async () => {
     vi.useFakeTimers();
     try {

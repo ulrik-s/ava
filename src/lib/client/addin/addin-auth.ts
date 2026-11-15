@@ -14,6 +14,7 @@
  */
 
 import {
+  type AccountInfo,
   createNestablePublicClientApplication,
   type Configuration,
   type IPublicClientApplication,
@@ -53,23 +54,13 @@ async function naaTokens(config: AddinConfig, create: PcaFactory): Promise<Addin
   });
   const get = async (scopes: string[]): Promise<string> => {
     const account = pca.getActiveAccount() ?? pca.getAllAccounts()[0];
-    let result;
-    try {
-      result = await pca.acquireTokenSilent({ scopes, ...(account ? { account } : {}) });
-    } catch {
-      result = await pca.acquireTokenPopup({ scopes });
-    }
+    const result = await pca.acquireTokenSilent({ scopes, ...(account ? { account } : {}) })
+      .catch(() => pca.acquireTokenPopup({ scopes }));
     pca.setActiveAccount(result.account);
     return result.accessToken;
   };
-  return {
-    ava: () => get([avaScope(config.clientId)]),
-    graph: () => get([GRAPH_MAIL_SCOPE]),
-    user: () => {
-      const a = pca.getActiveAccount();
-      return a ? { name: a.name ?? a.username, username: a.username } : null;
-    },
-  };
+  const userOf = (a: AccountInfo | null): AddinUser | null => (a ? { name: a.name ?? a.username, username: a.username } : null);
+  return { ava: () => get([avaScope(config.clientId)]), graph: () => get([GRAPH_MAIL_SCOPE]), user: () => userOf(pca.getActiveAccount()) };
 }
 
 /** Tokenkällan för en konfiguration. */

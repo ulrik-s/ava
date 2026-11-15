@@ -71,11 +71,7 @@ export function mailContext(office: OfficeLike): MailContext {
   };
 }
 
-/**
- * Save-flödet: Graph-token, `saveIncomingMail`, status. `setSaving`
- * (knapp-disable) injiceras så funktionen är DOM-fri. Fel → felstatus.
- */
-export async function runSave(opts: {
+export interface SaveOptions {
   office: OfficeLike;
   client: MailSaverClient;
   tokens: AddinTokens;
@@ -86,7 +82,13 @@ export async function runSave(opts: {
   description?: string;
   setStatus: StatusFn;
   setSaving: (saving: boolean) => void;
-}): Promise<void> {
+}
+
+/**
+ * Save-flödet: Graph-token, `saveIncomingMail`, status. `setSaving`
+ * (knapp-disable) injiceras så funktionen är DOM-fri. Fel → felstatus.
+ */
+export async function runSave(opts: SaveOptions): Promise<void> {
   const { office, client, tokens, graphBaseUrl, matter, minutes, description, setStatus, setSaving } = opts;
   setStatus("Sparar…");
   setSaving(true);
@@ -195,8 +197,7 @@ export function initForm(office: OfficeLike, tokens: AddinTokens, opts: PaneOpti
     if (!selected) return;
     const time = timeFieldMinutes($("minutes").value);
     if (!time.ok) { setStatus(time.error, "err"); return; }
-    const description = $("description").value.trim();
-    // Tid utan beskrivning går inte att fakturera begripligt — kräv en rad.
+    const description = $("description").value.trim(); // tid utan beskrivning går inte att fakturera
     if (time.minutes > 0 && !description) { setStatus("Skriv en beskrivning för tidsposten.", "err"); $("description").focus(); return; }
     const matter = selected;
     void client().then(
