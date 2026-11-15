@@ -158,6 +158,8 @@ describe("den automatiska taggen", () => {
     expect(runRelease(flow, gitHub("ulrik-s/ava", live.run), { now, disabled: false, enforce: true, log: (l) => lines.push(l) })).toEqual({ release: true, tag: "v0.7.10" });
     expect(live.calls.some((c) => c.includes("ref=refs/tags/v0.7.10") && c.includes("sha=abc"))).toBe(true);
     expect(live.calls.some((c) => c.includes("workflows/release.yml/dispatches") && c.includes("ref=v0.7.10"))).toBe(true);
+    // Mac-bygget av AVA Helper måste också startas, annars saknar releasen appen (install.sh).
+    expect(live.calls.some((c) => c.includes("workflows/helper-release.yml/dispatches") && c.includes("ref=v0.7.10"))).toBe(true);
 
     const dry = fakeGh(answers);
     runRelease(flow, gitHub("ulrik-s/ava", dry.run), { now, disabled: false, enforce: false, log: () => {} });

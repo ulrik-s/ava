@@ -17,6 +17,9 @@ import { type ReleaseDecision, releaseDecision } from "./flow/release";
 import type { Flow } from "./flow/schema";
 import type { Log } from "./flow-guard";
 
+/** Workflows som körs för varje v*-tagg: hela paketet och AVA Helper för macOS. */
+const RELEASE_WORKFLOWS = ["release.yml", "helper-release.yml"] as const;
+
 /** Beslutar och, om det är dags och `enforce`, taggar och startar releasen. */
 export function runRelease(flow: Flow, gh: GitHub, opts: { now: number; disabled: boolean; enforce: boolean; log: Log }): ReleaseDecision {
   const last = gh.latestRelease();
@@ -37,7 +40,8 @@ export function runRelease(flow: Flow, gh: GitHub, opts: { now: number; disabled
   opts.log(`${decision.tag} på ${mainSha.slice(0, 8)}${opts.enforce ? "" : " (bara rapport)"}`);
   if (opts.enforce) {
     gh.createTag(decision.tag, mainSha);
-    gh.dispatch("release.yml", decision.tag);
+    // Taggen är skapad med repots token, så inga tagg-workflows startar av sig själva.
+    for (const wf of RELEASE_WORKFLOWS) gh.dispatch(wf, decision.tag);
   }
   return decision;
 }
