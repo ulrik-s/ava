@@ -82,10 +82,12 @@ export async function runSave(opts: {
   graphBaseUrl: string;
   matter: MatterHit;
   minutes: number;
+  /** Tidspostens beskrivning (krävs i panelen när tid anges). */
+  description?: string;
   setStatus: StatusFn;
   setSaving: (saving: boolean) => void;
 }): Promise<void> {
-  const { office, client, tokens, graphBaseUrl, matter, minutes, setStatus, setSaving } = opts;
+  const { office, client, tokens, graphBaseUrl, matter, minutes, description, setStatus, setSaving } = opts;
   setStatus("Sparar…");
   setSaving(true);
   try {
@@ -93,7 +95,9 @@ export async function runSave(opts: {
     await saveIncomingMail({
       client, graphToken: await tokens.graph(), mimeBaseUrl: graphBaseUrl, restId: ctx.restId,
       matterId: matter.id, subject: ctx.subject, receivedAt: ctx.receivedAt,
-      ...(Number.isFinite(minutes) && minutes > 0 ? { time: { minutes } } : {}),
+      ...(Number.isFinite(minutes) && minutes > 0
+        ? { time: { minutes, ...(description?.trim() ? { description: description.trim() } : {}) } }
+        : {}),
     });
     setStatus(`✓ Sparat i ${matter.matterNumber}`, "ok");
   } catch (e) {
@@ -191,9 +195,12 @@ export function initForm(office: OfficeLike, tokens: AddinTokens, opts: PaneOpti
     if (!selected) return;
     const time = timeFieldMinutes($("minutes").value);
     if (!time.ok) { setStatus(time.error, "err"); return; }
+    const description = $("description").value.trim();
+    // Tid utan beskrivning går inte att fakturera begripligt — kräv en rad.
+    if (time.minutes > 0 && !description) { setStatus("Skriv en beskrivning för tidsposten.", "err"); $("description").focus(); return; }
     const matter = selected;
     void client().then(
-      (c) => runSave({ office, client: c, tokens, graphBaseUrl: opts.graphBaseUrl, matter, minutes: time.minutes, setStatus, setSaving }),
+      (c) => runSave({ office, client: c, tokens, graphBaseUrl: opts.graphBaseUrl, matter, minutes: time.minutes, description, setStatus, setSaving }),
       (e: unknown) => { setStatus(`Misslyckades: ${friendlyError(e)}`, "err"); },
     );
   });

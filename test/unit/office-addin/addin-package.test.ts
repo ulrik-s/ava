@@ -148,7 +148,7 @@ describe("task-panens HTML", () => {
     const tpl = page.getElementById("form-tpl") as HTMLTemplateElement | null;
     expect(tpl).not.toBeNull();
     const form = tpl?.content ?? page.createDocumentFragment();
-    for (const id of ["who", "q", "results", "minutes", "save", "status"]) {
+    for (const id of ["who", "q", "results", "minutes", "description", "save", "status"]) {
       expect(form.querySelector(`#${id}`), `#${id} saknas i #form-tpl`).not.toBeNull();
     }
   });

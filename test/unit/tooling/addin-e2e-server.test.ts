@@ -73,14 +73,14 @@ describe("tillägget mot AVA-servern", () => {
       matterId: m.id,
       subject: "Ang. bouppteckning",
       receivedAt: "2026-11-10T09:30:00.000Z",
-      time: { minutes: 15 },
+      time: { minutes: 15, description: "Genomgång av underlag" },
       fetch: (input, init) => handler(new Request(input, init)),
     });
     const res = await handler(new Request(`${ORIGIN}/__e2e/matter/${encodeURIComponent(m.id)}`));
-    const saved = (await res.json()) as { mails: { title: string; content: string | null }[]; time: { minutes: number }[] };
+    const saved = (await res.json()) as { mails: { title: string; content: string | null }[]; time: { minutes: number; description: string }[] };
     const mail = saved.mails.find((x) => x.title === "Ang. bouppteckning");
     expect(mail?.content).toBe(ADDIN_E2E_EML);
-    expect(saved.time.some((t) => t.minutes === 15)).toBe(true);
+    expect(saved.time).toContainEqual({ minutes: 15, description: "Genomgång av underlag" });
   });
 
   it("serverar tilläggets filer under /addin/ och vägrar sökvägar utanför dist", async () => {

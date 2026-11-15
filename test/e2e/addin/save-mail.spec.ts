@@ -58,6 +58,7 @@ test("inloggad via Outlook: sparar det öppna mejlet och tidsposten i valt ären
   await expect(page.locator("#save")).toBeDisabled();
   const number = await searchAndPick(page);
   await page.locator("#minutes").fill("0,25");
+  await page.locator("#description").fill("Genomgång av underlag från klienten");
   await expect(page.locator("#save")).toBeEnabled();
   await page.locator("#save").click();
 
@@ -67,11 +68,11 @@ test("inloggad via Outlook: sparar det öppna mejlet och tidsposten i valt ären
   // Serversidan: exakt det mejl Graph gav, och 15 minuters tid.
   const id = await matterIdByNumber(page, number);
   const saved = (await (await page.request.get(`/__e2e/matter/${encodeURIComponent(id)}`)).json()) as {
-    mails: Array<{ title: string; content: string | null }>; time: Array<{ minutes: number }>;
+    mails: Array<{ title: string; content: string | null }>; time: Array<{ minutes: number; description: string }>;
   };
   const mail = saved.mails.find((m) => m.title === DEFAULT_MAIL.subject);
   expect(mail?.content).toContain("Hej! Här kommer underlaget.");
-  expect(saved.time.some((t) => t.minutes === 15)).toBe(true);
+  expect(saved.time).toContainEqual({ minutes: 15, description: "Genomgång av underlag från klienten" });
 });
 
 test("AVA känner inte igen inloggningen: begripligt fel, inget kan sökas", async ({ page, baseURL }) => {
@@ -97,6 +98,15 @@ test("Graph vägrar: felet visas och knappen går att trycka igen", async ({ pag
   await expect(page.locator("#status")).toContainText("Misslyckades");
   await expect(page.locator("#status")).toHaveClass(/err/);
   await expect(page.locator("#save")).toBeEnabled();
+});
+
+test("tid utan beskrivning stoppas innan något skickas", async ({ page }) => {
+  await openPane(page);
+  await searchAndPick(page);
+  await page.locator("#minutes").fill("0,5");
+  await page.locator("#save").click();
+  await expect(page.locator("#status")).toHaveText("Skriv en beskrivning för tidsposten.");
+  await expect(page.locator("#description")).toBeFocused();
 });
 
 test("ogiltig tid stoppas innan något skickas", async ({ page }) => {

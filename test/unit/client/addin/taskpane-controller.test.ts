@@ -173,7 +173,7 @@ describe("panelen", () => {
     document.body.innerHTML = `
       <div id="app"></div>
       <template id="form-tpl">
-        <div id="who"></div><input id="q"><input id="minutes">
+        <div id="who"></div><input id="q"><input id="minutes"><input id="description">
         <button id="save" disabled></button>
         <div id="results"></div>
         <div id="status"></div>
@@ -210,8 +210,8 @@ describe("panelen", () => {
     expect(document.getElementById("who")?.textContent).toBe("Inloggad som Björn");
   });
 
-  /** Sök + välj ärendet, fyll tidsfältet och klicka Spara. */
-  async function searchPickSave(hours: string): Promise<void> {
+  /** Sök + välj ärendet, fyll tid och beskrivning och klicka Spara. */
+  async function searchPickSave(hours: string, description = "Genomgång av underlag"): Promise<void> {
     setupDom();
     listQueryMock.mockResolvedValue({ matters: [{ id: "m1", matterNumber: "2026-7", title: "Tvist" }] });
     bootstrap(makeOffice(), makeTokens(), OPTS);
@@ -221,6 +221,7 @@ describe("panelen", () => {
     await vi.advanceTimersByTimeAsync(350); // debounce (300ms) + sök-resolve
     (document.querySelector("#results .matter") as HTMLElement).click();
     (document.getElementById("minutes") as HTMLInputElement).value = hours;
+    (document.getElementById("description") as HTMLInputElement).value = description;
     (document.getElementById("save") as HTMLButtonElement).click();
     await vi.advanceTimersByTimeAsync(1);
   }
@@ -236,11 +237,34 @@ describe("panelen", () => {
     }
   });
 
-  it("tidsfältet i timmar: 0,25 skickas som 15 minuter (#1545)", async () => {
+  it("tid i timmar + beskrivning: 0,25 skickas som 15 minuter med raden (#1545)", async () => {
     vi.useFakeTimers();
     try {
-      await searchPickSave("0,25");
-      expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({ time: { minutes: 15 } }));
+      await searchPickSave("0,25", "  Genomgång av underlag  ");
+      expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({
+        time: { minutes: 15, description: "Genomgång av underlag" },
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("tid utan beskrivning stoppas med en förklaring", async () => {
+    vi.useFakeTimers();
+    try {
+      await searchPickSave("0,5", "   ");
+      expect(saveIncomingMailMock).not.toHaveBeenCalled();
+      expect(document.getElementById("status")?.textContent).toBe("Skriv en beskrivning för tidsposten.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("utan tid behövs ingen beskrivning", async () => {
+    vi.useFakeTimers();
+    try {
+      await searchPickSave("", "");
+      expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.not.objectContaining({ time: expect.anything() }));
     } finally {
       vi.useRealTimers();
     }
