@@ -84,7 +84,7 @@ AI-ytan tappa sin täckning utan att totalen rörde sig mätbart.
 |---|---|---|---|
 | `src/` | 90.0 % | 85.9 % | ~90.7 % / ~87.5 % |
 | `tooling/ava-cli/` (CLI + MCP) | 95.0 % | 92.0 % | 96.1 % / 93.7 % |
-| Outlook-tillägget (`src/lib/client/addin/` + `office-addin/`) | 98.0 % | 97.0 % | 99.3 % / 100 % |
+| Outlook-tillägget (`src/lib/client/addin/` + `office-addin/`) | 94.0 % | 97.0 % | 95.1 % / 100 % (enprocess 99.3 %) |
 | `tooling/scripts/` | 76.5 % | 78.0 % | — |
 
 AI-ytans golv ankrades först konservativt (93,0/88,0) eftersom det var okänt

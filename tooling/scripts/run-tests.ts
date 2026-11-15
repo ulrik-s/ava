@@ -176,11 +176,12 @@ const AI_FUNC_FLOOR = 0.920;
  * + `office-addin/` är ~140 rader mot appens ~40 000: i src/-golvet kunde
  * hela tillägget tappa sin täckning utan att procenten rörde sig.
  *
- * Uppmätt med enbart tilläggets egna tester (en undre gräns): **99,27 % rader
- * / 100 % funktioner** (136/137, 36/36). En rad är 0,73 procentenheter och en
- * funktion 2,8 — golven lämnar plats för exakt en av varje.
+ * Uppmätt: enprocess-körning av tilläggets tester 99,27 % rader / 100 %
+ * funktioner (136/137, 36/36); **grinden i CI (pass A med --parallel, OBS 2 i
+ * docs/quality.md) 95,10 % rader / 100 % funktioner**. Golvet följer CI:s
+ * siffra — det är den grinden mäter. Ratchet:en flyttas bara uppåt.
  */
-const ADDIN_LINE_FLOOR = 0.980;
+const ADDIN_LINE_FLOOR = 0.940;
 const ADDIN_FUNC_FLOOR = 0.970;
 
 const SCRIPTS_LINE_FLOOR = 0.765;
