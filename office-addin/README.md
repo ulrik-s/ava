@@ -1,5 +1,11 @@
 # AVA Office-add-ins (#83)
 
+> **Produktion (2026-11):** tillägget ligger på `https://<AVA-domän>/addin/`,
+> loggar in via Outlook (NAA, ingen PAT) och hämtar mejlet via Microsoft Graph.
+> Uppsättning och utrullning: [docs/outlook-addin.md](../docs/outlook-addin.md).
+> Delar av texten nedan (PAT, sideload, Outlook-REST) beskriver den tidigare
+> modellen.
+
 Grunden för Word- (#84) och Outlook- (#72) add-ins, enligt
 [ADR 0013](../docs/adr/0013-office-add-in-arkitektur.md).
 

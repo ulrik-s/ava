@@ -221,8 +221,11 @@ step "bygger server + klient (oven/bun) till out/ — Caddy serverar releases/cu
 # Versionen i gränssnittet (#1578) räknas fram HÄR: bygg-containern saknar git.
 export AVA_VERSION="${AVA_VERSION:-$(git describe --tags 2>/dev/null || true)}"
 export AVA_VERSION_DATE="${AVA_VERSION_DATE:-$(git log -1 --format=%cI HEAD 2>/dev/null || true)}"
-run docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server -e AVA_VERSION -e AVA_VERSION_DATE oven/bun:1 sh -c \
-  'bun install --frozen-lockfile >/dev/null && bun run server-first:build >/dev/null && bash tooling/scripts/build-demo.sh >/tmp/build.log 2>&1 || { tail -30 /tmp/build.log; exit 1; }'
+# Outlook-tillägget byggs in under out/addin (serveras på /addin/, docs/outlook-addin.md):
+# domänen och Entra-appens id kommer ur ava-server.env.
+run docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server -e AVA_VERSION -e AVA_VERSION_DATE \
+  -e AVA_DOMAIN -e OAUTH2_PROXY_CLIENT_ID -e OIDC_ISSUER_URL oven/bun:1 sh -c \
+  'bun install --frozen-lockfile >/dev/null && bun run server-first:build >/dev/null && bash tooling/scripts/build-demo.sh >/tmp/build.log 2>&1 && bun office-addin/build.ts --out out/addin >>/tmp/build.log 2>&1 || { tail -30 /tmp/build.log; exit 1; }'
 
 step "kontrollerar byggd CSS mot globals.css"
 run bash tooling/scripts/check-built-css.sh src/app/globals.css out/_next/static/chunks/*.css

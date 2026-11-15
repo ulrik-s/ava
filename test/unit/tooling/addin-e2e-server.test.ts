@@ -54,8 +54,8 @@ describe("tillägget mot AVA-servern", () => {
     await expect(c.matter.list.query({ pageSize: 1 })).rejects.toThrow();
   });
 
-  it("Outlooks REST kräver mejl-token:en", async () => {
-    const url = `${ORIGIN}/rest/api/v2.0/me/messages/x/$value`;
+  it("Graph-fejken kräver Mail.Read-token:en", async () => {
+    const url = `${ORIGIN}/graph/v1.0/me/messages/x/$value`;
     expect((await handler(new Request(url))).status).toBe(401);
     const ok = await handler(new Request(url, { headers: { authorization: `Bearer ${ADDIN_E2E_MAIL_TOKEN}` } }));
     expect(await ok.text()).toBe(ADDIN_E2E_EML);
@@ -66,7 +66,7 @@ describe("tillägget mot AVA-servern", () => {
     await saveIncomingMail({
       client: client("e2e-lawyer"),
       graphToken: ADDIN_E2E_MAIL_TOKEN,
-      mimeBaseUrl: `${ORIGIN}/rest/api/v2.0`,
+      mimeBaseUrl: `${ORIGIN}/graph/v1.0`,
       restId: "rest-1",
       matterId: m.id,
       subject: "Ang. bouppteckning",
@@ -81,8 +81,15 @@ describe("tillägget mot AVA-servern", () => {
     expect(saved.time.some((t) => t.minutes === 15)).toBe(true);
   });
 
-  it("serverar tilläggets filer och vägrar sökvägar utanför dist", async () => {
-    expect((await handler(new Request(`${ORIGIN}/taskpane.html`))).status).toBe(200);
-    expect((await handler(new Request(`${ORIGIN}/../package.json`))).status).toBe(404);
+  it("serverar tilläggets filer under /addin/ och vägrar sökvägar utanför dist", async () => {
+    expect((await handler(new Request(`${ORIGIN}/addin/taskpane.html`))).status).toBe(200);
+    expect((await handler(new Request(`${ORIGIN}/taskpane.html`))).status).toBe(404);
+    expect((await handler(new Request(`${ORIGIN}/addin/../package.json`))).status).toBe(404);
+  });
+
+  it("config.js ger fasta token och Graph-fejken på samma origin", async () => {
+    const js = await (await handler(new Request(`${ORIGIN}/addin/config.js`))).text();
+    expect(js).toContain(`"graphBaseUrl":"${ORIGIN}/graph/v1.0"`);
+    expect(js).toContain(`"ava":"e2e-lawyer"`);
   });
 });

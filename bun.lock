@@ -5,7 +5,7 @@
     "": {
       "name": "ava",
       "dependencies": {
-        "@azure/msal-browser": "^5.29.0",
+        "@azure/msal-browser": "^5.29.1",
         "@js-temporal/polyfill": "^0.5.1",
         "@modelcontextprotocol/server": "2.4.0",
         "@tanstack/react-query": "^5.107.1",
@@ -97,9 +97,9 @@
 
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
 
-    "@azure/msal-browser": ["@azure/msal-browser@5.29.0", "", { "dependencies": { "@azure/msal-common": "16.16.1" } }, "sha512-Ko/Ovw6h+Gu33mp8f0FUyddr/KDWzbGzcgR8HKZaT4wgTYljLPKJP1rcDu0RHj7pkd4CR2hCHK51XFzgvq/Q5Q=="],
+    "@azure/msal-browser": ["@azure/msal-browser@5.29.1", "", { "dependencies": { "@azure/msal-common": "16.16.2" } }, "sha512-+TMoU/4h3KYUvQKZH+p1/9/iDaepDlVJQ7UMUAB6q8prPsMfsOoqA9m2alpPqLUQ48Bp7sXqN2wdhA9rOg9q1A=="],
 
-    "@azure/msal-common": ["@azure/msal-common@16.16.1", "", {}, "sha512-dSKdL9h/iercb4GumsKFh+wVvLe1ohuDPiviklgnQVHnY2FYNUlbQJ3E1Qd37vkof9CfraK9BQpCW1hoOg0znQ=="],
+    "@azure/msal-common": ["@azure/msal-common@16.16.2", "", {}, "sha512-IVoPgAup0hnpzwC8esxPxrrnDDVe0n3mmK+UU3JRmKWySKxBQrl+a30tTP3okmJ9Wc7dh+IgoNaUXkCxb2DBSg=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 

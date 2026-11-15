@@ -28,7 +28,7 @@ export default defineConfig({
   use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   webServer: {
     command: "bun run addin:build && bun tooling/scripts/addin-e2e-server.ts",
-    url: `${baseURL}/taskpane.html`,
+    url: `${baseURL}/addin/taskpane.html`,
     cwd: projectRoot,
     env: { AVA_ADDIN_E2E_PORT: String(PORT) },
     timeout: 60_000,

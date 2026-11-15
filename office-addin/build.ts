@@ -1,19 +1,18 @@
 /**
- * Bygg Outlook task-pane-bundlen (#72, ADR 0013).
+ * Bygg Outlook-tillägget: bundle (taskpane.js), HTML, ikoner, och per
+ * installation config.js + manifest.xml (office-addin/manifest.ts).
  *
- *   bun run office-addin/build.ts
- *
- * Producerar `office-addin/dist/taskpane.js` (+ kopierar taskpane.html). Servera
- * `dist/` över **HTTPS** (Office kräver det vid sideload — t.ex. en dev-cert à la
- * `helper-ui/src/engine/tls/`) och peka manifestets `SourceLocation` dit. Detta steg är
- * INTE CI-verifierbart (kräver Office-värd) → kör + sideload-testa lokalt.
+ *   bun office-addin/build.ts                    → office-addin/dist/ (lokalt, https://localhost:3443)
+ *   bun office-addin/build.ts --out out/addin    → deployen: serveras på https://<AVA_DOMAIN>/addin/
  */
 
-import { cp } from "node:fs/promises";
-import { join } from "node:path";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { addinBaseUrl, addinConfigFromEnv, manifestVersion, renderConfigJs, renderManifest } from "./manifest";
 
 const root = import.meta.dir;
-const outdir = join(root, "dist");
+const outArg = process.argv.indexOf("--out");
+const outdir = outArg > -1 && process.argv[outArg + 1] ? resolve(process.argv[outArg + 1] as string) : join(root, "dist");
 
 const result = await Bun.build({
   entrypoints: [join(root, "taskpane/taskpane.ts")],
@@ -29,10 +28,15 @@ if (!result.success) {
   process.exit(1);
 }
 
+await mkdir(outdir, { recursive: true });
 await cp(join(root, "taskpane/taskpane.html"), join(outdir, "taskpane.html"));
-// Ikonerna refereras av manifestets IconUrl. Saknas de visar Outlook en tom
-// ruta — inte ett fel, men i en sideload-checklista är "är det trasigt eller
-// ska det se ut så?" en fråga man inte ska behöva ställa.
 await cp(join(root, "assets"), join(outdir, "assets"), { recursive: true });
-console.log(`✓ Byggd → ${outdir}/ (taskpane.js + taskpane.html + assets/).`);
-console.log("  Servera över HTTPS: bun run addin:serve");
+
+const base = addinBaseUrl(process.env);
+const config = addinConfigFromEnv(process.env);
+await writeFile(join(outdir, "config.js"), renderConfigJs(config));
+const template = await readFile(join(root, "manifests/outlook-manifest.xml"), "utf8");
+await writeFile(join(outdir, "manifest.xml"), renderManifest(template, { base, version: manifestVersion(process.env) }));
+
+console.log(`✓ Byggd → ${outdir}/ (taskpane.js, taskpane.html, config.js, manifest.xml, assets/) för ${base}.`);
+if (!config) console.log("  OBS: OAUTH2_PROXY_CLIENT_ID/OIDC_ISSUER_URL saknas — tillägget visar \"inte konfigurerat\".");

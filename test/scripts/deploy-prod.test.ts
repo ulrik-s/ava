@@ -175,7 +175,10 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     expect(backup).toBeGreaterThan(-1);
     expect(backup).toBeLessThan(build);
     // Prod-klienten byggs utan demodata (#1352) och på roten.
-    expect(calls[build]).toContain("-e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server -e AVA_VERSION -e AVA_VERSION_DATE oven/bun:1");
+    expect(calls[build]).toContain("-e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server -e AVA_VERSION -e AVA_VERSION_DATE");
+    // Outlook-tillägget byggs in under out/addin med domän och Entra-app ur miljön.
+    expect(calls[build]).toContain("-e AVA_DOMAIN -e OAUTH2_PROXY_CLIENT_ID -e OIDC_ISSUER_URL oven/bun:1");
+    expect(calls[build]).toContain("bun office-addin/build.ts --out out/addin");
     expect(build).toBeLessThan(migrate);
     expect(migrate).toBeLessThan(up);
     expect(up).toBeLessThan(at(calls, "exec -T caddy wget"));
