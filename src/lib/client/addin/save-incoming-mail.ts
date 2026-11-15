@@ -39,6 +39,8 @@ export interface SaveIncomingMailDeps {
   time?: { minutes: number; description?: string };
   /** Valfri folder i ärendet. */
   folderId?: string | null;
+  /** Mejlets Internet Message-ID — servern sparar då inte samma mejl två gånger i ärendet. */
+  internetMessageId?: string;
   /** MIME-bas-URL (default Graph; add-in:en kan ange mailbox-REST-URL:en). */
   mimeBaseUrl?: string;
   /** Valfri Graph-`fetch`-override (test). */
@@ -64,5 +66,6 @@ export async function saveIncomingMail(deps: SaveIncomingMailDeps): Promise<unkn
     receivedAt: deps.receivedAt,
     ...(deps.folderId !== undefined ? { folderId: deps.folderId } : {}),
     ...(deps.time ? { time: deps.time } : {}),
+    ...(deps.internetMessageId ? { internetMessageId: deps.internetMessageId } : {}),
   });
 }

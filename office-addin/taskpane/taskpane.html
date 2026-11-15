@@ -23,7 +23,8 @@
       .matter { padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; margin-top: 4px; }
       .matter.sel { border-color: #4f46e5; background: #eef2ff; }
       .status { margin-top: 12px; font-size: 12px; }
-      .err { color: #b91c1c; } .ok { color: #15803d; }
+      .err { color: #b91c1c; } .ok { color: #15803d; } .warn { color: #b45309; }
+      .matter .client { font-size: 11px; color: #6b7280; margin-top: 2px; }
       .row { display: flex; gap: 8px; } .row > * { flex: 1; }
       .who { font-size: 12px; color: #4b5563; min-height: 16px; }
     </style>
@@ -36,7 +37,7 @@
       <div id="who" class="who"></div>
 
       <label for="q">Sök ärende</label>
-      <input id="q" type="search" placeholder="Ärendenummer eller titel" />
+      <input id="q" type="search" placeholder="Ärendenummer, titel eller klient" />
       <div id="results"></div>
 
       <div class="row">

@@ -183,3 +183,25 @@ describe("ReadOnlyDelegate — relations via include", () => {
     expect((r as unknown as { contacts: Contact[] }).contacts.map(c => c.id)).toEqual(["c1"]);
   });
 });
+
+describe("ReadOnlyDelegate — relationsfilter inuti OR/AND", () => {
+  // Ärendesökningen filtrerar på kontaktnamn inuti en OR-lista. Förr hydrerades
+  // bara relationer på översta nivån, så sökning på klient gav aldrig träff i demon.
+  type Contact = { id: string; name: string; matterId: string } & Record<string, unknown>;
+  type ParentMatter = { id: string; title: string } & Record<string, unknown>;
+  const matters: ParentMatter[] = [{ id: "m1", title: "Bouppteckning" }, { id: "m2", title: "Tvist" }];
+  const contacts: Contact[] = [{ id: "c1", name: "Greta Gustafsson", matterId: "m1" }];
+  const del = new ReadOnlyDelegate<ParentMatter>(() => matters, {
+    relations: { contacts: { collection: () => contacts, where: (parent) => ({ matterId: parent.id }) } },
+  });
+  const byName = (name: string) => ({ some: { name: { contains: name, mode: "insensitive" } } });
+
+  it("OR: träff på kontaktnamn även när titeln inte matchar", async () => {
+    const rows = await del.findMany({ where: { OR: [{ title: { contains: "gustafsson" } }, { contacts: byName("gustafsson") }] } });
+    expect(rows.map((r) => r.id)).toEqual(["m1"]);
+  });
+
+  it("AND går också ned i relationen", async () => {
+    expect((await del.findMany({ where: { AND: [{ contacts: byName("greta") }] } })).map((r) => r.id)).toEqual(["m1"]);
+  });
+});

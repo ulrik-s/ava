@@ -23,6 +23,8 @@ import { parseHoursToMinutes, type ParsedHours } from "@/lib/shared/time-hours";
 
 export interface MailboxItem {
   itemId: string;
+  /** RFC 5322 Message-ID — samma i alla mappar och klienter (dubblettskyddet). */
+  internetMessageId?: string | null;
   subject?: string | null;
   dateTimeCreated?: Date | null;
 }
@@ -36,7 +38,7 @@ export interface OfficeLike {
   MailboxEnums: { RestVersion: { v2_0: string } };
 }
 
-export interface MatterHit { id: MatterId; matterNumber: string; title: string }
+export interface MatterHit { id: MatterId; matterNumber: string; title: string; client?: string }
 type StatusFn = (msg: string, cls?: string) => void;
 
 /** Smal klient-yta för ärende-söket (uppfylls av `createAddinClient(...)`). */
@@ -44,18 +46,44 @@ export interface MatterSearchClient {
   matter: {
     list: {
       query: (input: { search?: string; pageSize?: number }) => Promise<{
-        matters: ReadonlyArray<{ id: MatterId; matterNumber: string; title: string }>;
+        matters: ReadonlyArray<{
+          id: MatterId; matterNumber: string; title: string;
+          /** Klienten (rollen KLIENT), om ärendet har en. */
+          contacts?: ReadonlyArray<{ contact: { name: string } }>;
+        }>;
       }>;
     };
   };
 }
 
+/** Smal yta för dubblettfrågan (`mail.findSaved`). */
+export interface SavedCheckClient {
+  mail: { findSaved: { query: (input: { matterId: MatterId; internetMessageId: string }) => Promise<{ saved: boolean }> } };
+}
+
 // ─── Ren logik (Office och token injicerade) ──────────────────────────
 
-/** Ärende-sök via tRPC (`matter.list` med fritext) → vy-träffar. */
+/**
+ * Ärende-sök via tRPC (`matter.list`): servern söker i nummer, titel, mål-
+ * nummer, försäkringsreferens OCH kontakternas namn — klient och motpart.
+ */
 export async function searchMatters(client: MatterSearchClient, q: string): Promise<MatterHit[]> {
   const res = await client.matter.list.query({ search: q, pageSize: 8 });
-  return res.matters.map((m) => ({ id: m.id, matterNumber: m.matterNumber, title: m.title }));
+  return res.matters.map((m) => {
+    const name = m.contacts?.[0]?.contact.name;
+    return { id: m.id, matterNumber: m.matterNumber, title: m.title, ...(name ? { client: name } : {}) };
+  });
+}
+
+/** Finns det öppna mejlet redan i ärendet? Utan Message-ID går det inte att veta → false. */
+export async function alreadySaved(client: SavedCheckClient, office: OfficeLike, matterId: MatterId): Promise<boolean> {
+  const id = office.context.mailbox.item.internetMessageId;
+  return id ? (await client.mail.findSaved.query({ matterId, internetMessageId: id })).saved : false;
+}
+
+/** Svarade servern att mejlet redan fanns (`duplicateOf`)? */
+function wasDuplicate(result: unknown): boolean {
+  return typeof result === "object" && result !== null && Boolean(Reflect.get(result, "duplicateOf"));
 }
 
 export interface MailContext { restId: string; subject: string; receivedAt: string }
@@ -94,14 +122,17 @@ export async function runSave(opts: SaveOptions): Promise<void> {
   setSaving(true);
   try {
     const ctx = mailContext(office);
-    await saveIncomingMail({
+    const messageId = office.context.mailbox.item.internetMessageId;
+    const result = await saveIncomingMail({
       client, graphToken: await tokens.graph(), mimeBaseUrl: graphBaseUrl, restId: ctx.restId,
       matterId: matter.id, subject: ctx.subject, receivedAt: ctx.receivedAt,
+      ...(messageId ? { internetMessageId: messageId } : {}),
       ...(Number.isFinite(minutes) && minutes > 0
         ? { time: { minutes, ...(description?.trim() ? { description: description.trim() } : {}) } }
         : {}),
     });
-    setStatus(`✓ Sparat i ${matter.matterNumber}`, "ok");
+    if (wasDuplicate(result)) setStatus(`Mejlet fanns redan i ${matter.matterNumber} — inget sparades igen.`, "warn");
+    else setStatus(`✓ Sparat i ${matter.matterNumber}`, "ok");
   } catch (e) {
     setStatus(`Misslyckades: ${friendlyError(e)}`, "err");
   } finally {
@@ -125,6 +156,12 @@ export function renderResults(box: HTMLElement, matters: MatterHit[], onPick: (m
     const div = document.createElement("div");
     div.className = "matter";
     div.textContent = `${m.matterNumber} — ${m.title}`;
+    if (m.client) {
+      const who = document.createElement("div");
+      who.className = "client";
+      who.textContent = `Klient: ${m.client}`;
+      div.appendChild(who);
+    }
     div.addEventListener("click", () => {
       box.querySelectorAll(".matter").forEach((e) => e.classList.remove("sel"));
       div.classList.add("sel");
@@ -176,6 +213,21 @@ export function initForm(office: OfficeLike, tokens: AddinTokens, opts: PaneOpti
   const setSaving = (saving: boolean) => { $("save").disabled = saving; };
   const client = async () => createAddinClient({ baseUrl: opts.server, token: await tokens.ava() });
 
+  /** Valt ärende: Spara blir aktiv — om mejlet inte redan finns där. */
+  const checkSaved = async (m: MatterHit): Promise<void> => {
+    $("save").disabled = true;
+    setStatus("");
+    try {
+      if (await alreadySaved(await client(), office, m.id)) {
+        if (selected === m) setStatus(`Mejlet finns redan i ${m.matterNumber}.`, "warn");
+        return;
+      }
+    } catch {
+      // Frågan är bara en hjälp; servern stoppar ändå en dubblett vid Spara.
+    }
+    if (selected === m) $("save").disabled = false;
+  };
+
   // Hämta AVA-token direkt: då syns vem som är inloggad, eller varför inte.
   void tokens.ava().then(() => {
     const u = tokens.user();
@@ -187,7 +239,7 @@ export function initForm(office: OfficeLike, tokens: AddinTokens, opts: PaneOpti
     if (q.length < 2) return;
     try {
       const matters = await searchMatters(await client(), q);
-      renderResults(el("results"), matters, (m) => { selected = m; $("save").disabled = false; });
+      renderResults(el("results"), matters, (m) => { selected = m; void checkSaved(m); });
     } catch (e) {
       setStatus(`Sök misslyckades: ${friendlyError(e)}`, "err");
     }

@@ -197,6 +197,8 @@ async function main(): Promise<void> {
     receivedAt: msg.receivedDateTime,
     time: { minutes: MAIL_MINUTES, description: `E-post: ${subject}` },
   });
+  // Utan internetMessageId finns inget dubblettskydd → alltid ett nytt dokument.
+  assert(saved.document !== null, "mejlet sparades inte (oväntad dubblett)");
   console.log(`• Sparat på ärendet: ${saved.document.fileName}`);
 
   // ── Läs TILLBAKA. Att mutationen svarade säger inget om vad som ligger där. ──

@@ -9,8 +9,8 @@
  * som `OfficeLike`/`AddinTokens` antar — det kräver en Outlook-värd (piloten).
  */
 
-import { expect, type Page, test } from "@playwright/test";
-import { DEFAULT_MAIL, installFakeOffice } from "../../helpers/office-fake";
+import { expect, type Page, test, type TestInfo } from "@playwright/test";
+import { DEFAULT_MAIL, type FakeOfficeConfig, installFakeOffice } from "../../helpers/office-fake";
 
 const MAIL_TOKEN = "e2e-mail-token"; // = ADDIN_E2E_MAIL_TOKEN i servern
 
@@ -25,11 +25,15 @@ const tokensConfig = (baseURL: string, tokens: { ava: string; graph: string }) =
   staticTokens: { ...tokens, name: "Test Testsson" },
 });
 
-async function openPane(page: Page): Promise<void> {
+/** Ett eget Message-ID per test och motor: båda motorerna delar testservern (dubblettskyddet). */
+const uniqueMail = (info: TestInfo): FakeOfficeConfig["item"] =>
+  ({ ...DEFAULT_MAIL, internetMessageId: `<${info.project.name}-${info.title.length}-${Date.now()}@e2e.example>` });
+
+async function openPane(page: Page, item: FakeOfficeConfig["item"] = DEFAULT_MAIL): Promise<void> {
   // Microsofts office.js får inte laddas: den skulle skriva över fake:n (och kräva nätet).
   await page.route("https://appsforoffice.microsoft.com/**", (route) =>
     route.fulfill({ contentType: "text/javascript", body: "/* office.js ersatt av fake-Office i E2E */" }));
-  await page.addInitScript(installFakeOffice, { item: DEFAULT_MAIL });
+  await page.addInitScript(installFakeOffice, { item });
   await page.goto("/addin/taskpane.html");
 }
 
@@ -52,8 +56,8 @@ async function searchAndPick(page: Page): Promise<string> {
   return ((await first.textContent()) ?? "").split(" — ")[0]?.trim() ?? "";
 }
 
-test("inloggad via Outlook: sparar det öppna mejlet och tidsposten i valt ärende", async ({ page }) => {
-  await openPane(page);
+test("inloggad via Outlook: sparar det öppna mejlet och tidsposten i valt ärende", async ({ page }, info) => {
+  await openPane(page, uniqueMail(info));
   await expect(page.locator("#who")).toHaveText("Inloggad som Björn Bauer");
   await expect(page.locator("#save")).toBeDisabled();
   const number = await searchAndPick(page);
@@ -75,6 +79,28 @@ test("inloggad via Outlook: sparar det öppna mejlet och tidsposten i valt ären
   expect(saved.time).toContainEqual({ minutes: 15, description: "Genomgång av underlag från klienten" });
 });
 
+test("samma mejl en gång till i samma ärende: 'finns redan', Spara avstängd", async ({ page }, info) => {
+  const mail = uniqueMail(info);
+  await openPane(page, mail);
+  const number = await searchAndPick(page);
+  await page.locator("#save").click();
+  await expect(page.locator("#status")).toHaveText(`✓ Sparat i ${number}`);
+
+  await openPane(page, mail); // juristen öppnar samma mejl igen
+  await searchAndPick(page);
+  await expect(page.locator("#status")).toHaveText(`Mejlet finns redan i ${number}.`);
+  await expect(page.locator("#status")).toHaveClass(/warn/);
+  await expect(page.locator("#save")).toBeDisabled();
+});
+
+test("sök på klientens efternamn: träffen visar klienten", async ({ page }, info) => {
+  await openPane(page, uniqueMail(info));
+  await page.locator("#q").fill("Gustafsson");
+  // Efternamnet kan också vara en motpart i ett annat ärende — klientens rad ska finnas bland träffarna.
+  // Hon är klient på flera ärenden — minst en träff ska visa henne som klient.
+  await expect(page.locator("#results .matter .client", { hasText: "Klient: Greta Gustafsson" }).first()).toBeVisible();
+});
+
 test("AVA känner inte igen inloggningen: begripligt fel, inget kan sökas", async ({ page, baseURL }) => {
   await withConfig(page, tokensConfig(baseURL ?? "", { ava: "okänd-token", graph: MAIL_TOKEN }));
   await openPane(page);
@@ -90,9 +116,9 @@ test("installationen saknar konfiguration: panelen säger det", async ({ page })
   await expect(page.locator("#app")).toContainText("inte konfigurerat");
 });
 
-test("Graph vägrar: felet visas och knappen går att trycka igen", async ({ page, baseURL }) => {
+test("Graph vägrar: felet visas och knappen går att trycka igen", async ({ page, baseURL }, info) => {
   await withConfig(page, tokensConfig(baseURL ?? "", { ava: "e2e-admin", graph: "fel-graph-token" }));
-  await openPane(page);
+  await openPane(page, uniqueMail(info));
   await searchAndPick(page);
   await page.locator("#save").click();
   await expect(page.locator("#status")).toContainText("Misslyckades");
@@ -100,8 +126,8 @@ test("Graph vägrar: felet visas och knappen går att trycka igen", async ({ pag
   await expect(page.locator("#save")).toBeEnabled();
 });
 
-test("tid utan beskrivning stoppas innan något skickas", async ({ page }) => {
-  await openPane(page);
+test("tid utan beskrivning stoppas innan något skickas", async ({ page }, info) => {
+  await openPane(page, uniqueMail(info));
   await searchAndPick(page);
   await page.locator("#minutes").fill("0,5");
   await page.locator("#save").click();
@@ -109,8 +135,8 @@ test("tid utan beskrivning stoppas innan något skickas", async ({ page }) => {
   await expect(page.locator("#description")).toBeFocused();
 });
 
-test("ogiltig tid stoppas innan något skickas", async ({ page }) => {
-  await openPane(page);
+test("ogiltig tid stoppas innan något skickas", async ({ page }, info) => {
+  await openPane(page, uniqueMail(info));
   await searchAndPick(page);
   await page.locator("#minutes").fill("abc");
   await page.locator("#save").click();

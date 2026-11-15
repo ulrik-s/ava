@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest-compat";
 import { createAddinClient, type AddinFetch } from "@/lib/client/addin/addin-client";
 import { saveIncomingMail } from "@/lib/client/addin/save-incoming-mail";
-import { friendlyError } from "@/lib/client/addin/taskpane-controller";
+import { friendlyError, searchMatters } from "@/lib/client/addin/taskpane-controller";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import {
   ADDIN_E2E_EML, ADDIN_E2E_MAIL_TOKEN, createAddinE2eHandler,
@@ -81,6 +81,45 @@ describe("tillägget mot AVA-servern", () => {
     const mail = saved.mails.find((x) => x.title === "Ang. bouppteckning");
     expect(mail?.content).toBe(ADDIN_E2E_EML);
     expect(saved.time).toContainEqual({ minutes: 15, description: "Genomgång av underlag" });
+  });
+
+  it("sök på klientens namn hittar ärendet, och klienten följer med i träffen", async () => {
+    const { matters } = await client("e2e-admin").matter.list.query({ pageSize: 50 });
+    const withClient = matters.find((m) => m.contacts[0]?.contact.name);
+    const name = withClient?.contacts[0]?.contact.name ?? "";
+    expect(name).not.toBe("");
+    const hits = await searchMatters(client("e2e-admin"), name.split(" ").at(-1) ?? name);
+    expect(hits.find((h) => h.id === withClient?.id)?.client).toBe(name);
+  });
+
+  it("dubblettskydd: samma mejl i samma ärende sparas och tidsbokförs bara en gång", async () => {
+    const { matters } = await client("e2e-admin").matter.list.query({ pageSize: 2 });
+    const [m1, m2] = matters;
+    if (!m1 || !m2) throw new Error("seeden har för få ärenden");
+    const messageId = "<dubblett-test@mail.example.se>";
+    const save = (matterId: typeof m1.id) => saveIncomingMail({
+      client: client("e2e-lawyer"), graphToken: ADDIN_E2E_MAIL_TOKEN, mimeBaseUrl: `${ORIGIN}/graph/v1.0`,
+      restId: "rest-dup", matterId, subject: "Dubblett-test", receivedAt: "2026-11-11T08:00:00.000Z",
+      internetMessageId: messageId, time: { minutes: 30, description: "Läst mejlet" },
+      fetch: (input, init) => handler(new Request(input, init)),
+    });
+    const findSaved = (matterId: typeof m1.id) =>
+      client("e2e-lawyer").mail.findSaved.query({ matterId, internetMessageId: messageId });
+
+    expect((await findSaved(m1.id)).saved).toBe(false);
+    const first = await save(m1.id);
+    const second = await save(m1.id);
+    expect(Reflect.get(first as object, "duplicateOf")).toBeNull();
+    expect(Reflect.get(second as object, "duplicateOf")).toBeTruthy();
+    expect((await findSaved(m1.id)).saved).toBe(true);
+    // Samma mejl i ett annat ärende är ingen dubblett.
+    expect((await findSaved(m2.id)).saved).toBe(false);
+
+    const saved = (await (await handler(new Request(`${ORIGIN}/__e2e/matter/${encodeURIComponent(m1.id)}`))).json()) as {
+      mails: { title: string }[]; time: { minutes: number; description: string }[];
+    };
+    expect(saved.mails.filter((x) => x.title === "Dubblett-test")).toHaveLength(1);
+    expect(saved.time.filter((t) => t.description === "Läst mejlet")).toHaveLength(1);
   });
 
   it("serverar tilläggets filer under /addin/ och vägrar sökvägar utanför dist", async () => {
