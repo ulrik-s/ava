@@ -2,9 +2,9 @@
  * HelperSection — visar AVA Helper-status + synk-status (ADR 0028 §8) i Inställningar.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { HelperSection } from "@/components/settings/helper-section";
+import { HelperSection, macInstallCommand } from "@/components/settings/helper-section";
 import { resetHelperBaseCache } from "@/lib/client/helper/use-helper";
 
 const HTTPS = "https://localhost:48762";
@@ -35,6 +35,31 @@ function statusBody(snap: { pending: number; conflict: number; total: number }):
   return new Response(JSON.stringify({ ...snap, entries: [] }), { status: 200 });
 }
 
+describe("HelperSection — installation på Mac", () => {
+  it("Terminal-raden pekar på AVA:s eget install.sh", () => {
+    expect(macInstallCommand("https://ava-crm.io")).toBe("curl -fsSL https://ava-crm.io/helper/install.sh | bash");
+  });
+
+  it("visar raden med Kopiera när helpern saknas, och kopierar den", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<HelperSection />);
+    const command = macInstallCommand(window.location.origin);
+    expect(await screen.findByText(command)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Kopiera/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Kopierat/ })).toBeInTheDocument());
+    expect(writeText).toHaveBeenCalledWith(command);
+  });
+
+  it("döljer installationsrutan när helpern redan kör", async () => {
+    global.fetch = routeFetch([[`${HTTPS}/ping`, pingOk], [`${HTTPS}/status`, () => statusBody({ pending: 0, conflict: 0, total: 0 })]]);
+    render(<HelperSection />);
+    await screen.findByText(/Installerad/);
+    expect(screen.queryByText(/Installera på Mac/)).toBeNull();
+  });
+});
+
 describe("HelperSection — installations-status", () => {
   it("visar 'Kontrollerar…' först", () => {
     global.fetch = vi.fn(() => new Promise<Response>(() => { /* hänger */ }));
@@ -59,7 +84,7 @@ describe("HelperSection — installations-status", () => {
     global.fetch = routeFetch([[`${HTTP}/ping`, pingOk], [`${HTTP}/status`, () => statusBody({ pending: 0, conflict: 0, total: 0 })]]);
     render(<HelperSection />);
     const link = await screen.findByRole("link", { name: /Ladda ner/ });
-    expect(link.getAttribute("href")).toMatch(/github\.com\/ulrik-s\/ava\/releases\?q=helper-v/);
+    expect(link.getAttribute("href")).toBe("https://github.com/ulrik-s/ava/releases/latest");
     expect(screen.getByRole("link", { name: /Installationsguide/ }).getAttribute("href")).toMatch(/docs\/helper-installation\.md$/);
   });
 });
