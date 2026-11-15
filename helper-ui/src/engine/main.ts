@@ -57,7 +57,7 @@ import { UploadQueue } from "./queue.ts";
 import { createHandler } from "./server.ts";
 import { loadOrCreateTls } from "./tls/certs.ts";
 import { installCaTrust, isCaTrusted, removeCaTrust, type TrustResult } from "./tls/trust.ts";
-import { checkForUpdate, runUpdateLoop, type NoticeLoopConfig, type UpdateCheckConfig, type UpdateNotice } from "./update.ts";
+import { checkForUpdate, createUpdateTracker, runUpdateLoop, type LoopConfig, type UpdateCheckConfig, type UpdateStatus } from "./update.ts";
 import { VERSION } from "./version.ts";
 
 function extraOrigins(): string[] {
@@ -167,20 +167,13 @@ function startHttpsServer(handler: Handler, dir: string | null, port: number): R
   }
 }
 
-/** Repo + tagg-filter för update-kontrollen (helper-releaser taggas `helper-v*`). */
+/** Repo + tagg-filter för update-kontrollen (helpern byggs till varje `v*`-release). */
 function updateCheckConfig(): UpdateCheckConfig {
-  return { currentVersion: VERSION, repo: "ulrik-s/ava", tagFilter: "helper-" };
+  return { currentVersion: VERSION, repo: "ulrik-s/ava", tagFilter: "v" };
 }
 
-/** Notis-loopens config: daglig koll, 5 min initial fördröjning. */
-function buildNoticeConfig(onNotice: (notice: UpdateNotice | null) => void): NoticeLoopConfig {
-  return {
-    ...updateCheckConfig(),
-    checkIntervalMs: 24 * 60 * 60_000,
-    initialDelayMs: 5 * 60_000,
-    onNotice,
-  };
-}
+/** Bakgrundskollen: daglig, 5 min efter start. */
+const UPDATE_LOOP: LoopConfig = { checkIntervalMs: 24 * 60 * 60_000, initialDelayMs: 5 * 60_000 };
 
 /**
  * `/open`-hanterare som gör dokument-livscykeln offline-first (ADR 0028 §3):
@@ -286,10 +279,10 @@ export interface EngineOpts {
 export interface EngineHandle {
   port: number;
   stop: () => void;
-  /** Senast kända uppdaterings-notis (null = ingen / ej kollat). Läses av skalet. */
-  updateNotice: () => UpdateNotice | null;
+  /** Uppdateringskollens status (pågår, senaste utfall, ev. notis). Läses av skalet. */
+  updateStatus: () => UpdateStatus;
   /** Kör en omedelbar uppdaterings-kontroll (menyval "Sök efter uppdatering"). */
-  checkForUpdate: () => Promise<void>;
+  checkForUpdate: () => Promise<UpdateStatus>;
 }
 
 /**
@@ -310,13 +303,9 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
   const abort = new AbortController();
   // Uppdaterings-notis (ADR 0030 §2): daglig koll i bakgrunden + on-demand via
   // `/check-update` (web-appen) och skalets "Sök efter uppdatering". Ingen
-  // self-replace — bara senast kända notis som skalet visar i menyraden.
-  let updateNotice: UpdateNotice | null = null;
-  void runUpdateLoop(buildNoticeConfig((notice) => { updateNotice = notice; }), abort.signal);
-  const checkNow = async (): Promise<void> => {
-    try { updateNotice = await checkForUpdate(updateCheckConfig()); }
-    catch (err) { log(`check-update: ${String(err)}`); }
-  };
+  // self-replace — bara senaste status som skalet visar i menyraden.
+  const updates = createUpdateTracker(() => checkForUpdate(updateCheckConfig()));
+  void runUpdateLoop(UPDATE_LOOP, updates.check, abort.signal);
 
   // Helperns egen OIDC-auth (om parad/konfigurerad) → autonom Bearer mot servern.
   // Byggs om när webbappen pushar ny config (#1149) — förr krävdes omstart.
@@ -331,8 +320,8 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
     extraOrigins: extraOrigins(),
     approvedOrigins: () => origins.list(),
     onUnknownOrigin: (origin) => origins.onUnknown(origin),
-    onCheckUpdate: () => { void checkNow(); },
-    updateAvailable: () => updateNotice !== null,
+    onCheckUpdate: () => { void updates.check(); },
+    updateAvailable: () => updates.status().notice !== null,
     // Auto-konfigurering från web-appen (ADR 0029) — alltid på (skriver helper-config.json).
     onConfig: (req: Request) => handleConfig(req, {
       save: (input) => {
@@ -365,8 +354,8 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
   return {
     port,
     stop: () => { abort.abort(); httpServer.close(); httpsServer?.close(); },
-    updateNotice: () => updateNotice,
-    checkForUpdate: checkNow,
+    updateStatus: updates.status,
+    checkForUpdate: updates.check,
   };
 }
 

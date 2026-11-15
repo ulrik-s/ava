@@ -19,9 +19,10 @@ import { app, dialog, Menu, shell, Tray, nativeImage } from "electron";
 
 import { runLogin } from "./engine/auth/login.ts";
 import { caTrustStatus, resolveLoginConfig, startEngine, trustLocalCa, type EngineHandle } from "./engine/main.ts";
-import type { UpdateNotice } from "./engine/update.ts";
+import type { UpdateStatus } from "./engine/update.ts";
+import { VERSION } from "./engine/version.ts";
 import { pollHelper } from "./status-poller.ts";
-import { trayView } from "./tray-status.ts";
+import { trayView, updateCheckDialog, updateStatusLine } from "./tray-status.ts";
 
 const POLL_INTERVAL_MS = 4_000;
 
@@ -110,7 +111,8 @@ interface MenuActions {
  * (ADR 0030 §2): osignerat bygge → manuell installation, så vi öppnar bara
  * release-sidan i webbläsaren.
  */
-function buildMenu(tooltip: string, notice: UpdateNotice | null, actions: MenuActions): Menu {
+function buildMenu(tooltip: string, update: UpdateStatus, actions: MenuActions): Menu {
+  const notice = update.notice;
   const items: Electron.MenuItemConstructorOptions[] = [
     { label: tooltip, enabled: false },
     { type: "separator" },
@@ -126,7 +128,10 @@ function buildMenu(tooltip: string, notice: UpdateNotice | null, actions: MenuAc
     ...(actions.needsCertificate
       ? [{ label: "Installera certifikat för Safari…", click: actions.onInstallCertificate }]
       : []),
-    { label: "Sök efter uppdatering", click: actions.onCheckUpdate },
+    update.checking
+      ? { label: "Söker efter uppdatering…", enabled: false }
+      : { label: "Sök efter uppdatering", click: actions.onCheckUpdate },
+    { label: updateStatusLine(VERSION, update), enabled: false },
     {
       label: "Starta vid inloggning",
       type: "checkbox",
@@ -181,14 +186,29 @@ app.whenReady().then(() => {
     const view = trayView(snap.present, snap.status);
     tray.setTitle(view.title ? ` ${view.title}` : "");
     tray.setToolTip(view.tooltip);
-    tray.setContextMenu(buildMenu(view.tooltip, engine.updateNotice(), {
+    tray.setContextMenu(buildMenu(view.tooltip, engine.updateStatus(), {
       // Motorn körs in-process → kolla direkt (ingen HTTP-rundtur) och rita om.
-      onCheckUpdate: () => { void engine.checkForUpdate().then(refresh); },
+      onCheckUpdate: () => { void checkUpdateNow(); },
       onQuit: quit,
       needsCertificate,
       onInstallCertificate: () => { void installCertificate(false).then(recheckCertificate); },
     }));
   };
+  // Manuell kontroll: menyn visar "Söker…" medan den pågår, sedan svar i en dialog.
+  const checkUpdateNow = async (): Promise<void> => {
+    const pending = engine.checkForUpdate();
+    void refresh();
+    const status = await pending;
+    void refresh();
+    const d = updateCheckDialog(VERSION, status);
+    const { response } = await dialog.showMessageBox({
+      message: d.message,
+      detail: d.detail,
+      buttons: d.download ? ["Ladda ner", "Senare"] : ["OK"],
+    });
+    if (d.download && response === 0 && status.notice) void shell.openExternal(status.notice.url);
+  };
+
   void refresh();
   if (needsCertificate) void installCertificate(true).then(recheckCertificate);
   const timer = setInterval(() => void refresh(), POLL_INTERVAL_MS);

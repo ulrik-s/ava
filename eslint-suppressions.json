@@ -171,11 +171,6 @@
       "count": 5
     }
   },
-  "helper-ui/test/update.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 7
-    }
-  },
   "helper-ui/test/watch.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2

@@ -453,7 +453,7 @@ git tag v1.2.0 && git push origin v1.2.0
 # → release.yml bygger GitHub-releasen; inom fem minuter deployar servern.
 ```
 
-- Bara taggar som börjar på `v` räknas (`helper-v*` är helperns). **Högsta
+- Bara taggar som börjar på `v` räknas. **Högsta
   versionen** vinner, inte senast skapade: `v1.10.0` > `v1.9.0`.
 - Pekar den deployade releasen (`releases/current`) redan på taggens commit
   händer ingenting.
