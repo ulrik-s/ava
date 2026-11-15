@@ -51,7 +51,11 @@ jobs:
       - name: Bygg AVA Helper.app (arm64 + x64)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: bun run icons && bun run bundle && bunx electron-builder --mac dir --arm64 --x64 --publish never
+          # Appen bär release-taggen som version → uppdateringskollen jämför rätt.
+          AVA_HELPER_VERSION: ${{ inputs.tag || github.ref_name }}
+        run: |
+          bun run icons && bun run bundle
+          bunx electron-builder --mac dir --arm64 --x64 --publish never -c.extraMetadata.version="${AVA_HELPER_VERSION#v}"
 
       - name: Ad hoc-signera, zippa och räkna kontrollsummor
         run: |

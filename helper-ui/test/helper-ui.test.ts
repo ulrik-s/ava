@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { pollHelper } from "../src/status-poller.ts";
-import { trayView } from "../src/tray-status.ts";
+import { trayView, updateCheckDialog, updateStatusLine } from "../src/tray-status.ts";
 
 function status(pending: number, conflict: number) {
   return { pending, conflict, total: pending + conflict, entries: [] };
@@ -61,5 +61,38 @@ describe("pollHelper", () => {
     const fetchFn = async (url: string) => (url.endsWith("/ping") ? res("ava-helper v1\n") : res("garbage"));
     const snap = await pollHelper(fetchFn, "http://h");
     expect(snap).toMatchObject({ present: true, status: null });
+  });
+});
+
+describe("updateStatusLine", () => {
+  const now = new Date("2026-11-15T20:00:00");
+  const at = new Date("2026-11-15T18:05:00");
+  test("inte kontrollerad än", () => {
+    expect(updateStatusLine("v1.0.0", { checking: false, notice: null, last: null }, now)).toBe("v1.0.0 — inte kontrollerad än");
+  });
+  test("pågår", () => {
+    expect(updateStatusLine("v1.0.0", { checking: true, notice: null, last: null }, now)).toBe("v1.0.0 — söker efter uppdatering…");
+  });
+  test("utfall med klockslag samma dag", () => {
+    expect(updateStatusLine("v1.0.0", { checking: false, notice: null, last: { at, result: "up-to-date" } }, now))
+      .toBe("v1.0.0 — senaste versionen (kl 18:05)");
+  });
+  test("annan dag → datum", () => {
+    const line = updateStatusLine("v1.0.0", { checking: false, notice: null, last: { at, result: "error" } }, new Date("2026-11-17T09:00:00"));
+    expect(line).toMatch(/^v1\.0\.0 — kunde inte söka \(15 nov\.? 18:05\)$/);
+  });
+});
+
+describe("updateCheckDialog", () => {
+  const last = { at: new Date(), result: "up-to-date" as const };
+  test("ny version → erbjud nedladdning", () => {
+    const d = updateCheckDialog("v1.0.0", { checking: false, notice: { version: "v1.1.0", url: "u" }, last: { ...last, result: "available" } });
+    expect(d).toEqual({ message: "Ny version finns: v1.1.0", detail: "Du har v1.0.0.", download: true });
+  });
+  test("fel", () => {
+    expect(updateCheckDialog("v1.0.0", { checking: false, notice: null, last: { ...last, result: "error" } }).message).toBe("Kunde inte söka efter uppdatering");
+  });
+  test("senaste versionen", () => {
+    expect(updateCheckDialog("v1.0.0", { checking: false, notice: null, last })).toEqual({ message: "Du har senaste versionen", detail: "v1.0.0", download: false });
   });
 });

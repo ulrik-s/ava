@@ -1,5 +1,5 @@
 /**
- * Versionen bakas in vid build (`bundle.ts`, `helper-v<package.json-version>`).
+ * Versionen bakas in vid build (`bundle.ts`: release-taggen, t.ex. `v0.7.24`).
  * Vid dev-körning (`bun src/main.ts`) är symbolen odeklarerad → "dev".
  *
  * `typeof <odeklarerad>` är säkert i JS (kastar inte) → fallbacken
