@@ -36,10 +36,18 @@ describe("mätområden", () => {
     expect(src?.match("src/lib/server/routers/billingRun.ts")).toBe(true);
   });
 
+  it("Outlook-tillägget mäts för sig — ~140 rader försvinner annars i appens 40 000", () => {
+    const addin = scopeFor("Outlook-tillägget");
+    expect(addin, "tillägget måste vara ett eget mätområde").toBeDefined();
+    expect(addin?.match("src/lib/client/addin/taskpane-controller.ts")).toBe(true);
+    expect(addin?.match("office-addin/taskpane/taskpane.ts")).toBe(true);
+    expect(scopeFor("src/")?.match("src/lib/client/addin/addin-client.ts")).toBe(false);
+  });
+
   it("områdena överlappar inte — en fil hör hemma i exakt ett", () => {
     // Överlapp vore värre än en lucka: AI-ytans dipp skulle delvis absorberas
     // av app-golvet och delvis fälla det, utan att någon förstod varför.
-    for (const path of ["src/lib/shared/kostnadsrakning.ts", "tooling/ava-cli/cli.ts", "tooling/scripts/seed-data.ts"]) {
+    for (const path of ["src/lib/shared/kostnadsrakning.ts", "tooling/ava-cli/cli.ts", "tooling/scripts/seed-data.ts", "src/lib/client/addin/addin-client.ts", "office-addin/taskpane/taskpane.ts"]) {
       expect(COVERAGE_SCOPES.filter((s) => s.match(path)).map((s) => s.label), path).toHaveLength(1);
     }
   });
@@ -83,6 +91,7 @@ describe("golven är ratchets", () => {
   const FLOOR_BASELINE: Readonly<Record<string, { line: number; func: number }>> = {
     "src/": { line: 0.900, func: 0.859 },
     "tooling/ava-cli/": { line: 0.950, func: 0.920 },
+    "Outlook-tillägget": { line: 0.980, func: 0.970 },
     "tooling/scripts/": { line: 0.765, func: 0.780 },
   };
 

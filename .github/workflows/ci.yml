@@ -428,6 +428,28 @@ jobs:
           name: playwright-demo-report
           path: reports/playwright-demo/
 
+  # ───────────────── Outlook-tillägget i webbläsaren ─────────────────────
+  # Den byggda task-panen med fake-Office (test/helpers/office-fake.ts) mot
+  # tooling/scripts/addin-e2e-server.ts, som kör den RIKTIGA tRPC-handlern.
+  # Chromium (Outlook Windows/webben) + WebKit (Outlook på Mac, WKWebView).
+  # Manifest/HTML/bundle och kontraktet mot servern körs redan i `unit`.
+  addin-e2e:
+    name: Outlook-tillägg E2E (Chromium + WebKit)
+    runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/bun-setup
+      - run: npx playwright install --with-deps chromium webkit
+      - run: bun run e2e:addin
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: playwright-addin-report
+          path: reports/playwright-addin/
+
   # ───────────────── Keep-both-konflikt-E2E (UI-driven) ─────────────────
   # Verklighetstroget 2-användar-konflikt-test (#742) mot den FULLA self-hosted-
   # stacken (server-first tRPC + oauth2-proxy + Keycloak). conflict-e2e.sh
