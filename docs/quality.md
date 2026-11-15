@@ -84,6 +84,8 @@ AI-ytan tappa sin täckning utan att totalen rörde sig mätbart.
 |---|---|---|---|
 | `src/` | 90.0 % | 85.9 % | ~90.7 % / ~87.5 % |
 | `tooling/ava-cli/` (CLI + MCP) | 95.0 % | 92.0 % | 96.1 % / 93.7 % |
+| Outlook-tillägget (`src/lib/client/addin/` + `office-addin/`) | 94.0 % | 97.0 % | 95.1 % / 100 % (enprocess 99.3 %) |
+| `tooling/scripts/` | 76.5 % | 78.0 % | — |
 
 AI-ytans golv ankrades först konservativt (93,0/88,0) eftersom det var okänt
 hur mycket pass A:s `--parallel` underrapporterar (OBS 2). Nu är det mätt: CI
@@ -97,6 +99,27 @@ Coverage-rapporten skrivs till `coverage/` (lcov). `helper-ui` har en egen
 coverage-ratchet i [`helper-ui/bunfig.toml`](../helper-ui/bunfig.toml)
 (`coverageThreshold`, line 0.90 / function 0.85).
 
+#### Outlook-tillägget i CI
+
+Outlook kan inte köras i CI. Allt utom själva Outlook-värden testas, i lager:
+
+1. **Paketet** (`test/unit/office-addin/addin-package.test.ts`): manifestet
+   (id, version, Mailbox 1.5, behörighet, HTTPS, att ikonerna finns), att
+   task-panens HTML har alla element controllern slår upp, och att bundlen
+   bygger för webbläsaren.
+2. **Fake-Office** (`test/helpers/office-fake.ts`): typad mot `OfficeLike`,
+   delad av enhetstesterna och E2E:n.
+3. **E2E i Chromium + WebKit** (`bun run e2e:addin`, CI-jobbet `addin-e2e`):
+   den byggda task-panen med fake-Office mot
+   `tooling/scripts/addin-e2e-server.ts`. WebKit motsvarar Outlook på Mac.
+4. **Kontrakt mot servern** (`test/unit/tooling/addin-e2e-server.test.ts`):
+   tilläggets riktiga klient mot den riktiga tRPC-handlern. Det sparade
+   mejlets bytes och tidsposten kontrolleras på serversidan.
+5. **Eget täckningsgolv** (tabellen ovan).
+
+Det enda som inte täcks är att Outlooks riktiga Office.js beter sig som
+`OfficeLike` antar. Det kräver en Outlook-värd (README:ns manuella checklista).
+
 #### Vilken grind ser vilken katalog
 
 Luckan som #1025 stängde var osynlig just för att omfånget inte stod skrivet
@@ -106,9 +129,9 @@ någonstans. Håll tabellen aktuell när en ny katalog tillkommer:
 |---|---|---|---|
 | `src/` | ✅ eget golv | ✅ | ✅ |
 | `tooling/ava-cli/` | ✅ eget golv | ✅ | ✅ (via `package.json`-scripten `ava` / `ava:mcp`) |
-| `tooling/scripts/` | ❌ | ❌ | ✅ (entry-mönster) |
+| `tooling/scripts/` | ✅ eget golv (#1100) | ❌ | ✅ (entry-mönster) |
 | `helper-ui/` | ✅ egen ratchet (`bunfig.toml`) | ✅ | ✅ |
-| `office-addin/` | ❌ | ✅ | ✅ |
+| `office-addin/` + `src/lib/client/addin/` | ✅ eget golv | ✅ | ✅ |
 | `test/` | — | ✅ | ✅ |
 
 ### Komplexitet (`bun run lint`)

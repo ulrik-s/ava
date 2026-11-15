@@ -171,6 +171,19 @@ const AI_FUNC_FLOOR = 0.920;
 // mock.module och globala stubbar läcker mellan filer utan `--isolate`
 // (se bunfig.toml). Den uppblåsta siffran hade gett ett golv som inte går att
 // hålla.
+/**
+ * Outlook-tilläggets golv (lager 5 i tilläggets CI). `src/lib/client/addin/`
+ * + `office-addin/` är ~140 rader mot appens ~40 000: i src/-golvet kunde
+ * hela tillägget tappa sin täckning utan att procenten rörde sig.
+ *
+ * Uppmätt: enprocess-körning av tilläggets tester 99,27 % rader / 100 %
+ * funktioner (136/137, 36/36); **grinden i CI (pass A med --parallel, OBS 2 i
+ * docs/quality.md) 95,10 % rader / 100 % funktioner**. Golvet följer CI:s
+ * siffra — det är den grinden mäter. Ratchet:en flyttas bara uppåt.
+ */
+const ADDIN_LINE_FLOOR = 0.940;
+const ADDIN_FUNC_FLOOR = 0.970;
+
 const SCRIPTS_LINE_FLOOR = 0.765;
 const SCRIPTS_FUNC_FLOOR = 0.780;
 
@@ -317,7 +330,10 @@ function mergeLcov(into: Map<string, FileCov>, text: string): void {
   }
 }
 
-const isSrc = (path: string): boolean => path.includes("/src/") || path.startsWith("src/");
+/** Outlook-tillägget: klientlogiken i src/ + ingången i office-addin/. Mäts för sig. */
+const isAddin = (path: string): boolean => path.includes("src/lib/client/addin/") || path.includes("office-addin/");
+
+const isSrc = (path: string): boolean => (path.includes("/src/") || path.startsWith("src/")) && !isAddin(path);
 
 /** AI-ytan: CLI:t + MCP-servern (#1025). Mäts för sig, se AI_LINE_FLOOR. */
 const isAiSurface = (path: string): boolean => path.includes("tooling/ava-cli/");
@@ -337,6 +353,7 @@ export interface CoverageScope {
 export const COVERAGE_SCOPES: readonly CoverageScope[] = [
   { label: "src/", match: isSrc, lineFloor: LINE_FLOOR, funcFloor: FUNC_FLOOR },
   { label: "tooling/ava-cli/", match: isAiSurface, lineFloor: AI_LINE_FLOOR, funcFloor: AI_FUNC_FLOOR },
+  { label: "Outlook-tillägget", match: isAddin, lineFloor: ADDIN_LINE_FLOOR, funcFloor: ADDIN_FUNC_FLOOR },
   { label: "tooling/scripts/", match: isToolingScript, lineFloor: SCRIPTS_LINE_FLOOR, funcFloor: SCRIPTS_FUNC_FLOOR },
 ];
 

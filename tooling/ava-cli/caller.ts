@@ -114,16 +114,25 @@ function toPrincipal(p: LocalPrincipal): Principal {
   };
 }
 
-/** LOCAL: in-process caller mot seedad store (ingen server/auth). */
-export function createLocalCaller(principal: LocalPrincipal = DEFAULT_PRINCIPAL): AvaCaller {
+/**
+ * Den seedade backend:en i minnet (store + ports + repos). Delas av LOCAL-
+ * callern och av Outlook-tilläggets E2E-server (tooling/scripts/addin-e2e-server.ts).
+ */
+export function createSeededBackend() {
   const dataStore = new DemoDataStore(seededSource(), async () => {
     /* no-op write-back (mimikar prod:s FSA/OPFS så delegates är skrivbara) */
   });
+  return { dataStore, ports: buildGitPorts(dataStore), repos: buildInMemoryRepositories(dataStore) };
+}
+
+/** LOCAL: in-process caller mot seedad store (ingen server/auth). */
+export function createLocalCaller(principal: LocalPrincipal = DEFAULT_PRINCIPAL): AvaCaller {
+  const { dataStore, ports, repos } = createSeededBackend();
   const caller = appRouter.createCaller({
     user: toPrincipal(principal),
     dataStore,
-    ports: buildGitPorts(dataStore),
-    repos: buildInMemoryRepositories(dataStore),
+    ports,
+    repos,
   });
   return callerFromTrpc(caller);
 }
