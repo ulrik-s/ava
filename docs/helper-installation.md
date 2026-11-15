@@ -4,32 +4,38 @@ AVA Helper är en liten app i menyraden som gör att du kan öppna dokument frå
 AVA direkt i Word, Förhandsvisning m.fl. — och att det du sparar hamnar i AVA
 igen. Du installerar den en gång.
 
-## 1. Ladda ner och installera
+## 1. Installera med en rad i Terminal
 
-1. Ladda ner senaste **AVA-Helper-…​.dmg** under
-   [releaser som heter `helper-v…`](https://github.com/ulrik-s/ava/releases?q=helper-v&expanded=true).
-2. Öppna dmg-filen och dra **AVA Helper** till **Program**.
+Enklast är att utgå från AVA: **Inställningar → AVA Helper → Installera på
+Mac** visar raden med en **Kopiera**-knapp.
 
-## 2. Öppna appen första gången
+1. Kopiera raden (den ser ut så här, med din byrås AVA-adress):
 
-Appen är ännu inte signerad hos Apple, så macOS stoppar den första gången:
+   ```bash
+   curl -fsSL https://ava-crm.io/helper/install.sh | bash
+   ```
 
-1. Dubbelklicka på **AVA Helper** i Program. macOS säger att den inte kan
-   öppnas — klicka **Klar**.
-2. Öppna **Systeminställningar → Integritet och säkerhet**, scrolla ner och
-   klicka **Öppna ändå** vid AVA Helper. Bekräfta med ditt lösenord.
+2. Tryck **⌘ mellanslag**, skriv **Terminal** och tryck Enter.
+3. Klistra in med **⌘ V** och tryck Enter.
 
-Det behövs bara första gången. Appen syns sedan som en ikon i menyraden (uppe
-till höger) och startar av sig själv när du loggar in på datorn.
+Skriptet hämtar senaste versionen, kontrollerar dess kontrollsumma, lägger
+appen i **Program** i din hemkatalog (`~/Applications`) och startar den. Inga
+administratörsrättigheter behövs.
 
-## 3. Certifikat för Safari
+Appen är ännu inte signerad hos Apple. Hämtad på det här sättet stoppas den
+inte av macOS, så du behöver inte gå via *Integritet och säkerhet*.
 
-Första gången frågar AVA Helper om den får **installera ett certifikat för
-Safari**. Klicka **Installera** och bekräfta med ditt lösenord.
+## 2. Godkänn certifikatet
+
+När appen startar första gången frågar den om den får **installera ett
+certifikat**. Klicka **Installera** och bekräfta med ditt Mac-lösenord.
 
 Certifikatet gäller bara din egen dator (`localhost`) och behövs för att AVA i
-Safari ska få prata med helpern. Klickade du *Inte nu* finns valet kvar i
-menyn: **Installera certifikat för Safari…**
+Safari och **Outlook-tillägget** ska få prata med helpern. Klickade du
+*Inte nu* finns valet kvar i menyn: **Installera certifikat för Safari…**
+
+Appen syns sedan som en ikon i menyraden (uppe till höger) och startar av sig
+själv när du loggar in på datorn.
 
 ## 4. Koppla till AVA
 
@@ -50,14 +56,14 @@ den skickas när nätet är tillbaka).
 
 ## Ny version
 
-När en ny version finns står det **Ny version finns — ladda ner** i
-helperns meny. Ladda ner och ersätt appen i Program på samma sätt som ovan.
+När en ny version finns står det **Ny version finns** i helperns meny. Kör
+samma rad i Terminal igen (steg 1): den ersätter den gamla versionen.
 
 ## Om något inte fungerar
 
 - **AVA säger att helpern inte körs:** kolla att ikonen finns i menyraden
   (annars starta AVA Helper från Program), och att du har installerat
-  certifikatet (steg 3).
+  certifikatet (steg 2).
 - **Du råkade klicka Neka:** avsluta AVA Helper i menyn och starta den igen
   — den frågar på nytt nästa gång AVA anropar den.
 - **Inloggningen misslyckas:** kontakta den som administrerar AVA hos er

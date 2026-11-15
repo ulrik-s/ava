@@ -8,10 +8,11 @@
  * användaren om helpern är installerad och kör.
  */
 
-import { ExternalLink, CheckCircle2, XCircle, Loader2, CloudUpload, AlertTriangle, CloudCheck } from "lucide-react";
+import { ExternalLink, CheckCircle2, XCircle, Loader2, CloudUpload, AlertTriangle, CloudCheck, Copy, Check } from "lucide-react";
+import { useState } from "react";
 import { useHelper, useHelperSyncStatus, triggerHelperUpdateCheck } from "@/lib/client/helper/use-helper";
 
-const RELEASES_URL = "https://github.com/ulrik-s/ava/releases?q=helper-v&expanded=true";
+const RELEASES_URL = "https://github.com/ulrik-s/ava/releases/latest";
 const GUIDE_URL = "https://github.com/ulrik-s/ava/blob/main/docs/helper-installation.md";
 
 export function HelperSection() {
@@ -31,6 +32,7 @@ export function HelperSection() {
 
       <Status status={status} />
       {status.version ? <SyncStatus /> : null}
+      {status.checked && !status.version ? <MacInstall /> : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
         <a href={RELEASES_URL} target="_blank" rel="noreferrer"
@@ -49,6 +51,42 @@ export function HelperSection() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Terminal-raden som installerar helpern på macOS (public/helper/install.sh). */
+export function macInstallCommand(origin: string): string {
+  return `curl -fsSL ${origin}/helper/install.sh | bash`;
+}
+
+/**
+ * Installation på Mac med en rad i Terminal. Appen är inte signerad av Apple
+ * än; hämtad med curl stoppas den inte av Gatekeeper (docs/helper-installation.md).
+ */
+function MacInstall() {
+  const [copied, setCopied] = useState(false);
+  const command = macInstallCommand(window.location.origin);
+  const copy = (): void => {
+    void navigator.clipboard.writeText(command).then(() => setCopied(true), () => setCopied(false));
+  };
+  return (
+    <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm">
+      <p className="font-medium text-gray-900 mb-2">Installera på Mac</p>
+      <ol className="list-decimal pl-5 space-y-1 text-gray-700 mb-3">
+        <li>Klicka på <strong>Kopiera</strong> nedan.</li>
+        <li>Tryck <kbd className="font-mono bg-white border rounded px-1">⌘ mellanslag</kbd>, skriv <strong>Terminal</strong> och tryck Enter.</li>
+        <li>Klistra in (<kbd className="font-mono bg-white border rounded px-1">⌘ V</kbd>) och tryck Enter.</li>
+        <li>Godkänn med ditt Mac-lösenord när macOS frågar om AVA:s certifikat.</li>
+      </ol>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 min-w-0 truncate font-mono text-xs bg-white border border-gray-200 rounded px-2 py-1.5">{command}</code>
+        <button type="button" onClick={copy}
+          className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-white hover:bg-blue-700">
+          {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Kopierat" : "Kopiera"}
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-gray-500">Klar på under en minut. AVA-ikonen visas i menyraden och den här rutan försvinner.</p>
     </div>
   );
 }
@@ -104,7 +142,7 @@ function Status({ status }: { status: ReturnType<typeof useHelper> }) {
   return (
     <div className="inline-flex items-center gap-2 text-sm">
       <XCircle size={14} className="text-amber-600" />
-      <span className="text-gray-700">Inte installerad — PDF-redigering kräver det extra steg du har idag.</span>
+      <span className="text-gray-700">Inte installerad — behövs för att öppna dokument i Word/PDF-program och för Outlook-tillägget.</span>
     </div>
   );
 }

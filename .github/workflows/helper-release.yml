@@ -1,0 +1,78 @@
+# AVA Helper för macOS till varje release (v*-tagg).
+#
+# Osignerad av Apple (inget Developer ID än, #110): appen ad hoc-signeras så
+# att Apple Silicon kör den, zippas per arkitektur och laddas upp till
+# releasen tillsammans med en SHA-256-fil. public/helper/install.sh hämtar
+# därifrån (releases/latest) och kontrollerar summan. Hämtad med curl får
+# appen ingen karantän-markering, så Gatekeeper stoppar den inte.
+# Windows-installeraren läggs till här när den behövs.
+name: Helper release (macOS)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Befintlig release-tagg att bygga för (t.ex. v0.7.17)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: helper-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: helper-ui
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: ./.github/actions/bun-setup
+
+      - name: Install (helper-ui)
+        run: bun install --frozen-lockfile
+
+      - name: Bygg AVA Helper.app (arm64 + x64)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: bun run icons && bun run bundle && bunx electron-builder --mac dir --arm64 --x64 --publish never
+
+      - name: Ad hoc-signera, zippa och räkna kontrollsummor
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          for pair in "mac-arm64:arm64" "mac:x64"; do
+            dir="${pair%%:*}"; arch="${pair##*:}"
+            app="dist/installers/$dir/AVA Helper.app"
+            test -d "$app" || { echo "saknas: $app"; ls dist/installers; exit 1; }
+            codesign --force --deep --sign - "$app"
+            codesign --verify --deep "$app"
+            zip="AVA-Helper-mac-$arch.zip"
+            ditto -c -k --keepParent "$app" "out/$zip"
+            (cd out && shasum -a 256 "$zip" > "$zip.sha256")
+          done
+          ls -la out
+
+      - name: Ladda upp till releasen
+        run: |
+          set -euo pipefail
+          # release.yml skapar releasen för taggen — vänta in den.
+          for _ in $(seq 1 30); do
+            gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 && break
+            sleep 20
+          done
+          gh release upload "$TAG" out/* --clobber -R "$GITHUB_REPOSITORY"
