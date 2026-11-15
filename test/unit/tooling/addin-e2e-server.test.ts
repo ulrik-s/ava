@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest-compat";
 import { createAddinClient, type AddinFetch } from "@/lib/client/addin/addin-client";
 import { saveIncomingMail } from "@/lib/client/addin/save-incoming-mail";
+import { friendlyError } from "@/lib/client/addin/taskpane-controller";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import {
   ADDIN_E2E_EML, ADDIN_E2E_MAIL_TOKEN, createAddinE2eHandler,
@@ -40,8 +41,9 @@ describe("tillägget mot AVA-servern", () => {
     expect(matters.map((x) => x.matterNumber)).toContain(m.matterNumber);
   });
 
-  it("okänd token ger ingen identitet (UNAUTHORIZED)", async () => {
-    await expect(client("fel-token").matter.list.query({ pageSize: 1 })).rejects.toThrow();
+  it("okänd token ger ingen identitet; skälet når klienten så att panelen kan förklara", async () => {
+    const err: unknown = await client("fel-token").matter.list.query({ pageSize: 1 }).then(() => null, (e: unknown) => e);
+    expect(friendlyError(err)).toContain("kände inte igen inloggningen");
   });
 
   it("en förfalskad x-auth-request-email ignoreras (proxyn skriver över den)", async () => {

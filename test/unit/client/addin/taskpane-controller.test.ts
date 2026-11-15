@@ -56,6 +56,11 @@ function makeTokens(o: { avaFails?: Error } = {}): AddinTokens {
   };
 }
 
+/** Så som tRPC-klienten ger serverns 401: skälet i `data.authFailure` (trpc-core.ts). */
+function authError(reason: "no-identity" | "token-expired" | "account-inactive"): Error {
+  return Object.assign(new Error("Ingen giltig inloggning."), { data: { code: "UNAUTHORIZED", authFailure: reason } });
+}
+
 const matter: MatterHit = { id: asId<"MatterId">("m1"), matterNumber: "2026-0007", title: "Tvist" };
 const OPTS = { server: "https://ava.example", graphBaseUrl: GRAPH_BASE };
 
@@ -128,10 +133,10 @@ describe("runSave", () => {
 });
 
 describe("friendlyError", () => {
-  it("översätter serverns inloggningsskäl till något en jurist förstår", () => {
-    expect(friendlyError(new Error("Ej inloggad: account-inactive"))).toContain("finns inte i AVA");
-    expect(friendlyError(new Error("Ej inloggad: token-expired"))).toContain("gått ut");
-    expect(friendlyError(new Error("UNAUTHORIZED"))).toContain("kände inte igen");
+  it("översätter serverns skälkod (data.authFailure) till något en jurist förstår", () => {
+    expect(friendlyError(authError("account-inactive"))).toContain("finns inte i AVA");
+    expect(friendlyError(authError("token-expired"))).toContain("gått ut");
+    expect(friendlyError(authError("no-identity"))).toContain("kände inte igen");
     expect(friendlyError(new Error("nätfel"))).toBe("nätfel");
   });
 });
@@ -186,7 +191,7 @@ describe("panelen", () => {
 
   it("misslyckad inloggning syns i panelen", async () => {
     setupDom();
-    bootstrap(makeOffice(), makeTokens({ avaFails: new Error("Ej inloggad: account-inactive") }), OPTS);
+    bootstrap(makeOffice(), makeTokens({ avaFails: authError("account-inactive") }), OPTS);
     await flush();
     expect(document.getElementById("status")?.textContent).toContain("finns inte i AVA");
     expect(document.getElementById("status")?.className).toContain("err");
@@ -257,7 +262,7 @@ describe("panelen", () => {
     vi.useFakeTimers();
     try {
       setupDom();
-      listQueryMock.mockRejectedValue(new Error("Ej inloggad: no-identity"));
+      listQueryMock.mockRejectedValue(authError("no-identity"));
       bootstrap(makeOffice(), makeTokens(), OPTS);
       const q = document.getElementById("q") as HTMLInputElement;
       q.value = "tvist";

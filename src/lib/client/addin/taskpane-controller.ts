@@ -15,6 +15,7 @@ import { type AddinConfig, type AddinTokens, createAddinTokens } from "@/lib/cli
 import { createAddinClient } from "@/lib/client/addin/addin-client";
 import { saveIncomingMail, type MailSaverClient } from "@/lib/client/addin/save-incoming-mail";
 import { GRAPH_BASE } from "@/lib/client/graph/graph-mail";
+import { type AuthFailure, authFailureOf } from "@/lib/shared/auth-failure";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import { parseHoursToMinutes, type ParsedHours } from "@/lib/shared/time-hours";
 
@@ -217,14 +218,15 @@ export function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/**
- * Felet så som en jurist ska läsa det. Servern svarar `UNAUTHORIZED` med
- * skälet i meddelandet (`Ej inloggad: account-inactive` m.fl., auth-failure.ts).
- */
+/** Vad juristen ska läsa när servern svarar 401 (skälet: `data.authFailure`, auth-failure.ts). */
+const AUTH_FAILURE_TEXT: Readonly<Record<AuthFailure, string>> = {
+  "account-inactive": "ditt konto finns inte i AVA eller är inte aktivt — kontakta administratören.",
+  "token-expired": "inloggningen har gått ut — stäng och öppna tillägget igen.",
+  "no-identity": "AVA kände inte igen inloggningen — kontakta administratören.",
+};
+
+/** Felet så som en jurist ska läsa det: serverns skälkod i första hand, annars meddelandet. */
 export function friendlyError(e: unknown): string {
-  const msg = errMsg(e);
-  if (/account-inactive/.test(msg)) return "ditt konto finns inte i AVA eller är inte aktivt — kontakta administratören.";
-  if (/token-expired/.test(msg)) return "inloggningen har gått ut — stäng och öppna tillägget igen.";
-  if (/no-identity|UNAUTHORIZED|401/.test(msg)) return "AVA kände inte igen inloggningen — kontakta administratören.";
-  return msg;
+  const reason = authFailureOf(e);
+  return reason ? AUTH_FAILURE_TEXT[reason] : errMsg(e);
 }
