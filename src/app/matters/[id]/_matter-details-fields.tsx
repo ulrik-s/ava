@@ -39,20 +39,40 @@ function MatterTypeChoice({ value, types, onChange }: { value: string; types: re
   );
 }
 
+/** Ansvarig advokat/jurist ur byråns användare. Byte ändrar inte ärendenumret. */
+function ResponsibleChoice({ value, users, onChange }: {
+  value: string; users: readonly { id: string; name: string }[]; onChange: (v: string) => void;
+}) {
+  const id = useId();
+  return (
+    <div>
+      <label htmlFor={id} className={LABEL_CLASS}>Ansvarig advokat/jurist</label>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLASS}>
+        {!value && <option value="">Välj ansvarig…</option>}
+        {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+      </select>
+      <p className="mt-1 text-xs text-gray-500">Ärendenumret behålls när ansvarig byts.</p>
+    </div>
+  );
+}
+
 /** Props för {@link MatterDetailsFields}. */
 export interface MatterDetailsFieldsProps {
   value: MatterDetailsValues;
   onChange: (next: MatterDetailsValues) => void;
   matterTypes: readonly string[];
   showInsuranceReference: boolean;
+  /** Byråns användare (ansvarig advokat/jurist). */
+  users: readonly { id: string; name: string }[];
 }
 
-export function MatterDetailsFields({ value, onChange, matterTypes, showInsuranceReference }: MatterDetailsFieldsProps) {
+export function MatterDetailsFields({ value, onChange, matterTypes, showInsuranceReference, users }: MatterDetailsFieldsProps) {
   const set = <K extends keyof MatterDetailsValues>(key: K) => (v: MatterDetailsValues[K]) => onChange({ ...value, [key]: v });
   return (
     <div className="space-y-3">
       <TextField label="Titel" value={value.title} onChange={set("title")} />
       <MatterTypeChoice value={value.matterType} types={matterTypes} onChange={set("matterType")} />
+      <ResponsibleChoice value={value.responsibleLawyerId} users={users} onChange={set("responsibleLawyerId")} />
       <TextField label="Målnummer" value={value.courtCaseNumber} onChange={set("courtCaseNumber")} />
       {showInsuranceReference && (
         <TextField label="Försäkringsreferens" value={value.insuranceReference} onChange={set("insuranceReference")} />

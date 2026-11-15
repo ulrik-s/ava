@@ -78,6 +78,7 @@ function MatterEditForm({ matterId, matter, contacts, onClose }: EditProps & { o
   const [details, setDetails] = useState(() => matterDetailsFromMatter(matter));
   const payment = usePaymentMethodForm(paymentInitial(matter));
   const matterTypes = trpc.organization.getSettings.useQuery().data?.matterTypes ?? [];
+  const users = trpc.user.list.useQuery().data?.users ?? [];
   const showInsuranceReference = hasInsuranceCompany(contacts);
   const utils = trpc.useUtils();
   const update = trpc.matter.update.useMutation({
@@ -96,7 +97,7 @@ function MatterEditForm({ matterId, matter, contacts, onClose }: EditProps & { o
     <div className="space-y-4">
       <PaymentNotices matterId={matterId} matter={matter} />
       <MatterDetailsFields value={details} onChange={setDetails} matterTypes={matterTypes}
-        showInsuranceReference={showInsuranceReference} />
+        showInsuranceReference={showInsuranceReference} users={users} />
       <PaymentMethodFields value={payment.values} onChange={payment.setValues} />
       <div className="flex gap-2 justify-end">
         <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded">

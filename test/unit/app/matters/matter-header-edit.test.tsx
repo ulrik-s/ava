@@ -28,8 +28,10 @@ vi.mock("@/lib/client/trpc", () => ({
       },
     },
     organization: { getSettings: { useQuery: () => settings } },
+    user: { list: { useQuery: () => ({ data: { users: USERS } }) } },
   },
 }));
+const USERS = [{ id: "u-ulrik", name: "Ulrik Sjölin" }, { id: "u-cecilia", name: "Cecilia Moll" }];
 // Takvarningen och nekat-bannern har egna tester; här räcker att de finns i dialogen.
 vi.mock("@/components/matter/coverage-cap-warning", () => ({
   CoverageCapWarning: ({ paymentMethod }: { paymentMethod: string }) => <div data-testid="cap-warning">{paymentMethod}</div>,
@@ -46,6 +48,7 @@ const MATTER: HeaderEditMatter = {
   courtCaseNumber: "T 1-26",
   insuranceReference: "SK-1",
   paymentMethod: "PRIVAT",
+  responsibleLawyerId: "u-ulrik",
 };
 const CLIENT: MatterContactWithRole = { role: "KLIENT", contact: { contactType: "PERSON" } };
 const INSURER: MatterContactWithRole = { role: "FORSAKRINGSBOLAG", contact: { contactType: "INSURANCE_COMPANY" } };
@@ -128,6 +131,22 @@ describe("MatterHeaderEdit", () => {
       id: "m1", title: "Ny titel", matterType: "Bodelning", courtCaseNumber: "T 2-26",
       insuranceReference: "SK-2", description: "Ny beskrivning", paymentMethod: "RATTSSKYDD", hourlyRates: {},
     }));
+  });
+
+  it("ansvarig advokat/jurist: förvald till ärendets, och ett byte skickas med", () => {
+    const dialog = open();
+    const select = within(dialog).getByLabelText("Ansvarig advokat/jurist");
+    expect(select).toHaveValue("u-ulrik");
+    fireEvent.change(select, { target: { value: "u-cecilia" } });
+    save(dialog);
+    expect(sent()).toEqual(expect.objectContaining({ responsibleLawyerId: "u-cecilia" }));
+  });
+
+  it("ärende utan ansvarig: 'Välj ansvarig…' och inget skickas förrän ett val görs", () => {
+    const dialog = open({ responsibleLawyerId: null });
+    expect(within(dialog).getByLabelText("Ansvarig advokat/jurist")).toHaveValue("");
+    save(dialog);
+    expect(sent()).not.toHaveProperty("responsibleLawyerId");
   });
 
   it("utan valt förstaval skickas ingen matterType, och dold försäkringsreferens skickas inte", () => {

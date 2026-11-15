@@ -11,6 +11,8 @@ export interface MatterDetailsInitial {
   description?: string | null | undefined;
   courtCaseNumber: string;
   insuranceReference: string;
+  /** Ansvarig advokat/jurist (#174). */
+  responsibleLawyerId?: string | null | undefined;
 }
 
 /** Fältens värden som de står i dialogen. */
@@ -21,6 +23,8 @@ export interface MatterDetailsValues {
   courtCaseNumber: string;
   insuranceReference: string;
   description: string;
+  /** Vald ansvarig; `""` = ingen vald (äldre ärenden). */
+  responsibleLawyerId: string;
 }
 
 /** Ärendeuppgifternas del av `matter.update`-indata. */
@@ -32,6 +36,8 @@ export interface MatterDetailsUpdateInput {
   insuranceReference?: string | null;
   /** Utelämnas utan val ur byråns lista, så att ärendets typ står kvar. */
   matterType?: string;
+  /** Utelämnas utan val, så att ärendet inte tappar sin ansvarige. Ärendenumret ändras inte. */
+  responsibleLawyerId?: string;
 }
 
 /** Vad dialogen visar, som styr vilka fält som skickas. */
@@ -50,6 +56,7 @@ export function matterDetailsFromMatter(m: MatterDetailsInitial): MatterDetailsV
     courtCaseNumber: m.courtCaseNumber,
     insuranceReference: m.insuranceReference,
     description: m.description ?? "",
+    responsibleLawyerId: m.responsibleLawyerId ?? "",
   };
 }
 
@@ -71,6 +78,7 @@ export function matterDetailsInput(v: MatterDetailsValues, ctx: MatterDetailsCon
     courtCaseNumber: v.courtCaseNumber || null,
     ...shownInsuranceReference(v, ctx),
     ...chosenMatterType(v, ctx),
+    ...(v.responsibleLawyerId ? { responsibleLawyerId: v.responsibleLawyerId } : {}),
   };
 }
 
