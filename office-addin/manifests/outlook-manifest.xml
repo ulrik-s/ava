@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  AVA Outlook-add-in (#72) — task-pane-manifest (read/compose surface).
+  AVA Outlook-tillägg (#72) — MALL. office-addin/build.ts fyller i {{BASE}}
+  (t.ex. https://ava-crm.io/addin) och {{VERSION}} och skriver det färdiga
+  manifestet till <utkatalog>/manifest.xml, som serveras på
+  https://<AVA-domän>/addin/manifest.xml.
 
-  Pekar på en HTTPS-serverad task-pane-bundle (SourceLocation via bt:Url).
-  Add-in:en är en tunn tRPC-HTTP-klient (src/lib/client/addin/addin-client.ts)
-  mot AVA-serverns /api/trpc (ADR 0013). Byt ut https://localhost:3443 mot den
-  faktiska bundle-värden vid sideload/AppSource.
+  Utrullning: Microsoft 365 admin center → Inställningar → Integrerade appar →
+  Ladda upp anpassade appar → länk till manifest.xml (se docs/outlook-addin.md).
 
-  Sideload (dev): Outlook → Hämta tillägg → Mina tillägg → Egna tillägg →
-  Lägg till från fil → välj denna fil (kräver HTTPS-serverad bundle).
+  Inloggning sker via Outlook (NAA, src/lib/client/addin/addin-auth.ts); mejlet
+  hämtas via Microsoft Graph. Behörigheten ReadItem räcker för convertToRestId.
 -->
 <OfficeApp
   xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
@@ -17,31 +18,31 @@
   xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
   xsi:type="MailApp">
   <Id>3a0c9b4d-2e5f-4b7c-8d3a-1b2c3d4e5f60</Id>
-  <Version>0.1.0</Version>
+  <Version>{{VERSION}}</Version>
   <ProviderName>AVA</ProviderName>
   <DefaultLocale>sv-SE</DefaultLocale>
   <DisplayName DefaultValue="AVA" />
-  <Description DefaultValue="Koppla mail till ärenden och spara mail/bilagor till ärendets git-db från Outlook." />
-  <IconUrl DefaultValue="https://localhost:3443/assets/icon-64.png" />
-  <HighResolutionIconUrl DefaultValue="https://localhost:3443/assets/icon-128.png" />
+  <Description DefaultValue="Spara mejl till ärenden i AVA, med valfri tidspost." />
+  <IconUrl DefaultValue="{{BASE}}/assets/icon-64.png" />
+  <HighResolutionIconUrl DefaultValue="{{BASE}}/assets/icon-128.png" />
   <SupportUrl DefaultValue="https://github.com/ulrik-s/ava" />
   <Hosts>
     <Host Name="Mailbox" />
   </Hosts>
   <Requirements>
     <Sets>
-      <Set Name="Mailbox" MinVersion="1.5" />
+      <Set Name="Mailbox" MinVersion="1.3" />
     </Sets>
   </Requirements>
   <FormSettings>
     <Form xsi:type="ItemRead">
       <DesktopSettings>
-        <SourceLocation DefaultValue="https://localhost:3443/taskpane.html" />
+        <SourceLocation DefaultValue="{{BASE}}/taskpane.html" />
         <RequestedHeight>450</RequestedHeight>
       </DesktopSettings>
     </Form>
   </FormSettings>
-  <Permissions>ReadWriteItem</Permissions>
+  <Permissions>ReadItem</Permissions>
   <Rule xsi:type="RuleCollection" Mode="Or">
     <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read" />
   </Rule>

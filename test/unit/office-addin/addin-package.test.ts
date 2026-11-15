@@ -11,11 +11,22 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest-compat";
+import {
+  addinBaseUrl, addinConfigFromEnv, manifestVersion, renderConfigJs, renderManifest,
+} from "../../../office-addin/manifest";
 
 const ROOT = join(import.meta.dir, "..", "..", "..", "office-addin");
-const MANIFEST = readFileSync(join(ROOT, "manifests", "outlook-manifest.xml"), "utf8");
+const TEMPLATE = readFileSync(join(ROOT, "manifests", "outlook-manifest.xml"), "utf8");
 const HTML = readFileSync(join(ROOT, "taskpane", "taskpane.html"), "utf8");
 
+/** Produktionens miljö (värdena ur ava-server.env; klient-id och tenant är inte hemliga). */
+const PROD_ENV = {
+  AVA_DOMAIN: "ava-crm.io",
+  AVA_VERSION: "v0.7.20",
+  OAUTH2_PROXY_CLIENT_ID: "73542ff5-5080-4f17-b08f-419a734decf7",
+  OIDC_ISSUER_URL: "https://login.microsoftonline.com/c503234f-3ed9-44d4-9712-a870c5e4cc85/v2.0",
+};
+const MANIFEST = renderManifest(TEMPLATE, { base: addinBaseUrl(PROD_ENV), version: manifestVersion(PROD_ENV) });
 const doc = new DOMParser().parseFromString(MANIFEST, "application/xml");
 const byTag = (tag: string): Element[] => [...doc.getElementsByTagName(tag)];
 const one = (tag: string): Element => {
@@ -31,6 +42,19 @@ const urls = (): string[] =>
     .filter((v) => /^[a-z]+:\/\//i.test(v));
 
 describe("Outlook-manifestet", () => {
+  it("mallen har platshållare och inga hårdkodade värdar", () => {
+    expect(TEMPLATE).toContain("{{BASE}}/taskpane.html");
+    expect(TEMPLATE).toContain("<Version>{{VERSION}}</Version>");
+    expect(TEMPLATE).not.toMatch(/https:\/\/localhost/);
+    expect(MANIFEST).not.toContain("{{");
+  });
+
+  it("versionen följer release-taggen", () => {
+    expect(text("Version")).toBe("0.7.20");
+    expect(manifestVersion({ AVA_VERSION: "v0.7.20-3-gabc123" })).toBe("0.7.20");
+    expect(manifestVersion({})).toBe("0.0.0");
+  });
+
   it("är välformad XML", () => {
     expect(doc.getElementsByTagName("parsererror")).toHaveLength(0);
     expect(doc.documentElement.tagName).toBe("OfficeApp");
@@ -44,14 +68,14 @@ describe("Outlook-manifestet", () => {
     expect(one("DisplayName").getAttribute("DefaultValue")).not.toBe("");
   });
 
-  it("kräver Mailbox 1.5 — restUrl och getCallbackTokenAsync({isRest}) finns först där", () => {
+  it("kräver Mailbox 1.3 — convertToRestId finns först där (token kommer från NAA, inte Office)", () => {
     const req = byTag("Set").find((s) => s.getAttribute("Name") === "Mailbox");
-    expect(req?.getAttribute("MinVersion")).toBe("1.5");
+    expect(req?.getAttribute("MinVersion")).toBe("1.3");
     expect(byTag("Host").map((h) => h.getAttribute("Name"))).toContain("Mailbox");
   });
 
-  it("har behörighet att läsa mejlet (REST-token kräver minst ReadItem)", () => {
-    expect(["ReadItem", "ReadWriteItem", "ReadWriteMailbox"]).toContain(text("Permissions"));
+  it("begär minsta behörighet (ReadItem); mejlet läses via Graph", () => {
+    expect(text("Permissions")).toBe("ReadItem");
   });
 
   it("alla URL:er är HTTPS; det tillägget laddar ligger på en och samma origin", () => {
@@ -63,24 +87,59 @@ describe("Outlook-manifestet", () => {
     expect(new Set(loaded.map((u) => new URL(u).origin)).size).toBe(1);
   });
 
+  it("serveras från AVA:s domän under /addin/", () => {
+    expect(one("SourceLocation").getAttribute("DefaultValue")).toBe("https://ava-crm.io/addin/taskpane.html");
+  });
+
   it("task-panen och ikonerna pekar på filer som bygget levererar", () => {
     const source = one("SourceLocation").getAttribute("DefaultValue") ?? "";
-    expect(new URL(source).pathname).toBe("/taskpane.html");
+    expect(new URL(source).pathname).toBe("/addin/taskpane.html");
     const assets = new Set(readdirSync(join(ROOT, "assets")));
     for (const tag of ["IconUrl", "HighResolutionIconUrl"]) {
       const path = new URL(one(tag).getAttribute("DefaultValue") ?? "").pathname;
-      expect(path.startsWith("/assets/"), `${tag}: ${path}`).toBe(true);
-      expect(assets.has(path.slice("/assets/".length)), `${tag}: ${path} saknas i office-addin/assets`).toBe(true);
+      expect(path.startsWith("/addin/assets/"), `${tag}: ${path}`).toBe(true);
+      expect(assets.has(path.slice("/addin/assets/".length)), `${tag}: ${path} saknas i office-addin/assets`).toBe(true);
     }
   });
 });
 
+describe("installationens konfiguration (config.js)", () => {
+  it("klient-id och tenant ur deployens miljö", () => {
+    expect(addinConfigFromEnv(PROD_ENV)).toEqual({
+      clientId: "73542ff5-5080-4f17-b08f-419a734decf7", tenantId: "c503234f-3ed9-44d4-9712-a870c5e4cc85",
+    });
+  });
+
+  it("utan Entra-uppgifter: ingen konfiguration (panelen säger 'inte konfigurerat')", () => {
+    expect(addinConfigFromEnv({ AVA_DOMAIN: "x" })).toBeNull();
+    expect(renderConfigJs(null)).toContain("window.AVA_ADDIN = undefined;");
+  });
+
+  it("config.js sätter window.AVA_ADDIN", () => {
+    const js = renderConfigJs(addinConfigFromEnv(PROD_ENV));
+    const win: { AVA_ADDIN?: unknown } = {};
+    new Function("window", js)(win);
+    expect(win.AVA_ADDIN).toEqual(addinConfigFromEnv(PROD_ENV));
+  });
+
+  it("lokalt utan domän: https://localhost:3443 (office-addin-serve)", () => {
+    expect(addinBaseUrl({})).toBe("https://localhost:3443");
+    expect(addinBaseUrl({ AVA_ADDIN_BASE_URL: "https://x.test/addin/" })).toBe("https://x.test/addin");
+  });
+});
+
 describe("task-panens HTML", () => {
-  it("laddar Office.js från Microsofts CDN före bundlen", () => {
+  it("laddar Office.js från Microsofts CDN, sedan config.js, sist bundlen", () => {
     const office = HTML.indexOf('src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"');
+    const config = HTML.indexOf('src="./config.js"');
     const bundle = HTML.indexOf('src="./taskpane.js"');
     expect(office).toBeGreaterThan(-1);
-    expect(bundle).toBeGreaterThan(office);
+    expect(config).toBeGreaterThan(office);
+    expect(bundle).toBeGreaterThan(config);
+  });
+
+  it("frågar inte efter server eller PAT (inloggningen sker via Outlook)", () => {
+    expect(HTML).not.toMatch(/id="(server|pat)"/);
   });
 
   it("har alla element som controllern slår upp", () => {
@@ -89,7 +148,7 @@ describe("task-panens HTML", () => {
     const tpl = page.getElementById("form-tpl") as HTMLTemplateElement | null;
     expect(tpl).not.toBeNull();
     const form = tpl?.content ?? page.createDocumentFragment();
-    for (const id of ["server", "pat", "q", "results", "minutes", "save", "status"]) {
+    for (const id of ["who", "q", "results", "minutes", "description", "save", "status"]) {
       expect(form.querySelector(`#${id}`), `#${id} saknas i #form-tpl`).not.toBeNull();
     }
   });

@@ -12,24 +12,18 @@ import { DEFAULT_MAIL, installFakeOffice } from "../../helpers/office-fake";
 const HTML = readFileSync(join(import.meta.dir, "..", "..", "..", "office-addin", "taskpane", "taskpane.html"), "utf8");
 
 describe("task-panens ingång", () => {
-  it("renderar formuläret ur mallen och fyller i sparad server och PAT", async () => {
+  it("läser window.AVA_ADDIN, loggar in och renderar formuläret ur mallen", async () => {
     const page = new DOMParser().parseFromString(HTML, "text/html");
     page.querySelectorAll("script").forEach((s) => s.remove()); // ingången importeras nedan i stället
     document.body.innerHTML = page.body.innerHTML;
-    const office = installFakeOffice({
-      item: DEFAULT_MAIL,
-      restUrl: "https://outlook.office.com/api",
-      callbackToken: "t",
-      roaming: { ava_server: "https://ava.example", ava_pat: "ava_pat_x" },
-    });
-    globalThis.Office = office;
+    globalThis.Office = installFakeOffice({ item: DEFAULT_MAIL });
+    window.AVA_ADDIN = { clientId: "c", tenantId: "t", staticTokens: { ava: "a", graph: "g", name: "Maria Grosskopf" } };
 
     await import("../../../office-addin/taskpane/taskpane");
+    await new Promise((r) => setTimeout(r, 0));
 
-    const input = (id: string) => document.getElementById(id) as HTMLInputElement;
     expect(document.getElementById("app")?.textContent).not.toContain("Laddar…");
-    expect(input("server").value).toBe("https://ava.example");
-    expect(input("pat").value).toBe("ava_pat_x");
+    expect(document.getElementById("who")?.textContent).toBe("Inloggad som Maria Grosskopf");
     // Inget ärende valt än → Spara är avstängd.
     expect((document.getElementById("save") as HTMLButtonElement).disabled).toBe(true);
   });

@@ -1,16 +1,19 @@
 /**
- * Tester för `taskpane-controller` (#624) — Outlook-add-in:ens task-pane-logik
- * UTAN en Office-värd. `Office` injiceras via `OfficeLike`-interfacet och DOM:en
- * körs i happy-dom; `saveIncomingMail`/`createAddinClient` mockas. Täcker sök,
- * REST-token, mail-kontext, creds-persist, save-flödet (ok/fel/tidspost) +
- * render/bootstrap. Det enda otestade kvar är den ~4-radiga Office-entry:n.
+ * Tester för `taskpane-controller` (#624) — Outlook-tilläggets task-pane-logik
+ * UTAN en Office-värd. `Office` injiceras via `OfficeLike`, token via
+ * `AddinTokens` (fasta i testerna) och DOM:en körs i happy-dom;
+ * `saveIncomingMail`/`createAddinClient` mockas. Täcker sök, mail-kontext,
+ * save-flödet (ok/fel/tidspost), inloggningen i panelen, begripliga fel och
+ * hela kedjan sök → välj → spara.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { AddinTokens } from "@/lib/client/addin/addin-auth";
 import {
-  searchMatters, getRestToken, mailContext, persistCreds, runSave, renderResults, bootstrap, timeFieldMinutes,
+  searchMatters, mailContext, runSave, renderResults, bootstrap, startAddin, timeFieldMinutes, friendlyError,
   type OfficeLike, type MatterHit,
 } from "@/lib/client/addin/taskpane-controller";
+import { GRAPH_BASE } from "@/lib/client/graph/graph-mail";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const saveIncomingMailMock = vi.fn(async () => ({ ok: true }));
@@ -18,47 +21,52 @@ vi.mock("@/lib/client/addin/save-incoming-mail", () => ({
   saveIncomingMail: (args: unknown) => saveIncomingMailMock(args),
 }));
 const listQueryMock = vi.fn();
+const clientTokens: string[] = [];
 vi.mock("@/lib/client/addin/addin-client", () => ({
-  createAddinClient: () => ({
-    matter: { list: { query: (input: unknown) => listQueryMock(input) } },
-    mail: { saveIncoming: { mutate: vi.fn() } },
-  }),
+  createAddinClient: (opts: { baseUrl: string; token: string }) => {
+    clientTokens.push(`${opts.baseUrl}|${opts.token}`);
+    return {
+      matter: { list: { query: (input: unknown) => listQueryMock(input) } },
+      mail: { saveIncoming: { mutate: vi.fn() } },
+    };
+  },
 }));
 
-interface OfficeOverrides {
-  roaming?: Partial<Record<"ava_server" | "ava_pat", string>>;
-  subject?: string | null;
-  dateTimeCreated?: Date | null;
-  token?: { status: string; value?: string };
-}
-
-function makeOffice(o: OfficeOverrides = {}): { office: OfficeLike; set: ReturnType<typeof vi.fn>; saveAsync: ReturnType<typeof vi.fn> } {
-  const set = vi.fn();
-  const saveAsync = vi.fn();
-  const token = o.token ?? { status: "succeeded", value: "rest-token" };
-  const office: OfficeLike = {
+function makeOffice(o: { subject?: string | null; dateTimeCreated?: Date | null } = {}): OfficeLike {
+  return {
     context: {
-      roamingSettings: { get: (k: string) => o.roaming?.[k as "ava_server" | "ava_pat"], set, saveAsync },
       mailbox: {
         item: {
           itemId: "AAMk-1",
           subject: o.subject === undefined ? "Möte ang. tvist" : o.subject,
           dateTimeCreated: o.dateTimeCreated === undefined ? new Date("2026-02-03T10:00:00.000Z") : o.dateTimeCreated,
         },
-        restUrl: "https://outlook.office.com/api",
         convertToRestId: (id: string) => `rest(${id})`,
-        getCallbackTokenAsync: (_opts, cb) => cb(token),
       },
     },
     MailboxEnums: { RestVersion: { v2_0: "v2.0" } },
   };
-  return { office, set, saveAsync };
+}
+
+function makeTokens(o: { avaFails?: Error } = {}): AddinTokens {
+  return {
+    ava: () => (o.avaFails ? Promise.reject(o.avaFails) : Promise.resolve("ava-token")),
+    graph: () => Promise.resolve("graph-token"),
+    user: () => ({ name: "Cecilia Moll", username: "cecilia@mgadvokater.se" }),
+  };
+}
+
+/** Så som tRPC-klienten ger serverns 401: skälet i `data.authFailure` (trpc-core.ts). */
+function authError(reason: "no-identity" | "token-expired" | "account-inactive"): Error {
+  return Object.assign(new Error("Ingen giltig inloggning."), { data: { code: "UNAUTHORIZED", authFailure: reason } });
 }
 
 const matter: MatterHit = { id: asId<"MatterId">("m1"), matterNumber: "2026-0007", title: "Tvist" };
+const OPTS = { server: "https://ava.example", graphBaseUrl: GRAPH_BASE };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clientTokens.length = 0;
   document.body.innerHTML = "";
 });
 
@@ -66,69 +74,43 @@ describe("searchMatters", () => {
   it("mappar matter.list-svaret till vy-träffar", async () => {
     const client = {
       matter: { list: { query: vi.fn(async () => ({ matters: [
-        { id: "m1", matterNumber: "2026-1", title: "A" },
-        { id: "m2", matterNumber: "2026-2", title: "B" },
+        { id: asId<"MatterId">("m1"), matterNumber: "2026-1", title: "A" },
+        { id: asId<"MatterId">("m2"), matterNumber: "2026-2", title: "B" },
       ] })) } },
     };
-    expect(await searchMatters(client, "tvist")).toEqual([
+    expect(await searchMatters(client, "20")).toEqual([
       { id: "m1", matterNumber: "2026-1", title: "A" },
       { id: "m2", matterNumber: "2026-2", title: "B" },
     ]);
-    expect(client.matter.list.query).toHaveBeenCalledWith({ search: "tvist", pageSize: 8 });
-  });
-});
-
-describe("getRestToken", () => {
-  it("resolvar token vid succeeded", async () => {
-    const { office } = makeOffice({ token: { status: "succeeded", value: "tok-123" } });
-    expect(await getRestToken(office)).toBe("tok-123");
-  });
-  it("rejectar vid icke-succeeded", async () => {
-    const { office } = makeOffice({ token: { status: "failed" } });
-    await expect(getRestToken(office)).rejects.toThrow(/REST-token/);
+    expect(client.matter.list.query).toHaveBeenCalledWith({ search: "20", pageSize: 8 });
   });
 });
 
 describe("mailContext", () => {
-  it("bygger restId/restBase/subject/receivedAt", () => {
-    const { office } = makeOffice();
-    expect(mailContext(office)).toEqual({
-      restId: "rest(AAMk-1)",
-      restBase: "https://outlook.office.com/api/v2.0",
-      subject: "Möte ang. tvist",
-      receivedAt: "2026-02-03T10:00:00.000Z",
+  it("bygger restId/subject/receivedAt", () => {
+    expect(mailContext(makeOffice())).toEqual({
+      restId: "rest(AAMk-1)", subject: "Möte ang. tvist", receivedAt: "2026-02-03T10:00:00.000Z",
     });
   });
-  it("faller tillbaka på '(utan ämne)' + nu-tid när fälten saknas", () => {
-    const { office } = makeOffice({ subject: null, dateTimeCreated: null });
-    const ctx = mailContext(office);
-    expect(ctx.subject).toBe("(utan ämne)");
-    expect(() => new Date(ctx.receivedAt).toISOString()).not.toThrow();
-  });
-});
 
-describe("persistCreds", () => {
-  it("skriver server + pat till roaming och sparar", () => {
-    const { office, set, saveAsync } = makeOffice();
-    persistCreds(office, "https://srv", "PAT-1");
-    expect(set).toHaveBeenCalledWith("ava_server", "https://srv");
-    expect(set).toHaveBeenCalledWith("ava_pat", "PAT-1");
-    expect(saveAsync).toHaveBeenCalled();
+  it("faller tillbaka på '(utan ämne)' + nu-tid när fälten saknas", () => {
+    const ctx = mailContext(makeOffice({ subject: null, dateTimeCreated: null }));
+    expect(ctx.subject).toBe("(utan ämne)");
+    expect(Date.parse(ctx.receivedAt)).not.toBeNaN();
   });
 });
 
 describe("runSave", () => {
   const client = { mail: { saveIncoming: { mutate: vi.fn() } } };
 
-  it("kör save-flödet, inkluderar tidspost när minuter > 0, sätter ok-status", async () => {
-    const { office } = makeOffice();
+  it("hämtar mejlet via Graph med Graph-token:en, med tidspost, och sätter ok-status", async () => {
     const setStatus = vi.fn();
     const setSaving = vi.fn();
-    await runSave({ office, client, matter, minutes: 30, setStatus, setSaving });
+    await runSave({ office: makeOffice(), client, tokens: makeTokens(), graphBaseUrl: GRAPH_BASE, matter, minutes: 30, setStatus, setSaving });
     expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({
-      graphToken: "rest-token", restId: "rest(AAMk-1)", matterId: "m1",
+      graphToken: "graph-token", restId: "rest(AAMk-1)", matterId: "m1",
       subject: "Möte ang. tvist", receivedAt: "2026-02-03T10:00:00.000Z",
-      mimeBaseUrl: "https://outlook.office.com/api/v2.0", time: { minutes: 30 },
+      mimeBaseUrl: "https://graph.microsoft.com/v1.0", time: { minutes: 30 },
     }));
     expect(setStatus).toHaveBeenCalledWith("Sparar…");
     expect(setStatus).toHaveBeenLastCalledWith("✓ Sparat i 2026-0007", "ok");
@@ -136,19 +118,26 @@ describe("runSave", () => {
   });
 
   it("utelämnar tidspost när minuter saknas/0", async () => {
-    const { office } = makeOffice();
-    await runSave({ office, client, matter, minutes: NaN, setStatus: vi.fn(), setSaving: vi.fn() });
+    await runSave({ office: makeOffice(), client, tokens: makeTokens(), graphBaseUrl: GRAPH_BASE, matter, minutes: NaN, setStatus: vi.fn(), setSaving: vi.fn() });
     expect(saveIncomingMailMock.mock.calls[0]![0]).not.toHaveProperty("time");
   });
 
   it("fångar fel → felstatus, re-enablar (setSaving false)", async () => {
     saveIncomingMailMock.mockRejectedValueOnce(new Error("nätfel"));
-    const { office } = makeOffice();
     const setStatus = vi.fn();
     const setSaving = vi.fn();
-    await runSave({ office, client, matter, minutes: 0, setStatus, setSaving });
+    await runSave({ office: makeOffice(), client, tokens: makeTokens(), graphBaseUrl: GRAPH_BASE, matter, minutes: 0, setStatus, setSaving });
     expect(setStatus).toHaveBeenLastCalledWith("Misslyckades: nätfel", "err");
     expect(setSaving).toHaveBeenLastCalledWith(false);
+  });
+});
+
+describe("friendlyError", () => {
+  it("översätter serverns skälkod (data.authFailure) till något en jurist förstår", () => {
+    expect(friendlyError(authError("account-inactive"))).toContain("finns inte i AVA");
+    expect(friendlyError(authError("token-expired"))).toContain("gått ut");
+    expect(friendlyError(authError("no-identity"))).toContain("kände inte igen");
+    expect(friendlyError(new Error("nätfel"))).toBe("nätfel");
   });
 });
 
@@ -179,85 +168,103 @@ describe("timeFieldMinutes (#1545)", () => {
   });
 });
 
-describe("bootstrap/initForm", () => {
+describe("panelen", () => {
   function setupDom(): void {
     document.body.innerHTML = `
       <div id="app"></div>
       <template id="form-tpl">
-        <input id="server"><input id="pat"><input id="q"><input id="minutes">
-        <button id="save"></button>
+        <div id="who"></div><input id="q"><input id="minutes"><input id="description">
+        <button id="save" disabled></button>
         <div id="results"></div>
         <div id="status"></div>
       </template>`;
   }
+  const flush = () => new Promise((r) => setTimeout(r, 0));
 
-  it("klonar formuläret + förifyller creds ur roaming", () => {
+  it("visar vem som är inloggad, och Spara är avstängd tills ett ärende valts", async () => {
     setupDom();
-    const { office } = makeOffice({ roaming: { ava_server: "https://srv", ava_pat: "PAT-9" } });
-    bootstrap(office);
-    expect((document.getElementById("server") as HTMLInputElement).value).toBe("https://srv");
-    expect((document.getElementById("pat") as HTMLInputElement).value).toBe("PAT-9");
+    bootstrap(makeOffice(), makeTokens(), OPTS);
+    await flush();
+    expect(document.getElementById("who")?.textContent).toBe("Inloggad som Cecilia Moll");
+    expect((document.getElementById("save") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("Spara är disabled tills ett ärende valts (även med server+pat)", () => {
+  it("misslyckad inloggning syns i panelen", async () => {
     setupDom();
-    const { office } = makeOffice({ roaming: { ava_server: "https://srv", ava_pat: "PAT-9" } });
-    bootstrap(office);
-    const save = document.getElementById("save") as HTMLButtonElement;
-    document.getElementById("server")!.dispatchEvent(new Event("input"));
-    expect(save.disabled).toBe(true); // inget ärende valt än
+    bootstrap(makeOffice(), makeTokens({ avaFails: authError("account-inactive") }), OPTS);
+    await flush();
+    expect(document.getElementById("status")?.textContent).toContain("finns inte i AVA");
+    expect(document.getElementById("status")?.className).toContain("err");
   });
 
-  it("hela kedjan: skriv sök → debounce → välj träff → Spara → saveIncomingMail", async () => {
+  it("utan konfiguration (config.js) visas det i stället för formuläret", async () => {
+    setupDom();
+    await startAddin(makeOffice(), undefined, "https://ava.example");
+    expect(document.getElementById("app")?.textContent).toContain("inte konfigurerat");
+  });
+
+  it("med konfiguration: formuläret, mot sidans egen origin", async () => {
+    setupDom();
+    await startAddin(makeOffice(), { clientId: "c", tenantId: "t", staticTokens: { ava: "a", graph: "g", name: "Björn" } }, "https://ava.example");
+    await flush();
+    expect(document.getElementById("who")?.textContent).toBe("Inloggad som Björn");
+  });
+
+  /** Sök + välj ärendet, fyll tid och beskrivning och klicka Spara. */
+  async function searchPickSave(hours: string, description = "Genomgång av underlag"): Promise<void> {
+    setupDom();
+    listQueryMock.mockResolvedValue({ matters: [{ id: "m1", matterNumber: "2026-7", title: "Tvist" }] });
+    bootstrap(makeOffice(), makeTokens(), OPTS);
+    const q = document.getElementById("q") as HTMLInputElement;
+    q.value = "tvist";
+    q.dispatchEvent(new Event("input"));
+    await vi.advanceTimersByTimeAsync(350); // debounce (300ms) + sök-resolve
+    (document.querySelector("#results .matter") as HTMLElement).click();
+    (document.getElementById("minutes") as HTMLInputElement).value = hours;
+    (document.getElementById("description") as HTMLInputElement).value = description;
+    (document.getElementById("save") as HTMLButtonElement).click();
+    await vi.advanceTimersByTimeAsync(1);
+  }
+
+  it("hela kedjan: sök → välj → Spara; klienten får AVA-token:en och sidans origin", async () => {
     vi.useFakeTimers();
     try {
-      setupDom();
-      listQueryMock.mockResolvedValue({ matters: [{ id: "m1", matterNumber: "2026-7", title: "Tvist" }] });
-      const { office, set } = makeOffice({ roaming: { ava_server: "https://srv", ava_pat: "PAT-9" } });
-      bootstrap(office);
-
-      const q = document.getElementById("q") as HTMLInputElement;
-      q.value = "tvist";
-      q.dispatchEvent(new Event("input"));
-      await vi.advanceTimersByTimeAsync(350); // debounce (300ms) + sök-resolve
-
-      const row = document.querySelector("#results .matter") as HTMLElement;
-      expect(row?.textContent).toBe("2026-7 — Tvist");
-      row.click(); // välj ärendet
-
-      const save = document.getElementById("save") as HTMLButtonElement;
-      expect(save.disabled).toBe(false); // server+pat+val → aktiv
-      save.click();
-      await vi.advanceTimersByTimeAsync(1); // flush runSave:s promise-kedja
-
-      expect(set).toHaveBeenCalledWith("ava_server", "https://srv"); // persistCreds
-      expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({ matterId: "m1" }));
+      await searchPickSave("");
+      expect(clientTokens).toContain("https://ava.example|ava-token");
+      expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({ matterId: "m1", graphToken: "graph-token" }));
     } finally {
       vi.useRealTimers();
     }
   });
 
-  /** Sök + välj ärendet, fyll tidsfältet och klicka Spara. */
-  async function saveWithTime(hours: string): Promise<void> {
-    setupDom();
-    listQueryMock.mockResolvedValue({ matters: [{ id: "m1", matterNumber: "2026-7", title: "Tvist" }] });
-    bootstrap(makeOffice({ roaming: { ava_server: "https://srv", ava_pat: "PAT-9" } }).office);
-    const q = document.getElementById("q") as HTMLInputElement;
-    q.value = "tvist";
-    q.dispatchEvent(new Event("input"));
-    await vi.advanceTimersByTimeAsync(350);
-    (document.querySelector("#results .matter") as HTMLElement).click();
-    (document.getElementById("minutes") as HTMLInputElement).value = hours;
-    (document.getElementById("save") as HTMLButtonElement).click();
-    await vi.advanceTimersByTimeAsync(1);
-  }
-
-  it("tidsfältet i timmar: 0,25 skickas som 15 minuter (#1545)", async () => {
+  it("tid i timmar + beskrivning: 0,25 skickas som 15 minuter med raden (#1545)", async () => {
     vi.useFakeTimers();
     try {
-      saveIncomingMailMock.mockClear();
-      await saveWithTime("0,25");
-      expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({ time: { minutes: 15 } }));
+      await searchPickSave("0,25", "  Genomgång av underlag  ");
+      expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({
+        time: { minutes: 15, description: "Genomgång av underlag" },
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("tid utan beskrivning stoppas med en förklaring", async () => {
+    vi.useFakeTimers();
+    try {
+      await searchPickSave("0,5", "   ");
+      expect(saveIncomingMailMock).not.toHaveBeenCalled();
+      expect(document.getElementById("status")?.textContent).toBe("Skriv en beskrivning för tidsposten.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("utan tid behövs ingen beskrivning", async () => {
+    vi.useFakeTimers();
+    try {
+      await searchPickSave("", "");
+      expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.not.objectContaining({ time: expect.anything() }));
     } finally {
       vi.useRealTimers();
     }
@@ -266,11 +273,49 @@ describe("bootstrap/initForm", () => {
   it("ett otillåtet värde ger felstatus och ingen tidspost (#1545)", async () => {
     vi.useFakeTimers();
     try {
-      saveIncomingMailMock.mockClear();
-      await saveWithTime("0,33");
+      await searchPickSave("0,33");
       expect(saveIncomingMailMock).not.toHaveBeenCalled();
       expect(document.getElementById("status")?.textContent).toContain("Ändra värdet");
       expect(document.getElementById("status")?.className).toContain("err");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("går AVA-token inte att hämta vid Spara: felet visas och inget sparas", async () => {
+    vi.useFakeTimers();
+    try {
+      setupDom();
+      listQueryMock.mockResolvedValue({ matters: [{ id: "m1", matterNumber: "2026-7", title: "Tvist" }] });
+      let calls = 0;
+      // Första token (vid start och sök) går bra; vid Spara har inloggningen gått ut.
+      const tokens: AddinTokens = { ...makeTokens(), ava: () => (++calls <= 2 ? Promise.resolve("ava-token") : Promise.reject(authError("token-expired"))) };
+      bootstrap(makeOffice(), tokens, OPTS);
+      const q = document.getElementById("q") as HTMLInputElement;
+      q.value = "tvist";
+      q.dispatchEvent(new Event("input"));
+      await vi.advanceTimersByTimeAsync(350);
+      (document.querySelector("#results .matter") as HTMLElement).click();
+      (document.getElementById("save") as HTMLButtonElement).click();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(saveIncomingMailMock).not.toHaveBeenCalled();
+      expect(document.getElementById("status")?.textContent).toContain("gått ut");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sökfel visas begripligt", async () => {
+    vi.useFakeTimers();
+    try {
+      setupDom();
+      listQueryMock.mockRejectedValue(authError("no-identity"));
+      bootstrap(makeOffice(), makeTokens(), OPTS);
+      const q = document.getElementById("q") as HTMLInputElement;
+      q.value = "tvist";
+      q.dispatchEvent(new Event("input"));
+      await vi.advanceTimersByTimeAsync(350);
+      expect(document.getElementById("status")?.textContent).toContain("Sök misslyckades");
     } finally {
       vi.useRealTimers();
     }

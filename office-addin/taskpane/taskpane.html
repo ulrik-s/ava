@@ -4,8 +4,8 @@
   som .eml till valt ärende + valfri tidspost.
 
   Office.js laddas från Microsofts CDN (krav). Resten (taskpane.js) är en
-  bun-byggd bundle av taskpane.ts som anropar AVA-serverns tRPC + MS Graph/
-  Outlook-REST. Serveras över HTTPS (Office kräver det vid sideload).
+  bun-byggd bundle av taskpane.ts som anropar AVA-serverns tRPC och Microsoft
+  Graph, inloggad via Outlook (NAA). Serveras från AVA:s domän under /addin/.
 -->
 <html lang="sv">
   <head>
@@ -25,6 +25,7 @@
       .status { margin-top: 12px; font-size: 12px; }
       .err { color: #b91c1c; } .ok { color: #15803d; }
       .row { display: flex; gap: 8px; } .row > * { flex: 1; }
+      .who { font-size: 12px; color: #4b5563; min-height: 16px; }
     </style>
   </head>
   <body>
@@ -32,10 +33,7 @@
     <div id="app">Laddar…</div>
 
     <template id="form-tpl">
-      <label for="server">AVA-server</label>
-      <input id="server" type="url" placeholder="https://byra.example" />
-      <label for="pat">PAT (Bearer-token)</label>
-      <input id="pat" type="password" placeholder="ava_pat_…" />
+      <div id="who" class="who"></div>
 
       <label for="q">Sök ärende</label>
       <input id="q" type="search" placeholder="Ärendenummer eller titel" />
@@ -47,11 +45,15 @@
           <input id="minutes" type="text" inputmode="decimal" placeholder="t.ex. 0,25" />
         </div>
       </div>
+      <label for="description">Beskrivning (krävs med tid)</label>
+      <input id="description" type="text" maxlength="500" placeholder="t.ex. Genomgång av underlag från klienten" />
 
       <button id="save" disabled>Spara mail till valt ärende</button>
       <div id="status" class="status"></div>
     </template>
 
+    <!-- Per installation: klient-id och tenant (office-addin/build.ts). -->
+    <script src="./config.js"></script>
     <script src="./taskpane.js"></script>
   </body>
 </html>

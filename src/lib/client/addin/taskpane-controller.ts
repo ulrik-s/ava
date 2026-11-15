@@ -1,52 +1,45 @@
 /**
- * `taskpane-controller` — den testbara logiken bakom Outlook-add-in:ens
+ * `taskpane-controller` — den testbara logiken bakom Outlook-tilläggets
  * task-pane (#72, ADR 0013, funktion 1: spara öppet mail → ärende + tidspost).
  *
- * Office.js-glue:n i `office-addin/taskpane/taskpane.ts` reducerades till en
- * tunn entry (`Office.onReady(() => bootstrap(Office))`); ALL logik bor här och
- * kan enhetstestas UTAN en Office-värd: `Office` injiceras via det smala
- * `OfficeLike`-interfacet och DOM:en körs i happy-dom. Det enda som genuint
- * kräver en värd (att de RIKTIGA Office-API:erna beter sig som interfacet
- * antar) täcks separat av en OWA+Playwright-smoke.
+ * Ingången `office-addin/taskpane/taskpane.ts` är tunn: `Office.onReady` →
+ * `startAddin`. Office injiceras via det smala `OfficeLike`, token via
+ * `AddinTokens` (NAA i Outlook, fasta token i test) och DOM:en körs i
+ * happy-dom. Det enda som kräver en riktig Outlook-värd är att Office.js
+ * beter sig som `OfficeLike` antar.
+ *
+ * Tillägget ligger på AVA:s egen domän (`/addin/`), så API:t är samma origin.
  */
 
+import { type AddinConfig, type AddinTokens, createAddinTokens } from "@/lib/client/addin/addin-auth";
 import { createAddinClient } from "@/lib/client/addin/addin-client";
 import { saveIncomingMail, type MailSaverClient } from "@/lib/client/addin/save-incoming-mail";
+import { GRAPH_BASE } from "@/lib/client/graph/graph-mail";
+import { type AuthFailure, authFailureOf } from "@/lib/shared/auth-failure";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import { parseHoursToMinutes, type ParsedHours } from "@/lib/shared/time-hours";
 
 // ─── Smal Office.js-yta (det subset task-panen faktiskt rör) ──────────
 
-export interface RoamingSettings {
-  get(key: string): string | undefined;
-  set(key: string, value: string): void;
-  saveAsync(): void;
-}
 export interface MailboxItem {
   itemId: string;
   subject?: string | null;
   dateTimeCreated?: Date | null;
 }
-export interface CallbackTokenResult {
-  status: string;
-  value?: string;
-}
 export interface Mailbox {
   item: MailboxItem;
-  restUrl: string;
+  /** EWS-id → REST-id (samma format som Microsoft Graph använder). */
   convertToRestId(itemId: string, version: string): string;
-  getCallbackTokenAsync(options: { isRest: boolean }, callback: (result: CallbackTokenResult) => void): void;
 }
 export interface OfficeLike {
-  context: { roamingSettings: RoamingSettings; mailbox: Mailbox };
+  context: { mailbox: Mailbox };
   MailboxEnums: { RestVersion: { v2_0: string } };
 }
 
 export interface MatterHit { id: MatterId; matterNumber: string; title: string }
 type StatusFn = (msg: string, cls?: string) => void;
 
-/** Smal klient-yta för ärende-söket (uppfylls av `createAddinClient(...)`s
- *  `TRPCClient<AppRouter>`; smal så testdubbletter slipper casts). */
+/** Smal klient-yta för ärende-söket (uppfylls av `createAddinClient(...)`). */
 export interface MatterSearchClient {
   matter: {
     list: {
@@ -57,7 +50,7 @@ export interface MatterSearchClient {
   };
 }
 
-// ─── Ren logik (Office injicerat / mockad fetch) ──────────────────────
+// ─── Ren logik (Office och token injicerade) ──────────────────────────
 
 /** Ärende-sök via tRPC (`matter.list` med fritext) → vy-träffar. */
 export async function searchMatters(client: MatterSearchClient, q: string): Promise<MatterHit[]> {
@@ -65,71 +58,65 @@ export async function searchMatters(client: MatterSearchClient, q: string): Prom
   return res.matters.map((m) => ({ id: m.id, matterNumber: m.matterNumber, title: m.title }));
 }
 
-/** REST-token mot mailboxens egen REST-URL (ingen Azure-app krävs). */
-export function getRestToken(office: OfficeLike): Promise<string> {
-  return new Promise((resolve, reject) => {
-    office.context.mailbox.getCallbackTokenAsync({ isRest: true }, (r) => {
-      if (r.status === "succeeded" && r.value) resolve(r.value);
-      else reject(new Error("Kunde inte hämta REST-token (getCallbackTokenAsync)"));
-    });
-  });
-}
+export interface MailContext { restId: string; subject: string; receivedAt: string }
 
-export interface MailContext { restId: string; restBase: string; subject: string; receivedAt: string }
-
-/** Plocka REST-id/-bas + ämne/datum ur Office-item:en. */
+/** REST-id + ämne/datum ur Office-item:en. */
 export function mailContext(office: OfficeLike): MailContext {
   const mb = office.context.mailbox;
   const { item } = mb;
   return {
     restId: mb.convertToRestId(item.itemId, office.MailboxEnums.RestVersion.v2_0),
-    restBase: `${mb.restUrl}/v2.0`,
     subject: item.subject ?? "(utan ämne)",
     receivedAt: (item.dateTimeCreated ?? new Date()).toISOString(),
   };
 }
 
-/** Persistera server-URL + PAT i Office roaming-settings (ADR 0013 §3 C1). */
-export function persistCreds(office: OfficeLike, server: string, pat: string): void {
-  const r = office.context.roamingSettings;
-  r.set("ava_server", server);
-  r.set("ava_pat", pat);
-  r.saveAsync();
+export interface SaveOptions {
+  office: OfficeLike;
+  client: MailSaverClient;
+  tokens: AddinTokens;
+  graphBaseUrl: string;
+  matter: MatterHit;
+  minutes: number;
+  /** Tidspostens beskrivning (krävs i panelen när tid anges). */
+  description?: string;
+  setStatus: StatusFn;
+  setSaving: (saving: boolean) => void;
 }
 
 /**
- * Save-flödet: hämta Office-kontext + REST-token, kör `saveIncomingMail`, och
- * rapportera status. `setSaving` (knapp-disable) injiceras så funktionen är
- * DOM-fri och testbar. Fel fångas → felstatus (shell:en re-enablar via finally).
+ * Save-flödet: Graph-token, `saveIncomingMail`, status. `setSaving`
+ * (knapp-disable) injiceras så funktionen är DOM-fri. Fel → felstatus.
  */
-export async function runSave(opts: {
-  office: OfficeLike;
-  client: MailSaverClient;
-  matter: MatterHit;
-  minutes: number;
-  setStatus: StatusFn;
-  setSaving: (saving: boolean) => void;
-}): Promise<void> {
-  const { office, client, matter, minutes, setStatus, setSaving } = opts;
+export async function runSave(opts: SaveOptions): Promise<void> {
+  const { office, client, tokens, graphBaseUrl, matter, minutes, description, setStatus, setSaving } = opts;
   setStatus("Sparar…");
   setSaving(true);
   try {
     const ctx = mailContext(office);
-    const token = await getRestToken(office);
     await saveIncomingMail({
-      client, graphToken: token, mimeBaseUrl: ctx.restBase, restId: ctx.restId,
+      client, graphToken: await tokens.graph(), mimeBaseUrl: graphBaseUrl, restId: ctx.restId,
       matterId: matter.id, subject: ctx.subject, receivedAt: ctx.receivedAt,
-      ...(Number.isFinite(minutes) && minutes > 0 ? { time: { minutes } } : {}),
+      ...(Number.isFinite(minutes) && minutes > 0
+        ? { time: { minutes, ...(description?.trim() ? { description: description.trim() } : {}) } }
+        : {}),
     });
     setStatus(`✓ Sparat i ${matter.matterNumber}`, "ok");
   } catch (e) {
-    setStatus(`Misslyckades: ${errMsg(e)}`, "err");
+    setStatus(`Misslyckades: ${friendlyError(e)}`, "err");
   } finally {
     setSaving(false);
   }
 }
 
 // ─── DOM-glue (happy-dom-testbar; använder global `document`) ──────────
+
+/** Ett element i task-panen; saknas det är HTML:en och koden ur takt (testas i addin-package.test.ts). */
+function el(id: string): HTMLElement {
+  const found = document.getElementById(id);
+  if (!found) throw new Error(`#${id} saknas i task-panen`);
+  return found;
+}
 
 /** Rendera sök-träffarna som klickbara rader; markera vald + rapportera valet. */
 export function renderResults(box: HTMLElement, matters: MatterHit[], onPick: (m: MatterHit) => void): void {
@@ -147,53 +134,76 @@ export function renderResults(box: HTMLElement, matters: MatterHit[], onPick: (m
   }
 }
 
-/** Klona form-mallen in i #app och koppla upp formuläret. */
-export function bootstrap(office: OfficeLike): void {
-  const app = document.getElementById("app")!;
-  const tpl = document.getElementById("form-tpl") as HTMLTemplateElement;
-  app.innerHTML = "";
-  app.appendChild(tpl.content.cloneNode(true));
-  initForm(office);
+export interface PaneOptions {
+  /** AVA:s origin (tillägget ligger på samma domän). */
+  server: string;
+  graphBaseUrl: string;
 }
 
-/** Koppla upp formuläret: förifyll creds, sök (debounce), spara. */
-export function initForm(office: OfficeLike): void {
-  const $ = (id: string) => document.getElementById(id) as HTMLInputElement;
-  $("server").value = office.context.roamingSettings.get("ava_server") ?? "";
-  $("pat").value = office.context.roamingSettings.get("ava_pat") ?? "";
+/** Klona form-mallen in i #app och koppla upp formuläret. */
+export function bootstrap(office: OfficeLike, tokens: AddinTokens, opts: PaneOptions): void {
+  const app = el("app");
+  const tpl = el("form-tpl") as HTMLTemplateElement;
+  app.innerHTML = "";
+  app.appendChild(tpl.content.cloneNode(true));
+  initForm(office, tokens, opts);
+}
 
+/**
+ * Ingången: konfiguration (config.js) → token → formuläret. Saknas
+ * konfigurationen eller misslyckas inloggningen visas det i panelen.
+ */
+export async function startAddin(office: OfficeLike, config: AddinConfig | undefined, origin: string,
+  create?: Parameters<typeof createAddinTokens>[1]): Promise<void> {
+  const app = el("app");
+  if (!config) {
+    app.textContent = "Tillägget är inte konfigurerat för den här AVA-installationen — kontakta administratören.";
+    return;
+  }
+  const tokens = await createAddinTokens(config, create);
+  bootstrap(office, tokens, { server: origin, graphBaseUrl: config.graphBaseUrl ?? GRAPH_BASE });
+}
+
+/** Koppla upp formuläret: inloggning, sök (debounce), spara. */
+export function initForm(office: OfficeLike, tokens: AddinTokens, opts: PaneOptions): void {
+  const $ = (id: string) => el(id) as HTMLInputElement;
   let selected: MatterHit | null = null;
   const setStatus: StatusFn = (msg, cls = "") => {
-    const el = document.getElementById("status")!;
-    el.textContent = msg;
-    el.className = `status ${cls}`;
+    const status = el("status");
+    status.textContent = msg;
+    status.className = `status ${cls}`;
   };
   const setSaving = (saving: boolean) => { $("save").disabled = saving; };
-  const refreshSaveEnabled = () => {
-    $("save").disabled = !(selected && $("server").value && $("pat").value);
-  };
-  const client = () =>
-    createAddinClient({ baseUrl: $("server").value.trim(), token: $("pat").value.trim() });
+  const client = async () => createAddinClient({ baseUrl: opts.server, token: await tokens.ava() });
+
+  // Hämta AVA-token direkt: då syns vem som är inloggad, eller varför inte.
+  void tokens.ava().then(() => {
+    const u = tokens.user();
+    el("who").textContent = u ? `Inloggad som ${u.name}` : "";
+  }, (e: unknown) => { setStatus(`Inloggningen misslyckades: ${friendlyError(e)}`, "err"); });
 
   $("q").addEventListener("input", debounce(async () => {
     const q = $("q").value.trim();
     if (q.length < 2) return;
     try {
-      const matters = await searchMatters(client(), q);
-      renderResults(document.getElementById("results")!, matters, (m) => { selected = m; refreshSaveEnabled(); });
+      const matters = await searchMatters(await client(), q);
+      renderResults(el("results"), matters, (m) => { selected = m; $("save").disabled = false; });
     } catch (e) {
-      setStatus(`Sök misslyckades: ${errMsg(e)}`, "err");
+      setStatus(`Sök misslyckades: ${friendlyError(e)}`, "err");
     }
   }, 300));
-
-  ["server", "pat"].forEach((id) => $(id).addEventListener("input", refreshSaveEnabled));
 
   $("save").addEventListener("click", () => {
     if (!selected) return;
     const time = timeFieldMinutes($("minutes").value);
     if (!time.ok) { setStatus(time.error, "err"); return; }
-    persistCreds(office, $("server").value.trim(), $("pat").value.trim());
-    void runSave({ office, client: client(), matter: selected, minutes: time.minutes, setStatus, setSaving });
+    const description = $("description").value.trim(); // tid utan beskrivning går inte att fakturera
+    if (time.minutes > 0 && !description) { setStatus("Skriv en beskrivning för tidsposten.", "err"); $("description").focus(); return; }
+    const matter = selected;
+    void client().then(
+      (c) => runSave({ office, client: c, tokens, graphBaseUrl: opts.graphBaseUrl, matter, minutes: time.minutes, description, setStatus, setSaving }),
+      (e: unknown) => { setStatus(`Misslyckades: ${friendlyError(e)}`, "err"); },
+    );
   });
 }
 
@@ -214,4 +224,17 @@ export function debounce<A extends unknown[]>(fn: (...a: A) => unknown, ms: numb
 
 export function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/** Vad juristen ska läsa när servern svarar 401 (skälet: `data.authFailure`, auth-failure.ts). */
+const AUTH_FAILURE_TEXT: Readonly<Record<AuthFailure, string>> = {
+  "account-inactive": "ditt konto finns inte i AVA eller är inte aktivt — kontakta administratören.",
+  "token-expired": "inloggningen har gått ut — stäng och öppna tillägget igen.",
+  "no-identity": "AVA kände inte igen inloggningen — kontakta administratören.",
+};
+
+/** Felet så som en jurist ska läsa det: serverns skälkod i första hand, annars meddelandet. */
+export function friendlyError(e: unknown): string {
+  const reason = authFailureOf(e);
+  return reason ? AUTH_FAILURE_TEXT[reason] : errMsg(e);
 }
