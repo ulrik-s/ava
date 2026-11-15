@@ -177,10 +177,28 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> implements Dele
     const out: Record<string, unknown> = { ...row };
     for (const [key, spec] of Object.entries(tree)) {
       if (key === "_count" || spec === undefined || spec === false) continue;
+      if (mode === "where" && this.hydrateLogical(out, relations, key, spec)) continue;
       const rc = relations[key];
       if (rc) out[key] = this.resolveRelation(out, rc, spec, mode);
     }
     return out;
+  }
+
+  /**
+   * Relationer som filtreras INUTI OR/AND måste också hydreras — annars matchar
+   * t.ex. ärendesökningens `OR: [..., { contacts: { some: … } }]` aldrig.
+   */
+  private hydrateLogical(
+    out: Record<string, unknown>,
+    relations: Record<string, RelationConfig<Record<string, unknown>>>,
+    key: string,
+    spec: unknown,
+  ): boolean {
+    if (key !== "OR" && key !== "AND") return false;
+    for (const sub of Array.isArray(spec) ? spec : [spec]) {
+      if (typeof sub === "object" && sub !== null) Object.assign(out, this.hydrateWith(out, relations, sub as Record<string, unknown>, "where"));
+    }
+    return true;
   }
 
   private resolveRelation(

@@ -16,7 +16,7 @@ import type { OfficeLike } from "@/lib/client/addin/taskpane-controller";
 
 export interface FakeOfficeConfig {
   /** Mejlet som är öppet i Outlook. */
-  item: { itemId: string; subject: string | null; dateTimeCreated: string | null };
+  item: { itemId: string; subject: string | null; dateTimeCreated: string | null; internetMessageId?: string | null };
 }
 
 declare global {
@@ -37,6 +37,7 @@ export function installFakeOffice(config: FakeOfficeConfig): FakeOffice {
           itemId: config.item.itemId,
           subject: config.item.subject,
           dateTimeCreated: config.item.dateTimeCreated === null ? null : new Date(config.item.dateTimeCreated),
+          internetMessageId: config.item.internetMessageId ?? null,
         },
         // Office gör om EWS-id:t till REST-id; fake:n märker det så att testerna ser att det används.
         convertToRestId: (itemId, version) => `rest-${version}-${itemId}`,
@@ -52,4 +53,5 @@ export const DEFAULT_MAIL: FakeOfficeConfig["item"] = {
   itemId: "AAMkAD-test-1",
   subject: "Ang. bouppteckning",
   dateTimeCreated: "2026-11-10T09:30:00.000Z",
+  internetMessageId: "<bouppteckning-1@mail.example.se>",
 };

@@ -16,28 +16,30 @@ import {
 import { GRAPH_BASE } from "@/lib/client/graph/graph-mail";
 import { asId } from "@/lib/shared/schemas/ids";
 
-const saveIncomingMailMock = vi.fn(async () => ({ ok: true }));
+const saveIncomingMailMock = vi.fn(() => Promise.resolve({ ok: true }));
 vi.mock("@/lib/client/addin/save-incoming-mail", () => ({
   saveIncomingMail: (args: unknown) => saveIncomingMailMock(args),
 }));
 const listQueryMock = vi.fn();
+const findSavedMock = vi.fn(() => Promise.resolve({ saved: false }));
 const clientTokens: string[] = [];
 vi.mock("@/lib/client/addin/addin-client", () => ({
   createAddinClient: (opts: { baseUrl: string; token: string }) => {
     clientTokens.push(`${opts.baseUrl}|${opts.token}`);
     return {
       matter: { list: { query: (input: unknown) => listQueryMock(input) } },
-      mail: { saveIncoming: { mutate: vi.fn() } },
+      mail: { saveIncoming: { mutate: vi.fn() }, findSaved: { query: (input: unknown) => findSavedMock(input) } },
     };
   },
 }));
 
-function makeOffice(o: { subject?: string | null; dateTimeCreated?: Date | null } = {}): OfficeLike {
+function makeOffice(o: { subject?: string | null; dateTimeCreated?: Date | null; internetMessageId?: string | null } = {}): OfficeLike {
   return {
     context: {
       mailbox: {
         item: {
           itemId: "AAMk-1",
+          internetMessageId: o.internetMessageId === undefined ? "<msg-1@mail.example>" : o.internetMessageId,
           subject: o.subject === undefined ? "Möte ang. tvist" : o.subject,
           dateTimeCreated: o.dateTimeCreated === undefined ? new Date("2026-02-03T10:00:00.000Z") : o.dateTimeCreated,
         },
@@ -66,6 +68,7 @@ const OPTS = { server: "https://ava.example", graphBaseUrl: GRAPH_BASE };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  findSavedMock.mockResolvedValue({ saved: false });
   clientTokens.length = 0;
   document.body.innerHTML = "";
 });
@@ -73,7 +76,7 @@ beforeEach(() => {
 describe("searchMatters", () => {
   it("mappar matter.list-svaret till vy-träffar", async () => {
     const client = {
-      matter: { list: { query: vi.fn(async () => ({ matters: [
+      matter: { list: { query: vi.fn(() => Promise.resolve({ matters: [
         { id: asId<"MatterId">("m1"), matterNumber: "2026-1", title: "A" },
         { id: asId<"MatterId">("m2"), matterNumber: "2026-2", title: "B" },
       ] })) } },
@@ -83,6 +86,13 @@ describe("searchMatters", () => {
       { id: "m2", matterNumber: "2026-2", title: "B" },
     ]);
     expect(client.matter.list.query).toHaveBeenCalledWith({ search: "20", pageSize: 8 });
+  });
+
+  it("tar med klienten när ärendet har en", async () => {
+    const client = { matter: { list: { query: vi.fn(() => Promise.resolve({ matters: [
+      { id: asId<"MatterId">("m1"), matterNumber: "2026-1", title: "A", contacts: [{ contact: { name: "Greta Gustafsson" } }] },
+    ] })) } } };
+    expect(await searchMatters(client, "greta")).toEqual([{ id: "m1", matterNumber: "2026-1", title: "A", client: "Greta Gustafsson" }]);
   });
 });
 
@@ -115,6 +125,14 @@ describe("runSave", () => {
     expect(setStatus).toHaveBeenCalledWith("Sparar…");
     expect(setStatus).toHaveBeenLastCalledWith("✓ Sparat i 2026-0007", "ok");
     expect(setSaving.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("skickar mejlets Message-ID; svarar servern 'fanns redan' blir det en varning, inte ✓", async () => {
+    saveIncomingMailMock.mockResolvedValueOnce({ ok: true, duplicateOf: "d1" });
+    const setStatus = vi.fn();
+    await runSave({ office: makeOffice(), client, tokens: makeTokens(), graphBaseUrl: GRAPH_BASE, matter, minutes: 0, setStatus, setSaving: vi.fn() });
+    expect(saveIncomingMailMock).toHaveBeenCalledWith(expect.objectContaining({ internetMessageId: "<msg-1@mail.example>" }));
+    expect(setStatus).toHaveBeenLastCalledWith("Mejlet fanns redan i 2026-0007 — inget sparades igen.", "warn");
   });
 
   it("utelämnar tidspost när minuter saknas/0", async () => {
@@ -152,6 +170,12 @@ describe("renderResults", () => {
     (rows[1] as HTMLElement).click();
     expect(picked).toEqual([{ id: "m2", matterNumber: "2026-9", title: "B" }]);
     expect(rows[1]!.classList.contains("sel")).toBe(true);
+  });
+
+  it("visar klienten på en egen rad", () => {
+    const box = document.createElement("div");
+    renderResults(box, [{ ...matter, client: "Greta Gustafsson" }], () => {});
+    expect(box.querySelector(".matter .client")?.textContent).toBe("Klient: Greta Gustafsson");
   });
 });
 
@@ -220,6 +244,7 @@ describe("panelen", () => {
     q.dispatchEvent(new Event("input"));
     await vi.advanceTimersByTimeAsync(350); // debounce (300ms) + sök-resolve
     (document.querySelector("#results .matter") as HTMLElement).click();
+    await vi.advanceTimersByTimeAsync(1); // dubblettfrågan
     (document.getElementById("minutes") as HTMLInputElement).value = hours;
     (document.getElementById("description") as HTMLInputElement).value = description;
     (document.getElementById("save") as HTMLButtonElement).click();
@@ -282,6 +307,50 @@ describe("panelen", () => {
     }
   });
 
+  it("finns mejlet redan i valt ärende: varning och Spara förblir avstängd", async () => {
+    vi.useFakeTimers();
+    try {
+      findSavedMock.mockResolvedValue({ saved: true });
+      await searchPickSave("");
+      expect(findSavedMock).toHaveBeenCalledWith({ matterId: "m1", internetMessageId: "<msg-1@mail.example>" });
+      expect(document.getElementById("status")?.textContent).toBe("Mejlet finns redan i 2026-7.");
+      expect((document.getElementById("save") as HTMLButtonElement).disabled).toBe(true);
+      expect(saveIncomingMailMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("utan Message-ID (ovanligt) frågas inte servern, Spara blir aktiv", async () => {
+    vi.useFakeTimers();
+    try {
+      setupDom();
+      listQueryMock.mockResolvedValue({ matters: [{ id: "m1", matterNumber: "2026-7", title: "Tvist" }] });
+      bootstrap(makeOffice({ internetMessageId: null }), makeTokens(), OPTS);
+      const q = document.getElementById("q") as HTMLInputElement;
+      q.value = "tvist";
+      q.dispatchEvent(new Event("input"));
+      await vi.advanceTimersByTimeAsync(350);
+      (document.querySelector("#results .matter") as HTMLElement).click();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(findSavedMock).not.toHaveBeenCalled();
+      expect((document.getElementById("save") as HTMLButtonElement).disabled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("går dubblettfrågan inte att ställa: Spara blir ändå aktiv (servern stoppar en dubblett)", async () => {
+    vi.useFakeTimers();
+    try {
+      findSavedMock.mockRejectedValue(new Error("nätfel"));
+      await searchPickSave("");
+      expect(saveIncomingMailMock).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("går AVA-token inte att hämta vid Spara: felet visas och inget sparas", async () => {
     vi.useFakeTimers();
     try {
@@ -296,6 +365,7 @@ describe("panelen", () => {
       q.dispatchEvent(new Event("input"));
       await vi.advanceTimersByTimeAsync(350);
       (document.querySelector("#results .matter") as HTMLElement).click();
+      await vi.advanceTimersByTimeAsync(1); // dubblettfrågan (misslyckas tyst, Spara blir aktiv)
       (document.getElementById("save") as HTMLButtonElement).click();
       await vi.advanceTimersByTimeAsync(1);
       expect(saveIncomingMailMock).not.toHaveBeenCalled();

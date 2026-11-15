@@ -1710,9 +1710,6 @@
   "test/unit/client/addin/taskpane-controller.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
-    },
-    "@typescript-eslint/require-await": {
-      "count": 2
     }
   },
   "test/unit/client/auth/revalidate-session.test.ts": {

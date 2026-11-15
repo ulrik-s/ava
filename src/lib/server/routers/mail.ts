@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { mailDocumentId } from "@/lib/shared/mail-document-id";
 import { asId, documentFolderIdSchema, type MatterId, matterIdSchema, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE } from "@/lib/shared/time-hours";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -41,6 +42,9 @@ function emlFileName(subject: string): string {
   return `${base}.eml`;
 }
 
+/** RFC 5322 Message-ID, t.ex. `<abc@mail.example>` (gränsen enligt RFC:ns radlängd). */
+const messageIdSchema = z.string().trim().min(3).max(998);
+
 const timeInput = z.object({
   /** Bara tillåtna tidsvärden (#1544). */
   minutes: z.number().int().min(1).refine(isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE),
@@ -65,6 +69,8 @@ export const mailRouter = router({
         /** Klient-genererat id (annars uuidv7). Begränsat till filnamns-säkra
          *  tecken — path:en byggs av det (defense-in-depth mot traversal). */
         documentId: z.string().regex(/^[A-Za-z0-9_-]+$/).brand<"DocumentId">().optional(),
+        /** Mejlets Internet Message-ID (Outlook). Ger dubblettskydd per ärende (mail-document-id.ts). */
+        internetMessageId: messageIdSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -72,40 +78,66 @@ export const mailRouter = router({
       const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
 
-      // 2. Skriv .eml-bytes till git-working-copy:n (server-runtime).
-      const id = input.documentId ?? uuidv7();
-      const storagePath = `documents/content/${id}.eml`;
-      const bytes = base64ToBytes(input.emlBase64);
-      await ctx.ports.content.write(storagePath, bytes);
+      // 2. Dubblettskydd: samma mejl i samma ärende sparas inte igen — och tiden bokförs inte igen.
+      const mailId = input.internetMessageId ? await mailDocumentId(input.matterId, input.internetMessageId) : null;
+      if (mailId) {
+        const existing = await ctx.repos.documents.getByIdInOrg(mailId, ctx.orgId);
+        if (existing) return { document: null, timeEntry: null, duplicateOf: existing.id };
+      }
 
-      // 3. Registrera dokument-metadata (projektion).
-      const fileName = emlFileName(input.subject);
-      const docData = {
-        id: asId<"DocumentId">(id),
-        matterId: input.matterId,
-        fileName,
-        mimeType: "message/rfc822",
-        sizeBytes: bytes.byteLength,
-        storagePath,
-        folderId: input.folderId ?? null,
-        organizationId: ctx.orgId,
-        analysisStatus: "PENDING" as const,
-        uploadedById: asId<"UserId">(ctx.user.id),
-        title: input.subject,
-        documentType: "E-post",
-        createdAt: new Date(input.receivedAt),
-      };
-      const doc = await ctx.repos.documents.create(docData);
-      await emit.documentUploaded(ctx, { id: docData.id, fileName, matterId: docData.matterId });
+      // 3. Skriv .eml-bytes + registrera dokumentet. Ett borttaget dokument med
+      //    samma härledda id finns kvar som rad → då ett nytt id (ponytail: sällsynt).
+      const doc = await storeMail(ctx, input, mailId ?? input.documentId ?? asId<"DocumentId">(uuidv7()))
+        .catch((err: unknown) => {
+          if (!mailId) throw err;
+          return storeMail(ctx, input, asId<"DocumentId">(uuidv7()));
+        });
 
       // 4. Valfri tidspost kopplad till mailet.
       const timeEntry = input.time
         ? await createMailTimeEntry(ctx, input.matterId, input.receivedAt, input.subject, input.time)
         : null;
 
-      return { document: doc, timeEntry };
+      return { document: doc, timeEntry, duplicateOf: null };
+    }),
+
+  /** Finns mejlet redan i ärendet? Panelen frågar när juristen väljer ärende. */
+  findSaved: orgProcedure
+    .input(z.object({ matterId: matterIdSchema, internetMessageId: messageIdSchema }))
+    .query(async ({ ctx, input }) => {
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
+      const existing = await ctx.repos.documents.getByIdInOrg(await mailDocumentId(input.matterId, input.internetMessageId), ctx.orgId);
+      return { saved: existing !== null };
     }),
 });
+
+type SaveInput = { matterId: MatterId; emlBase64: string; subject: string; receivedAt: string; folderId?: z.infer<typeof documentFolderIdSchema> | null | undefined };
+
+/** Skriv .eml-bytes till innehållslagret och registrera dokumentet. */
+async function storeMail(ctx: MailCtx & { ports: { content: { write(p: string, b: Uint8Array): Promise<void> } }; user: { id: string } }, input: SaveInput, id: string) {
+  const storagePath = `documents/content/${id}.eml`;
+  const bytes = base64ToBytes(input.emlBase64);
+  await ctx.ports.content.write(storagePath, bytes);
+  const fileName = emlFileName(input.subject);
+  const doc = await ctx.repos.documents.create({
+    id: asId<"DocumentId">(id),
+    matterId: input.matterId,
+    fileName,
+    mimeType: "message/rfc822",
+    sizeBytes: bytes.byteLength,
+    storagePath,
+    folderId: input.folderId ?? null,
+    organizationId: ctx.orgId,
+    analysisStatus: "PENDING" as const,
+    uploadedById: asId<"UserId">(ctx.user.id),
+    title: input.subject,
+    documentType: "E-post",
+    createdAt: new Date(input.receivedAt),
+  });
+  await emit.documentUploaded(ctx, { id: asId<"DocumentId">(id), fileName, matterId: input.matterId });
+  return doc;
+}
 
 /** Bokför tidsposten som hör ihop med ett sparat mail (#72 funktion 1). */
 async function createMailTimeEntry(
