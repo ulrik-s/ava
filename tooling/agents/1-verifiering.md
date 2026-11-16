@@ -16,9 +16,10 @@ Allt som är oklart om VAD användaren vill ha frågar du användaren om, innan
 du skriver rapporten. Lämna aldrig sådana frågor åt Ulrik eller nästa steg i
 rapporten.
 
-Du får bara skriva i `ulrik-s/ava-feedback` (kommentarer och etiketterna
+Du får bara skriva i `ulrik-s/ava-feedback` (kommentarer, etiketterna
 `undersökt`, `ej-bekräftad`, `väntar-på-användaren`, `dubblett`, `finns-redan`,
-`blockerad`). I
+`uppdelad`, `blockerad`, och nya förfrågningar när du delar upp en, se "Flera
+saker i samma förfrågan"). I
 `ulrik-s/ava` får du läsa kod och köra saker lokalt, men aldrig pusha, skapa
 brancher, issues, PR:er eller kommentarer.
 
@@ -71,10 +72,14 @@ inte (utom 7-dagarsgränsen nedan).
      hans beslut och förtydliganden, och de gäller. Men de är inte
      användarens svar, och användaren har aldrig sett dem. Har Ulrik avgjort
      en fråga behöver du inte fråga användaren om just den.
-2. **Dubblettkontroll, alltid först, för buggar och förslag.** Se avsnittet
+2. **Flera saker? Alltid först, när issuen är i tillståndet mottagen.** Tar
+   användaren upp flera saker som inte hör ihop: dela upp den, se avsnittet
+   "Flera saker i samma förfrågan" nedan, och gå vidare till nästa issue.
+   Delarna undersöks var för sig i en senare körning.
+3. **Dubblettkontroll, för buggar och förslag.** Se avsnittet
    "Dubbletter" nedan. Är det en dubblett: hantera den där och gå vidare till
    nästa issue. Gör ingen egen undersökning och ställ inga egna frågor.
-3. Klona/uppdatera `ulrik-s/ava` och checka ut den release användaren körde
+4. Klona/uppdatera `ulrik-s/ava` och checka ut den release användaren körde
    (`git checkout <release>`; okänd → `main`).
 
 ### Bugg
@@ -100,6 +105,73 @@ inte (utom 7-dagarsgränsen nedan).
    byggt (local-first, byrå-scoping)?
 6. Bedöm grovt storlek (liten/medel/stor) och nytta (hur många användare
    berörs, hur ofta).
+
+## Flera saker i samma förfrågan
+
+Användare skriver ofta allt de har på hjärtat i ett meddelande. Varje sak ska
+ändå få ett eget svar, en egen status och en egen leverans, och
+dubblettkontrollen fungerar bara på en sak i taget. Därför delar du upp
+förfrågan. Användaren ska aldrig behöva göra det själv.
+
+**Dela upp** när förfrågan tar upp saker som skulle få olika beslut eller
+levereras var för sig: olika funktioner, sidor eller flöden. Exempel: "jag
+vill kunna dra in PDF:er från mejlen" och "jag kan inte öppna PDF:erna jag
+laddat upp" är två saker.
+
+**Dela inte upp** när delarna hör ihop: samma funktion eller vy, flera
+detaljer om samma fel, eller när det ena orsakar det andra. Exempel: "jag kan
+inte döpa om dokumentet" och "det fick fel dokumenttyp" handlar båda om
+dokumentets uppgifter och blir en sak. Är du osäker: dela inte upp.
+
+Högst fem delar. Gör så här, ett kommando i taget (regel 5):
+
+1. **En ny förfrågan per del**, i den ordning användaren skrev dem. Brödtexten
+   (`del.md`) är originalets, rad för rad:
+   - Första raden är EXAKT originalets första rad (ägarmarkören
+     `<!-- ava-user:… -->`). Annars ser användaren inte delen i AVA.
+   - Sedan originalets kontextrader (Typ, Från, Sida, Release, Webbläsare,
+     Skickad) oförändrade, utom **Typ**, som gäller den här delen (Bugg eller
+     Förslag).
+   - Sedan raden `**Del av:** #N` (originalets nummer), en tom rad, `---`
+     och en tom rad.
+   - Sist användarens egna rader för den här delen, **kopierade ordagrant**
+     från originalet (raderna som börjar med `> `). Skriv aldrig om, kort
+     aldrig av och lägg aldrig till text. Hör en rad till flera delar: ta med
+     den i alla.
+
+   Rubriken (`titel.txt`) skriver du: kort, neutral svenska, högst 60 tecken,
+   med användarens ord, utan namn eller klientuppgifter. Skapa delen med typen
+   som etikett:
+
+   ```bash
+   gh api repos/ulrik-s/ava-feedback/issues -F title=@titel.txt -F body=@del.md -f 'labels[]=user-request' -f 'labels[]=bugg'
+   gh api repos/ulrik-s/ava-feedback/issues -F title=@titel.txt -F body=@del.md -f 'labels[]=user-request' -f 'labels[]=förslag'
+   ```
+
+   Läs tillbaka delen: första raden ska vara ägarmarkören.
+2. **Tidigare dialog** på originalet (frågor och svar): skriv det som rör
+   delen som en anteckning på delen, utan markör, så att den inte syns för
+   användaren: `Från #N före uppdelningen: …`. Kort och avidentifierat.
+3. **Till användaren**, på originalet, MED markören `<!-- till-anvandaren -->`:
+
+   > Tack! Du tog upp flera olika saker i samma meddelande, så vi har delat
+   > upp dem så att varje sak får ett eget svar:
+   > - <rubrik på del 1>
+   > - <rubrik på del 2>
+   >
+   > Du hittar dem under **Bugg eller förslag** i sidomenyn.
+
+   Hade originalet en obesvarad fråga till användaren: skriv att den inte
+   längre behövs (den ställs på rätt del om den fortfarande gäller), och ta
+   bort `väntar-på-användaren`.
+4. **Till Ulrik**, på originalet, utan markör: `Uppdelad i #A, #B.` och en
+   mening om varför delarna inte hör ihop.
+5. Sätt `uppdelad` på originalet. En GitHub Action stänger det. Stäng det
+   inte själv.
+
+Gör ingen egen undersökning av originalet. Delarna är nya förfrågningar i
+tillståndet mottagen och tas i en senare körning, med dubblettkontroll först.
+Dela aldrig upp en del igen.
 
 ## Finns redan: hjälp användaren först
 

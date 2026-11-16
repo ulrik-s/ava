@@ -25,7 +25,7 @@ export const feedbackInputSchema = z.object({
 export type FeedbackInput = z.infer<typeof feedbackInputSchema>;
 
 /** Var förfrågan befinner sig, sett från användaren. */
-export const FEEDBACK_STATES = ["mottagen", "vantar_pa_dig", "finns_redan", "dubblett", "undersokt", "ej_bekraftad", "verifierad", "pagar", "levererad", "avslutad"] as const;
+export const FEEDBACK_STATES = ["mottagen", "vantar_pa_dig", "finns_redan", "dubblett", "uppdelad", "undersokt", "ej_bekraftad", "verifierad", "pagar", "levererad", "avslutad"] as const;
 export type FeedbackState = (typeof FEEDBACK_STATES)[number];
 
 export const FEEDBACK_STATE_LABEL: Readonly<Record<FeedbackState, string>> = {
@@ -33,6 +33,7 @@ export const FEEDBACK_STATE_LABEL: Readonly<Record<FeedbackState, string>> = {
   vantar_pa_dig: "Väntar på ditt svar",
   finns_redan: "Finns redan i AVA",
   dubblett: "Hanteras ihop med en tidigare förfrågan",
+  uppdelad: "Uppdelad i flera förfrågningar",
   undersokt: "Undersökt — väntar på beslut",
   ej_bekraftad: "Kunde inte bekräftas",
   verifierad: "Verifierad",
@@ -91,12 +92,12 @@ export function userReplyMarker(userId: string): string {
 }
 
 /**
- * Avslutad, levererad eller fanns redan — inget mer händer, så den kan ligga
+ * Avslutad, levererad, uppdelad eller fanns redan — inget mer händer, så den kan ligga
  * undanstoppad. En `finns_redan` går fortfarande att svara på: skriver
  * användaren att det inte hjälpte tar verifieringen upp den igen.
  */
 export function isFinished(item: FeedbackItem): boolean {
-  return item.state === "levererad" || item.state === "avslutad" || item.state === "finns_redan";
+  return item.state === "levererad" || item.state === "avslutad" || item.state === "finns_redan" || item.state === "uppdelad";
 }
 
 /** Senaste aktiviteten: senaste meddelandet, annars när förfrågan skickades. */
@@ -170,6 +171,8 @@ export const INTAKE_LABELS = {
   duplicate: "dubblett",
   /** Fanns redan (eller var avsett beteende); användaren har fått veta hur. */
   alreadyExists: "finns-redan",
+  /** Flera olika saker i samma förfrågan — delad i egna förfrågningar. */
+  split: "uppdelad",
   brokenDown: "nedbruten",
   delivered: "levererad",
 } as const;
@@ -188,6 +191,7 @@ const OPEN_STATE_BY_LABEL: ReadonlyArray<readonly [string, FeedbackState]> = [
 /** Status ur issuens läge och etiketter. Levererad vinner över allt annat. */
 export function feedbackState(open: boolean, labels: readonly string[]): FeedbackState {
   if (labels.includes(INTAKE_LABELS.delivered)) return "levererad";
+  if (labels.includes(INTAKE_LABELS.split)) return "uppdelad";
   if (!open) return "avslutad";
   return OPEN_STATE_BY_LABEL.find(([label]) => labels.includes(label))?.[1] ?? "mottagen";
 }

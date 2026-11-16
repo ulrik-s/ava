@@ -44,10 +44,19 @@ function repoRules(flow: Flow, repo: string): string[] {
   return out;
 }
 
+/**
+ * En del av en uppdelad förfrågan (L1): en ny förfrågan med typen satt.
+ * Typen är fast i regeln — inget tillstånd kan sättas när issuen skapas.
+ */
+const createPart = (repo: string, kind: string): string =>
+  `Bash(gh api repos/${repo}/issues -F title=@* -F body=@* -f 'labels[]=user-request' -f 'labels[]=${kind}')`;
+
 /** Leveransen i intaget: release-etiketten och kommentarerna (privat repo). */
 function intakeRules(repo: string): string[] {
   return [
     add(repo, "release:v*"),
+    createPart(repo, "bugg"),
+    createPart(repo, "förslag"),
     `Bash(gh api repos/${repo}/labels -f name=release:v* -f color=0e8a16)`,
     `Bash(gh api repos/${repo}/issues/*/comments -F body=@*)`,
   ];

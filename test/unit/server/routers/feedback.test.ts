@@ -211,6 +211,7 @@ describe("olästa meddelanden", () => {
   it("isFinished och lastActivity", () => {
     expect(isFinished({ ...item(1, []), state: "levererad" })).toBe(true);
     expect(isFinished({ ...item(1, []), state: "pagar" })).toBe(false);
+    expect(isFinished({ ...item(1, []), state: "uppdelad" })).toBe(true);
     expect(lastActivity({ ...item(1, []), createdAt: "c" })).toBe("c");
     expect(lastActivity(item(1, [["claude", "m"]]))).toBe("m");
   });
@@ -248,6 +249,9 @@ describe("hjälpfunktioner", () => {
     [false, ["dubblett", "levererad"], "levererad"],
     [false, ["nedbruten"], "avslutad"],
     [false, ["levererad"], "levererad"],
+    // Uppdelad: stängd av Actionen men inte "avslutad" — användaren ska se varför.
+    [false, ["uppdelad"], "uppdelad"],
+    [true, ["uppdelad"], "uppdelad"],
   ] as const)("feedbackState(open=%s, %j) = %s", (open, labels, expected) => {
     expect(feedbackState(open, labels)).toBe(expected);
   });

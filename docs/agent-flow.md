@@ -21,10 +21,12 @@ stateDiagram-v2
   state "levererad" as levererad
   state "finns-redan" as finns-redan
   state "dubblett<br/>L2" as dubblett
+  state "uppdelad" as uppdelad
   [*] --> mottagen
   mottagen --> undersokt
   mottagen --> dubblett
   mottagen --> finns-redan
+  mottagen --> uppdelad
   undersokt --> verifierad : Ulrik
   undersokt --> dubblett
   undersokt --> finns-redan
@@ -34,17 +36,19 @@ stateDiagram-v2
   finns-redan --> undersokt
   finns-redan --> dubblett
   dubblett --> levererad
+  uppdelad --> [*]
 ```
 
 | Tillstånd | Etikett | Agent | Får gå till | Timeout |
 |---|---|---|---|---|
-| mottagen | — | L1 | undersokt, dubblett, finns-redan | — |
+| mottagen | — | L1 | undersokt, dubblett, finns-redan, uppdelad | — |
 | undersokt | `undersökt` | — | verifierad (Ulrik), dubblett, finns-redan | — |
 | verifierad | `verifierad` | L2 | nedbruten | — |
 | nedbruten | `nedbruten` | L2 | levererad | — |
 | levererad | `levererad` | — | — | — |
 | finns-redan | `finns-redan` | — | undersokt, dubblett | — |
 | dubblett | `dubblett` | L2 | levererad | — |
+| uppdelad | `uppdelad` | — | — | — |
 
 | Flagga | Får sättas av | Timeout | Betyder |
 |---|---|---|---|
@@ -149,6 +153,7 @@ gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/finns-redan
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/levererad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/nedbruten
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/unders%C3%B6kt
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/uppdelad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/user-request
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/v%C3%A4ntar-p%C3%A5-anv%C3%A4ndaren
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/verifierad
@@ -164,6 +169,8 @@ gh api -X DELETE repos/ulrik-s/ava/issues/N/labels/refaktorisering
 gh api -X POST repos/ulrik-s/ava-feedback/actions/workflows/flodesvakt.yml/dispatches -f ref=main
 gh api -X POST repos/ulrik-s/ava/actions/workflows/agent-flow.yml/dispatches -f ref=main
 gh api -X PUT repos/ulrik-s/ava/pulls/N/merge -f merge_method=squash -f sha=*
+gh api repos/ulrik-s/ava-feedback/issues -F title=@* -F body=@* -f 'labels[]=user-request' -f 'labels[]=bugg'
+gh api repos/ulrik-s/ava-feedback/issues -F title=@* -F body=@* -f 'labels[]=user-request' -f 'labels[]=förslag'
 gh api repos/ulrik-s/ava-feedback/issues/N/comments -F body=@*
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=agentstatus'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=blockerad'
@@ -176,6 +183,7 @@ gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=levererad'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=nedbruten'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=release:v*'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=undersökt'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=uppdelad'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=user-request'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=väntar-på-användaren'
 gh api repos/ulrik-s/ava-feedback/labels -f name=release:v* -f color=0e8a16
