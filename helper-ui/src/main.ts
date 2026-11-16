@@ -215,7 +215,7 @@ class StatusWindow {
     });
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     win.once("ready-to-show", () => { win.show(); });
-    win.on("closed", () => { this.win = undefined; this.html = ""; app.dock?.hide(); });
+    win.on("closed", () => { delete this.win; this.html = ""; app.dock?.hide(); });
     this.win = win;
     void app.dock?.show();
     void this.render();
