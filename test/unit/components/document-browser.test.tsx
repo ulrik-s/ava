@@ -1,7 +1,8 @@
 /**
  * Test för DocumentBrowser — träd-rendering, ikoner, badges, tomtillstånd.
  *
- * Drag-and-drop testas inte i detalj här (testas i E2E) men bas-renderingen
+ * Flytt med drag-and-drop och släpp av filer utifrån (#1615) testas med
+ * syntetiska `dataTransfer`; bas-renderingen
  * och de flesta interaktiva UI-flöden täcks: + Ny mapp, + Ladda upp, "..."
  * etc.
  */
@@ -660,6 +661,129 @@ describe("DocumentBrowser — flera filer på en gång", () => {
     await waitFor(() => expect(screen.getByText(/b\.pdf: för stor/)).toBeInTheDocument());
     expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(3);
     expect(screen.queryByText(/a\.pdf:/)).not.toBeInTheDocument();
+  });
+});
+
+// #1615: filer som släpps utifrån (från datorn eller ett mejlprogram).
+describe("DocumentBrowser — släpp filer utifrån", () => {
+  const pdf = (name: string) => new File(["%PDF"], name, { type: "application/pdf" });
+  const outside = (files: File[], types: string[] = ["Files"]) => ({
+    effectAllowed: "", dropEffect: "", setData: vi.fn(), getData: vi.fn(), types, files, items: [] as DataTransferItem[],
+  });
+  /** dragover + drop som webbläsaren skickar; returnerar om dragover släpptes igenom (inte förhindrad). */
+  function drop(el: Element, dataTransfer: ReturnType<typeof outside>): boolean {
+    const passed = fireEvent.dragOver(el, { dataTransfer });
+    fireEvent.drop(el, { dataTransfer });
+    return passed;
+  }
+  const rowOf = (text: string): HTMLElement => {
+    const tr = screen.getByText(text).closest("tr");
+    if (!tr) throw new Error(`ingen rad för ${text}`);
+    return tr;
+  };
+  const dialog = () => screen.queryByRole("dialog", { name: "Namnge dokumentet" });
+  const save = () => fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+  const registered = (): unknown[] => mutationStubs.register.mutateAsync.mock.calls.map((c: readonly unknown[]) => c[0]);
+  const renderTree = () => {
+    treeQuery.data = { folders: [baseFolder()], documents: [baseDoc()] };
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+  };
+
+  it("fil släppt på en mapp → namnrutan, Spara → register i mappen", async () => {
+    renderTree();
+    expect(drop(rowOf("Inlagor"), outside([pdf("skiss.pdf")]))).toBe(false);
+    expect(dialog()).toBeInTheDocument();
+    save();
+    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(registered()[0]).toMatchObject({ fileName: "skiss.pdf", folderId: "f1", matterId: "m1" });
+  });
+
+  it("fil släppt på rot-raden → roten", async () => {
+    renderTree();
+    drop(rowOf("Rot"), outside([pdf("skiss.pdf")]));
+    save();
+    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(registered()[0]).not.toHaveProperty("folderId");
+  });
+
+  it("fil släppt på ett dokument (tom yta i vyn) → roten; webbläsaren öppnar den inte", async () => {
+    renderTree();
+    expect(drop(rowOf("test.pdf"), outside([pdf("bilaga.pdf")]))).toBe(false);
+    save();
+    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(registered()[0]).not.toHaveProperty("folderId");
+  });
+
+  it("två filer → två namnrutor i tur och ordning", async () => {
+    renderTree();
+    drop(rowOf("Inlagor"), outside([pdf("a.pdf"), pdf("b.pdf")]));
+    expect(screen.getByDisplayValue("a")).toBeInTheDocument();
+    save();
+    expect(screen.getByDisplayValue("b")).toBeInTheDocument();
+    save();
+    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(2));
+    expect(registered().map((r) => (r as { fileName: string }).fileName)).toEqual(["a.pdf", "b.pdf"]);
+  });
+
+  it("släpp utan filer (bara text) → beskedet, ingen namnruta, ingen register", () => {
+    renderTree();
+    drop(rowOf("Inlagor"), outside([], ["text/plain"]));
+    expect(screen.getByText(/Det gick inte att läsa in det du släppte/)).toBeInTheDocument();
+    expect(dialog()).not.toBeInTheDocument();
+    expect(mutationStubs.register.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("AVA-dokument till mapp → moveDocument som förut, ingen namnruta", () => {
+    renderTree();
+    const dataTransfer = outside([], []);
+    fireEvent.dragStart(rowOf("test.pdf"), { dataTransfer });
+    drop(rowOf("Inlagor"), dataTransfer);
+    expect(mutationStubs.moveDocument.mutate).toHaveBeenCalledWith({ documentId: "d1", folderId: "f1" });
+    expect(dialog()).not.toBeInTheDocument();
+  });
+
+  it("AVA-rad släppt utanför mapparna: inget händer (som förut)", () => {
+    renderTree();
+    const dataTransfer = outside([], ["text/plain"]);
+    const row = rowOf("test.pdf");
+    fireEvent.dragStart(row, { dataTransfer });
+    expect(drop(row, dataTransfer)).toBe(true);
+    expect(mutationStubs.moveDocument.mutate).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Det gick inte att läsa in/)).not.toBeInTheDocument();
+  });
+
+  it("släpp-markeringen: mappen respektive roten markeras och släcks vid dragleave", () => {
+    renderTree();
+    const folder = rowOf("Inlagor");
+    fireEvent.dragOver(folder, { dataTransfer: outside([]) });
+    expect(folder.className).toContain("bg-blue-50");
+    fireEvent.dragLeave(folder);
+    expect(folder.className).not.toContain("bg-blue-50");
+    const doc = rowOf("test.pdf");
+    fireEvent.dragOver(doc, { dataTransfer: outside([]) });
+    expect(rowOf("Rot").className).toContain("bg-blue-50");
+  });
+
+  it("listvyn: fil släppt i listan → roten, med markering under dragningen", async () => {
+    window.localStorage.setItem("ava.documents.viewMode", "list");
+    treeQuery.data = { folders: [baseFolder()], documents: [baseDoc({ folderId: "f1" })] };
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    const cell = screen.getByText("test.pdf");
+    fireEvent.dragOver(cell, { dataTransfer: outside([]) });
+    expect(document.querySelector(".ring-blue-300")).not.toBeNull();
+    drop(cell, outside([pdf("skiss.pdf")]));
+    expect(document.querySelector(".ring-blue-300")).toBeNull();
+    save();
+    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(registered()[0]).not.toHaveProperty("folderId");
+  });
+
+  it("listvyn: en kolumndragning (inte utifrån) rörs inte", () => {
+    window.localStorage.setItem("ava.documents.viewMode", "list");
+    treeQuery.data = { folders: [], documents: [baseDoc()] };
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    expect(drop(screen.getByText("test.pdf"), outside([], ["text/x-col"]))).toBe(true);
+    expect(screen.queryByText(/Det gick inte att läsa in/)).not.toBeInTheDocument();
   });
 });
 

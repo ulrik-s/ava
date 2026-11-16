@@ -6,7 +6,7 @@
   "src/app/matters/[id]/_kostnadsrakning-modal.tsx": 568,
   "src/app/matters/page.tsx": 427,
   "src/app/settings/page.tsx": 508,
-  "src/components/documents/document-browser.tsx": 587,
+  "src/components/documents/document-browser.tsx": 535,
   "src/components/shell/demo-bootstrap.tsx": 578,
   "src/components/ui/data-table.tsx": 734,
   "src/lib/client/jobs/job-queue.ts": 419,

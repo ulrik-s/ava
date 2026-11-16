@@ -28,6 +28,8 @@ interface Props {
   docSync?: Map<string, SyncStatus>;
   onDelete: (id: string) => void;
   onReanalyze: (id: string) => void;
+  /** Filer utifrån dras över listan; de hamnar i roten (#1615). */
+  isDropTarget?: boolean;
 }
 
 const NO_SYNC: Map<string, SyncStatus> = new Map();
@@ -44,7 +46,7 @@ function folderPath(folderId: DocumentFolderId | null, folders: FolderRecord[]):
   return "/" + parts.join("/");
 }
 
-export function DocumentsListView({ matterId, documents, folders, docSync = NO_SYNC, onDelete, onReanalyze }: Props) {
+export function DocumentsListView({ matterId, documents, folders, docSync = NO_SYNC, onDelete, onReanalyze, isDropTarget = false }: Props) {
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   // Lease-medveten öppning (ADR 0033 §2) — delad med träd-vyn.
   const { openDocument, leaseModal } = useLeaseAwareOpen();
@@ -108,7 +110,7 @@ export function DocumentsListView({ matterId, documents, folders, docSync = NO_S
   void trpc;
 
   return (
-    <div className="p-4">
+    <div className={`p-4 ${isDropTarget ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" : ""}`}>
       <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
       {leaseModal}
       <DataTable
