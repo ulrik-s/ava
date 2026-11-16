@@ -21,7 +21,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import superjson from "superjson";
 import { AnalyzeDispatcherRegistrar } from "@/components/documents/analyze-dispatcher-registrar";
 import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-text-dispatcher-registrar";
-import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-registrar";
 import { HelperAutoConfig } from "@/components/shell/helper-auto-config";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 import { loginDeniedMessage } from "@/lib/client/auth/login-denied";
@@ -310,7 +309,6 @@ function AuthGatedDemoTree(props: TreeProps) {
           <SyncProviderRoot token={firmaConfig.token}>
           <AnalyzeDispatcherRegistrar />
           <ExtractTextDispatcherRegistrar />
-          <MirrorOutlookRegistrar />
           {/* Serverns config hämtas från servern, inte in-process (#1161). Demon har ingen server. */}
           {!isDemoTier && <HelperAutoConfig loadConfig={loadServerHelperConfig} />}
           {/* Statusraden + appen delar på skärmhöjden — annars skjuts den

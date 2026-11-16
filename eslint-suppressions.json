@@ -585,14 +585,6 @@
       "count": 3
     }
   },
-  "src/lib/client/integrations/microsoft-graph.ts": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-spread": {
-      "count": 1
-    }
-  },
   "src/lib/client/integrations/office365-connector.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
@@ -2035,11 +2027,6 @@
       "count": 1
     }
   },
-  "test/unit/components/mirror-outlook-registrar.test.tsx": {
-    "@typescript-eslint/require-await": {
-      "count": 4
-    }
-  },
   "test/unit/components/money.test.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
@@ -2450,14 +2437,6 @@
       "count": 3
     }
   },
-  "test/unit/lib/integrations/microsoft-graph.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 11
-    },
-    "no-restricted-syntax": {
-      "count": 7
-    }
-  },
   "test/unit/lib/integrations/registry.test.ts": {
     "@typescript-eslint/require-await": {
       "count": 2
@@ -2487,17 +2466,6 @@
   "test/unit/lib/jobs/job-queue.test.ts": {
     "@typescript-eslint/require-await": {
       "count": 3
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
-    }
-  },
-  "test/unit/lib/jobs/mirror-outlook.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 7
-    },
-    "@typescript-eslint/require-await": {
-      "count": 25
     },
     "@typescript-eslint/restrict-template-expressions": {
       "count": 1
@@ -3259,7 +3227,7 @@
   },
   "test/unit/server/routers/calendar.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 6
+      "count": 3
     }
   },
   "test/unit/server/routers/conflict.test.ts": {

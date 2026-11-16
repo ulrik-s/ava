@@ -38,7 +38,6 @@ export type JobKind =
   | "extract-text"
   | "index-document"
   | "upload-document"
-  | "mirror-to-outlook"
   | "sync"
   | "custom";
 

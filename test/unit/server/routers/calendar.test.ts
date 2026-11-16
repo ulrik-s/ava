@@ -3,7 +3,7 @@
  *
  * Fokus:
  *   - Ownership-guard (user kan bara se/ändra egna events)
- *   - mirror-status-hantering (pending när mirrorToOutlook flippas)
+ *   - Outlook-speglingen är borttagen (#1622): inga mirror-fält skrivs
  *   - Tidsfönsterfiltrering i list
  */
 
@@ -69,6 +69,13 @@ describe("calendar.list", () => {
     const events = await makeCaller().list();
     expect(events).toHaveLength(2);
   });
+
+  it("listar ett gammalt event med lagrade mirror-fält oförändrat", async () => {
+    const old = { id: "e1", startAt: new Date(), mirrorToOutlook: true, mirrorStatus: "synced", outlookEventId: "ou-1" };
+    mockPrisma.calendarEvent.findMany.mockResolvedValue([old]);
+    const events = await makeCaller().list();
+    expect(events).toEqual([old]);
+  });
 });
 
 describe("calendar.listForUsers", () => {
@@ -120,34 +127,16 @@ describe("calendar.listForUsers", () => {
 });
 
 describe("calendar.create", () => {
-  it("sätter userId + organizationId från ctx + mirrorStatus när mirrorToOutlook=true", async () => {
+  it("sätter userId + organizationId från ctx och skriver inga mirror-fält", async () => {
     mockPrisma.calendarEvent.create.mockResolvedValue({ id: "new-1" });
     await makeCaller("u-anna", "org-x").create({
       title: "Förhandling",
       startAt: new Date("2026-06-01T10:00:00Z"),
-      mirrorToOutlook: true,
     });
-    expect(mockPrisma.calendarEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          title: "Förhandling",
-          userId: "u-anna",
-          organizationId: "org-x",
-          mirrorToOutlook: true,
-          mirrorStatus: "pending",
-        }),
-      }),
-    );
-  });
-
-  it("sätter mirrorStatus=null när mirrorToOutlook=false", async () => {
-    mockPrisma.calendarEvent.create.mockResolvedValue({ id: "new-1" });
-    await makeCaller().create({
-      title: "Privat möte",
-      startAt: new Date(),
-    });
-    const arg = mockPrisma.calendarEvent.create.mock.calls[0]![0] as { data: { mirrorStatus: string | null } };
-    expect(arg.data.mirrorStatus).toBeNull();
+    const arg = mockPrisma.calendarEvent.create.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect(arg.data).toMatchObject({ title: "Förhandling", userId: "u-anna", organizationId: "org-x" });
+    expect(arg.data).not.toHaveProperty("mirrorStatus");
+    expect(arg.data).not.toHaveProperty("mirrorToOutlook");
   });
 
   it("kräver title min(1) — Zod-validering", async () => {
@@ -177,35 +166,17 @@ describe("calendar.update", () => {
     expect(mockPrisma.calendarEvent.update).not.toHaveBeenCalled();
   });
 
-  it("flippa till mirrorToOutlook=true → sätt mirrorStatus=pending", async () => {
+  it("uppdaterar ett gammalt event med lagrade mirror-fält utan att röra dem", async () => {
     mockPrisma.calendarEvent.findFirst.mockResolvedValue({
-      id: "e1", mirrorToOutlook: false, mirrorStatus: null,
+      id: "e1", title: "Gammalt", mirrorToOutlook: true, mirrorStatus: "synced", outlookEventId: "ou-1",
     });
-    mockPrisma.calendarEvent.update.mockResolvedValue({});
-    await makeCaller().update({ id: "e1", mirrorToOutlook: true });
-    const arg = mockPrisma.calendarEvent.update.mock.calls[0]![0] as { data: { mirrorStatus: string } };
-    expect(arg.data.mirrorStatus).toBe("pending");
-  });
-
-  it("flippa till mirrorToOutlook=false → nollställ outlookEventId + status", async () => {
-    mockPrisma.calendarEvent.findFirst.mockResolvedValue({
-      id: "e1", mirrorToOutlook: true, mirrorStatus: "synced", outlookEventId: "ou-1",
-    });
-    mockPrisma.calendarEvent.update.mockResolvedValue({});
-    await makeCaller().update({ id: "e1", mirrorToOutlook: false });
-    const arg = mockPrisma.calendarEvent.update.mock.calls[0]![0] as { data: { mirrorStatus: string | null; outlookEventId: string | null } };
-    expect(arg.data.mirrorStatus).toBeNull();
-    expect(arg.data.outlookEventId).toBeNull();
-  });
-
-  it("ändra title på mirrored event → mirrorStatus=pending (re-push)", async () => {
-    mockPrisma.calendarEvent.findFirst.mockResolvedValue({
-      id: "e1", mirrorToOutlook: true, mirrorStatus: "synced",
-    });
-    mockPrisma.calendarEvent.update.mockResolvedValue({});
-    await makeCaller().update({ id: "e1", title: "Nytt namn" });
-    const arg = mockPrisma.calendarEvent.update.mock.calls[0]![0] as { data: { mirrorStatus: string } };
-    expect(arg.data.mirrorStatus).toBe("pending");
+    mockPrisma.calendarEvent.update.mockResolvedValue({ id: "e1", title: "Nytt namn" });
+    const res = await makeCaller().update({ id: "e1", title: "Nytt namn" });
+    expect(res).toMatchObject({ id: "e1", title: "Nytt namn" });
+    const arg = mockPrisma.calendarEvent.update.mock.calls[0]![0] as { where: unknown; data: Record<string, unknown> };
+    expect(arg.where).toEqual({ id: "e1" });
+    expect(arg.data).toMatchObject({ title: "Nytt namn" });
+    for (const k of ["mirrorToOutlook", "mirrorStatus", "outlookEventId"]) expect(arg.data).not.toHaveProperty(k);
   });
 });
 
@@ -238,31 +209,6 @@ describe("calendar.listForMatter", () => {
         orderBy: { startAt: "asc" },
       }),
     );
-  });
-});
-
-describe("calendar.setMirrorState", () => {
-  it("guardar ownership innan uppdatering", async () => {
-    mockPrisma.calendarEvent.findFirst.mockResolvedValue(null);
-    await expect(
-      makeCaller().setMirrorState({ id: "e1", mirrorStatus: "synced" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(mockPrisma.calendarEvent.update).not.toHaveBeenCalled();
-  });
-
-  it("skriver mirror-fält rakt av UTAN computeMirrorPatch (ingen pending-loop)", async () => {
-    mockPrisma.calendarEvent.findFirst.mockResolvedValue({ id: "e1" });
-    mockPrisma.calendarEvent.update.mockResolvedValue({});
-    await makeCaller().setMirrorState({
-      id: "e1", outlookEventId: "ou-1", mirrorStatus: "synced",
-    });
-    const arg = mockPrisma.calendarEvent.update.mock.calls[0]![0] as {
-      where: unknown; data: Record<string, unknown>;
-    };
-    expect(arg.where).toEqual({ id: "e1" });
-    expect(arg.data.mirrorStatus).toBe("synced"); // INTE flippad till pending
-    expect(arg.data.outlookEventId).toBe("ou-1");
-    expect(arg.data).not.toHaveProperty("id"); // id lyfts ut ur data
   });
 });
 
