@@ -11,6 +11,10 @@
  * aldrig nått henne.
  *
  * Telefon: ingen dragning — en panel i taget i laptop-layoutens ordning.
+ *
+ * Valbara paneler (#1611): sidan kan ange paneler som användaren får ta bort
+ * med ×. De dolda filtreras bort innan de når layouten, så varken en sparad
+ * layout, standardlayouten eller sent tillkomna paneler lägger tillbaka dem.
  */
 
 import "dockview-react/dist/styles/dockview.css";
@@ -22,7 +26,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { useScreenClass } from "@/lib/client/layout/use-screen-class";
 import { trpc } from "@/lib/client/trpc";
 import {
-  LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, withoutMaximized, type SerializedLayout,
+  LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, visiblePanels, withoutMaximized,
+  type SerializedLayout,
 } from "@/lib/shared/layout/dock-layout";
 import { MaximizeAction } from "./maximize-action";
 import { keepProportionsAcrossMaximize } from "./maximize-proportions";
@@ -30,6 +35,7 @@ import { useOverflowTriggerLabels } from "./overflow-trigger";
 import type { PanelDef } from "./panel-def";
 import { PhonePanels } from "./phone-panels";
 import { swallowTabCloseKey } from "./tab-close-keys";
+import { useHiddenPanels } from "./use-hidden-panels";
 
 /** Lägg till en panel (via id); standardlayouter bygger med den. `inactive` = lägg till som bakgrundsflik. */
 export type AddPanel = (id: string, opts?: { position?: AddPanelPositionOptions; inactive?: boolean; initialWidth?: number }) => void;
@@ -49,7 +55,15 @@ interface Props {
   page: string;
   panels: readonly PanelDef[];
   defaultLayout: DefaultLayout;
+  /** Panel-id:n som användaren får ta bort med ×. Utan: inga flikar kan stängas. */
+  closable?: readonly string[] | undefined;
 }
+
+const NO_CLOSABLE: readonly string[] = [];
+
+/** Vilka flikar som har × och vad × gör; `null` = sidan har inga valbara paneler. */
+interface TabClose { closable: ReadonlySet<string>; hide: (id: string) => void }
+const TabCloseContext = createContext<TabClose | null>(null);
 
 const PanelDefs = createContext<ReadonlyMap<string, PanelDef>>(new Map());
 
@@ -68,10 +82,22 @@ const COMPONENTS = { panel: PanelHost };
 /**
  * Fliken utan stängknapp (#1292): en sida har en fast uppsättning paneler.
  * × (och mittenklick) stängde panelen, och den var borta tills sidan
- * laddades om.
+ * laddades om. Undantag: en valbar panel (#1611) får ×, som tar bort panelen
+ * och sparar den som dold. Bara användarens × går hit, aldrig dockviews egna
+ * borttagningar (`clear`, `fromJSON`).
  */
 export function PanelTab(props: IDockviewPanelHeaderProps) {
-  return <DockviewDefaultTab {...props} hideClose />;
+  const close = useContext(TabCloseContext);
+  if (!close?.closable.has(props.api.id)) return <DockviewDefaultTab {...props} hideClose />;
+  const closeAction = (): void => { props.api.close(); close.hide(props.api.id); };
+  return <DockviewDefaultTab {...props} closeActionOverride={closeAction} />;
+}
+
+/** Placering relativt en panel som inte finns (t.ex. dold) → ingen placering; dockview hade kastat. */
+function placeable(api: DockviewApi, position: AddPanelPositionOptions | undefined): AddPanelPositionOptions | undefined {
+  if (!position || !("referencePanel" in position)) return position;
+  const ref = position.referencePanel;
+  return typeof ref === "string" && !api.getPanel(ref) ? undefined : position;
 }
 
 const SAVE_DEBOUNCE_MS = 800;
@@ -80,9 +106,10 @@ function adder(api: DockviewApi, defs: ReadonlyMap<string, PanelDef>): AddPanel 
   return (id, opts = {}) => {
     const def = defs.get(id);
     if (!def || api.getPanel(id)) return;
+    const position = placeable(api, opts.position);
     api.addPanel({
       id, component: "panel", title: def.title, params: { id },
-      ...(opts.position ? { position: opts.position } : {}), ...(opts.inactive ? { inactive: true } : {}),
+      ...(position ? { position } : {}), ...(opts.inactive ? { inactive: true } : {}),
       ...(opts.initialWidth ? { initialWidth: opts.initialWidth } : {}),
     });
   };
@@ -115,14 +142,25 @@ export function activatePanelFromHash(
   if (id) api.getPanel(id)?.api.setActive();
 }
 
-export function DockWorkspace({ page, panels, defaultLayout }: Props) {
+export function DockWorkspace({ page, panels, defaultLayout, closable = NO_CLOSABLE }: Props) {
   const screen = useScreenClass();
-  if (screen === "phone") return <PhoneWorkspace page={page} panels={panels} />;
-  return <DesktopWorkspace key={screen} page={page} panels={panels} defaultLayout={defaultLayout} screen={screen} />;
+  const hidden = useHiddenPanels(page, closable);
+  const visible = useMemo(() => visiblePanels(panels, closable, hidden.hidden), [panels, closable, hidden.hidden]);
+  const closableSet = useMemo(() => new Set(closable), [closable]);
+  const tabClose = closable.length > 0 ? { closable: closableSet, hide: hidden.hide } : null;
+  if (hidden.isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;
+  return (
+    <TabCloseContext.Provider value={tabClose}>
+      {screen === "phone"
+        ? <PhoneWorkspace page={page} panels={visible} />
+        : <DesktopWorkspace key={screen} page={page} panels={visible} defaultLayout={defaultLayout} screen={screen} />}
+    </TabCloseContext.Provider>
+  );
 }
 
 /** Telefon: panelerna i laptop-layoutens ordning (personlig → firma → registrets). */
 function PhoneWorkspace({ page, panels }: { page: string; panels: readonly PanelDef[] }) {
+  const close = useContext(TabCloseContext);
   const prefs = trpc.prefs.get.useQuery({ key: layoutPrefKey(page, "laptop") });
   const ordered = useMemo(() => {
     const layout = parseStoredLayout(prefs.data?.user) ?? parseStoredLayout(prefs.data?.org);
@@ -131,7 +169,7 @@ function PhoneWorkspace({ page, panels }: { page: string; panels: readonly Panel
     const rank = (id: string): number => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
     return [...panels].sort((a, b) => rank(a.id) - rank(b.id));
   }, [prefs.data, panels]);
-  return <PhonePanels panels={ordered} />;
+  return <PhonePanels panels={ordered} closable={close?.closable} onClose={close?.hide} />;
 }
 
 function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { screen: "laptop" | "large" }) {
