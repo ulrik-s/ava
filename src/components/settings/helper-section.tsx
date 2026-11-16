@@ -12,7 +12,6 @@ import { ExternalLink, CheckCircle2, XCircle, Loader2, CloudUpload, AlertTriangl
 import { useState } from "react";
 import { useHelper, useHelperSyncStatus, triggerHelperUpdateCheck } from "@/lib/client/helper/use-helper";
 
-const RELEASES_URL = "https://github.com/ulrik-s/ava/releases/latest";
 const GUIDE_URL = "https://github.com/ulrik-s/ava/blob/main/docs/helper-installation.md";
 
 export function HelperSection() {
@@ -24,10 +23,11 @@ export function HelperSection() {
         <h2 className="font-semibold text-gray-900">AVA Helper</h2>
       </div>
       <p className="text-xs text-gray-500 mb-4">
-        Liten lokal-app som öppnar PDF/Word-dokument direkt i dina vanliga
-        editorer (PDF Gear, Preview, Word…) och synkar tillbaka ändringar
-        till AVA när du sparar. Installeras en gång — den säger till i
-        menyraden när en ny version finns.
+        Liten app på din Mac som öppnar PDF/Word-dokument direkt i dina vanliga
+        program (Word, PDF Gear, Förhandsvisning…) och skickar tillbaka
+        ändringarna till AVA när du sparar. Installeras en gång. Öppna
+        AVA Helper (t.ex. via Spotlight) så visas ett fönster med status — där
+        finns knappen <strong>Uppdatera nu</strong> när en ny version kommer.
       </p>
 
       <Status status={status} />
@@ -35,10 +35,6 @@ export function HelperSection() {
       {status.checked && !status.version ? <MacInstall /> : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-        <a href={RELEASES_URL} target="_blank" rel="noreferrer"
-          className="inline-flex items-center gap-1 text-blue-600 hover:underline">
-          <ExternalLink size={14} /> Ladda ner
-        </a>
         <a href={GUIDE_URL} target="_blank" rel="noreferrer"
           className="inline-flex items-center gap-1 text-blue-600 hover:underline">
           <ExternalLink size={14} /> Installationsguide
@@ -86,7 +82,7 @@ function MacInstall() {
           {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Kopierat" : "Kopiera"}
         </button>
       </div>
-      <p className="mt-2 text-xs text-gray-500">Klar på under en minut. AVA-ikonen visas i menyraden och den här rutan försvinner.</p>
+      <p className="mt-2 text-xs text-gray-500">Klar på under en minut. AVA Helper öppnar ett statusfönster när den är installerad, och den här rutan försvinner.</p>
     </div>
   );
 }

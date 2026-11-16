@@ -80,12 +80,13 @@ describe("HelperSection — installations-status", () => {
     await waitFor(() => expect(screen.getByText(/Inte installerad/)).toBeInTheDocument());
   });
 
-  it("alltid visar länk till release-sidan", async () => {
+  it("länkar till guiden men inte till zip-nedladdningen (blockeras av macOS)", async () => {
     global.fetch = routeFetch([[`${HTTP}/ping`, pingOk], [`${HTTP}/status`, () => statusBody({ pending: 0, conflict: 0, total: 0 })]]);
     render(<HelperSection />);
-    const link = await screen.findByRole("link", { name: /Ladda ner/ });
-    expect(link.getAttribute("href")).toBe("https://github.com/ulrik-s/ava/releases/latest");
-    expect(screen.getByRole("link", { name: /Installationsguide/ }).getAttribute("href")).toMatch(/docs\/helper-installation\.md$/);
+    const guide = await screen.findByRole("link", { name: /Installationsguide/ });
+    expect(guide.getAttribute("href")).toMatch(/docs\/helper-installation\.md$/);
+    expect(screen.queryByRole("link", { name: /Ladda ner/ })).toBeNull();
+    expect(screen.getByText(/Uppdatera nu/)).toBeInTheDocument();
   });
 });
 

@@ -89,7 +89,7 @@ vi.mock("@/lib/client/trpc", () => ({
 const screenClass = { value: "laptop" as "laptop" | "large" | "phone" };
 vi.mock("@/lib/client/layout/use-screen-class", () => ({ useScreenClass: () => screenClass.value }));
 
-const { DockWorkspace, PanelTab } = await import("@/components/layout/dock-workspace");
+const { DockWorkspace, PanelTab, activatePanelFromHash } = await import("@/components/layout/dock-workspace");
 
 const PANELS = [
   { id: "a", title: "Alfa", render: () => <p>alfa-innehåll</p> },
@@ -303,5 +303,17 @@ describe("DockWorkspace — firmastandard under maximering (#1356)", () => {
     fake.maximized = true; // dockview har maximerat; React har inte ritat om än
     fireEvent.click(screen.getByRole("button", { name: "Spara som firmastandard" }));
     expect(setOrg).not.toHaveBeenCalled();
+  });
+});
+
+describe("activatePanelFromHash", () => {
+  it("#external aktiverar den panelen; tom hash eller okänd panel gör inget", () => {
+    const setActive = vi.fn();
+    const getPanel = vi.fn((id: string) => (id === "external" ? { api: { setActive } } : undefined));
+    activatePanelFromHash({ getPanel }, "#external");
+    activatePanelFromHash({ getPanel }, "#saknas");
+    activatePanelFromHash({ getPanel }, "");
+    expect(setActive).toHaveBeenCalledTimes(1);
+    expect(getPanel).toHaveBeenCalledTimes(2);
   });
 });

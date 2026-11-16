@@ -106,6 +106,15 @@ function applyLayout(api: DockviewApi, stored: SerializedLayout | null, defs: Re
   for (const def of defs.values()) api.getPanel(def.id)?.api.setTitle(def.title);
 }
 
+/** `/settings#external` → den panelen blir aktiv (länkar från andra sidor). */
+export function activatePanelFromHash(
+  api: { getPanel: (id: string) => { api: { setActive: () => void } } | undefined },
+  hash: string,
+): void {
+  const id = hash.replace(/^#/, "");
+  if (id) api.getPanel(id)?.api.setActive();
+}
+
 export function DockWorkspace({ page, panels, defaultLayout }: Props) {
   const screen = useScreenClass();
   if (screen === "phone") return <PhoneWorkspace page={page} panels={panels} />;
@@ -165,6 +174,7 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { scr
             apiRef.current = api;
             applyLayout(api, stored, defs, () => defaultLayout(adder(api, defs), screen));
             keepProportionsAcrossMaximize(api);
+            activatePanelFromHash(api, window.location.hash);
             api.onDidMaximizedGroupChange(() => setMaximized(api.hasMaximizedGroup()));
             // Under maximering serialiserar dockview de dolda gruppernas gamla
             // pixlar; sparas först när gruppen återställts (#1291).

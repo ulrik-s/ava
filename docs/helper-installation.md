@@ -1,6 +1,6 @@
 # Installera AVA Helper (Mac)
 
-AVA Helper är en liten app i menyraden som gör att du kan öppna dokument från
+AVA Helper är en liten app på din Mac som gör att du kan öppna dokument från
 AVA direkt i Word, Förhandsvisning m.fl. — och att det du sparar hamnar i AVA
 igen. Du installerar den en gång.
 
@@ -34,19 +34,21 @@ Certifikatet gäller bara din egen dator (`localhost`) och behövs för att AVA 
 Safari och **Outlook-tillägget** ska få prata med helpern. Klickade du
 *Inte nu* finns valet kvar i menyn: **Installera certifikat för Safari…**
 
-Appen syns sedan som en ikon i menyraden (uppe till höger) och startar av sig
-själv när du loggar in på datorn.
+När appen är installerad öppnas ett **statusfönster** med version, uppdatering,
+synk och inloggning. Klicka **OK** — AVA Helper fortsätter i bakgrunden och
+startar av sig själv när du loggar in på datorn. Fönstret visas igen när du
+öppnar AVA Helper (t.ex. via Spotlight: ⌘ mellanslag, skriv "AVA Helper").
 
 ## 4. Koppla till AVA
 
 1. Öppna AVA i Safari (t.ex. https://ava-crm.io) och logga in som vanligt.
 2. AVA Helper frågar **"ava-crm.io vill använda AVA Helper"** — klicka
    **Tillåt**. (Tillåt bara din byrås egen AVA-adress.)
-3. Klicka på helper-ikonen i menyraden → **Logga in…** och logga in med ditt
-   vanliga Microsoft-konto i webbläsaren som öppnas.
+3. Öppna AVA Helper (Spotlight) → klicka **Logga in…** i statusfönstret och
+   logga in med ditt vanliga Microsoft-konto i webbläsaren som öppnas.
 
-Klart. Under **Inställningar → AVA Helper** i AVA ska det nu stå att helpern
-körs.
+Klart. Under **Inställningar → Extern editering** i AVA ska det nu stå att
+helpern körs.
 
 ## Använda den
 
@@ -56,15 +58,16 @@ den skickas när nätet är tillbaka).
 
 ## Ny version
 
-När en ny version finns står det **Ny version finns** i helperns meny. Kör
-samma rad i Terminal igen (steg 1): den ersätter den gamla versionen.
+När en ny version finns öppnar AVA Helper statusfönstret av sig själv med
+**Ny version finns**. Klicka **Uppdatera nu** — appen byts ut och startar om.
+(Fungerar det inte: kör samma rad i Terminal igen, steg 1.)
 
 ## Om något inte fungerar
 
-- **AVA säger att helpern inte körs:** kolla att ikonen finns i menyraden
-  (annars starta AVA Helper från Program), och att du har installerat
-  certifikatet (steg 2).
-- **Du råkade klicka Neka:** avsluta AVA Helper i menyn och starta den igen
+- **AVA säger att helpern inte körs:** öppna AVA Helper via Spotlight — visar
+  statusfönstret att den kör, kontrollera att du har installerat certifikatet
+  (steg 2).
+- **Du råkade klicka Neka:** avsluta AVA Helper ("Avsluta AVA Helper helt" i statusfönstret) och starta den igen
   — den frågar på nytt nästa gång AVA anropar den.
 - **Inloggningen misslyckas:** kontakta den som administrerar AVA hos er
   (Entra-appen behöver vara konfigurerad för helpern, se
