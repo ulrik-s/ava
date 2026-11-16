@@ -4,16 +4,12 @@
  * Designval:
  *   - `list` returnerar bara den aktiva användarens events. Org-admins
  *     kan inte se andras kalendrar (privacy).
- *   - `mirrorToOutlook`-flaggan persisteras direkt; `mirror-to-outlook`-
- *     job-workern triggas separat när browsern är öppen.
- *   - Vid update av en mirrored event sätter vi mirrorStatus="pending" så
- *     workern vet att den ska re-push:a till Graph.
- *   - Vid delete av en mirrored event behåller vi outlookEventId i payload
- *     till workern så den kan kalla DELETE /me/events/{id}.
+ *   - Outlook-speglingen är borttagen (#1622). Lagrade mirror-fält på gamla
+ *     events får ligga kvar i data; de läses och skrivs inte längre här.
  */
 
 import { z } from "zod";
-import { calendarEventKindSchema, calendarEventVisibilitySchema, calendarMirrorStatusSchema, type CalendarEvent } from "@/lib/shared/schemas";
+import { calendarEventKindSchema, calendarEventVisibilitySchema, type CalendarEvent } from "@/lib/shared/schemas";
 import {
   asId,
   calendarEventIdSchema,
@@ -34,7 +30,6 @@ const createInput = z.object({
   allDay: z.boolean().default(false),
   matterId: matterIdSchema.nullish(),
   visibility: calendarEventVisibilitySchema.default("normal"),
-  mirrorToOutlook: z.boolean().default(false),
   /** Inbjudna kollegor (interna users). */
   inviteeUserIds: z.array(userIdSchema).optional(),
   /** Inbjudna externa kontakter (klient, motpart, vittne osv.). */
@@ -46,8 +41,7 @@ const createInput = z.object({
 });
 
 // OBS: separat schema utan `.default()` — annars fyller Zod i defaults för
-// fält som användaren inte angav, vilket triggar fel mirror-state-detektering
-// i computeMirrorPatch (allt ser ut som "explicit satt").
+// fält som användaren inte angav, och en delvis update skulle skriva över dem.
 const updateInput = z.object({
   id: calendarEventIdSchema,
   kind: calendarEventKindSchema.optional(),
@@ -59,34 +53,9 @@ const updateInput = z.object({
   allDay: z.boolean().optional(),
   matterId: matterIdSchema.nullish(),
   visibility: calendarEventVisibilitySchema.optional(),
-  mirrorToOutlook: z.boolean().optional(),
   inviteeUserIds: z.array(userIdSchema).optional(),
   inviteeContactIds: z.array(contactIdSchema).optional(),
 });
-
-/**
- * Beräkna mirror-relaterade patch-fält baserat på vad som ändrats:
- *   - flippad PÅ (false→true): mirrorStatus="pending"
- *   - flippad AV (true→false): mirrorStatus=null, outlookEventId=null
- *   - oförändrad mirror, men event redan mirrored + andra fält ändrats: re-push
- *     (mirrorStatus="pending")
- *   - oförändrat: tomt patch
- */
-type UpdateData = Record<string, unknown> & { mirrorToOutlook?: boolean | undefined };
-type ExistingEvent = { mirrorToOutlook?: boolean | undefined };
-function computeMirrorPatch(data: UpdateData, existing: ExistingEvent): Record<string, unknown> {
-  const newFlag = data.mirrorToOutlook;
-  const oldFlag = existing.mirrorToOutlook ?? false;
-  const flippedOn = newFlag === true && !oldFlag;
-  const flippedOff = newFlag === false && oldFlag;
-  const otherFieldsChanged = Object.keys(data).some((k) => k !== "mirrorToOutlook");
-
-  if (flippedOff) return { mirrorStatus: null, outlookEventId: null };
-  if (flippedOn) return { mirrorStatus: "pending" };
-  // Inget flippat — men event är mirrored och något annat ändrats → re-push
-  if (oldFlag && otherFieldsChanged) return { mirrorStatus: "pending" };
-  return {};
-}
 
 export const calendarRouter = router({
   /** Lista den aktiva användarens events (frivilligt filtrerade per tidsfönster). */
@@ -165,7 +134,6 @@ export const calendarRouter = router({
         ...cleanInput,
         userId: input.userId ?? asId<"UserId">(ctx.user.id),
         organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-        mirrorStatus: input.mirrorToOutlook ? "pending" : null,
       } satisfies Partial<CalendarEvent>);
     }),
 
@@ -183,14 +151,11 @@ export const calendarRouter = router({
       const existing = await ctx.repos.calendarEvents.getOwned(id, ctx.user.id, ctx.user.organizationId);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
       // exactOptionalPropertyTypes: utelämna nycklar vars värde är undefined
-      // i write-payloaden (förr droppades de ändå). `computeMirrorPatch` får
-      // dock det råa `data` så dess nyckel-räkning av "ändrade fält" bevaras.
+      // i write-payloaden (förr droppades de ändå).
       const writeData = Object.fromEntries(
         Object.entries(data).filter(([, v]) => v !== undefined),
       );
-      return ctx.repos.calendarEvents.update(id, {
-        ...writeData, ...computeMirrorPatch(data, existing),
-      } satisfies Partial<CalendarEvent>);
+      return ctx.repos.calendarEvents.update(id, writeData satisfies Partial<CalendarEvent>);
     }),
 
   delete: protectedProcedure
@@ -202,28 +167,5 @@ export const calendarRouter = router({
       // Hård delete bevarar dagens beteende (ADR 0017-delete-policy öppen).
       await ctx.repos.calendarEvents.hardDelete(input.id);
       return { id: input.id };
-    }),
-
-  /**
-   * Sätt mirror-state utan att trigga `computeMirrorPatch`-logiken.
-   * Anropas av `mirror-to-outlook`-workern efter sync — annars skulle vår
-   * egen status-update klassas som "andra fält ändrade" och vi skulle få
-   * en evig pending→synced→pending-loop.
-   */
-  setMirrorState: protectedProcedure
-    .input(
-      z.object({
-        id: calendarEventIdSchema,
-        outlookEventId: z.string().nullish(),
-        mirrorStatus: calendarMirrorStatusSchema.nullable(),
-        mirrorError: z.string().nullish(),
-        mirrorLastSyncedAt: z.coerce.date().nullish(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const owned = await ctx.repos.calendarEvents.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
-      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      const { id, ...data } = input;
-      return ctx.repos.calendarEvents.update(id, data satisfies Partial<CalendarEvent>);
     }),
 });

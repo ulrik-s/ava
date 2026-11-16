@@ -1,5 +1,5 @@
 {
-  "src/app/calendar/page.tsx": 768,
+  "src/app/calendar/page.tsx": 672,
   "src/app/contacts/[id]/_client.tsx": 422,
   "src/app/invoices/[id]/_client.tsx": 652,
   "src/app/matters/[id]/_billing-panel.tsx": 698,
@@ -7,9 +7,9 @@
   "src/app/matters/page.tsx": 427,
   "src/app/settings/page.tsx": 508,
   "src/components/documents/document-browser.tsx": 535,
-  "src/components/shell/demo-bootstrap.tsx": 578,
+  "src/components/shell/demo-bootstrap.tsx": 576,
   "src/components/ui/data-table.tsx": 734,
-  "src/lib/client/jobs/job-queue.ts": 419,
+  "src/lib/client/jobs/job-queue.ts": 418,
   "src/lib/client/kostnadsrakning/faktura-template.ts": 453,
   "src/lib/server/data-store/in-memory/caching-sync-data-store.ts": 423,
   "src/lib/server/data-store/in-memory/mutation-queue.ts": 406,

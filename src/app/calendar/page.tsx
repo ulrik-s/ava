@@ -4,18 +4,15 @@
  * /calendar — användarens kalender (möten, förhandlingar, frister) + tasks.
  *
  * Vy: lista nu — månadsgrid och veckovy i CalendarGrid-komponenten.
- * Outlook-spegling enqueue:as automatiskt på create/update/delete via
- * `enqueueMirror()` när `mirrorToOutlook=true`.
  */
 
-import { Calendar as CalendarIcon, Plus, ExternalLink, Trash2, CheckCircle2, List, LayoutGrid, CalendarDays, Sun } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, Trash2, CheckCircle2, List, LayoutGrid, CalendarDays, Sun } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { MatterCombobox } from "@/components/matter/matter-combobox";
 import { CheckboxList } from "@/components/ui/checkbox-list";
 import { resolveSelectedUsers } from "@/lib/client/calendar/select-users";
 import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
-import { jobQueue } from "@/lib/client/jobs/job-queue";
 import { trpc } from "@/lib/client/trpc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { asId, type CalendarEventId, type ContactId, type MatterId, type UserId } from "@/lib/shared/schemas/ids";
@@ -26,39 +23,6 @@ import { EventDetailModal, type EventDetail } from "./_event-detail-modal";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
 
 type ViewMode = "list" | "day" | "week" | "month";
-
-interface EventForMirror {
-  title: string;
-  description?: string | null;
-  location?: string | null;
-  startAt: string;
-  endAt?: string | null;
-  allDay: boolean;
-  visibility: "normal" | "private";
-  kind: "appointment" | "deadline";
-}
-
-// type-alias (inte interface) → får implicit index-signatur och är därmed
-// tilldelningsbar till jobQueue.enqueue:s `Record<string, unknown>`-payload
-// utan cast.
-type MirrorArgs = {
-  eventId: CalendarEventId;
-  op: "upsert" | "delete";
-  event?: EventForMirror;
-  outlookEventId?: string | null;
-  outlookCalendarId?: string | null;
-};
-
-/**
- * Enqueue:a en mirror-to-outlook-worker. Fire-and-forget; workern
- * uppdaterar mirrorStatus efter sync och calendar.list invalidate:as.
- */
-function enqueueMirror(args: MirrorArgs): void {
-  const label = args.op === "delete"
-    ? `Tar bort i Outlook: ${args.eventId.slice(0, 8)}`
-    : `Speglar till Outlook: ${args.event?.title ?? ""}`;
-  jobQueue.enqueue("mirror-to-outlook", label, args);
-}
 
 /**
  * Kalender-sidans state: anchor (date-param-deep-link), vy, multi-user-val
@@ -245,12 +209,6 @@ function EventList() {
 
   const handleDelete = (ev: EventRow) => {
     if (!confirm(`Ta bort "${ev.title}"?`)) return;
-    if (ev.outlookEventId) {
-      enqueueMirror({
-        eventId: ev.id, op: "delete",
-        outlookEventId: ev.outlookEventId, outlookCalendarId: ev.outlookCalendarId ?? null,
-      });
-    }
     del.mutate({ id: ev.id });
   };
 
@@ -267,7 +225,6 @@ function EventList() {
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-900">{ev.title}</span>
               <KindBadge kind={ev.kind} />
-              {ev.mirrorToOutlook && <MirrorBadge {...omitUndefined({ status: ev.mirrorStatus })} />}
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
               {formatEventTime(ev)}
@@ -383,7 +340,6 @@ function emptyEventForm() {
     endAt: "",
     location: "",
     matterId: asId<"MatterId">(""),
-    mirrorToOutlook: false,
     inviteeUserIds: [] as UserId[],
     inviteeContactIds: [] as ContactId[],
   };
@@ -399,7 +355,6 @@ function eventFormFromRow(i: EventRow) {
     endAt: i.endAt ? toLocalInput(i.endAt) : "",
     location: i.location ?? "",
     matterId: i.matterId ?? asId<"MatterId">(""),
-    mirrorToOutlook: i.mirrorToOutlook ?? false,
     inviteeUserIds: i.inviteeUserIds ?? [],
     inviteeContactIds: i.inviteeContactIds ?? [],
   };
@@ -410,26 +365,6 @@ function eventFormDefaults(initial?: EventRow) {
   return initial ? eventFormFromRow(initial) : emptyEventForm();
 }
 
-/** Bygger mirror-to-outlook-argumenten (upsert) för en sparad event-rad. */
-function buildMirrorArgs(saved: EventRow): MirrorArgs {
-  const iso = (d: Date | string) => (typeof d === "string" ? d : d.toISOString());
-  return {
-    eventId: saved.id,
-    op: "upsert",
-    event: {
-      title: saved.title,
-      description: null,
-      location: saved.location ?? null,
-      startAt: iso(saved.startAt),
-      endAt: saved.endAt ? iso(saved.endAt) : null,
-      allDay: saved.allDay,
-      visibility: "normal",
-      kind: saved.kind,
-    },
-    outlookCalendarId: saved.outlookCalendarId ?? null,
-  };
-}
-
 /** All state + mutationer för event-formuläret (create + edit). */
 function useEventForm({ initial, onClose }: { initial?: EventRow | undefined; onClose: () => void }) {
   const utils = trpc.useUtils();
@@ -438,12 +373,8 @@ function useEventForm({ initial, onClose }: { initial?: EventRow | undefined; on
   const orgUsers = trpc.user.list.useQuery();
   const contacts = trpc.contacts.list.useQuery({ pageSize: 500 });
 
-  // Boundary-cast: mutationen returnerar en branded/optional tRPC-rad som är
-  // bredare än vy-typen EventRow; vi läser bara de fält som finns.
-  const onSuccess = (savedRow: unknown): void => {
-    const saved = savedRow as EventRow;
+  const onSuccess = (): void => {
     void utils.calendar.invalidate();
-    if (saved.mirrorToOutlook) enqueueMirror(buildMirrorArgs(saved));
     onClose();
   };
   const create = trpc.calendar.create.useMutation({ onSuccess });
@@ -456,7 +387,6 @@ function useEventForm({ initial, onClose }: { initial?: EventRow | undefined; on
   const [endAt, setEndAt] = useState(d.endAt);
   const [location, setLocation] = useState(d.location);
   const [matterId, setMatterId] = useState(d.matterId);
-  const [mirrorToOutlook, setMirrorToOutlook] = useState(d.mirrorToOutlook);
   const [inviteeUserIds, setInviteeUserIds] = useState<UserId[]>(d.inviteeUserIds);
   const [inviteeContactIds, setInviteeContactIds] = useState<ContactId[]>(d.inviteeContactIds);
 
@@ -469,7 +399,6 @@ function useEventForm({ initial, onClose }: { initial?: EventRow | undefined; on
       endAt: endAt && kind === "appointment" ? new Date(endAt) : undefined,
       location: location || undefined,
       matterId: matterId || undefined,
-      mirrorToOutlook,
       inviteeUserIds,
       inviteeContactIds,
     };
@@ -485,7 +414,7 @@ function useEventForm({ initial, onClose }: { initial?: EventRow | undefined; on
     isEdit, matterOptions, userOptions, contactOptions,
     title, setTitle, kind, setKind, startAt, setStartAt, endAt, setEndAt,
     location, setLocation, matterId, setMatterId,
-    mirrorToOutlook, setMirrorToOutlook, inviteeUserIds, setInviteeUserIds,
+    inviteeUserIds, setInviteeUserIds,
     inviteeContactIds, setInviteeContactIds, submit,
     pending: create.isPending || update.isPending,
   };
@@ -588,13 +517,6 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
         contactIds={f.inviteeContactIds}
         setContactIds={(ids) => f.setInviteeContactIds(ids.map((id) => asId<"ContactId">(id)))}
       />
-      <label className="flex items-center gap-2 text-xs text-gray-700">
-        <input
-          type="checkbox" checked={f.mirrorToOutlook}
-          onChange={(e) => f.setMirrorToOutlook(e.target.checked)}
-        />
-        <ExternalLink size={12} /> Spegla till Outlook (kräver O365-anslutning)
-      </label>
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm text-gray-700 hover:bg-white rounded">Avbryt</button>
         <button type="submit" disabled={!f.title || f.pending}
@@ -678,10 +600,6 @@ interface EventRow {
   matter?: { id: MatterId; matterNumber: string; title: string } | null | undefined;
   inviteeUserIds?: UserId[] | undefined;
   inviteeContactIds?: ContactId[] | undefined;
-  mirrorToOutlook?: boolean | undefined;
-  mirrorStatus?: "pending" | "synced" | "failed" | null | undefined;
-  outlookEventId?: string | null | undefined;
-  outlookCalendarId?: string | null | undefined;
 }
 
 interface TaskRow {
@@ -737,20 +655,6 @@ function PriorityBadge({ priority }: { priority: "LOW" | "MEDIUM" | "HIGH" }) {
   return (
     <span className={`text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${styles[priority]}`}>
       {priority === "HIGH" ? "Hög" : priority === "MEDIUM" ? "Medel" : "Låg"}
-    </span>
-  );
-}
-
-function MirrorBadge({ status }: { status?: "pending" | "synced" | "failed" | null }) {
-  const text = status === "synced" ? "Outlook ✓" : status === "failed" ? "Outlook ✗" : "Outlook ⏳";
-  const styles = status === "synced"
-    ? "bg-green-100 text-green-800"
-    : status === "failed"
-    ? "bg-red-100 text-red-800"
-    : "bg-gray-100 text-gray-600";
-  return (
-    <span className={`text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${styles}`}>
-      {text}
     </span>
   );
 }

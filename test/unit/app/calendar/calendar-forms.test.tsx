@@ -7,6 +7,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import CalendarPage from "@/app/calendar/page";
+import { jobQueue } from "@/lib/client/jobs/job-queue";
 
 const calCreate = vi.fn();
 const calDelete = vi.fn();
@@ -77,11 +78,19 @@ describe("CalendarPage — lista + skapa-flöden", () => {
     expect(screen.getByText("Hög")).toBeInTheDocument(); // PriorityBadge HIGH
   });
 
-  it("lista-vyn renderar EventList med kind/Outlook-badge", () => {
+  it("lista-vyn renderar EventList med kind-badge men utan Outlook-märke (#1622)", () => {
     render(<CalendarPage />);
     fireEvent.click(screen.getByRole("button", { name: "Lista" }));
     expect(screen.getByText("Förhandling Tingsrätt")).toBeInTheDocument();
-    expect(screen.getByText(/Outlook/)).toBeInTheDocument(); // MirrorBadge
+    expect(screen.getByText("Möte")).toBeInTheDocument(); // KindBadge
+    expect(screen.queryByText(/Outlook/)).not.toBeInTheDocument();
+  });
+
+  it("event-formuläret saknar kryssrutan Spegla till Outlook (#1622)", () => {
+    render(<CalendarPage />);
+    fireEvent.click(screen.getByRole("button", { name: /Nytt event/ }));
+    expect(screen.queryByLabelText(/Spegla till Outlook/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /Outlook/ })).not.toBeInTheDocument();
   });
 
   it("'Nytt event' → fyll titel + start → Skapa → calendar.create", () => {
@@ -112,6 +121,21 @@ describe("CalendarPage — lista + skapa-flöden", () => {
     expect(taskComplete).toHaveBeenCalledWith({ id: "t1" });
     fireEvent.click(screen.getAllByTitle("Ta bort")[0]!);
     expect(taskDelete).toHaveBeenCalledWith({ id: "t1" });
+    confirmSpy.mockRestore();
+  });
+
+  it("ta bort ett speglat event → calendar.delete, inget jobb i kön (#1622)", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const enqueueSpy = vi.spyOn(jobQueue, "enqueue");
+    render(<CalendarPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Lista" }));
+    const eventRow = screen.getByText("Förhandling Tingsrätt").closest("li");
+    const deleteButton = eventRow?.querySelector("button");
+    if (!deleteButton) throw new Error("ta bort-knappen saknas på eventraden");
+    fireEvent.click(deleteButton);
+    expect(calDelete).toHaveBeenCalledWith({ id: "e1" });
+    expect(enqueueSpy).not.toHaveBeenCalled();
+    enqueueSpy.mockRestore();
     confirmSpy.mockRestore();
   });
 });

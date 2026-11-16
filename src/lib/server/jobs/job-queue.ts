@@ -26,7 +26,6 @@ export const JOB_QUEUES = {
   indexDocument: "index-document",
   fortnoxSync: "fortnox-sync",
   rulesTick: "rules-tick",
-  outlookMirror: "outlook-mirror",
 } as const;
 
 export type JobQueueName = (typeof JOB_QUEUES)[keyof typeof JOB_QUEUES];

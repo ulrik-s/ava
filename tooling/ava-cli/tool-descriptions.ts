@@ -54,7 +54,6 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "calendar.create": "Skapa en kalenderhändelse (möte, förhandling, frist), valfritt kopplad till ett ärende.",
   "calendar.update": "Uppdatera en kalenderhändelse.",
   "calendar.delete": "Radera en kalenderhändelse.",
-  "calendar.setMirrorState": "Sätt speglingsstatus mot Outlook. Anropas av synk-workern — inte något en användare gör manuellt.",
 
   // ── Jävskontroll ─────────────────────────────────────────────────
   "conflict.check": "Kör en jävskontroll mot byråns kontakter och ärenden, och spara resultatet. Ska göras innan ett nytt uppdrag antas.",
