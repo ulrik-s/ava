@@ -1,15 +1,10 @@
 "use client";
 
-import type { inferRouterInputs } from "@trpc/server";
 import { useState, useRef, useCallback, useMemo } from "react";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
-import type { SuggestClient } from "@/lib/client/backend/suggest-from-bytes";
-import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
-import { shouldClassifyOnClient } from "@/lib/client/jobs/classify-policy";
 import { enqueueTextExtraction } from "@/lib/client/jobs/enqueue-text-extraction";
 import { trpc } from "@/lib/client/trpc";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import { kindLabel } from "@/lib/shared/document-kind";
 import { kindsOf } from "@/lib/shared/document-part-kinds";
 import { asId, type DocumentFolderId, type DocumentId, type MatterId } from "@/lib/shared/schemas/ids";
@@ -20,11 +15,11 @@ import { type DragItem } from "./_drag-helpers";
 import { FolderRow, type FolderRecord } from "./_folder-row";
 import { NewFolderForm } from "./_new-folder-form";
 import type { SyncStatus } from "./_sync-badge";
+import { UploadNameDialog, useUploadNameQueue } from "./_upload-name-dialog";
+import { useFileUpload, type RegisterInput } from "./_use-file-upload";
 
 type ViewMode = "tree" | "list";
 const VIEW_MODE_KEY = "ava.documents.viewMode";
-
-type RegisterInput = inferRouterInputs<AppRouter>["document"]["register"];
 
 interface DocumentBrowserProps {
   matterId: MatterId;
@@ -83,10 +78,12 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     setAnalyzingIds,
   });
   const upload = useFileUpload({ matterId, mutations, fileInputRef });
+  // Namnrutan före uppladdning (#1614): `nameQueue.enqueue(filer, mapp)` öppnar den.
+  const nameQueue = useUploadNameQueue();
   const drag = useDragHandlers(mutations);
 
   const foldersByParent = useMemo(() => groupBy(folders, (f) => f.parentId ?? null), [folders]);
-  // Optimistiska rader läggs i root-foldern (de saknar ännu folderId).
+  // Optimistiska rader läggs i sin målmapp (roten för + Ladda upp).
   const docsByFolder = useMemo(
     () => groupBy([...visibleDocuments, ...upload.pendingUploads], (d) => d.folderId ?? null),
     [visibleDocuments, upload.pendingUploads]
@@ -117,6 +114,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
       {upload.uploadError && (
         <UploadErrorBanner message={upload.uploadError} onDismiss={() => upload.setUploadError(null)} />
       )}
+      <UploadNameDialog item={nameQueue.current} onSave={(file, options) => { void upload.enqueueUpload(file, options); }} onNext={nameQueue.next} />
 
       {showNewFolder && (
         <NewFolderForm
@@ -316,163 +314,6 @@ function UploadErrorBanner({ message, onDismiss }: { message: string; onDismiss:
   );
 }
 
-interface UploadResult { id: string; fileName: string; mimeType: string; sizeBytes: number; storagePath: string }
-
-/**
- * Lös var bytes hamnar: FSA (lokal working copy om ansluten) eller server-first
- * (#518) — generera id + läs bytes som laddas upp content-adresserat efter
- * register. `serverBytes` är null i FSA-fallet.
- */
-async function resolveUpload(file: File, matterId: MatterId): Promise<{ result: UploadResult; serverBytes: Uint8Array | null }> {
-  const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
-  const handle = isFsaSupported() ? await loadHandle("repo-root") : null;
-  if (handle) {
-    const { uploadDocumentToFsa } = await import("@/lib/client/fsa/upload-document");
-    return { result: await uploadDocumentToFsa({ handle, matterId, file }), serverBytes: null };
-  }
-  const { uuidv7 } = await import("@/lib/shared/uuid");
-  const id = uuidv7();
-  return {
-    result: {
-      id, fileName: file.name, mimeType: file.type || "application/octet-stream",
-      sizeBytes: file.size, storagePath: `documents/content/pending-${id}`,
-    },
-    serverBytes: new Uint8Array(await file.arrayBuffer()),
-  };
-}
-
-/**
- * Best-effort-förslag ur just uppladdade bytes (#988). Uppladdningen är redan
- * klar när det här körs — ett fel här loggas, det kastas aldrig vidare.
- */
-async function suggestFromUpload(client: SuggestClient, doc: UploadResult, bytes: Uint8Array): Promise<void> {
-  try {
-    const { suggestFromBytes } = await import("@/lib/client/backend/suggest-from-bytes");
-    await suggestFromBytes(client, asId<"DocumentId">(doc.id), {
-      bytes, mimeType: doc.mimeType, fileName: doc.fileName,
-    });
-  } catch (err) {
-    console.warn("[suggest-from-text] misslyckades:", err);
-  }
-}
-
-/**
- * Uppladdnings-state + handler: optimistiska placeholder-rader, FSA-write,
- * tRPC-register, invalidate och bakgrundsjobb (klassificering + text-extraktion).
- */
-function useFileUpload({ matterId, mutations, fileInputRef }: {
-  matterId: MatterId;
-  mutations: ReturnType<typeof useDocumentMutations>;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
-}) {
-  const utils = trpc.useUtils();
-  const { jobs } = useCapabilities();
-  const [uploading, setUploading] = useState(false);
-  const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
-  const [pendingUploads, setPendingUploads] = useState<DocumentRecord[]>([]);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  /** En fil: placeholder → register → bytes → bakgrundsjobb. Kastar vid fel. */
-  async function uploadOne(file: File): Promise<void> {
-    // Optimistisk rad — användaren ser filen direkt i listan, greyed,
-    // med "Lokal"-pill. Tas bort när tree-refetch klart.
-    const placeholderId = `pending-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const placeholder = makePlaceholderDoc({ id: placeholderId, file, matterId });
-    setPendingUploads((p) => [...p, placeholder]);
-    setUploadingIds((s) => new Set(s).add(placeholderId));
-
-    const removePlaceholder = () => {
-      setPendingUploads((p) => p.filter((d) => d.id !== placeholderId));
-      setUploadingIds((s) => {
-        const next = new Set(s); next.delete(placeholderId); return next;
-      });
-    };
-
-    try {
-      const { result, serverBytes } = await resolveUpload(file, matterId);
-
-      // Byt placeholder-id mot riktigt id så raden inte hoppar.
-      setUploadingIds((s) => {
-        const next = new Set(s); next.delete(placeholderId); next.add(result.id); return next;
-      });
-      setPendingUploads((p) => p.map((d) => (d.id === placeholderId ? { ...d, id: asId<"DocumentId">(result.id) } : d)));
-
-      try {
-        await mutations.createFromFsa({
-          id: result.id,
-          matterId,
-          fileName: result.fileName,
-          mimeType: result.mimeType,
-          sizeBytes: result.sizeBytes,
-          storagePath: result.storagePath,
-        });
-        // Server-first: ladda upp bytes (content-adresserat) efter att metadatan
-        // registrerats → repekar storagePath + triggar server-klassificering.
-        if (serverBytes) {
-          const { saveDocumentContent } = await import("@/lib/client/backend/save-document-content");
-          await saveDocumentContent(utils.client, asId<"DocumentId">(result.id), serverBytes);
-        }
-      } finally {
-        await utils.document.tree.invalidate({ matterId });
-        setUploadingIds((s) => {
-          const next = new Set(s); next.delete(result.id); return next;
-        });
-        setPendingUploads((p) => p.filter((d) => d.id !== result.id));
-      }
-
-      // Bakgrundsjobb: klassificering + text-extraktion → sökbart innehåll.
-      // Server-first äger klassificeringen när bytes:en nått servern (#1220) —
-      // annars skrev klientens filnamnsgissning över serverns svar.
-      if (shouldClassifyOnClient(jobs, serverBytes !== null)) {
-        const { jobQueue } = await import("@/lib/client/jobs/job-queue");
-        jobQueue.enqueue("classify-document", `Analyserar ${result.fileName}`, {
-          documentId: result.id,
-          fileName: result.fileName,
-          storagePath: result.storagePath,
-        });
-      }
-      await enqueueTextExtraction(result);
-      // Utan working copy (demon, server-first i browsern) kan extract-text-
-      // jobbet aldrig läsa filen igen — bytes:en finns bara här. Extrahera nu
-      // så kontakt-/händelseförslagen uppstår även där (#988). Best-effort:
-      // uppladdningen är redan klar och får inte falla på det här.
-      if (serverBytes) void suggestFromUpload(utils.client, result, serverBytes);
-    } catch (err) {
-      removePlaceholder();
-      throw err;
-    }
-  }
-
-  /**
-   * Alla valda filer, EN I TAGET: parallellt hade tRPC:s batch-länk packat
-   * allihop i en enda jättestor request. En fil som fallerar stoppar inte de
-   * andra — felen samlas per fil.
-   */
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    setUploadError(null);
-    setUploading(true);
-    const errors: string[] = [];
-    try {
-      for (const file of files) {
-        try {
-          await uploadOne(file);
-        } catch (err) {
-          console.error("[upload]", err);
-          errors.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-    if (errors.length > 0) setUploadError(errors.join("\n"));
-  }
-
-  return { uploading, uploadingIds, pendingUploads, uploadError, setUploadError, handleFileUpload };
-}
-
 /** Drag-and-drop-state + handlers (flytta dokument/mappar). */
 function useDragHandlers(mutations: ReturnType<typeof useDocumentMutations>) {
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
@@ -625,35 +466,6 @@ function BrowserHeader({
       </div>
     </div>
   );
-}
-
-/**
- * Bygger en placeholder-DocumentRecord för optimistisk rendering medan
- * filen håller på att skrivas till FSA + registreras via tRPC.
- * Fälten är "best-effort" — version/uploadedBy/etc bara stub-värden
- * eftersom raden ändå är disabled tills den ersätts av den riktiga.
- */
-function makePlaceholderDoc({
-  id, file, matterId,
-}: { id: string; file: File; matterId: MatterId }): DocumentRecord {
-  return {
-    id: asId<"DocumentId">(id),
-    fileName: file.name,
-    mimeType: file.type || "application/octet-stream",
-    sizeBytes: file.size,
-    storagePath: "",
-    version: 1,
-    matterId,
-    folderId: null,
-    uploadedById: asId<"UserId">(""),
-    createdAt: new Date().toISOString(),
-    uploadedBy: { name: null },
-    title: null,
-    documentType: null,
-    summary: null,
-    analyzedAt: null,
-    analysisError: null,
-  };
 }
 
 function groupBy<T, K>(items: T[], keyFn: (item: T) => K): Map<K, T[]> {

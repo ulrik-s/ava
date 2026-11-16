@@ -640,6 +640,16 @@ describe("DocumentBrowser — flera filer på en gång", () => {
     expect(names).toEqual(["stamning.pdf", "svaromal.pdf", "dom.pdf"]);
   });
 
+  it("+ Ladda upp visar ingen namnruta och sparar i roten med filens eget namn (#1614)", async () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    pick([pdf("skiss.pdf")]);
+    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog", { name: "Namnge dokumentet" })).not.toBeInTheDocument();
+    const input: unknown = mutationStubs.register.mutateAsync.mock.calls[0]?.[0];
+    expect(input).toMatchObject({ fileName: "skiss.pdf", matterId: "m1" });
+    expect(input).not.toHaveProperty("folderId");
+  });
+
   it("en fil som fallerar stoppar inte de andra, och felet säger vilken fil", async () => {
     mutationStubs.register.mutateAsync
       .mockResolvedValueOnce({})
