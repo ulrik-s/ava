@@ -24,7 +24,7 @@ export interface StatusPageModel {
   installing: boolean;
 }
 
-const ACTIONS = ["check-update", "install", "download", "login", "toggle-login-item", "quit"] as const;
+const ACTIONS = ["check-update", "install", "download", "login", "toggle-login-item", "close", "quit"] as const;
 export type StatusAction = (typeof ACTIONS)[number];
 
 /** `ava:check-update` → "check-update"; allt annat → null (navigeras aldrig). */
@@ -93,12 +93,17 @@ h1 { font-size:17px; margin:0 0 2px; } .sub { color:var(--muted); margin:0 0 16p
 .actions { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
 .btn { display:inline-block; padding:4px 12px; border-radius:6px; border:1px solid var(--line); color:var(--text); text-decoration:none; background:var(--bg); }
 .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-.foot { margin-top:14px; text-align:right; }`;
+.foot { margin-top:14px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.hint { color:var(--muted); font-size:11px; }
+.quit { color:var(--muted); font-size:11px; }
+.btn.ok { min-width:72px; text-align:center; }`;
 
 /** Hela sidan för statusfönstret. */
 export function statusPageHtml(m: StatusPageModel, now: Date = new Date()): string {
   return `<!doctype html><html lang="sv"><head><meta charset="utf-8"><title>AVA Helper</title><style>${STYLE}</style></head><body>`
     + `<h1>AVA Helper</h1><p class="sub">Version ${esc(m.version)} · öppnar och sparar dokument från AVA</p>`
     + `<div class="card">${updateRow(m, now)}${row("Synk", syncText(m.sync))}${loginRow(m.login)}${startRow(m.openAtLogin)}</div>`
-    + `<div class="foot">${button("quit", "Avsluta AVA Helper")}</div></body></html>`;
+    + `<div class="foot"><span class="hint">AVA Helper fortsätter i bakgrunden när fönstret stängs.</span>`
+    + `<a class="btn primary ok" href="ava:close">OK</a></div>`
+    + `<div class="foot"><a class="quit" href="ava:quit">Avsluta AVA Helper helt</a></div></body></html>`;
 }
