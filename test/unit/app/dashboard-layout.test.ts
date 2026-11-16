@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest-compat";
-import { dashboardLayout } from "@/app/_dashboard-layout";
+import { DASHBOARD_CLOSABLE, dashboardLayout } from "@/app/_dashboard-layout";
 
 function record(screen: "laptop" | "large") {
   const calls: Array<{ id: string; ref?: unknown }> = [];
@@ -16,5 +16,12 @@ describe("startsidans standardlayout (#1184)", () => {
 
   it("stor skärm: Senaste ärenden i en egen kolumn", () => {
     expect(record("large")[3]?.ref).toEqual({ referencePanel: "calendar", direction: "right" });
+  });
+});
+
+describe("startsidans valbara rutor (#1612)", () => {
+  it("Att bevaka, Tidrapportering och Senaste ärenden — aldrig Kalender", () => {
+    expect(DASHBOARD_CLOSABLE).toEqual(["watch", "time", "recent"]);
+    expect(DASHBOARD_CLOSABLE).not.toContain("calendar");
   });
 });

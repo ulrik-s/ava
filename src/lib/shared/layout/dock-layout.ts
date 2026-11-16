@@ -165,3 +165,13 @@ export function visiblePanels<P extends { id: string }>(
   const gone = new Set(hidden.filter((id) => closable.includes(id)));
   return gone.size === 0 ? panels : panels.filter((p) => !gone.has(p.id));
 }
+
+/**
+ * Valbara paneler som är dolda just nu, i sidans ordning (#1612): det
+ * "Lägg till ruta" erbjuder. Komplementet till `visiblePanels`.
+ */
+export function hiddenChoices<P extends { id: string }>(
+  panels: readonly P[], closable: readonly string[], hidden: readonly string[],
+): readonly P[] {
+  return panels.filter((p) => closable.includes(p.id) && hidden.includes(p.id));
+}

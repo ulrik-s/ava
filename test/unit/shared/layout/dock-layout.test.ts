@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest-compat";
 import {
-  groupShares, hiddenPanelsPrefKey, parseHiddenPanels, visiblePanels, withoutMaximized,
+  groupShares, hiddenChoices, hiddenPanelsPrefKey, parseHiddenPanels, visiblePanels, withoutMaximized,
   LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, screenClassFor, type SerializedLayout,
 } from "@/lib/shared/layout/dock-layout";
 
@@ -155,5 +155,17 @@ describe("dolda paneler", () => {
 
   it("inget att dölja → samma lista", () => {
     expect(visiblePanels(P, [], ["a"])).toBe(P);
+  });
+});
+
+describe("hiddenChoices (#1612)", () => {
+  const P = [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+  it("dolda valbara paneler i sidans ordning", () => {
+    expect(hiddenChoices(P, ["a", "b", "c"], ["c", "a"]).map((p) => p.id)).toEqual(["a", "c"]);
+  });
+
+  it("dolda men inte valbara, och okända id, erbjuds inte", () => {
+    expect(hiddenChoices(P, ["b"], ["a", "okänd"])).toEqual([]);
   });
 });

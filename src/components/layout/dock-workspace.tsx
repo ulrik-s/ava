@@ -15,6 +15,8 @@
  * Valbara paneler (#1611): sidan kan ange paneler som användaren får ta bort
  * med ×. De dolda filtreras bort innan de når layouten, så varken en sparad
  * layout, standardlayouten eller sent tillkomna paneler lägger tillbaka dem.
+ * "Lägg till ruta" (#1612) lägger tillbaka en dold panel som aktiv; är alla
+ * borttagna visas ett tomt läge i stället för en tom dockyta.
  */
 
 import "dockview-react/dist/styles/dockview.css";
@@ -26,9 +28,10 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { useScreenClass } from "@/lib/client/layout/use-screen-class";
 import { trpc } from "@/lib/client/trpc";
 import {
-  LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, visiblePanels, withoutMaximized,
+  hiddenChoices, LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, visiblePanels, withoutMaximized,
   type SerializedLayout,
 } from "@/lib/shared/layout/dock-layout";
+import { AddPanelMenu, NoPanels, TOOLBAR_BUTTON, type PanelChoices } from "./add-panel-menu";
 import { MaximizeAction } from "./maximize-action";
 import { keepProportionsAcrossMaximize } from "./maximize-proportions";
 import { useOverflowTriggerLabels } from "./overflow-trigger";
@@ -147,19 +150,22 @@ export function DockWorkspace({ page, panels, defaultLayout, closable = NO_CLOSA
   const hidden = useHiddenPanels(page, closable);
   const visible = useMemo(() => visiblePanels(panels, closable, hidden.hidden), [panels, closable, hidden.hidden]);
   const closableSet = useMemo(() => new Set(closable), [closable]);
-  const tabClose = closable.length > 0 ? { closable: closableSet, hide: hidden.hide } : null;
+  const selectable = closable.length > 0;
+  const tabClose = selectable ? { closable: closableSet, hide: hidden.hide } : null;
+  const choices = selectable ? { hidden: hiddenChoices(panels, closable, hidden.hidden), show: hidden.show } : null;
   if (hidden.isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;
+  if (choices && visible.length === 0) return <NoPanels choices={choices} />;
   return (
     <TabCloseContext.Provider value={tabClose}>
       {screen === "phone"
-        ? <PhoneWorkspace page={page} panels={visible} />
-        : <DesktopWorkspace key={screen} page={page} panels={visible} defaultLayout={defaultLayout} screen={screen} />}
+        ? <PhoneWorkspace page={page} panels={visible} choices={choices} />
+        : <DesktopWorkspace key={screen} page={page} panels={visible} defaultLayout={defaultLayout} screen={screen} choices={choices} />}
     </TabCloseContext.Provider>
   );
 }
 
 /** Telefon: panelerna i laptop-layoutens ordning (personlig → firma → registrets). */
-function PhoneWorkspace({ page, panels }: { page: string; panels: readonly PanelDef[] }) {
+function PhoneWorkspace({ page, panels, choices }: { page: string; panels: readonly PanelDef[]; choices: PanelChoices | null }) {
   const close = useContext(TabCloseContext);
   const prefs = trpc.prefs.get.useQuery({ key: layoutPrefKey(page, "laptop") });
   const ordered = useMemo(() => {
@@ -169,10 +175,10 @@ function PhoneWorkspace({ page, panels }: { page: string; panels: readonly Panel
     const rank = (id: string): number => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
     return [...panels].sort((a, b) => rank(a.id) - rank(b.id));
   }, [prefs.data, panels]);
-  return <PhonePanels panels={ordered} closable={close?.closable} onClose={close?.hide} />;
+  return <PhonePanels panels={ordered} closable={close?.closable} onClose={close?.hide} choices={choices} />;
 }
 
-function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { screen: "laptop" | "large" }) {
+function DesktopWorkspace({ page, panels, defaultLayout, screen, choices }: Props & { screen: "laptop" | "large"; choices: PanelChoices | null }) {
   const key = layoutPrefKey(page, screen);
   const [generation, setGeneration] = useState(0);
   const prefs = trpc.prefs.get.useQuery({ key });
@@ -181,21 +187,26 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen }: Props & { scr
   const layout = useLayoutPersistence(key, () => { setGeneration((g) => g + 1); });
   const overflowLabels = useOverflowTriggerLabels();
   const [maximized, setMaximized] = useState(false);
+  // Panelen som användaren just lagt tillbaka med "Lägg till ruta" (#1612).
+  const revealed = useRef<string | null>(null);
   // En panel som tillkommer efter start — t.ex. Backup, som visas först när
   // servern och rollen är kända (#1431) — läggs till som en inaktiv flik.
+  // Den som användaren själv lagt tillbaka blir aktiv.
   useEffect(() => {
     const api = apiRef.current;
     if (!api) return;
     const add = adder(api, defs);
-    defs.forEach((_, id) => add(id, { inactive: true }));
+    defs.forEach((_, id) => add(id, id === revealed.current ? {} : { inactive: true }));
+    revealed.current = null;
   }, [defs]);
+  const reveal = choices && { ...choices, show: (id: string) => { revealed.current = id; choices.show(id); } };
 
   if (prefs.isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;
   const stored = parseStoredLayout(prefs.data?.user) ?? parseStoredLayout(prefs.data?.org);
 
   return (
     <div ref={overflowLabels} className="flex h-full min-h-0 flex-col" onPointerDown={layout.markTouched} onKeyDownCapture={swallowTabCloseKey}>
-      <LayoutToolbar hasOrgDefault={prefs.data?.org != null} maximized={maximized} onReset={layout.reset}
+      <LayoutToolbar hasOrgDefault={prefs.data?.org != null} maximized={maximized} onReset={layout.reset} choices={reveal}
         onSaveOrg={() => { if (apiRef.current && !apiRef.current.hasMaximizedGroup()) layout.saveOrgDefault(apiRef.current.toJSON()); }}
         onClearOrg={layout.clearOrgDefault} />
       <PanelDefs.Provider value={defs}>
@@ -253,14 +264,17 @@ function useLayoutPersistence(key: string, remount: () => void) {
  * maximerad (#1356): dockview serialiserar då de dolda gruppernas gamla
  * pixlar, och hela byrån hade fått den skeva layouten (jfr #1291).
  */
-function LayoutToolbar({ hasOrgDefault, maximized, onReset, onSaveOrg, onClearOrg }: {
+function LayoutToolbar({ hasOrgDefault, maximized, onReset, onSaveOrg, onClearOrg, choices }: {
   hasOrgDefault: boolean; maximized: boolean; onReset: () => void; onSaveOrg: () => void; onClearOrg: () => void;
+  /** Valbara paneler (#1612); `null` = sidan har inga. */
+  choices: PanelChoices | null;
 }) {
   const me = trpc.user.current.useQuery();
-  const btn = "rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50";
+  const btn = TOOLBAR_BUTTON;
   return (
     <div className="flex shrink-0 items-center justify-end gap-1 pb-1 text-xs text-gray-500">
       <span className="mr-auto">Dra flikarna för att ordna panelerna.</span>
+      {choices && <AddPanelMenu choices={choices} />}
       <button type="button" className={btn} onClick={onReset}>Återställ layout</button>
       {me.data?.role === "ADMIN" && (
         <>

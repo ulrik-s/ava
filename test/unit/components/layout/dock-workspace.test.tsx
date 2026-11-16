@@ -372,6 +372,79 @@ describe("DockWorkspace — valbara paneler", () => {
   });
 });
 
+// #1612: "Lägg till ruta" lägger tillbaka en dold valbar panel.
+describe("DockWorkspace — Lägg till ruta", () => {
+  const renderClosable = (closable: readonly string[]) =>
+    render(<DockWorkspace page="dashboard" panels={PANELS} defaultLayout={defaultLayout} closable={closable} />);
+  const addButton = () => screen.getByRole("button", { name: "Lägg till ruta" });
+
+  it("visas bara på sidor med valbara paneler", () => {
+    renderWs();
+    expect(screen.queryByRole("button", { name: "Lägg till ruta" })).not.toBeInTheDocument();
+  });
+
+  it("inaktiv med förklaring när ingen ruta är dold", () => {
+    renderClosable(["b", "c"]);
+    expect(addButton()).toBeDisabled();
+    expect(addButton()).toHaveAttribute("title", "Alla rutor visas redan");
+  });
+
+  it("listan visar bara dolda valbara rutor; ett val lägger tillbaka rutan aktiv", () => {
+    hiddenPrefs.user = { hidden: ["b", "a"] };
+    renderClosable(["b", "c"]);
+    expect(addButton()).toBeEnabled();
+    fireEvent.click(addButton());
+    expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Beta"]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Beta" }));
+    expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: ["a"] } });
+    expect(fake.added.filter((p) => p.id === "b")).toEqual([expect.not.objectContaining({ inactive: true })]);
+  });
+
+  it("efter tillbakaläggning tillkommer sena paneler som vanligt inaktiva", () => {
+    hiddenPrefs.user = { hidden: ["b"] };
+    const { rerender } = renderClosable(["b"]);
+    fireEvent.click(addButton());
+    fireEvent.click(screen.getByRole("menuitem", { name: "Beta" }));
+    const late = [...PANELS, { id: "d", title: "Delta", render: () => <p>delta-innehåll</p> }];
+    rerender(<DockWorkspace page="dashboard" panels={late} defaultLayout={defaultLayout} closable={["b"]} />);
+    expect(fake.added.filter((p) => p.id === "d")).toEqual([expect.objectContaining({ inactive: true })]);
+  });
+
+  it("alla rutor borttagna: tomt läge med knappen i stället för dockytan", () => {
+    hiddenPrefs.user = { hidden: ["a", "b", "c"] };
+    renderClosable(["a", "b", "c"]);
+    expect(screen.queryByTestId("dock")).not.toBeInTheDocument();
+    expect(screen.getByText("Du har tagit bort alla rutor.")).toBeInTheDocument();
+    fireEvent.click(addButton());
+    fireEvent.click(screen.getByRole("menuitem", { name: "Gamma" }));
+    expect(screen.getByTestId("dock")).toBeInTheDocument();
+    expect(fake.added.map((p) => p.id)).toEqual(["c"]);
+  });
+
+  it("telefon: knappen lägger tillbaka rutan och visar den", () => {
+    screenClass.value = "phone";
+    hiddenPrefs.user = { hidden: ["c"] };
+    renderClosable(["b", "c"]);
+    expect(screen.getByText("alfa-innehåll")).toBeInTheDocument();
+    fireEvent.click(addButton());
+    fireEvent.click(screen.getByRole("menuitem", { name: "Gamma" }));
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Alfa", "Beta", "Gamma"]);
+    expect(screen.getByRole("tab", { name: "Gamma" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("gamma-innehåll")).toBeInTheDocument();
+  });
+
+  it("telefon: tomt läge när alla rutor är borttagna", () => {
+    screenClass.value = "phone";
+    hiddenPrefs.user = { hidden: ["b", "c"] };
+    renderClosable(["a", "b", "c"]);
+    expect(screen.getAllByRole("tab")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort Alfa" }));
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.getByText("Du har tagit bort alla rutor.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lägg till ruta" })).toBeEnabled();
+  });
+});
+
 // #1356: dockview-core stänger en fokuserad flik med Delete/Backspace trots
 // hideClose, och shift-drag skapade flytande grupper.
 describe("DockWorkspace — tangentbord och flytande grupper", () => {

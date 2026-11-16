@@ -9,6 +9,9 @@
  *   - Senaste 5 ärenden man jobbat i (timeEntry order desc, dedup)
  *
  * Dagsval: Igår / Idag / Imorgon / fritt datum.
+ *
+ * Användaren väljer själv vilka rutor som syns (#1612): alla utom Kalender
+ * kan tas bort med × och läggas tillbaka med "Lägg till ruta".
  */
 
 import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
@@ -22,7 +25,7 @@ import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
-import { dashboardLayout } from "./_dashboard-layout";
+import { DASHBOARD_CLOSABLE, dashboardLayout } from "./_dashboard-layout";
 
 function todayYmd(): string {
   const d = new Date();
@@ -62,6 +65,7 @@ export default function Dashboard() {
       page="dashboard"
       panels={panels}
       defaultLayout={dashboardLayout}
+      closable={DASHBOARD_CLOSABLE}
       header={(
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>

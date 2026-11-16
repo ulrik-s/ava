@@ -258,3 +258,31 @@ test("Delete/Backspace stänger inte en flik, och flytande grupper går inte att
   await expect(page.locator(".dv-resize-container")).toHaveCount(0);
   await expect(page.getByRole("tab")).toHaveCount(tabs);
 });
+
+// #1612: Startsidans rutor (utom Kalender) tas bort med × och läggs tillbaka
+// med "Lägg till ruta". Valet består vid navigering (demon sparar inte över
+// en omladdning, så vi navigerar inom appen).
+test("Startsidan: ta bort Tidrapportering med ×, den förblir borta, och Lägg till ruta ger den tillbaka", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  await page.goto(`${base}/`, { waitUntil: "load" });
+  const tidTab = page.getByRole("tab", { name: /^Tidrapportering/ });
+  await expect(tidTab).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("tab", { name: /^Kalender/ }).locator(".dv-default-tab-action")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Lägg till ruta" })).toBeDisabled();
+
+  await tidTab.locator(".dv-default-tab-action").click();
+  await expect(tidTab).toHaveCount(0);
+
+  await page.getByRole("link", { name: /Ärenden/ }).first().click();
+  await expect(page).toHaveURL(/\/matters\/?$/);
+  await page.getByRole("link", { name: /Startsida/ }).first().click();
+  await expect(page.getByRole("tab", { name: /^Kalender/ })).toBeVisible({ timeout: 30_000 });
+  await expect(tidTab).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Lägg till ruta" }).click();
+  await page.getByRole("menuitem", { name: "Tidrapportering" }).click();
+  await expect(tidTab).toBeVisible();
+  await expect(tidTab).toHaveAttribute("aria-selected", "true");
+});

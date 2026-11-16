@@ -4,7 +4,8 @@
  * Vilka valbara paneler användaren tagit bort på en sida (#1611). Personlig
  * preferens (bara `data.user`, ingen firmastandard) som synkas mellan
  * enheter; uppdateras lokalt direkt så att vyn inte blinkar medan sparandet
- * går (jfr `useFeedbackSeen`).
+ * går (jfr `useFeedbackSeen`). Efter sparandet hämtas preferensen om, så
+ * att valet består när sidan visas igen efter navigering (#1612).
  */
 
 import { useMemo, useState } from "react";
@@ -25,12 +26,13 @@ export interface HiddenPanels {
 export function useHiddenPanels(page: string, closable: readonly string[]): HiddenPanels {
   const key = hiddenPanelsPrefKey(page);
   const stored = trpc.prefs.get.useQuery({ key }, { enabled: closable.length > 0 });
+  const utils = trpc.useUtils();
   const save = trpc.prefs.save.useMutation();
   const [local, setLocal] = useState<readonly string[] | null>(null);
   const hidden = useMemo(() => local ?? parseHiddenPanels(stored.data?.user), [local, stored.data]);
   const update = (next: readonly string[]): void => {
     setLocal(next);
-    save.mutate({ key, prefs: { hidden: [...next] } });
+    save.mutate({ key, prefs: { hidden: [...next] } }, { onSuccess: () => { void utils.prefs.get.invalidate({ key }); } });
   };
   return {
     hidden,
