@@ -209,13 +209,20 @@ describe("MattersPage", () => {
     fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Tvist AB" } });
     fireEvent.change(screen.getByLabelText("Ärendetyp"), { target: { value: "Brottmål" } });
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Misshandel" } });
-    fireEvent.click(screen.getByRole("checkbox")); // Taxeärende
     fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
     expect(createMatterMutate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Tvist AB", matterType: "Brottmål", description: "Misshandel", isTaxeArende: true,
-      }),
+      expect.objectContaining({ title: "Tvist AB", matterType: "Brottmål", description: "Misshandel" }),
     );
+    // Taxa/icke-taxa väljs i kostnadsräkningen, inte vid nytt ärende (#1613).
+    expect(createMatterMutate.mock.calls[0]?.[0]).not.toHaveProperty("isTaxeArende");
+  });
+
+  it("Nytt ärende har ingen Taxeärende-kryssruta (#1613)", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByText("Taxeärende")).toBeNull();
+    expect(screen.queryByText(/Domstolsverkets fastställda taxa/)).toBeNull();
   });
 
   it("Målnummer-rutan visas alltid i Nytt ärende, även utan klient (#1509)", () => {

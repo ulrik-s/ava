@@ -134,7 +134,6 @@ interface MatterForm {
   matterType: string;
   klientId: string;
   responsibleLawyerId: string;
-  isTaxeArende: boolean;
   /** Domstolens målnummer — frivilligt, trimmas vid submit (#1509). */
   courtCaseNumber: string;
 }
@@ -150,7 +149,6 @@ const EMPTY_MATTER_FORM: MatterForm = {
   matterType: "",
   klientId: "",
   responsibleLawyerId: "",
-  isTaxeArende: false,
   courtCaseNumber: "",
 };
 
@@ -163,7 +161,6 @@ function matterCreateArgs(form: MatterForm) {
     matterType: form.matterType || undefined,
     klientId: form.klientId || undefined,
     responsibleLawyerId: form.responsibleLawyerId || undefined,
-    isTaxeArende: form.isTaxeArende || undefined,
     courtCaseNumber: optionalTrimmed(form.courtCaseNumber),
   };
 }
@@ -250,24 +247,6 @@ function NewMatterForm({ form, setForm, matterTypes, client, onPickClient, onCle
           <textarea id={descriptionId} value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-        <div className="md:col-span-2">
-          <label className="inline-flex items-start gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.isTaxeArende}
-              onChange={(e) => setForm({ ...form, isTaxeArende: e.target.checked })}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="font-medium text-gray-900">Taxeärende</span>
-              <span className="block text-xs text-gray-500 mt-0.5">
-                Ersättning enligt Domstolsverkets fastställda taxa (schablon)
-                istället för löpande timdebitering. Vanligast för brottmål med
-                offentlig försvarare, konkursförvaltning och förordnandemål.
-              </span>
-            </span>
-          </label>
         </div>
       </div>
       <div className="mt-4 flex gap-2">
