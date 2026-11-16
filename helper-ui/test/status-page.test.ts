@@ -77,3 +77,13 @@ describe("statusPageHtml — synk, inloggning, start", () => {
     expect(page({ openAtLogin: false })).toContain("Slå på");
   });
 });
+
+describe("statusPageHtml — stänga", () => {
+  test("OK stänger fönstret; avsluta är en diskret länk", () => {
+    const html = page();
+    expect(parseAction("ava:close")).toBe("close");
+    expect(html).toContain('href="ava:close">OK</a>');
+    expect(html).toContain("fortsätter i bakgrunden");
+    expect(html).toContain('class="quit" href="ava:quit"');
+  });
+});

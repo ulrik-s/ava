@@ -205,7 +205,7 @@ class StatusWindow {
   show(): void {
     if (this.win) { this.win.show(); this.win.focus(); return; }
     const win = new BrowserWindow({
-      width: 440, height: 470, resizable: false, show: false, title: "AVA Helper",
+      width: 440, height: 520, resizable: false, show: false, title: "AVA Helper",
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false },
     });
     win.webContents.on("will-navigate", (event, url) => {
@@ -219,6 +219,11 @@ class StatusWindow {
     this.win = win;
     void app.dock?.show();
     void this.render();
+  }
+
+  /** Stäng fönstret — appen fortsätter i bakgrunden (window-all-closed avslutar inte). */
+  close(): void {
+    this.win?.close();
   }
 
   async render(): Promise<void> {
@@ -289,6 +294,7 @@ app.whenReady().then(() => {
       app.setLoginItemSettings({ openAtLogin: !app.getLoginItemSettings().openAtLogin });
       return status.render();
     },
+    close: () => { status.close(); },
     quit: () => { quit(); },
   };
   const onAction = async (action: StatusAction): Promise<void> => { await ACTION_HANDLERS[action](); };
