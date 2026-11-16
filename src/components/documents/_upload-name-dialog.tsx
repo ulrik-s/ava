@@ -2,14 +2,16 @@
 
 /**
  * Namnrutan före uppladdning (#1614): en dialog per fil, i tur och ordning,
- * förifylld med filens namn utan ändelse. **Spara** laddar upp filen med det
+ * förifylld med filens namn utan ändelse — för ett mejl (`.eml`) med ämnesraden
+ * om den går att läsa (#1616). **Spara** laddar upp filen med det
  * valda namnet i målmappen; **Avbryt** hoppar bara över den filen.
  * **+ Ladda upp** använder den inte.
  */
 
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { cleanFileName, fileExtension } from "@/lib/shared/document-file-name";
+import { EML_HEAD_BYTES, emlSubject, isEmlFile } from "@/lib/shared/eml-subject";
 import type { DocumentFolderId } from "@/lib/shared/schemas/ids";
 import type { UploadOptions } from "./_use-file-upload";
 
@@ -26,6 +28,37 @@ export interface NameQueueItem {
 export function defaultUploadName(fileName: string): string {
   const base = fileName.slice(0, fileName.length - fileExtension(fileName).length);
   return base || fileName;
+}
+
+/**
+ * Mejlets ämnesrad om filen är en `.eml`, annars null. Bara huvudet läses
+ * (de första {@link EML_HEAD_BYTES} byten); ett läsfel ger null.
+ */
+export async function readEmlSubject(file: File): Promise<string | null> {
+  if (!isEmlFile(file.name, file.type)) return null;
+  try {
+    return emlSubject(new Uint8Array(await file.slice(0, EML_HEAD_BYTES).arrayBuffer()));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Namnet i rutan: filens namn utan ändelse, som byts mot mejlets ämnesrad när
+ * den lästs — om användaren inte redan börjat skriva.
+ */
+function usePrefilledName(file: File): [string, (value: string) => void] {
+  const [name, setName] = useState(() => defaultUploadName(file.name));
+  const edited = useRef(false);
+  useEffect(() => {
+    let active = true;
+    void readEmlSubject(file).then((subject) => {
+      if (active && subject && !edited.current) setName(subject);
+    });
+    return () => { active = false; };
+  }, [file]);
+  const change = useCallback((value: string) => { edited.current = true; setName(value); }, []);
+  return [name, change];
 }
 
 /** Hjälptexten: det namn filen sparas som. */
@@ -55,7 +88,7 @@ function NameForm({ item, onSave, onNext }: {
   onNext: () => void;
 }) {
   const id = useId();
-  const [name, setName] = useState(() => defaultUploadName(item.file.name));
+  const [name, setName] = usePrefilledName(item.file);
   const saved = cleanFileName(name, item.file.name);
   const save = () => { if (saved) onSave(item.file, { folderId: item.folderId, fileName: saved }); };
   return (

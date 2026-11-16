@@ -27,6 +27,7 @@ test("KR som väntar på dom: inget självupptäckt fel, och referensen öppnar 
 
 // #1615: filer som släpps utifrån i dokumentvyn — på en mapp eller på roten —
 // går via namnrutan och sparas som de filer de är (PDF som PDF, .eml som .eml).
+// Ett mejl förifylls med sin ämnesrad (#1616).
 // Specen ligger här eftersom demo-konfigurationens testMatch (skyddad) bara
 // plockar upp listade filer; den rör dokumentmappar, precis som KR-fallet.
 test.describe("släpp filer utifrån i dokumentvyn (#1615)", () => {
@@ -63,11 +64,11 @@ test.describe("släpp filer utifrån i dokumentvyn (#1615)", () => {
     await expect(page.locator("tr").filter({ has: saved }).locator("[style*='padding-left: 20px']").first()).toBeVisible();
   });
 
-  test("ett mejl som .eml släppt på roten sparas som .eml", async ({ page }) => {
-    await dropFile(page, "Rot", "mejl.eml", "message/rfc822", "Subject: Hej\r\n\r\nText");
+  test("ett mejl som .eml släppt på roten förifylls med ämnesraden och sparas som .eml (#1616)", async ({ page }) => {
+    await dropFile(page, "Rot", "mejl.eml", "message/rfc822", "Subject: =?UTF-8?Q?M=C3=B6te_om_f=C3=B6rlikning?=\r\n\r\nText");
     const dialog = page.getByRole("dialog", { name: "Namnge dokumentet" });
-    await expect(dialog.getByRole("textbox")).toHaveValue("mejl");
+    await expect(dialog.getByRole("textbox")).toHaveValue("Möte om förlikning");
     await dialog.getByRole("button", { name: "Spara" }).click();
-    await expect(page.getByText("mejl.eml")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Möte om förlikning.eml")).toBeVisible({ timeout: 30_000 });
   });
 });
