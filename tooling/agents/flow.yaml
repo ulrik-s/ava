@@ -37,6 +37,8 @@ machines:
           - to: undersokt
           - to: dubblett
           - to: finns-redan
+          # Flera orelaterade saker i samma förfrågan: delad i egna förfrågningar.
+          - to: uppdelad
       undersokt:
         label: undersökt
         color: "c5def5"
@@ -87,6 +89,13 @@ machines:
         agent: L2
         transitions:
           - to: levererad
+      uppdelad:
+        label: uppdelad
+        color: "d4c5f9"
+        description: Innehöll flera olika saker; delad i egna förfrågningar (Del av #N) och stängd av en Action
+        # Delarna lever vidare som egna förfrågningar; originalet är klart.
+        agent: null
+        transitions: []
     flags:
       user-request:
         color: "0e8a16"
