@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest-compat";
 import {
-  groupShares, withoutMaximized,
+  groupShares, hiddenPanelsPrefKey, parseHiddenPanels, visiblePanels, withoutMaximized,
   LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, screenClassFor, type SerializedLayout,
 } from "@/lib/shared/layout/dock-layout";
 
@@ -125,5 +125,35 @@ describe("groupShares — varje grupps andel av ytan", () => {
       width: 100, height: 100, orientation: "HORIZONTAL",
     });
     expect(noSize.get("n")).toEqual({ width: 0, height: 1 });
+  });
+});
+
+// #1611: valbara paneler — vilka användaren tagit bort, per sida.
+describe("dolda paneler", () => {
+  it("nyckeln är per sida, utan skärmklass", () => {
+    expect(hiddenPanelsPrefKey("dashboard")).toBe("panels.dashboard.hidden");
+  });
+
+  it("parsning: giltig lista; trasig eller fel typ → inga dolda", () => {
+    expect(parseHiddenPanels({ hidden: ["a", "b"] })).toEqual(["a", "b"]);
+    expect(parseHiddenPanels(null)).toEqual([]);
+    expect(parseHiddenPanels(undefined)).toEqual([]);
+    expect(parseHiddenPanels({ hidden: "a" })).toEqual([]);
+    expect(parseHiddenPanels({ hidden: [1] })).toEqual([]);
+    expect(parseHiddenPanels("trasig")).toEqual([]);
+  });
+
+  const P = [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+  it("dolda valbara paneler tas bort", () => {
+    expect(visiblePanels(P, ["b", "c"], ["b"]).map((p) => p.id)).toEqual(["a", "c"]);
+  });
+
+  it("id utanför closable och okända id ignoreras", () => {
+    expect(visiblePanels(P, ["b"], ["a", "okänd"]).map((p) => p.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("inget att dölja → samma lista", () => {
+    expect(visiblePanels(P, [], ["a"])).toBe(P);
   });
 });

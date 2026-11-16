@@ -5,6 +5,7 @@
  */
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
+import type { AddPanel } from "@/components/layout/dock-workspace";
 import { LAYOUT_VERSION, type SerializedLayout } from "@/lib/shared/layout/dock-layout";
 
 interface FakeApi {
@@ -15,8 +16,15 @@ interface FakeApi {
   layoutListener: (() => void) | null;
   maximized: boolean;
   maximizeListeners: Array<(e: { isMaximized: boolean }) => void>;
+  /** Paneler som användaren stängt med ×. */
+  closed: string[];
 }
-const fake: FakeApi = { added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListeners: [] };
+const fake: FakeApi = {
+  added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListeners: [], closed: [],
+};
+/** Flikar som attrappen ritar med sidans flikkomponent (#1611). */
+const TAB_IDS = ["a", "b", "c"];
+type TabComponent = (p: { api: { id: string; close: () => void } }) => React.ReactNode;
 let readyCount = 0;
 
 const dockProps: { defaultTabComponent: unknown; disableFloatingGroups: unknown } = { defaultTabComponent: null, disableFloatingGroups: undefined };
@@ -29,7 +37,11 @@ const recordTablistKeys = (el: HTMLDivElement | null): void => {
 vi.mock("dockview-react", () => ({
   themeLight: { name: "light" },
   themeDark: { name: "dark" },
-  DockviewDefaultTab: ({ hideClose }: { hideClose?: boolean }) => <span data-testid="default-tab" data-hide-close={String(hideClose)} />,
+  DockviewDefaultTab: ({ hideClose, closeActionOverride, api }: { hideClose?: boolean; closeActionOverride?: () => void; api?: { id: string } }) => (
+    <span data-testid="default-tab" data-hide-close={String(hideClose)}>
+      {!hideClose && <button type="button" aria-label={`Stäng ${api?.id ?? ""}`} onClick={closeActionOverride}>×</button>}
+    </span>
+  ),
   DockviewReact: ({ onReady, defaultTabComponent, disableFloatingGroups }: {
     onReady: (e: { api: unknown }) => void; defaultTabComponent?: unknown; disableFloatingGroups?: boolean;
   }) => {
@@ -37,7 +49,12 @@ vi.mock("dockview-react", () => ({
     dockProps.disableFloatingGroups = disableFloatingGroups;
     const panels = new Set<string>();
     const api = {
-      addPanel: (o: { id: string; inactive?: boolean; position?: unknown }) => { panels.add(o.id); fake.added.push(o); },
+      addPanel: (o: { id: string; inactive?: boolean; position?: { referencePanel?: string } }) => {
+        // Som dockview: en placering relativt en panel som inte finns kastar.
+        const ref = o.position?.referencePanel;
+        if (ref !== undefined && !panels.has(ref)) throw new Error(`no panel ${ref}`);
+        panels.add(o.id); fake.added.push(o);
+      },
       getPanel: (id: string) => (panels.has(id) ? { api: { setTitle: (t: string) => { fake.titles[id] = t; } } } : undefined),
       fromJSON: (j: { panels: Record<string, unknown> }) => {
         if (fake.failLoad) throw new Error("trasig");
@@ -54,8 +71,10 @@ vi.mock("dockview-react", () => ({
     };
     // En gång per montering, som dockview.
     if (readyCount++ === 0 || !fake.layoutListener) onReady({ api });
+    const Tab = defaultTabComponent as TabComponent;
     return (
       <div data-testid="dock">
+        {TAB_IDS.map((id) => <Tab key={id} api={{ id, close: () => { fake.closed.push(id); } }} />)}
         <div role="tablist" aria-label="flikrad" ref={recordTablistKeys}>
           <div className="dv-tab" data-testid="dv-tab" tabIndex={0} />
         </div>
@@ -65,6 +84,8 @@ vi.mock("dockview-react", () => ({
 }));
 
 const prefsData: { user: unknown; org: unknown } = { user: null, org: null };
+/** Listan över dolda paneler (#1611) — egen nyckel, ingen firmastandard. */
+const hiddenPrefs: { user: unknown; org: unknown; loading: boolean } = { user: null, org: null, loading: false };
 const role = { value: "LAWYER" };
 const save = vi.fn();
 const clear = vi.fn();
@@ -79,7 +100,11 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate } } }),
     prefs: {
-      get: { useQuery: () => ({ data: prefsData, isLoading: false }) },
+      get: {
+        useQuery: ({ key }: { key: string }) => (key.startsWith("panels.")
+          ? { data: hiddenPrefs, isLoading: hiddenPrefs.loading }
+          : { data: prefsData, isLoading: false }),
+      },
       save: mutation(save), clear: mutation(clear), setOrgDefault: mutation(setOrg), clearOrgDefault: mutation(clearOrg),
     },
     user: { current: { useQuery: () => ({ data: { role: role.value } }) } },
@@ -89,7 +114,7 @@ vi.mock("@/lib/client/trpc", () => ({
 const screenClass = { value: "laptop" as "laptop" | "large" | "phone" };
 vi.mock("@/lib/client/layout/use-screen-class", () => ({ useScreenClass: () => screenClass.value }));
 
-const { DockWorkspace, PanelTab, activatePanelFromHash } = await import("@/components/layout/dock-workspace");
+const { DockWorkspace, PanelTab, activatePanelFromHash, addGroup } = await import("@/components/layout/dock-workspace");
 
 const PANELS = [
   { id: "a", title: "Alfa", render: () => <p>alfa-innehåll</p> },
@@ -110,7 +135,8 @@ const renderWs = () => render(<DockWorkspace page="matter" panels={PANELS} defau
 beforeEach(() => {
   vi.clearAllMocks();
   fake.added = []; fake.loaded = []; fake.titles = {}; fake.failLoad = false; fake.layoutListener = null;
-  fake.maximized = false; fake.maximizeListeners = [];
+  fake.maximized = false; fake.maximizeListeners = []; fake.closed = [];
+  hiddenPrefs.user = null; hiddenPrefs.org = null; hiddenPrefs.loading = false;
   tablistKeys.length = 0;
   readyCount = 0;
   prefsData.user = null; prefsData.org = null;
@@ -251,10 +277,98 @@ describe("DockWorkspace — flikar", () => {
   it("dockytan använder PanelTab, som är dockviews flik utan stängknapp", () => {
     renderWs();
     expect(dockProps.defaultTabComponent).toBe(PanelTab);
-    // Cast: dockviews header-props (api, containerApi, …) byggs av dockview och
-    // kan inte skapas här; attrappen av DockviewDefaultTab läser bara hideClose.
-    render(<PanelTab {...({} as Parameters<typeof PanelTab>[0])} />);
-    expect(screen.getByTestId("default-tab").getAttribute("data-hide-close")).toBe("true");
+    const tabs = screen.getAllByTestId("default-tab");
+    expect(tabs.map((t) => t.getAttribute("data-hide-close"))).toEqual(["true", "true", "true"]);
+    expect(screen.queryByRole("button", { name: /^Stäng/ })).not.toBeInTheDocument();
+  });
+});
+
+// #1611: valbara paneler — användaren tar bort dem med ×, och de förblir dolda.
+describe("DockWorkspace — valbara paneler", () => {
+  const renderClosable = (closable: readonly string[], layout = defaultLayout) =>
+    render(<DockWorkspace page="dashboard" panels={PANELS} defaultLayout={layout} closable={closable} />);
+
+  it("bara valbara flikar får ×", () => {
+    renderClosable(["b"]);
+    const tabs = screen.getAllByTestId("default-tab");
+    expect(tabs.map((t) => t.getAttribute("data-hide-close"))).toEqual(["true", "undefined", "true"]);
+  });
+
+  it("× stänger panelen, sparar den som dold och den läggs inte tillbaka", () => {
+    renderClosable(["b", "c"]);
+    fireEvent.click(screen.getByRole("button", { name: "Stäng b" }));
+    expect(fake.closed).toEqual(["b"]);
+    expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: ["b"] } });
+    expect(fake.added.filter((p) => p.id === "b")).toHaveLength(1);
+  });
+
+  it("dold panel läggs inte till av standardlayouten; id utanför closable ignoreras", () => {
+    hiddenPrefs.user = { hidden: ["b", "a"] };
+    renderClosable(["b"]);
+    expect(fake.added.map((p) => p.id)).toEqual(["a", "c"]);
+  });
+
+  it("dold panel läggs inte till av reconcileLayout eller av sent tillkomna paneler", () => {
+    prefsData.user = stored(SAVED);
+    hiddenPrefs.user = { hidden: ["b", "c"] };
+    const { rerender } = renderClosable(["b", "c"]);
+    expect(fake.loaded).toEqual([expect.objectContaining({ panels: { a: { id: "a" } } })]);
+    rerender(<DockWorkspace page="dashboard" panels={[...PANELS]} defaultLayout={defaultLayout} closable={["b", "c"]} />);
+    expect(fake.added).toEqual([]);
+  });
+
+  it("standardlayout med dold referenspanel kraschar inte; övriga paneler syns", () => {
+    hiddenPrefs.user = { hidden: ["b"] };
+    const relative = vi.fn((add: AddPanel) => {
+      add("b");
+      add("c", { position: { referencePanel: "b", direction: "below" } });
+      add("a", { position: { direction: "right" } });
+    });
+    renderClosable(["b"], relative);
+    expect(fake.added).toEqual([
+      expect.not.objectContaining({ position: expect.anything() }),
+      expect.objectContaining({ id: "a", position: { direction: "right" } }),
+    ]);
+    expect(fake.added[0]?.id).toBe("c");
+  });
+
+  it("referenspanel som finns: placeringen behålls", () => {
+    const relative = vi.fn((add: AddPanel) => { addGroup(add, ["a", "b"]); });
+    renderClosable(["c"], relative);
+    expect(fake.added[1]).toEqual(expect.objectContaining({ id: "b", position: { referencePanel: "a", direction: "within" } }));
+  });
+
+  it("programmatiska borttagningar (trasig layout, Återställ layout) döljer inget", () => {
+    prefsData.user = stored(SAVED);
+    fake.failLoad = true;
+    renderClosable(["a", "b", "c"]);
+    fireEvent.click(screen.getByRole("button", { name: "Återställ layout" }));
+    expect(clear).toHaveBeenCalledWith({ key: "layout.dashboard.laptop" });
+    expect(save).not.toHaveBeenCalledWith(expect.objectContaining({ key: "panels.dashboard.hidden" }));
+  });
+
+  it("väntar på listan över dolda innan dockytan byggs", () => {
+    hiddenPrefs.loading = true;
+    renderClosable(["b"]);
+    expect(screen.getByText("Laddar…")).toBeInTheDocument();
+    expect(screen.queryByTestId("dock")).not.toBeInTheDocument();
+  });
+
+  it("telefon: dolda paneler syns inte och × på en valbar flik döljer den", () => {
+    screenClass.value = "phone";
+    hiddenPrefs.user = { hidden: ["b"] };
+    renderClosable(["b", "c"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Alfa", "Gamma"]);
+    expect(screen.queryByRole("button", { name: "Ta bort Alfa" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort Gamma" }));
+    expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: ["b", "c"] } });
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Alfa"]);
+  });
+
+  it("telefon utan closable: inga ×", () => {
+    screenClass.value = "phone";
+    renderWs();
+    expect(screen.queryByRole("button", { name: /^Ta bort/ })).not.toBeInTheDocument();
   });
 });
 

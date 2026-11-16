@@ -136,3 +136,32 @@ export function reconcileLayout(
     missing: panelIds.filter((id) => !present.has(id)),
   };
 }
+
+/**
+ * Valbara paneler (#1611): användaren kan ta bort en panel som sidan märkt
+ * som valbar. Listan över dolda paneler är personlig och gäller alla
+ * skärmklasser, så nyckeln saknar skärmklass.
+ */
+export function hiddenPanelsPrefKey(page: string): string {
+  return `panels.${page}.hidden`;
+}
+
+/** Det som sparas i preferensen för dolda paneler. */
+export const hiddenPanelsSchema = z.object({ hidden: z.array(z.string()) });
+
+/** Dolda panel-id:n ur en preferens; saknad eller trasig preferens → inga dolda. */
+export function parseHiddenPanels(prefs: unknown): string[] {
+  const r = hiddenPanelsSchema.safeParse(prefs);
+  return r.success ? r.data.hidden : [];
+}
+
+/**
+ * Paneler som syns: de dolda filtreras bort, men bara om de är valbara. En
+ * icke-valbar panel kan aldrig döljas, t.ex. via en gammal preferens.
+ */
+export function visiblePanels<P extends { id: string }>(
+  panels: readonly P[], closable: readonly string[], hidden: readonly string[],
+): readonly P[] {
+  const gone = new Set(hidden.filter((id) => closable.includes(id)));
+  return gone.size === 0 ? panels : panels.filter((p) => !gone.has(p.id));
+}
