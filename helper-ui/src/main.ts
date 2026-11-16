@@ -167,13 +167,13 @@ function enableLoginItemOnFirstRun(): void {
 if (!app.requestSingleInstanceLock()) app.quit();
 
 // Öppnas appen igen medan den redan kör avslutas den nya tyst — utan svar ser
-// det ut som att appen "inte startar". Ikonen kan dessutom döljas bakom kameran
-// på MacBooks med notch när menyraden är full.
+// det ut som att appen "inte startar". Ikonen kan dessutom vara avslagen i
+// macOS 26 (Systeminställningar → Menyrad) — t.ex. efter en ominstallation.
 app.on("second-instance", () => {
   void dialog.showMessageBox({
     message: "AVA Helper körs redan",
-    detail: "Ikonen finns i menyraden uppe till höger. Syns den inte kan den vara dold bakom kameran — "
-      + "håll in ⌘ och dra bort några andra ikoner från menyraden för att göra plats.",
+    detail: "Ikonen finns i menyraden uppe till höger. Syns den inte: öppna Systeminställningar → Menyrad "
+      + "och slå på AVA Helper under \"Tillåt i menyraden\".",
   });
 });
 
