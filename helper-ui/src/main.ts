@@ -166,6 +166,17 @@ function enableLoginItemOnFirstRun(): void {
 // En instans åt gången — två motorer skulle slåss om portarna.
 if (!app.requestSingleInstanceLock()) app.quit();
 
+// Öppnas appen igen medan den redan kör avslutas den nya tyst — utan svar ser
+// det ut som att appen "inte startar". Ikonen kan dessutom döljas bakom kameran
+// på MacBooks med notch när menyraden är full.
+app.on("second-instance", () => {
+  void dialog.showMessageBox({
+    message: "AVA Helper körs redan",
+    detail: "Ikonen finns i menyraden uppe till höger. Syns den inte kan den vara dold bakom kameran — "
+      + "håll in ⌘ och dra bort några andra ikoner från menyraden för att göra plats.",
+  });
+});
+
 app.whenReady().then(() => {
   enableLoginItemOnFirstRun();
   app.dock?.hide(); // tray-only, ingen dock-ikon
