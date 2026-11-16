@@ -45,19 +45,42 @@ interface MenuPos {
 
 const ITEM_HEIGHT = 44;
 
+const KEBAB_CLASS =
+  "inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation";
+
+/** En triggerknapp med text i stället för kebab-ikonen (t.ex. "Lägg till ruta", #1612). */
+export interface ActionMenuTrigger {
+  text: string;
+  className: string;
+}
+
+/** Knappens klass och innehåll: text om `trigger` finns, annars ⋮. */
+function triggerLook(trigger: ActionMenuTrigger | undefined): { className: string; content: ReactNode } {
+  return trigger
+    ? { className: trigger.className, content: trigger.text }
+    : { className: KEBAB_CLASS, content: <MoreVertical size={18} /> };
+}
+
 export function ActionMenu({
   items,
   disabled,
   label = "Åtgärder",
+  trigger,
+  title,
 }: {
   items: ActionMenuItem[];
   disabled?: boolean;
   label?: string;
+  /** Knapp med text i stället för ⋮. Utan: kebab-ikonen. */
+  trigger?: ActionMenuTrigger | undefined;
+  /** Tooltip på knappen, t.ex. varför den är inaktiv. Utan: `label`. */
+  title?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<MenuPos | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const look = triggerLook(trigger);
 
   const toggle = () => {
     if (open) {
@@ -117,10 +140,10 @@ export function ActionMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}
-        title={label}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation"
+        title={title ?? label}
+        className={look.className}
       >
-        <MoreVertical size={18} />
+        {look.content}
       </button>
       {open && pos && typeof document !== "undefined"
         ? createPortal(

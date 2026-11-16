@@ -9,9 +9,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 const stored: { data: { user: unknown; org: unknown } | undefined; isLoading: boolean } = { data: undefined, isLoading: false };
 const useQuery = vi.fn((_input: { key: string }, _opts: { enabled: boolean }) => stored);
 const save = vi.fn();
+const invalidate = vi.fn(() => Promise.resolve());
+const mutate = (input: unknown, opts?: { onSuccess?: () => void }): void => { save(input); opts?.onSuccess?.(); };
 
 vi.mock("@/lib/client/trpc", () => ({
-  trpc: { prefs: { get: { useQuery }, save: { useMutation: () => ({ mutate: save }) } } },
+  trpc: {
+    useUtils: () => ({ prefs: { get: { invalidate } } }),
+    prefs: { get: { useQuery }, save: { useMutation: () => ({ mutate }) } },
+  },
 }));
 
 const { useHiddenPanels } = await import("@/components/layout/use-hidden-panels");
@@ -58,5 +63,12 @@ describe("useHiddenPanels", () => {
     act(() => result.current.show("b"));
     expect(result.current.hidden).toEqual([]);
     expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: [] } });
+  });
+
+  // #1612: utan omhämtning visade sidan den gamla listan efter navigering.
+  it("efter sparning hämtas preferensen om", () => {
+    const { result } = renderHook(() => useHiddenPanels("dashboard", ["a", "b"]));
+    act(() => result.current.hide("a"));
+    expect(invalidate).toHaveBeenCalledWith({ key: "panels.dashboard.hidden" });
   });
 });

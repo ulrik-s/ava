@@ -12,3 +12,9 @@ export const dashboardLayout: DefaultLayout = (add, screen) => {
   else addGroup(add, ["recent"], { referencePanel: "watch", direction: "below" });
 };
 
+
+/**
+ * Rutorna som användaren får ta bort med × och lägga tillbaka (#1612).
+ * Kalendern är aldrig valbar.
+ */
+export const DASHBOARD_CLOSABLE: readonly string[] = ["watch", "time", "recent"];

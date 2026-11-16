@@ -123,4 +123,22 @@ describe("ActionMenu", () => {
     fireEvent.click(t);
     expect(screen.getByRole("menu", { name: "Dokumentåtgärder" })).toBeInTheDocument();
   });
+
+  // #1612: knapp med egen text och tooltip — bakåtkompatibelt (utan: ⋮ och label).
+  it("trigger med text och egen klass; title ersätter label som tooltip", () => {
+    setup([{ key: "a", label: "Alpha", onSelect: vi.fn() }], {
+      label: "Lägg till ruta", trigger: { text: "Lägg till ruta", className: "egen-klass" }, title: "Alla rutor visas redan",
+    });
+    const btn = screen.getByRole("button", { name: "Lägg till ruta" });
+    expect(btn).toHaveTextContent("Lägg till ruta");
+    expect(btn).toHaveClass("egen-klass");
+    expect(btn).toHaveAttribute("title", "Alla rutor visas redan");
+  });
+
+  it("utan trigger/title: kebab-ikon och label som tooltip", () => {
+    setup([{ key: "a", label: "Alpha", onSelect: vi.fn() }]);
+    expect(trigger()).toHaveAttribute("title", "Åtgärder");
+    expect(trigger()).toHaveTextContent("");
+    expect(trigger().querySelector("svg")).not.toBeNull();
+  });
 });
