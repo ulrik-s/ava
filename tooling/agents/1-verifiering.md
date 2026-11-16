@@ -72,6 +72,11 @@ inte (utom 7-dagarsgränsen nedan).
      hans beslut och förtydliganden, och de gäller. Men de är inte
      användarens svar, och användaren har aldrig sett dem. Har Ulrik avgjort
      en fråga behöver du inte fråga användaren om just den.
+   - **Omprövningar** från loop 2 (via appen, börjar med `Omprövning v…:`):
+     något som har släppts kan lösa förfrågan helt eller delvis. Det är ett
+     tips, inte ett beslut. Kontrollera det i koden. Stämmer det: hjälp
+     användaren enligt "Finns redan" (helt löst), eller berätta vad som redan
+     går och undersök bara resten (delvis löst).
 2. **Flera saker? Alltid först, när issuen är i tillståndet mottagen.** Tar
    användaren upp flera saker som inte hör ihop: dela upp den, se avsnittet
    "Flera saker i samma förfrågan" nedan, och gå vidare till nästa issue.
@@ -149,6 +154,17 @@ Högst fem delar. Gör så här, ett kommando i taget (regel 5):
    ```
 
    Läs tillbaka delen: första raden ska vara ägarmarkören.
+
+   Koppla sedan delen som **sub-issue** till originalet, så att Ulrik ser
+   delarna och hur långt de kommit direkt i GitHub. API:t vill ha delens
+   **id** (inte numret): läs det med `gh api repos/ulrik-s/ava-feedback/issues/<del> --jq .id`
+   och skriv sedan:
+
+   ```bash
+   gh api repos/ulrik-s/ava-feedback/issues/N/sub_issues -F sub_issue_id=<id>
+   ```
+
+   Raden `**Del av:** #N` står kvar ändå: AVA och agenterna läser texten.
 2. **Tidigare dialog** på originalet (frågor och svar): skriv det som rör
    delen som en anteckning på delen, utan markör, så att den inte syns för
    användaren: `Från #N före uppdelningen: …`. Kort och avidentifierat.

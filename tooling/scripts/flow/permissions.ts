@@ -57,6 +57,8 @@ function intakeRules(repo: string): string[] {
     add(repo, "release:v*"),
     createPart(repo, "bugg"),
     createPart(repo, "förslag"),
+    // Delen kopplas som GitHub-sub-issue till originalet (id, inte nummer).
+    `Bash(gh api repos/${repo}/issues/*/sub_issues -F sub_issue_id=*)`,
     `Bash(gh api repos/${repo}/labels -f name=release:v* -f color=0e8a16)`,
     `Bash(gh api repos/${repo}/issues/*/comments -F body=@*)`,
   ];
