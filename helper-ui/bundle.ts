@@ -6,6 +6,8 @@
  * något.
  */
 
+import { readFileSync } from "node:fs";
+
 import pkg from "./package.json" with { type: "json" };
 
 // Releasebygget (helper-release.yml) sätter taggen (t.ex. "v0.7.24") — samma
@@ -19,7 +21,11 @@ const result = await Bun.build({
   external: ["electron"],
   outdir: "dist",
   naming: "main.cjs",
-  define: { __AVA_HELPER_VERSION__: JSON.stringify(version) },
+  define: {
+    __AVA_HELPER_VERSION__: JSON.stringify(version),
+    // "Uppdatera nu" kör samma skript som Terminal-installationen (src/installer.ts).
+    __AVA_INSTALL_SCRIPT__: JSON.stringify(readFileSync("../public/helper/install.sh", "utf8")),
+  },
 });
 
 if (!result.success) {

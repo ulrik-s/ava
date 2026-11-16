@@ -30,7 +30,7 @@ export function trayView(present: boolean, status: HelperStatusResponse | null):
 }
 
 /** "kl 18:05" samma dag, annars "14 nov. 18:05". */
-function checkedAt(at: Date, now: Date): string {
+export function checkedAt(at: Date, now: Date): string {
   const time = at.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
   if (at.toDateString() === now.toDateString()) return `kl ${time}`;
   return `${at.toLocaleDateString("sv-SE", { day: "numeric", month: "short" })} ${time}`;
@@ -47,13 +47,4 @@ export function updateStatusLine(version: string, s: UpdateStatus, now: Date = n
   if (s.checking) return `${version} — söker efter uppdatering…`;
   if (s.last === null) return `${version} — inte kontrollerad än`;
   return `${version} — ${RESULT_TEXT[s.last.result]} (${checkedAt(s.last.at, now)})`;
-}
-
-/** Svaret på ett manuellt "Sök efter uppdatering". `download` = erbjud nedladdning. */
-export function updateCheckDialog(version: string, s: UpdateStatus): { message: string; detail: string; download: boolean } {
-  if (s.notice) return { message: `Ny version finns: ${s.notice.version}`, detail: `Du har ${version}.`, download: true };
-  if (s.last?.result === "error") {
-    return { message: "Kunde inte söka efter uppdatering", detail: "Kontrollera nätverket och försök igen.", download: false };
-  }
-  return { message: "Du har senaste versionen", detail: version, download: false };
 }
