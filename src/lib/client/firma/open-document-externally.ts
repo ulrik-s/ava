@@ -21,6 +21,7 @@
 import type { ModalState } from "@/components/documents/external-edit-modal";
 import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
+import type { OpenInFinderResult } from "@/lib/client/fsa/open-in-finder";
 import { openViaHelper } from "@/lib/client/helper/use-helper";
 import type { HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -103,6 +104,39 @@ function demoUrl(doc: Doc): string {
   return `${demoBase()}/${doc.storagePath}`;
 }
 
+/**
+ * Juristens vanliga fall: ingen helper och ingen lokal mapp. Då hjälper inte
+ * FSA-felen ("Ingen lokal mapp vald") — peka i stället på installationen.
+ */
+const HELPER_NEEDED: ModalState = {
+  kind: "error",
+  title: "AVA Helper behövs",
+  message: "För att öppna och redigera dokument i Word eller ditt PDF-program behöver AVA Helper vara installerad och igång på datorn. "
+    + "Installationen tar under en minut. Är den redan installerad: öppna AVA Helper (t.ex. via Spotlight) och försök igen.",
+  link: { href: "/settings#external", label: "Visa installationen" },
+};
+
+type FinderFailure = Exclude<OpenInFinderResult, { kind: "ok" }>;
+
+/** Varför filen inte kunde öppnas lokalt → felrutan. */
+function finderError(r: FinderFailure): ModalState {
+  if ((r.kind === "unsupported" || r.kind === "no-handle") && !isDemoTier()) return HELPER_NEEDED;
+  switch (r.kind) {
+    case "unsupported":
+      return { kind: "error", title: "Browser stödjer inte File System Access",
+        message: "Din webbläsare stödjer inte File System Access API. Använd Chrome eller Edge på desktop." };
+    case "no-handle":
+      return { kind: "error", title: "Ingen lokal mapp vald",
+        message: "Du har inte valt en lokal mapp än. Gå till Inställningar → 'Datakälla' → välj firma-mapp." };
+    case "permission-denied":
+      return { kind: "error", title: "Saknar behörighet",
+        message: "AVA fick inte tillåtelse att läsa filen. Klicka 'Tillåt' nästa gång prompten dyker upp." };
+    case "file-not-found":
+      return { kind: "error", title: "Filen hittades inte",
+        message: `Hittade inte filen i din lokala mapp: ${r.path}` };
+  }
+}
+
 export async function runExternalEdit(doc: Doc): Promise<ModalState> {
   const { openInFinder } = await import("@/lib/client/fsa/open-in-finder");
   const { getExternalEditTracker } = await import("@/lib/client/fsa/external-edit-tracker");
@@ -110,22 +144,7 @@ export async function runExternalEdit(doc: Doc): Promise<ModalState> {
   const fallbackBase = isDemoTier() ? demoBase() : undefined;
 
   const r = await openInFinder(doc.storagePath, omitUndefined({ downloadFallbackBase: fallbackBase }));
-  if (r.kind === "unsupported") {
-    return { kind: "error", title: "Browser stödjer inte File System Access",
-      message: "Din webbläsare stödjer inte File System Access API. Använd Chrome eller Edge på desktop." };
-  }
-  if (r.kind === "no-handle") {
-    return { kind: "error", title: "Ingen lokal mapp vald",
-      message: "Du har inte valt en lokal mapp än. Gå till Inställningar → 'Datakälla' → välj firma-mapp." };
-  }
-  if (r.kind === "permission-denied") {
-    return { kind: "error", title: "Saknar behörighet",
-      message: "AVA fick inte tillåtelse att läsa filen. Klicka 'Tillåt' nästa gång prompten dyker upp." };
-  }
-  if (r.kind === "file-not-found") {
-    return { kind: "error", title: "Filen hittades inte",
-      message: `Hittade inte filen i din lokala mapp: ${r.path}` };
-  }
+  if (r.kind !== "ok") return finderError(r);
 
   const t = getExternalEditTracker();
   if (!t) {

@@ -38,6 +38,11 @@ describe("ExternalEditModal", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("kind=error med länk → länkknapp bredvid Stäng", () => {
+    render(<ExternalEditModal state={{ kind: "error", title: "AVA Helper behövs", message: "M", link: { href: "/settings#external", label: "Visa installationen" } }} onClose={() => {}} />);
+    expect(screen.getByRole("link", { name: "Visa installationen" }).getAttribute("href")).toBe("/settings#external");
+  });
+
   it("kind=ok (PDF) → visar fil + path, ingen Office-knapp", async () => {
     render(<ExternalEditModal state={okState("avtal.pdf")} onClose={() => {}} />);
     expect(screen.getByText("avtal.pdf")).toBeInTheDocument();

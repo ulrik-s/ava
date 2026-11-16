@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 export type ModalState =
   | { kind: "closed" }
   | { kind: "ok"; fileName: string; folderName: string; relativePath: string; fileHandle: FileSystemFileHandle }
-  | { kind: "error"; title: string; message: string };
+  | { kind: "error"; title: string; message: string; link?: { href: string; label: string } };
 
 interface Props {
   state: ModalState;
@@ -72,19 +72,26 @@ export function ExternalEditModal({ state, onClose }: Props): React.ReactElement
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-5">
         {state.kind === "error"
-          ? <ErrorView title={state.title} message={state.message} onClose={onClose} />
+          ? <ErrorView title={state.title} message={state.message} link={state.link} onClose={onClose} />
           : <OkView state={state} downloadUrl={downloadUrl} onClose={onClose} />}
       </div>
     </div>
   );
 }
 
-function ErrorView({ title, message, onClose }: { title: string; message: string; onClose: () => void }) {
+function ErrorView({ title, message, link, onClose }: {
+  title: string; message: string; link?: { href: string; label: string } | undefined; onClose: () => void;
+}) {
   return (
     <>
       <h2 className="text-lg font-semibold text-gray-900 mb-2">{title}</h2>
       <p className="text-sm text-gray-700 mb-5">{message}</p>
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {link && (
+          <a href={link.href} className="px-4 py-2 border border-gray-300 text-sm rounded text-gray-800 hover:bg-gray-50">
+            {link.label}
+          </a>
+        )}
         <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
           Stäng
         </button>

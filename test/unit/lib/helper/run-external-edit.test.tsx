@@ -18,15 +18,28 @@ vi.mock("@/lib/client/fsa/open-in-finder", () => ({
 vi.mock("@/lib/client/fsa/external-edit-tracker", () => ({
   getExternalEditTracker: () => trackerValue,
 }));
+let demoTier = true;
+vi.mock("@/lib/client/firma/firma-config", () => ({ isDemoTier: () => demoTier }));
 
 const DOC = { id: "d1", fileName: "rapport.pdf", storagePath: "documents/d1.pdf" };
 
 beforeEach(() => {
   vi.clearAllMocks();
   trackerValue = { watch: trackerWatch };
+  demoTier = true;
 });
 
 describe("runExternalEdit", () => {
+  it("server: utan helper och lokal mapp → 'AVA Helper behövs' med länk till installationen", async () => {
+    demoTier = false;
+    for (const kind of ["unsupported", "no-handle"]) {
+      openInFinderMock.mockResolvedValue({ kind });
+      expect(await runExternalEdit(DOC)).toMatchObject({
+        kind: "error", title: "AVA Helper behövs", link: { href: "/settings#external" },
+      });
+    }
+  });
+
   it("unsupported → fel-modal om File System Access", async () => {
     openInFinderMock.mockResolvedValue({ kind: "unsupported" });
     const r = await runExternalEdit(DOC);
