@@ -1,18 +1,20 @@
 /**
  * Namnrutan före uppladdning (#1614): förifyllt namn, hjälptext, Spara/Avbryt
- * och kön (en namnruta per fil, i tur och ordning).
+ * och kön (en namnruta per fil, i tur och ordning). Mejl (`.eml`) förifylls
+ * med ämnesraden (#1616).
  */
 
-import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest-compat";
 import {
-  defaultUploadName, UploadNameDialog, useUploadNameQueue, type NameQueueItem,
+  defaultUploadName, readEmlSubject, UploadNameDialog, useUploadNameQueue, type NameQueueItem,
 } from "@/components/documents/_upload-name-dialog";
 import type { UploadOptions } from "@/components/documents/_use-file-upload";
 import { cleanFileName } from "@/lib/shared/document-file-name";
 import { asId, type DocumentFolderId } from "@/lib/shared/schemas/ids";
 
 const pdf = (name: string) => new File(["%PDF"], name, { type: "application/pdf" });
+const eml = (name: string, body: string, type = "message/rfc822") => new File([body], name, { type });
 const folder = asId<"DocumentFolderId">("f1");
 
 describe("defaultUploadName", () => {
@@ -125,5 +127,65 @@ describe("useUploadNameQueue", () => {
     expect(result.current.current?.file).toBe(a);
     act(() => result.current.next());
     expect(result.current.current).toMatchObject({ file: b, folderId: folder });
+  });
+});
+
+describe("readEmlSubject", () => {
+  it("läser ämnet ur en .eml", async () => {
+    expect(await readEmlSubject(eml("mejl.eml", "Subject: =?UTF-8?B?w6XDpMO2?=\r\n\r\nText"))).toBe("åäö");
+  });
+
+  it("känner igen mejl på mimetypen", async () => {
+    expect(await readEmlSubject(eml("mejl", "Subject: Hej\r\n\r\n"))).toBe("Hej");
+  });
+
+  it("andra filer läses inte", async () => {
+    expect(await readEmlSubject(new File(["Subject: Hej\r\n\r\n"], "a.txt", { type: "text/plain" }))).toBeNull();
+  });
+
+  it("ett läsfel ger null", async () => {
+    const file = eml("mejl.eml", "Subject: Hej\r\n\r\n");
+    const broken = Object.assign(file, { slice: () => ({ arrayBuffer: () => Promise.reject(new Error("läsfel")) }) });
+    expect(await readEmlSubject(broken)).toBeNull();
+  });
+});
+
+describe("UploadNameDialog med mejl (#1616)", () => {
+  it("släppt .eml med ämne → förifylld med ämnet; Spara → <ämne>.eml", async () => {
+    const file = eml("x7f3.eml", "From: a@b.se\r\nSubject: =?UTF-8?Q?Ang=C3=A5ende_f=C3=B6rlikning?=\r\n\r\nText");
+    const { onSave } = renderDialog({ key: 1, file, folderId: folder });
+    await waitFor(() => expect(nameInput()).toHaveValue("Angående förlikning"));
+    expect(screen.getByText("Sparas som: Angående förlikning.eml")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+    expect(onSave).toHaveBeenCalledWith(file, { folderId: folder, fileName: "Angående förlikning.eml" });
+  });
+
+  it(".eml utan ämne → filnamnet utan ändelse", async () => {
+    const { onSave } = renderDialog({ key: 1, file: eml("mejl.eml", "From: a@b.se\r\n\r\nText"), folderId: null });
+    await act(async () => { await Promise.resolve(); });
+    expect(nameInput()).toHaveValue("mejl");
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+    expect(onSave).toHaveBeenCalledWith(expect.any(File), { folderId: null, fileName: "mejl.eml" });
+  });
+
+  it("ett namn som användaren redan skrivit skrivs inte över av ämnet", async () => {
+    renderDialog({ key: 1, file: eml("mejl.eml", "Subject: Ämnet\r\n\r\n"), folderId: null });
+    fireEvent.change(nameInput(), { target: { value: "Eget namn" } });
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    expect(nameInput()).toHaveValue("Eget namn");
+  });
+
+  it("stängs rutan innan ämnet lästs händer inget", async () => {
+    const item = { key: 1, file: eml("mejl.eml", "Subject: Ämnet\r\n\r\n"), folderId: null };
+    const { rerender } = render(<UploadNameDialog item={item} onSave={vi.fn()} onNext={vi.fn()} />);
+    rerender(<UploadNameDialog item={null} onSave={vi.fn()} onNext={vi.fn()} />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("PDF → filnamnet", async () => {
+    renderDialog({ key: 1, file: pdf("skiss.pdf"), folderId: null });
+    await act(async () => { await Promise.resolve(); });
+    expect(nameInput()).toHaveValue("skiss");
   });
 });
