@@ -194,7 +194,7 @@ function appMenu(showStatus: () => void, checkUpdate: () => void, quit: () => vo
  * `ava:`-länkar som fångas här. Ritas om bara när innehållet ändrats.
  */
 class StatusWindow {
-  private win: BrowserWindow | null = null;
+  private win?: BrowserWindow;
   private html = "";
 
   constructor(
@@ -215,7 +215,7 @@ class StatusWindow {
     });
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     win.once("ready-to-show", () => { win.show(); });
-    win.on("closed", () => { this.win = null; this.html = ""; app.dock?.hide(); });
+    win.on("closed", () => { this.win = undefined; this.html = ""; app.dock?.hide(); });
     this.win = win;
     void app.dock?.show();
     void this.render();
