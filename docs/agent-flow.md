@@ -186,6 +186,7 @@ gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=undersökt'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=uppdelad'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=user-request'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=väntar-på-användaren'
+gh api repos/ulrik-s/ava-feedback/issues/N/sub_issues -F sub_issue_id=*
 gh api repos/ulrik-s/ava-feedback/labels -f name=release:v* -f color=0e8a16
 gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=agent-pr'
 gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=agent-task'

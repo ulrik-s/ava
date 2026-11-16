@@ -45,6 +45,7 @@
       "Bash(gh api repos/ulrik-s/ava-feedback/issues/*/labels -f 'labels[]=uppdelad')",
       "Bash(gh api repos/ulrik-s/ava-feedback/issues/*/labels -f 'labels[]=user-request')",
       "Bash(gh api repos/ulrik-s/ava-feedback/issues/*/labels -f 'labels[]=väntar-på-användaren')",
+      "Bash(gh api repos/ulrik-s/ava-feedback/issues/*/sub_issues -F sub_issue_id=*)",
       "Bash(gh api repos/ulrik-s/ava-feedback/labels -f name=release:v* -f color=0e8a16)",
       "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f 'labels[]=agent-pr')",
       "Bash(gh api repos/ulrik-s/ava/issues/*/labels -f 'labels[]=agent-task')",
