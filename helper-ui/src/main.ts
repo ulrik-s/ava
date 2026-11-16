@@ -1,10 +1,14 @@
 /**
  * AVA Helper UI (ADR 0029/0030) — Electron menyrads-skal runt helper-motorn.
  *
- * Tray-only (inget fönster): startar motorn IN-PROCESS (`startEngine`, samma
- * Node-process — ingen medföljande binär/child-process längre, ADR 0030),
- * pollar dess /status och visar synk-läget i menyraden, samt en meny för
- * Logga in (loopback-PKCE, in-process), Sök uppdatering och Avsluta. All
+ * Startar motorn IN-PROCESS (`startEngine`, samma Node-process — ingen
+ * medföljande binär/child-process längre, ADR 0030), pollar dess /status och
+ * visar synk-läget i menyraden, samt en meny för Logga in (loopback-PKCE,
+ * in-process), Sök uppdatering och Avsluta.
+ *
+ * Statusfönstret (#1603) öppnas när appen startas eller öppnas igen — det
+ * syns även när macOS döljer menyradsikonen. Medan det är öppet visas appen i
+ * Dock med en vanlig appmeny; stängs det går appen tillbaka till bakgrunden. All
  * icke-Electron-logik ligger i de testade modulerna; den här filen är tunt
  * Electron-lim.
  *
@@ -15,14 +19,16 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { app, dialog, Menu, shell, Tray, nativeImage } from "electron";
+import { app, BrowserWindow, dialog, Menu, shell, Tray, nativeImage } from "electron";
 
 import { runLogin } from "./engine/auth/login.ts";
 import { caTrustStatus, resolveLoginConfig, startEngine, trustLocalCa, type EngineHandle } from "./engine/main.ts";
 import type { UpdateStatus } from "./engine/update.ts";
 import { VERSION } from "./engine/version.ts";
+import { INSTALL_SCRIPT, runInstaller } from "./installer.ts";
+import { parseAction, statusPageHtml, type LoginState, type StatusAction, type StatusPageModel } from "./status-page.ts";
 import { pollHelper } from "./status-poller.ts";
-import { trayView, updateCheckDialog, updateStatusLine } from "./tray-status.ts";
+import { trayView, updateStatusLine, type TrayView } from "./tray-status.ts";
 
 const POLL_INTERVAL_MS = 4_000;
 
@@ -99,6 +105,7 @@ async function installCertificate(ask: boolean): Promise<void> {
 }
 
 interface MenuActions {
+  onShowStatus: () => void;
   onCheckUpdate: () => void;
   onQuit: () => void;
   /** Visa "Installera certifikat för Safari…" (certifikatet saknas). */
@@ -124,6 +131,7 @@ function buildMenu(tooltip: string, update: UpdateStatus, actions: MenuActions):
     });
   }
   items.push(
+    { label: "Visa status…", click: actions.onShowStatus },
     { label: "Logga in…", click: () => { void startLogin(); } },
     ...(actions.needsCertificate
       ? [{ label: "Installera certifikat för Safari…", click: actions.onInstallCertificate }]
@@ -163,6 +171,65 @@ function enableLoginItemOnFirstRun(): void {
   writeFileSync(marker, new Date().toISOString());
 }
 
+/** Appmenyn medan statusfönstret är öppet (appen syns då i Dock). */
+function appMenu(showStatus: () => void, checkUpdate: () => void, quit: () => void): Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: "AVA Helper",
+      submenu: [
+        { label: "Om AVA Helper", click: showStatus },
+        { label: "Sök efter uppdatering", click: checkUpdate },
+        { type: "separator" },
+        { role: "hide", label: "Göm AVA Helper" },
+        { type: "separator" },
+        { label: "Avsluta AVA Helper", accelerator: "Command+Q", click: quit },
+      ],
+    },
+    { label: "Fönster", submenu: [{ role: "close", label: "Stäng fönster" }, { role: "minimize", label: "Minimera" }] },
+  ]);
+}
+
+/**
+ * Statusfönstret: HTML utan JavaScript (status-page.ts), knappar som
+ * `ava:`-länkar som fångas här. Ritas om bara när innehållet ändrats.
+ */
+class StatusWindow {
+  private win?: BrowserWindow;
+  private html = "";
+
+  constructor(
+    private readonly model: () => StatusPageModel,
+    private readonly onAction: (action: StatusAction) => void,
+  ) {}
+
+  show(): void {
+    if (this.win) { this.win.show(); this.win.focus(); return; }
+    const win = new BrowserWindow({
+      width: 440, height: 470, resizable: false, show: false, title: "AVA Helper",
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false },
+    });
+    win.webContents.on("will-navigate", (event, url) => {
+      event.preventDefault();
+      const action = parseAction(url);
+      if (action) this.onAction(action);
+    });
+    win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    win.once("ready-to-show", () => { win.show(); });
+    win.on("closed", () => { delete this.win; this.html = ""; app.dock?.hide(); });
+    this.win = win;
+    void app.dock?.show();
+    void this.render();
+  }
+
+  async render(): Promise<void> {
+    if (!this.win) return;
+    const html = statusPageHtml(this.model());
+    if (html === this.html) return;
+    this.html = html;
+    await this.win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  }
+}
+
 // En instans åt gången — två motorer skulle slåss om portarna.
 if (!app.requestSingleInstanceLock()) app.quit();
 
@@ -181,33 +248,82 @@ app.whenReady().then(() => {
     void refresh();
   };
 
+  // Statusfönstrets läge: synk från senaste pollningen, inloggning läses när
+  // fönstret visas / efter inloggning (nyckelringen — inte var 4:e sekund).
+  let sync: TrayView = trayView(false, null);
+  let login: LoginState = "not-configured";
+  let installing = false;
+  const readLogin = async (): Promise<void> => {
+    login = !resolveLoginConfig() ? "not-configured" : (await engine.isLoggedIn()) ? "logged-in" : "logged-out";
+  };
+  const status = new StatusWindow(() => ({
+    version: VERSION,
+    update: engine.updateStatus(),
+    sync,
+    login,
+    openAtLogin: app.getLoginItemSettings().openAtLogin,
+    canInstall: INSTALL_SCRIPT !== null,
+    installing,
+  }), (action) => { void onAction(action); });
+  const showStatus = (): void => { void readLogin().then(() => { status.show(); }); };
+
+  // Motorn körs in-process → kolla direkt (ingen HTTP-rundtur); fönstret visar förloppet.
+  const checkUpdate = (): void => {
+    const pending = engine.checkForUpdate();
+    showStatus();
+    void refresh();
+    void pending.then(refresh);
+  };
+  const install = (): void => {
+    if (INSTALL_SCRIPT === null) return;
+    installing = true;
+    void status.render();
+    runInstaller(INSTALL_SCRIPT, join(app.getPath("logs"), "install.log"));
+  };
+  const ACTION_HANDLERS: Record<StatusAction, () => void | Promise<void>> = {
+    "check-update": checkUpdate,
+    install,
+    download: () => { const n = engine.updateStatus().notice; if (n) void shell.openExternal(n.url); },
+    login: () => startLogin().then(readLogin).then(() => status.render()),
+    "toggle-login-item": () => {
+      app.setLoginItemSettings({ openAtLogin: !app.getLoginItemSettings().openAtLogin });
+      return status.render();
+    },
+    quit: () => { quit(); },
+  };
+  const onAction = async (action: StatusAction): Promise<void> => { await ACTION_HANDLERS[action](); };
+
+  // En ny version visas en gång per version, även om ingen öppnar fönstret själv.
+  let shownNotice: string | null = null;
+  const announceUpdate = (): void => {
+    const notice = engine.updateStatus().notice;
+    if (!notice || notice.version === shownNotice) return;
+    shownNotice = notice.version;
+    showStatus();
+  };
+
   const refresh = async (): Promise<void> => {
     const snap = await pollHelper();
     const view = trayView(snap.present, snap.status);
+    sync = view;
+    announceUpdate();
+    void status.render();
     tray.setTitle(view.title ? ` ${view.title}` : "");
     tray.setToolTip(view.tooltip);
     tray.setContextMenu(buildMenu(view.tooltip, engine.updateStatus(), {
-      // Motorn körs in-process → kolla direkt (ingen HTTP-rundtur) och rita om.
-      onCheckUpdate: () => { void checkUpdateNow(); },
+      onShowStatus: showStatus,
+      onCheckUpdate: checkUpdate,
       onQuit: quit,
       needsCertificate,
       onInstallCertificate: () => { void installCertificate(false).then(recheckCertificate); },
     }));
   };
-  // Manuell kontroll: menyn visar "Söker…" medan den pågår, sedan svar i en dialog.
-  const checkUpdateNow = async (): Promise<void> => {
-    const pending = engine.checkForUpdate();
-    void refresh();
-    const status = await pending;
-    void refresh();
-    const d = updateCheckDialog(VERSION, status);
-    const { response } = await dialog.showMessageBox({
-      message: d.message,
-      detail: d.detail,
-      buttons: d.download ? ["Ladda ner", "Senare"] : ["OK"],
-    });
-    if (d.download && response === 0 && status.notice) void shell.openExternal(status.notice.url);
-  };
+  Menu.setApplicationMenu(appMenu(showStatus, checkUpdate, quit));
+  // Öppnas appen igen (Finder, Spotlight, Dock, en andra instans) → visa fönstret.
+  app.on("activate", showStatus);
+  app.on("second-instance", showStatus);
+  // Vid manuell start syns fönstret direkt; vid start vid inloggning körs appen tyst.
+  if (!app.getLoginItemSettings().wasOpenedAtLogin) showStatus();
 
   void refresh();
   if (needsCertificate) void installCertificate(true).then(recheckCertificate);

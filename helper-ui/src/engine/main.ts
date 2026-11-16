@@ -283,6 +283,8 @@ export interface EngineHandle {
   updateStatus: () => UpdateStatus;
   /** Kör en omedelbar uppdaterings-kontroll (menyval "Sök efter uppdatering"). */
   checkForUpdate: () => Promise<UpdateStatus>;
+  /** Finns sparade inloggningsuppgifter? (statusfönstret) */
+  isLoggedIn: () => Promise<boolean>;
 }
 
 /**
@@ -356,6 +358,7 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
     stop: () => { abort.abort(); httpServer.close(); httpsServer?.close(); },
     updateStatus: updates.status,
     checkForUpdate: updates.check,
+    isLoggedIn: () => tokenStore.load().then((t) => t !== null, () => false),
   };
 }
 
