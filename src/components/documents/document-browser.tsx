@@ -11,15 +11,17 @@ import { asId, type DocumentFolderId, type DocumentId, type MatterId } from "@/l
 import { useDocumentsWithParts } from "./_document-parts";
 import { DocumentRow, DOCUMENT_RECIPIENT_LABELS, type DocumentRecord } from "./_document-row";
 import { DocumentsListView } from "./_documents-list-view";
-import { type DragItem } from "./_drag-helpers";
 import { FolderRow, type FolderRecord } from "./_folder-row";
 import { NewFolderForm } from "./_new-folder-form";
 import type { SyncStatus } from "./_sync-badge";
 import { UploadNameDialog, useUploadNameQueue } from "./_upload-name-dialog";
+import { useDragHandlers } from "./_use-drag-handlers";
 import { useFileUpload, type RegisterInput } from "./_use-file-upload";
 
 type ViewMode = "tree" | "list";
 const VIEW_MODE_KEY = "ava.documents.viewMode";
+/** Beskedet när något utan filer släpps i vyn (#1615). */
+export const UNREADABLE_DROP = "Det gick inte att läsa in det du släppte. Spara filen på datorn och använd + Ladda upp.";
 
 interface DocumentBrowserProps {
   matterId: MatterId;
@@ -51,14 +53,8 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tree = trpc.document.tree.useQuery({ matterId });
-  const folders = useMemo<FolderRecord[]>(
-    () => tree.data?.folders ?? [],
-    [tree.data],
-  );
-  const treeDocuments = useMemo<DocumentRecord[]>(
-    () => tree.data?.documents ?? [],
-    [tree.data],
-  );
+  const folders = useMemo<FolderRecord[]>(() => tree.data?.folders ?? [], [tree.data]);
+  const treeDocuments = useMemo<DocumentRecord[]>(() => tree.data?.documents ?? [], [tree.data]);
   // Delar i sammansatta dokument (#1220) hängs på varje dokument.
   const documents = useDocumentsWithParts(matterId, treeDocuments);
   // Filter på riktning + mottagare (#901) + typ (#1220, träffar valfri del). Påverkar
@@ -80,7 +76,8 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const upload = useFileUpload({ matterId, mutations, fileInputRef });
   // Namnrutan före uppladdning (#1614): `nameQueue.enqueue(filer, mapp)` öppnar den.
   const nameQueue = useUploadNameQueue();
-  const drag = useDragHandlers(mutations);
+  // Filer utifrån (#1615) går till namnrutan och sedan samma uppladdning.
+  const drag = useDragHandlers(mutations, { onFiles: nameQueue.enqueue, onUnreadable: () => upload.setUploadError(UNREADABLE_DROP) });
 
   const foldersByParent = useMemo(() => groupBy(folders, (f) => f.parentId ?? null), [folders]);
   // Optimistiska rader läggs i sin målmapp (roten för + Ladda upp).
@@ -99,7 +96,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   }, []);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div className="bg-white rounded-lg border border-gray-200" {...drag.rootZone}>
       <BrowserHeader
         showNewFolder={() => setShowNewFolder(true)}
         uploading={upload.uploading}
@@ -145,6 +142,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
           docSync={docSync}
           onDelete={(id) => mutations.deleteDocument.mutate({ id })}
           onReanalyze={(id) => mutations.reanalyze.mutate({ documentId: id })}
+          isDropTarget={drag.dropTarget === "root"}
         />
       )}
     </div>
@@ -220,7 +218,7 @@ function DocumentTree({
   rename: RenameApi;
   mutations: ReturnType<typeof useDocumentMutations>;
 }) {
-  const { dragItem, dropTarget, setDropTarget, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd } = drag;
+  const { dragItem, dropTarget, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd } = drag;
   const { renamingFolderId, renameValue, setRenameValue, setRenamingFolderId } = rename;
 
   const renderDocRow = (doc: DocumentRecord, depth: number) => (
@@ -290,7 +288,7 @@ function DocumentTree({
       renderFolderRow={renderFolderRow}
       renderDocRow={renderDocRow}
       dropTarget={dropTarget}
-      setDropTarget={setDropTarget}
+      onDragOver={handleDragOver("root")}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop(null)}
     />
@@ -314,62 +312,16 @@ function UploadErrorBanner({ message, onDismiss }: { message: string; onDismiss:
   );
 }
 
-/** Drag-and-drop-state + handlers (flytta dokument/mappar). */
-function useDragHandlers(mutations: ReturnType<typeof useDocumentMutations>) {
-  const [dragItem, setDragItem] = useState<DragItem | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
-
-  const handleDragStart = useCallback(
-    (type: "document" | "folder", id: string) => (e: React.DragEvent) => {
-      setDragItem({ type, id });
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", `${type}:${id}`);
-    },
-    []
-  );
-  const handleDragOver = useCallback(
-    (targetId: string) => (e: React.DragEvent) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      setDropTarget(targetId);
-    },
-    []
-  );
-  const handleDragLeave = useCallback(() => setDropTarget(null), []);
-
-  const handleDrop = useCallback(
-    (targetFolderId: string | null) => (e: React.DragEvent) => {
-      e.preventDefault();
-      setDropTarget(null);
-      if (!dragItem) return;
-      if (dragItem.type === "document") {
-        mutations.moveDocument.mutate({ documentId: dragItem.id, folderId: targetFolderId });
-      } else if (dragItem.type === "folder" && dragItem.id !== targetFolderId) {
-        mutations.moveFolder.mutate({ folderId: dragItem.id, targetParentId: targetFolderId });
-      }
-      setDragItem(null);
-    },
-    [dragItem, mutations.moveDocument, mutations.moveFolder]
-  );
-
-  const handleDragEnd = useCallback(() => {
-    setDragItem(null);
-    setDropTarget(null);
-  }, []);
-
-  return { dragItem, dropTarget, setDropTarget, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd };
-}
-
 function BrowserTable({
   rootFolders, rootDocs, renderFolderRow, renderDocRow,
-  dropTarget, setDropTarget, onDragLeave, onDrop,
+  dropTarget, onDragOver, onDragLeave, onDrop,
 }: {
   rootFolders: FolderRecord[];
   rootDocs: DocumentRecord[];
   renderFolderRow: (folder: FolderRecord, depth: number) => React.ReactNode;
   renderDocRow: (doc: DocumentRecord, depth: number) => React.ReactNode;
   dropTarget: string | null;
-  setDropTarget: (t: string | null) => void;
+  onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
 }) {
@@ -386,11 +338,7 @@ function BrowserTable({
         </thead>
         <tbody>
           <tr
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
-              setDropTarget("root");
-            }}
+            onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
             className={dropTarget === "root" ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" : "bg-gray-50"}
