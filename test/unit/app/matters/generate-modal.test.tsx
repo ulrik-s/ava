@@ -86,7 +86,7 @@ describe("GenerateModal — vyer", () => {
 
   it("inga kontakter → tomtext i mottagar-pickern", () => {
     render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={[]} onClose={() => {}} />);
-    expect(screen.getByText("Inga kontakter kopplade till ärendet.")).toBeInTheDocument();
+    expect(screen.getByText("Inga parter kopplade till ärendet.")).toBeInTheDocument();
   });
 });
 

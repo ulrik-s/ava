@@ -9,7 +9,7 @@ import { NewClientDialog, type PickedClient } from "./new-client-dialog";
 interface Props {
   onPick: (client: PickedClient) => void;
   onClose: () => void;
-  /** Vad som väljs — "klient" (nytt ärende) eller "kontakt" (ärendets kontakter, #1136). */
+  /** Vad som väljs — "klient" (nytt ärende) eller "part" (ärendets parter, #1136). */
   noun?: string;
   /** Extra fält ovanför sökrutan, t.ex. roll i ärendet. */
   children?: React.ReactNode;
@@ -34,7 +34,7 @@ interface Hit {
  * förnamn, efternamn, person-/orgnummer, var för sig eller tillsammans. En
  * dropdown fungerar inte när byrån har många klienter. Hittar man inte
  * klienten skapar man den härifrån ("Ny klient…"). Samma dialog väljer
- * kontakt i ett ärende (`noun="kontakt"`, #1136).
+ * part i ett ärende (`noun="part"`, #1136).
  */
 export function ClientPickerDialog({ onPick, onClose, noun = "klient", children, initialTerm = "" }: Props) {
   const [term, setTerm] = useTermFrom(initialTerm);

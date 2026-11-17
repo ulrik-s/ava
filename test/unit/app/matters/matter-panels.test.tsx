@@ -15,6 +15,7 @@ describe("ärendesidans paneler (#1185)", () => {
     const panels = matterPanels(Object.fromEntries(MATTER_PANEL_IDS.map((id) => [id, () => id])) as Parameters<typeof matterPanels>[0]);
     expect(panels.map((p) => p.id)).toEqual([...MATTER_PANEL_IDS]);
     expect(panels.find((p) => p.id === "time")?.title).toBe("Tid");
+    expect(panels.find((p) => p.id === "contacts")?.title).toBe("Parter");
     expect(panels.find((p) => p.id === "watch")?.render()).toBe("watch");
   });
 

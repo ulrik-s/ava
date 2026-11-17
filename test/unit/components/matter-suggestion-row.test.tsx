@@ -70,6 +70,7 @@ describe("SuggestionRow — godkänn-knapp", () => {
       "title",
       expect.stringContaining("2 roller"),
     );
+    expect(screen.getByTitle("Skapar/återanvänder part och länkar 2 roller till ärendet")).toBeInTheDocument();
   });
 });
 

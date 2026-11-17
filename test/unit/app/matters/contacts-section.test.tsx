@@ -67,21 +67,21 @@ beforeEach(() => { vi.clearAllMocks(); searchHits = []; contactCreated = undefin
 const openPicker = () => {
   render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} matterTitle={TITLE} />);
   fireEvent.click(screen.getByText("+ Lägg till"));
-  return screen.getByRole("dialog", { name: "Välj kontakt" });
+  return screen.getByRole("dialog", { name: "Välj part" });
 };
 
 describe("ContactsSection", () => {
   it("visar rubrik med antal + kontaktraderna (namn, roll, nummer)", () => {
     render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={contacts} matterTitle={TITLE} />);
-    expect(screen.getByText("Kontakter (1)")).toBeInTheDocument();
+    expect(screen.getByText("Parter (1)")).toBeInTheDocument();
     expect(screen.getByText("Klient Karlsson")).toBeInTheDocument();
     expect(screen.getByText("19800101-1234")).toBeInTheDocument();
   });
 
   it("tomt → tomtillstånd", () => {
     render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} matterTitle={TITLE} />);
-    expect(screen.getByText("Kontakter (0)")).toBeInTheDocument();
-    expect(screen.getByText("Inga kontakter kopplade")).toBeInTheDocument();
+    expect(screen.getByText("Parter (0)")).toBeInTheDocument();
+    expect(screen.getByText("Inga parter kopplade")).toBeInTheDocument();
   });
 
   it("'+ Lägg till' öppnar sökdialogen — ingen dropdown med kontakter (#1136)", () => {
@@ -116,12 +116,12 @@ describe("ContactsSection", () => {
     expect(invalidated.watchlist).toHaveBeenCalled();
   });
 
-  it("ingen träff → 'Ny kontakt…' förifylld; OK skapar och kopplar den till ärendet", () => {
+  it("ingen träff → 'Ny part…' förifylld; OK skapar och kopplar den till ärendet", () => {
     const dialog = openPicker();
     fireEvent.change(within(dialog).getByRole("searchbox"), { target: { value: "Motpart AB" } });
-    expect(screen.getByText(/Ingen träff — skapa kontakten/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Ny kontakt/ }));
-    const create = screen.getByRole("dialog", { name: "Ny kontakt" });
+    expect(screen.getByText(/Ingen träff — skapa parten med "Ny part…"/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ny part/ }));
+    const create = screen.getByRole("dialog", { name: "Ny part" });
     expect((within(create).getByLabelText<HTMLInputElement>(/Namn/)).value).toBe("Motpart AB");
     fireEvent.click(within(create).getByRole("button", { name: "OK" }));
     expect(createContact).toHaveBeenCalledWith(expect.objectContaining({ name: "Motpart AB" }));
@@ -170,7 +170,7 @@ describe("ContactsSection", () => {
       chooseRole(first, "KLIENT");
       fireEvent.click(within(first).getByRole("button", { name: "Avbryt" }));
       fireEvent.click(screen.getByText("+ Lägg till"));
-      const dialog = screen.getByRole("dialog", { name: "Välj kontakt" });
+      const dialog = screen.getByRole("dialog", { name: "Välj part" });
       expect(within(dialog).getByLabelText("Roll i ärendet")).toHaveValue("KLIENT");
       expect(searchbox(dialog).value).toBe("Skattetvist Exempel AB");
     });

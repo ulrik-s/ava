@@ -101,7 +101,7 @@ test("försäkringsreferens: dold när bolaget är motpart, visas med försäkri
   await expect(header.getByTestId("matter-court-case-number")).toBeVisible({ timeout: 25_000 });
   await expect(header.getByTestId("matter-insurance-reference")).toHaveCount(0);
 
-  await showPanel(page, "Kontakter");
+  await showPanel(page, "Parter");
   await page.getByRole("button", { name: "+ Lägg till" }).click();
   await page.getByLabel("Roll i ärendet").selectOption("FORSAKRINGSBOLAG");
   await page.getByPlaceholder("Namn, personnummer eller organisationsnummer").fill("Trygg-Hansa");

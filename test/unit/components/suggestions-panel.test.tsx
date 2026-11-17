@@ -83,7 +83,7 @@ describe("SuggestionsPanel", () => {
   it("visar ett förklarande tomtillstånd när inga förslag finns (#1213)", () => {
     groupsQuery.data = [];
     render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
-    expect(screen.getByText(/Inga föreslagna kontakter/)).toBeInTheDocument();
+    expect(screen.getByText("Inga föreslagna parter. AVA föreslår parter ur dokument som laddas upp.")).toBeInTheDocument();
   });
 
   it("renderar gruppnamn, roll och kontaktdata", () => {
@@ -99,6 +99,7 @@ describe("SuggestionsPanel", () => {
     groupsQuery.data = [baseGroup({ key: "a" }), baseGroup({ key: "b", name: "B" })];
     render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("(2)")).toBeInTheDocument();
+    expect(screen.getByText(/🧠 Föreslagna parter från dokumentanalys/)).toBeInTheDocument();
   });
 
   it("visar källdokument-titel när det finns", () => {

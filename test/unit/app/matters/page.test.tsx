@@ -204,6 +204,7 @@ describe("MattersPage", () => {
     mattersQuery.data = { matters: [row("1", "Bodelning"), row("2", null)], total: 2, pages: 1 };
     render(<MattersPage />);
     expect(screen.getByRole("columnheader", { name: /Ärendetyp/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /^Parter/ })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "Bodelning" })).toBeInTheDocument();
     expect(screen.getAllByRole("cell", { name: "—" }).length).toBeGreaterThan(0);
   });

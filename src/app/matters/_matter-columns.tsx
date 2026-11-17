@@ -116,7 +116,7 @@ export const matterColumns: Column<MatterRow>[] = [
       }`}>{statusLabel(m.status)}</span>
     ),
   },
-  { key: "contactCount", label: "Kontakter", sortable: true, align: "right", sortValue: (m) => m._count.contacts,
+  { key: "contactCount", label: "Parter", sortable: true, align: "right", sortValue: (m) => m._count.contacts,
     render: (m) => <span className="text-sm text-gray-500">{m._count.contacts}</span> },
   { key: "coverage", label: "Täckning (tak)", sortable: true, filterable: true, groupable: true,
     // Sortera ej-tillämpliga sist (negativ kvot); filtrera/gruppera på etiketten.
