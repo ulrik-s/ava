@@ -186,7 +186,7 @@ describe("describeQueueEntry", () => {
 
   it("radposter: ny/ändring/borttagning av entiteten; okänd entitet med sitt namn", () => {
     expect(describeQueueEntry({ ...row, kind: "create", entity: "matter" })).toBe("Nytt ärende");
-    expect(describeQueueEntry({ ...row, kind: "create", entity: "contact" })).toBe("Ny kontakt");
+    expect(describeQueueEntry({ ...row, kind: "create", entity: "contact" })).toBe("Ny part");
     expect(describeQueueEntry({ ...row, kind: "delete", entity: "document" })).toBe("Borttagning av dokument");
     expect(describeQueueEntry({ ...row, entity: "widget" })).toBe("Ändring av widget");
   });

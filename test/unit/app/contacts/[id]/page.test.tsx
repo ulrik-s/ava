@@ -161,6 +161,7 @@ describe("ContactDetailPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: "Anna Andersson" });
     fireEvent.click(screen.getByRole("button", { name: /^Ta bort$/i }));
+    expect(confirmSpy).toHaveBeenCalledWith("Är du säker på att du vill ta bort denna part? Parten tas bort från alla ärenden.");
     expect(deleteMutate).toHaveBeenCalledWith({ id: "c1" });
     confirmSpy.mockRestore();
   });
@@ -170,6 +171,7 @@ describe("ContactDetailPage", () => {
     renderPage();
     expect(await screen.findByRole("heading", { name: "Acme AB" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Kontaktpersoner/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "← Tillbaka till parter" })).toHaveAttribute("href", "/contacts");
     expect(screen.getByText("Bo Boman")).toBeInTheDocument();
     expect(screen.getByText(/2026-001/)).toBeInTheDocument();
     expect(screen.getByText(/Tvist/)).toBeInTheDocument();

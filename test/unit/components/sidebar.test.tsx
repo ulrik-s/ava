@@ -33,7 +33,7 @@ describe("Sidebar", () => {
     render(<Sidebar />);
     // Mobile + desktop visar samma — så vi får dubbletter; firstMatch räcker
     expect(screen.getAllByText("Startsida")[0]).toBeInTheDocument();
-    expect(screen.getAllByText("Kontakter")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Parter")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Ärenden / jävskontroll")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Tidregistrering")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Rapporter")[0]).toBeInTheDocument();
@@ -177,7 +177,7 @@ describe("Sidebar", () => {
     fireEvent.click(button);
     expect(screen.getAllByText("Logga ut").length).toBeGreaterThanOrEqual(2);
     // Klicka på en länk i drawern
-    const links = screen.getAllByRole("link", { name: /Kontakter/ });
+    const links = screen.getAllByRole("link", { name: /Parter/ });
     fireEvent.click(links[0]!);
     // Drawer borde nu vara stängd
     expect(screen.getAllByText("Logga ut").length).toBe(1);
@@ -220,16 +220,16 @@ describe("Sidebar — hopfällt ikon-läge (#1198)", () => {
     render(<Sidebar userName="Anna Karlsson" />);
     expect(screen.getByRole("button", { name: "Fäll ihop menyn" })).toBeInTheDocument();
     expect(screen.getAllByText("Advokat CRM").length).toBe(2);
-    const links = within(desktop()).getAllByRole("link", { name: "Kontakter" });
+    const links = within(desktop()).getAllByRole("link", { name: "Parter" });
     expect(links.every((l) => l.getAttribute("title") === null)).toBe(true);
   });
 
   it("fäller ihop: länkar får title, namnet blir sr-only och läget sparas", () => {
     render(<Sidebar userName="Anna Karlsson" />);
     fireEvent.click(screen.getByRole("button", { name: "Fäll ihop menyn" }));
-    const titled = within(desktop()).getAllByRole("link", { name: "Kontakter" }).filter((l) => l.getAttribute("title") === "Kontakter");
+    const titled = within(desktop()).getAllByRole("link", { name: "Parter" }).filter((l) => l.getAttribute("title") === "Parter");
     expect(titled.length).toBe(1);
-    expect(titled[0]!.querySelector(".sr-only")?.textContent).toBe("Kontakter");
+    expect(titled[0]!.querySelector(".sr-only")?.textContent).toBe("Parter");
     expect(screen.getByRole("button", { name: "Fäll ut menyn" })).toBeInTheDocument();
     // Mobil-topbaren behåller "Advokat CRM"; desktop döljer den + användarnamnet
     expect(screen.getAllByText("Advokat CRM").length).toBe(1);

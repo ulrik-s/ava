@@ -16,7 +16,7 @@ test.describe("Smoke", () => {
     await page.goto("/");
     // Sidomenyn ska finnas
     await expect(page.getByRole("link", { name: /Ärenden/i }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: /Kontakter/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /Parter/i }).first()).toBeVisible();
   });
 
   test("ärendelistan kan navigeras till", async ({ page }) => {

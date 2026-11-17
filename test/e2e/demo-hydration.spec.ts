@@ -56,11 +56,11 @@ test.describe("sparat mörkt tema (ava.theme)", () => {
 test.describe("första klicket (mörkt läge)", () => {
   test.use({ colorScheme: "dark" });
 
-  test("'+ Ny kontakt' öppnar formuläret på första klicket, och texten stannar", async ({ page }) => {
+  test("'+ Ny part' öppnar formuläret på första klicket, och texten stannar", async ({ page }) => {
     const errors = collectHydrationErrors(page);
     await seedDemoLogin(page, BASE);
     await page.goto(`${BASE}/contacts/`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "+ Ny kontakt" }).click();
+    await page.getByRole("button", { name: "+ Ny part" }).click();
     const name = page.getByLabel("Namn *");
     await expect(name).toBeVisible({ timeout: 5_000 });
     await name.fill("Första försöket");

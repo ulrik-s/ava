@@ -51,7 +51,7 @@ describe("OrgDefaultsSection", () => {
       { id: "p2", key: "list.matters" },
     ];
     render(<OrgDefaultsSection />);
-    expect(screen.getByText("Kontakter")).toBeInTheDocument();
+    expect(screen.getByText("Parter")).toBeInTheDocument();
     expect(screen.getByText("Ärenden")).toBeInTheDocument();
   });
 

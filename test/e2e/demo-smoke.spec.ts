@@ -28,7 +28,7 @@ const ROUTES = [
   { path: "/", expectText: /Startsida|AVA/i },
   { path: "/demo/", expectText: /AVA Demo|Vill du prova/i },
   { path: "/matters/", expectText: /Ärenden|Nytt ärende/i },
-  { path: "/contacts/", expectText: /Kontakter/i },
+  { path: "/contacts/", expectText: /Parter/i },
   { path: "/invoices/", expectText: /Fakturor/i },
   { path: "/time/", expectText: /Tidregistrering/i },
   { path: "/reports/", expectText: /Rapporter/i },
