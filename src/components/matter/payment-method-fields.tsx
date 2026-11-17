@@ -27,6 +27,8 @@ type SetField = <K extends keyof PaymentMethodFormValues>(key: K, v: PaymentMeth
 interface Props {
   value: PaymentMethodFormValues;
   onChange: (next: PaymentMethodFormValues) => void;
+  /** Betalningssättet bestäms av ärendetypen (offentligt uppdrag, #1639): rullgardinen är inaktiv. */
+  methodLocked?: boolean | undefined;
 }
 
 /** Tak-fältet: rättsskyddets maxbelopp (kr) eller rättshjälpens timtak. */
@@ -122,17 +124,21 @@ function MatterRateField({ value, onChange }: { value: HourlyRates; onChange: (v
   );
 }
 
-/** Betalningssättets rullgardinsmeny. */
-function MethodSelect({ value, onChange }: { value: PaymentMethod; onChange: (v: PaymentMethod) => void }) {
+/** Betalningssättets rullgardinsmeny; inaktiv med en förklaring när ärendetypen låser den. */
+function MethodSelect({ value, onChange, locked = false }: {
+  value: PaymentMethod; onChange: (v: PaymentMethod) => void; locked?: boolean | undefined;
+}) {
   const id = useId();
   return (
     <div>
       <label htmlFor={id} className="block text-xs font-medium mb-1">Betalningssätt</label>
-      <select id={id} value={value} onChange={(e) => onChange(paymentMethodSchema.parse(e.target.value))} className={INPUT_CLASS}>
+      <select id={id} value={value} disabled={locked} onChange={(e) => onChange(paymentMethodSchema.parse(e.target.value))}
+        className={`${INPUT_CLASS} disabled:bg-gray-100`}>
         {paymentMethodOptions.map((opt) => (
           <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>
+      {locked && <p className="mt-1 text-[11px] text-gray-400">Bestäms av ärendetypen</p>}
     </div>
   );
 }
@@ -162,11 +168,11 @@ function DecisionFields({ value, set }: { value: PaymentMethodFormValues; set: S
 }
 
 /** Alla betalningsfält, styrda av `value`/`onChange`. */
-export function PaymentMethodFields({ value, onChange }: Props) {
+export function PaymentMethodFields({ value, onChange, methodLocked }: Props) {
   const set: SetField = (key, v) => onChange({ ...value, [key]: v });
   return (
     <>
-      <MethodSelect value={value.method} onChange={(v) => set("method", v)} />
+      <MethodSelect value={value.method} onChange={(v) => set("method", v)} locked={methodLocked} />
       {usesClientShare(value.method) && (
         <ClientShareField value={value.sharePct} onChange={(v) => set("sharePct", v)} />
       )}

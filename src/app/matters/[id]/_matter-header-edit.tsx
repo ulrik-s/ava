@@ -13,11 +13,14 @@ import { useState } from "react";
 import { CoverageCapWarning } from "@/components/matter/coverage-cap-warning";
 import { PaymentMethodFields } from "@/components/matter/payment-method-fields";
 import { RattsskyddNekadBanner } from "@/components/matter/rattsskydd-nekad-banner";
-import { usePaymentMethodForm, type PaymentMethodInitial } from "@/components/matter/use-payment-method-form";
+import {
+  paymentUpdateInput, usePaymentMethodForm, type PaymentMethodFormValues, type PaymentMethodInitial,
+} from "@/components/matter/use-payment-method-form";
 import { Modal } from "@/components/ui/modal";
 import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { trpc } from "@/lib/client/trpc";
 import { hasInsuranceCompany, type MatterContactWithRole } from "@/lib/shared/matter-insurance";
+import { lockedPaymentMethod, type PublicAssignmentSettings } from "@/lib/shared/public-assignment";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type { MatterId } from "@/lib/shared/schemas/ids";
@@ -73,11 +76,24 @@ function paymentInitial(m: HeaderEditMatter): PaymentMethodInitial {
   };
 }
 
+/**
+ * Betalningsfälten som de visas och sparas: en ärendetyp som är offentligt
+ * uppdrag låser betalningssättet (#1639). Servern avgör; detta speglar bara.
+ */
+function shownPayment(
+  values: PaymentMethodFormValues, org: PublicAssignmentSettings | undefined, matterType: string,
+): { values: PaymentMethodFormValues; locked: boolean } {
+  const method = lockedPaymentMethod(org, matterType);
+  return method ? { values: { ...values, method }, locked: true } : { values, locked: false };
+}
+
 /** Dialogens formulär: fälten, Avbryt och den enda Spara. */
 function MatterEditForm({ matterId, matter, contacts, onClose }: EditProps & { onClose: () => void }) {
   const [details, setDetails] = useState(() => matterDetailsFromMatter(matter));
   const payment = usePaymentMethodForm(paymentInitial(matter));
-  const matterTypes = trpc.organization.getSettings.useQuery().data?.matterTypes ?? [];
+  const settings = trpc.organization.getSettings.useQuery().data;
+  const matterTypes = settings?.matterTypes ?? [];
+  const shown = shownPayment(payment.values, settings, details.matterType);
   const users = trpc.user.list.useQuery().data?.users ?? [];
   const showInsuranceReference = hasInsuranceCompany(contacts);
   const utils = trpc.useUtils();
@@ -91,14 +107,14 @@ function MatterEditForm({ matterId, matter, contacts, onClose }: EditProps & { o
   const save = () => update.mutate({
     id: matterId,
     ...matterDetailsInput(details, { matterTypes, showInsuranceReference }),
-    ...payment.toUpdateInput(),
+    ...paymentUpdateInput(shown.values),
   });
   return (
     <div className="space-y-4">
       <PaymentNotices matterId={matterId} matter={matter} />
       <MatterDetailsFields value={details} onChange={setDetails} matterTypes={matterTypes}
         showInsuranceReference={showInsuranceReference} users={users} />
-      <PaymentMethodFields value={payment.values} onChange={payment.setValues} />
+      <PaymentMethodFields value={shown.values} onChange={payment.setValues} methodLocked={shown.locked} />
       <div className="flex gap-2 justify-end">
         <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded">
           Avbryt
