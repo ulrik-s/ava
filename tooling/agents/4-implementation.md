@@ -25,7 +25,12 @@ Gjorde du något i steg 1: gör högst två nya issues (steg 2) i samma körning
 ## 2. Nya issues (högst tre, en i taget)
 
 Välj den äldsta öppna issuen i `ulrik-s/ava` med `agent-task` + `granskad`
-som saknar `pågår` och `blockerad`, och vars `Beror på #N` alla är stängda.
+som saknar `pågår` och `blockerad`, och vars `Beror på #N` alla är **klara**:
+stängda av en mergad PR (`state_reason` `completed`). Är ett beroende stängt
+utan att ha byggts (`not_planned`, och ingen mergad PR i tidslinjen) finns
+koden inte på `main`: bygg inte. Sätt `blockerad` och kommentera vilket
+beroende som föll bort, så att Ulrik avgör om issuen ska byggas ändå. Ulriks
+egna dubbletter (hans kommentar säger det) räknas inte som beroenden.
 **Användarnas önskemål går först:** ta en issue med `refaktorisering` bara om
 ingen annan finns. En `refaktorisering`-issue är ett förslag från
 veckogenomgången (loop 5), och den får du bara bygga om `granskad` sattes av
