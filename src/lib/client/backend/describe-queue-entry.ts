@@ -67,7 +67,7 @@ const PROCEDURES: Readonly<Record<string, string>> = {
 
 /** Entiteter i radkön, i bestämd form efter "av". */
 const ENTITIES: Readonly<Record<string, string>> = {
-  matter: "ärende", contact: "kontakt", invoice: "faktura", timeEntry: "tidspost", expense: "utlägg",
+  matter: "ärende", contact: "part", invoice: "faktura", timeEntry: "tidspost", expense: "utlägg",
   document: "dokument", documentFolder: "mapp", task: "uppgift", calendarEvent: "kalenderhändelse",
   serviceNote: "tjänsteanteckning", payment: "betalning", paymentPlan: "avbetalningsplan", user: "användare",
 };

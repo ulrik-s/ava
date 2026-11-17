@@ -186,7 +186,7 @@ function DemoResults({ matters, contacts, users }: ResultsProps) {
       <SummaryRow
         counts={{
           ärenden: matters.length,
-          kontakter: contacts.length,
+          parter: contacts.length,
           användare: users.length,
         }}
       />
@@ -206,7 +206,7 @@ function DemoResults({ matters, contacts, users }: ResultsProps) {
         </Section>
       )}
       {contacts.length > 0 && (
-        <Section title="Kontakter">
+        <Section title="Parter">
           <ul className="divide-y border rounded">
             {contacts.map((c) => (
               <li key={c.id} className="p-3">

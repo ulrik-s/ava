@@ -162,7 +162,14 @@ describe("ContactDetailPage", () => {
     await screen.findByRole("heading", { name: "Anna Andersson" });
     fireEvent.click(screen.getByRole("button", { name: /^Ta bort$/i }));
     expect(deleteMutate).toHaveBeenCalledWith({ id: "c1" });
+    expect(confirmSpy).toHaveBeenCalledWith("Är du säker på att du vill ta bort denna part? Parten tas bort från alla ärenden.");
     confirmSpy.mockRestore();
+  });
+
+  it("länken tillbaka säger \"parter\" (#1646)", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "Anna Andersson" });
+    expect(screen.getByRole("link", { name: "← Tillbaka till parter" })).toHaveAttribute("href", "/contacts");
   });
 
   it("visar kontaktpersoner och ärenden för organisation", async () => {

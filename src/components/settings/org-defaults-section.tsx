@@ -10,7 +10,7 @@
 import { trpc } from "@/lib/client/trpc";
 
 const KEY_LABELS: Record<string, string> = {
-  "list.contacts": "Kontakter",
+  "list.contacts": "Parter",
   "list.matters": "Ärenden",
   "list.invoices": "Fakturor",
   "list.time-entries": "Tidregistrering",

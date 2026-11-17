@@ -95,7 +95,7 @@ describe("DemoClient", () => {
     fireEvent.click(screen.getByRole("button", { name: /Ladda demo/i }));
 
     await waitFor(() => expect(screen.getByText(/2 ärenden/i)).toBeInTheDocument());
-    expect(screen.getByText(/1 kontakter/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 parter/i)).toBeInTheDocument();
   });
 
   it("auto-laddar default-repo vid mount (utan att kräva user-input)", async () => {

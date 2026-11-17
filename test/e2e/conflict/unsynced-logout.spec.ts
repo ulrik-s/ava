@@ -33,9 +33,9 @@ test("ändring offline → varning + fråga vid utloggning; online → synkas oc
 
   await context.setOffline(true);
   const name = `Offline-kontakt ${Date.now()}`;
-  await page.getByRole("button", { name: "+ Ny kontakt" }).click();
+  await page.getByRole("button", { name: "+ Ny part" }).click();
   await page.getByLabel("Namn *").fill(name);
-  await page.getByRole("button", { name: "Spara kontakt" }).click();
+  await page.getByRole("button", { name: "Spara part" }).click();
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 15_000 });
 
   await expect(pill).toContainText(/Off-line — 1 ändring väntar/, { timeout: 15_000 });
