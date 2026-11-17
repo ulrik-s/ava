@@ -189,6 +189,40 @@ describe("förordnanden (#1648)", () => {
     expect(parties[0]).toMatchObject({ name: "Lisa Ek", role: "KLIENT", personalNumber: "900101-1234" });
   });
 
+  it("förordnande utan punkt följt av ett partsblock → klienten tar inte nästa rads namn eller nummer", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek",
+      "",
+      "Målsägande: Nils Berg 850101-1111",
+      "Tilltalad: Lisa Ek",
+    ].join("\n");
+    const parties = extractPartySuggestions(text);
+    // Målsägande-raden är en partsrad som i dag (ROLE_MARKERS, ändras i #1649).
+    expect(parties.map((p) => [p.role, p.name, p.personalNumber])).toEqual([
+      ["KLIENT", "Lisa Ek", null],
+      ["KLIENT", "Nils Berg", "850101-1111"],
+    ]);
+  });
+
+  it("förordnande utan punkt direkt följt av en partsrad → personnumret bara ur klientens egen rad", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek",
+      "Målsägande: Nils Berg 850101-1111",
+      "Tilltalad: Lisa Ek 900101-1234",
+    ].join("\n");
+    const lisa = extractPartySuggestions(text).filter((p) => p.name.startsWith("Lisa Ek"));
+    expect(lisa).toHaveLength(1);
+    expect(lisa[0]).toMatchObject({ name: "Lisa Ek", role: "KLIENT", personalNumber: "900101-1234" });
+  });
+
+  it("förordnande utan punkt följt av domstolens namn → klientens namn slutar vid radslutet", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek",
+      "Stockholms tingsrätt",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Lisa Ek", "DOMSTOL:Stockholms tingsrätt"]);
+  });
+
   it("åklagare och domstol i samma text föreslås som i dag", () => {
     const text = [
       "Stockholms tingsrätt",

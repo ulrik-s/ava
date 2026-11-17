@@ -30,6 +30,22 @@ describe("findAppointments", () => {
     expect(a).toMatchObject({ appointee: "Per Holm", assignment: "offentlig försvarare", client: "Lisa Ek" });
   });
 
+  it("klientens namn och resten av meningen stannar vid radslutet", () => {
+    const [a] = findAppointments("Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek\nMålsägande: Nils Berg 850101-1111");
+    expect(a).toMatchObject({ client: "Lisa Ek", tail: "" });
+    expect(a?.sentence).toBe("förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek");
+  });
+
+  it("klientens namn får stå på raden efter 'för', och radbrytningen blir mellanslag", () => {
+    const [a] = findAppointments("Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för\nLisa Ek, 900101-1234");
+    expect(a).toMatchObject({ client: "Lisa Ek", tail: ", 900101-1234" });
+    expect(a?.sentence).toBe("förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek, 900101-1234");
+  });
+
+  it("en tom rad avslutar meningen", () => {
+    expect(findAppointments("Tingsrätten förordnar advokaten Per Holm som offentlig försvarare\n\nför Lisa Ek.")).toEqual([]);
+  });
+
   it("ger förordnandena i den ordning de står i texten", () => {
     const text = [
       "Eva Sand förordnas som målsägandebiträde för Nils Berg.",

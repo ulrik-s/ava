@@ -25,16 +25,25 @@ export interface Appointment {
   sentence: string;
 }
 
-/** Ett namn: ett till fyra ord med versal i början. */
+/** Ett namn: ett till fyra ord med versal i början, på en och samma rad. */
 const NAME = String.raw`\p{Lu}[\p{L}'-]*(?: \p{Lu}[\p{L}'-]*){0,3}`;
+/**
+ * Ordgräns inne i meningen fram till klientens namn: ett mellanslag eller EN
+ * radbrytning. En tom rad (två radbrytningar) avslutar meningen.
+ */
+const S = String.raw`[ \n]`;
 const VERB = String.raw`förordna(?:r|s|des|ts|t)\b`;
-/** `som <uppdrag> för [den tilltalade] <namn><resten av meningen>`. */
-const ASSIGNMENT = String.raw`som (?<assignment>[\p{Ll} ]+?) för (?:\p{Ll}+ ){0,2}(?<client>${NAME})(?<tail>[^.]*)`;
+/**
+ * `som <uppdrag> för [den tilltalade] <namn><resten av meningen>`. Namnet och
+ * resten stannar vid radslutet: utdragen PDF-text saknar ofta punkten, och
+ * nästa rad är då en partsrad med någon annans namn och personnummer.
+ */
+const ASSIGNMENT = String.raw`som${S}(?<assignment>\p{Ll}+(?:${S}\p{Ll}+)*?)${S}för${S}(?:\p{Ll}+${S}){0,2}(?<client>${NAME})(?<tail>[^.\n]*)`;
 
-/** "… förordnar advokaten X som …" och "Som … förordnas advokaten X som …". */
-const ACTIVE = new RegExp(String.raw`${VERB} (?:[\p{Ll}.]+ ){0,2}(?<appointee>${NAME}) ${ASSIGNMENT}`, "gu");
+/** "… förordnar advokaten X som …". */
+const ACTIVE = new RegExp(String.raw`${VERB}${S}(?:[\p{Ll}.]+${S}){0,2}(?<appointee>${NAME})${S}${ASSIGNMENT}`, "gu");
 /** "X förordnas som …", "Advokaten X har förordnats som …". */
-const PASSIVE = new RegExp(String.raw`(?<appointee>${NAME}) (?:har )?${VERB} (?:\p{Ll}+ ){0,2}?${ASSIGNMENT}`, "gu");
+const PASSIVE = new RegExp(String.raw`(?<appointee>${NAME})${S}(?:har${S})?${VERB}${S}(?:\p{Ll}+${S}){0,2}?${ASSIGNMENT}`, "gu");
 
 /** Titeln före en advokats namn, så "Advokat X" och "advokaten X" blir samma. */
 const TITLE = /^(?:advokat(?:en)?|biträdande jurist(?:en)?|jur\.? ?kand\.?) /i;
@@ -44,16 +53,21 @@ export function nameKey(name: string): string {
   return name.replace(/\s+/g, " ").trim().replace(TITLE, "").toLowerCase();
 }
 
+/** Radbrytningar inne i meningen blir mellanslag. */
+function oneLine(text: string): string {
+  return text.replace(/\n/g, " ");
+}
+
 function toAppointment(match: RegExpExecArray): { at: number; appointment: Appointment } {
   const g = match.groups ?? {};
   return {
     at: match.index,
     appointment: {
       appointee: (g.appointee ?? "").replace(TITLE, ""),
-      assignment: g.assignment ?? "",
+      assignment: oneLine(g.assignment ?? ""),
       client: g.client ?? "",
       tail: g.tail ?? "",
-      sentence: match[0],
+      sentence: oneLine(match[0]),
     },
   };
 }
@@ -63,7 +77,8 @@ function toAppointment(match: RegExpExecArray): { at: number; appointment: Appoi
  * uppdrag; resten är andra förordnanden i samma mål.
  */
 export function findAppointments(text: string): Appointment[] {
-  const flat = text.replace(/\s+/g, " ");
+  // Mellanslag slås ihop, men radbrytningarna behålls: de avgränsar namnet.
+  const flat = text.replace(/[^\S\n]+/g, " ").replace(/ *\n */g, "\n");
   return [...flat.matchAll(ACTIVE), ...flat.matchAll(PASSIVE)]
     .map(toAppointment)
     .sort((a, b) => a.at - b.at)
