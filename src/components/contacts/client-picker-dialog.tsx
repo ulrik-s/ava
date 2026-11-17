@@ -13,6 +13,8 @@ interface Props {
   noun?: string;
   /** Extra fält ovanför sökrutan, t.ex. roll i ärendet. */
   children?: React.ReactNode;
+  /** Sökrutans startvärde, t.ex. ärendets titel i Nytt ärende (#1644). */
+  initialTerm?: string;
 }
 
 interface Hit {
@@ -30,8 +32,8 @@ interface Hit {
  * klienten skapar man den härifrån ("Ny klient…"). Samma dialog väljer
  * kontakt i ett ärende (`noun="kontakt"`, #1136).
  */
-export function ClientPickerDialog({ onPick, onClose, noun = "klient", children }: Props) {
-  const [term, setTerm] = useState("");
+export function ClientPickerDialog({ onPick, onClose, noun = "klient", children, initialTerm = "" }: Props) {
+  const [term, setTerm] = useState(initialTerm);
   const [creating, setCreating] = useState(false);
   if (creating) {
     return <NewClientDialog noun={noun} initialName={term.trim()} onCreated={onPick} onClose={() => setCreating(false)} />;
