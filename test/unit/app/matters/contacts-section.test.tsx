@@ -59,24 +59,27 @@ const contacts = [
   { id: "mc1", role: "KLIENT", contact: { id: "c1", name: "Klient Karlsson", personalNumber: "19800101-1234" } },
 ];
 
+/** Ärendets titel — med blanksteg runt, som trimmas innan den hamnar i sökrutan. */
+const TITLE = "  Skattetvist Exempel AB ";
+
 beforeEach(() => { vi.clearAllMocks(); searchHits = []; contactCreated = undefined; });
 
 const openPicker = () => {
-  render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} />);
+  render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} matterTitle={TITLE} />);
   fireEvent.click(screen.getByText("+ Lägg till"));
   return screen.getByRole("dialog", { name: "Välj kontakt" });
 };
 
 describe("ContactsSection", () => {
   it("visar rubrik med antal + kontaktraderna (namn, roll, nummer)", () => {
-    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={contacts} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={contacts} matterTitle={TITLE} />);
     expect(screen.getByText("Kontakter (1)")).toBeInTheDocument();
     expect(screen.getByText("Klient Karlsson")).toBeInTheDocument();
     expect(screen.getByText("19800101-1234")).toBeInTheDocument();
   });
 
   it("tomt → tomtillstånd", () => {
-    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} matterTitle={TITLE} />);
     expect(screen.getByText("Kontakter (0)")).toBeInTheDocument();
     expect(screen.getByText("Inga kontakter kopplade")).toBeInTheDocument();
   });
@@ -133,8 +136,57 @@ describe("ContactsSection", () => {
     expect(addContact).not.toHaveBeenCalled();
   });
 
+  describe("ärendets titel i sökrutan vid rollen Klient (#1645)", () => {
+    const searchbox = (dialog: HTMLElement) => within(dialog).getByRole<HTMLInputElement>("searchbox");
+    const chooseRole = (dialog: HTMLElement, role: string) =>
+      fireEvent.change(within(dialog).getByLabelText("Roll i ärendet"), { target: { value: role } });
+
+    it("standardrollen Motpart → tom sökruta", () => {
+      expect(searchbox(openPicker()).value).toBe("");
+    });
+
+    it("byte till Klient med tom sökruta → den trimmade titeln fylls i", () => {
+      const dialog = openPicker();
+      chooseRole(dialog, "KLIENT");
+      expect(searchbox(dialog).value).toBe("Skattetvist Exempel AB");
+    });
+
+    it("byte till Klient efter egen text → texten står kvar", () => {
+      const dialog = openPicker();
+      fireEvent.change(searchbox(dialog), { target: { value: "berit" } });
+      chooseRole(dialog, "KLIENT");
+      expect(searchbox(dialog).value).toBe("berit");
+    });
+
+    it("byte bort från Klient → titeln står kvar, inget rensas", () => {
+      const dialog = openPicker();
+      chooseRole(dialog, "KLIENT");
+      chooseRole(dialog, "MOTPART");
+      expect(searchbox(dialog).value).toBe("Skattetvist Exempel AB");
+    });
+
+    it("dialogen öppnas med rollen Klient → sökrutan har titeln", () => {
+      const first = openPicker();
+      chooseRole(first, "KLIENT");
+      fireEvent.click(within(first).getByRole("button", { name: "Avbryt" }));
+      fireEvent.click(screen.getByText("+ Lägg till"));
+      const dialog = screen.getByRole("dialog", { name: "Välj kontakt" });
+      expect(within(dialog).getByLabelText("Roll i ärendet")).toHaveValue("KLIENT");
+      expect(searchbox(dialog).value).toBe("Skattetvist Exempel AB");
+    });
+
+    it("tömd sökruta och byte till Klient igen → titeln fylls i på nytt", () => {
+      const dialog = openPicker();
+      chooseRole(dialog, "KLIENT");
+      fireEvent.change(searchbox(dialog), { target: { value: "" } });
+      chooseRole(dialog, "MOTPART");
+      chooseRole(dialog, "KLIENT");
+      expect(searchbox(dialog).value).toBe("Skattetvist Exempel AB");
+    });
+  });
+
   it("Ta bort → removeContact.mutate med matterContactId", () => {
-    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={contacts} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={contacts} matterTitle={TITLE} />);
     fireEvent.click(screen.getByText("Ta bort"));
     expect(removeContact).toHaveBeenCalledWith({ matterContactId: "mc1" });
   });

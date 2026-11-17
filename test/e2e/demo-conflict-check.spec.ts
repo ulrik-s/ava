@@ -7,7 +7,7 @@
  * så kontrollen avgörs direkt i fliken.
  */
 import type { Locator, Page } from "@playwright/test";
-import { DEMO_BASE_URL as BASE, seedDemoLogin, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterIdWith, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 /** Lägg upp ett ärende med en befintlig kontakt som klient. */
 async function createMatterFor(page: Page, title: string, klient: string): Promise<void> {
@@ -94,4 +94,20 @@ test("Nytt ärende: titeln fyller i sökrutan i 'Välj klient…', och vald klie
   await search.fill("Anna Andersson");
   await page.getByRole("list", { name: "Träffar" }).getByRole("button", { name: /Anna Andersson/ }).first().click();
   await expect(title).toHaveValue("Anna Andersson");
+});
+
+test("Ärendet: rollen Klient i 'Lägg till' fyller i ärendets titel i sökrutan (#1645)", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await seedDemoLogin(page, BASE);
+  const seed = await fetchDemoSeed(page, BASE);
+  const matter = seed.matters.find((m) => m.id === matterIdWith(seed, "timeEntries"));
+  if (!matter) throw new Error("demodatan saknar ett ärende med tidsposter");
+  await page.goto(`${BASE}/matters/${matter.id}/`, { waitUntil: "load" });
+  await showPanel(page, "Kontakter");
+  await page.getByRole("button", { name: "+ Lägg till" }).click();
+  const dialog = page.getByRole("dialog", { name: "Välj kontakt" });
+  const search = dialog.getByRole("searchbox");
+  await expect(search).toHaveValue("");
+  await dialog.getByLabel("Roll i ärendet").selectOption("KLIENT");
+  await expect(search).toHaveValue(matter.title.trim());
 });

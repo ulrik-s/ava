@@ -70,7 +70,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
     billing: () => <BillingPanel matterId={id} matter={m} />,
     receivables: () => <ExpectedReceivablesSection matterId={id} isCourtMatter={isCourtMatter(m)} />,
     watch: () => <WatchSection matterId={id} />,
-    contacts: () => <ContactsSection matterId={id} contacts={m.contacts} />,
+    contacts: () => <ContactsSection matterId={id} contacts={m.contacts} matterTitle={m.title} />,
     documents: () => <DocumentBrowser matterId={id} />,
     events: () => <EventsPanel matterId={id} />,
     suggestions: () => <SuggestionsPanel matterId={id} />,
