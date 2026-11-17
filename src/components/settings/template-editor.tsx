@@ -33,7 +33,7 @@ const VARIABLE_REFERENCE = [
     ],
   },
   {
-    group: "Kontakter",
+    group: "Parter",
     vars: [
       { key: "klient.name", desc: "Klientens namn" },
       { key: "klient.personalNumber", desc: "Personnummer" },
@@ -45,8 +45,8 @@ const VARIABLE_REFERENCE = [
       { key: "recipient.address", desc: "Aktuell mottagares adress" },
       { key: "recipient.email", desc: "Aktuell mottagares e-post" },
       { key: "recipient.roleLabel", desc: "Roll (t.ex. Klient, Motpart)" },
-      { key: "contacts", desc: "Alla kontakter (loop)" },
-      { key: "contacts[i].name", desc: "Kontaktens namn" },
+      { key: "contacts", desc: "Alla parter (loop)" },
+      { key: "contacts[i].name", desc: "Partens namn" },
       { key: "contacts[i].roleLabel", desc: "Roll (t.ex. Klient)" },
     ],
   },
@@ -111,7 +111,7 @@ export function TemplateEditor({
   const [content, setContent] = useState(initialContent);
   const [activeTab, setActiveTab] = useState<"editor" | "preview">("editor");
   const [refOpen, setRefOpen] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["Ärende", "Kontakter"]));
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["Ärende", "Parter"]));
 
   const previewHtml = useMemo(() => {
     if (!content) return "<p style='color:#999;padding:2rem'>Skriv en mall till vänster för att se förhandsgranskning.</p>";

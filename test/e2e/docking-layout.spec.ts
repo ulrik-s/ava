@@ -79,14 +79,14 @@ const groupOf = (page: Page, title: string) =>
 test("dra en flik till en annan grupp och återställ", async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1470, height: 956 });
   await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
-  const kontakter = page.getByRole("tab", { name: /^Kontakter/ });
-  await expect(groupOf(page, "Tid").getByRole("tab", { name: /^Kontakter/ })).toHaveCount(0);
+  const kontakter = page.getByRole("tab", { name: /^Parter/ });
+  await expect(groupOf(page, "Tid").getByRole("tab", { name: /^Parter/ })).toHaveCount(0);
 
   await kontakter.dragTo(page.getByRole("tab", { name: /^Utlägg/ }));
-  await expect(groupOf(page, "Tid").getByRole("tab", { name: /^Kontakter/ })).toHaveCount(1);
+  await expect(groupOf(page, "Tid").getByRole("tab", { name: /^Parter/ })).toHaveCount(1);
 
   await page.getByRole("button", { name: "Återställ layout" }).click();
-  await expect(groupOf(page, "Att bevaka").getByRole("tab", { name: /^Kontakter/ })).toHaveCount(1, { timeout: 15_000 });
+  await expect(groupOf(page, "Att bevaka").getByRole("tab", { name: /^Parter/ })).toHaveCount(1, { timeout: 15_000 });
 });
 
 test("maximera Dokument-panelen och återställ den (#1263)", async ({ page, baseURL }) => {
@@ -181,7 +181,7 @@ test("smal grupp: dolda flikar nås via en tydlig knapp, även med tangentbordet
   // än den rymmer.
   await page.setViewportSize({ width: 1024, height: 768 });
   await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
-  for (const t of ["Kontakter", "Anteckningar", "Händelser"]) {
+  for (const t of ["Parter", "Anteckningar", "Händelser"]) {
     await page.getByRole("tab", { name: new RegExp(`^${t}`) }).dragTo(page.getByRole("tab", { name: /^Utlägg/ }));
   }
   const more = groupOf(page, "Tid").getByRole("button", { name: /^\d+ dold(a)? flik(ar)?$/ });

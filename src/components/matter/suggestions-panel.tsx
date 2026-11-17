@@ -32,13 +32,13 @@ export function SuggestionsPanel({ matterId }: SuggestionsPanelProps) {
   if (groups.isLoading) return null;
   const list = (groups.data ?? []) as SuggestionGroup[];
   // Panel-UI (#1213): en tom flik ska förklara sig, inte vara blank.
-  if (list.length === 0) return <p className="text-sm text-gray-500">Inga föreslagna kontakter. AVA föreslår parter ur dokument som laddas upp.</p>;
+  if (list.length === 0) return <p className="text-sm text-gray-500">Inga föreslagna parter. AVA föreslår parter ur dokument som laddas upp.</p>;
 
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-lg lg:col-span-2">
       <div className="px-6 py-4 border-b border-amber-200">
         <h2 className="font-semibold text-amber-900 flex items-center gap-2">
-          🧠 Föreslagna kontakter från dokumentanalys
+          🧠 Föreslagna parter från dokumentanalys
           <span className="text-xs font-normal text-amber-700">({list.length})</span>
         </h2>
         <p className="text-xs text-amber-800 mt-1">

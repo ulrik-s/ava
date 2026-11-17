@@ -59,14 +59,14 @@ export function ContactsSection({ matterId, contacts, matterTitle }: Props) {
   return (
     <div className="bg-white rounded-lg border border-gray-200">
       <div className={sectionHeaderClass("blue")}>
-        <h2 className="font-semibold text-gray-900">Kontakter ({contacts.length})</h2>
+        <h2 className="font-semibold text-gray-900">Parter ({contacts.length})</h2>
         <button onClick={() => setPicking(true)} className="text-sm text-blue-600 hover:underline">
           + Lägg till
         </button>
       </div>
 
       {picking && (
-        <ClientPickerDialog noun="kontakt" onClose={() => setPicking(false)}
+        <ClientPickerDialog noun="part" onClose={() => setPicking(false)}
           initialTerm={role === "KLIENT" ? matterTitle.trim() : ""}
           onPick={(c) => addContact.mutate({ matterId, contactId: asId<"ContactId">(c.id), role })}>
           <RoleSelect role={role} onChange={setRole} />
@@ -107,7 +107,7 @@ function ContactsList({
           <EntityLink route="contacts" id={mc.contact.id} className="text-sm font-medium text-blue-600 hover:underline">
             {mc.contact.name}
           </EntityLink>
-        ) : <span className="text-sm text-gray-400 italic">(kontakt saknas)</span>
+        ) : <span className="text-sm text-gray-400 italic">(part saknas)</span>
       ),
     },
     { key: "role", label: "Roll", sortable: true, sortValue: (mc) => labelForMatterRole(mc.role),
@@ -130,7 +130,7 @@ function ContactsList({
         columns={columns}
         data={contacts}
         rowKey={(mc) => mc.id}
-        emptyMessage="Inga kontakter kopplade"
+        emptyMessage="Inga parter kopplade"
       />
     </div>
   );
