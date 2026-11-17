@@ -93,8 +93,7 @@ export function userReplyMarker(userId: string): string {
 
 /**
  * Avslutad, levererad, uppdelad eller fanns redan — inget mer händer, så den kan ligga
- * undanstoppad. En `finns_redan` går fortfarande att svara på: skriver
- * användaren att det inte hjälpte tar verifieringen upp den igen.
+ * undanstoppad. Behöver användaren något mer skickar hen en ny förfrågan.
  */
 export function isFinished(item: FeedbackItem): boolean {
   return item.state === "levererad" || item.state === "avslutad" || item.state === "finns_redan" || item.state === "uppdelad";
@@ -192,6 +191,8 @@ const OPEN_STATE_BY_LABEL: ReadonlyArray<readonly [string, FeedbackState]> = [
 export function feedbackState(open: boolean, labels: readonly string[]): FeedbackState {
   if (labels.includes(INTAKE_LABELS.delivered)) return "levererad";
   if (labels.includes(INTAKE_LABELS.split)) return "uppdelad";
+  // Stängd av Actionen, men användaren ska fortfarande se var funktionen finns.
+  if (labels.includes(INTAKE_LABELS.alreadyExists)) return "finns_redan";
   if (!open) return "avslutad";
   return OPEN_STATE_BY_LABEL.find(([label]) => labels.includes(label))?.[1] ?? "mottagen";
 }

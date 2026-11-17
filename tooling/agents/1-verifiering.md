@@ -37,19 +37,13 @@ Nekas kommandot: gå vidare och nämn det i sammanfattningen.
 ## Vilka
 
 Högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `user-request` som är i
-tillståndet **mottagen**, **undersökt** eller **finns-redan** (alltså saknar
-`verifierad`, `nedbruten`, `levererad` och `dubblett`) och saknar `blockerad`,
-äldst först, och som är något av:
+tillståndet **mottagen** eller **undersökt** (alltså saknar `verifierad`,
+`nedbruten`, `levererad`, `dubblett`, `finns-redan` och `uppdelad`) och saknar
+`blockerad`, äldst först, och som är något av:
 
 - **Ny:** i tillståndet mottagen (ingen av `undersökt`, `verifierad`,
   `nedbruten`, `levererad`, `dubblett`, `finns-redan`) och utan
   `väntar-på-användaren`.
-- **Hjälpte inte:** har `finns-redan` och ett svar från användaren som är
-  nyare än ditt svar om var funktionen finns. Läs svaret: säger hen att det
-  inte löste behovet, eller beskriver något annat, är det ett riktigt
-  förslag eller en riktig bugg. Undersök det som vanligt (svaret är nu en del
-  av förfrågan) och sätt `undersökt` när du är klar; flödesvakten tar bort
-  `finns-redan`. Tackar hen bara: gör ingenting.
 - **Besvarad:** har `väntar-på-användaren` och ett svar från användaren som är
   nyare än den senaste frågan till hen (se "Dialog med användaren"). Det
   gäller **även om `undersökt` redan är satt**, eftersom Ulrik kan ha frågat

@@ -33,8 +33,7 @@ stateDiagram-v2
   verifierad --> nedbruten
   nedbruten --> levererad
   levererad --> [*]
-  finns-redan --> undersokt
-  finns-redan --> dubblett
+  finns-redan --> [*]
   dubblett --> levererad
   uppdelad --> [*]
 ```
@@ -46,7 +45,7 @@ stateDiagram-v2
 | verifierad | `verifierad` | L2 | nedbruten | — |
 | nedbruten | `nedbruten` | L2 | levererad | — |
 | levererad | `levererad` | — | — | — |
-| finns-redan | `finns-redan` | — | undersokt, dubblett | — |
+| finns-redan | `finns-redan` | — | — | — |
 | dubblett | `dubblett` | L2 | levererad | — |
 | uppdelad | `uppdelad` | — | — | — |
 
