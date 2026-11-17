@@ -255,12 +255,6 @@
   "src/app/matters/page.tsx": {
     "@typescript-eslint/no-deprecated": {
       "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
     }
   },
   "src/app/profile/page.tsx": {

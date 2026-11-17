@@ -37,6 +37,22 @@ describe("extractPartySuggestions", () => {
     expect(p?.contactType).toBe("LAW_FIRM");
   });
 
+  it("'Medtilltalad' ger rollen MEDTILLTALAD, 'Tilltalad' fortfarande KLIENT (#1637)", () => {
+    for (const marker of ["Medtilltalad", "Medtilltalade", "Medtilltaladen"]) {
+      const [p] = extractPartySuggestions(`${marker}: Per Exempelsson`);
+      expect(p).toMatchObject({ name: "Per Exempelsson", role: "MEDTILLTALAD", contactType: "PERSON" });
+    }
+    const [client] = extractPartySuggestions("Tilltalad: Eva Exempeldotter");
+    expect(client).toMatchObject({ name: "Eva Exempeldotter", role: "KLIENT" });
+  });
+
+  it("tilltalad och medtilltalad i samma text får var sin roll, oavsett ordning", () => {
+    const roles = (text: string) => extractPartySuggestions(text).map((p) => `${p.role}:${p.name}`).sort();
+    const expected = ["KLIENT:Eva Exempeldotter", "MEDTILLTALAD:Per Exempelsson"];
+    expect(roles("Tilltalad: Eva Exempeldotter\nMedtilltalad: Per Exempelsson")).toEqual(expected);
+    expect(roles("Medtilltalad: Per Exempelsson\nTilltalad: Eva Exempeldotter")).toEqual(expected);
+  });
+
   it("rollordet får stå på raden FÖRE namnet", () => {
     const [p] = extractPartySuggestions("Svarande\nByggfirma Stenhammar AB");
     expect(p).toMatchObject({ name: "Byggfirma Stenhammar AB", role: "MOTPART" });

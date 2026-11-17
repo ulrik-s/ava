@@ -4,7 +4,7 @@
  */
 
 import { conflictScore, parseConflictQuery, type ConflictSearchType } from "@/lib/shared/conflict-match";
-import type { MatterRole } from "@/lib/shared/schemas/enums";
+import type { MatterRole, MatterStatus } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 import type { ConflictContactRow } from "../repositories/matter-contact-repository";
 import type { Repositories } from "../repositories/repositories";
@@ -22,9 +22,14 @@ export interface ConflictResult {
   matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
+  /** Ärendets status (#1641) — visas i träfflistan, loggas inte. */
+  matterStatus: MatterStatus;
   role: MatterRole;
   klient: string | null;
 }
+
+/** Det som sparas i jävskontrollens historik: träffen utan ärendets status. */
+export type LoggedConflictResult = Omit<ConflictResult, "matterStatus">;
 
 /** Rad-form från `repos.matterContacts.findForConflict`. */
 type ConflictRow = ConflictContactRow;
@@ -39,6 +44,7 @@ function toResult(mc: ConflictRow): ConflictResult {
     matterId: mc.matter.id,
     matterNumber: mc.matter.matterNumber,
     matterTitle: mc.matter.title,
+    matterStatus: mc.matter.status,
     role: mc.role,
     klient: mc.matter.contacts[0]?.contact.name ?? null,
   };
@@ -57,6 +63,15 @@ export async function searchConflicts(ctx: ConflictCtx, term: string, searchType
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)
     .map((s) => toResult(s.row));
+}
+
+/**
+ * Snapshoten som loggas i `conflictChecks.results` (#1641): samma fält som
+ * före `matterStatus`, så historiken inte ändras.
+ */
+export function toLoggedResult(result: ConflictResult): LoggedConflictResult {
+  const { matterStatus: _status, ...logged } = result;
+  return logged;
 }
 
 /** Lägg till nya träffar, deduplicerat på (kontakt, ärende, roll). */

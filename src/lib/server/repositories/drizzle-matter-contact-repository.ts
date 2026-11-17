@@ -42,7 +42,7 @@ export class DrizzleMatterContactRepository
         role: matterContacts.role,
         cId: contacts.id, cName: contacts.name, cType: contacts.contactType,
         cPnr: contacts.personalNumber, cOrg: contacts.orgNumber,
-        mId: matters.id, mNum: matters.matterNumber, mTitle: matters.title, klient,
+        mId: matters.id, mNum: matters.matterNumber, mTitle: matters.title, mStatus: matters.status, klient,
       })
       .from(matterContacts)
       .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
@@ -55,7 +55,7 @@ export class DrizzleMatterContactRepository
         personalNumber: r.cPnr ?? null, orgNumber: r.cOrg ?? null,
       },
       matter: {
-        id: r.mId, matterNumber: r.mNum, title: r.mTitle,
+        id: r.mId, matterNumber: r.mNum, title: r.mTitle, status: r.mStatus,
         contacts: r.klient ? [{ contact: { name: r.klient } }] : [],
       },
     }));

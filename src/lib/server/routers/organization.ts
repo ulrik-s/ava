@@ -37,6 +37,16 @@ function brandingFields(org: Organization) {
   };
 }
 
+/** Byråns ärendetyper och vilka av dem som är offentligt uppdrag (#1638). */
+function matterTypeFields(org: Organization) {
+  return {
+    /** Byråns ärendetyper (valen när ett ärende läggs upp). */
+    matterTypes: org.matterTypes,
+    /** Offentligt uppdrag; `null` = aldrig satt (inga markerade). */
+    publicAssignmentMatterTypes: org.publicAssignmentMatterTypes ?? null,
+  };
+}
+
 /** Projektion för settings-vyn. */
 function toOrgSettings(org: Organization) {
   return {
@@ -47,8 +57,7 @@ function toOrgSettings(org: Organization) {
     documentKinds: organizationKinds(org),
     /** Föråldrad: Samma lista under taggarnas namn, för äldre klienter (ADR 0038). */
     documentTags: organizationKinds(org),
-    /** Byråns ärendetyper (valen när ett ärende läggs upp). */
-    matterTypes: org.matterTypes,
+    ...matterTypeFields(org),
     /** Gränsbelopp (öre) för aconto-utskick (#885). */
     accontoThresholdOre: org.accontoThresholdOre ?? null,
     /** Byråns timpris per kategori (öre/h, #1206). */
@@ -83,6 +92,31 @@ function withOrganizationKinds<P extends { documentKinds?: string[]; documentTag
 /** Trimma, släng tomma, dedupa (set-semantik, ordningen behålls). */
 function normalizeVocabulary(list: readonly string[]): string[] {
   return [...new Set(list.map((t) => t.trim()).filter(Boolean))];
+}
+
+type MatterTypesPatch = { matterTypes?: string[]; publicAssignmentMatterTypes?: string[] };
+
+/**
+ * Markeringen att indata ska ersätta (#1638): den skickade listan, eller —
+ * när bara ärendetyperna ändras — den sparade, så att en borttagen typ också
+ * försvinner ur markeringen. Aldrig satt (`null`) förblir aldrig satt.
+ */
+function publicAssignmentInput(patch: MatterTypesPatch, current: Organization | null): readonly string[] | undefined {
+  if (patch.publicAssignmentMatterTypes) return patch.publicAssignmentMatterTypes;
+  if (!patch.matterTypes) return undefined;
+  return current?.publicAssignmentMatterTypes ?? undefined;
+}
+
+/**
+ * Offentligt uppdrag (#1638): hela listan ersätts, normaliserad som
+ * ärendetyperna, och bara med namn som finns bland byråns ärendetyper
+ * (de nya i samma anrop, annars de sparade).
+ */
+function withPublicAssignmentTypes<P extends MatterTypesPatch>(patch: P, current: Organization | null): P {
+  const list = publicAssignmentInput(patch, current);
+  if (!list) return patch;
+  const known = new Set(patch.matterTypes ?? current?.matterTypes);
+  return { ...patch, publicAssignmentMatterTypes: normalizeVocabulary(list).filter((t) => known.has(t)) };
 }
 
 /** Objektets nycklar i sorterad ordning — jämförelsen ska inte bero på ordningen. */
@@ -143,6 +177,9 @@ export const organizationRouter = router({
         documentTags: z.array(z.string()).optional(),
         /** Byråns ärendetyper. Hela listan ersätts; dedupas + tomma rensas. */
         matterTypes: z.array(z.string()).optional(),
+        /** Ärendetyperna som är offentligt uppdrag (#1638). Hela listan ersätts;
+         *  normaliseras och begränsas till byråns ärendetyper. */
+        publicAssignmentMatterTypes: z.array(z.string()).optional(),
         /** Gränsbelopp (öre) för aconto-utskick (#885). */
         accontoThresholdOre: z.number().int().nonnegative().optional(),
         /** Timpris per kategori (öre/h, #1206). HELA kartan ersätts; en
@@ -157,10 +194,12 @@ export const organizationRouter = router({
       const orgId = asId<"OrganizationId">(ctx.user.organizationId);
       // Normalisera vokabulären: trimma, släng tomma, dedupa (set-semantik).
       const patch = omitUndefined(input);
-      assertMayChangeSettings(ctx.user.role, await ctx.repos.organizations.getById(orgId), patch);
+      const current = await ctx.repos.organizations.getById(orgId);
+      assertMayChangeSettings(ctx.user.role, current, patch);
       if (patch.matterTypes) patch.matterTypes = normalizeVocabulary(patch.matterTypes);
       if (patch.standardAtgarder) patch.standardAtgarder = normalizeStandardAtgarder(patch.standardAtgarder);
-      return ctx.repos.organizations.update(orgId, withOrganizationKinds(patch) satisfies Partial<Organization>);
+      const normalized = withPublicAssignmentTypes(withOrganizationKinds(patch), current);
+      return ctx.repos.organizations.update(orgId, normalized satisfies Partial<Organization>);
     }),
 
   /**
