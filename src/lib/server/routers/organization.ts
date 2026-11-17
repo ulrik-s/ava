@@ -4,15 +4,19 @@ import { ledgerAccountMapSchema } from "@/lib/shared/accounting/account-map";
 import { isCustomKind, normalizeKinds, organizationKinds } from "@/lib/shared/document-kinds";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { orgImageSchema } from "@/lib/shared/org-image";
+import { PUBLIC_ASSIGNMENT_METHOD } from "@/lib/shared/public-assignment";
 import type { UserRole } from "@/lib/shared/schemas/enums";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import type { Office, Organization } from "@/lib/shared/schemas/organization";
 import { normalizeStandardAtgarder, standardAtgarderInputSchema } from "@/lib/shared/standard-atgard";
 import { assertAdmin } from "../auth/assert-admin";
+import type { Principal } from "../auth/principal";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
-import { newRowId } from "../queued-call";
-import { router, protectedProcedure } from "../trpc";
+import { applyPaymentMethodToExistingMatters } from "../billing/matter-payment-method";
+import { emit } from "../events/emit";
+import { newRowId, type QueuedCallScope } from "../queued-call";
+import { router, protectedProcedure, type Context } from "../trpc";
 
 /** Nullbara org-fält (nullish → null). Utbruten så komplexiteten (många `??`)
  *  inte räknas in i `toOrgSettings` (#199 complexity@8). */
@@ -119,6 +123,23 @@ function withPublicAssignmentTypes<P extends MatterTypesPatch>(patch: P, current
   return { ...patch, publicAssignmentMatterTypes: normalizeVocabulary(list).filter((t) => known.has(t)) };
 }
 
+/** Det `updateSettings` behöver ur anropet för att byta befintliga ärenden. */
+type SettingsCtx = QueuedCallScope & Pick<Context, "repos" | "dataStore"> & { user: Principal };
+
+/**
+ * Befintliga ärenden (#1640): när anropet sparar ärendetyperna eller
+ * markeringen och markeringen inte är tom, får byråns ärenden med en markerad
+ * typ betalningssättet Offentligt uppdrag, med admin som författare till
+ * anteckningarna. Urkryssning eller andra inställningar ändrar inga ärenden.
+ */
+async function applyToExistingMatters(ctx: SettingsCtx, marked: readonly string[] | undefined): Promise<void> {
+  if (!marked?.length) return;
+  const noteCtx = { ...ctx, orgId: ctx.user.organizationId };
+  const ids = await ctx.repos.transaction((repos) =>
+    applyPaymentMethodToExistingMatters(repos, noteCtx, { publicAssignmentMatterTypes: marked }));
+  for (const id of ids) await emit.matterUpdated(ctx, id, { paymentMethod: PUBLIC_ASSIGNMENT_METHOD });
+}
+
 /** Objektets nycklar i sorterad ordning — jämförelsen ska inte bero på ordningen. */
 function sortedKeys(_key: string, v: unknown): unknown {
   if (v === null || typeof v !== "object" || Array.isArray(v)) return v;
@@ -199,7 +220,9 @@ export const organizationRouter = router({
       if (patch.matterTypes) patch.matterTypes = normalizeVocabulary(patch.matterTypes);
       if (patch.standardAtgarder) patch.standardAtgarder = normalizeStandardAtgarder(patch.standardAtgarder);
       const normalized = withPublicAssignmentTypes(withOrganizationKinds(patch), current);
-      return ctx.repos.organizations.update(orgId, normalized satisfies Partial<Organization>);
+      const saved = await ctx.repos.organizations.update(orgId, normalized satisfies Partial<Organization>);
+      await applyToExistingMatters(ctx, normalized.publicAssignmentMatterTypes);
+      return saved;
     }),
 
   /**
