@@ -15,6 +15,12 @@ const TABLE: ReadonlyArray<readonly [MatterRole, MatterRole, boolean]> = [
   // Motsidan här ↔ klient där (en befintlig eller tidigare klient blir motpart).
   ["MOTPART", "KLIENT", true],
   ["MOTPARTSOMBUD", "KLIENT", true],
+  // Medtilltalad står på motsidan, som motparten (#1637).
+  ["MEDTILLTALAD", "KLIENT", true],
+  ["KLIENT", "MEDTILLTALAD", true],
+  ["MEDTILLTALAD", "MOTPART", false],
+  ["MEDTILLTALAD", "MOTPARTSOMBUD", false],
+  ["MEDTILLTALAD", "MEDTILLTALAD", false],
   // Samma sida: återkommande klient, samma motpart i flera ärenden.
   ["KLIENT", "KLIENT", false],
   ["MOTPART", "MOTPART", false],
@@ -53,7 +59,7 @@ describe("isConflictingRole", () => {
 
 describe("isCheckedRole", () => {
   const CHECKED: ReadonlyArray<readonly [MatterRole, boolean]> = [
-    ["KLIENT", true], ["MOTPART", true], ["MOTPARTSOMBUD", true],
+    ["KLIENT", true], ["MOTPART", true], ["MOTPARTSOMBUD", true], ["MEDTILLTALAD", true],
     ["VITTNE", false], ["DOMSTOL", false], ["AKLAGARE", false], ["FORSAKRINGSBOLAG", false], ["OMBUD", false], ["OVRIG", false],
   ];
   for (const [role, expected] of CHECKED) {

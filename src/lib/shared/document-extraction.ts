@@ -48,6 +48,7 @@ const ROLE_MARKERS: ReadonlyArray<readonly [RegExp, MatterRole]> = [
   [/motpartens ombud|motpartsombud|ombud för motparten/i, "MOTPARTSOMBUD"],
   [/\bombud\b|\bbiträde\b/i, "OMBUD"],
   [/\bmotpart(en)?\b|\bsvarande(n)?\b/i, "MOTPART"],
+  [/\bmedtilltalad(e|en)?\b/i, "MEDTILLTALAD"],
   [/\bkärande(n)?\b|\bmålsägande(n)?\b|\bklient(en)?\b|\btilltalad(e|en)?\b/i, "KLIENT"],
   [/\båklagare(n)?\b/i, "AKLAGARE"],
   [/\bvittne(t|n)?\b/i, "VITTNE"],

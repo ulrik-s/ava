@@ -88,6 +88,12 @@ describe("ContactsSection", () => {
     expect(within(dialog).getAllByRole("combobox")).toHaveLength(1); // bara rollen
   });
 
+  it("rollväljaren listar Medtilltalad (#1637)", () => {
+    const dialog = openPicker();
+    expect(within(within(dialog).getByLabelText("Roll i ärendet")).getByRole("option", { name: "Medtilltalad" }))
+      .toHaveValue("MEDTILLTALAD");
+  });
+
   it("sök + välj befintlig kontakt med vald roll → addContact, dialogen stängs", () => {
     searchHits = [{ id: "c2", name: "Berit Befintlig", contactType: "PERSON" }];
     const dialog = openPicker();
