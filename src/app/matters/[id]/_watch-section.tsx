@@ -49,7 +49,7 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
       <div className={sectionHeaderClass("amber")}>
         <h2 className="font-semibold text-gray-900">Att bevaka ({open.length})</h2>
         {done.length > 0 && (
-          <button type="button" onClick={() => setShowDone((v) => !v)} className="text-sm text-blue-600 hover:underline">
+          <button type="button" onClick={() => setShowDone((v) => !v)} className="text-sm text-blue-700 hover:underline">
             {showDone ? "Dölj klara" : `Visa klara (${done.length})`}
           </button>
         )}

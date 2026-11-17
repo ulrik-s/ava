@@ -179,10 +179,10 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
         <h2 className="font-semibold text-gray-900">
           Tidregistrering
           {timeEntries.data && (
-            <span className="ml-2 text-sm font-normal text-gray-500">(totalt {formatDecimalHoursWithUnit(timeEntries.data.totalMinutes)})</span>
+            <span className="ml-2 text-sm font-normal text-gray-600">(totalt {formatDecimalHoursWithUnit(timeEntries.data.totalMinutes)})</span>
           )}
         </h2>
-        <button onClick={() => setShowCreate(true)} className="text-sm text-blue-600 hover:underline">
+        <button onClick={() => setShowCreate(true)} className="text-sm text-blue-700 hover:underline">
           + Registrera tid
         </button>
       </div>
