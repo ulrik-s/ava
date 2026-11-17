@@ -49,6 +49,8 @@ function toOrgSettings(org: Organization) {
     documentTags: organizationKinds(org),
     /** Byråns ärendetyper (valen när ett ärende läggs upp). */
     matterTypes: org.matterTypes,
+    /** Ärendetyper som är offentligt uppdrag (#1638). `null` = aldrig satt. */
+    publicAssignmentMatterTypes: org.publicAssignmentMatterTypes ?? null,
     /** Gränsbelopp (öre) för aconto-utskick (#885). */
     accontoThresholdOre: org.accontoThresholdOre ?? null,
     /** Byråns timpris per kategori (öre/h, #1206). */
@@ -83,6 +85,36 @@ function withOrganizationKinds<P extends { documentKinds?: string[]; documentTag
 /** Trimma, släng tomma, dedupa (set-semantik, ordningen behålls). */
 function normalizeVocabulary(list: readonly string[]): string[] {
   return [...new Set(list.map((t) => t.trim()).filter(Boolean))];
+}
+
+/** Fälten i `updateSettings` som styr markeringen av offentligt uppdrag (#1638). */
+interface PublicAssignmentPatch {
+  matterTypes?: string[];
+  publicAssignmentMatterTypes?: string[];
+}
+
+/** Markeringen efter ändringen: den skickade, annars den sparade (`null` = aldrig satt). */
+function markedAfter(patch: PublicAssignmentPatch, current: Organization | null): string[] | null {
+  return patch.publicAssignmentMatterTypes ?? current?.publicAssignmentMatterTypes ?? null;
+}
+
+/** Ärendetyperna efter ändringen: de skickade, annars de sparade. */
+function matterTypesAfter(patch: PublicAssignmentPatch, current: Organization | null): readonly string[] {
+  return patch.matterTypes ?? current?.matterTypes ?? [];
+}
+
+/**
+ * Markeringen av offentligt uppdrag (#1638), normaliserad och begränsad till de
+ * ärendetyper som gäller efter ändringen. Tas en ärendetyp bort via
+ * `matterTypes` rensas den också ur en sparad markering. En markering som
+ * aldrig satts förblir `null`, även när ärendetyperna redigeras.
+ */
+function withPublicAssignment<P extends PublicAssignmentPatch>(patch: P, current: Organization | null): P {
+  if (patch.publicAssignmentMatterTypes === undefined && patch.matterTypes === undefined) return patch;
+  const marked = markedAfter(patch, current);
+  if (!marked) return patch;
+  const types = new Set(matterTypesAfter(patch, current));
+  return { ...patch, publicAssignmentMatterTypes: normalizeVocabulary(marked).filter((t) => types.has(t)) };
 }
 
 /** Objektets nycklar i sorterad ordning — jämförelsen ska inte bero på ordningen. */
@@ -143,6 +175,9 @@ export const organizationRouter = router({
         documentTags: z.array(z.string()).optional(),
         /** Byråns ärendetyper. Hela listan ersätts; dedupas + tomma rensas. */
         matterTypes: z.array(z.string()).optional(),
+        /** Ärendetyper som är offentligt uppdrag (#1638). Hela listan ersätts;
+         *  normaliseras och begränsas till byråns ärendetyper. Bara admin. */
+        publicAssignmentMatterTypes: z.array(z.string()).optional(),
         /** Gränsbelopp (öre) för aconto-utskick (#885). */
         accontoThresholdOre: z.number().int().nonnegative().optional(),
         /** Timpris per kategori (öre/h, #1206). HELA kartan ersätts; en
@@ -157,10 +192,12 @@ export const organizationRouter = router({
       const orgId = asId<"OrganizationId">(ctx.user.organizationId);
       // Normalisera vokabulären: trimma, släng tomma, dedupa (set-semantik).
       const patch = omitUndefined(input);
-      assertMayChangeSettings(ctx.user.role, await ctx.repos.organizations.getById(orgId), patch);
+      const current = await ctx.repos.organizations.getById(orgId);
+      assertMayChangeSettings(ctx.user.role, current, patch);
       if (patch.matterTypes) patch.matterTypes = normalizeVocabulary(patch.matterTypes);
       if (patch.standardAtgarder) patch.standardAtgarder = normalizeStandardAtgarder(patch.standardAtgarder);
-      return ctx.repos.organizations.update(orgId, withOrganizationKinds(patch) satisfies Partial<Organization>);
+      const normalized = withPublicAssignment(withOrganizationKinds(patch), current);
+      return ctx.repos.organizations.update(orgId, normalized satisfies Partial<Organization>);
     }),
 
   /**

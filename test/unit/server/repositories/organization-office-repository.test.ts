@@ -63,3 +63,22 @@ describe("Organization/Office — Drizzle (pglite)", () => {
     expect((await offRepo.getByIdInOrg(main, org))!.isMain).toBe(false);
   });
 });
+
+describe("Organization — markering av offentligt uppdrag (#1638, Drizzle/pglite)", () => {
+  let handle: TestDbHandle;
+  beforeAll(async () => { handle = await createTestDb(); });
+  afterAll(async () => { await handle.close(); });
+
+  it("NULL bevaras tills fältet sätts; listan läses och skrivs", async () => {
+    const org = asId<"OrganizationId">(uuidv7());
+    await handle.db.insert(organizations).values({ version: 1, id: org, name: "Byrå AB" });
+    const repo = new DrizzleOrganizationRepository(handle.db);
+    expect((await repo.getById(org))?.publicAssignmentMatterTypes ?? null).toBeNull();
+    await repo.update(org, { matterTypes: ["Bodelning"] });
+    expect((await repo.getById(org))?.publicAssignmentMatterTypes ?? null).toBeNull();
+    await repo.update(org, { publicAssignmentMatterTypes: ["Offentlig försvarare"] });
+    expect((await repo.getById(org))?.publicAssignmentMatterTypes).toEqual(["Offentlig försvarare"]);
+    await repo.update(org, { publicAssignmentMatterTypes: [] });
+    expect((await repo.getById(org))?.publicAssignmentMatterTypes).toEqual([]);
+  });
+});

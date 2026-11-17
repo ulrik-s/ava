@@ -5,7 +5,8 @@
  * `organization.updateSettings`:
  * - `DocumentKindsSection` (ADR 0038) — byråns egna dokumenttyper, utöver de
  *   inbyggda. Valen i "Redigera uppgifter…" och det AI:n föreslår bland.
- * - `MatterTypesSection` — ärendetyperna man väljer bland när ett ärende läggs upp.
+ * - `MatterTypesSection` — ärendetyperna man väljer bland när ett ärende läggs upp,
+ *   med en kryssruta per typ för offentligt uppdrag (#1638).
  */
 
 import { useState } from "react";
@@ -14,11 +15,39 @@ import { KIND_LABELS, KNOWN_KINDS } from "@/lib/shared/document-kind";
 
 type VocabularyField = "documentKinds" | "matterTypes";
 
+/** En markering per post i listan (#1638): en delmängd som sparas i eget fält. */
+interface VocabularyMarking {
+  field: "publicAssignmentMatterTypes";
+  label: string;
+}
+
 interface VocabularySectionProps {
   field: VocabularyField;
   intro: string;
   empty: string;
   placeholder: string;
+  /** Valfri kryssruta per post; utelämnad = ingen kryssruta. */
+  marking?: VocabularyMarking;
+}
+
+interface MarkingCheckboxProps {
+  tag: string;
+  label: string;
+  marked: readonly string[];
+  disabled: boolean;
+  onChange: (next: string[]) => void;
+}
+
+/** Kryssrutan för en post: lägger till eller tar bort den ur markeringen. */
+function MarkingCheckbox({ tag, label, marked, disabled, onChange }: MarkingCheckboxProps) {
+  const checked = marked.includes(tag);
+  const toggle = (): void => onChange(checked ? marked.filter((t) => t !== tag) : [...marked, tag]);
+  return (
+    <label className="inline-flex items-center gap-1 text-blue-600">
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={toggle} aria-label={`${label}: ${tag}`} />
+      {label}
+    </label>
+  );
 }
 
 export function DocumentKindsSection() {
@@ -39,11 +68,12 @@ export function MatterTypesSection() {
       intro="Typerna man väljer bland när ett ärende läggs upp. Tom lista = fritext."
       empty="Inga ärendetyper ännu."
       placeholder="Ny ärendetyp, t.ex. Bodelning"
+      marking={{ field: "publicAssignmentMatterTypes", label: "Offentligt uppdrag" }}
     />
   );
 }
 
-function VocabularySection({ field, intro, empty, placeholder }: VocabularySectionProps) {
+function VocabularySection({ field, intro, empty, placeholder, marking }: VocabularySectionProps) {
   const utils = trpc.useUtils();
   const settings = trpc.organization.getSettings.useQuery();
   const update = trpc.organization.updateSettings.useMutation({
@@ -53,6 +83,7 @@ function VocabularySection({ field, intro, empty, placeholder }: VocabularySecti
 
   const tags = settings.data?.[field] ?? [];
   const save = (next: string[]): void => update.mutate({ [field]: next });
+  const marked = (marking && settings.data?.[marking.field]) ?? [];
 
   const add = (): void => {
     const t = draft.trim();
@@ -69,6 +100,9 @@ function VocabularySection({ field, intro, empty, placeholder }: VocabularySecti
         {tags.map((tag) => (
           <span key={tag} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
             {tag}
+            {marking && (
+              <MarkingCheckbox tag={tag} label={marking.label} marked={marked} disabled={update.isPending} onChange={(next) => update.mutate({ [marking.field]: next })} />
+            )}
             <button
               type="button"
               disabled={update.isPending}

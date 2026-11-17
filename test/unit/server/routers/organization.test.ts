@@ -335,6 +335,15 @@ describe("organization.getSettings", () => {
   });
 });
 
+describe("organization.getSettings — offentligt uppdrag (#1638)", () => {
+  it("returnerar null när markeringen aldrig satts, annars listan", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB" });
+    expect((await makeCaller("org-a").getSettings()).publicAssignmentMatterTypes).toBeNull();
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB", publicAssignmentMatterTypes: ["Offentlig försvarare"] });
+    expect((await makeCaller("org-a").getSettings()).publicAssignmentMatterTypes).toEqual(["Offentlig försvarare"]);
+  });
+});
+
 describe("organization.getSettings — timpriser", () => {
   it("returnerar byråns timpris per kategori (öre/h, #1206)", async () => {
     mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB", hourlyRates: { ARBETE: 250000, TIDSSPILLAN: 150000 } });
@@ -517,5 +526,64 @@ describe("organization — behörighet för icke-admin (#1370)", () => {
     mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
     await makeCaller("org-a", "LAWYER").updateSettings({ hourlyRates: {}, documentTags: [] });
     expect(mockPrisma.organization.update).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Markeringen av offentligt uppdrag (#1638): normaliseras, begränsas till
+ * byråns ärendetyper efter ändringen, och ett aldrig satt värde (`null`)
+ * förblir `null` när bara ärendetyperna redigeras.
+ */
+describe("organization.updateSettings — offentligt uppdrag (#1638)", () => {
+  const lastData = (): Record<string, unknown> =>
+    (mockPrisma.organization.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> }).data;
+
+  beforeEach(() => {
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
+  });
+
+  it("normaliserar listan och släpper namn som inte är byråns ärendetyper", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", matterTypes: ["Offentlig försvarare", "Bodelning", "Målsägandebiträde"] });
+    await makeCaller("org-a").updateSettings({ publicAssignmentMatterTypes: [" Offentlig försvarare ", "", "Okänd", "Målsägandebiträde", "Offentlig försvarare"] });
+    expect(lastData().publicAssignmentMatterTypes).toEqual(["Offentlig försvarare", "Målsägandebiträde"]);
+  });
+
+  it("filtrerar mot de skickade ärendetyperna när båda skickas", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", matterTypes: ["Offentlig försvarare"] });
+    await makeCaller("org-a").updateSettings({ matterTypes: [" Målsägandebiträde "], publicAssignmentMatterTypes: ["Offentlig försvarare", "Målsägandebiträde"] });
+    expect(lastData()).toMatchObject({ matterTypes: ["Målsägandebiträde"], publicAssignmentMatterTypes: ["Målsägandebiträde"] });
+  });
+
+  it("en borttagen ärendetyp rensas ur den sparade markeringen när bara ärendetyperna skickas", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({
+      id: "org-a", matterTypes: ["Offentlig försvarare", "Målsägandebiträde"], publicAssignmentMatterTypes: ["Offentlig försvarare", "Målsägandebiträde"],
+    });
+    await makeCaller("org-a").updateSettings({ matterTypes: ["Offentlig försvarare"] });
+    expect(lastData().publicAssignmentMatterTypes).toEqual(["Offentlig försvarare"]);
+  });
+
+  it("en markering som aldrig satts förblir orörd när bara ärendetyperna redigeras", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", matterTypes: ["Bodelning"], publicAssignmentMatterTypes: null });
+    await makeCaller("org-a").updateSettings({ matterTypes: ["Bodelning", "God man"] });
+    expect(lastData()).not.toHaveProperty("publicAssignmentMatterTypes");
+  });
+
+  it("andra fält rör inte markeringen", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", matterTypes: [], publicAssignmentMatterTypes: ["Gammal"] });
+    await makeCaller("org-a").updateSettings({ bankgiro: "123-4567" });
+    expect(lastData()).not.toHaveProperty("publicAssignmentMatterTypes");
+  });
+
+  it("en tom lista sparas som tom lista (satt, inga markerade)", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
+    await makeCaller("org-a").updateSettings({ publicAssignmentMatterTypes: [] });
+    expect(lastData().publicAssignmentMatterTypes).toEqual([]);
+  });
+
+  it("LAWYER: ändring av markeringen nekas (FORBIDDEN) och inget skrivs", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", matterTypes: ["Offentlig försvarare"] });
+    await expect(makeCaller("org-a", "LAWYER").updateSettings({ publicAssignmentMatterTypes: ["Offentlig försvarare"] }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
   });
 });
