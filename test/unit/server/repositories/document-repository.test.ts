@@ -32,10 +32,10 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
         { id: sub, name: "Under", matterId: mId, parentId: root },
       ],
       documents: [
-        { id: d1, matterId: mId, folderId: root, fileName: "a.pdf", uploadedById: uId, documentType: "Avtal" },
+        { id: d1, matterId: mId, folderId: root, fileName: "a.pdf", uploadedById: uId, kinds: ["KALLELSE", "FUP"], documentType: "KALLELSE" },
         { id: uuidv7(), matterId: mId, folderId: null, fileName: "b.pdf", documentType: "Faktura" },
       ],
-      // #1220: d1 är sammansatt → räknas under varje dels typ i stället för documentType.
+      // ADR 0038: d1 har sina typer; b.pdf är en äldre rad (läsregeln: Faktura → FAKTURA).
       documentParts: [
         { id: uuidv7(), documentId: d1, matterId: mId, ordinal: 0, kind: "KALLELSE", fromPage: 1, toPage: 1, source: "AUTO" },
         { id: uuidv7(), documentId: d1, matterId: mId, ordinal: 1, kind: "FUP", fromPage: 2, toPage: 3, source: "AUTO" },
@@ -53,8 +53,9 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
     expect(await docs.getByIdInOrg(d1, asId<"OrganizationId">(uuidv7()))).toBeNull();
     expect((await docs.listByMatter(mId)).length).toBe(2);
     expect(await docs.listDocumentTypesForOrg(ORG)).toEqual([
-      { type: "Faktura", count: 1 }, { type: "FUP", count: 1 }, { type: "KALLELSE", count: 1 },
+      { type: "FAKTURA", count: 1 }, { type: "FUP", count: 1 }, { type: "KALLELSE", count: 1 },
     ]);
+    expect((await docs.listWithLegacyKinds()).map((d) => d.fileName)).toEqual(["b.pdf"]);
 
     const rootFolders = await folders.listInParent(mId, null);
     expect(rootFolders).toHaveLength(1);
@@ -102,7 +103,7 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
     await db.insert(documentFolders).values(v({ id: sub, name: "Under", matterId: mId, parentId: root }));
     const doc = (extra: Record<string, unknown>) =>
       v({ matterId: mId, fileName: "f", mimeType: "application/pdf", sizeBytes: 1, storagePath: "p", uploadedById: uId, ...extra });
-    await db.insert(documents).values(doc({ id: d1, folderId: root, documentType: "Avtal" }));
+    await db.insert(documents).values(doc({ id: d1, folderId: root, kinds: ["KALLELSE", "FUP"], documentType: "KALLELSE" }));
     await db.insert(documents).values(doc({ id: uuidv7(), folderId: null, documentType: "Faktura" }));
     const part = (ordinal: number, kind: string, deletedAt: Date | null = null) =>
       v({ id: uuidv7(), documentId: d1, matterId: mId, ordinal, kind, fromPage: ordinal + 1, toPage: ordinal + 1, source: "AUTO", deletedAt });
@@ -117,8 +118,9 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
     expect(await docs.getByIdInOrg(d1, asId<"OrganizationId">(uuidv7()))).toBeNull();
     expect((await docs.listByMatter(mId)).length).toBe(2);
     expect(await docs.listDocumentTypesForOrg(org)).toEqual([
-      { type: "Faktura", count: 1 }, { type: "FUP", count: 1 }, { type: "KALLELSE", count: 1 },
+      { type: "FAKTURA", count: 1 }, { type: "FUP", count: 1 }, { type: "KALLELSE", count: 1 },
     ]);
+    expect((await docs.listWithLegacyKinds()).map((d) => d.fileName)).toEqual(["f"]);
 
     const rootFolders = await folders.listInParent(mId, null);
     expect(rootFolders).toHaveLength(1);

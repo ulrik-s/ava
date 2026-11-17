@@ -11,6 +11,7 @@
  */
 
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
+import { kindsFields } from "@/lib/shared/document-kinds";
 import {
   KOSTNADSRAKNING_TEMPLATE_NAME,
   KOSTNADSRAKNING_TEMPLATE_CATEGORY,
@@ -294,7 +295,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
         },
       ],
       // Etiketterna dokument kan taggas med (Inställningar → Dokument-etiketter).
-      documentTags: [...DOCUMENT_TAGS],
+      documentKinds: [...DOCUMENT_KINDS],
       createdAt: isoDate(-365), updatedAt: isoDate(-30),
     }],
     // Kontoren som står i dokumentens sidfot (Inställningar → Kontor).
@@ -375,7 +376,8 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
 }
 
 /** Etiketterna byrån taggar dokument med. */
-const DOCUMENT_TAGS = ["Bevisning", "Dom", "Fullmakt", "Kallelse", "Kostnadsräkning", "Korrespondens", "Yttrande"] as const;
+/** Demobyråns egna dokumenttyper (ADR 0038), utöver de inbyggda. */
+const DOCUMENT_KINDS = ["Korrespondens", "Ansökan"] as const;
 
 /**
  * Byråns standardvyer (Inställningar → Standardvyer): sortering för listor som
@@ -450,15 +452,16 @@ function buildDocuments(orgId: string, users: UserSeed[]): SeedDataset["document
   const out: SeedDataset["documents"] = [];
   // documents — 20 PDF + 20 DOCX. Faktiska binärfiler skrivs av
   // `seed-firma-local.ts` via `generateDocumentBytes()` exporterad nedan.
+  // `type` = dokumentets typ (ADR 0038, inbyggd kod); `baseName` = filnamnet.
   const docKinds = [
-    { type: "Stämningsansökan", baseName: "Stämningsansökan" },
-    { type: "Svaromål", baseName: "Svaromål" },
-    { type: "Bevisförteckning", baseName: "Bevisförteckning" },
-    { type: "Dom", baseName: "Dom" },
-    { type: "Fullmakt", baseName: "Fullmakt" },
-    { type: "Avtal", baseName: "Avtal" },
-    { type: "Bilaga", baseName: "Bilaga" },
-    { type: "Yttrande", baseName: "Yttrande" },
+    { type: "STAMNING", baseName: "Stämningsansökan" },
+    { type: "INLAGA", baseName: "Svaromål" },
+    { type: "BEVIS", baseName: "Bevisförteckning" },
+    { type: "DOM", baseName: "Dom" },
+    { type: "FULLMAKT", baseName: "Fullmakt" },
+    { type: "AVTAL", baseName: "Avtal" },
+    { type: "BEVIS", baseName: "Bilaga" },
+    { type: "INLAGA", baseName: "Yttrande" },
   ];
   const formats: Array<{ ext: "pdf" | "docx"; mime: string; count: number }> = [
     { ext: "pdf", mime: "application/pdf", count: 20 },
@@ -482,8 +485,8 @@ function buildDocuments(orgId: string, users: UserSeed[]): SeedDataset["document
         storagePath: `documents/content/${id}.${fmt.ext}`, version: 1,
         uploadedById: uploader.id,
         title: `${k.baseName} ${matter.matterNumber}`,
-        documentType: k.type,
-        summary: `${k.type} för ärende ${matter.matterNumber} — ${matter.title}. Skapat som demo-data med svenska tecken (å, ä, ö).`,
+        ...kindsFields([k.type], true),
+        summary: `${k.baseName} för ärende ${matter.matterNumber} — ${matter.title}. Skapat som demo-data med svenska tecken (å, ä, ö).`,
         analyzedAt: isoDate(-daysAgo + 1), analysisStatus: "DONE",
         createdAt: isoDate(-daysAgo), updatedAt: isoDate(-daysAgo + 1),
       });
@@ -1199,13 +1202,14 @@ export async function generateDocumentBytes(doc: {
   id: string;
   title?: string;
   fileName?: string;
-  documentType?: string;
+  /** Rubriken överst i filen, t.ex. typens visningsnamn. */
+  heading?: string;
   summary?: string;
   mimeType?: string;
   storagePath?: string;
 }): Promise<Uint8Array> {
   const title = doc.title ?? doc.fileName ?? doc.id;
-  const heading = doc.documentType ?? "Dokument";
+  const heading = doc.heading ?? "Dokument";
   const body = doc.summary
     ?? "Detta är ett demo-dokument med svenska tecken: å, ä, ö, Å, Ä, Ö.";
   const ext = doc.storagePath?.toLowerCase().endsWith(".pdf") ? "pdf"

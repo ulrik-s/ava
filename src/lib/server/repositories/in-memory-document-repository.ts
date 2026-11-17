@@ -3,7 +3,8 @@
  * till query-engine:n (uploadedBy/matter-relations registrerade i relations.ts).
  */
 
-import { groupPartsByDocument, kindCountsByName, type PartLike } from "@/lib/shared/document-part-kinds";
+import { needsKindsBackfill } from "@/lib/shared/document-kinds";
+import { kindCountsByName } from "@/lib/shared/document-part-kinds";
 import type { Document } from "@/lib/shared/schemas/document";
 import type {
   DocumentFolderId, DocumentId, MatterId, OrganizationId,
@@ -19,7 +20,7 @@ export type DocumentRepoSource = Pick<IDataStore, "documents" | "documentParts">
 export class InMemoryDocumentRepository
   extends InMemoryRepository<Document>
   implements DocumentRepository {
-  constructor(private readonly store: DocumentRepoSource, now?: () => Date) {
+  constructor(store: DocumentRepoSource, now?: () => Date) {
     super(store.documents, now ?? (() => new Date()));
   }
 
@@ -56,10 +57,13 @@ export class InMemoryDocumentRepository
   async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {
     const docs = (await this.delegate.findMany({
       where: { matter: { organizationId } },
-    })) as Array<{ id: string; documentType?: string | null; deletedAt?: unknown }>;
-    // Delarnas typer räknas (#1220) — ett sammansatt dokument syns under varje dels typ.
-    const parts = groupPartsByDocument((await this.store.documentParts.findMany({})) as PartLike[]);
-    return kindCountsByName(docs.filter((d) => !d.deletedAt).map((d) => ({ documentType: d.documentType, parts: parts.get(d.id) })));
+    })) as Document[];
+    return kindCountsByName(docs.filter((d) => !d.deletedAt));
+  }
+
+  async listWithLegacyKinds(): Promise<Document[]> {
+    const docs = (await this.delegate.findMany({})) as Document[];
+    return docs.filter((d) => !d.deletedAt && needsKindsBackfill(d));
   }
 
   async getByIdInOrg(id: DocumentId, organizationId: OrganizationId): Promise<DocumentAccessRow | null> {

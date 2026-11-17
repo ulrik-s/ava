@@ -36,7 +36,7 @@ import { entityRepo, type EntityRepo, type Row } from "./entity-repo";
 import { checkProcedureOwned, checkScope, type PushRejection } from "./push-guard";
 import type { StoredRowOutcome } from "./row-push-ledger";
 import { checkRowPolicy, immutableOnUpdate, isSameCreation, type RowPolicyRejection, type RowPusher } from "./row-push-policy";
-import { withoutServerOwned } from "./server-owned-fields";
+import { withKindsFromLegacy, withoutServerOwned } from "./server-owned-fields";
 
 /** Radens id ur posten ("" om det saknas). */
 export function rowIdOf(m: QueuedMutation): string {
@@ -166,7 +166,8 @@ class RowApplication {
   }
 
   private async applyCreate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
-    if (!existing) return { status: "accepted", row: await repo.create(m.row) };
+    // Äldre klienters dokumentrader bär typerna i documentType/tags (ADR 0038).
+    if (!existing) return { status: "accepted", row: await repo.create(withKindsFromLegacy(m.entity, null, m.row)) };
     // Omsändning av samma skapande → idempotent; en annan rad med samma id → konflikt (#1380).
     if (isSameCreation(m.entity, existing, m.row)) return { status: "accepted", row: existing };
     return { status: "conflict", reason: ID_TAKEN_REASON, current: existing };
@@ -178,7 +179,7 @@ class RowApplication {
     if (surfaceConflict) return { status: "conflict", reason: surfaceConflict, current: existing };
     // Server-ägda fält (dokumentets analys, #1280) och radens ursprung (när och
     // av vem, #1344) skrivs aldrig av en radpush.
-    const patch = immutableOnUpdate(m.entity, withoutServerOwned(m.entity, existing, m.row));
+    const patch = immutableOnUpdate(m.entity, withKindsFromLegacy(m.entity, existing, withoutServerOwned(m.entity, existing, m.row)));
     const updated = await repo.update(rowIdOf(m), patch);
     const rebased = m.baseVersion != null && serverVersion > m.baseVersion;
     return { status: rebased ? "rebased" : "accepted", row: updated };

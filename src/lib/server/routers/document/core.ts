@@ -19,6 +19,7 @@ import { assertSetupFieldsAllowed } from "../../auth/setup-fields";
 import { removeDocument } from "../../documents/remove-document";
 import { writeSuggestionsFromText } from "../../documents/suggest-from-text";
 import { orgProcedure } from "../../trpc";
+import { createKindsPatch, kindsInputSchema, metadataKindsPatch } from "./kinds";
 import { assertDocAccess } from "./shared";
 
 /** Valfria kopplingar på ett registrerat dokument (null = ingen → utelämnas). */
@@ -96,7 +97,7 @@ export const coreProcedures = {
       };
     }),
 
-  /** Lista alla unika documentType-värden inom org + antal per typ.
+  /** Alla dokumenttyper inom org + antal dokument per typ (ADR 0038).
    *  Används av sök-sidan för att rendera filter-checkboxar. */
   listDocumentTypes: orgProcedure
     .query(({ ctx }) => ctx.repos.documents.listDocumentTypesForOrg(ctx.orgId)),
@@ -131,6 +132,10 @@ export const coreProcedures = {
       uploadedById: userIdSchema.optional(),
       version: z.number().int().positive().optional(),
       title: z.string().nullable().optional(),
+      /** Dokumentets typer (ADR 0038). Satta här → en person/systemet satte dem. */
+      kinds: kindsInputSchema.optional(),
+      kindsManual: z.boolean().optional(),
+      /** Föråldrad: Äldre form av `kinds` (ADR 0038). */
       documentType: z.string().nullable().optional(),
       direction: documentDirectionSchema.nullable().optional(),
       recipient: documentRecipientSchema.nullable().optional(),
@@ -163,7 +168,7 @@ export const coreProcedures = {
         uploadedById: asId<"UserId">(input.uploadedById ?? ctx.user.id),
         version: input.version,
         title: input.title,
-        documentType: input.documentType,
+        ...createKindsPatch(input),
         direction: input.direction,
         recipient: input.recipient,
         summary: input.summary,
@@ -333,6 +338,10 @@ export const coreProcedures = {
       z.object({
         documentId: documentIdSchema,
         title: z.string().nullable().optional(),
+        /** Dokumentets typer (ADR 0038). `kindsManual: true` = uttrycklig överstyrning. */
+        kinds: kindsInputSchema.optional(),
+        kindsManual: z.boolean().optional(),
+        /** Föråldrad: Äldre form av `kinds` (ADR 0038). */
         documentType: z.string().nullable().optional(),
         summary: z.string().nullable().optional(),
         analyzedAt: z.union([z.string(), z.date()]).nullable().optional(),
@@ -341,9 +350,12 @@ export const coreProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
-      const { documentId, analyzedAt, analysisStatus, ...rest } = input;
+      const { documentId, analyzedAt, analysisStatus, kinds, kindsManual, documentType, ...rest } = input;
+      const doc = await ctx.repos.documents.getByIdOrThrow(documentId);
       const data = {
         ...rest,
+        // Typer som en person satt skrivs inte över av en automatisk analys (ADR 0038).
+        ...metadataKindsPatch(doc, { kinds, kindsManual, documentType }),
         ...omitUndefined({
           analysisStatus,
           analyzedAt:
@@ -358,26 +370,6 @@ export const coreProcedures = {
       // innehållsändring, så versionen bumpas inte (ADR 0023). Innehållsändringar
       // går via uploadContent/markExternallyEdited som bumpar versionen.
       return ctx.repos.documents.updateMetadata(documentId, data);
-    }),
-
-  /**
-   * `setTags` (#621) — sätt dokumentets etiketter. Validerar att alla taggar
-   * finns i byråns vokabulär (`organization.documentTags`) så listan hålls
-   * konsekvent. Etiketter är metadata → bumpar INTE versionen (#619).
-   */
-  setTags: orgProcedure
-    .input(z.object({ documentId: documentIdSchema, tags: z.array(z.string()) }))
-    .mutation(async ({ ctx, input }) => {
-      await assertDocAccess(ctx, input.documentId);
-      const org = await ctx.repos.organizations.getById(ctx.orgId);
-      const vocab = new Set(org?.documentTags ?? []);
-      const invalid = input.tags.filter((t) => !vocab.has(t));
-      if (invalid.length > 0) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Okända etiketter: ${invalid.join(", ")}` });
-      }
-      // Dedup, behåll inmatningsordning.
-      const tags = [...new Set(input.tags)];
-      return ctx.repos.documents.updateMetadata(input.documentId, { tags });
     }),
 
   /**

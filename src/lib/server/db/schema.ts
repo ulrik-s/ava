@@ -57,7 +57,8 @@ export const organizations = pgTable("organizations", {
   ledgerAccountMap: jsonb("ledger_account_map"),
   /** Byråns vokabulär av giltiga dokument-etiketter (#621). Dokument får bara
    *  bära taggar ur denna lista; hanteras i org-inställningarna. */
-  documentTags: jsonb("document_tags").notNull().default([]).$type<string[]>(),
+  documentKinds: jsonb("document_kinds").notNull().default([]).$type<string[]>(), // byråns egna dokumenttyper (ADR 0038)
+  documentTags: jsonb("document_tags").notNull().default([]).$type<string[]>(), // föråldrad: taggvokabulären, ersatt av documentKinds
   /** Byråns ärendetyper — valen i "Ärendetyp" när ett ärende läggs upp. */
   matterTypes: jsonb("matter_types").notNull().default([]).$type<string[]>(),
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
@@ -485,15 +486,14 @@ export const documents = pgTable("documents", {
   storagePath: text("storage_path").notNull(),
   uploadedById: uuid("uploaded_by_id").notNull().$type<UserId>(),
   title: text("title"),
-  documentType: text("document_type"),
+  kinds: jsonb("kinds").notNull().default([]).$type<string[]>(), // dokumentets typer, primär först (ADR 0038)
+  kindsManual: boolean("kinds_manual").notNull().default(false), // satta av person/system → AI:n ändrar dem inte
+  documentType: text("document_type"), // föråldrad: spegel av primärtypen för äldre klienter
   /** Riktning (#880): INKOMMANDE / UTGAENDE — null där det saknar mening. */
   direction: text("direction").$type<"INKOMMANDE" | "UTGAENDE">(),
   /** Motpart/mottagare (#901) — driver "dok skickade till domstol"-filtret. */
   recipient: text("recipient").$type<"DOMSTOL" | "MOTPART" | "KLIENT" | "FORSAKRING" | "MYNDIGHET" | "OVRIGT">(),
-  /** Fria etiketter ur byråns vokabulär (#621) — komplement till documentType.
-   *  Sätts av LLM (förslag) + användare; skrivs via updateMetadata (ingen
-   *  version-bump, #619). */
-  tags: jsonb("tags").notNull().default([]).$type<string[]>(),
+  tags: jsonb("tags").notNull().default([]).$type<string[]>(), // föråldrad: ersatt av kinds (ADR 0038)
   summary: text("summary"),
   analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
   analysisStatus: text("analysis_status").$type<"PENDING" | "RUNNING" | "DONE" | "ERROR">(),

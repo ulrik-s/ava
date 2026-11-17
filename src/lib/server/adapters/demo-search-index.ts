@@ -2,8 +2,8 @@
  * `demoSearchIndex` — client-side fritextsök för demo-mode.
  *
  * Scannar dokument-datan som finns i DemoDataStore (laddad från
- * git-repo:t) och matchar query mot fileName, documentType och
- * summary. Riktigt PDF/DOCX-content kommer i nästa iteration när
+ * git-repo:t) och matchar query mot fileName, typernas visningsnamn
+ * (ADR 0038) och summary. Riktigt PDF/DOCX-content kommer i nästa iteration när
  * vi har Tika-emulation client-side.
  *
  * DRY: faktoriserar ut sökning som ren funktion — testas direkt
@@ -11,6 +11,7 @@
  */
 
 import { getDocumentContent } from "@/lib/client/demo/document-content-cache";
+import type { KindsCarrier } from "@/lib/shared/document-kinds";
 import { groupPartsByDocument, type PartLike } from "@/lib/shared/document-part-kinds";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { ISearchIndex, SearchResponse } from "../ports";
@@ -18,10 +19,9 @@ import {
   compileNeedle, computeFacetEntries, documentTypeFilter, metaHaystack, metadataScore, type NeedleMatcher,
 } from "./search-scoring";
 
-interface DocLike {
+interface DocLike extends Omit<KindsCarrier, "parts"> {
   id: string;
   fileName?: string;
-  documentType?: string | null | undefined;
   summary?: string | null | undefined;
   matterId: string;
   /** Path till filinnehållet — propageras till hit:en så UI kan öppna. */
@@ -47,7 +47,7 @@ interface MatterLike {
  * "stämningsansökan". Annars vanlig substring-match.
  */
 export interface SearchOpts {
-  /** Begränsa till dokument vars documentType matchar någon i listan.
+  /** Bara dokument som har någon av typerna (ADR 0038).
    *  Tomt array eller undefined = alla typer. */
   documentTypes?: string[];
   /** Bara dokument i detta ärende (#1215). */

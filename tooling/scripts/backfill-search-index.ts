@@ -16,10 +16,9 @@
  * `--reclassify` (#1220): köa `classify-document` i stället — indexerar sidorna
  * OCH kör om klassificering + segmentering, så befintliga dokument får DELAR
  * (kallelse + stämning + FUP …). Jobbet skriver inte över användarens val:
- *   - specialvärden i documentType (Kostnadsräkning, E-post, fritext) rörs inte
- *     och får inga delar;
- *   - en kategori användaren satt (en kod som servern aldrig analyserat och som
- *     inte är filnamnsgissningen) behålls och blir EN manuell del;
+ *   - typer som en person eller systemet satt (ADR 0038, `kindsManual` —
+ *     kostnadsräkningar, e-post, rättningar i "Redigera uppgifter…") rörs inte
+ *     och dokumenten segmenteras inte om;
  *   - MANUAL-delar (rättade i panelen) bevaras så länge sidantalet är samma.
  *
  *   AVA_DATABASE_URL=postgres://… bun tooling/scripts/backfill-search-index.ts --reclassify

@@ -3,7 +3,7 @@
  *
  * Förr köade klienten ALLTID sitt `classify-document`-jobb (filnamns-
  * heuristik) — även i server-first, där servern samtidigt klassificerar med
- * text + LLM och segmenterar dokumentet i delar. Båda skrev `documentType`,
+ * text + LLM och segmenterar dokumentet i delar. Båda skrev dokumentets typ,
  * och den som blev klar sist vann: klientens filnamnsgissning skrev ofta över
  * serverns bättre svar.
  *

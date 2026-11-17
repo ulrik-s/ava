@@ -18,7 +18,8 @@ export function AnalyzeDispatcherRegistrar() {
     setAnalyzeDispatcher(async ({ documentId, kind, analyzedAt, analysisStatus }) => {
       await updateMetadata.mutateAsync({
         documentId,
-        documentType: kind,
+        // Automatisk gissning → skriver inte över typer en person satt (ADR 0038).
+        kinds: [kind],
         analyzedAt,
         analysisStatus,
       });

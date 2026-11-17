@@ -93,7 +93,7 @@ describe("kostnadsrakning.record — dokumentet syns i ärendet (demo-backend)",
       huvudforhandlingMinutes: 130,
     });
     expect((doc as { id: string }).id).toBe(docId);
-    expect((doc as { documentType?: string }).documentType).toBe("Kostnadsräkning");
+    expect((doc as { kinds?: string[] }).kinds).toEqual(["KOSTNADSRAKNING"]);
   });
 
   it("dokumentet är synligt via document.tree (det DocumentBrowser:n läser)", async () => {
@@ -101,7 +101,7 @@ describe("kostnadsrakning.record — dokumentet syns i ärendet (demo-backend)",
     const found = tree.documents.find((d) => d.id === "kostn-test-1");
     expect(found).toBeDefined();
     expect(found!.fileName).toBe("Kostnadsräkning B 2026-1234.html");
-    expect(found!.documentType).toBe("Kostnadsräkning");
+    expect(found!.kinds).toEqual(["KOSTNADSRAKNING"]);
   });
 
   it("dokumentet är synligt via document.list (det faktura-panelen läser)", async () => {

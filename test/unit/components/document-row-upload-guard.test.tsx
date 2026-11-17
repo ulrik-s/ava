@@ -11,14 +11,13 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { DocumentRow, type DocumentRecord } from "@/components/documents/_document-row";
 
-// DocumentRow renderar DocumentTags (#621), som läser org-vokabulären + setTags.
-// Tom vokabulär → editorn renderar null (påverkar inte guard-assertionerna).
+// "Redigera uppgifter…" (ADR 0038) läser byråns egna dokumenttyper när dialogen
+// öppnas; stubben påverkar inte guard-assertionerna.
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ document: { tree: { invalidate: vi.fn() } } }),
-    organization: { getSettings: { useQuery: () => ({ data: { documentTags: [] } }) } },
+    organization: { getSettings: { useQuery: () => ({ data: { documentKinds: [] } }) } },
     document: {
-      setTags: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       takeoverLease: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
     },
   },

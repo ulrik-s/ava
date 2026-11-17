@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ledgerAccountMapSchema } from "@/lib/shared/accounting/account-map";
+import { isCustomKind, normalizeKinds, organizationKinds } from "@/lib/shared/document-kinds";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { orgImageSchema } from "@/lib/shared/org-image";
 import type { UserRole } from "@/lib/shared/schemas/enums";
@@ -42,8 +43,10 @@ function toOrgSettings(org: Organization) {
     id: org.id,
     name: org.name,
     ...nullableOrgFields(org),
-    /** Byråns vokabulär av giltiga dokument-etiketter (#621). */
-    documentTags: org.documentTags ?? [],
+    /** Byråns egna dokumenttyper (ADR 0038), utöver de inbyggda. */
+    documentKinds: organizationKinds(org),
+    /** Föråldrad: Samma lista under taggarnas namn, för äldre klienter (ADR 0038). */
+    documentTags: organizationKinds(org),
     /** Byråns ärendetyper (valen när ett ärende läggs upp). */
     matterTypes: org.matterTypes,
     /** Gränsbelopp (öre) för aconto-utskick (#885). */
@@ -56,14 +59,26 @@ function toOrgSettings(org: Organization) {
 }
 
 /**
- * Byråinställningar en medlem får ändra (#1370): bara dokument-etiketternas
- * vokabulär, som juristerna använder i sitt dagliga arbete. Allt annat syns på
+ * Byråinställningar en medlem får ändra (#1370): bara byråns egna dokumenttyper
+ * (ADR 0038; tidigare etikett-vokabulären), som juristerna använder i sitt
+ * dagliga arbete. Allt annat syns på
  * dokument och fakturor eller styr betalningar, bokföring och prissättning
  * (byrånamn, adress, logotyp, sigill, bankgiro, kontoplan, timpriser …) och
  * ändras bara av admin (#1344). En medlem kan skicka hela formuläret så länge
  * de övriga fälten är oförändrade.
  */
-const MEMBER_SETTINGS: ReadonlySet<string> = new Set(["documentTags"]);
+const MEMBER_SETTINGS: ReadonlySet<string> = new Set(["documentKinds", "documentTags"]);
+
+/**
+ * Byråns egna typer ur indata (ADR 0038): normaliserade, utan dubbletter och
+ * utan inbyggda typer (de finns redan). Den äldre formen `documentTags` tas
+ * emot från gamla klienter och blir samma lista; taggfältet töms.
+ */
+function withOrganizationKinds<P extends { documentKinds?: string[]; documentTags?: string[] }>(patch: P): P {
+  const list = patch.documentKinds ?? patch.documentTags;
+  if (!list) return patch;
+  return { ...patch, documentKinds: normalizeKinds(list).filter(isCustomKind), documentTags: [] };
+}
 
 /** Trimma, släng tomma, dedupa (set-semantik, ordningen behålls). */
 function normalizeVocabulary(list: readonly string[]): string[] {
@@ -122,8 +137,9 @@ export const organizationRouter = router({
         footerSeal: orgImageSchema.nullable().optional(),
         /** Roll→konto-mappning för bokföringsexport (#249). */
         ledgerAccountMap: ledgerAccountMapSchema.optional(),
-        /** Byråns vokabulär av giltiga dokument-etiketter (#621). Hela listan
-         *  ersätts (set-semantik); dedupas + tomma rensas. */
+        /** Byråns egna dokumenttyper (ADR 0038). Hela listan ersätts; normaliseras. */
+        documentKinds: z.array(z.string()).optional(),
+        /** Föråldrad: Äldre klienters namn på samma lista (ADR 0038). */
         documentTags: z.array(z.string()).optional(),
         /** Byråns ärendetyper. Hela listan ersätts; dedupas + tomma rensas. */
         matterTypes: z.array(z.string()).optional(),
@@ -142,10 +158,9 @@ export const organizationRouter = router({
       // Normalisera vokabulären: trimma, släng tomma, dedupa (set-semantik).
       const patch = omitUndefined(input);
       assertMayChangeSettings(ctx.user.role, await ctx.repos.organizations.getById(orgId), patch);
-      if (patch.documentTags) patch.documentTags = normalizeVocabulary(patch.documentTags);
       if (patch.matterTypes) patch.matterTypes = normalizeVocabulary(patch.matterTypes);
       if (patch.standardAtgarder) patch.standardAtgarder = normalizeStandardAtgarder(patch.standardAtgarder);
-      return ctx.repos.organizations.update(orgId, patch satisfies Partial<Organization>);
+      return ctx.repos.organizations.update(orgId, withOrganizationKinds(patch) satisfies Partial<Organization>);
     }),
 
   /**

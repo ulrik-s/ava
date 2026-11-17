@@ -65,6 +65,11 @@
 >   kön lagrar procedur-anrop och servern kör om dem auktoritativt via samma
 >   `appRouter` (mutator-modellen); logiken ligger kvar i klienten så allt fungerar
 >   offline. Reviderar ADR 0017:s kö-format. Valdes framför Electric/PowerSync (#1248).
+> - [ADR 0038](./adr/0038-en-mekanism-for-dokumenttyp.md) — **en mekanism för
+>   dokumenttyp**: dokumentets typer (`kinds`, flera, primär först) ur EN lista
+>   (inbyggda + byråns egna) ersätter `documentType` + taggar. Övergången tål
+>   pågående migrering: additiv migration, läs-/skrivregel, äldre indata översätts,
+>   backfill efter omstart (#1632).
 
 ## Två lager
 

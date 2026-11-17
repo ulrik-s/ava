@@ -1,12 +1,11 @@
 /**
  * `document.updateDetails` — juristens egna ändringar av ett dokuments
- * uppgifter: titel, filnamn, klassning (dokumenttyp), riktning, mottagare och
- * sammanfattning. Skild från `updateMetadata`, som AI-analysen skriver med.
+ * uppgifter: titel, filnamn, typer, riktning, mottagare och sammanfattning.
+ * Skild från `updateMetadata`, som AI-analysen skriver med.
  *
- * Klassningen ska överleva en ny AI-analys:
- *   - Ej analyserat än: en användarsatt typ respekteras redan (`manualKindOf`).
- *   - Analyserat med delar: första delen märks `MANUAL` (som `setPartKind`) —
- *     analysen behåller manuella delar och typen följer första delen.
+ * Typerna (ADR 0038) sätts av en person → `kindsManual`, så en ny AI-analys
+ * skriver inte över dem. Den äldre formen `documentType` (EN typ, från gamla
+ * klienter och köade anrop) byter den primära typen och behåller resten.
  *
  * Bara metadata → versionen bumpas inte (ADR 0023). Filnamnet är ett
  * visningsnamn; lagringssökvägen ändras aldrig.
@@ -15,15 +14,20 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { cleanFileName } from "@/lib/shared/document-file-name";
-import { documentDirectionSchema, documentKindSchema, documentRecipientSchema } from "@/lib/shared/schemas/document";
+import { documentKinds, kindsFields } from "@/lib/shared/document-kinds";
+import { type Document, documentDirectionSchema, documentKindSchema, documentRecipientSchema } from "@/lib/shared/schemas/document";
 import { documentIdSchema } from "@/lib/shared/schemas/ids";
 import { orgProcedure } from "../../trpc";
+import { assertKnownKinds, kindsInputSchema } from "./kinds";
 import { assertDocAccess } from "./shared";
 
 const detailsInput = z.object({
   documentId: documentIdSchema,
   title: z.string().trim().max(300).nullable().optional(),
   fileName: z.string().max(400).optional(),
+  /** Dokumentets typer, primär först (ADR 0038). */
+  kinds: kindsInputSchema.optional(),
+  /** Föråldrad: Äldre form: byt den primära typen (ADR 0038). */
   documentType: documentKindSchema.optional(),
   direction: documentDirectionSchema.nullable().optional(),
   recipient: documentRecipientSchema.nullable().optional(),
@@ -45,6 +49,13 @@ function simplePatch(input: DetailsInput, currentFileName: string): Record<strin
   return data;
 }
 
+/** Typerna personen begär, eller null om de inte ändras. */
+function requestedKinds(input: DetailsInput, doc: Document): string[] | null {
+  if (input.kinds) return input.kinds;
+  if (input.documentType === undefined) return null;
+  return [input.documentType, ...documentKinds(doc).slice(1)];
+}
+
 export const detailsProcedures = {
   updateDetails: orgProcedure
     .input(detailsInput)
@@ -52,14 +63,9 @@ export const detailsProcedures = {
       await assertDocAccess(ctx, input.documentId);
       const doc = await ctx.repos.documents.getById(input.documentId);
       if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
-      const data = simplePatch(input, doc.fileName);
-      const kind = input.documentType;
-      if (kind !== undefined && kind !== doc.documentType) {
-        data.documentType = kind;
-        // Analyserat med delar: gör första delen manuell så en ny analys inte skriver över klassningen.
-        const [first] = await ctx.repos.documentParts.listForDocument(input.documentId);
-        if (first) await ctx.repos.documentParts.update(first.id, { kind, source: "MANUAL" });
-      }
+      const kinds = requestedKinds(input, doc);
+      if (kinds) await assertKnownKinds(ctx.repos, ctx.orgId, doc, kinds);
+      const data = { ...simplePatch(input, doc.fileName), ...(kinds ? kindsFields(kinds, true) : {}) };
       return ctx.repos.documents.updateMetadata(input.documentId, data);
     }),
 };

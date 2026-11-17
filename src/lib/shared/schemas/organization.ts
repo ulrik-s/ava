@@ -29,8 +29,10 @@ export const organizationSchema = z.object({
   azureTenantId: z.string().nullish(),
   /** Per-byrå roll→konto-mappning för bokföringsexport (SIE m.fl., #249). */
   ledgerAccountMap: ledgerAccountMapSchema.nullish(),
-  /** Byråns vokabulär av giltiga dokument-etiketter (#621). Dokument får bara
-   *  bära taggar ur denna lista; redigeras i org-inställningarna. */
+  /** Byråns egna dokumenttyper (ADR 0038), utöver de inbyggda. Valen i
+   *  "Redigera uppgifter…" och AI:ns förslag; redigeras i Inställningar. */
+  documentKinds: z.array(z.string()).default([]),
+  /** Föråldrad: Taggvokabulären (#621), ersatt av `documentKinds` (ADR 0038). */
   documentTags: z.array(z.string()).default([]),
   /** Byråns ärendetyper — valen i "Ärendetyp" när ett ärende läggs upp. */
   matterTypes: z.array(z.string()).default([]),

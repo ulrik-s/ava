@@ -4,7 +4,7 @@
  */
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { groupPartsByDocument, kindCountsByName } from "@/lib/shared/document-part-kinds";
+import { kindCountsByName } from "@/lib/shared/document-part-kinds";
 import type { Document } from "@/lib/shared/schemas/document";
 import type {
   DocumentFolderId, DocumentId, MatterId, OrganizationId,
@@ -94,16 +94,19 @@ export class DrizzleDocumentRepository
   async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {
     const inOrg = and(eq(matters.organizationId, organizationId), isNull(documents.deletedAt));
     const docs = await this.db
-      .select({ id: documents.id, documentType: documents.documentType })
+      .select({ kinds: documents.kinds, kindsManual: documents.kindsManual, documentType: documents.documentType, tags: documents.tags })
       .from(documents).innerJoin(matters, eq(documents.matterId, matters.id)).where(inOrg);
-    // Delarnas typer räknas (#1220) — ett sammansatt dokument syns under varje dels typ.
-    const partRows = await this.db
-      .select({ documentId: documentParts.documentId, kind: documentParts.kind, fromPage: documentParts.fromPage, toPage: documentParts.toPage })
-      .from(documentParts).innerJoin(documents, eq(documentParts.documentId, documents.id))
-      .innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(inOrg, isNull(documentParts.deletedAt)));
-    const parts = groupPartsByDocument(partRows);
-    return kindCountsByName(docs.map((d) => ({ documentType: d.documentType, parts: parts.get(d.id) })));
+    return kindCountsByName(docs);
+  }
+
+  async listWithLegacyKinds(): Promise<Document[]> {
+    const rows = await this.db.select().from(documents).where(and(
+      isNull(documents.deletedAt),
+      eq(documents.kindsManual, false),
+      sql`${documents.kinds} = '[]'::jsonb`,
+      sql`(${documents.documentType} IS NOT NULL OR ${documents.tags} <> '[]'::jsonb)`,
+    ));
+    return this.asRows(rows);
   }
 
   async getByIdInOrg(id: DocumentId, organizationId: OrganizationId): Promise<DocumentAccessRow | null> {

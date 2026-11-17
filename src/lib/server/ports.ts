@@ -39,7 +39,7 @@ export interface IDocumentAnalyzer {
    * resultatet skrivs av jobbet, inte av anroparen.
    *
    * Vad analysen skriver beror på vad implementationen kommer åt (#988):
-   *   - **alltid** dokumentets metadata (`documentType`, `analysisStatus`, …)
+   *   - **alltid** dokumentets metadata (`kinds`, `analysisStatus`, …)
    *     via `document.updateMetadata`;
    *   - **dessutom** kontakt- och händelseförslag när den kan läsa dokumentets
    *     TEXT — server-first-jobbet läser bytes ur content-store:n och kallar
@@ -102,7 +102,7 @@ export interface IndexableDocument {
 }
 
 export interface ISearchOpts {
-  /** Bara dokument där någon del (eller documentType) matchar någon i listan (#1220). */
+  /** Bara dokument som har någon av typerna (ADR 0038). */
   documentTypes?: string[];
   /** Bara dokument i detta ärende (#1215). */
   matterId?: MatterId;

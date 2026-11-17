@@ -81,7 +81,7 @@ describe("mail.saveIncoming", () => {
         id: "doc-1",
         matterId: "m1",
         mimeType: "message/rfc822",
-        documentType: "E-post",
+        kinds: ["EPOST"], kindsManual: true,
         title: "Hej",
         fileName: "Hej.eml",
         storagePath: "documents/content/doc-1.eml",

@@ -11,16 +11,15 @@
  *     Länken först; för äldre dokument närmast i tid (bästa gissning).
  */
 
-import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "./schemas/document";
+import { hasKind, type KindsCarrier } from "./document-kinds";
 import type { BillingRunId, DocumentId } from "./schemas/ids";
 
 type DateLike = Date | string;
 
 /** Det urvalet behöver ur ett dokument. */
-export interface KrDocLike {
+export interface KrDocLike extends KindsCarrier {
   id: DocumentId;
   fileName: string;
-  documentType?: string | null | undefined;
   billingRunId?: BillingRunId | null | undefined;
   createdAt?: DateLike | null | undefined;
 }
@@ -49,7 +48,8 @@ export type KrDocSelection<D extends KrDocLike> =
 const ms = (d: DateLike | null | undefined): number => (d ? new Date(d).getTime() : 0);
 
 function isUnlinkedKrDoc(d: KrDocLike): boolean {
-  return d.documentType === KOSTNADSRAKNING_DOCUMENT_TYPE && !d.billingRunId;
+  // Länken avgör; äldre olänkade känns igen på typen (ADR 0038).
+  return !d.billingRunId && hasKind(d, "KOSTNADSRAKNING");
 }
 
 /** Tidsfönstret [från, till) där ett äldre dokument entydigt hör till `run`. */

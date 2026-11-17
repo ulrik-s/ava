@@ -40,7 +40,7 @@ describe("populateInvoiceDocs", () => {
     expect(final).toBeDefined();
     const inv = await (target.caller as Any).invoice.getById({ id: final.id });
     expect(inv.documents.length).toBeGreaterThan(0); // länkat dokument syns på fakturan
-    expect(inv.documents[0].documentType).toBe("Faktura");
+    expect(inv.documents[0].kinds).toEqual(["FAKTURA"]);
     expect(inv.documents[0].invoiceId).toBe(final.id);
     expect(String(inv.documents[0].fileName)).toContain("Faktura");
     expect(String(inv.documents[0].fileName)).toMatch(/\.pdf$/);

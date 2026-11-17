@@ -19,6 +19,7 @@ import { coreProcedures } from "./document/core";
 import { detailsProcedures } from "./document/details";
 import { eventProcedures } from "./document/events";
 import { folderProcedures } from "./document/folders";
+import { kindProcedures } from "./document/kinds";
 import { leaseProcedures } from "./document/lease";
 import { partProcedures } from "./document/parts";
 import { suggestionProcedures } from "./document/suggestions";
@@ -26,6 +27,7 @@ import { suggestionProcedures } from "./document/suggestions";
 export const documentRouter = router({
   ...coreProcedures,
   ...detailsProcedures,
+  ...kindProcedures,
   ...folderProcedures,
   ...suggestionProcedures,
   ...eventProcedures,

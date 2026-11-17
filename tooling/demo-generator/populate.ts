@@ -148,11 +148,12 @@ async function createOffices(c: AnyCaller, rows: Row[]): Promise<void> {
   }
 }
 
-/** Byråns dokument-etiketter — en inställning på organisationen, ingen egen rad. */
-async function applyDocumentTags(c: AnyCaller, orgs: Row[]): Promise<void> {
+/** Byråns egna dokumenttyper — en inställning på organisationen, ingen egen rad. */
+async function applyDocumentKinds(c: AnyCaller, orgs: Row[]): Promise<void> {
   for (const o of orgs) {
-    const tags = Array.isArray(o.documentTags) ? o.documentTags : [];
-    if (tags.length > 0) await c.organization.updateSettings({ documentTags: tags });
+    // Byråns egna dokumenttyper (ADR 0038).
+    const kinds = Array.isArray(o.documentKinds) ? o.documentKinds : [];
+    if (kinds.length > 0) await c.organization.updateSettings({ documentKinds: kinds });
   }
 }
 
@@ -220,7 +221,7 @@ export async function populate(caller: GeneratorCaller, seed: SeedDataset, opts:
   await runConflictChecks(c, conflictChecks); // efter matter-contacts (söker i dem)
   // Byråns inställningar — så att Inställningar inte är tomma i demon.
   await createOffices(c, offices);
-  await applyDocumentTags(c, organizations);
+  await applyDocumentKinds(c, organizations);
   await createOrgDefaults(c, orgPreferences);
 
   return {

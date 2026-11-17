@@ -13,7 +13,7 @@
  *        adresserad lagring + version-bump + `analyze`-jobb köas (pg-boss)
  *     3. server-side klassificering (filnamns-heuristik i Fas 2; ollama via
  *        `--profile llm` + AVA_LLM_* i Fas 3, fail-soft till heuristiken) skriver
- *        `documentType` + `analysisStatus=DONE`
+ *        typerna (`kinds`, ADR 0038) + `analysisStatus=DONE`
  *     4. redigerar (ny uppladdning) → version bumpas igen + om-klassificeras
  *   ANVÄNDARE B (annan principal, samma org):
  *     5. ser dokumentet med SENASTE versionen + klassificeringen
@@ -151,14 +151,14 @@ async function main(): Promise<void> {
   // ── steg 3: server-side klassificering färdig (analyze-jobbet) ───
   const classified = await waitUntil(
     () => findDoc(a, matterId, docId),
-    (d) => d?.analysisStatus === "DONE" && kindOk(d?.documentType),
+    (d) => d?.analysisStatus === "DONE" && kindOk(d?.kinds[0]),
     `server-side klassificering DONE + ${LLM_MODE ? "giltig kategori" : EXPECTED_KIND}`,
   );
   // Klassificering är METADATA → får INTE bumpa dokumentets version (regr-skydd
   // för #619-beslutet). Versionen ska vara KVAR på uppladdningens värde.
   assert(classified!.version === versionAfterUpload1,
     `klassificering bumpar INTE version (kvar på ${versionAfterUpload1}, fick ${classified!.version})`);
-  console.log(`✓ steg 3: klassificering klar UTAN version-bump → documentType=${classified!.documentType}, version ${classified!.version} (modell ${classified!.analysisModel})`);
+  console.log(`✓ steg 3: klassificering klar UTAN version-bump → typ=${classified!.kinds[0]}, version ${classified!.version} (modell ${classified!.analysisModel})`);
 
   // ── steg 4: redigera (ny uppladdning) → version bumpas + om-klassas ──
   const v2text = "STÄMNINGSANSÖKAN (reviderad). Käranden justerar yrkandet och åberopar ny bevisning.";
@@ -167,11 +167,11 @@ async function main(): Promise<void> {
   assert(versionAfterUpload2 > versionAfterUpload1, `redigering (innehållsändring) bumpar version (${versionAfterUpload1} → ${versionAfterUpload2})`);
   const reclassified = await waitUntil(
     () => findDoc(a, matterId, docId),
-    (d) => d?.analysisStatus === "DONE" && (d?.version ?? 0) >= versionAfterUpload2 && kindOk(d?.documentType),
+    (d) => d?.analysisStatus === "DONE" && (d?.version ?? 0) >= versionAfterUpload2 && kindOk(d?.kinds[0]),
     "om-klassificering efter redigering klar",
   );
   const finalVersion = reclassified!.version;
-  const finalKind = reclassified!.documentType;
+  const finalKind = reclassified!.kinds[0];
   // Återigen: om-klassificeringen är metadata → versionen står kvar på upload-2.
   assert(finalVersion === versionAfterUpload2,
     `om-klassificering bumpar INTE version (kvar på ${versionAfterUpload2}, fick ${finalVersion})`);
@@ -182,8 +182,8 @@ async function main(): Promise<void> {
   assert(seenByB !== undefined, "användare B ser dokumentet (samma org)");
   assert((seenByB!.version ?? 0) >= versionAfterUpload2, `användare B ser den redigerade versionen (>= ${versionAfterUpload2}, fick ${seenByB!.version})`);
   // Fler-användar-konsistens: B ser SAMMA kategori som A:s slutvy (mode-agnostiskt).
-  assert(seenByB!.documentType === finalKind, `användare B ser samma kategori som A (${finalKind})`);
-  console.log(`✓ steg 5: användare B ser dokumentet (version ${seenByB!.version}, ${seenByB!.documentType})`);
+  assert(seenByB!.kinds[0] === finalKind, `användare B ser samma kategori som A (${finalKind})`);
+  console.log(`✓ steg 5: användare B ser dokumentet (version ${seenByB!.version}, ${seenByB!.kinds[0]})`);
 
   console.log("✓ dokument-pipeline-E2E: alla steg gröna (upload → server-klassificering → versionering → fler-användar-synlighet)");
 }

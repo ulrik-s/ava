@@ -168,7 +168,7 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     // Byråns fält ur metan (#1439) står i sidhuvudet.
     expect(text).toContain("Byrå AB");
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-1", documentType: "Faktura",
+      id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-1", kinds: ["FAKTURA"],
     }));
     expect(persistGeneratedDoc).toHaveBeenCalled();
     await waitFor(() => expect(onClose).toHaveBeenCalled());

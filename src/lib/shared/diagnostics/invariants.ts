@@ -12,7 +12,7 @@
  * webbläsaren och i node-tester (och i framtiden server-side).
  */
 
-import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
+import { hasKind, type KindsCarrier } from "@/lib/shared/document-kinds";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 
 /** Maskinläsbar kod per invariant — stabil, används för dedup + filtrering. */
@@ -36,8 +36,9 @@ export interface BillingRunView {
 }
 
 /** Minimal vy av ett dokument som invarianten behöver. */
-export interface DocumentView {
-  documentType?: string | null | undefined;
+export interface DocumentView extends KindsCarrier {
+  /** Länken till faktureringskörningen (#1230) — kostnadsräkningens dokument. */
+  billingRunId?: string | null | undefined;
 }
 
 export interface MatterInvariantInput {
@@ -69,7 +70,7 @@ function checkKostnadsrakningHasDocument(input: MatterInvariantInput): Invariant
   if (pendingRuns.length === 0) return [];
 
   const hasKrDoc = input.documents.some(
-    (d) => d.documentType === KOSTNADSRAKNING_DOCUMENT_TYPE,
+    (d) => d.billingRunId != null || hasKind(d, "KOSTNADSRAKNING"),
   );
   if (hasKrDoc) return [];
 

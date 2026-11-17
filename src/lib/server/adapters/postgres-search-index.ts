@@ -18,6 +18,7 @@
  */
 
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { KIND_LABELS, KNOWN_KINDS } from "@/lib/shared/document-kind";
 import { groupPartsByDocument, partForPage } from "@/lib/shared/document-part-kinds";
 import { asId, type DocumentId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { documentPages, documentParts, documents, matters } from "../db/schema";
@@ -45,7 +46,11 @@ interface Candidate {
   fileName: string;
   storagePath: string;
   matterId: MatterId;
+  /** Typerna (ADR 0038) + de äldre fälten för läsregeln (`documentKinds`). */
+  kinds: string[];
+  kindsManual: boolean;
   documentType: string | null;
+  tags: string[];
   summary: string | null;
   matterNumber: string;
   matterTitle: string;
@@ -81,6 +86,19 @@ export function markHeadline(text: string): string {
   return text
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
     .replaceAll(MARK_START, "<mark>").replaceAll(MARK_END, "</mark>");
+}
+
+/**
+ * Träffar söktermen dokumentets typer (ADR 0038)? Inbyggda typer matchas på
+ * visningsnamnet ("Stämning" → STAMNING), egna typer på sig själva. De äldre
+ * `document_type` täcker rader som backfillen inte hunnit flytta.
+ */
+function kindsMatch(needle: Needle): SQL | undefined {
+  const own = sql`${documents.kinds}::text ILIKE ${needle.likePattern}`;
+  const legacy = ilike(documents.documentType, needle.likePattern);
+  const codes = KNOWN_KINDS.filter((k) => needle.matcher.test(KIND_LABELS[k]));
+  if (codes.length === 0) return or(own, legacy);
+  return or(own, legacy, sql`${documents.kinds} ?| array[${sql.join(codes.map((c) => sql`${c}`), sql`, `)}]`);
 }
 
 /** Poäng: metadata (som demon) + innehåll (1 + ts_rank) när en sida träffade. */
@@ -187,13 +205,14 @@ export class PostgresSearchIndex implements ISearchIndex, IDocumentPageIndex {
       .as("best");
     const metaMatch = or(
       ilike(documents.fileName, needle.likePattern),
-      ilike(documents.documentType, needle.likePattern),
+      kindsMatch(needle),
       ilike(documents.summary, needle.likePattern),
     );
     return this.db
       .select({
         id: documents.id, fileName: documents.fileName, storagePath: documents.storagePath,
-        matterId: documents.matterId, documentType: documents.documentType, summary: documents.summary,
+        matterId: documents.matterId, summary: documents.summary,
+        kinds: documents.kinds, kindsManual: documents.kindsManual, documentType: documents.documentType, tags: documents.tags,
         matterNumber: matters.matterNumber, matterTitle: matters.title, organizationId: matters.organizationId,
         page: best.pageNo, rank: best.rank,
       })

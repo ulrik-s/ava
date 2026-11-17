@@ -93,7 +93,7 @@ jobQueue.registerWorker<ClassifyPayload>("classify-document", async (payload, ct
   ctx.setProgress(0.3);
   const guess = guessFromFilename(payload.fileName);
 
-  // Skriv `documentType` + `analyzedAt` + `analysisStatus` via tRPC.
+  // Skriv typen (ADR 0038) + `analyzedAt` + `analysisStatus` via tRPC.
   // Alla tre fält måste sättas så UI:n vet att analysen körts klart —
   // utan analyzedAt visas "⏳ analyseras..." permanent.
   ctx.setProgress(0.7);

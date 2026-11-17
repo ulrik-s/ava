@@ -28,7 +28,7 @@ describe("AnalyzeDispatcherRegistrar", () => {
     await dispatchAnalyze({ documentId: asId<"DocumentId">("d1"), kind: "INVOICE", analyzedAt: "2026-01-01T00:00:00Z", analysisStatus: "DONE" });
     expect(mutateAsync).toHaveBeenCalledWith({
       documentId: "d1",
-      documentType: "INVOICE",
+      kinds: ["INVOICE"],
       analyzedAt: "2026-01-01T00:00:00Z",
       analysisStatus: "DONE",
     });

@@ -10,7 +10,6 @@ import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/share
 import { DocumentDetailsDialog } from "./_document-details-dialog";
 import { DOCUMENT_RECIPIENT_LABELS } from "./_document-details-input";
 import { DocumentPartsList, documentKindsLabel, type DocumentPartView } from "./_document-parts";
-import { DocumentTags } from "./_document-tags";
 import { formatFileSize } from "./_drag-helpers";
 import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
@@ -29,6 +28,9 @@ export interface DocumentRecord {
   createdAt: string | Date;
   uploadedBy: { name: string | null } | null;
   title?: string | null | undefined;
+  /** Dokumentets typer (ADR 0038). Läses via `documentKinds` (äldre rader: documentType/tags). */
+  kinds?: readonly string[] | undefined;
+  kindsManual?: boolean | undefined;
   documentType?: string | null | undefined;
   /** Delar i ett sammansatt dokument (#1220), sidordning. Tom/saknas = inga delar. */
   parts?: readonly DocumentPartView[] | undefined;
@@ -119,7 +121,6 @@ export function DocumentRow({
               <SyncStatusBadge status={syncStatus} />
             </div>
             <DocumentPartsList doc={doc} />
-            <DocumentTags documentId={doc.id} matterId={doc.matterId} tags={doc.tags ?? []} />
           </div>
         </td>
         <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.sizeBytes)}</td>

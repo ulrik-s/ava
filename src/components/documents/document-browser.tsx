@@ -6,7 +6,7 @@ import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
 import { enqueueTextExtraction } from "@/lib/client/jobs/enqueue-text-extraction";
 import { trpc } from "@/lib/client/trpc";
 import { kindLabel } from "@/lib/shared/document-kind";
-import { kindsOf } from "@/lib/shared/document-part-kinds";
+import { documentKinds } from "@/lib/shared/document-kinds";
 import { asId, type DocumentFolderId, type DocumentId, type MatterId } from "@/lib/shared/schemas/ids";
 import { useDocumentsWithParts } from "./_document-parts";
 import { DocumentRow, DOCUMENT_RECIPIENT_LABELS, type DocumentRecord } from "./_document-row";
@@ -149,11 +149,11 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   );
 }
 
-/** Matchar dokumentet filtren? Tomt filter = allt. Typ träffar valfri del (#1220). */
+/** Matchar dokumentet filtren? Tomt filter = allt. Typ träffar någon av dokumentets typer (ADR 0038). */
 function matchesFilter(d: DocumentRecord, f: { dir: string; recipient: string; kind: string }): boolean {
   return (!f.dir || d.direction === f.dir)
     && (!f.recipient || d.recipient === f.recipient)
-    && (!f.kind || kindsOf(d).includes(f.kind));
+    && (!f.kind || documentKinds(d).includes(f.kind));
 }
 
 /** Dokumentfilter-state (#901, #1220): riktning + mottagare + typ, samt den filtrerade
@@ -167,7 +167,7 @@ function useDocumentFilter(documents: DocumentRecord[]) {
     [documents, dirFilter, recipientFilter, kindFilter],
   );
   const kinds = useMemo(
-    () => [...new Set(documents.flatMap(kindsOf))].sort((a, b) => kindLabel(a).localeCompare(kindLabel(b), "sv")),
+    () => [...new Set(documents.flatMap((d) => documentKinds(d)))].sort((a, b) => kindLabel(a).localeCompare(kindLabel(b), "sv")),
     [documents],
   );
   return { dirFilter, recipientFilter, kindFilter, setDirFilter, setRecipientFilter, setKindFilter, visibleDocuments, kinds };

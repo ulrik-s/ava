@@ -1,22 +1,23 @@
 /**
- * Tester för `DocumentTagsSection` (#621) — org-vokabulären för dokument-
- * etiketter. Verifierar add/remove → `organization.updateSettings`.
+ * Tester för byråns ordlistor i inställningarna: `DocumentKindsSection`
+ * (ADR 0038, byråns egna dokumenttyper) och `MatterTypesSection`.
+ * Verifierar add/remove → `organization.updateSettings`.
  */
 
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { DocumentTagsSection, MatterTypesSection } from "@/app/settings/_document-tags-section";
+import { DocumentKindsSection, MatterTypesSection } from "@/app/settings/_vocabulary-sections";
 
 const updateMutate = vi.fn();
 const getSettingsInvalidate = vi.fn();
-let documentTags: string[] = ["Sekretess"];
+let documentKinds: string[] = ["Sekretess"];
 let matterTypes: string[] = ["Bodelning"];
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ organization: { getSettings: { invalidate: getSettingsInvalidate } } }),
     organization: {
-      getSettings: { useQuery: () => ({ data: { documentTags, matterTypes } }) },
+      getSettings: { useQuery: () => ({ data: { documentKinds, matterTypes } }) },
       updateSettings: { useMutation: () => ({ mutate: updateMutate, isPending: false }) },
     },
   },
@@ -24,41 +25,42 @@ vi.mock("@/lib/client/trpc", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  documentTags = ["Sekretess"];
+  documentKinds = ["Sekretess"];
   matterTypes = ["Bodelning"];
 });
 
-describe("DocumentTagsSection", () => {
-  it("renderar vokabulären som chips", () => {
-    render(<DocumentTagsSection />);
+describe("DocumentKindsSection", () => {
+  it("renderar byråns egna typer som chips och nämner de inbyggda", () => {
+    render(<DocumentKindsSection />);
     expect(screen.getByText("Sekretess")).toBeInTheDocument();
+    expect(screen.getByText(/De inbyggda finns alltid: Stämning, Kallelse/)).toBeInTheDocument();
   });
 
-  it("lägga till etikett anropar updateSettings med utökad lista", () => {
-    render(<DocumentTagsSection />);
-    fireEvent.change(screen.getByPlaceholderText(/Ny etikett/), { target: { value: "Original" } });
+  it("lägga till typ anropar updateSettings med utökad lista", () => {
+    render(<DocumentKindsSection />);
+    fireEvent.change(screen.getByPlaceholderText(/Ny dokumenttyp/), { target: { value: "Original" } });
     fireEvent.click(screen.getByRole("button", { name: "Lägg till" }));
-    expect(updateMutate).toHaveBeenCalledWith({ documentTags: ["Sekretess", "Original"] });
+    expect(updateMutate).toHaveBeenCalledWith({ documentKinds: ["Sekretess", "Original"] });
   });
 
   it("dubblett läggs inte till", () => {
-    render(<DocumentTagsSection />);
-    fireEvent.change(screen.getByPlaceholderText(/Ny etikett/), { target: { value: "Sekretess" } });
+    render(<DocumentKindsSection />);
+    fireEvent.change(screen.getByPlaceholderText(/Ny dokumenttyp/), { target: { value: "Sekretess" } });
     fireEvent.click(screen.getByRole("button", { name: "Lägg till" }));
     expect(updateMutate).not.toHaveBeenCalled();
   });
 
-  it("ta bort etikett anropar updateSettings utan den", () => {
-    documentTags = ["Sekretess", "Original"];
-    render(<DocumentTagsSection />);
+  it("ta bort typ anropar updateSettings utan den", () => {
+    documentKinds = ["Sekretess", "Original"];
+    render(<DocumentKindsSection />);
     fireEvent.click(screen.getByRole("button", { name: "Ta bort Sekretess" }));
-    expect(updateMutate).toHaveBeenCalledWith({ documentTags: ["Original"] });
+    expect(updateMutate).toHaveBeenCalledWith({ documentKinds: ["Original"] });
   });
 
   it("tom vokabulär → visar tomtext", () => {
-    documentTags = [];
-    render(<DocumentTagsSection />);
-    expect(screen.getByText("Inga etiketter ännu.")).toBeInTheDocument();
+    documentKinds = [];
+    render(<DocumentKindsSection />);
+    expect(screen.getByText("Inga egna dokumenttyper ännu.")).toBeInTheDocument();
   });
 });
 

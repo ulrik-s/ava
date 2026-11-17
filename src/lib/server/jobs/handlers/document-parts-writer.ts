@@ -9,12 +9,10 @@
  *     sidintervallen inte längre → allt räknas om och de manuella delarna
  *     släpps.
  *   - Oförändrad segmentering → inga skrivningar (ingen change_log-churn).
- *   - `documentType` behåller sin betydelse bakåtkompatibelt: första delens typ,
- *     utom specialvärden (`Kostnadsräkning`, `E-post`, fritext) som aldrig
- *     skrivs över — sådana dokument får inga delar alls.
+ *   - Dokument vars typer en person eller systemet satt (ADR 0038,
+ *     `kindsManual`) segmenteras inte om — jobbet anropar då inte skrivaren.
  */
 
-import { guessFromFilename, isDocumentKind, type DocumentKind } from "@/lib/shared/document-kind";
 import { overlayManualParts, type SegmentPart, type SourcedPart } from "@/lib/shared/document-segmentation";
 import type { Document, DocumentPart } from "@/lib/shared/schemas/document";
 import type { DocumentPartRepository } from "../../repositories/document-part-repository";
@@ -23,18 +21,7 @@ import type { DocumentPartRepository } from "../../repositories/document-part-re
 export type PartsRepo = Pick<DocumentPartRepository, "listForDocument" | "create" | "update" | "softDelete">;
 
 /** Dokumentfälten reglerna läser. */
-export type PartsDoc = Pick<Document, "id" | "matterId" | "fileName" | "documentType" | "analysisModel">;
-
-/**
- * En kategori som en ANVÄNDARE satt (före delarna fanns): en kod, men aldrig
- * analyserad av servern (`analysisModel` tomt) och inte vad filnamns-
- * heuristiken (klientens gamla gissning) hade gett. Bevaras som EN manuell del.
- */
-export function manualKindOf(doc: PartsDoc): DocumentKind | null {
-  const t = doc.documentType;
-  if (!isDocumentKind(t) || doc.analysisModel) return null;
-  return t === guessFromFilename(doc.fileName) ? null : t;
-}
+export type PartsDoc = Pick<Document, "id" | "matterId">;
 
 /** Sista sidan som delarna täcker (= sidantalet när delarna skrevs). */
 function lastPage(parts: readonly DocumentPart[]): number {
@@ -73,17 +60,14 @@ async function writeTarget(repo: PartsRepo, doc: PartsDoc, target: readonly Sour
 
 /**
  * Ersätt dokumentets delar med `computed` (ny segmentering) för `pageCount`
- * sidor. `seedManual` = en användarsatt kategori som ska bli en manuell del
- * över hela dokumentet (första gången delar skapas). Returnerar delarna.
+ * sidor. Manuellt rättade delar bevaras (se ovan). Returnerar delarna.
  */
 export async function replaceDocumentParts(
   repo: PartsRepo, doc: PartsDoc, computed: readonly SegmentPart[], pageCount: number,
-  seedManual: DocumentKind | null = null,
 ): Promise<SourcedPart[]> {
   const existing = await repo.listForDocument(doc.id);
   const manual = keptManual(existing, pageCount);
-  const seed = seedManual && existing.length === 0 ? [{ kind: seedManual, fromPage: 1, toPage: pageCount }] : [];
-  const target = overlayManualParts(computed, [...manual, ...seed]);
+  const target = overlayManualParts(computed, manual);
   if (unchanged(existing, target)) return target;
   for (const e of existing) {
     if (!manual.includes(e)) await repo.softDelete(e.id);

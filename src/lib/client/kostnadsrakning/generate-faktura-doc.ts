@@ -88,7 +88,7 @@ export async function generateFakturaFromTemplate(args: GenerateFakturaFromTempl
   const storagePath = `documents/content/${docId}.pdf`;
   await register.mutateAsync({
     id: asId<"DocumentId">(docId), matterId, fileName, mimeType: FAKTURA_MIME,
-    sizeBytes: bytes.byteLength, storagePath, documentType: "Faktura", invoiceId: invoice.id, analysisStatus: "DONE",
+    sizeBytes: bytes.byteLength, storagePath, kinds: ["FAKTURA"], invoiceId: invoice.id, analysisStatus: "DONE",
   });
   await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: FAKTURA_MIME, bytes });
   try {

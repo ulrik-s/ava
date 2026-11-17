@@ -1,7 +1,7 @@
 /**
  * E2E (demo): varje panel och flik i varje menyval visar data (#1314).
  *
- * Demon hade tomma paneler: Inställningar → Kontor, Dokument-etiketter och
+ * Demon hade tomma paneler: Inställningar → Kontor, Dokumenttyper och
  * Standardvyer; Händelser och Förslag i de flesta ärenden; Domstolsbetalningar i
  * brottmålen; och åldersanalysen i Kundfordringar (inga fakturor hade
  * förfallodatum). Testet klickar igenom varje flik och fäller på ett tomläge.
