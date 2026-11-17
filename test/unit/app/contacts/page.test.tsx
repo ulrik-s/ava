@@ -48,10 +48,16 @@ beforeEach(() => {
 });
 
 describe("ContactsPage", () => {
-  it("renderar Kontakter-rubrik och +Ny kontakt-knapp", () => {
+  it("renderar Parter-rubrik och +Ny part-knapp", () => {
     render(<ContactsPage />);
-    expect(screen.getAllByText(/Kontakter/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /\+ Ny kontakt/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Parter" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+ Ny part" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Sök parter...")).toBeInTheDocument();
+  });
+
+  it("tom lista visar 'Inga parter.'", () => {
+    render(<ContactsPage />);
+    expect(screen.getByText("Inga parter.")).toBeInTheDocument();
   });
 
   it("renderar kontakt i listan", () => {
@@ -75,11 +81,13 @@ describe("ContactsPage", () => {
     expect(screen.getByText("Anna Andersson")).toBeInTheDocument();
   });
 
-  it("öppnar formulär vid +Ny kontakt", () => {
+  it("öppnar formulär vid +Ny part", () => {
     render(<ContactsPage />);
-    fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     // Form-submit-knappen "Skapa kontakt" syns nu
     expect(screen.getByRole("button", { name: /Skapa kontakt|Spara/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ny part" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Spara part" })).toBeInTheDocument();
   });
 
   it("öppnar form direkt med ?new=1 query-parameter", () => {
@@ -90,16 +98,16 @@ describe("ContactsPage", () => {
 
   it("submittar nytt kontakt-formulär med namn", () => {
     render(<ContactsPage />);
-    fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     fireEvent.change(screen.getByLabelText("Namn *"), { target: { value: "Cecilia C" } });
-    fireEvent.click(screen.getByRole("button", { name: /Spara kontakt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Spara part/i }));
     expect(createMutate).toHaveBeenCalled();
     expect(createMutate.mock.calls[0]![0].name).toBe("Cecilia C");
   });
 
   it("byter mellan PERSON och COMPANY visar olika nummer-fält", () => {
     render(<ContactsPage />);
-    fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     expect(screen.getByPlaceholderText(/YYYYMMDD/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "COMPANY" } });
     expect(screen.queryByPlaceholderText(/YYYYMMDD/)).not.toBeInTheDocument();
@@ -108,12 +116,12 @@ describe("ContactsPage", () => {
 
   it("Avbryt-knappen i form stänger den", () => {
     render(<ContactsPage />);
-    fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
-    expect(screen.getByRole("button", { name: /Spara kontakt/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
+    expect(screen.getByRole("button", { name: /Spara part/i })).toBeInTheDocument();
     // Det finns två "Avbryt" — top-headerns toggle och form Avbryt
     const cancelButtons = screen.getAllByRole("button", { name: /Avbryt/i });
     fireEvent.click(cancelButtons[cancelButtons.length - 1]!);
-    expect(screen.queryByRole("button", { name: /Spara kontakt/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Spara part/i })).not.toBeInTheDocument();
   });
 
   it("uppdaterar sökfältet och resettar page", () => {
@@ -123,7 +131,7 @@ describe("ContactsPage", () => {
       pages: 0,
     };
     render(<ContactsPage />);
-    const search = screen.getByPlaceholderText<HTMLInputElement>(/Sök kontakter/i);
+    const search = screen.getByPlaceholderText<HTMLInputElement>(/Sök parter/i);
     fireEvent.change(search, { target: { value: "Anna" } });
     expect(search.value).toBe("Anna");
   });
@@ -163,7 +171,7 @@ describe("ContactsPage", () => {
 
   it("uppdaterar alla formulärfält i ny kontakt-form", () => {
     render(<ContactsPage />);
-    fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     const nameInput = screen.getByLabelText<HTMLInputElement>(/Namn/);
     fireEvent.change(nameInput, { target: { value: "Bertil" } });
     expect(nameInput.value).toBe("Bertil");
@@ -191,7 +199,7 @@ describe("ContactsPage", () => {
 
   it("uppdaterar org-nummerfält när typ=COMPANY", () => {
     render(<ContactsPage />);
-    fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     const typeSelect = screen.getByLabelText<HTMLSelectElement>(/^Typ$/);
     fireEvent.change(typeSelect, { target: { value: "COMPANY" } });
     const orgNr = screen.getByLabelText<HTMLInputElement>(/Organisationsnummer/);

@@ -77,7 +77,7 @@ function useContactDetail(paramId: string) {
     setEditing(true);
   }
   function handleDelete(): void {
-    if (!confirm("Är du säker på att du vill ta bort denna kontakt? Kontakten tas bort från alla ärenden.")) return;
+    if (!confirm("Är du säker på att du vill ta bort denna part? Parten tas bort från alla ärenden.")) return;
     deleteContact.mutate({ id });
   }
 
@@ -413,7 +413,7 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
       defaultLayout={contactLayout}
       header={(
         <div className="mb-2">
-          <Link href="/contacts" className="text-xs text-blue-600 hover:underline">&larr; Tillbaka till kontakter</Link>
+          <Link href="/contacts" className="text-xs text-blue-600 hover:underline">&larr; Tillbaka till parter</Link>
         </div>
       )}
     />

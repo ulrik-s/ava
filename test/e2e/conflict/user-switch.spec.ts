@@ -67,9 +67,9 @@ test("utloggning med en osynkad ändring → nästa användare ser den aldrig; s
   // Servern nås inte → ändringen köas lokalt.
   await page.route("**/api/trpc/**", (route) => route.abort());
   const name = `Sekretess-kontakt ${Date.now()}`;
-  await page.getByRole("button", { name: "+ Ny kontakt" }).click();
+  await page.getByRole("button", { name: "+ Ny part" }).click();
   await page.getByLabel("Namn *").fill(name);
-  await page.getByRole("button", { name: "Spara kontakt" }).click();
+  await page.getByRole("button", { name: "Spara part" }).click();
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 15_000 });
   await expect.poll(() => queued(page, lawyer), { timeout: 15_000 }).toBe(1);
 

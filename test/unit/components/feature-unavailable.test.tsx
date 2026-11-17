@@ -22,7 +22,7 @@ describe("FeatureUnavailable", () => {
   it("listar genvägar till fungerande delar", () => {
     render(<FeatureUnavailable title="X" description="y" />);
     expect(screen.getByRole("link", { name: /Ärenden/ })).toHaveAttribute("href", "/matters");
-    expect(screen.getByRole("link", { name: /Kontakter/ })).toHaveAttribute("href", "/contacts");
+    expect(screen.getByRole("link", { name: /Parter/ })).toHaveAttribute("href", "/contacts");
     expect(screen.getByRole("link", { name: /Fakturor/ })).toHaveAttribute("href", "/invoices");
     expect(screen.getByRole("link", { name: /Tidregistrering/ })).toHaveAttribute("href", "/time");
     expect(screen.getByRole("link", { name: /Rapporter/ })).toHaveAttribute("href", "/reports");

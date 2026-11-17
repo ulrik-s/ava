@@ -35,7 +35,7 @@ interface NewContactFormProps {
 
 /** Ny-kontakt-formuläret — delat av /contacts och "+ Ny klient" i nytt ärende.
  *  Äger sina fält-id:n; presentational (form-state + submit som props). */
-export function NewContactForm({ form, setForm, onSubmit, onCancel, isPending, error, title = "Ny kontakt", submitLabel = "Spara kontakt" }: NewContactFormProps) {
+export function NewContactForm({ form, setForm, onSubmit, onCancel, isPending, error, title = "Ny part", submitLabel = "Spara part" }: NewContactFormProps) {
   const nameId = useId();
   const typeId = useId();
   const personalNumberId = useId();
