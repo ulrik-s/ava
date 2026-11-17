@@ -76,3 +76,22 @@ test("återkommande klient ger inga träffar; en ny motpart som är klient i ett
   await page.getByRole("tab", { name: /^Att bevaka/ }).first().click();
   await expect(watch.getByText(/Jävskontroll: \d+ träffar att bedöma/)).toBeVisible({ timeout: 15_000 });
 });
+
+test("Nytt ärende: titeln fyller i sökrutan i 'Välj klient…', och vald klient fyller i en tom titel (#1644)", async ({ page }) => {
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/matters/?new=1`);
+  const title = page.getByLabel("Titel *");
+  await title.fill("Anna Andersson");
+  await page.getByRole("button", { name: /Välj klient/ }).click();
+  const search = page.getByPlaceholder("Namn, personnummer eller organisationsnummer");
+  await expect(search).toHaveValue("Anna Andersson");
+  await expect(page.getByRole("list", { name: "Träffar" }).getByRole("button", { name: /Anna Andersson/ }).first()).toBeVisible();
+  await page.getByRole("dialog", { name: "Välj klient" }).getByRole("button", { name: "Avbryt" }).click();
+
+  await title.fill("");
+  await page.getByRole("button", { name: /Välj klient/ }).click();
+  await expect(search).toHaveValue("");
+  await search.fill("Anna Andersson");
+  await page.getByRole("list", { name: "Träffar" }).getByRole("button", { name: /Anna Andersson/ }).first().click();
+  await expect(title).toHaveValue("Anna Andersson");
+});

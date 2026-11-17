@@ -13,6 +13,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { coverageStatus } from "@/lib/shared/coverage-cap";
 import type { MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
+import { EMPTY_MATTER_FORM, matterCreateArgs, withPickedClient, type MatterForm } from "./_matter-form";
 
 interface MatterRow {
   id: string;
@@ -127,43 +128,6 @@ const matterColumns: Column<MatterRow>[] = [
 
 type StatusFilter = MatterStatus | "";
 type NamedOption = { id: string; name: string };
-
-interface MatterForm {
-  title: string;
-  description: string;
-  matterType: string;
-  klientId: string;
-  responsibleLawyerId: string;
-  /** Domstolens målnummer — frivilligt, trimmas vid submit (#1509). */
-  courtCaseNumber: string;
-}
-
-/** Trimmat värde, eller undefined när det bara är blanksteg/tomt. */
-function optionalTrimmed(v: string): string | undefined {
-  return v.trim() || undefined;
-}
-
-const EMPTY_MATTER_FORM: MatterForm = {
-  title: "",
-  description: "",
-  matterType: "",
-  klientId: "",
-  responsibleLawyerId: "",
-  courtCaseNumber: "",
-};
-
-/** Formulär → `matter.create`-input: tomma fält utelämnas (utbrutet ur
- *  MattersContent, max-lines/complexity-ratchet). */
-function matterCreateArgs(form: MatterForm) {
-  return {
-    title: form.title,
-    description: form.description || undefined,
-    matterType: form.matterType || undefined,
-    klientId: form.klientId || undefined,
-    responsibleLawyerId: form.responsibleLawyerId || undefined,
-    courtCaseNumber: optionalTrimmed(form.courtCaseNumber),
-  };
-}
 
 /** Bygg query-args för matter.list (flyttar `|| undefined`-grenarna ut ur
  *  MattersContent → håller den under complexity@8). */
@@ -397,9 +361,10 @@ function MattersContent() {
 
       {pickerOpen && (
         <ClientPickerDialog
+          initialTerm={form.title.trim()}
           onPick={(c) => {
             setClient(c);
-            setForm({ ...form, klientId: c.id });
+            setForm(withPickedClient(form, c));
             setPickerOpen(false);
           }}
           onClose={() => setPickerOpen(false)}
