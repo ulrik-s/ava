@@ -55,12 +55,11 @@ export const organizations = pgTable("organizations", {
   footerSeal: text("footer_seal").$type<OrgImage>(),
   azureTenantId: text("azure_tenant_id"),
   ledgerAccountMap: jsonb("ledger_account_map"),
-  /** Byråns vokabulär av giltiga dokument-etiketter (#621). Dokument får bara
-   *  bära taggar ur denna lista; hanteras i org-inställningarna. */
   documentKinds: jsonb("document_kinds").notNull().default([]).$type<string[]>(), // byråns egna dokumenttyper (ADR 0038)
   documentTags: jsonb("document_tags").notNull().default([]).$type<string[]>(), // föråldrad: taggvokabulären, ersatt av documentKinds
   /** Byråns ärendetyper — valen i "Ärendetyp" när ett ärende läggs upp. */
   matterTypes: jsonb("matter_types").notNull().default([]).$type<string[]>(),
+  publicAssignmentMatterTypes: jsonb("public_assignment_matter_types").$type<string[]>(), // offentligt uppdrag (#1638); NULL = aldrig satt
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: integer("acconto_threshold_ore"),

@@ -208,3 +208,54 @@ describe("MatterContactRepository — läs-/skriv-metoder (Drizzle/pglite)", () 
     expect((await mc.findLink(mId, cNew, "VITTNE"))?.id).toBe(created.id);
   });
 });
+
+// ─── #1641: findForConflict bär ärendets status — paritet in-memory + Drizzle. ───
+
+const STATUSES = ["ACTIVE", "CLOSED", "ARCHIVED"] as const;
+
+/** Ett ärende per status, med samma klient i alla. */
+function statusSeed(org: string) {
+  const cKli = uuidv7();
+  const matterRows = STATUSES.map((status, i) => ({ id: uuidv7(), organizationId: org, matterNumber: `2026-${i}`, title: status, status }));
+  const links = matterRows.map((m) => ({ id: uuidv7(), matterId: m.id, contactId: cKli, role: "KLIENT" }));
+  return { cKli, matterRows, links };
+}
+
+function statusByTitle(rows: Array<{ matter: { title: string; status: string } }>): Record<string, string> {
+  return Object.fromEntries(rows.map((r) => [r.matter.title, r.matter.status]));
+}
+
+const EXPECTED_STATUS = { ACTIVE: "ACTIVE", CLOSED: "CLOSED", ARCHIVED: "ARCHIVED" };
+
+describe("findForConflict — ärendets status (#1641)", () => {
+  it("in-memory: aktivt, stängt och arkiverat; rad utan status blir ACTIVE", async () => {
+    const { cKli, matterRows, links } = statusSeed(ORG);
+    const bare = uuidv7();
+    const source = prebakeJoins({
+      matters: [...matterRows, { id: bare, organizationId: ORG, matterNumber: "2026-9", title: "utan" }],
+      contacts: [{ id: cKli, organizationId: ORG, name: "Klient AB", contactType: "COMPANY" }],
+      matterContacts: [...links, { id: uuidv7(), matterId: bare, contactId: cKli, role: "KLIENT" }],
+    });
+    const rows = await new InMemoryMatterContactRepository(new LocalStore(source, async () => {})).findForConflict(ORG);
+    expect(statusByTitle(rows)).toEqual({ ...EXPECTED_STATUS, utan: "ACTIVE" });
+  });
+
+  describe("Drizzle (pglite)", () => {
+    let handle: TestDbHandle;
+    beforeAll(async () => { handle = await createTestDb(); });
+    afterAll(async () => { await handle.close(); });
+
+    it("aktivt, stängt och arkiverat", async () => {
+      const db = handle.db;
+      const org = asId<"OrganizationId">(uuidv7());
+      const { cKli, matterRows, links } = statusSeed(org);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+      for (const m of matterRows) await db.insert(matters).values(v(m));
+      await db.insert(contacts).values(v({ id: cKli, organizationId: org, name: "Klient AB", contactType: "COMPANY" }));
+      for (const l of links) await db.insert(matterContacts).values(v(l));
+      const rows = await new DrizzleMatterContactRepository(db).findForConflict(org);
+      expect(statusByTitle(rows)).toEqual(EXPECTED_STATUS);
+    });
+  });
+});

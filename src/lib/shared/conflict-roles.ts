@@ -6,12 +6,12 @@
  * avgörs bara vilken SIDA en roll står på:
  *
  *   - klientsidan: klienten,
- *   - motsidan: motparten och motpartens ombud,
+ *   - motsidan: motparten, motpartens ombud och en medtilltalad,
  *   - neutral: åklagare, domstol, försäkringsbolag, vittne, ombud och övriga.
  *
  * En konflikt är när samma person eller organisation står på olika sidor —
- * klient här och motpart (eller motpartsombud) i ett annat av byråns ärenden,
- * eller tvärtom (VRGA 3.2.1: att biträda mot en nuvarande eller tidigare
+ * klient här och motpart (eller motpartsombud eller medtilltalad) i ett annat
+ * av byråns ärenden, eller tvärtom (VRGA 3.2.1: att biträda mot en nuvarande eller tidigare
  * klient). Att vara klient i flera av byråns ärenden är ingen konflikt, och
  * inte heller att vara motpart i flera. Neutrala roller ger inga träffar och
  * kontrolleras inte: ett vittne eller en domstol är inte part.
@@ -27,6 +27,7 @@ export const CONFLICT_SIDE: Readonly<Record<MatterRole, ConflictSide>> = Object.
   KLIENT: "CLIENT",
   MOTPART: "ADVERSE",
   MOTPARTSOMBUD: "ADVERSE",
+  MEDTILLTALAD: "ADVERSE",
   AKLAGARE: "NEUTRAL",
   DOMSTOL: "NEUTRAL",
   FORSAKRINGSBOLAG: "NEUTRAL",

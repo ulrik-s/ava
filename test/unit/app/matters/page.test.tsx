@@ -5,6 +5,7 @@
 import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import MattersPage from "@/app/matters/page";
+import { ClientPickerDialog } from "@/components/contacts/client-picker-dialog";
 
 const mattersQuery: {
   data: { matters: Array<Record<string, unknown>>; total: number; pages: number };
@@ -43,6 +44,10 @@ vi.mock("@/lib/client/trpc", () => ({
       create: {
         useMutation: () => ({ mutate: createMatterMutate, isPending: false }),
       },
+    },
+    // Sammanslagen sökning (#1642) — täcks i page-search.test.tsx.
+    conflict: {
+      check: { useMutation: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, data: undefined, error: null }) },
     },
     contacts: {
       list: { useQuery: () => contactsQuery },
@@ -348,5 +353,89 @@ describe("MattersPage — Välj klient via sökdialog (#1128)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Anna Karlsson/ }));
     fireEvent.click(screen.getByRole("button", { name: "Ta bort vald klient" }));
     expect(screen.getByRole("button", { name: /Välj klient/ })).toBeInTheDocument();
+  });
+});
+
+describe("ClientPickerDialog — startvärde för sökrutan (#1644)", () => {
+  beforeEach(() => {
+    searchHits = [{ id: "c-anna", name: "Anna Karlsson", contactType: "PERSON" }];
+  });
+
+  it("med initialTerm är sökrutan ifylld och träffarna visas direkt", () => {
+    render(<ClientPickerDialog initialTerm="Anna" onPick={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole<HTMLInputElement>("searchbox").value).toBe("Anna");
+    expect(searchQuery).toHaveBeenLastCalledWith({ term: "Anna" });
+    expect(screen.getByRole("button", { name: /Anna Karlsson/ })).toBeInTheDocument();
+  });
+
+  it("utan initialTerm är sökrutan tom som förut", () => {
+    render(<ClientPickerDialog onPick={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole<HTMLInputElement>("searchbox").value).toBe("");
+    expect(screen.getByText("Skriv för att söka.")).toBeInTheDocument();
+  });
+
+  it("'+ Ny klient…' får startvärdet som namn", () => {
+    render(<ClientPickerDialog initialTerm="Nya Klienten AB" onPick={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Ny klient/ }));
+    const dialog = screen.getByRole("dialog", { name: "Ny klient" });
+    expect(within(dialog).getByLabelText<HTMLInputElement>(/Namn/).value).toBe("Nya Klienten AB");
+  });
+});
+
+describe("MattersPage — titel och klient fyller i varandra (#1644)", () => {
+  beforeEach(() => {
+    searchHits = [{ id: "c-anna", name: "Anna Karlsson", contactType: "PERSON" }];
+  });
+
+  function openForm(): void {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+  }
+
+  function titleInput(): HTMLInputElement {
+    return screen.getByLabelText<HTMLInputElement>(/Titel/);
+  }
+
+  it("titel → sökrutan är ifylld med den trimmade titeln", () => {
+    openForm();
+    fireEvent.change(titleInput(), { target: { value: "  Anna Karlsson  " } });
+    fireEvent.click(screen.getByRole("button", { name: /Välj klient/ }));
+    const dialog = screen.getByRole("dialog", { name: "Välj klient" });
+    expect(within(dialog).getByRole<HTMLInputElement>("searchbox").value).toBe("Anna Karlsson");
+    expect(within(dialog).getByRole("button", { name: /Anna Karlsson/ })).toBeInTheDocument();
+  });
+
+  it("tom titel (bara mellanslag) → tom sökruta", () => {
+    openForm();
+    fireEvent.change(titleInput(), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /Välj klient/ }));
+    expect(within(screen.getByRole("dialog")).getByRole<HTMLInputElement>("searchbox").value).toBe("");
+  });
+
+  it("klient vald med tom titel → titeln får klientens namn", () => {
+    openForm();
+    fireEvent.click(screen.getByRole("button", { name: /Välj klient/ }));
+    fireEvent.change(within(screen.getByRole("dialog")).getByRole("searchbox"), { target: { value: "Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: /Anna Karlsson/ }));
+    expect(titleInput().value).toBe("Anna Karlsson");
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ title: "Anna Karlsson", klientId: "c-anna" }));
+  });
+
+  it("nyskapad klient med tom titel → titeln får klientens namn", () => {
+    openForm();
+    fireEvent.click(screen.getByRole("button", { name: /Välj klient/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Ny klient/ }));
+    act(() => contactCreated?.({ id: "c-new", name: "Nya Klienten AB" }));
+    expect(titleInput().value).toBe("Nya Klienten AB");
+  });
+
+  it("ifylld titel rörs inte när klienten väljs", () => {
+    openForm();
+    fireEvent.change(titleInput(), { target: { value: "Bodelning" } });
+    fireEvent.click(screen.getByRole("button", { name: /Välj klient/ }));
+    fireEvent.change(within(screen.getByRole("dialog")).getByRole("searchbox"), { target: { value: "Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: /Anna Karlsson/ }));
+    expect(titleInput().value).toBe("Bodelning");
   });
 });

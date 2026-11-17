@@ -81,6 +81,20 @@ describe("matter.list", () => {
     expect((await caller.list({ search: "bergström" })).matters).toHaveLength(1);
   });
 
+  it("id-filtret (#1642): bara de angivna ärendena, alla statusar, inom byrån", async () => {
+    const { caller } = makeCaller({
+      matters: [
+        matter({ status: "CLOSED" }),
+        matter({ id: "m2", matterNumber: `${YEAR}-0002` }),
+        matter({ id: "m-b", organizationId: "org-b", matterNumber: `${YEAR}-0003` }),
+      ],
+    });
+    const res = await caller.list({ ids: ["matter-1", "m-b"], page: 1, pageSize: 2 });
+    expect(res.matters.map((m) => [m.id, m.status])).toEqual([["matter-1", "CLOSED"]]);
+    expect(res.total).toBe(1);
+    expect((await caller.list({ ids: [] })).matters).toHaveLength(0);
+  });
+
   it("räknar pages korrekt", async () => {
     const { caller } = makeCaller({
       matters: [matter(), matter({ id: "m2", matterNumber: `${YEAR}-0002` }), matter({ id: "m3", matterNumber: `${YEAR}-0003` })],
@@ -384,5 +398,51 @@ describe("matter.removeContact", () => {
     }, "org-b");
     await expect(caller.removeContact({ matterContactId: "mc1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mcs(ds).some((mc) => mc.id === "mc1")).toBe(true);
+  });
+});
+
+describe("offentligt uppdrag per ärendetyp (#1639)", () => {
+  const PUBLIC_ORGS = [{ id: ORG, name: "X", matterTypes: ["Försvar", "Bodelning"], publicAssignmentMatterTypes: ["Försvar"] }];
+  const caller = (matters: unknown[] = []) => makeCaller({ organizations: PUBLIC_ORGS, matters } as Partial<DemoSource>);
+  const notes = (ds: DemoDataStore) => (src(ds).serviceNotes ?? []) as Array<{ text: string }>;
+  const stored = (ds: DemoDataStore) => (src(ds).matters as Array<{ id: string; paymentMethod?: string }>).find((m) => m.id === "matter-1");
+
+  it("create med markerad typ ger Offentligt uppdrag även om klienten skickar annat", async () => {
+    const { caller: c } = caller();
+    expect((await c.create({ title: "T", matterType: "Försvar", paymentMethod: "PRIVAT" })).paymentMethod).toBe("OFFENTLIGT_UPPDRAG");
+    expect((await c.create({ title: "T2", matterType: "Försvar" })).paymentMethod).toBe("OFFENTLIGT_UPPDRAG");
+  });
+
+  it("create med omarkerad typ eller utan typ: som i dag", async () => {
+    const { caller: c } = caller();
+    expect((await c.create({ title: "T", matterType: "Bodelning", paymentMethod: "PRIVAT" })).paymentMethod).toBe("PRIVAT");
+    expect((await c.create({ title: "T2", paymentMethod: "RATTSHJALP" })).paymentMethod).toBe("RATTSHJALP");
+  });
+
+  it("update avvisar ett annat betalningssätt för markerad typ, med svenskt felmeddelande", async () => {
+    const { caller: c, ds } = caller([matter({ matterType: "Försvar", paymentMethod: "OFFENTLIGT_UPPDRAG" })]);
+    await expect(c.update({ id: "matter-1", paymentMethod: "PRIVAT" })).rejects.toThrow(/bestäms av ärendetypen/);
+    await expect(c.update({ id: "matter-1", matterType: "Försvar", paymentMethod: "PRIVAT" })).rejects.toThrow(/offentligt uppdrag/);
+    expect(stored(ds)?.paymentMethod).toBe("OFFENTLIGT_UPPDRAG");
+  });
+
+  it("byte till markerad typ sätter Offentligt uppdrag och loggar betalningssättsändringen", async () => {
+    const { caller: c, ds } = caller([matter({ matterType: "Bodelning", paymentMethod: "PENDING" })]);
+    await c.update({ id: "matter-1", matterType: "Försvar" });
+    expect(stored(ds)?.paymentMethod).toBe("OFFENTLIGT_UPPDRAG");
+    expect(notes(ds).map((n) => n.text)).toEqual([expect.stringContaining("Offentligt uppdrag")]);
+  });
+
+  it("byte bort från markerad typ släpper låset", async () => {
+    const { caller: c, ds } = caller([matter({ matterType: "Försvar", paymentMethod: "OFFENTLIGT_UPPDRAG" })]);
+    await c.update({ id: "matter-1", matterType: "Bodelning", paymentMethod: "PRIVAT" });
+    expect(stored(ds)?.paymentMethod).toBe("PRIVAT");
+  });
+
+  it("en uppdatering som varken rör typ eller betalningssätt lämnar betalningssättet", async () => {
+    const { caller: c, ds } = caller([matter({ matterType: "Försvar", paymentMethod: "PENDING" })]);
+    await c.update({ id: "matter-1", title: "Ny" });
+    expect(stored(ds)?.paymentMethod).toBe("PENDING");
+    expect(notes(ds)).toHaveLength(0);
   });
 });

@@ -27,14 +27,18 @@ type MatterContact = {
 interface Props {
   matterId: MatterId;
   contacts: MatterContact[];
+  /** Ärendets titel — sökrutans förslag när rollen är Klient (#1645). */
+  matterTitle: string;
 }
 
 /**
  * Ärendets kontakter. "+ Lägg till" öppnar samma sökdialog som klientvalet i
  * nytt ärende (#1136) — sök som i jävskontrollen, välj roll, eller skapa en
  * ny kontakt därifrån. En dropdown fungerar inte med många kontakter.
+ * Med rollen Klient föreslås ärendets titel i en tom sökruta (#1645): klientens
+ * namn är ofta detsamma som titeln.
  */
-export function ContactsSection({ matterId, contacts }: Props) {
+export function ContactsSection({ matterId, contacts, matterTitle }: Props) {
   const utils = trpc.useUtils();
   const [picking, setPicking] = useState(false);
   const [role, setRole] = useState<MatterRole>("MOTPART");
@@ -63,6 +67,7 @@ export function ContactsSection({ matterId, contacts }: Props) {
 
       {picking && (
         <ClientPickerDialog noun="kontakt" onClose={() => setPicking(false)}
+          initialTerm={role === "KLIENT" ? matterTitle.trim() : ""}
           onPick={(c) => addContact.mutate({ matterId, contactId: asId<"ContactId">(c.id), role })}>
           <RoleSelect role={role} onChange={setRole} />
         </ClientPickerDialog>

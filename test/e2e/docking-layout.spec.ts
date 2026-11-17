@@ -300,3 +300,56 @@ test("Startsidan och menyn saknar Kalender, och /calendar/ skickar till Startsid
   await expect(page.getByRole("tab", { name: /^Kalender/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Kalender/ })).toHaveCount(0);
 });
+
+// #1635: flikar och avdelare i ljust läge — nästan svart fliktext, vald flik
+// markerad med mer än textfärgen, mörkare flikrad, synliga gruppkanter. Mörkt
+// läge har dockviews mörka tema precis som förut.
+const tabLook = (page: Page) => page.evaluate(() => {
+  const style = (sel: string) => { const el = document.querySelector(sel); return el ? getComputedStyle(el) : null; };
+  const sep = document.querySelector(".dv-split-view-container.dv-separator-border > .dv-view-container > .dv-view:not(:first-child)");
+  return {
+    row: style(".dv-tabs-and-actions-container")?.backgroundColor,
+    group: style(".dv-groupview")?.backgroundColor,
+    groupOutline: style(".dv-groupview")?.outlineStyle,
+    activeColor: style(".dv-active-group .dv-tab.dv-active-tab")?.color,
+    activeMark: style(".dv-tab.dv-active-tab")?.boxShadow,
+    inactiveColor: style(".dv-tab.dv-inactive-tab")?.color,
+    inactiveBg: style(".dv-tab.dv-inactive-tab")?.backgroundColor,
+    separator: sep ? getComputedStyle(sep, "::before").backgroundColor : null,
+  };
+});
+
+async function openLight(page: Page, base: string, path: string): Promise<void> {
+  await page.goto(`${base}${path}`, { waitUntil: "load" });
+  await expect(page.locator(".dv-tab.dv-active-tab").first()).toBeVisible({ timeout: 30_000 });
+}
+
+test("ljust läge: tydliga flikar och avdelare på Startsidan och ett ärende (#1635)", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  await page.addInitScript(() => { localStorage.setItem("ava.theme", "light"); });
+  const light = {
+    row: "rgb(209, 213, 219)", group: "rgb(255, 255, 255)", groupOutline: "solid",
+    activeColor: "rgb(17, 24, 39)", activeMark: "rgb(37, 99, 235) 0px 3px 0px 0px inset", separator: "rgb(107, 114, 128)",
+  };
+  // Startsidan har en flik per grupp; ärendet har inaktiva flikar bredvid de valda.
+  await openLight(page, base, "/");
+  expect(await tabLook(page)).toMatchObject(light);
+  await openLight(page, base, `/matters/${matterIdWith(seed, "timeEntries")}/`);
+  expect(await tabLook(page)).toEqual({ ...light, inactiveColor: "rgb(17, 24, 39)", inactiveBg: "rgb(209, 213, 219)" });
+});
+
+test("mörkt läge: dockytans flikar oförändrade (#1635)", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await page.addInitScript(() => { localStorage.setItem("ava.theme", "dark"); });
+  await openMatter(page, base);
+  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  expect(await tabLook(page)).toEqual({
+    row: "rgb(37, 37, 38)", group: "rgb(30, 30, 30)", groupOutline: "none",
+    activeColor: "rgb(255, 255, 255)", activeMark: "none",
+    inactiveColor: expect.stringMatching(/^rgb\((150, 150, 150|98, 98, 98)\)$/), inactiveBg: "rgb(45, 45, 45)", separator: "rgb(68, 68, 68)",
+  });
+});

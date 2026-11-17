@@ -38,6 +38,8 @@ export interface MatterListFilter {
   search?: string | undefined;
   status?: MatterStatus | undefined;
   employeeId?: UserId | undefined;
+  /** Bara dessa ärenden (#1642, jävsträffarnas rader). Tom lista = inga ärenden. */
+  ids?: readonly MatterId[] | undefined;
   page: number;
   pageSize: number;
 }

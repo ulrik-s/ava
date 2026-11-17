@@ -252,6 +252,7 @@ export const MATTER_ROLE_LABELS = {
   KLIENT: "Klient",
   MOTPART: "Motpart",
   MOTPARTSOMBUD: "Motpartsombud",
+  MEDTILLTALAD: "Medtilltalad",
   AKLAGARE: "Åklagare",
   DOMSTOL: "Domstol",
   FORSAKRINGSBOLAG: "Försäkringsbolag",

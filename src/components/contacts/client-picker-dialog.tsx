@@ -13,6 +13,12 @@ interface Props {
   noun?: string;
   /** Extra fält ovanför sökrutan, t.ex. roll i ärendet. */
   children?: React.ReactNode;
+  /**
+   * Sökrutans startvärde, t.ex. ärendets titel i Nytt ärende (#1644). Ändras
+   * det medan dialogen är öppen fylls en tom sökruta i (#1645); egen text
+   * skrivs aldrig över, och ett tomt värde rensar inget.
+   */
+  initialTerm?: string;
 }
 
 interface Hit {
@@ -30,8 +36,8 @@ interface Hit {
  * klienten skapar man den härifrån ("Ny klient…"). Samma dialog väljer
  * kontakt i ett ärende (`noun="kontakt"`, #1136).
  */
-export function ClientPickerDialog({ onPick, onClose, noun = "klient", children }: Props) {
-  const [term, setTerm] = useState("");
+export function ClientPickerDialog({ onPick, onClose, noun = "klient", children, initialTerm = "" }: Props) {
+  const [term, setTerm] = useTermFrom(initialTerm);
   const [creating, setCreating] = useState(false);
   if (creating) {
     return <NewClientDialog noun={noun} initialName={term.trim()} onCreated={onPick} onClose={() => setCreating(false)} />;
@@ -56,6 +62,22 @@ export function ClientPickerDialog({ onPick, onClose, noun = "klient", children 
       </div>
     </Modal>
   );
+}
+
+/**
+ * Sökrutans state, som följer `initialTerm` när det ändras och rutan är tom
+ * (#1645: rollen byts till Klient medan dialogen är öppen). Reacts mönster för
+ * att justera state när en prop ändras: jämför med föregående värde under
+ * render, utan effekt och utan att montera om dialogen.
+ */
+function useTermFrom(initialTerm: string): [string, (term: string) => void] {
+  const [term, setTerm] = useState(initialTerm);
+  const [prevInitial, setPrevInitial] = useState(initialTerm);
+  if (initialTerm !== prevInitial) {
+    setPrevInitial(initialTerm);
+    if (initialTerm && !term.trim()) setTerm(initialTerm);
+  }
+  return [term, setTerm];
 }
 
 /** Träfflistan — bäst först. Tom sökning visar en ledtråd i st.f. alla kontakter. */

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ListPage } from "@/components/layout/list-page";
+import { ConflictMatchBadge } from "@/components/matter/conflict-match-badge";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
@@ -115,13 +116,7 @@ export default function ConflictsPage() {
             <h2 className="font-semibold text-gray-900">
               Resultat för &quot;{checkConflict.data.searchTerm}&quot;
             </h2>
-            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
-              checkConflict.data.matchCount > 0 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"
-            }`}>
-              {checkConflict.data.matchCount > 0
-                ? `${checkConflict.data.matchCount} träff(ar) — bedöm om jäv föreligger`
-                : "Inga träffar"}
-            </span>
+            <ConflictMatchBadge matchCount={checkConflict.data.matchCount} />
           </div>
 
           {checkConflict.data.matchCount > 0 && (

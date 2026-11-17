@@ -74,6 +74,17 @@ describe("matter.create — jävskontrollen", () => {
     expect((await loggedChecks(ctx)).map((c) => c.searchTerm)).toEqual(["Bo Berg 19800101-1234"]);
   });
 
+  // #1641: snapshoten i historiken har samma fält som före matterStatus.
+  it("den loggade träffen saknar ärendets status (samma snapshot som tidigare)", async () => {
+    const { caller, ctx } = setup();
+    await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+    const [logged] = await loggedChecks(ctx);
+    expect(logged?.results).toEqual([{
+      contactId: KLIENT, contactName: "Bo Berg", contactType: "PERSON", personalNumber: "19800101-1234",
+      orgNumber: undefined, matterId: OLD, matterNumber: "2026-0001", matterTitle: "Tvist", role: "MOTPART", klient: "Dag Dahl",
+    }]);
+  });
+
   it("återkommande klient (klient i ett annat ärende) → inga träffar, men kontrollen loggas", async () => {
     const { caller, ctx } = setup();
     expect(await caller.matter.create({ id: NEW, title: "Nytt", klientId: RETURNING }))

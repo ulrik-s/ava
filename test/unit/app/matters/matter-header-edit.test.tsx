@@ -12,7 +12,9 @@ import { asId } from "@/lib/shared/schemas/ids";
 
 const updateMutate = vi.fn();
 let updateOpts: { onSuccess: () => void } | undefined;
-const settings: { data: { matterTypes?: string[]; hourlyRates?: Record<string, number> } | undefined } = { data: undefined };
+const settings: {
+  data: { matterTypes?: string[]; publicAssignmentMatterTypes?: string[] | null; hourlyRates?: Record<string, number> } | undefined;
+} = { data: undefined };
 const utilsMock = {
   matter: { getById: { invalidate: vi.fn() } },
   serviceNote: { list: { invalidate: vi.fn(async () => {}) } },
@@ -205,5 +207,35 @@ describe("MatterHeaderEdit", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Avbryt" }));
     fireEvent.click(screen.getByRole("button", { name: "Ändra ärende" }));
     expect(screen.getByLabelText("Titel")).toHaveValue("Bodelning A");
+  });
+
+  describe("offentligt uppdrag (#1639)", () => {
+    beforeEach(() => { settings.data = { matterTypes: TYPES, publicAssignmentMatterTypes: ["Bodelning"] }; });
+
+    it("markerad ärendetyp: betalningssättet visas som Offentligt uppdrag, inaktivt med förklaring", () => {
+      const d = within(open({ matterType: "Bodelning" }));
+      const select = d.getByLabelText("Betalningssätt");
+      expect(select).toHaveValue("OFFENTLIGT_UPPDRAG");
+      expect(select).toBeDisabled();
+      expect(d.getByText("Bestäms av ärendetypen")).toBeInTheDocument();
+    });
+
+    it("omarkerad ärendetyp: rullgardinen är aktiv och utan förklaring", () => {
+      const d = within(open());
+      expect(d.getByLabelText("Betalningssätt")).toBeEnabled();
+      expect(d.queryByText("Bestäms av ärendetypen")).toBeNull();
+    });
+
+    it("byte till markerad typ låser och sparar Offentligt uppdrag; byte bort släpper låset", () => {
+      const dialog = open();
+      const d = within(dialog);
+      fireEvent.change(d.getByLabelText("Ärendetyp"), { target: { value: "Bodelning" } });
+      expect(d.getByLabelText("Betalningssätt")).toBeDisabled();
+      save(dialog);
+      expect(sent()).toEqual(expect.objectContaining({ matterType: "Bodelning", paymentMethod: "OFFENTLIGT_UPPDRAG" }));
+      fireEvent.change(d.getByLabelText("Ärendetyp"), { target: { value: "Familjerätt" } });
+      expect(d.getByLabelText("Betalningssätt")).toHaveValue("PRIVAT");
+      expect(d.getByLabelText("Betalningssätt")).toBeEnabled();
+    });
   });
 });

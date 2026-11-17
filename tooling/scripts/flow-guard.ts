@@ -12,8 +12,8 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
-import { dispatchTarget, type FetchFn, fire } from "./flow/dispatch";
-import { type GitHub, gitHub } from "./flow/github";
+import { dispatchTarget, earlierFire, type FetchFn, type FireTarget, fire } from "./flow/dispatch";
+import { type GitHub, gitHub, type RepoLabelEvent } from "./flow/github";
 import { loadFlow } from "./flow/load";
 import type { Flow, Machine } from "./flow/schema";
 import { type Decision, decide, isUlrik, normalizeRemovals, previousStateLabel } from "./flow/transition";
@@ -62,14 +62,44 @@ export function handleLabel(flow: Flow, payload: Payload, gh: GitHub, enforce: b
   return decision;
 }
 
-/** Startar agenten för tillståndet som etiketten satte. Ger true om den startades. */
-export async function dispatchLabel(flow: Flow, payload: Payload, env: Readonly<Record<string, string | undefined>>, fetchFn: FetchFn, log: Log): Promise<boolean> {
+/** Låset: startade en tidigare etikett i fönstret redan samma rutin? Loggar i så fall. */
+function startedAlready(flow: Flow, payload: Payload, target: FireTarget, events: readonly RepoLabelEvent[], log: Log): boolean {
+  const repo = payload.repository.full_name;
+  const own = { number: (payload.pull_request ?? payload.issue)?.number ?? -1, label: payload.label.name, isPr: !!payload.pull_request };
+  const routineOf = (e: RepoLabelEvent): string | null => {
+    const m = machineFor(flow, repo, e.isPr ? "pulls" : "issues");
+    return m ? dispatchTarget(flow, m, e.label)?.id ?? null : null;
+  };
+  const prior = earlierFire(events, { own, routineId: target.id, routineOf, now: Date.now() });
+  if (prior) log(`${target.id}: redan startad av #${prior.number} (${prior.label}) — hoppar över`);
+  return prior !== null;
+}
+
+/** Rutinen etiketten ska starta, och saken den gäller — eller null. */
+function dispatchFor(flow: Flow, payload: Payload): { target: FireTarget; number: number } | null {
   const item = payload.pull_request ?? payload.issue;
   const machine = machineFor(flow, payload.repository.full_name, payload.pull_request ? "pulls" : "issues");
   const target = machine && item ? dispatchTarget(flow, machine, payload.label.name) : null;
-  if (!target || !item) return false;
-  const text = `Flödesvakten: ${payload.repository.full_name}#${item.number} gick in i tillståndet ${payload.label.name}.`;
-  return fire(target, text, env[`ROUTINE_TOKEN_${target.id}`], fetchFn, log);
+  return target && item ? { target, number: item.number } : null;
+}
+
+/** Det dispatchen behöver utifrån; `recentEvents` (repots etiketthändelser) slår på låset. */
+export interface DispatchIo {
+  fetch: FetchFn;
+  log: Log;
+  recentEvents?: () => RepoLabelEvent[];
+}
+
+/** Startar agenten för tillståndet som etiketten satte. Ger true om den startades. */
+export async function dispatchLabel(
+  flow: Flow, payload: Payload, env: Readonly<Record<string, string | undefined>>, io: DispatchIo,
+): Promise<boolean> {
+  const found = dispatchFor(flow, payload);
+  if (!found) return false;
+  const { target } = found;
+  if (io.recentEvents && startedAlready(flow, payload, target, io.recentEvents(), io.log)) return false;
+  const text = `Flödesvakten: ${payload.repository.full_name}#${found.number} gick in i tillståndet ${payload.label.name}.`;
+  return fire(target, text, env[`ROUTINE_TOKEN_${target.id}`], io.fetch, io.log);
 }
 
 /** Städar alla öppna saker i en maskin till ett tillstånd var. Ger antal ändrade. */
@@ -95,7 +125,10 @@ if (import.meta.main) {
     normalize(machine, gitHub(machine.repo), enforce, console.log);
   } else {
     const payload = parseJsonWith(payloadSchema, readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8"));
-    const decision = handleLabel(flow, payload, gitHub(payload.repository.full_name), enforce, console.log);
-    if (enforce && decision.kind === "allow") await dispatchLabel(flow, payload, process.env, fetch, console.log);
+    const gh = gitHub(payload.repository.full_name);
+    const decision = handleLabel(flow, payload, gh, enforce, console.log);
+    if (enforce && decision.kind === "allow") {
+      await dispatchLabel(flow, payload, process.env, { fetch, log: console.log, recentEvents: () => gh.recentLabelEvents() });
+    }
   }
 }

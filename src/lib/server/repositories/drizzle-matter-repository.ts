@@ -5,7 +5,7 @@
  * (robustare än korrelerade subqueries; jfr document-folder-repo:t).
  */
 
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import type { ContactId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { contacts, documents, matterContacts, matters, timeEntries } from "../db/schema";
@@ -14,6 +14,11 @@ import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   MatterDetailRow, MatterListFilter, MatterListResult, MatterListRow, MatterRepository,
 } from "./matter-repository";
+
+/** Id-filtret (#1642): en tom lista matchar inga ärenden. */
+function idsWhere(ids: readonly MatterId[]): SQL {
+  return ids.length > 0 ? inArray(matters.id, [...ids]) : sql`false`;
+}
 
 export class DrizzleMatterRepository extends DrizzleRepository<Matter> implements MatterRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
@@ -44,6 +49,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       f.employeeId
         ? sql`exists (select 1 from time_entries te where te.matter_id = ${matters.id} and te.user_id = ${f.employeeId})`
         : undefined,
+      f.ids ? idsWhere(f.ids) : undefined,
       f.search
         ? or(
             ilike(matters.title, pat),
