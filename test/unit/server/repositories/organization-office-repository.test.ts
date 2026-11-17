@@ -62,4 +62,15 @@ describe("Organization/Office — Drizzle (pglite)", () => {
     await offRepo.demoteMains(org);
     expect((await offRepo.getByIdInOrg(main, org))!.isMain).toBe(false);
   });
+
+  it("offentligt uppdrag (#1638): NULL bevaras som aldrig satt, listan och tom lista skrivs och läses", async () => {
+    const org = asId<"OrganizationId">(uuidv7());
+    await handle.db.insert(organizations).values({ version: 1, id: org, name: "Byrå AB", matterTypes: ["Bodelning"] });
+    const repo = new DrizzleOrganizationRepository(handle.db);
+    expect((await repo.getById(org))?.publicAssignmentMatterTypes).toBeNull();
+    await repo.update(org, { publicAssignmentMatterTypes: ["Bodelning"] });
+    expect((await repo.getById(org))?.publicAssignmentMatterTypes).toEqual(["Bodelning"]);
+    await repo.update(org, { publicAssignmentMatterTypes: [] });
+    expect((await repo.getById(org))?.publicAssignmentMatterTypes).toEqual([]);
+  });
 });

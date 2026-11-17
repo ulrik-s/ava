@@ -36,6 +36,10 @@ export const organizationSchema = z.object({
   documentTags: z.array(z.string()).default([]),
   /** Byråns ärendetyper — valen i "Ärendetyp" när ett ärende läggs upp. */
   matterTypes: z.array(z.string()).default([]),
+  /** De av byråns ärendetyper som är offentligt uppdrag (t.ex. offentlig
+   *  försvarare). `null`/saknas = aldrig satt (inga markerade); `[]` = satt
+   *  till tom lista. Skillnaden styr en senare engångsuppdatering (#1640). */
+  publicAssignmentMatterTypes: z.array(z.string()).nullish(),
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: z.number().int().nonnegative().nullish(),
