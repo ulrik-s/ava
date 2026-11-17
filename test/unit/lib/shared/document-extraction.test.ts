@@ -184,7 +184,7 @@ describe("förordnanden (#1648)", () => {
     expect(roles(text)).toEqual(["KLIENT:Nils Berg"]);
   });
 
-  it("två förordnanden → bara det första förordnandets klient; målsägandebiträdet saknas", () => {
+  it("två förordnanden → första förordnandets klient som Klient; målsägandebiträdet saknas", () => {
     const text = [
       "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek, 900101-1234.",
       "Advokaten Eva Sand förordnas som målsägandebiträde för Nils Berg.",
@@ -192,7 +192,8 @@ describe("förordnanden (#1648)", () => {
       "Ombud: Advokat Per Holm",
       "Klient: Nils Berg",
     ].join("\n");
-    expect(roles(text)).toEqual(["KLIENT:Lisa Ek"]);
+    // Målsäganden ur målsägandebiträdesmeningen blir Motpart (#1649).
+    expect(roles(text)).toEqual(["KLIENT:Lisa Ek", "MOTPART:Nils Berg"]);
   });
 
   it("personnumret hämtas ur partsblocket när meningen saknar det", () => {
@@ -213,10 +214,10 @@ describe("förordnanden (#1648)", () => {
       "Tilltalad: Lisa Ek",
     ].join("\n");
     const parties = extractPartySuggestions(text);
-    // Målsägande-raden är en partsrad som i dag (ROLE_MARKERS, ändras i #1649).
+    // Målsägande-raden är en partsrad; i ett försvararförordnande Motpart (#1649).
     expect(parties.map((p) => [p.role, p.name, p.personalNumber])).toEqual([
       ["KLIENT", "Lisa Ek", null],
-      ["KLIENT", "Nils Berg", "850101-1111"],
+      ["MOTPART", "Nils Berg", "850101-1111"],
     ]);
   });
 
@@ -268,5 +269,126 @@ describe("förordnanden (#1648)", () => {
       "Tingsrätten har förordnat en sakkunnig.",
     ].join("\n");
     expect(roles(text)).toEqual(["KLIENT:Anna Andersson", "OMBUD:Advokat Erik Lundqvist"]);
+  });
+});
+
+describe("förordnandets uppdrag avgör de andra parternas roller (#1649)", () => {
+  const roles = (text: string): string[] =>
+    extractPartySuggestions(text).map((p) => `${p.role}:${p.name}`);
+
+  it("försvararförordnande med partsblock → målsägande Motpart, annan tilltalad Medtilltalad", () => {
+    const text = [
+      "Stockholms tingsrätt",
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek.",
+      "Advokaten Eva Sand förordnas som målsägandebiträde för Nils Berg.",
+      "Åklagare: Kammaråklagare Ola Lind",
+      "Tilltalad: Lisa Ek 900101-1234",
+      "Tilltalad: Karl Ny 880202-2222",
+      "Målsägande: Nils Berg 850101-1111",
+      "Målsägandebiträde: Advokat Eva Sand",
+      "Offentlig försvarare: Advokat Per Holm",
+    ].join("\n");
+    const parties = extractPartySuggestions(text);
+    expect(parties.map((p) => `${p.role}:${p.name}`)).toEqual([
+      "KLIENT:Lisa Ek",
+      "DOMSTOL:Stockholms tingsrätt",
+      "AKLAGARE:Kammaråklagare Ola Lind",
+      "MEDTILLTALAD:Karl Ny",
+      "MOTPART:Nils Berg",
+    ]);
+    expect(parties[0]?.personalNumber).toBe("900101-1234");
+    expect(parties.find((p) => p.name === "Karl Ny")).toMatchObject({ contactType: "PERSON", personalNumber: "880202-2222" });
+  });
+
+  it("målsägandebiträdesförordnande → målsäganden Klient, alla tilltalade Motpart, försvararen saknas", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Eva Sand som målsägandebiträde för Nils Berg.",
+      "Advokaten Per Holm förordnas som offentlig försvarare för Lisa Ek.",
+      "Målsägande: Nils Berg",
+      "Tilltalad: Lisa Ek",
+      "Tilltalad: Karl Ny",
+      "Offentlig försvarare: Advokat Per Holm",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Nils Berg", "MOTPART:Lisa Ek", "MOTPART:Karl Ny"]);
+  });
+
+  it("rollen som rubrik på raden ovanför namnet ger samma roller", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek.",
+      "Målsägande",
+      "Nils Berg",
+      "Tilltalad",
+      "Karl Ny",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Lisa Ek", "MOTPART:Nils Berg", "MEDTILLTALAD:Karl Ny"]);
+  });
+
+  it("\"Misstänkt\" i ett försvararförordnande → Medtilltalad, eller Klient om det är klienten", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek.",
+      "Misstänkt: Lisa Ek",
+      "Misstänkt: Karl Ny",
+      "Misstänkt",
+      "Olle Bo",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Lisa Ek", "MEDTILLTALAD:Karl Ny", "MEDTILLTALAD:Olle Bo"]);
+  });
+
+  it("\"Misstänkt\" i ett målsägandebiträdesförordnande → Motpart", () => {
+    const text = [
+      "Advokaten Eva Sand förordnas som målsägandebiträde för Nils Berg.",
+      "Misstänkt: Karl Ny",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Nils Berg", "MOTPART:Karl Ny"]);
+  });
+
+  it("namn i förordnandemeningar får rollen ur sitt uppdrag; personnumret ur meningen", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek.",
+      "Advokaten Anna Vik förordnas som offentlig försvarare för Karl Ny, 880202-2222.",
+      "Advokaten Eva Sand förordnas som målsägandebiträde för Nils Berg.",
+      "Advokaten Ida Lund förordnas som målsägandebiträde för Nils Berg.",
+    ].join("\n");
+    const parties = extractPartySuggestions(text);
+    expect(parties.map((p) => `${p.role}:${p.name}`)).toEqual([
+      "KLIENT:Lisa Ek", "MEDTILLTALAD:Karl Ny", "MOTPART:Nils Berg",
+    ]);
+    expect(parties[1]).toMatchObject({ personalNumber: "880202-2222", contactType: "PERSON" });
+    expect(parties[1]?.notes).toContain("förordnas som offentlig försvarare för Karl Ny");
+  });
+
+  it("partsblocket vinner över förordnandemeningen för samma namn", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek.",
+      "Advokaten Eva Sand förordnas som målsägandebiträde för Nils Berg.",
+      "Målsägande: Nils Berg 850101-1111",
+    ].join("\n");
+    const parties = extractPartySuggestions(text);
+    expect(parties.map((p) => `${p.role}:${p.name}`)).toEqual(["KLIENT:Lisa Ek", "MOTPART:Nils Berg"]);
+    expect(parties[1]?.notes).toContain("Föreslagen ur dokumentet");
+  });
+
+  it("ett annat uppdrag än försvarare/målsägandebiträde → övriga parter som i dag", () => {
+    const text = [
+      "Advokaten Eva Sand har förordnats som särskild företrädare för barnet Moa Berg.",
+      "Advokaten Per Holm förordnas som offentlig försvarare för Lisa Ek.",
+      "Tilltalad: Karl Ny",
+      "",
+      "Misstänkt: Olle Bo",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Moa Berg", "KLIENT:Karl Ny"]);
+  });
+
+  it("ett vanligt dokument utan förordnande: tilltalad och målsägande Klient, misstänkt ingen markör", () => {
+    const text = [
+      "Tilltalad: Lisa Ek",
+      "Målsägande: Nils Berg",
+      "",
+      "Misstänkt: Karl Ny",
+      "",
+      "Misstänkt",
+      "Olle Bo",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Lisa Ek", "KLIENT:Nils Berg"]);
   });
 });

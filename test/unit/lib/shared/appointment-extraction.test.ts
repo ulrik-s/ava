@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { findAppointments, nameKey } from "@/lib/shared/appointment-extraction";
+import { findAppointments, nameKey, otherPartyRole, sideMarkers, sideOf } from "@/lib/shared/appointment-extraction";
 
 describe("findAppointments", () => {
   it("läser aktiv form: domstolen förordnar advokaten X som … för Y", () => {
@@ -66,5 +66,32 @@ describe("nameKey", () => {
     expect(nameKey("advokaten Per Holm")).toBe("per holm");
     expect(nameKey("Jur. kand. Per Holm")).toBe("per holm");
     expect(nameKey("Per Holm")).toBe("per holm");
+  });
+});
+
+describe("uppdragets sida och de andra parternas roller (#1649)", () => {
+  it("sideOf: försvarare → tilltalads sida, målsägandebiträde → målsägandens, annat → null", () => {
+    expect(sideOf("offentlig försvarare")).toBe("TILLTALAD");
+    expect(sideOf("målsägandebiträde")).toBe("MALSAGANDE");
+    expect(sideOf("särskild företrädare")).toBeNull();
+  });
+
+  it("otherPartyRole: försvarare ger Medtilltalad/Motpart, målsägandebiträde ger Motpart", () => {
+    expect(otherPartyRole("TILLTALAD", "TILLTALAD")).toBe("MEDTILLTALAD");
+    expect(otherPartyRole("TILLTALAD", "MALSAGANDE")).toBe("MOTPART");
+    expect(otherPartyRole("MALSAGANDE", "TILLTALAD")).toBe("MOTPART");
+    expect(otherPartyRole("MALSAGANDE", "MALSAGANDE")).toBeNull();
+    expect(otherPartyRole(null, "TILLTALAD")).toBeNull();
+    expect(otherPartyRole("TILLTALAD", null)).toBeNull();
+  });
+
+  it("sideMarkers: misstänkt räknas som tilltalad, målsägandebiträde är ingen målsägande", () => {
+    const defence = sideMarkers("TILLTALAD");
+    const roleFor = (text: string): string | undefined => defence.find(([p]) => p.test(text))?.[1];
+    expect(roleFor("Misstänkt: X")).toBe("MEDTILLTALAD");
+    expect(roleFor("Tilltalade")).toBe("MEDTILLTALAD");
+    expect(roleFor("Målsägande: Y")).toBe("MOTPART");
+    expect(roleFor("Målsägandebiträde: Z")).toBeUndefined();
+    expect(sideMarkers("MALSAGANDE").map(([, role]) => role)).toEqual(["MOTPART"]);
   });
 });
