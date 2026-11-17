@@ -86,7 +86,8 @@ describe("classify-document — dokumentdelar", () => {
   it("manuell första del styr den primära typen", async () => {
     const s = setup();
     await run(s);
-    const first = (await s.parts.listForDocument(DOC))[0];
+    const [first] = await s.parts.listForDocument(DOC);
+    if (!first) throw new Error("segmenteringen skrev inga delar");
     await s.parts.update(first.id, { kind: "DOM", source: "MANUAL" });
     await run(s);
     expect(s.documents.updateMetadata.mock.calls[1]?.[1]).toMatchObject({ kinds: ["DOM", "STAMNING", "FUP"] });
@@ -95,7 +96,8 @@ describe("classify-document — dokumentdelar", () => {
   it("ändrat sidantal → allt räknas om och MANUAL släpps", async () => {
     const s = setup();
     await run(s);
-    const first = (await s.parts.listForDocument(DOC))[0];
+    const [first] = await s.parts.listForDocument(DOC);
+    if (!first) throw new Error("segmenteringen skrev inga delar");
     await s.parts.update(first.id, { kind: "DOM", source: "MANUAL" });
     s.readPages.mockResolvedValue([text("Delgivningskvitto"), text("DOM")]);
     await run(s);
