@@ -21,7 +21,7 @@ import type { Contact } from "@/lib/shared/schemas/contact";
 import type { ConflictCheckStatus, MatterRole } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
-import { type ConflictCtx, type ConflictResult, pushUnique, searchConflicts } from "./conflict-search";
+import { type ConflictCtx, type ConflictResult, pushUnique, searchConflicts, toLoggedResult } from "./conflict-search";
 
 /** Fälten ärendet får av kontrollen. */
 export type MatterConflictPatch = {
@@ -79,7 +79,7 @@ async function checkParty(ctx: CheckCtx, matterId: MatterId, party: ResolvedPart
     .filter((r) => r.matterId !== matterId && isConflictingRole(party.role, r.role));
   await ctx.repos.conflictChecks.create({
     id: asId<"ConflictCheckId">(newRowId(ctx, `conflictCheck:${party.contact.id}:${party.role}`)),
-    searchTerm: term, searchType: "both", results, checkedById: asId<"UserId">(ctx.user.id),
+    searchTerm: term, searchType: "both", results: results.map(toLoggedResult), checkedById: asId<"UserId">(ctx.user.id),
   });
   return results;
 }

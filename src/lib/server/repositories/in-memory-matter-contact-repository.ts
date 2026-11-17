@@ -6,12 +6,23 @@
 
 import type { Contact } from "@/lib/shared/schemas/contact";
 import type { ContactId, MatterContactId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
-import type { MatterContact } from "@/lib/shared/schemas/matter";
+import { type MatterContact, matterSchema } from "@/lib/shared/schemas/matter";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
   ConflictContactRow, MatterContactRepository, MatterContactWithContact,
 } from "./matter-contact-repository";
+
+type ConflictMatter = ConflictContactRow["matter"];
+
+/**
+ * Ärendet i en jävskontroll-rad. Status saknas i råa rader som inte gått
+ * genom schemat; samma standardvärde som schemat och kolumnen (#1641).
+ */
+function toConflictMatter(matter: unknown): ConflictMatter {
+  const m = matter as Omit<ConflictMatter, "status"> & { status?: unknown };
+  return { ...m, status: matterSchema.shape.status.parse(m.status) };
+}
 
 export type MatterContactRepoSource = Pick<IDataStore, "matterContacts">;
 
@@ -44,7 +55,7 @@ export class InMemoryMatterContactRepository
     return rows.map((r): ConflictContactRow => ({
       role: r.role,
       contact: r.contact as ConflictContactRow["contact"],
-      matter: r.matter as ConflictContactRow["matter"],
+      matter: toConflictMatter(r.matter),
     }));
   }
 

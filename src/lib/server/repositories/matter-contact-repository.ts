@@ -5,7 +5,7 @@
  */
 
 import type { Contact } from "@/lib/shared/schemas/contact";
-import type { ContactType, MatterRole } from "@/lib/shared/schemas/enums";
+import type { ContactType, MatterRole, MatterStatus } from "@/lib/shared/schemas/enums";
 import type { ContactId, MatterContactId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import type { Repository } from "./types";
@@ -23,7 +23,7 @@ export interface ConflictContactRow {
     personalNumber: string | null; orgNumber: string | null;
   };
   matter: {
-    id: MatterId; matterNumber: string; title: string;
+    id: MatterId; matterNumber: string; title: string; status: MatterStatus;
     contacts: Array<{ contact: { name: string } }>;
   };
 }
