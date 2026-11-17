@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { asId } from "@/lib/shared/schemas/ids";
-import { type ConflictResult, pushUnique, searchConflicts } from "../conflict/conflict-search";
+import { type ConflictResult, pushUnique, searchConflicts, toLoggedResult } from "../conflict/conflict-search";
 import { router, protectedProcedure } from "../trpc";
 
 
@@ -20,7 +20,7 @@ export const conflictRouter = router({
       await ctx.repos.conflictChecks.create({
         searchTerm: input.searchTerm,
         searchType: input.searchType,
-        results,
+        results: results.map(toLoggedResult),
         checkedById: asId<"UserId">(ctx.user.id),
       });
 

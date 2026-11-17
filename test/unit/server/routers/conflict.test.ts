@@ -84,6 +84,21 @@ describe("conflict.check", () => {
     expect(checks(store)[0]).toMatchObject({ searchTerm: "test", checkedById: "u1" });
   });
 
+  // #1641: träffen bär ärendets status; historiken loggar samma fält som förut.
+  it("ger ärendets status per träff men loggar snapshoten utan den", async () => {
+    const { caller, store } = makeCaller({
+      ...seedWithParty({ name: "Anna", personalNumber: "19850225-6655" }),
+      matters: [{ id: "m1", organizationId: ORG, matterNumber: "2026-0001", title: "X", status: "CLOSED" }],
+    });
+    const res = await caller.check({ searchTerm: "19850225", searchType: "personalNumber" });
+    expect(res.results.map((r) => r.matterStatus)).toEqual(["CLOSED"]);
+    const [logged] = checks(store) as Array<{ results: Array<Record<string, unknown>> }>;
+    expect(logged?.results).toEqual([{
+      contactId: "c1", contactName: "Anna", contactType: "PERSON", personalNumber: "19850225-6655",
+      orgNumber: undefined, matterId: "m1", matterNumber: "2026-0001", matterTitle: "X", role: "MOTPART", klient: "Klient Klientsson",
+    }]);
+  });
+
   it("kräver searchTerm min(1)", async () => {
     const { caller } = makeCaller();
     await expect(caller.check({ searchTerm: "" })).rejects.toThrow();
