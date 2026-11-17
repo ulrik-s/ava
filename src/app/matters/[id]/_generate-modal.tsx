@@ -250,7 +250,7 @@ function RecipientPicker({
         </span>
       </label>
       {contacts.length === 0 ? (
-        <p className="text-xs text-gray-400">Inga kontakter kopplade till ärendet.</p>
+        <p className="text-xs text-gray-400">Inga parter kopplade till ärendet.</p>
       ) : (
         <div className="max-h-40 overflow-y-auto border border-gray-200 rounded divide-y divide-gray-100">
           {contacts.map((mc) => {

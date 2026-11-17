@@ -77,6 +77,7 @@ describe("Ärendelistan — sammanslagen sökning (#1642)", () => {
   it("före sökning: listan som i dag, utan Träff-kolumn och utan jävmärkning", () => {
     render(<MattersPage />);
     expect(columnHeaders().some((h) => h.includes("Träff"))).toBe(false);
+    expect(columnHeaders().some((h) => h.includes("Parter"))).toBe(true);
     expect(screen.queryByText(/träff\(ar\)|Inga träffar/)).toBeNull();
     expect(screen.getByRole("option", { name: "Alla statusar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sök" })).toBeDisabled();

@@ -50,7 +50,7 @@ export function SuggestionRow({ group: g, isBusy, onAccept, onReject }: Props) {
           className="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
           title={
             g.roles.length > 1
-              ? `Skapar/återanvänder kontakt och länkar ${g.roles.length} roller till ärendet`
+              ? `Skapar/återanvänder part och länkar ${g.roles.length} roller till ärendet`
               : undefined
           }
         >

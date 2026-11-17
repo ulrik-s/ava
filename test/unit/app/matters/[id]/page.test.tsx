@@ -463,7 +463,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /\+ Lägg till/i }));
-    expect(screen.getByRole("dialog", { name: "Välj kontakt" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Välj part" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

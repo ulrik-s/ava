@@ -16,7 +16,7 @@ interface Props {
   initialName?: string;
   onCreated: (client: PickedClient) => void;
   onClose: () => void;
-  /** "klient" eller "kontakt" — styr rubriken. */
+  /** "klient" eller "part" — styr rubriken. */
   noun?: string;
 }
 

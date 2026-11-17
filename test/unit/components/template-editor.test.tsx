@@ -77,9 +77,17 @@ describe("TemplateEditor", () => {
   it("Variabler-knappen visar och döljer sidebar", () => {
     render(<TemplateEditor onSave={onSave} onCancel={onCancel} />);
     fireEvent.click(screen.getByRole("button", { name: /Variabler/i }));
-    // Förvalt expanderade grupper: Ärende och Kontakter — variabler från dem syns
+    // Förvalt expanderade grupper: Ärende och Parter — variabler från dem syns
     expect(screen.getAllByText("{{matter.matterNumber}}").length).toBeGreaterThan(0);
     expect(screen.getAllByText("{{klient.name}}").length).toBeGreaterThan(0);
+  });
+
+  it("mallfälten säger \"part\": gruppen Parter är utfälld från början (#1647)", () => {
+    render(<TemplateEditor onSave={onSave} onCancel={onCancel} />);
+    fireEvent.click(screen.getByRole("button", { name: /Variabler/i }));
+    expect(screen.getByRole("button", { name: /Parter/ })).toBeInTheDocument();
+    expect(screen.getByText("Alla parter (loop)")).toBeInTheDocument();
+    expect(screen.getByText("Partens namn")).toBeInTheDocument();
   });
 
   it("klick på en variabel infogar tagg i editorn", () => {

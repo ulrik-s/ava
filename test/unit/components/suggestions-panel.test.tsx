@@ -83,7 +83,7 @@ describe("SuggestionsPanel", () => {
   it("visar ett förklarande tomtillstånd när inga förslag finns (#1213)", () => {
     groupsQuery.data = [];
     render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
-    expect(screen.getByText(/Inga föreslagna kontakter/)).toBeInTheDocument();
+    expect(screen.getByText("Inga föreslagna parter. AVA föreslår parter ur dokument som laddas upp.")).toBeInTheDocument();
   });
 
   it("renderar gruppnamn, roll och kontaktdata", () => {
@@ -111,7 +111,14 @@ describe("SuggestionsPanel", () => {
     groupsQuery.data = [baseGroup({ roles: ["KLIENT", "MOTPART"] })];
     render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     // Knapptexten reflekterar antal roller
-    expect(screen.getByRole("button", { name: /Godkänn \(2 roller\)/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Godkänn \(2 roller\)/ }))
+      .toHaveAttribute("title", "Skapar/återanvänder part och länkar 2 roller till ärendet");
+  });
+
+  it("rubriken säger \"parter\" (#1647)", () => {
+    groupsQuery.data = [baseGroup()];
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
+    expect(screen.getByText(/Föreslagna parter från dokumentanalys/)).toBeInTheDocument();
   });
 
   it("klick på Godkänn anropar acceptGroup.mutate med suggestionIds", () => {

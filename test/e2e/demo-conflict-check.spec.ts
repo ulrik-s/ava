@@ -65,9 +65,9 @@ test("återkommande klient ger inga träffar; en ny motpart som är klient i ett
   await expect(watch.getByText(/Jävskontroll/)).toHaveCount(0);
 
   // Erika Ek är klient i två av byråns ärenden — som motpart här är hon en träff.
-  await page.getByRole("tab", { name: /^Kontakter/ }).first().click();
+  await page.getByRole("tab", { name: /^Parter/ }).first().click();
   await page.getByRole("button", { name: "+ Lägg till" }).click();
-  const dialog = page.getByRole("dialog", { name: "Välj kontakt" });
+  const dialog = page.getByRole("dialog", { name: "Välj part" });
   await expect(dialog.getByLabel("Roll i ärendet")).toHaveValue("MOTPART");
   await dialog.getByRole("searchbox").fill("Erika Ek");
   await dialog.getByRole("button", { name: /Erika Ek/ }).first().click();
@@ -125,9 +125,9 @@ test("Ärendet: rollen Klient i 'Lägg till' fyller i ärendets titel i sökruta
   const matter = seed.matters.find((m) => m.id === matterIdWith(seed, "timeEntries"));
   if (!matter) throw new Error("demodatan saknar ett ärende med tidsposter");
   await page.goto(`${BASE}/matters/${matter.id}/`, { waitUntil: "load" });
-  await showPanel(page, "Kontakter");
+  await showPanel(page, "Parter");
   await page.getByRole("button", { name: "+ Lägg till" }).click();
-  const dialog = page.getByRole("dialog", { name: "Välj kontakt" });
+  const dialog = page.getByRole("dialog", { name: "Välj part" });
   const search = dialog.getByRole("searchbox");
   await expect(search).toHaveValue("");
   await dialog.getByLabel("Roll i ärendet").selectOption("KLIENT");
