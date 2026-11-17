@@ -39,8 +39,10 @@ export function collectItems(flow: Flow, ghFor: (repo: string) => GitHub): Healt
   return Object.values(flow.machines).flatMap((m) => {
     const gh = ghFor(m.repo);
     const relevant = new Set([...stateLabels(m), "blockerad"]);
-    return openIn(m.repo)
-      .filter((i) => i.isPr === (m.items === "pulls") && i.labels.some((l) => relevant.has(l)))
+    // PR:er via PR-ändpunkten: i intagets Action kom de inte med i issuelistan.
+    const list = m.items === "pulls" ? gh.openPulls() : openIn(m.repo).filter((i) => !i.isPr);
+    return list
+      .filter((i) => i.labels.some((l) => relevant.has(l)))
       .map((i) => ({
         repo: m.repo, number: i.number, title: i.title, labels: i.labels, isPr: i.isPr,
         labeledAt: lastAdded(gh, i.number),
@@ -81,6 +83,8 @@ if (import.meta.main) {
   const ava = Object.values(flow.machines).find((m) => m.items === "pulls")?.repo ?? "ulrik-s/ava";
   const intake = flow.machines.intake?.repo ?? "ulrik-s/ava-feedback";
   const now = Date.now();
-  const report = healthReport(flow, { now, items: collectItems(flow, ghFor), lastClockRun: lastClockRun(ghFor(ava)) });
+  const items = collectItems(flow, ghFor);
+  console.log(`saker: ${items.length} (varav PR: ${items.filter((i) => i.isPr).length})`);
+  const report = healthReport(flow, { now, items, lastClockRun: lastClockRun(ghFor(ava)) });
   publishStatus(ghFor(intake), report, now, flow.ulrik, console.log);
 }
