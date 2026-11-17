@@ -3,6 +3,7 @@
  * tillståndets agent direkt, via rutinens API-trigger (`/fire`). Utan token
  * (`ROUTINE_TOKEN_<id>`) gör den inget; rutinens schema tar saken i stället.
  */
+import type { RepoLabelEvent } from "./github";
 import { stateOfLabel } from "./load";
 import type { Flow, Machine, Routine } from "./schema";
 
@@ -18,6 +19,38 @@ export function dispatchTarget(flow: Flow, machine: Machine, label: string): Fir
   if (!state?.agent || !state.dispatch) return null;
   const routine = flow.routines[state.agent];
   return routine ? { id: state.agent, routine } : null;
+}
+
+/**
+ * Fönstret där en rutin bara startas EN gång. Varje etikett startade förr en ny
+ * körning, så flera ändringar i följd gav flera samtidiga körningar av samma
+ * loop (dubbel nedbrytning, tre granskningar av samma PR, två PR:er för samma
+ * issue). Det som kommer under fönstret tar den pågående körningen eller nästa.
+ */
+export const FIRE_WINDOW_MS = 15 * 60_000;
+
+/** Vad låset frågar om: den här händelsen och rutinen den skulle starta. */
+export interface FireQuery {
+  /** Den här händelsen; saknas den i loggen (fördröjning) räknas den som nyast. */
+  own: Pick<RepoLabelEvent, "number" | "label" | "isPr">;
+  routineId: string;
+  /** Rutinen en händelse startar (eller null). */
+  routineOf: (e: RepoLabelEvent) => string | null;
+  now: number;
+  windowMs?: number;
+}
+
+/**
+ * En TIDIGARE etiketthändelse i fönstret som redan startade samma rutin, eller
+ * null. Händelse-id:n är strikt ordnade, så alla samtidiga vaktjobb ser samma
+ * ordning och bara det första startar rutinen — ett lås utan skrivningar.
+ */
+export function earlierFire(events: readonly RepoLabelEvent[], q: FireQuery): RepoLabelEvent | null {
+  const { own } = q;
+  const windowMs = q.windowMs ?? FIRE_WINDOW_MS;
+  const mine = events.filter((e) => e.number === own.number && e.label === own.label && e.isPr === own.isPr);
+  const ownId = mine.length > 0 ? Math.max(...mine.map((e) => e.id)) : Number.POSITIVE_INFINITY;
+  return events.find((e) => e.id < ownId && q.now - Date.parse(e.at) < windowMs && q.routineOf(e) === q.routineId) ?? null;
 }
 
 /** Tillräckligt av `fetch` för att kunna bytas ut i testerna. */
