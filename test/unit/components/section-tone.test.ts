@@ -51,8 +51,10 @@ describe("sectionHeaderClass", () => {
 describe("mörkt läge för rubrikraderna (globals.css)", () => {
   const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
   const rule = (selector: string): string => {
-    const m = css.match(new RegExp(`${selector.replace(/\./g, "\\.")}\\s*\\{([^}]*)\\}`));
-    return m?.[1] ?? "";
+    const open = css.indexOf(`${selector} {`);
+    if (open < 0) return "";
+    const start = open + selector.length + 2;
+    return css.slice(start, css.indexOf("}", start));
   };
   const decl = (body: string, prop: string): string => body.match(new RegExp(`(?:^|;)\\s*${prop}:\\s*([^;]+)`))?.[1]?.trim() ?? "";
 
