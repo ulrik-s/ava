@@ -40,6 +40,14 @@ sätter en `v*`-tagg.
  Användaren ser "Levererad i vX.Y.Z" under "Dina förfrågningar"
 ```
 
+**Beroenden mellan förfrågningar (loop 2):** förfrågningar bryts ner i
+beroendeordning, inte i den ordning de verifierades. Skriv `Beror på
+ava-feedback#M` i en kommentar på förfrågan så väntar den på M (M bryts ner
+först; är M inte verifierad blir förfrågan `blockerad`). Loop 2 lägger dessutom
+själv `Beror på #N` när en ny implementations-issue rör samma kod som en öppen
+från en annan förfrågan. Loop 4 bygger en issue först när alla dess beroenden
+är mergade; ett beroende som stängts utan att byggas blockerar.
+
 **Omprövning (loop 2, en gång per release):** funktioner byggs också utanför
 kedjan. Varje ny release prövas mot alla öppna förfrågningar. Är en helt
 eller delvis löst, eller innehåller den flera saker, går den tillbaka till
