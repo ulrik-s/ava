@@ -4,21 +4,20 @@
  * Dashboard — översikt för inloggad användare:
  *   - "Att bevaka" — härledda påminnelser (#1062)
  *   - "Att bevaka" överst — frister/bevakningar i rött när de är inne (#1167)
- *   - "Kalender" för vald dag (möten, förhandlingar)
  *   - Tidrapportering för vald dag (summa + lista)
  *   - Senaste 5 ärenden man jobbat i (timeEntry order desc, dedup)
  *
  * Dagsval: Igår / Idag / Imorgon / fritt datum.
  *
- * Användaren väljer själv vilka rutor som syns (#1612): alla utom Kalender
- * kan tas bort med × och läggas tillbaka med "Lägg till ruta".
+ * Användaren väljer själv vilka rutor som syns (#1612): alla kan tas bort
+ * med × och läggas tillbaka med "Lägg till ruta". Kalendern är borttagen
+ * (#1623) — byråerna använder en egen kalender.
  */
 
-import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
+import { Plus, Clock } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
-import { Modal } from "@/components/ui/modal";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
@@ -55,7 +54,6 @@ export default function Dashboard() {
   const [ymd, setYmd] = useState<string>(todayYmd());
   const panels = [
     { id: "watch", title: "Att bevaka", render: () => <WatchlistCard /> },
-    { id: "calendar", title: "Kalender", render: () => <CalendarCard ymd={ymd} /> },
     { id: "time", title: "Tidrapportering", render: () => <TimeCard ymd={ymd} /> },
     { id: "recent", title: "Senaste ärenden", render: () => <RecentMattersCard /> },
   ];
@@ -134,137 +132,6 @@ function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => 
       <input type="date" value={ymd} onChange={(e) => onChange(e.target.value)}
         className="rounded-md border border-gray-200 px-2 py-1 text-xs" />
     </div>
-  );
-}
-
-/**
- * Dagens kalender (#1167): möten och förhandlingar. Uppgifter och frister
- * står i "Att bevaka" — förr visade det här kortet ("Att göra") samma
- * poster en gång till, och två listor med samma innehåll förvirrade.
- */
-function CalendarCard({ ymd }: { ymd: string }) {
-  const range = useMemo(() => rangeForDay(ymd), [ymd]);
-  // Vänta på me.data innan vi frågar — todo.list verifierar att user finns
-  // i org:en. Demo-runtime hydrerar users asynkront → utan gate kraschar
-  // första query:n innan datan finns.
-  const me = trpc.user.current.useQuery();
-  const todo = trpc.todo.list.useQuery(
-    { from: range.from, to: range.to },
-    { enabled: !!me.data?.id },
-  );
-  const events = todo.data?.filter((i) => i.source === "event") as CalendarItem[] | undefined;
-  const [selected, setSelected] = useState<CalendarItem | null>(null);
-
-  return (
-    <div className="bg-white rounded-lg border border-gray-200">
-      <div className={sectionHeaderClass("blue")}>
-        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-          <CalendarIcon size={16} className="text-gray-500" /> Kalender
-          {events && <span className="text-xs font-normal text-gray-500">({events.length})</span>}
-        </h2>
-        <Link href="/calendar" className="text-sm text-blue-600 hover:underline">Öppna kalender →</Link>
-      </div>
-      <CalendarList events={events} isLoading={todo.isLoading} ymd={ymd} onSelect={setSelected} />
-      <Modal open={!!selected} title={selected?.title ?? ""} onClose={() => setSelected(null)} widthClass="max-w-lg">
-        {selected && <CalendarDetail item={selected} onClose={() => setSelected(null)} />}
-      </Modal>
-    </div>
-  );
-}
-
-/** Listinnehållet: laddar / tomt / rader. */
-function CalendarList({ events, isLoading, ymd, onSelect }: {
-  events: CalendarItem[] | undefined; isLoading: boolean; ymd: string; onSelect: (i: CalendarItem) => void;
-}) {
-  return (
-    <div className="divide-y divide-gray-100">
-      {isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}
-      {events && events.length === 0 && (
-        <p className="px-6 py-4 text-sm text-gray-500">Inget i kalendern {ymd === todayYmd() ? "idag" : "denna dag"}.</p>
-      )}
-      {events?.map((item) => <CalendarRow key={item.id} item={item} onSelect={onSelect} />)}
-    </div>
-  );
-}
-
-interface CalendarItem {
-  id: string;
-  title: string;
-  at: string | Date;
-  endAt?: string | Date | null;
-  allDay: boolean;
-  kind: string | null;
-  location: string | null;
-  description?: string | null;
-  matter: { id: string; matterNumber: string; title: string } | null;
-}
-
-function badgeFor(item: CalendarItem): { cls: string; label: string } {
-  if (item.kind === "deadline") return { cls: "bg-amber-100 text-amber-800", label: "Frist" };
-  return { cls: "bg-purple-50 text-purple-700", label: "Möte" };
-}
-
-function CalendarRow({ item, onSelect }: { item: CalendarItem; onSelect: (item: CalendarItem) => void }) {
-  const date = new Date(item.at);
-  const timeStr = item.allDay ? "Hela dagen" : date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-  const badge = badgeFor(item);
-  return (
-    <button type="button" onClick={() => onSelect(item)}
-      className="w-full text-left px-6 py-3 hover:bg-gray-50 flex items-center gap-3">
-      <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
-        {item.matter && (
-          <p className="text-xs text-gray-500 truncate">{item.matter.matterNumber} — {item.matter.title}</p>
-        )}
-      </div>
-      <span className="text-xs text-gray-500 whitespace-nowrap">{timeStr}</span>
-    </button>
-  );
-}
-
-/** Detaljer för en kalenderpost (läsvy). */
-function CalendarDetail({ item, onClose }: { item: CalendarItem; onClose: () => void }) {
-  const badge = badgeFor(item);
-  return (
-    <div className="space-y-3 text-sm">
-      <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
-      <DetailWhen item={item} />
-      {item.location && (
-        <p className="text-gray-700 inline-flex items-center gap-1"><MapPin size={12} className="text-gray-400" /> {item.location}</p>
-      )}
-      {item.description && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-1">Beskrivning</p>
-          <p className="text-gray-700 whitespace-pre-wrap">{item.description}</p>
-        </div>
-      )}
-      {item.matter && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-1">Ärende</p>
-          <EntityLink route="matters" id={item.matter.id} className="text-blue-600 hover:underline">
-            {item.matter.matterNumber} — {item.matter.title}
-          </EntityLink>
-        </div>
-      )}
-      <div className="flex justify-end pt-3 border-t border-gray-200">
-        <button type="button" onClick={onClose}
-          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
-          Stäng
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Datum + tid (+ ev. sluttid). */
-function DetailWhen({ item }: { item: CalendarItem }) {
-  const date = new Date(item.at);
-  const dateStr = date.toLocaleDateString("sv-SE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  const timeStr = item.allDay ? "Hela dagen" : date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-  const endStr = item.endAt && !item.allDay ? new Date(item.endAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) : null;
-  return (
-    <p className="text-gray-700"><span className="capitalize">{dateStr}</span>{!item.allDay && <> · {timeStr}{endStr ? `–${endStr}` : ""}</>}</p>
   );
 }
 

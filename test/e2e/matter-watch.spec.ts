@@ -31,7 +31,7 @@ test("bevakning idag: röd i ärendet och i Att bevaka på startsidan", async ({
   const watchRow = page.locator("li", { hasText: "E2E-bevakning: överklagandefrist" });
   await expect(watchRow).toBeVisible({ timeout: 15_000 });
   await expect(watchRow.getByRole("alert")).toHaveText("FRIST IDAG");
-  await expect(page.getByRole("heading", { name: /Kalender/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Tidrapportering/ })).toBeVisible();
   await expect(page.getByText("Att göra", { exact: true })).toHaveCount(0);
 });
 

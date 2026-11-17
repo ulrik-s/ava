@@ -5,7 +5,6 @@
  * - Fakturor: typen "CREDIT" i stället för "Kreditfaktura".
  * - Avbetalningar: radens status "AKTIVA" (filterknappens plural).
  * - Användare: "2.50 kr/km" med decimalpunkt; nu kr/mil med decimalkomma (#1527).
- * - Kalender: "Tasks" / "Ny task".
  * - Fakturor: annullerade och kreditfakturor dolda från början (#1522).
  * - Ärendet: fliken Betalningssätt borta, ändras via huvudet (#1499).
  */
@@ -31,7 +30,7 @@ test("ärendenas anteckningar visar dag och klockslag, aldrig en rå ISO-tidpunk
   }
 });
 
-test("Fakturor, Avbetalningar, Användare och Kalender visar svenska etiketter", async ({ page }) => {
+test("Fakturor, Avbetalningar och Användare visar svenska etiketter", async ({ page }) => {
   await page.goto(`${BASE}/invoices/`);
   // Kreditfakturor är dolda från början (#1522).
   await page.getByRole("button", { name: /^Visa annullerade \(\d+\)$/ }).click({ timeout: 30_000 });
@@ -44,11 +43,6 @@ test("Fakturor, Avbetalningar, Användare och Kalender visar svenska etiketter",
   await page.goto(`${BASE}/users/`);
   await expect(page.getByText(/^\d+,\d{2}\s?kr\/mil$/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/\d\.\d{2}\s?kr\/mil|kr\/km/)).toHaveCount(0);
-
-  await page.goto(`${BASE}/calendar/`);
-  await showPanel(page, "Uppgifter");
-  await expect(page.getByRole("heading", { name: "Uppgifter", level: 2 })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Ny uppgift/ })).toBeVisible();
 });
 
 // Betalningssättet i ärendehuvudet (#1518): etikett, försäkringsbolag (vid
