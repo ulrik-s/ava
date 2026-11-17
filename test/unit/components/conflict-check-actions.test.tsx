@@ -53,9 +53,9 @@ describe("ConflictCheckActions", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("med träffar: länk till jävskontrollens historik", () => {
+  it("med träffar: länk till den sammanslagna ärendelistan", () => {
     render(<ConflictCheckActions matterId={M} hasHits />);
-    expect(screen.getByRole("link", { name: /Se träffarna/ })).toHaveAttribute("href", "/conflicts");
+    expect(screen.getByRole("link", { name: /Se träffarna/ })).toHaveAttribute("href", "/matters");
   });
 
   it("bedömningen kräver en motivering, som skickas med", () => {

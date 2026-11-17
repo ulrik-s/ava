@@ -37,7 +37,7 @@ export function ConflictCheckActions({ matterId, hasHits }: { matterId: MatterId
           Kör jävskontrollen igen
         </button>
         {hasHits && (
-          <Link href="/conflicts" className="text-sm text-blue-600 hover:underline">Se träffarna i jävskontrollens historik</Link>
+          <Link href="/matters" className="text-sm text-blue-600 hover:underline">Se träffarna i jävskontrollens historik</Link>
         )}
       </div>
       {hasHits && <ReviewHits matterId={matterId} onDone={refresh} />}

@@ -66,12 +66,12 @@ for (const [label, width, height] of [["halv skärm", 800, 900], ["kvarts skärm
     await openStart(page, width, height);
     await expect(page.getByRole("button", { name: "Öppna meny" })).toHaveCount(0);
 
-    const matters = page.getByRole("link", { name: "Ärenden", exact: true });
+    const matters = page.getByRole("link", { name: "Ärenden / jävskontroll", exact: true });
     await expect(matters).toBeVisible();
     const box = await matters.boundingBox();
     expect(box?.x ?? 999, "ikonmenyn ligger längst till vänster").toBeLessThan(64);
     expect(box?.width ?? 999, "bara ikoner — smal meny").toBeLessThanOrEqual(64);
-    await expectNothingCovered(page, [["link", "Ärenden"]]);
+    await expectNothingCovered(page, [["link", "Ärenden / jävskontroll"]]);
 
     await matters.click();
     await expectMatters(page);
@@ -91,7 +91,7 @@ test("1280 px: versionen står i den utfällda sidomenyns 64 px-huvud, inte efte
 
 test("900 px (ikonmenyn): ingen synlig versionstext (#1578)", async ({ page }) => {
   await openStart(page, 900, 900);
-  await expect(page.getByRole("link", { name: "Ärenden", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Ärenden / jävskontroll", exact: true })).toBeVisible();
   await expect(versionText(page)).toBeHidden();
 });
 

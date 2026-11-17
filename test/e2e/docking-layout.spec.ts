@@ -57,7 +57,7 @@ for (const p of PANEL_PAGES) {
 }
 
 /** Listsidor: huvudet står still, listan scrollar inuti — sidan aldrig. */
-const LIST_PAGES = ["/matters/", "/contacts/", "/invoices/", "/time/", "/payment-plans/", "/users/", "/templates/", "/search/", "/watchlist/", "/conflicts/"];
+const LIST_PAGES = ["/matters/", "/contacts/", "/invoices/", "/time/", "/payment-plans/", "/users/", "/templates/", "/search/", "/watchlist/"];
 
 for (const path of LIST_PAGES) {
   test(`listsida ${path}: ingen sidscroll (13" och telefon)`, async ({ page, baseURL }) => {

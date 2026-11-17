@@ -33,7 +33,6 @@ const ROUTES = [
   { path: "/time/", expectText: /Tidregistrering/i },
   { path: "/reports/", expectText: /Rapporter/i },
   { path: "/search/", expectText: /Sök|Dokumentsök/i },
-  { path: "/conflicts/", expectText: /Jävskontroll/i },
   // /settings är fullständig i demo:n (datakälla + FSA + token-config)
   { path: "/settings/", expectText: /Inställningar/i },
   // Placeholders (Fas R17) — visar FeatureUnavailable istället för 404
@@ -83,6 +82,19 @@ test("ärendelistan visar seedens egna ärenden", async ({ page }) => {
   const newest = [...seed.matters]
     .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))[0];
   await expect(page.getByText(newest?.title ?? "", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
+});
+
+test("menyvalet Ärenden / jävskontroll öppnar ärendelistan (#1643)", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await page.goto(`${BASE}/`);
+  await page.locator("[data-desktop-sidebar]").getByRole("link", { name: "Ärenden / jävskontroll" }).click();
+  await expect(page).toHaveURL(/\/matters\/?$/, { timeout: 15_000 });
+  await expect(page.getByRole("heading", { level: 1, name: /Ärenden/ })).toBeVisible({ timeout: 15_000 });
+});
+
+test("gamla /conflicts/ skickar vidare till ärendelistan (#1643)", async ({ page }) => {
+  await page.goto(`${BASE}/conflicts/`);
+  await expect(page).toHaveURL(/\/matters\/?$/, { timeout: 15_000 });
 });
 
 test("kontaktlistan visar seedens egna kontakter", async ({ page }) => {

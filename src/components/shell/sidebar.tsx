@@ -13,10 +13,9 @@ import { useSignOutFlow } from "./sign-out-flow";
 import { ThemeToggle } from "./theme-toggle";
 
 const navigation = [
-  // Jävskontroll överst — första steget i ärendehantering, mest framträdande (#89).
-  // Ärenden direkt under — kärnan i det dagliga arbetet.
-  { name: "Jävskontroll", href: "/conflicts", icon: "🔍" },
-  { name: "Ärenden", href: "/matters", icon: "📁" },
+  // Överst (#89): ärendelistan kör också jävskontrollen (#1642), så ett
+  // menyval för båda (#1643). /conflicts skickar hit.
+  { name: "Ärenden / jävskontroll", href: "/matters", icon: "🔍" },
   { name: "Startsida", href: "/", icon: "📊" },
   // EN lista för det som ska bevakas (#1167): bevakningar/frister + härledda
   // signaler. "Att göra" visade samma poster en gång till och förvirrade.
