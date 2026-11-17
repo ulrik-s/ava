@@ -15,6 +15,7 @@ describe("matterRoleLabels", () => {
   it("innehåller alla vedertagna rollvärden", () => {
     expect(matterRoleLabels.MOTPART).toBe("Motpart");
     expect(matterRoleLabels.MOTPARTSOMBUD).toBe("Motpartsombud");
+    expect(matterRoleLabels.MEDTILLTALAD).toBe("Medtilltalad");
     expect(matterRoleLabels.AKLAGARE).toBe("Åklagare");
     expect(matterRoleLabels.DOMSTOL).toBe("Domstol");
     expect(matterRoleLabels.VITTNE).toBe("Vittne");
