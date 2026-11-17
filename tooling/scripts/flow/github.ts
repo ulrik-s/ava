@@ -50,6 +50,17 @@ export interface TimedLabelEvent extends LabelEvent { at: string }
 /** En öppen issue eller PR. */
 export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean }
 
+const repoEventSchema = z.object({
+  id: z.number(),
+  event: z.string(),
+  created_at: z.string(),
+  label: z.object({ name: z.string() }).optional(),
+  issue: z.object({ number: z.number(), pull_request: z.unknown().optional() }).nullable().optional(),
+});
+
+/** En etikett som satts någonstans i repot (repots händelselogg). */
+export interface RepoLabelEvent { id: number; label: string; number: number; isPr: boolean; at: string }
+
 const enc = (label: string): string => encodeURIComponent(label);
 
 /** GitHub-operationerna för ett repo. */
@@ -61,6 +72,18 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
         (e.event === "labeled" || e.event === "unlabeled") && e.label
           ? [{ id: e.id, label: e.label.name, added: e.event === "labeled", actor: e.actor?.login ?? "", viaApp: e.performed_via_github_app != null, at: e.created_at }]
           : []);
+    },
+    /** Repots senaste etiketthändelser (nyast först, en sida) — låset för rutinstarter. */
+    recentLabelEvents(): RepoLabelEvent[] {
+      const rows = parseJsonWith(z.array(repoEventSchema), run(["api", `repos/${repo}/issues/events?per_page=100`]));
+      return rows.flatMap((e) => (e.event === "labeled" && e.label && e.issue
+        ? [{ id: e.id, label: e.label.name, number: e.issue.number, isPr: e.issue.pull_request != null, at: e.created_at }]
+        : []));
+    },
+    /** Öppna PR:er via PR-ändpunkten (issuelistan räcker inte för alla tokens). */
+    openPulls(): OpenItem[] {
+      const pages = parseJsonWith(pagesSchema(itemSchema), run(["api", `repos/${repo}/pulls?state=open&per_page=100`, "--paginate", "--slurp"]));
+      return pages.flat().map((p) => ({ number: p.number, title: p.title, body: p.body ?? "", labels: p.labels.map((l) => l.name), isPr: true }));
     },
     openItems(): OpenItem[] {
       const pages = parseJsonWith(pagesSchema(itemSchema), run(["api", `repos/${repo}/issues?state=open&per_page=100`, "--paginate", "--slurp"]));
