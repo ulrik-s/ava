@@ -7,7 +7,9 @@
  * - Användare: "2.50 kr/km" med decimalpunkt; nu kr/mil med decimalkomma (#1527).
  * - Fakturor: annullerade och kreditfakturor dolda från början (#1522).
  * - Ärendet: fliken Betalningssätt borta, ändras via huvudet (#1499).
+ * - Rutornas rubrikrader: ett steg starkare färg i ljust läge, mörkt läge oförändrat (#1636).
  */
+import type { Locator, Page } from "@playwright/test";
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 const ISO_TIMESTAMP = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
@@ -96,4 +98,94 @@ test("Fakturor döljer annullerade och kreditfakturor tills man väljer att visa
   await expect(page.getByRole("cell", { name: "Kreditfaktura", exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Dölj annullerade" }).click();
   await expect(page.getByRole("cell", { name: "Kreditfaktura", exact: true })).toHaveCount(0);
+});
+
+// ── #1636: rubrikradernas färg ──────────────────────────────────────────────
+
+/** Rubrikradens beräknade färger: bakgrund, kant (överkant) och vänsterkant. */
+async function headerColors(header: Locator): Promise<[string, string, string]> {
+  return header.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return [s.backgroundColor, s.borderTopColor, s.borderLeftColor];
+  });
+}
+
+/** Samma färger på ett provelement med Tailwind-klasserna (ljust läge: ingen `.dark`). */
+async function probeColors(page: Page, classes: readonly string[]): Promise<[string, string, string]> {
+  return page.evaluate((cls) => {
+    const probe = document.createElement("div");
+    probe.className = `${cls.join(" ")} border border-l-4`;
+    document.body.append(probe);
+    const s = getComputedStyle(probe);
+    const out: [string, string, string] = [s.backgroundColor, s.borderTopColor, s.borderLeftColor];
+    probe.remove();
+    return out;
+  }, [...classes]);
+}
+
+/**
+ * Lägsta WCAG-kontrast mellan rubrikradens text (rubrik, summor, länkar) och
+ * radens bakgrund. Färgerna tolkas via canvas, så oklch/lab fungerar också.
+ */
+async function minTextContrast(header: Locator): Promise<number> {
+  return header.evaluate((el) => {
+    const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    if (!ctx) return 0;
+    const lum = (color: string): number => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r = 0, g = 0, b = 0] = ctx.getImageData(0, 0, 1, 1).data;
+      const lin = (v: number): number => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    };
+    const bg = lum(getComputedStyle(el).backgroundColor);
+    const ownText = (n: Element): boolean => [...n.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && (c.textContent ?? "").trim() !== "");
+    const ratios = [...el.querySelectorAll("*")].filter(ownText).map((n) => {
+      const fg = lum(getComputedStyle(n).color);
+      return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+    });
+    return Math.min(...ratios);
+  });
+}
+
+const START_HEADERS = [
+  { tone: "amber", heading: /Att bevaka/, light: ["bg-amber-200", "border-amber-300", "border-l-amber-600"],
+    dark: ["rgba(245, 158, 11, 0.28)", "rgba(245, 158, 11, 0.4)", "rgba(245, 158, 11, 0.4)"] },
+  { tone: "indigo", heading: /Tidrapportering/, light: ["bg-indigo-200", "border-indigo-300", "border-l-indigo-600"],
+    dark: ["rgba(99, 102, 241, 0.28)", "rgba(99, 102, 241, 0.4)", "rgba(99, 102, 241, 0.4)"] },
+  { tone: "gray", heading: /Senaste ärenden/, light: ["bg-gray-200", "border-gray-300", "border-l-gray-500"],
+    dark: ["rgb(51, 65, 85)", "rgb(51, 65, 85)", "rgb(51, 65, 85)"] },
+] as const;
+
+/** Startsidans rubrikrad med given ton och rubrik. */
+function startHeader(page: Page, tone: string, heading: RegExp): Locator {
+  return page.locator(`.section-tone-${tone}`).filter({ has: page.getByRole("heading", { name: heading }) }).first();
+}
+
+test("Startsidan i ljust läge: rubrikraderna har den starkare tonen och läsbar text", async ({ page }) => {
+  await page.goto(`${BASE}/`);
+  for (const h of START_HEADERS) {
+    const header = startHeader(page, h.tone, h.heading);
+    await expect(header).toBeVisible({ timeout: 30_000 });
+    expect(await headerColors(header), h.tone).toEqual(await probeColors(page, h.light));
+    expect(await minTextContrast(header), h.tone).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+test.describe("mörkt läge", () => {
+  test.use({ colorScheme: "dark" });
+
+  test("Startsidans rubrikrader har samma färger som före #1636", async ({ page }) => {
+    await page.goto(`${BASE}/`);
+    await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+    for (const h of START_HEADERS) {
+      const header = startHeader(page, h.tone, h.heading);
+      await expect(header).toBeVisible({ timeout: 30_000 });
+      expect(await headerColors(header), h.tone).toEqual([...h.dark]);
+    }
+    // Andra element med samma klasser behåller sina mörka värden (.dark .bg-gray-200 m.fl.).
+    const [bg, border] = await probeColors(page, ["bg-gray-200", "border-gray-300", "border-l-gray-500"]);
+    expect([bg, border]).toEqual(["rgb(71, 85, 105)", "rgb(71, 85, 105)"]);
+  });
 });

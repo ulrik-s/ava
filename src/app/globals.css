@@ -155,6 +155,19 @@ body {
 .dark .border-purple-200 { border-color: rgba(168, 85, 247, 0.4); }
 .dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.4); }
 
+/* Avdelningarnas rubrikrader (#1636). Ljust läge använder ett steg starkare
+   toner (bg-*-200, border-*-300), mörkt läge behåller exakt de värden de
+   hade med bg-*-100/border-*-200 ovan, vänsterkanten inräknad. Står efter
+   .dark .bg-gray-200 och .dark .border-gray-300 så att de vinner. */
+.dark .section-tone-red { background-color: rgba(220, 38, 38, 0.28); border-color: rgba(220, 38, 38, 0.4); }
+.dark .section-tone-amber { background-color: rgba(245, 158, 11, 0.28); border-color: rgba(245, 158, 11, 0.4); }
+.dark .section-tone-blue { background-color: rgba(37, 99, 235, 0.28); border-color: rgba(37, 99, 235, 0.4); }
+.dark .section-tone-purple { background-color: rgba(168, 85, 247, 0.28); border-color: rgba(168, 85, 247, 0.4); }
+.dark .section-tone-green { background-color: rgba(22, 163, 74, 0.28); border-color: rgba(22, 163, 74, 0.4); }
+.dark .section-tone-indigo { background-color: rgba(99, 102, 241, 0.28); border-color: rgba(99, 102, 241, 0.4); }
+.dark .section-tone-orange { background-color: rgb(249 115 22 / 0.2); border-color: rgb(249 115 22 / 0.35); }
+.dark .section-tone-gray { background-color: #334155; border-color: #334155; }
+
 /* Floating theme-toggle override — toggle:n behöver semitransparent
    bakgrund mot båda lägena. Override på dark. */
 .dark .bg-white\/80 { background-color: rgba(30, 41, 59, 0.85); }

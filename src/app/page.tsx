@@ -99,11 +99,11 @@ function WatchlistCard() {
       <div className={sectionHeaderClass("amber")}>
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           🔔 Att bevaka
-          <span className="text-xs font-normal text-gray-500">
+          <span className="text-xs font-normal text-gray-600">
             ({items.length}{passed > 0 ? `, ${passed} passerade` : ""})
           </span>
         </h2>
-        <Link href="/watchlist" className="text-sm text-blue-600 hover:underline">
+        <Link href="/watchlist" className="text-sm text-blue-700 hover:underline">
           Visa alla →
         </Link>
       </div>
@@ -152,10 +152,10 @@ function TimeCard({ ymd }: { ymd: string }) {
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           <Clock size={16} className="text-gray-500" /> Tidrapportering
           {entries.data && (
-            <span className="text-xs font-normal text-gray-500">({formatDecimalHoursWithUnit(entries.data.totalMinutes)})</span>
+            <span className="text-xs font-normal text-gray-600">({formatDecimalHoursWithUnit(entries.data.totalMinutes)})</span>
           )}
         </h2>
-        <Link href="/time" className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
+        <Link href="/time" className="text-sm text-blue-700 hover:underline inline-flex items-center gap-1">
           <Plus size={12} /> Ny tid
         </Link>
       </div>
@@ -210,7 +210,7 @@ function RecentMattersCard() {
     <div className="bg-white rounded-lg border border-gray-200">
       <div className={sectionHeaderClass("gray")}>
         <h2 className="font-semibold text-gray-900">Senaste ärenden du jobbat i</h2>
-        <Link href="/matters" className="text-sm text-blue-600 hover:underline">Alla ärenden →</Link>
+        <Link href="/matters" className="text-sm text-blue-700 hover:underline">Alla ärenden →</Link>
       </div>
       <div className="divide-y divide-gray-100">
         {entries.isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}

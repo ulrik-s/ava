@@ -100,7 +100,7 @@ export function ServiceNotesSection({ matterId }: { matterId: MatterId }) {
           <NotebookPen size={16} /> Tjänsteanteckningar
         </h2>
         {!showForm && (
-          <button onClick={() => { setEditing(null); setAdding(true); }} className="text-sm text-blue-600 hover:underline">
+          <button onClick={() => { setEditing(null); setAdding(true); }} className="text-sm text-blue-700 hover:underline">
             + Ny anteckning
           </button>
         )}

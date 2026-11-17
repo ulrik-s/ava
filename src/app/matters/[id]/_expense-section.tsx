@@ -216,12 +216,12 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
         <h2 className="font-semibold text-gray-900">
           Utlägg
           {expenses.data && expenses.data.totalAmount > 0 && (
-            <span className="ml-2 text-sm font-normal text-gray-500">(totalt {formatCurrency(expenses.data.totalAmount)})</span>
+            <span className="ml-2 text-sm font-normal text-gray-600">(totalt {formatCurrency(expenses.data.totalAmount)})</span>
           )}
         </h2>
         <span className="flex gap-4">
-          <button onClick={() => setShowCreate(true)} className="text-sm text-blue-600 hover:underline">+ Nytt utlägg</button>
-          <button onClick={() => setShowMileage(true)} className="text-sm text-blue-600 hover:underline">+ Milersättning</button>
+          <button onClick={() => setShowCreate(true)} className="text-sm text-blue-700 hover:underline">+ Nytt utlägg</button>
+          <button onClick={() => setShowMileage(true)} className="text-sm text-blue-700 hover:underline">+ Milersättning</button>
         </span>
       </div>
 
