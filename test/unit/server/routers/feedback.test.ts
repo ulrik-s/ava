@@ -242,8 +242,8 @@ describe("hjälpfunktioner", () => {
     [true, ["verifierad", "nedbruten"], "pagar"],
     [true, ["undersökt", "dubblett"], "dubblett"],
     [true, ["finns-redan"], "finns_redan"],
-    // Användaren svarade "det hjälpte inte" och verifieringen frågar igen.
-    [true, ["finns-redan", "väntar-på-användaren"], "vantar_pa_dig"],
+    // Stängd av Actionen men fortfarande "finns redan" för användaren.
+    [false, ["finns-redan"], "finns_redan"],
     // En fråga som väntar går före — användaren ska svara.
     [true, ["dubblett", "väntar-på-användaren"], "vantar_pa_dig"],
     [false, ["dubblett", "levererad"], "levererad"],

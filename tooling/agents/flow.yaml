@@ -75,13 +75,11 @@ machines:
       finns-redan:
         label: finns-redan
         color: "bfdadc"
-        description: Fanns redan (eller avsett beteende); användaren har fått veta hur — inget att bygga
-        # Ingen agent: skriver användaren igen startar flödesvakten L1 (comments.ts).
+        description: Fanns redan (eller avsett beteende); användaren har fått veta hur — stängs av en Action
+        # Slutläge: användaren har bekräftat (eller inte svarat på 7 dagar). Behöver
+        # hen något mer skickar hen en ny förfrågan.
         agent: null
-        transitions:
-          # Användaren skrev att det inte löste behovet: undersök som vanligt.
-          - to: undersokt
-          - to: dubblett
+        transitions: []
       dubblett:
         label: dubblett
         color: "cfd3d7"
