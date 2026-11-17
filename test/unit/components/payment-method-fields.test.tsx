@@ -43,6 +43,18 @@ describe("PaymentMethodFields", () => {
     expect(onChange).toHaveBeenCalledWith({ ...value, method: "PRIVAT" });
   });
 
+  it("låst betalningssätt (#1639): rullgardinen är inaktiv med förklaringen", () => {
+    render(<PaymentMethodFields value={{ ...BASE, method: "OFFENTLIGT_UPPDRAG" }} onChange={onChange} methodLocked />);
+    expect(screen.getByLabelText("Betalningssätt")).toBeDisabled();
+    expect(screen.getByText("Bestäms av ärendetypen")).toBeInTheDocument();
+  });
+
+  it("utan lås är rullgardinen aktiv och förklaringen saknas", () => {
+    renderFields();
+    expect(screen.getByLabelText("Betalningssätt")).toBeEnabled();
+    expect(screen.queryByText("Bestäms av ärendetypen")).toBeNull();
+  });
+
   it.each([
     [/Klientens andel att betala/, "25", "sharePct"],
     ["Tvist uppkom (datum)", "2026-01-05", "tvist"],

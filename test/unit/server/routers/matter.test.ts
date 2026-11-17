@@ -400,3 +400,49 @@ describe("matter.removeContact", () => {
     expect(mcs(ds).some((mc) => mc.id === "mc1")).toBe(true);
   });
 });
+
+describe("offentligt uppdrag per ärendetyp (#1639)", () => {
+  const PUBLIC_ORGS = [{ id: ORG, name: "X", matterTypes: ["Försvar", "Bodelning"], publicAssignmentMatterTypes: ["Försvar"] }];
+  const caller = (matters: unknown[] = []) => makeCaller({ organizations: PUBLIC_ORGS, matters } as Partial<DemoSource>);
+  const notes = (ds: DemoDataStore) => (src(ds).serviceNotes ?? []) as Array<{ text: string }>;
+  const stored = (ds: DemoDataStore) => (src(ds).matters as Array<{ id: string; paymentMethod?: string }>).find((m) => m.id === "matter-1");
+
+  it("create med markerad typ ger Offentligt uppdrag även om klienten skickar annat", async () => {
+    const { caller: c } = caller();
+    expect((await c.create({ title: "T", matterType: "Försvar", paymentMethod: "PRIVAT" })).paymentMethod).toBe("OFFENTLIGT_UPPDRAG");
+    expect((await c.create({ title: "T2", matterType: "Försvar" })).paymentMethod).toBe("OFFENTLIGT_UPPDRAG");
+  });
+
+  it("create med omarkerad typ eller utan typ: som i dag", async () => {
+    const { caller: c } = caller();
+    expect((await c.create({ title: "T", matterType: "Bodelning", paymentMethod: "PRIVAT" })).paymentMethod).toBe("PRIVAT");
+    expect((await c.create({ title: "T2", paymentMethod: "RATTSHJALP" })).paymentMethod).toBe("RATTSHJALP");
+  });
+
+  it("update avvisar ett annat betalningssätt för markerad typ, med svenskt felmeddelande", async () => {
+    const { caller: c, ds } = caller([matter({ matterType: "Försvar", paymentMethod: "OFFENTLIGT_UPPDRAG" })]);
+    await expect(c.update({ id: "matter-1", paymentMethod: "PRIVAT" })).rejects.toThrow(/bestäms av ärendetypen/);
+    await expect(c.update({ id: "matter-1", matterType: "Försvar", paymentMethod: "PRIVAT" })).rejects.toThrow(/offentligt uppdrag/);
+    expect(stored(ds)?.paymentMethod).toBe("OFFENTLIGT_UPPDRAG");
+  });
+
+  it("byte till markerad typ sätter Offentligt uppdrag och loggar betalningssättsändringen", async () => {
+    const { caller: c, ds } = caller([matter({ matterType: "Bodelning", paymentMethod: "PENDING" })]);
+    await c.update({ id: "matter-1", matterType: "Försvar" });
+    expect(stored(ds)?.paymentMethod).toBe("OFFENTLIGT_UPPDRAG");
+    expect(notes(ds).map((n) => n.text)).toEqual([expect.stringContaining("Offentligt uppdrag")]);
+  });
+
+  it("byte bort från markerad typ släpper låset", async () => {
+    const { caller: c, ds } = caller([matter({ matterType: "Försvar", paymentMethod: "OFFENTLIGT_UPPDRAG" })]);
+    await c.update({ id: "matter-1", matterType: "Bodelning", paymentMethod: "PRIVAT" });
+    expect(stored(ds)?.paymentMethod).toBe("PRIVAT");
+  });
+
+  it("en uppdatering som varken rör typ eller betalningssätt lämnar betalningssättet", async () => {
+    const { caller: c, ds } = caller([matter({ matterType: "Försvar", paymentMethod: "PENDING" })]);
+    await c.update({ id: "matter-1", title: "Ny" });
+    expect(stored(ds)?.paymentMethod).toBe("PENDING");
+    expect(notes(ds)).toHaveLength(0);
+  });
+});

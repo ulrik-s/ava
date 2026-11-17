@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
 import { DEFAULT_MATTER_FOLDERS } from "@/lib/shared/default-matter-folders";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { previousCourtCaseNumberAfterChange } from "@/lib/shared/previous-court-case-number";
@@ -8,7 +7,6 @@ import {
   contactTypeSchema,
   matterStatusSchema,
   paymentMethodSchema,
-  type PaymentMethod,
 } from "@/lib/shared/schemas/enums";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import {
@@ -27,7 +25,7 @@ import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
-import { logMatterNote, type NoteCtx } from "../billing/matter-note";
+import { applyPaymentMethodOnCreate, applyPaymentMethodOnUpdate, logBillingChanges } from "../billing/matter-payment-method";
 import { checkMatterConflicts } from "../conflict/matter-conflict-check";
 import { recheckIfParty, recheckMatterConflicts } from "../conflict/matter-conflict-recheck";
 import { conflictReviewInput, reviewMatterConflicts } from "../conflict/matter-conflict-review";
@@ -84,26 +82,6 @@ type MatterCreateInput = z.infer<typeof matterCreateInput>;
 const MATTER_NUMBER_RE = /^([A-ZÅÄÖ]{1,3})?(\d{4})-(\d{4,})$/;
 
 /** Löpnumret i ett ärendenummer OM det avser `year`, annars 0. */
-/** Det i en matter-uppdatering som loggas som anteckning (#1221). */
-interface BillingChangeInput {
-  paymentMethod?: PaymentMethod | undefined;
-  rattsskyddNekadAt?: string | null | undefined;
-}
-
-/**
- * Faktureringsrelevanta ärendeändringar som tjänsteanteckning (#1221): nytt
- * betalningssätt och avslaget rättsskydd. Bara när värdet faktiskt ÄNDRAS —
- * ett formulär som sparar samma betalningssätt igen ska inte logga något.
- */
-async function logBillingChanges(repos: Repositories, ctx: MatterCtx & NoteCtx, before: Matter, input: BillingChangeInput): Promise<void> {
-  if (input.paymentMethod && input.paymentMethod !== before.paymentMethod) {
-    await logMatterNote(repos, ctx, before.id, paymentMethodNote(input.paymentMethod));
-  }
-  if (input.rattsskyddNekadAt && !before.rattsskyddNekadAt) {
-    await logMatterNote(repos, ctx, before.id, rattsskyddNekadNote(input.rattsskyddNekadAt.slice(0, 10)));
-  }
-}
-
 function seqForYear(matterNumber: string, year: number): number {
   const m = MATTER_NUMBER_RE.exec(matterNumber);
   if (!m || Number(m[2]) !== year) return 0;
@@ -251,7 +229,9 @@ export const matterRouter = router({
 
   create: orgProcedure
     .input(matterCreateInput)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input: sent }) => {
+      // Offentligt uppdrag (#1639): servern sätter betalningssättet efter ärendetypen.
+      const input = await applyPaymentMethodOnCreate(ctx, sent);
       assertSetupFieldsAllowed(ctx, { matterNumber: input.matterNumber, status: input.status, createdAt: input.createdAt });
       // Ansvarig jurist = explicit val (i byrån, #1345), annars skaparen (#174). Styr serien.
       if (input.responsibleLawyerId) await requireUserInOrg(ctx, input.responsibleLawyerId);
@@ -330,8 +310,10 @@ export const matterRouter = router({
         taxaHufStart: z.string().nullable().optional(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      const before = await requireMatterInOrg(ctx, asId<"MatterId">(input.id));
+    .mutation(async ({ ctx, input: sent }) => {
+      const before = await requireMatterInOrg(ctx, asId<"MatterId">(sent.id));
+      // Offentligt uppdrag (#1639): låst betalningssätt för en markerad ärendetyp.
+      const input = await applyPaymentMethodOnUpdate(ctx, before, sent);
       const { id, paymentMethodDecidedAt, taxaHufStart, tvistUppkomDatum, rattsskyddBeslutDatum, rattsskyddNekadAt, ...rest } = input;
       const data: Record<string, unknown> = { ...rest };
       // Datumsträngar (yyyy-mm-dd) → Date | null; lämna orörda om utelämnade.

@@ -12,44 +12,8 @@ import { Pager } from "@/components/ui/pager";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
 import { trpc } from "@/lib/client/trpc";
 import { MatterFilters, type NamedOption, type StatusFilter } from "./_matter-filters";
+import { EMPTY_MATTER_FORM, matterCreateArgs, withPickedClient, type MatterForm } from "./_matter-form";
 import { type MatterSearch, useMatterSearch } from "./_use-matter-search";
-
-interface MatterForm {
-  title: string;
-  description: string;
-  matterType: string;
-  klientId: string;
-  responsibleLawyerId: string;
-  /** Domstolens målnummer — frivilligt, trimmas vid submit (#1509). */
-  courtCaseNumber: string;
-}
-
-/** Trimmat värde, eller undefined när det bara är blanksteg/tomt. */
-function optionalTrimmed(v: string): string | undefined {
-  return v.trim() || undefined;
-}
-
-const EMPTY_MATTER_FORM: MatterForm = {
-  title: "",
-  description: "",
-  matterType: "",
-  klientId: "",
-  responsibleLawyerId: "",
-  courtCaseNumber: "",
-};
-
-/** Formulär → `matter.create`-input: tomma fält utelämnas (utbrutet ur
- *  MattersContent, max-lines/complexity-ratchet). */
-function matterCreateArgs(form: MatterForm) {
-  return {
-    title: form.title,
-    description: form.description || undefined,
-    matterType: form.matterType || undefined,
-    klientId: form.klientId || undefined,
-    responsibleLawyerId: form.responsibleLawyerId || undefined,
-    courtCaseNumber: optionalTrimmed(form.courtCaseNumber),
-  };
-}
 
 /** Bygg query-args för matter.list (flyttar `|| undefined`-grenarna ut ur
  *  MattersContent → håller den under complexity@8). */
@@ -260,9 +224,10 @@ function MattersContent() {
 
       {pickerOpen && (
         <ClientPickerDialog
+          initialTerm={form.title.trim()}
           onPick={(c) => {
             setClient(c);
-            setForm({ ...form, klientId: c.id });
+            setForm(withPickedClient(form, c));
             setPickerOpen(false);
           }}
           onClose={() => setPickerOpen(false)}

@@ -490,6 +490,7 @@ describe("organization — behörighet för icke-admin (#1370)", () => {
     ["aconto-gränsen", { accontoThresholdOre: 1 }],
     ["standardåtgärderna", { standardAtgarder: [] as never[] }],
     ["ärendetyperna", { matterTypes: ["Bodelning"] }],
+    ["offentligt uppdrag", { publicAssignmentMatterTypes: ["Bodelning"] }],
   ])("LAWYER: ändring av %s nekas (FORBIDDEN) och inget skrivs", async (_label, patch) => {
     mockPrisma.organization.findFirst.mockResolvedValue({ ...CURRENT, standardAtgarder: [{ id: "x" }] });
     await expect(makeCaller("org-a", "LAWYER").updateSettings(patch)).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringMatching(/Endast administratörer/) });
@@ -517,5 +518,67 @@ describe("organization — behörighet för icke-admin (#1370)", () => {
     mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
     await makeCaller("org-a", "LAWYER").updateSettings({ hourlyRates: {}, documentTags: [] });
     expect(mockPrisma.organization.update).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Offentligt uppdrag per ärendetyp (#1638): hela listan ersätts, normaliseras
+ * som ärendetyperna och begränsas till byråns ärendetyper. "Aldrig satt"
+ * (`null`) skiljs från tom lista.
+ */
+describe("organization — offentligt uppdrag (#1638)", () => {
+  const ORG = { id: "org-a", name: "Advokat AB", matterTypes: ["Offentlig försvarare", "Bodelning", "Målsägandebiträde"] };
+  const lastData = (): Record<string, unknown> =>
+    (mockPrisma.organization.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> }).data;
+
+  beforeEach(() => {
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
+  });
+
+  it("getSettings: aldrig satt → null; satt → listan", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue(ORG);
+    expect((await makeCaller("org-a").getSettings()).publicAssignmentMatterTypes).toBeNull();
+    mockPrisma.organization.findFirst.mockResolvedValue({ ...ORG, publicAssignmentMatterTypes: ["Bodelning"] });
+    expect((await makeCaller("org-a").getSettings()).publicAssignmentMatterTypes).toEqual(["Bodelning"]);
+    mockPrisma.organization.findFirst.mockResolvedValue({ ...ORG, publicAssignmentMatterTypes: [] });
+    expect((await makeCaller("org-a").getSettings()).publicAssignmentMatterTypes).toEqual([]);
+  });
+
+  it("updateSettings: trimmar, slänger tomma, dedupar och släpper namn som inte är byråns ärendetyper", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue(ORG);
+    await makeCaller("org-a").updateSettings({
+      publicAssignmentMatterTypes: [" Offentlig försvarare ", "", "Okänd typ", "Målsägandebiträde", "Offentlig försvarare"],
+    });
+    expect(lastData()).toMatchObject({ publicAssignmentMatterTypes: ["Offentlig försvarare", "Målsägandebiträde"] });
+  });
+
+  it("updateSettings: en tom lista sparas som tom lista (inte aldrig satt)", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ ...ORG, publicAssignmentMatterTypes: ["Bodelning"] });
+    await makeCaller("org-a").updateSettings({ publicAssignmentMatterTypes: [] });
+    expect(lastData()).toMatchObject({ publicAssignmentMatterTypes: [] });
+  });
+
+  it("updateSettings: ärendetyperna i samma anrop avgör vilka namn som får markeras", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue(ORG);
+    await makeCaller("org-a").updateSettings({ matterTypes: ["Ny typ ", "Bodelning"], publicAssignmentMatterTypes: ["Ny typ", "Offentlig försvarare"] });
+    expect(lastData()).toMatchObject({ matterTypes: ["Ny typ", "Bodelning"], publicAssignmentMatterTypes: ["Ny typ"] });
+  });
+
+  it("updateSettings: en borttagen ärendetyp försvinner också ur den sparade markeringen", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ ...ORG, publicAssignmentMatterTypes: ["Offentlig försvarare", "Målsägandebiträde"] });
+    await makeCaller("org-a").updateSettings({ matterTypes: ["Bodelning", "Målsägandebiträde"] });
+    expect(lastData()).toMatchObject({ publicAssignmentMatterTypes: ["Målsägandebiträde"] });
+  });
+
+  it("updateSettings: ändrade ärendetyper lämnar en aldrig satt markering orörd", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue(ORG);
+    await makeCaller("org-a").updateSettings({ matterTypes: ["Bodelning"] });
+    expect(lastData()).not.toHaveProperty("publicAssignmentMatterTypes");
+  });
+
+  it("updateSettings: utan ärendetyper hos byrån kan inget markeras", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB" });
+    await makeCaller("org-a").updateSettings({ publicAssignmentMatterTypes: ["Bodelning"] });
+    expect(lastData()).toMatchObject({ publicAssignmentMatterTypes: [] });
   });
 });

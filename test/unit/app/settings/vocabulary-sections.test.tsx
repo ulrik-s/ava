@@ -12,12 +12,13 @@ const updateMutate = vi.fn();
 const getSettingsInvalidate = vi.fn();
 let documentKinds: string[] = ["Sekretess"];
 let matterTypes: string[] = ["Bodelning"];
+let publicAssignmentMatterTypes: string[] | null = null;
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ organization: { getSettings: { invalidate: getSettingsInvalidate } } }),
     organization: {
-      getSettings: { useQuery: () => ({ data: { documentKinds, matterTypes } }) },
+      getSettings: { useQuery: () => ({ data: { documentKinds, matterTypes, publicAssignmentMatterTypes } }) },
       updateSettings: { useMutation: () => ({ mutate: updateMutate, isPending: false }) },
     },
   },
@@ -27,6 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   documentKinds = ["Sekretess"];
   matterTypes = ["Bodelning"];
+  publicAssignmentMatterTypes = null;
 });
 
 describe("DocumentKindsSection", () => {
@@ -77,5 +79,65 @@ describe("MatterTypesSection", () => {
     matterTypes = [];
     render(<MatterTypesSection />);
     expect(screen.getByText("Inga ärendetyper ännu.")).toBeInTheDocument();
+  });
+});
+
+describe("MatterTypesSection — offentligt uppdrag (#1638)", () => {
+  const checkbox = (tag: string): HTMLInputElement =>
+    screen.getByRole("checkbox", { name: `Offentligt uppdrag: ${tag}` });
+
+  it("varje ärendetyp har en kryssruta som speglar markeringen (aldrig satt = ingen ikryssad)", () => {
+    matterTypes = ["Bodelning", "Offentlig försvarare"];
+    const { unmount } = render(<MatterTypesSection />);
+    expect(checkbox("Bodelning").checked).toBe(false);
+    expect(checkbox("Offentlig försvarare").checked).toBe(false);
+    unmount();
+    publicAssignmentMatterTypes = ["Offentlig försvarare"];
+    render(<MatterTypesSection />);
+    expect(checkbox("Bodelning").checked).toBe(false);
+    expect(checkbox("Offentlig försvarare").checked).toBe(true);
+  });
+
+  it("kryssa i sparar listan med typen tillagd", () => {
+    matterTypes = ["Bodelning", "Offentlig försvarare", "Målsägandebiträde"];
+    publicAssignmentMatterTypes = ["Offentlig försvarare"];
+    render(<MatterTypesSection />);
+    fireEvent.click(checkbox("Målsägandebiträde"));
+    expect(updateMutate).toHaveBeenCalledWith({ publicAssignmentMatterTypes: ["Offentlig försvarare", "Målsägandebiträde"] });
+  });
+
+  it("kryssa i när markeringen aldrig satts ger en lista med bara den typen", () => {
+    render(<MatterTypesSection />);
+    fireEvent.click(checkbox("Bodelning"));
+    expect(updateMutate).toHaveBeenCalledWith({ publicAssignmentMatterTypes: ["Bodelning"] });
+  });
+
+  it("kryssa ur sparar listan utan typen", () => {
+    matterTypes = ["Bodelning", "Offentlig försvarare"];
+    publicAssignmentMatterTypes = ["Offentlig försvarare", "Bodelning"];
+    render(<MatterTypesSection />);
+    fireEvent.click(checkbox("Offentlig försvarare"));
+    expect(updateMutate).toHaveBeenCalledWith({ publicAssignmentMatterTypes: ["Bodelning"] });
+  });
+
+  it("ta bort en markerad ärendetyp tar också bort den ur markeringen", () => {
+    matterTypes = ["Bodelning", "Offentlig försvarare"];
+    publicAssignmentMatterTypes = ["Offentlig försvarare"];
+    render(<MatterTypesSection />);
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort Offentlig försvarare" }));
+    expect(updateMutate).toHaveBeenCalledWith({ matterTypes: ["Bodelning"], publicAssignmentMatterTypes: [] });
+  });
+
+  it("ta bort en omarkerad ärendetyp rör inte markeringen", () => {
+    matterTypes = ["Bodelning", "Offentlig försvarare"];
+    publicAssignmentMatterTypes = ["Offentlig försvarare"];
+    render(<MatterTypesSection />);
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort Bodelning" }));
+    expect(updateMutate).toHaveBeenCalledWith({ matterTypes: ["Offentlig försvarare"] });
+  });
+
+  it("dokumenttyperna har ingen kryssruta", () => {
+    render(<DocumentKindsSection />);
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 });
