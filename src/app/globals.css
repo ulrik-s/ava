@@ -200,6 +200,32 @@ body {
 }
 .dv-tab .dv-default-tab .dv-default-tab-content { margin-right: 0; }
 
+/* Dockytans flikar och avdelare i ljust läge (#1635) ───────────────────
+   dockviews ljusa tema gav ljusgrå flikrad, grå text på inaktiva flikar och
+   tunna, ljusgrå avdelare. Nu: nästan svart text (gray-900) på alla flikar,
+   mörkare flikrad (gray-300), vald flik vit med blå list överst, synliga
+   streck mellan flikarna och tydligare kant och avdelare runt varje ruta.
+   Bara ljust läge: reglerna avgränsas till dockviews ljusa temaklass och
+   `:root:not(.dark)`, så mörkt läge renderas exakt som förut. */
+:root:not(.dark) .dockview-theme-light {
+  --dv-tabs-and-actions-container-background-color: #d1d5db;
+  --dv-activegroup-visiblepanel-tab-background-color: #ffffff;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #ffffff;
+  --dv-activegroup-hiddenpanel-tab-background-color: #d1d5db;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #d1d5db;
+  --dv-activegroup-visiblepanel-tab-color: #111827;
+  --dv-activegroup-hiddenpanel-tab-color: #111827;
+  --dv-inactivegroup-visiblepanel-tab-color: #111827;
+  --dv-inactivegroup-hiddenpanel-tab-color: #111827;
+  --dv-tab-divider-color: #9ca3af;
+  --dv-separator-border: #6b7280;
+}
+:root:not(.dark) .dockview-theme-light .dv-tab.dv-active-tab { box-shadow: inset 0 3px 0 #2563eb; }
+/* dockview sätter `outline: none` inline på gruppen, därav !important. */
+:root:not(.dark) .dockview-theme-light .dv-groupview { outline: 1px solid #9ca3af !important; outline-offset: -1px; }
+:root:not(.dark) .dockview-theme-light .dv-split-view-container.dv-horizontal > .dv-view-container > .dv-view:not(:first-child)::before { width: 2px; }
+:root:not(.dark) .dockview-theme-light .dv-split-view-container.dv-vertical > .dv-view-container > .dv-view:not(:first-child)::before { height: 2px; }
+
 /* På telefon (under 768 px, där toppremsan visas — #1301) står temaknappen i
    toppremsan (#1297); den flytande låg förr ovanpå "Öppna meny". Toppremsan
    sätter `data-mobile-topbar` på <html> medan den är monterad (inte `:has()` —
