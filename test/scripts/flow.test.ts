@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { INTAKE_LABELS } from "@/lib/shared/feedback";
-import { dispatchTarget, type FetchFn } from "../../tooling/scripts/flow/dispatch";
+import { dispatchTarget, earlierFire, type FetchFn, FIRE_WINDOW_MS } from "../../tooling/scripts/flow/dispatch";
 import { renderMermaid } from "../../tooling/scripts/flow/generate";
 import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
 import { flowErrors, loadFlow, parseFlow } from "../../tooling/scripts/flow/load";
@@ -326,22 +326,66 @@ describe("händelsestyrningen", () => {
   it("utan token händer inget", async () => {
     const calls: Call[] = [];
     const lines: string[] = [];
-    expect(await dispatchLabel(flow, payload("verifierad"), {}, okFetch(calls), (l) => lines.push(l))).toBe(false);
+    expect(await dispatchLabel(flow, payload("verifierad"), {}, { fetch: okFetch(calls), log: (l) => lines.push(l) })).toBe(false);
     expect(calls).toEqual([]);
     expect(lines[0]).toContain("ingen ROUTINE_TOKEN_L2");
   });
 
   it("med token startas rutinen via /fire", async () => {
     const calls: Call[] = [];
-    expect(await dispatchLabel(flow, payload("verifierad"), { ROUTINE_TOKEN_L2: "t" }, okFetch(calls), () => {})).toBe(true);
+    expect(await dispatchLabel(flow, payload("verifierad"), { ROUTINE_TOKEN_L2: "t" }, { fetch: okFetch(calls), log: () => {} })).toBe(true);
     expect(calls[0]?.url).toContain("trig_01TnVuo291SKkYqn3f8752qn/fire");
     expect(calls[0]?.headers.Authorization).toBe("Bearer t");
   });
 
+  // Låset: flera etiketter i följd startar samma loop bara en gång.
+  const at = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
+  const lev = (id: number, number: number, label: string, msAgo = 60_000, isPr = false) => ({ id, number, label, isPr, at: at(msAgo) });
+  const routineOf = (e: { label: string; isPr: boolean }) => dispatchTarget(flow, e.isPr ? codePr : intake, e.label)?.id ?? null;
+
+  it("earlierFire: den första händelsen i fönstret vinner, senare och gamla räknas inte", () => {
+    const events = [lev(30, 6, "verifierad"), lev(20, 5, "verifierad"), lev(10, 4, "verifierad", FIRE_WINDOW_MS + 60_000)];
+    expect(earlierFire(events, { own: { number: 6, label: "verifierad", isPr: false }, routineId: "L2", routineOf, now: Date.now() })?.number).toBe(5);
+    // #5 är den äldsta inom fönstret (#4 ligger utanför) → den startar.
+    expect(earlierFire(events, { own: { number: 5, label: "verifierad", isPr: false }, routineId: "L2", routineOf, now: Date.now() })).toBeNull();
+    // En annan rutin (eller en flagga) låser inte.
+    expect(earlierFire([lev(20, 5, "bugg")], { own: { number: 6, label: "verifierad", isPr: false }, routineId: "L2", routineOf, now: Date.now() })).toBeNull();
+    // Den egna händelsen syns inte än i loggen → räknas som nyast.
+    expect(earlierFire([lev(20, 5, "verifierad")], { own: { number: 9, label: "verifierad", isPr: false }, routineId: "L2", routineOf, now: Date.now() })?.number).toBe(5);
+  });
+
+  it("repots etiketthändelser och öppna PR:er läses från GitHub", () => {
+    const gh = fakeGh({
+      "issues/events": [
+        { id: 3, event: "labeled", created_at: "2026-11-17T10:00:00Z", label: { name: "granskad" }, issue: { number: 7, pull_request: {} } },
+        { id: 2, event: "unlabeled", created_at: "2026-11-17T09:59:00Z", label: { name: "x" }, issue: { number: 6 } },
+        { id: 1, event: "labeled", created_at: "2026-11-17T09:58:00Z", label: { name: "verifierad" }, issue: { number: 5 } },
+      ],
+      "pulls?state=open": [[{ number: 7, title: "PR", body: null, labels: [{ name: "agent-pr" }] }]],
+    });
+    const api = gitHub("ulrik-s/ava", gh.run);
+    expect(api.recentLabelEvents()).toEqual([
+      { id: 3, label: "granskad", number: 7, isPr: true, at: "2026-11-17T10:00:00Z" },
+      { id: 1, label: "verifierad", number: 5, isPr: false, at: "2026-11-17T09:58:00Z" },
+    ]);
+    expect(api.openPulls()).toEqual([{ number: 7, title: "PR", body: "", labels: ["agent-pr"], isPr: true }]);
+  });
+
+  it("dispatchLabel med låset: en tidigare start i fönstret → ingen ny körning", async () => {
+    const calls: Call[] = [];
+    const lines: string[] = [];
+    const events = () => [lev(20, 4, "verifierad"), lev(10, 3, "verifierad")];
+    expect(await dispatchLabel(flow, payload("verifierad"), { ROUTINE_TOKEN_L2: "t" }, { fetch: okFetch(calls), log: (l) => lines.push(l), recentEvents: events })).toBe(false);
+    expect(calls).toEqual([]);
+    expect(lines[0]).toContain("L2: redan startad av #3");
+    // Ingen tidigare i fönstret → startar.
+    expect(await dispatchLabel(flow, payload("verifierad"), { ROUTINE_TOKEN_L2: "t" }, { fetch: okFetch(calls), log: () => {}, recentEvents: () => [lev(20, 4, "verifierad")] })).toBe(true);
+  });
+
   it("ingen agent att starta: inget anrop", async () => {
     const calls: Call[] = [];
-    expect(await dispatchLabel(flow, payload("bugg"), { ROUTINE_TOKEN_L2: "t" }, okFetch(calls), () => {})).toBe(false);
-    expect(await dispatchLabel(flow, { label: { name: "x" }, repository: { full_name: "x/y" } }, {}, okFetch(calls), () => {})).toBe(false);
+    expect(await dispatchLabel(flow, payload("bugg"), { ROUTINE_TOKEN_L2: "t" }, { fetch: okFetch(calls), log: () => {} })).toBe(false);
+    expect(await dispatchLabel(flow, { label: { name: "x" }, repository: { full_name: "x/y" } }, {}, { fetch: okFetch(calls), log: () => {} })).toBe(false);
     expect(calls).toEqual([]);
   });
 });

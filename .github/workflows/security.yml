@@ -76,6 +76,11 @@ jobs:
       #   @esbuild-kit/core-utils (`~0.18.20`) via drizzle-kit, vars senaste
       #   version fortfarande drar in det. Advisoryn gäller esbuilds
       #   UTVECKLINGSSERVER, som vi aldrig startar; paketet är dessutom devDep.
+      # picomatch (high, ReDoS via extglobs) GHSA-fc5q-39xc-vjpf: ingen
+      #   åtgärdad version finns (≤ 4.0.7, 4.0.7 är senaste). Alla vägar går via
+      #   devDependencies (dependency-cruiser, knip, lint-staged, eslint-kedjan),
+      #   inget i produktionskoden, och mönstren är fasta ur config — en
+      #   angripare styr dem inte. Tas bort när fix finns: #1664.
       #
       # (De två image-size-undantagen är BORTA sedan #970 — html-to-docx är
       # ersatt av en egen DOCX-skrivare, så paketet finns inte längre i trädet.)
@@ -85,7 +90,8 @@ jobs:
       - name: bun audit (roten)
         run: |
           bun audit --audit-level=low \
-            --ignore GHSA-67mh-4wv8-2f99
+            --ignore GHSA-67mh-4wv8-2f99 \
+            --ignore GHSA-fc5q-39xc-vjpf
 
       # helper-ui har egen lockfil och låg helt UTANFÖR grinden fram till #966 —
       # den innehöll då 27 sårbarheter, varav en critical (node-tar).
@@ -96,9 +102,11 @@ jobs:
       # (node-forge, GHSA-86w9-cpqp-85rv, åtgärdades i stället för att undantas:
       # cert-bygget i src/engine/tls/certs.ts använder nu @peculiar/asn1-x509 +
       # node:crypto, så paketet finns inte längre i trädet.)
-      # Inga undantag: per advisory med skäl och uppföljningsärende, som i roten.
+      # picomatch (high) GHSA-fc5q-39xc-vjpf: samma som i roten — ingen åtgärdad
+      #   version; här bara via devDependencies (electron-builder), inget i den
+      #   paketerade appen. Tas bort när fix finns: #1664.
       - name: bun audit (helper-ui)
-        run: bun audit --audit-level=low
+        run: bun audit --audit-level=low --ignore GHSA-fc5q-39xc-vjpf
         working-directory: helper-ui
 
       - name: Full rapport (informativ, fäller inte)

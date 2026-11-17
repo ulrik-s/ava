@@ -98,8 +98,12 @@ const ghEvent = (id: number, label: string, at: string) =>
 describe("hälsokontrollen mot GitHub", () => {
   it("samlar saker med tillstånd eller blockerad, med tidpunkter och PR-läge", () => {
     const gh = fakeGh([
+      // PR:er hämtas via PR-ändpunkten; i issuelistan ignoreras de.
+      ["pulls?state=open", [[
+        { number: 7, title: "PR", labels: [{ name: "agent-pr" }, { name: "granskad" }] },
+      ]]],
       ["issues?state=open", [[
-        { number: 7, title: "PR", labels: [{ name: "agent-pr" }, { name: "granskad" }], pull_request: {} },
+        { number: 9, title: "PR i issuelistan", labels: [{ name: "agent-pr" }, { name: "granskad" }], pull_request: {} },
         { number: 8, title: "Annat", labels: [{ name: "tooling" }] },
       ]]],
       ["/events", [[ghEvent(1, "granskad", ago(2))]]],
@@ -108,7 +112,7 @@ describe("hälsokontrollen mot GitHub", () => {
     const items = collectItems(flow, (repo) => gitHub(repo, gh.run));
     const pr = items.find((i) => i.number === 7 && i.repo === "ulrik-s/ava");
     expect(pr).toMatchObject({ isPr: true, mergeState: "clean", labeledAt: { granskad: ago(2) } });
-    expect(items.some((i) => i.number === 8)).toBe(false);
+    expect(items.some((i) => i.number === 8 || i.number === 9)).toBe(false);
   });
 
   it("öppna implementations-issues avgör om en nedbruten förfrågan väntar på release", () => {
@@ -121,6 +125,7 @@ describe("hälsokontrollen mot GitHub", () => {
         { number: 1615, title: "Impl", body: "Problem…\n\nIntag: ava-feedback#17", labels: [{ name: "agent-task" }, { name: "pågår" }] },
         { number: 1700, title: "PR", body: "Intag: ava-feedback#16", labels: [{ name: "agent-pr" }], pull_request: {} },
       ]]],
+      ["pulls?state=open", [[]]],
       ["/events", [[]]],
     ]);
     const items = collectItems(flow, (repo) => gitHub(repo, gh.run));
