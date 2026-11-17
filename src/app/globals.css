@@ -40,10 +40,10 @@ body {
 /* Surfaces ─────────────────────────────────────────────────────────── */
 .dark .bg-white { background-color: #1e293b; /* slate-800 */ }
 .dark .bg-canvas { background-color: #0f172a; /* slate-900 — som förut */ }
-.dark .border-orange-200 { border-color: rgb(249 115 22 / 0.35); }
-.dark .bg-orange-100 { background-color: rgb(249 115 22 / 0.2); }
+.dark .border-orange-200, .dark .section-header.border-orange-300 { border-color: rgb(249 115 22 / 0.35); }
+.dark .bg-orange-100, .dark .section-header.bg-orange-200 { background-color: rgb(249 115 22 / 0.2); }
 .dark .bg-gray-50 { background-color: #0f172a; /* slate-900 */ }
-.dark .bg-gray-100 { background-color: #334155; /* slate-700 */ }
+.dark .bg-gray-100, .dark .section-header.bg-gray-200 { background-color: #334155; /* slate-700 */ }
 .dark .bg-gray-200 { background-color: #475569; /* slate-600 */ }
 
 /* Responsive-varianter måste override:as separat — Tailwind genererar
@@ -75,7 +75,7 @@ body {
 .dark .text-gray-300 { color: #475569; }
 
 /* Borders ──────────────────────────────────────────────────────────── */
-.dark .border-gray-200 { border-color: #334155; }
+.dark .border-gray-200, .dark .section-header.border-gray-300 { border-color: #334155; }
 .dark .border-gray-300 { border-color: #475569; }
 .dark .border-gray-100 { border-color: #1e293b; }
 .dark .ring-gray-200 { --tw-ring-color: #334155; }
@@ -130,30 +130,34 @@ body {
 .dark .text-yellow-600 { color: #fde047; }
 .dark .text-yellow-800 { color: #fef08a; }
 
+/* Rubrikraderna (`section-header`, #1636) är ett steg starkare i ljust läge
+   (bg-X-200, border-X-300) men ska se ut som förut i mörkt läge: de delar
+   därför deklarationen med bg-X-100/border-X-200 nedan. Kanten sätter alla
+   fyra sidor, alltså även vänsterkanten (border-l-X-600), precis som förr. */
 /* Mjuka accent-bakgrunder (bg-X-50 etc.) — gör dem genomskinligare på
    mörk botten så det blir luftigt + textfärg lyfter ──────────────── */
 .dark .bg-blue-50 { background-color: rgba(37, 99, 235, 0.18); }
-.dark .bg-blue-100 { background-color: rgba(37, 99, 235, 0.28); }
+.dark .bg-blue-100, .dark .section-header.bg-blue-200 { background-color: rgba(37, 99, 235, 0.28); }
 .dark .bg-green-50 { background-color: rgba(22, 163, 74, 0.18); }
-.dark .bg-green-100 { background-color: rgba(22, 163, 74, 0.28); }
+.dark .bg-green-100, .dark .section-header.bg-green-200 { background-color: rgba(22, 163, 74, 0.28); }
 .dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.18); }
-.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.28); }
+.dark .bg-amber-100, .dark .section-header.bg-amber-200 { background-color: rgba(245, 158, 11, 0.28); }
 .dark .bg-red-50 { background-color: rgba(220, 38, 38, 0.18); }
-.dark .bg-red-100 { background-color: rgba(220, 38, 38, 0.28); }
+.dark .bg-red-100, .dark .section-header.bg-red-200 { background-color: rgba(220, 38, 38, 0.28); }
 .dark .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.18); }
 .dark .bg-orange-50 { background-color: rgba(249, 115, 22, 0.18); }
 .dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.18); }
-.dark .bg-purple-100 { background-color: rgba(168, 85, 247, 0.28); }
+.dark .bg-purple-100, .dark .section-header.bg-purple-200 { background-color: rgba(168, 85, 247, 0.28); }
 .dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.18); }
-.dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.28); }
+.dark .bg-indigo-100, .dark .section-header.bg-indigo-200 { background-color: rgba(99, 102, 241, 0.28); }
 
 /* Mjuka accent-borders — matchande på dark */
-.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.4); }
-.dark .border-blue-200 { border-color: rgba(37, 99, 235, 0.4); }
-.dark .border-green-200 { border-color: rgba(22, 163, 74, 0.4); }
-.dark .border-red-200 { border-color: rgba(220, 38, 38, 0.4); }
-.dark .border-purple-200 { border-color: rgba(168, 85, 247, 0.4); }
-.dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.4); }
+.dark .border-amber-200, .dark .section-header.border-amber-300 { border-color: rgba(245, 158, 11, 0.4); }
+.dark .border-blue-200, .dark .section-header.border-blue-300 { border-color: rgba(37, 99, 235, 0.4); }
+.dark .border-green-200, .dark .section-header.border-green-300 { border-color: rgba(22, 163, 74, 0.4); }
+.dark .border-red-200, .dark .section-header.border-red-300 { border-color: rgba(220, 38, 38, 0.4); }
+.dark .border-purple-200, .dark .section-header.border-purple-300 { border-color: rgba(168, 85, 247, 0.4); }
+.dark .border-indigo-200, .dark .section-header.border-indigo-300 { border-color: rgba(99, 102, 241, 0.4); }
 
 /* Floating theme-toggle override — toggle:n behöver semitransparent
    bakgrund mot båda lägena. Override på dark. */

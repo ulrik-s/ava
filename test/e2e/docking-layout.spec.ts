@@ -285,6 +285,74 @@ test("Startsidan: ta bort Tidrapportering med ×, den förblir borta, och Lägg 
   await expect(tidTab).toHaveAttribute("aria-selected", "true");
 });
 
+// #1636: rubrikraderna är ett steg starkare i ljust läge (bg-X-200, kant-X-300,
+// vänsterkant-X-600; grått 200/300/500) och oförändrade i mörkt läge.
+const headerLook = (page: Page) => page.evaluate(() => {
+  const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+  const rgb = (c: string): number[] => {
+    if (!ctx) return [];
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1);
+    return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3);
+  };
+  const lum = (c: number[]): number => c.reduce((sum, v, i) => {
+    const x = v / 255;
+    return sum + ([0.2126, 0.7152, 0.0722][i] ?? 0) * (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+  }, 0);
+  const probe = document.body.appendChild(document.createElement("div"));
+  const resolve = (v: string): string => { probe.style.color = `var(${v})`; return getComputedStyle(probe).color; };
+  const out = [...document.querySelectorAll<HTMLElement>(".section-header")].map((el) => {
+    const tone = /border-l-([a-z]+)-(\d+)/.exec(el.className);
+    const s = getComputedStyle(el);
+    const title = el.querySelector("h2");
+    const [hi, lo] = [lum(rgb(title ? getComputedStyle(title).color : s.color)), lum(rgb(s.backgroundColor))].sort((a, b) => b - a) as [number, number];
+    const name = tone?.[1] ?? "";
+    const steps = name === "gray" ? ["200", "300", "500"] : ["200", "300", "600"];
+    return {
+      tone: name, bg: s.backgroundColor, top: s.borderTopColor, left: s.borderLeftColor,
+      expected: steps.map((step) => resolve(`--color-${name}-${step}`)),
+      titleContrast: (hi + 0.05) / (lo + 0.05),
+    };
+  });
+  probe.remove();
+  return out;
+});
+
+test("ljust läge: rubrikraderna ett steg starkare, titeln klarar AA (#1636)", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await page.addInitScript(() => { localStorage.setItem("ava.theme", "light"); });
+  await seedDemoLogin(page, base);
+  await page.goto(`${base}/`, { waitUntil: "load" });
+  await expect(page.locator(".section-header").first()).toBeVisible({ timeout: 30_000 });
+  const headers = await headerLook(page);
+  expect(headers.map((h) => h.tone).sort()).toEqual(["amber", "gray", "indigo"]);
+  for (const h of headers) {
+    expect([h.bg, h.top, h.left]).toEqual(h.expected);
+    expect(h.titleContrast).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+test("mörkt läge: rubrikraderna oförändrade (#1636)", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await page.addInitScript(() => { localStorage.setItem("ava.theme", "dark"); });
+  await seedDemoLogin(page, base);
+  await page.goto(`${base}/`, { waitUntil: "load" });
+  await expect(page.locator(".section-header").first()).toBeVisible({ timeout: 30_000 });
+  // Uppmätt på main före ändringen: bakgrund = bg-X-100:s och alla kanter = border-X-200:s mörka värde.
+  const before: Record<string, [string, string]> = {
+    amber: ["rgba(245, 158, 11, 0.28)", "rgba(245, 158, 11, 0.4)"],
+    indigo: ["rgba(99, 102, 241, 0.28)", "rgba(99, 102, 241, 0.4)"],
+    gray: ["rgb(51, 65, 85)", "rgb(51, 65, 85)"],
+  };
+  const headers = await headerLook(page);
+  expect(headers.length).toBe(3);
+  for (const h of headers) {
+    const [bg, border] = before[h.tone] ?? [];
+    expect({ tone: h.tone, bg: h.bg, top: h.top, left: h.left }).toEqual({ tone: h.tone, bg, top: border, left: border });
+  }
+});
+
 // #1623: Kalendern är borttagen — ingen ruta på Startsidan, ingen menypost,
 // och gamla bokmärken till /calendar/ hamnar på Startsidan.
 test("Startsidan och menyn saknar Kalender, och /calendar/ skickar till Startsidan", async ({ page, baseURL }) => {
