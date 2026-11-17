@@ -34,21 +34,22 @@ describe("Sidebar", () => {
     // Mobile + desktop visar samma — så vi får dubbletter; firstMatch räcker
     expect(screen.getAllByText("Startsida")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Kontakter")[0]).toBeInTheDocument();
-    expect(screen.getAllByText("Ärenden")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Ärenden / jävskontroll")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Tidregistrering")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Rapporter")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Användare")[0]).toBeInTheDocument();
   });
 
-  it("visar Jävskontroll överst, sedan Ärenden, före Startsida (#89)", () => {
+  it("visar ett menyval Ärenden / jävskontroll → /matters överst, före Startsida (#89, #1643)", () => {
     render(<Sidebar />);
-    const texts = screen.getAllByRole("link").map((l) => l.textContent ?? "");
-    const jav = texts.findIndex((t) => t.includes("Jävskontroll"));
-    const arenden = texts.findIndex((t) => t.includes("Ärenden"));
-    const dash = texts.findIndex((t) => t.includes("Startsida"));
-    expect(jav).toBeGreaterThanOrEqual(0);
-    expect(arenden).toBe(jav + 1);
-    expect(arenden).toBeLessThan(dash);
+    const links = screen.getAllByRole("link");
+    const texts = links.map((l) => l.textContent ?? "");
+    const merged = texts.indexOf("🔍Ärenden / jävskontroll");
+    expect(merged).toBe(0);
+    expect(links[merged]).toHaveAttribute("href", "/matters");
+    expect(texts.indexOf("📊Startsida")).toBe(merged + 1);
+    expect(texts.some((t) => t.endsWith("Jävskontroll") || t.endsWith("Ärenden"))).toBe(false);
+    expect(links.some((l) => l.getAttribute("href") === "/conflicts")).toBe(false);
   });
 
   it("markerar dashboard som aktiv när pathname=/", () => {
@@ -62,7 +63,7 @@ describe("Sidebar", () => {
   it("markerar Ärenden aktiv när pathname är /matters/123", () => {
     pathnameMock.mockReturnValue("/matters/123");
     render(<Sidebar />);
-    const matterLinks = screen.getAllByRole("link", { name: /Ärenden/ });
+    const matterLinks = screen.getAllByRole("link", { name: /Ärenden \/ jävskontroll/ });
     expect(matterLinks.some((l) => l.className.includes("bg-blue-50"))).toBe(true);
   });
 
@@ -150,7 +151,7 @@ describe("Sidebar", () => {
     expect(rail?.className).toMatch(/\bmd:flex\b/);
     expect(rail?.className).toMatch(/\blg:hidden\b/);
     const matters = rail?.querySelector('a[href="/matters"]');
-    expect(matters?.getAttribute("title")).toBe("Ärenden");
+    expect(matters?.getAttribute("title")).toBe("Ärenden / jävskontroll");
     expect(rail?.querySelector('[aria-label="Fäll ut menyn"], [aria-label="Fäll ihop menyn"]')).toBeNull();
     expect(rail?.querySelector('[aria-label="Logga ut"]')).not.toBeNull();
   });

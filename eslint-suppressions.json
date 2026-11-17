@@ -184,11 +184,6 @@
       "count": 1
     }
   },
-  "src/app/conflicts/page.tsx": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 1
-    }
-  },
   "src/app/contacts/[id]/_client.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
@@ -1364,11 +1359,6 @@
   "test/scripts/write-demo-meta.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
-    }
-  },
-  "test/unit/app/conflicts/page.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
     }
   },
   "test/unit/app/contacts/[id]/page.test.tsx": {
