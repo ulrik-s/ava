@@ -25,7 +25,7 @@
  * ett kallelseord — och gissas aldrig fritt ur löptext.
  */
 
-import { type Appointment, findAppointments, nameKey } from "./appointment-extraction";
+import { type Appointment, findAppointments, nameKey, otherPartyRole, sideMarkers, sideOf } from "./appointment-extraction";
 import type { ContactType, MatterRole } from "./schemas/enums";
 
 // ─── Parter ───────────────────────────────────────────────────────────────
@@ -41,21 +41,33 @@ export interface PartyCandidate {
   notes: string;
 }
 
+type RoleMarkers = ReadonlyArray<readonly [RegExp, MatterRole]>;
+
 /**
  * Rollord → roll. Ordningen spelar roll: mer specifika uttryck först, så
- * "Motpartens ombud" inte fastnar på "Motpart".
+ * "Motpartens ombud" inte fastnar på "Motpart". Delad i två så att ett
+ * förordnandes partsord (#1649) kan läggas in före KLIENT-markören.
  */
-const ROLE_MARKERS: ReadonlyArray<readonly [RegExp, MatterRole]> = [
+const LEADING_MARKERS: RoleMarkers = [
   [/motpartens ombud|motpartsombud|ombud för motparten/i, "MOTPARTSOMBUD"],
   [/\bombud\b|\bbiträde\b/i, "OMBUD"],
   [/\bmotpart(en)?\b|\bsvarande(n)?\b/i, "MOTPART"],
   [/\bmedtilltalad(e|en)?\b/i, "MEDTILLTALAD"],
+];
+const TRAILING_MARKERS: RoleMarkers = [
   [/\bkärande(n)?\b|\bmålsägande(n)?\b|\bklient(en)?\b|\btilltalad(e|en)?\b/i, "KLIENT"],
   [/\båklagare(n)?\b/i, "AKLAGARE"],
   [/\bvittne(t|n)?\b/i, "VITTNE"],
   [/tingsrätt|hovrätt|högsta domstolen|förvaltningsrätt|kammarrätt/i, "DOMSTOL"],
   [/försäkringsbolag|försäkringsaktiebolag/i, "FORSAKRINGSBOLAG"],
 ];
+const ROLE_MARKERS: RoleMarkers = [...LEADING_MARKERS, ...TRAILING_MARKERS];
+
+/** Markörerna i en text med förordnandet `own`: uppdraget avgör de andras roller. */
+function markersFor(own: Appointment): RoleMarkers {
+  const side = sideOf(own.assignment);
+  return side ? [...LEADING_MARKERS, ...sideMarkers(side), ...TRAILING_MARKERS] : ROLE_MARKERS;
+}
 
 /** Bolagsformer → contactType COMPANY. Svenska suffix, inte namnlistor. */
 const COMPANY_SUFFIX = /\b(AB|HB|KB|aktiebolag|ekonomisk förening|stiftelse)\b\.?$/i;
@@ -82,8 +94,8 @@ function toLines(text: string): Line[] {
  *  `Roll: Namn`, utan punkt. */
 const SENTENCE_END = /[.!?]$/;
 
-function markerIn(text: string): MatterRole | null {
-  for (const [pattern, role] of ROLE_MARKERS) {
+function markerIn(text: string, markers: RoleMarkers): MatterRole | null {
+  for (const [pattern, role] of markers) {
     if (pattern.test(text)) return role;
   }
   return null;
@@ -98,11 +110,11 @@ function markerIn(text: string): MatterRole | null {
  * "Ombud: Advokat Erik Lundqvist". Utan kravet att den ärvande raden ser ut som
  * ett ensamt namn ärvde varje mening i stycket föregående rads roll.
  */
-function roleOf(line: Line): MatterRole | null {
-  const own = markerIn(line.text);
+function roleOf(line: Line, markers: RoleMarkers): MatterRole | null {
+  const own = markerIn(line.text, markers);
   if (own) return own;
   if (SENTENCE_END.test(line.text)) return null;
-  return markerIn(line.prev);
+  return markerIn(line.prev, markers);
 }
 
 /**
@@ -131,8 +143,8 @@ function contactTypeFor(role: MatterRole, name: string): ContactType {
  * part. Testas genom att stryka markören: blir inget kvar var raden en etikett.
  * "Stockholms tingsrätt" behåller "Stockholms" och är alltså ett namn.
  */
-function isBareRoleHeader(text: string): boolean {
-  for (const [pattern] of ROLE_MARKERS) {
+function isBareRoleHeader(text: string, markers: RoleMarkers): boolean {
+  for (const [pattern] of markers) {
     if (pattern.test(text)) return !/\p{L}/u.test(text.replace(pattern, " ").replace(/[:\s]/g, ""));
   }
   return false;
@@ -158,9 +170,9 @@ function joined(match: RegExpMatchArray | null): string | null {
  * i samma handling.
  */
 export function extractPartySuggestions(text: string): PartyCandidate[] {
-  const parties = partiesFromLines(text);
   const [own, ...others] = findAppointments(text);
-  return own ? withAppointment(parties, own, others) : parties;
+  if (!own) return partiesFromLines(text, ROLE_MARKERS);
+  return withAppointment(partiesFromLines(text, markersFor(own)), own, others);
 }
 
 /** Roller på advokatens egen sida — dit ett annat förordnandes klient inte hör. */
@@ -170,7 +182,8 @@ const CLIENT_SIDE: ReadonlySet<MatterRole> = new Set(["KLIENT", "OMBUD", "MOTPAR
  * Partsförslagen när texten är ett förordnande (#1648). Det FÖRSTA förordnandet
  * är advokatens uppdrag: dess klient föreslås som Klient. De förordnade
  * advokaterna föreslås inte alls, och de andra förordnandenas klienter inte som
- * Klient eller ombud.
+ * Klient eller ombud. Deras klienter föreslås i stället med den roll
+ * uppdraget ger dem (#1649), om partsblocket inte redan nämner dem.
  */
 function withAppointment(parties: PartyCandidate[], own: Appointment, others: Appointment[]): PartyCandidate[] {
   const appointees = new Set([own, ...others].map((a) => nameKey(a.appointee)));
@@ -181,30 +194,43 @@ function withAppointment(parties: PartyCandidate[], own: Appointment, others: Ap
     if (appointees.has(key) || key === clientKey) return false;
     return !(otherClients.has(key) && CLIENT_SIDE.has(p.role));
   });
-  return [clientOf(own, parties), ...kept];
+  const taken = new Set([clientKey, ...appointees, ...kept.map((p) => nameKey(p.name))]);
+  return [fromSentence(own, "KLIENT", parties), ...kept, ...othersFromSentences(own, others, parties, taken)];
 }
 
-/** Klienten ur förordnandet, med personnummer från meningen eller partsblocket. */
-function clientOf(own: Appointment, parties: PartyCandidate[]): PartyCandidate {
-  const inBlock = parties.find((p) => p.personalNumber && nameKey(p.name) === nameKey(own.client));
+/** Klienterna i de andra förordnandena, med den roll advokatens uppdrag ger dem. */
+function othersFromSentences(own: Appointment, others: Appointment[], parties: PartyCandidate[], taken: Set<string>): PartyCandidate[] {
+  const side = sideOf(own.assignment);
+  const out = new Map<string, PartyCandidate>();
+  for (const other of others) {
+    const role = otherPartyRole(side, sideOf(other.assignment));
+    const key = nameKey(other.client);
+    if (role && !taken.has(key) && !out.has(key)) out.set(key, fromSentence(other, role, parties));
+  }
+  return [...out.values()];
+}
+
+/** Förordnandets klient med `role`, med personnummer från meningen eller partsblocket. */
+function fromSentence(a: Appointment, role: MatterRole, parties: PartyCandidate[]): PartyCandidate {
+  const inBlock = parties.find((p) => p.personalNumber && nameKey(p.name) === nameKey(a.client));
   return {
-    name: own.client, role: "KLIENT", contactType: contactTypeFor("KLIENT", own.client),
-    personalNumber: joined(own.tail.match(PERSONAL_NUMBER)) ?? inBlock?.personalNumber ?? null,
+    name: a.client, role, contactType: contactTypeFor(role, a.client),
+    personalNumber: joined(a.tail.match(PERSONAL_NUMBER)) ?? inBlock?.personalNumber ?? null,
     orgNumber: null,
-    notes: `Föreslagen ur förordnandet: "${own.sentence.slice(0, 120)}"`,
+    notes: `Föreslagen ur förordnandet: "${a.sentence.slice(0, 120)}"`,
   };
 }
 
 /** Partsraderna: rader med både en rollmarkör och ett rimligt namn. */
-function partiesFromLines(text: string): PartyCandidate[] {
+function partiesFromLines(text: string, markers: RoleMarkers): PartyCandidate[] {
   const out = new Map<string, PartyCandidate>();
   for (const line of toLines(text)) {
     // Rader som slutar som en mening är löptext. "Käranden yrkar ersättning."
     // bär ett rollord men är inget partsnamn — utan den här grinden blev varje
     // sådan mening ett förslag att avfärda.
     if (SENTENCE_END.test(line.text)) continue;
-    if (isBareRoleHeader(line.text)) continue;
-    const role = roleOf(line);
+    if (isBareRoleHeader(line.text, markers)) continue;
+    const role = roleOf(line, markers);
     if (!role) continue;
     const name = nameOf(line.text);
     if (!isPlausibleName(name)) continue;
