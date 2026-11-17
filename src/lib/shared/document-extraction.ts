@@ -25,6 +25,7 @@
  * ett kallelseord — och gissas aldrig fritt ur löptext.
  */
 
+import { type Appointment, findAppointments, nameKey } from "./appointment-extraction";
 import type { ContactType, MatterRole } from "./schemas/enums";
 
 // ─── Parter ───────────────────────────────────────────────────────────────
@@ -156,6 +157,45 @@ function joined(match: RegExpMatchArray | null): string | null {
  * i samma handling.
  */
 export function extractPartySuggestions(text: string): PartyCandidate[] {
+  const parties = partiesFromLines(text);
+  const [own, ...others] = findAppointments(text);
+  return own ? withAppointment(parties, own, others) : parties;
+}
+
+/** Roller på advokatens egen sida — dit ett annat förordnandes klient inte hör. */
+const CLIENT_SIDE: ReadonlySet<MatterRole> = new Set(["KLIENT", "OMBUD", "MOTPARTSOMBUD"]);
+
+/**
+ * Partsförslagen när texten är ett förordnande (#1648). Det FÖRSTA förordnandet
+ * är advokatens uppdrag: dess klient föreslås som Klient. De förordnade
+ * advokaterna föreslås inte alls, och de andra förordnandenas klienter inte som
+ * Klient eller ombud.
+ */
+function withAppointment(parties: PartyCandidate[], own: Appointment, others: Appointment[]): PartyCandidate[] {
+  const appointees = new Set([own, ...others].map((a) => nameKey(a.appointee)));
+  const otherClients = new Set(others.map((a) => nameKey(a.client)));
+  const clientKey = nameKey(own.client);
+  const kept = parties.filter((p) => {
+    const key = nameKey(p.name);
+    if (appointees.has(key) || key === clientKey) return false;
+    return !(otherClients.has(key) && CLIENT_SIDE.has(p.role));
+  });
+  return [clientOf(own, parties), ...kept];
+}
+
+/** Klienten ur förordnandet, med personnummer från meningen eller partsblocket. */
+function clientOf(own: Appointment, parties: PartyCandidate[]): PartyCandidate {
+  const inBlock = parties.find((p) => p.personalNumber && nameKey(p.name) === nameKey(own.client));
+  return {
+    name: own.client, role: "KLIENT", contactType: contactTypeFor("KLIENT", own.client),
+    personalNumber: joined(own.tail.match(PERSONAL_NUMBER)) ?? inBlock?.personalNumber ?? null,
+    orgNumber: null,
+    notes: `Föreslagen ur förordnandet: "${own.sentence.slice(0, 120)}"`,
+  };
+}
+
+/** Partsraderna: rader med både en rollmarkör och ett rimligt namn. */
+function partiesFromLines(text: string): PartyCandidate[] {
   const out = new Map<string, PartyCandidate>();
   for (const line of toLines(text)) {
     // Rader som slutar som en mening är löptext. "Käranden yrkar ersättning."

@@ -147,3 +147,76 @@ describe("hela partsblocket ur en stämningsansökan", () => {
     expect(events[0]?.title).toBe("Muntlig förberedelse");
   });
 });
+
+describe("förordnanden (#1648)", () => {
+  const roles = (text: string): string[] =>
+    extractPartySuggestions(text).map((p) => `${p.role}:${p.name}`);
+
+  it("försvararförordnande som en enda mening → klienten som Klient med personnummer, advokaten saknas", () => {
+    const text = "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek, 900101-1234.";
+    const parties = extractPartySuggestions(text);
+    expect(parties).toHaveLength(1);
+    expect(parties[0]).toMatchObject({
+      name: "Lisa Ek", role: "KLIENT", contactType: "PERSON",
+      personalNumber: "900101-1234", orgNumber: null,
+    });
+    expect(parties[0]?.notes).toContain("förordnar advokaten Per Holm");
+  });
+
+  it("målsägandebiträdesförordnande → målsäganden som Klient, advokaten saknas", () => {
+    const text = "Advokaten Eva Sand förordnas som målsägandebiträde för Nils Berg.";
+    expect(roles(text)).toEqual(["KLIENT:Nils Berg"]);
+  });
+
+  it("två förordnanden → bara det första förordnandets klient; målsägandebiträdet saknas", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek, 900101-1234.",
+      "Advokaten Eva Sand förordnas som målsägandebiträde för Nils Berg.",
+      "Målsägandebiträde: Advokat Eva Sand",
+      "Ombud: Advokat Per Holm",
+      "Klient: Nils Berg",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Lisa Ek"]);
+  });
+
+  it("personnumret hämtas ur partsblocket när meningen saknar det", () => {
+    const text = [
+      "Tilltalad: Lisa Ek 900101-1234",
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek.",
+    ].join("\n");
+    const parties = extractPartySuggestions(text);
+    expect(parties).toHaveLength(1);
+    expect(parties[0]).toMatchObject({ name: "Lisa Ek", role: "KLIENT", personalNumber: "900101-1234" });
+  });
+
+  it("åklagare och domstol i samma text föreslås som i dag", () => {
+    const text = [
+      "Stockholms tingsrätt",
+      "Åklagare: Kammaråklagare Ola Lind",
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek.",
+    ].join("\n");
+    expect(roles(text)).toEqual([
+      "KLIENT:Lisa Ek",
+      "DOMSTOL:Stockholms tingsrätt",
+      "AKLAGARE:Kammaråklagare Ola Lind",
+    ]);
+  });
+
+  it("ett annat förordnandes klient får behålla en roll utanför advokatens sida", () => {
+    const text = [
+      "Tingsrätten förordnar advokaten Per Holm som offentlig försvarare för Lisa Ek.",
+      "Advokaten Eva Sand förordnas som målsägandebiträde för Nils Berg.",
+      "Vittne: Nils Berg",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Lisa Ek", "VITTNE:Nils Berg"]);
+  });
+
+  it("ett vanligt dokument utan förordnande ger samma förslag som tidigare", () => {
+    const text = [
+      "Kärande: Anna Andersson 850312-4567",
+      "Ombud: Advokat Erik Lundqvist",
+      "Tingsrätten har förordnat en sakkunnig.",
+    ].join("\n");
+    expect(roles(text)).toEqual(["KLIENT:Anna Andersson", "OMBUD:Advokat Erik Lundqvist"]);
+  });
+});
