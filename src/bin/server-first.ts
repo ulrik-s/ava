@@ -48,6 +48,7 @@ import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-s
 import { DEFAULT_INTEGRITY_INTERVAL_MS, runContentIntegrityCheck, scheduleContentIntegrity } from "@/lib/server/integrity/content-integrity";
 import { backfillDocumentKinds } from "@/lib/server/jobs/document-kinds-backfill";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
+import { backfillPublicAssignmentTypes } from "@/lib/server/jobs/public-assignment-backfill";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { makeEmailPort } from "@/lib/server/jobs/queue-backed-email-sender";
 import { buildServerFirstJobHandlers, loadActiveSmtpConfig } from "@/lib/server/jobs/server-first-handlers";
@@ -194,6 +195,11 @@ function main(): void {
   // även rader som den gamla servern hann skriva kommer med. Best effort.
   void backfillDocumentKinds(api.repos, [asId<"OrganizationId">(config.organizationId)], (m) => log(`dokumenttyper: ${m}`))
     .then((r) => log(`dokumenttyper flyttade: ${r.documents} dokument, ${r.organizations} byråer, ${r.failed} fel`));
+
+  // #1640: byråns lista över offentligt uppdrag, en gång (fältet aldrig satt).
+  // Ändrar inga ärenden — det görs när admin sparar ärendetyperna. Best effort.
+  void backfillPublicAssignmentTypes(api.repos, [asId<"OrganizationId">(config.organizationId)], (m) => log(`offentligt uppdrag: ${m}`))
+    .then((r) => log(`offentligt uppdrag: ${r.organizations} byråer uppdaterade, ${r.failed} fel`));
 
   // Integritetskontroll (#1145): dokument med metadata men utan innehåll loggas
   // som `content.integrity.missing` (level error) vid start och sedan dagligen.
