@@ -32,12 +32,11 @@ for (const [name, width, height] of [["13\" laptop", 1470, 956], ["stor skärm",
 
 /** Varje panelsida: en panel som ska finnas, och hur man tar sig dit. */
 const PANEL_PAGES = [
-  { name: "startsidan", path: () => "/", tab: "Kalender" },
+  { name: "startsidan", path: () => "/", tab: "Senaste ärenden" },
   { name: "en faktura", path: (s: Awaited<ReturnType<typeof fetchDemoSeed>>) => `/invoices/${s.invoices[0]?.id ?? ""}/`, tab: "Betalningar" },
   { name: "en kontakt", path: (s: Awaited<ReturnType<typeof fetchDemoSeed>>) => `/contacts/${s.contacts[0]?.id ?? ""}/`, tab: "Ärenden" },
   { name: "inställningar", path: () => "/settings/", tab: "Standardåtgärder" },
   { name: "rapporter", path: () => "/reports/", tab: "Veckor" },
-  { name: "kalendern", path: () => "/calendar/", tab: "Uppgifter" },
   { name: "jobbkön", path: () => "/jobs/", tab: "Historik" },
   { name: "min profil", path: () => "/profile/", tab: "Uppgifter" }, // Anslutna tjänster finns bara med integrationer (#1213)
   { name: "betalfilsimporten", path: () => "/payments/import/", tab: "Matchning" },
@@ -259,7 +258,7 @@ test("Delete/Backspace stänger inte en flik, och flytande grupper går inte att
   await expect(page.getByRole("tab")).toHaveCount(tabs);
 });
 
-// #1612: Startsidans rutor (utom Kalender) tas bort med × och läggs tillbaka
+// #1612: Startsidans rutor tas bort med × och läggs tillbaka
 // med "Lägg till ruta". Valet består vid navigering (demon sparar inte över
 // en omladdning, så vi navigerar inom appen).
 test("Startsidan: ta bort Tidrapportering med ×, den förblir borta, och Lägg till ruta ger den tillbaka", async ({ page, baseURL }) => {
@@ -269,7 +268,6 @@ test("Startsidan: ta bort Tidrapportering med ×, den förblir borta, och Lägg 
   await page.goto(`${base}/`, { waitUntil: "load" });
   const tidTab = page.getByRole("tab", { name: /^Tidrapportering/ });
   await expect(tidTab).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("tab", { name: /^Kalender/ }).locator(".dv-default-tab-action")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Lägg till ruta" })).toBeDisabled();
 
   await tidTab.locator(".dv-default-tab-action").click();
@@ -278,11 +276,27 @@ test("Startsidan: ta bort Tidrapportering med ×, den förblir borta, och Lägg 
   await page.getByRole("link", { name: /Ärenden/ }).first().click();
   await expect(page).toHaveURL(/\/matters\/?$/);
   await page.getByRole("link", { name: /Startsida/ }).first().click();
-  await expect(page.getByRole("tab", { name: /^Kalender/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("tab", { name: /^Att bevaka/ })).toBeVisible({ timeout: 30_000 });
   await expect(tidTab).toHaveCount(0);
 
   await page.getByRole("button", { name: "Lägg till ruta" }).click();
   await page.getByRole("menuitem", { name: "Tidrapportering" }).click();
   await expect(tidTab).toBeVisible();
   await expect(tidTab).toHaveAttribute("aria-selected", "true");
+});
+
+// #1623: Kalendern är borttagen — ingen ruta på Startsidan, ingen menypost,
+// och gamla bokmärken till /calendar/ hamnar på Startsidan.
+test("Startsidan och menyn saknar Kalender, och /calendar/ skickar till Startsidan", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  await page.goto(`${base}/calendar/`, { waitUntil: "load" });
+  await expect(page).toHaveURL(new RegExp(`${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/?$`), { timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Startsida", level: 1 })).toBeVisible({ timeout: 30_000 });
+  for (const title of ["Att bevaka", "Tidrapportering", "Senaste ärenden"]) {
+    await expect(page.getByRole("tab", { name: new RegExp(`^${title}`) })).toBeVisible();
+  }
+  await expect(page.getByRole("tab", { name: /^Kalender/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Kalender/ })).toHaveCount(0);
 });

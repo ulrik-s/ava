@@ -50,12 +50,12 @@ describe("AppShell", () => {
     expect(screen.getByTestId("page-content")).toBeInTheDocument();
   });
 
-  it("sidebar: Att bevaka + Kalender, ingen Att göra (samma lista två gånger, #1167)", () => {
+  it("sidebar: Att bevaka, ingen Att göra (#1167) och ingen Kalender (#1623)", () => {
     currentQuery.data = { name: "X" };
     render(<AppShell>x</AppShell>);
     // Två förekomster (mobil + desktop) — räkna att minst en finns
     expect(screen.getAllByRole("link", { name: /Att bevaka/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /Kalender/i })[0]).toHaveAttribute("href", expect.stringContaining("/calendar"));
+    expect(screen.queryByRole("link", { name: /Kalender/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Att göra/i })).not.toBeInTheDocument();
   });
 

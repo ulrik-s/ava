@@ -1,13 +1,12 @@
 /**
- * Test för Dashboard — Att bevaka + Kalender (möten/förhandlingar) +
- * tidrapportering + senaste ärenden, med dagsväxlare (#1167).
+ * Test för Dashboard — Att bevaka + tidrapportering + senaste ärenden, med
+ * dagsväxlare (#1167). Kalendern är borttagen (#1623).
  */
 
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import Dashboard from "@/app/page";
 
-const todoQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
 const timeQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
 const meQuery: { data: unknown } = { data: { id: "u1", name: "Anna" } };
 /** "Att bevaka" (#1062) — tom lista → panelen säger att det är lugnt (#1184). */
@@ -26,7 +25,6 @@ vi.mock("@/components/layout/panel-page", () => ({
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ watchlist: { list: { invalidate: vi.fn() } }, task: { listForMatter: { invalidate: vi.fn() } } }),
-    todo: { list: { useQuery: () => todoQuery } },
     timeEntry: { list: { useQuery: () => timeQuery } },
     user: { current: { useQuery: () => meQuery } },
     watchlist: { list: { useQuery: () => watchlistQuery } },
@@ -39,22 +37,25 @@ vi.mock("@/lib/client/trpc", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  todoQuery.data = undefined;
-  todoQuery.isLoading = false;
   timeQuery.data = undefined;
   timeQuery.isLoading = false;
   watchlistQuery.data = { items: [] };
 });
 
 describe("Dashboard", () => {
-  it("renderar rubrik + panelerna", async () => {
+  it("renderar rubrik + panelerna", () => {
     render(<Dashboard />);
     expect(screen.getByRole("heading", { name: /Startsida/i })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: /Kalender/ })).toBeInTheDocument();
     expect(screen.queryByText(/Att göra/)).not.toBeInTheDocument(); // samma lista som Att bevaka, borttagen
     expect(screen.getByText(/Tidrapportering/i)).toBeInTheDocument();
     expect(screen.getByText(/Senaste ärenden/i)).toBeInTheDocument();
     expect(screen.getByText("Inget att bevaka just nu.")).toBeInTheDocument();
+  });
+
+  it("har ingen Kalender-ruta (#1623)", () => {
+    const { container } = render(<Dashboard />);
+    expect([...container.querySelectorAll("[data-panel]")].map((e) => e.getAttribute("data-panel"))).toEqual(["watch", "time", "recent"]);
+    expect(screen.queryByText(/Kalender/)).not.toBeInTheDocument();
   });
 
   it("visar dagsväxlare och växlar valt datum", () => {
@@ -63,45 +64,6 @@ describe("Dashboard", () => {
     fireEvent.click(igår);
     // "Igår" är nu fokuserad-knapp; verifiera via aktiv klass
     expect(igår.className).toContain("bg-blue-50");
-  });
-
-  it("Kalender: tomt-läge när inget möte idag", () => {
-    todoQuery.data = [];
-    render(<Dashboard />);
-    expect(screen.getByText(/Inget i kalendern idag/i)).toBeInTheDocument();
-  });
-
-  it("Kalender visar bara möten/förhandlingar — uppgifter står i Att bevaka", () => {
-    todoQuery.data = [
-      { id: "t1", source: "task", title: "Skriv stämningsansökan", at: new Date(), allDay: false, status: "TODO", kind: null, matter: null },
-      { id: "e1", source: "event", title: "Förlikningsmöte", at: new Date(), allDay: false, status: null, kind: "meeting", location: null, matter: { id: "m1", matterNumber: "2026-0001", title: "Tvist" } },
-    ];
-    render(<Dashboard />);
-    expect(screen.getByText("Förlikningsmöte")).toBeInTheDocument();
-    expect(screen.getByText(/2026-0001 — Tvist/)).toBeInTheDocument();
-    expect(screen.queryByText("Skriv stämningsansökan")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Öppna kalender/ })).toHaveAttribute("href", "/calendar");
-  });
-
-  it("visar event-frist-badge", () => {
-    todoQuery.data = [
-      { id: "e1", source: "event", title: "Förhandlingsfrist", at: new Date(), allDay: false, status: null, kind: "deadline", matter: null },
-    ];
-    render(<Dashboard />);
-    expect(screen.getByText("Frist")).toBeInTheDocument();
-  });
-
-  it("klick på kalenderpost öppnar detaljer (plats, beskrivning, ärende) och Stäng", async () => {
-    const { waitFor } = await import("@testing-library/react");
-    todoQuery.data = [
-      { id: "e1", source: "event", title: "Huvudförhandling", description: "Sal 4", at: new Date(), allDay: true, status: null, kind: "hearing", location: "Stockholms tingsrätt", matter: { id: "m1", matterNumber: "2026-0001", title: "Tvist" } },
-    ];
-    render(<Dashboard />);
-    fireEvent.click(screen.getByText("Huvudförhandling"));
-    await waitFor(() => expect(screen.getByText(/Stockholms tingsrätt/)).toBeInTheDocument());
-    expect(screen.getByText("Sal 4")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Stäng" }).at(-1)!); // Modal har även en ×-knapp
-    await waitFor(() => expect(screen.queryByText("Sal 4")).not.toBeInTheDocument());
   });
 
   it("Att bevaka: tidsfrist kan bockas av direkt på startsidan", () => {

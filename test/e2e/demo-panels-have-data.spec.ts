@@ -16,7 +16,7 @@ import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, test, expect, type
 /** Appens tomlägen ("Inga … ännu.", "Laddar …", "Välj jurist och period."). */
 const EMPTY_STATE = /Inga [^.]{0,60}(ännu|registrerade|hittade|satta)[^.]*\.|Inga [a-zåäö ]{2,40}\.|Laddar|Välj jurist/;
 
-const MENU = ["/", "/conflicts/", "/matters/", "/watchlist/", "/calendar/", "/contacts/", "/search/", "/templates/",
+const MENU = ["/", "/conflicts/", "/matters/", "/watchlist/", "/contacts/", "/search/", "/templates/",
   "/time/", "/reports/", "/invoices/", "/payment-plans/", "/users/", "/profile/", "/settings/"];
 
 type SeedMatter = DemoSeed["matters"][number];

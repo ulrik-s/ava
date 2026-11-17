@@ -184,27 +184,6 @@
       "count": 1
     }
   },
-  "src/app/calendar/_calendar-grid.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 4
-    }
-  },
-  "src/app/calendar/_day-view.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
-  "src/app/calendar/page.tsx": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
-    }
-  },
   "src/app/conflicts/page.tsx": {
     "@typescript-eslint/no-deprecated": {
       "count": 1
@@ -469,11 +448,6 @@
   "src/lib/client/billing/deferred-faktura-docs.ts": {
     "@typescript-eslint/require-await": {
       "count": 2
-    }
-  },
-  "src/lib/client/calendar/user-colors.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
     }
   },
   "src/lib/client/demo/demo-seed-loader.ts": {
@@ -1406,32 +1380,6 @@
       "count": 4
     }
   },
-  "test/unit/app/calendar/calendar-forms.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
-  "test/unit/app/calendar/calendar-grid-helpers.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 5
-    }
-  },
-  "test/unit/app/calendar/day-view-helpers.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 6
-    }
-  },
-  "test/unit/app/calendar/user-picker.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "test/unit/app/conflicts/page.test.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
@@ -1552,11 +1500,6 @@
       "count": 4
     },
     "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
-  "test/unit/app/page.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
@@ -1945,11 +1888,6 @@
       "count": 6
     },
     "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/components/checkbox-list.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },
