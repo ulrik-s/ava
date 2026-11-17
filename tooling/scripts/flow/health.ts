@@ -18,6 +18,8 @@ export interface HealthItem {
   isPr: boolean;
   /** GitHubs `mergeable_state` för en PR (`clean` = grön och mergebar). */
   mergeState?: string;
+  /** Nedbruten förfrågan utan öppna implementations-issues: klar, väntar bara på nästa release. */
+  awaitingRelease?: boolean;
 }
 
 /** Läget i hela kedjan vid ett tillfälle. */
@@ -53,10 +55,14 @@ function currentStates(flow: Flow, item: HealthItem): string[] {
   return machine ? stateLabels(machine).filter((l) => item.labels.includes(l)) : [];
 }
 
+/** Väntar saken på något annat än en agent (en människa eller nästa release)? */
+const waitsOnSomeoneElse = (flow: Flow, item: HealthItem): boolean =>
+  item.awaitingRelease === true || item.labels.some((l) => flow.nudge.skip_flags.includes(l));
+
 function stuckAlarm(flow: Flow, item: HealthItem, now: number): Alarm[] {
   const label = currentStates(flow, item)[0];
   const state = Object.values(machineOf(flow, item)?.states ?? {}).find((s) => s.label === label);
-  if (!label || !state?.agent || item.labels.some((l) => flow.nudge.skip_flags.includes(l))) return [];
+  if (!label || !state?.agent || waitsOnSomeoneElse(flow, item)) return [];
   const age = hoursSince(item.labeledAt[label], now);
   if (age * 3_600_000 < parseDuration(flow.health.stuck_after)) return [];
   return [{ key: `stuck:${ref(item)}`, text: line(item, `har stått i ${label} i ${Math.floor(age)} h trots knuffar`) }];
@@ -89,7 +95,7 @@ export function healthReport(flow: Flow, snap: HealthSnapshot): HealthReport {
   const waitingForUlrik = snap.items.flatMap((i) => waitsForUlrik(i) ?? []);
   const moving = snap.items
     .filter((i) => waitsForUlrik(i) === null && currentStates(flow, i).length > 0)
-    .map((i) => line(i, currentStates(flow, i).join(", ")));
+    .map((i) => line(i, i.awaitingRelease ? "klar — väntar på nästa release" : currentStates(flow, i).join(", ")));
   return { alarms, waitingForUlrik, moving };
 }
 

@@ -7,7 +7,7 @@ import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
 import { healthReport, type HealthItem, newAlarms, previousAlarmKeys, renderStatus } from "../../tooling/scripts/flow/health";
 import { loadFlow } from "../../tooling/scripts/flow/load";
 import { commitType, nextVersion, releaseDecision } from "../../tooling/scripts/flow/release";
-import { collectItems, lastClockRun, publishStatus } from "../../tooling/scripts/flow-health";
+import { collectItems, lastClockRun, openIntakeRefs, publishStatus } from "../../tooling/scripts/flow-health";
 import { runRelease } from "../../tooling/scripts/flow-release";
 
 const flow = loadFlow();
@@ -47,6 +47,22 @@ describe("hälsokontrollen", () => {
     expect(report.alarms).toEqual([]);
     expect(report.waitingForUlrik).toHaveLength(2);
     expect(report.moving).toEqual(["ava#5 En sak — pågår"]);
+  });
+
+  it("nedbruten och klar (väntar på release) larmar inte; den som fortfarande byggs gör det", () => {
+    const report = healthReport(flow, {
+      now,
+      lastClockRun: ago(0.5),
+      items: [
+        item({ repo: "ulrik-s/ava-feedback", number: 16, labels: ["user-request", "nedbruten"], labeledAt: { nedbruten: ago(20) }, awaitingRelease: true }),
+        item({ repo: "ulrik-s/ava-feedback", number: 17, labels: ["user-request", "nedbruten"], labeledAt: { nedbruten: ago(20) } }),
+      ],
+    });
+    expect(report.alarms.map((a) => a.key)).toEqual(["stuck:ava-feedback#17"]);
+    expect(report.moving).toEqual([
+      "ava-feedback#16 En sak — klar — väntar på nästa release",
+      "ava-feedback#17 En sak — nedbruten",
+    ]);
   });
 
   it("ingen klockkörning alls larmar", () => {
@@ -93,6 +109,34 @@ describe("hälsokontrollen mot GitHub", () => {
     const pr = items.find((i) => i.number === 7 && i.repo === "ulrik-s/ava");
     expect(pr).toMatchObject({ isPr: true, mergeState: "clean", labeledAt: { granskad: ago(2) } });
     expect(items.some((i) => i.number === 8)).toBe(false);
+  });
+
+  it("öppna implementations-issues avgör om en nedbruten förfrågan väntar på release", () => {
+    const gh = fakeGh([
+      ["repos/ulrik-s/ava-feedback/issues?state=open", [[
+        { number: 16, title: "Klar", labels: [{ name: "user-request" }, { name: "nedbruten" }] },
+        { number: 17, title: "Byggs", labels: [{ name: "user-request" }, { name: "nedbruten" }] },
+      ]]],
+      ["repos/ulrik-s/ava/issues?state=open", [[
+        { number: 1615, title: "Impl", body: "Problem…\n\nIntag: ava-feedback#17", labels: [{ name: "agent-task" }, { name: "pågår" }] },
+        { number: 1700, title: "PR", body: "Intag: ava-feedback#16", labels: [{ name: "agent-pr" }], pull_request: {} },
+      ]]],
+      ["/events", [[]]],
+    ]);
+    const items = collectItems(flow, (repo) => gitHub(repo, gh.run));
+    expect(items.find((i) => i.number === 16)?.awaitingRelease).toBe(true);
+    expect(items.find((i) => i.number === 17)?.awaitingRelease).toBeUndefined();
+    expect(gh.calls.filter((c) => c.includes("repos/ulrik-s/ava/issues?state=open"))).toHaveLength(1);
+  });
+
+  it("openIntakeRefs läser bara egna rader i issues, inte PR:er eller andra omnämnanden", () => {
+    const open = [
+      { number: 1, title: "", body: "Intag: ava-feedback#5", labels: [], isPr: false },
+      { number: 2, title: "", body: "Se Intag: ava-feedback#6 i texten", labels: [], isPr: false },
+      { number: 3, title: "", body: "Intag: ava-feedback#7", labels: [], isPr: true },
+      { number: 4, title: "", body: "", labels: [], isPr: false },
+    ];
+    expect([...openIntakeRefs(open, "ulrik-s/ava-feedback")]).toEqual([5]);
   });
 
   it("klockans senaste körning: den senaste av dispatch och schema", () => {

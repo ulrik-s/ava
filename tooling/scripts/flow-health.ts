@@ -7,7 +7,7 @@
  *
  *   bun tooling/scripts/flow-health.ts
  */
-import { type GitHub, gitHub } from "./flow/github";
+import { type GitHub, gitHub, type OpenItem } from "./flow/github";
 import { type Alarm, healthReport, type HealthItem, type HealthReport, newAlarms, renderStatus } from "./flow/health";
 import { loadFlow, stateLabels } from "./flow/load";
 import type { Flow } from "./flow/schema";
@@ -22,17 +22,30 @@ function lastAdded(gh: GitHub, n: number): Record<string, string> {
   return out;
 }
 
+/** Intagsnumren som en ÖPPEN implementations-issue pekar på (`Intag: ava-feedback#N`, loop 2). */
+export function openIntakeRefs(items: readonly OpenItem[], intakeRepo: string): Set<number> {
+  const name = intakeRepo.split("/")[1] ?? intakeRepo;
+  const re = new RegExp(`^Intag: ${name}#(\\d+)\\s*$`, "m");
+  return new Set(items.flatMap((i) => (i.isPr ? [] : Number(re.exec(i.body)?.[1] ?? Number.NaN))).filter((n) => !Number.isNaN(n)));
+}
+
 /** De öppna saker i flödet som har ett tillstånd eller är blockerade. */
 export function collectItems(flow: Flow, ghFor: (repo: string) => GitHub): HealthItem[] {
+  const open = new Map<string, OpenItem[]>();
+  const openIn = (repo: string): OpenItem[] => open.get(repo) ?? open.set(repo, ghFor(repo).openItems()).get(repo) ?? [];
+  const intake = flow.machines.intake?.repo;
+  const codeRepo = Object.values(flow.machines).find((m) => m.repo !== intake)?.repo;
+  const pending = intake && codeRepo ? openIntakeRefs(openIn(codeRepo), intake) : new Set<number>();
   return Object.values(flow.machines).flatMap((m) => {
     const gh = ghFor(m.repo);
     const relevant = new Set([...stateLabels(m), "blockerad"]);
-    return gh.openItems()
+    return openIn(m.repo)
       .filter((i) => i.isPr === (m.items === "pulls") && i.labels.some((l) => relevant.has(l)))
       .map((i) => ({
         repo: m.repo, number: i.number, title: i.title, labels: i.labels, isPr: i.isPr,
         labeledAt: lastAdded(gh, i.number),
         ...(i.isPr && i.labels.includes("granskad") ? { mergeState: gh.prMergeState(i.number) } : {}),
+        ...(m.repo === intake && i.labels.includes("nedbruten") && !pending.has(i.number) ? { awaitingRelease: true } : {}),
       }));
   });
 }
