@@ -104,7 +104,7 @@ Definieras i `tooling/agents/labels.json`. Skapas och uppdateras med
 | ava-feedback | `finns-redan` | loop 1 | Det efterfrågade fanns redan (eller var avsett beteende). Loop 1 har visat användaren vägen och hen har bekräftat det (eller inte svarat på 7 dagar). Inget byggs och Ulrik behöver inte besluta. En Action stänger issuen. Användaren ser *Finns redan i AVA*; behöver hen något mer skickar hen en ny förfrågan |
 | ava-feedback | `undersökt` | loop 1 | Verifieringsrapporten finns |
 | ava-feedback | `ej-bekräftad` | loop 1 | Buggen/behovet kunde inte bekräftas |
-| ava-feedback | `verifierad` | **Ulrik** | Sant och värt att bygga — får brytas ner |
+| ava-feedback | `verifierad` | **Ulrik** | Sant och värt att bygga — får brytas ner. Sätts på en `undersökt` förfrågan; på `nedbruten` eller `levererad` nekar flödesvakten den (även för Ulrik) |
 | ava-feedback | `nedbruten` | loop 2 | Issues finns i ava |
 | ava-feedback | `levererad`, `release:vX` | loop 2 | Ute i produktion |
 | ava | `agent-task` | loop 2 | Implementations-issue |

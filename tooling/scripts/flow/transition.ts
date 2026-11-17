@@ -79,11 +79,22 @@ const fromState = (machine: Machine, previous: string | null): string =>
 const restoreOf = (change: LabelChange): string | null =>
   change.previous !== null && !change.current.includes(change.previous) ? change.previous : null;
 
-/** Beslutet för en satt etikett. Ulrik själv får alltid göra alla övergångar. */
+/** Kommentaren om tillståndet nekar målet för alla (`refuse` i flow.yaml), annars null. */
+function refusal(machine: Machine, from: string, to: string): string | null {
+  const r = machine.states[from]?.refuse;
+  return r?.to.includes(to) ? r.comment : null;
+}
+
+/**
+ * Beslutet för en satt etikett. Ulrik själv får göra alla övergångar, utom
+ * dem tillståndet nekar för alla (`refuse`).
+ */
 export function decide(machine: Machine, change: LabelChange): Decision {
   const to = stateOfLabel(machine, change.label);
   if (to === null) return flagDecision(machine, change);
   const from = fromState(machine, change.previous);
+  const refused = refusal(machine, from, to);
+  if (refused !== null) return { kind: "reject", reason: refused, restore: restoreOf(change) };
   const remove = othersToRemove(machine, change);
   const problem = from === to || change.byUlrik ? null : transitionProblem(machine, from, to, change);
   return problem === null ? { kind: "allow", remove } : { kind: "reject", reason: problem, restore: restoreOf(change) };

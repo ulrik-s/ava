@@ -37,6 +37,8 @@ const stateSchema = z.object({
   /** Starta agenten när saken går in i tillståndet (standard: ja). */
   dispatch: z.boolean().default(true),
   transitions: z.array(transitionSchema).default([]),
+  /** Mål som nekas härifrån för ALLA, även Ulrik; `comment` säger varför och vad man gör i stället. */
+  refuse: z.object({ to: z.array(z.string()).min(1), comment: z.string() }).optional(),
   timeout: timeoutSchema.optional(),
 });
 
