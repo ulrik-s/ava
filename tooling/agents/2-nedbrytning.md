@@ -27,7 +27,9 @@ För varje ÖPPEN issue i `ulrik-s/ava-feedback` med `nedbruten`:
    - **Ingen tagg ännu:** kommentera EN gång (kolla att kommentaren inte redan
      finns) "Klart och mergat, kommer med nästa release." Stäng inte.
    - **Någon stängd som "not planned" utan PR:** kommentera varför och sätt
-     `blockerad`, så att Ulrik bestämmer.
+     `blockerad`, så att Ulrik bestämmer. Undantag: Ulrik har stängt den som
+     **dubblett** (hans kommentar på issuen säger det). Den räknas inte alls:
+     följ upp de andra som vanligt.
 
 ## A2. Dubbletter följer sitt original
 
@@ -118,13 +120,20 @@ För varje godkänd:
    tar verifieringen den igen och frågar användaren), kommentera vilka frågor
    som är öppna, och gå vidare. Gissa aldrig, och välj aldrig själv mellan
    alternativ.
-3. Bryt ner den i 1–5 implementations-issues, var och en lagom för EN PR som
+3. **Är den redan nedbruten?** Två körningar kan starta samtidigt. Sök
+   precis innan du skapar något:
+   `gh api -X GET search/issues -f q='repo:ulrik-s/ava "Intag: ava-feedback#<nr>" in:body'`.
+   Finns det redan issues (öppna eller stängda, utom Ulriks dubbletter): skapa
+   INGA nya. Kommentera listan (om den inte redan står där), sätt `nedbruten`
+   och gå vidare. Gör samma kontroll igen före varje ny issue, om du skapar
+   flera.
+4. Bryt ner den i 1–5 implementations-issues, var och en lagom för EN PR som
    går att granska på några minuter. En bugg blir oftast en issue, och då
    ska testet från verifieringsrapporten bli acceptanskriteriet. Bygg
    **exakt** "Vad som ska byggas" (och Ulriks beslut), varken mer eller mindre.
    Det som står under "Inte med" får inte smyga in, inte heller "när vi
    ändå är där".
-4. Skapa varje issue i `ulrik-s/ava` med etiketterna `agent-task` och
+5. Skapa varje issue i `ulrik-s/ava` med etiketterna `agent-task` och
    `att-granska`, på svenska, AVIDENTIFIERAD (regel 3), med:
    - **Problem**: generellt beskrivet.
    - **Acceptanskriterier**: mätbara, i punktform.
@@ -136,7 +145,7 @@ För varje godkänd:
    - **Testplan**: vilka tester som ska finnas (enhet/komponent/E2E).
    - **Beroenden**: andra issues som måste vara klara först (`Beror på #N`).
    - Sist, på egen rad: `Intag: ava-feedback#<nr>`
-5. Kommentera på intag-issuen med listan över skapade issues
+6. Kommentera på intag-issuen med listan över skapade issues
    (`ulrik-s/ava#N`) och sätt `nedbruten`.
 
 Är det oklart hur något ska bete sig för användaren: fråga användaren enligt
