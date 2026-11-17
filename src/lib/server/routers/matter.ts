@@ -35,6 +35,7 @@ import { ensureDefaultMatterFolders } from "../documents/default-matter-folders"
 import { emit } from "../events/emit";
 import { formatSeriesNumber } from "../number-series";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
+import type { MatterListFilter } from "../repositories/matter-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
 
@@ -223,6 +224,8 @@ export const matterRouter = router({
         status: matterStatusSchema.optional(),
         /** Filtrera till ärenden som medarbetaren har arbetat på (har tidsposter på). */
         employeeId: userIdSchema.optional(),
+        /** Bara dessa ärenden (#1642): jävsträffarnas rader i den sammanslagna sökningen. */
+        ids: z.array(matterIdSchema).max(500).optional(),
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(500).default(20),
       })
@@ -230,13 +233,7 @@ export const matterRouter = router({
     // Migrerad till repository-sömmen (ADR 0020): listForOrg kapslar in
     // filter/sök-where + KLIENT-include + _count + total.
     .query(async ({ ctx, input }) => {
-      const { matters, total } = await ctx.repos.matters.listForOrg(ctx.orgId, {
-        search: input.search,
-        status: input.status,
-        employeeId: input.employeeId,
-        page: input.page,
-        pageSize: input.pageSize,
-      });
+      const { matters, total } = await ctx.repos.matters.listForOrg(ctx.orgId, input satisfies MatterListFilter);
       // Täcknings-tak-kolumn (#793): bifoga upparbetat (debiterbart) per ärende
       // batchat, så listan kan visa/sortera/filtrera mot rättshjälps-/rättsskyddstaket.
       const usage = await ctx.repos.timeEntries.coverageUsageForMatters(matters.map((m) => asId<"MatterId">(m.id)));

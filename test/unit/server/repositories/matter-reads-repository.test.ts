@@ -67,6 +67,26 @@ describe("Matter-läsningar — in-memory", () => {
   });
 });
 
+describe("listForOrg — id-filtret (#1642), in-memory", () => {
+  it("ger bara de angivna ärendena inom byrån; tom lista ger inga; utan filtret som i dag", async () => {
+    const [a, b] = [asId<"MatterId">(uuidv7()), asId<"MatterId">(uuidv7())];
+    const other = asId<"MatterId">(uuidv7());
+    const store = new LocalStore(prebakeJoins({
+      matters: [
+        { id: a, organizationId: ORG, matterNumber: "2026-0001", title: "A", status: "CLOSED", createdAt: new Date("2026-01-01") },
+        { id: b, organizationId: ORG, matterNumber: "2026-0002", title: "B", status: "ACTIVE", createdAt: new Date("2026-01-02") },
+        { id: other, organizationId: uuidv7(), matterNumber: "2026-0003", title: "C", status: "ACTIVE", createdAt: new Date("2026-01-03") },
+      ],
+    }), async () => {});
+    const repo = new InMemoryMatterRepository(store);
+    const ids = async (filter: { ids?: typeof a[] }) =>
+      (await repo.listForOrg(ORG, { ...filter, page: 1, pageSize: 20 })).matters.map((m) => m.id).sort();
+    expect(await ids({ ids: [a, other] })).toEqual([a]);
+    expect(await ids({ ids: [] })).toEqual([]);
+    expect(await ids({})).toEqual([a, b].sort());
+  });
+});
+
 describe("Matter-läsningar — Drizzle (pglite)", () => {
   let handle: TestDbHandle;
   beforeAll(async () => { handle = await createTestDb(); });
@@ -116,5 +136,22 @@ describe("Matter-läsningar — Drizzle (pglite)", () => {
 
     const link = await mcRepo.linkContact({ id: uuidv7(), matterId: mId, contactId: cId, role: "MOTPART" } as never);
     expect(link.contact.name).toBe("Klient AB");
+  });
+
+  it("listForOrg — id-filtret (#1642): bara de angivna ärendena inom byrån; tom lista ger inga", async () => {
+    const db = handle.db;
+    const org = asId<"OrganizationId">(uuidv7());
+    const [a, b, other] = [asId<"MatterId">(uuidv7()), asId<"MatterId">(uuidv7()), asId<"MatterId">(uuidv7())];
+    await db.insert(matters).values([
+      { id: a, organizationId: org, matterNumber: "2026-0001", title: "A", status: "CLOSED", version: 1 },
+      { id: b, organizationId: org, matterNumber: "2026-0002", title: "B", status: "ACTIVE", version: 1 },
+      { id: other, organizationId: asId<"OrganizationId">(uuidv7()), matterNumber: "2026-0003", title: "C", status: "ACTIVE", version: 1 },
+    ]);
+    const repo = new DrizzleMatterRepository(db);
+    const ids = async (filter: { ids?: typeof a[] }) =>
+      (await repo.listForOrg(org, { ...filter, page: 1, pageSize: 20 })).matters.map((m) => m.id).sort();
+    expect(await ids({ ids: [a, other] })).toEqual([a]);
+    expect(await ids({ ids: [] })).toEqual([]);
+    expect(await ids({})).toEqual([a, b].sort());
   });
 });
