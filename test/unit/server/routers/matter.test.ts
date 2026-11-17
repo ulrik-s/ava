@@ -81,6 +81,20 @@ describe("matter.list", () => {
     expect((await caller.list({ search: "bergström" })).matters).toHaveLength(1);
   });
 
+  it("id-filtret (#1642): bara de angivna ärendena, alla statusar, inom byrån", async () => {
+    const { caller } = makeCaller({
+      matters: [
+        matter({ status: "CLOSED" }),
+        matter({ id: "m2", matterNumber: `${YEAR}-0002` }),
+        matter({ id: "m-b", organizationId: "org-b", matterNumber: `${YEAR}-0003` }),
+      ],
+    });
+    const res = await caller.list({ ids: ["matter-1", "m-b"], page: 1, pageSize: 2 });
+    expect(res.matters.map((m) => [m.id, m.status])).toEqual([["matter-1", "CLOSED"]]);
+    expect(res.total).toBe(1);
+    expect((await caller.list({ ids: [] })).matters).toHaveLength(0);
+  });
+
   it("räknar pages korrekt", async () => {
     const { caller } = makeCaller({
       matters: [matter(), matter({ id: "m2", matterNumber: `${YEAR}-0002` }), matter({ id: "m3", matterNumber: `${YEAR}-0003` })],

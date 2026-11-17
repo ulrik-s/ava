@@ -21,6 +21,7 @@ function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<
     organizationId,
     ...(f.status ? { status: f.status } : {}),
     ...(f.employeeId ? { timeEntries: { some: { userId: f.employeeId } } } : {}),
+    ...(f.ids ? { id: { in: [...f.ids] } } : {}),
     ...(f.search
       ? {
           OR: [

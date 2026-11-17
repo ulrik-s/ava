@@ -45,6 +45,10 @@ vi.mock("@/lib/client/trpc", () => ({
         useMutation: () => ({ mutate: createMatterMutate, isPending: false }),
       },
     },
+    // Sammanslagen sökning (#1642) — täcks i page-search.test.tsx.
+    conflict: {
+      check: { useMutation: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, data: undefined, error: null }) },
+    },
     contacts: {
       list: { useQuery: () => contactsQuery },
       search: { useQuery: (input: { term: string }) => searchQuery(input) },

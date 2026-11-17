@@ -14,7 +14,7 @@
   "src/lib/server/db/schema.ts": 725,
   "src/lib/server/routers/billingRun.ts": 1179,
   "src/lib/server/routers/invoice.ts": 558,
-  "src/lib/server/routers/matter.ts": 430,
+  "src/lib/server/routers/matter.ts": 427,
   "src/lib/server/routers/reports.ts": 624,
   "src/lib/shared/brottmalstaxa.ts": 537,
   "src/lib/shared/kostnadsrakning.ts": 685,
