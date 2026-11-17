@@ -7,6 +7,7 @@
 
 import { noteTimestamp } from "@/lib/shared/billing-notes";
 import { coverageEntryRateOre } from "@/lib/shared/brottmalstaxa";
+import { kindLabel } from "@/lib/shared/document-kind";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { SettlementViewLine } from "@/lib/shared/settlement-view";
@@ -120,7 +121,7 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
   // härleda ur dokumentet man öppnar.
   const body = bodyOf(t, { at: new Date(iso), seed: seedOf(m.id), criminal: m.paymentMethod === "OFFENTLIGT_UPPDRAG" });
   const text = body ?? t.summary;
-  const bytes = await generateDocumentBytes({ id, title: t.title, fileName, documentType: t.documentType, summary: text, mimeType: "application/pdf", storagePath });
+  const bytes = await generateDocumentBytes({ id, title: t.title, fileName, heading: kindLabel(t.kind), summary: text, mimeType: "application/pdf", storagePath });
   const size = ctx.sink ? ctx.sink(storagePath, bytes) : bytes.byteLength;
   // Filas efter mottagare (#985) — demon hade tidigare allt i roten, så
   // träd-vyns mapphantering gick varken att se eller prova.
@@ -128,7 +129,7 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
   const folderId = await folderFor(ctx, m, folderPath, st);
   await ctx.c.document.register({
     id, matterId: m.id, fileName, mimeType: "application/pdf", sizeBytes: size, storagePath, folderId,
-    documentType: t.documentType, direction: t.direction, recipient: t.recipient, title: t.title, summary: t.summary,
+    kinds: [t.kind], direction: t.direction, recipient: t.recipient, title: t.title, summary: t.summary,
     analysisStatus: "DONE", createdAt: iso,
   });
   ctx.res.documents++;

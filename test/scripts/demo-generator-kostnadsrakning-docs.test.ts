@@ -31,11 +31,11 @@ type Any = any;
  *  Domstol/Kostnadsräkningar sedan #985, och trädet är dessutom vad UI:t läser. */
 async function krDocsFor(caller: Any, matterId: string): Promise<Any[]> {
   const { documents } = await caller.document.tree({ matterId });
-  return (documents as Any[]).filter((d) => d.documentType === "Kostnadsräkning");
+  return (documents as Any[]).filter((d) => d.kinds?.includes("KOSTNADSRAKNING"));
 }
 
 describe("populateKostnadsrakningDocs", () => {
-  it("genererar ett KR-dokument per KOSTNADSRAKNING-run, taggat documentType=Kostnadsräkning", async () => {
+  it("genererar ett KR-dokument per KOSTNADSRAKNING-run, med typen KOSTNADSRAKNING (ADR 0038)", async () => {
     const seed = buildSeed();
     const writes: string[] = [];
     const bodies: Uint8Array[] = [];

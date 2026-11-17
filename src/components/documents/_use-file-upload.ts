@@ -96,6 +96,8 @@ export function makePlaceholderDoc({
     createdAt: new Date().toISOString(),
     uploadedBy: { name: null },
     title: null,
+    kinds: [],
+    kindsManual: false,
     documentType: null,
     summary: null,
     analyzedAt: null,

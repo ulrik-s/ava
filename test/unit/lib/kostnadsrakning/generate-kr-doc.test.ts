@@ -1,7 +1,7 @@
 /**
  * Tester för generateKrDoc (#828 steg 4) — rättshjälpens KR-dokument:
  * bygger en non-taxa-kontext (timkostnadsnorm), renderar PDF och registrerar
- * ett document med documentType "Kostnadsräkning" så panelens doc-länk hittar det.
+ * ett document med typen KOSTNADSRAKNING (ADR 0038) så panelens doc-länk hittar det.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
@@ -39,7 +39,7 @@ describe("generateKrDoc", () => {
     await generateKrDoc(baseArgs);
     expect(renderKostnadsrakningPdf).toHaveBeenCalled();
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      matterId: "m1", documentType: "Kostnadsräkning", mimeType: "application/pdf", sizeBytes: 4,
+      matterId: "m1", kinds: ["KOSTNADSRAKNING"], mimeType: "application/pdf", sizeBytes: 4,
     }));
     const arg = registerMutateAsync.mock.calls[0]![0] as { fileName: string; id: string };
     expect(arg.fileName).toMatch(/^Kostnadsräkning Ä-2026-1/);

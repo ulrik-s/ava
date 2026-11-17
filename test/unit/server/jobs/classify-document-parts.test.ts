@@ -1,6 +1,6 @@
 /**
  * `classify-document` + dokumentdelar (#1220): segmentering → delar skrivs,
- * documentType = första delens typ, MANUAL bevaras vid samma sidantal,
+ * typerna (ADR 0038) = delarnas i sidordning, MANUAL bevaras vid samma sidantal,
  * specialvärden rörs inte, LLM-tak, idempotens.
  */
 
@@ -8,10 +8,9 @@ import type { Job } from "pg-boss";
 import { describe, expect, it, vi } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { createClassifyDocumentHandler } from "@/lib/server/jobs/handlers/classify-document-handler";
-import { manualKindOf } from "@/lib/server/jobs/handlers/document-parts-writer";
 import { JOB_QUEUES } from "@/lib/server/jobs/job-queue";
 import { InMemoryDocumentPartRepository } from "@/lib/server/repositories/in-memory-document-part-repository";
-import { type DocumentKind, isSpecialDocumentType } from "@/lib/shared/document-kind";
+import type { DocumentKind } from "@/lib/shared/document-kind";
 import type { DocumentPart } from "@/lib/shared/schemas/document";
 import { asId } from "@/lib/shared/schemas/ids";
 
@@ -35,7 +34,7 @@ function setup(doc: Record<string, unknown> = {}, pages: string[] = COMPOSITE, s
     getById: vi.fn(async () => ({
       id: DOC, matterId: MATTER, fileName: "inkommet.pdf", storagePath: "documents/content/x.pdf", mimeType: "application/pdf", ...doc,
     })),
-    updateMetadata: vi.fn(async () => ({})),
+    updateMetadata: vi.fn(() => Promise.resolve({})),
   };
   const readPages = vi.fn(async () => pages);
   return { parts, documents, readPages };
@@ -48,7 +47,7 @@ function run(s: ReturnType<typeof setup>, extra: Record<string, unknown> = {}) {
 const simple = (ps: DocumentPart[]) => ps.map((p) => ({ kind: p.kind, fromPage: p.fromPage, toPage: p.toPage, source: p.source, ordinal: p.ordinal }));
 
 describe("classify-document — dokumentdelar", () => {
-  it("skriver delar och sätter documentType = första delens typ", async () => {
+  it("skriver delar och sätter typerna = delarnas i sidordning (primär = första)", async () => {
     const s = setup();
     await run(s);
     expect(simple(await s.parts.listForDocument(DOC))).toEqual([
@@ -56,7 +55,9 @@ describe("classify-document — dokumentdelar", () => {
       { kind: "STAMNING", fromPage: 3, toPage: 3, source: "AUTO", ordinal: 1 },
       { kind: "FUP", fromPage: 4, toPage: 5, source: "AUTO", ordinal: 2 },
     ]);
-    expect(s.documents.updateMetadata.mock.calls[0]![1]).toMatchObject({ documentType: "KALLELSE", analysisStatus: "DONE" });
+    expect(s.documents.updateMetadata.mock.calls[0]?.[1]).toMatchObject({
+      kinds: ["KALLELSE", "STAMNING", "FUP"], kindsManual: false, documentType: "KALLELSE", analysisStatus: "DONE",
+    });
   });
 
   it("omkörning med samma resultat skriver ingenting (ingen churn)", async () => {
@@ -82,19 +83,21 @@ describe("classify-document — dokumentdelar", () => {
     ]);
   });
 
-  it("manuell första del styr documentType", async () => {
+  it("manuell första del styr den primära typen", async () => {
     const s = setup();
     await run(s);
-    const first = (await s.parts.listForDocument(DOC))[0]!;
+    const [first] = await s.parts.listForDocument(DOC);
+    if (!first) throw new Error("segmenteringen skrev inga delar");
     await s.parts.update(first.id, { kind: "DOM", source: "MANUAL" });
     await run(s);
-    expect(s.documents.updateMetadata.mock.calls[1]![1]).toMatchObject({ documentType: "DOM" });
+    expect(s.documents.updateMetadata.mock.calls[1]?.[1]).toMatchObject({ kinds: ["DOM", "STAMNING", "FUP"] });
   });
 
   it("ändrat sidantal → allt räknas om och MANUAL släpps", async () => {
     const s = setup();
     await run(s);
-    const first = (await s.parts.listForDocument(DOC))[0]!;
+    const [first] = await s.parts.listForDocument(DOC);
+    if (!first) throw new Error("segmenteringen skrev inga delar");
     await s.parts.update(first.id, { kind: "DOM", source: "MANUAL" });
     s.readPages.mockResolvedValue([text("Delgivningskvitto"), text("DOM")]);
     await run(s);
@@ -120,39 +123,40 @@ describe("classify-document — dokumentdelar", () => {
     ]);
   });
 
-  it("specialvärde (Kostnadsräkning) skrivs inte över och får inga delar", async () => {
-    const s = setup({ documentType: "Kostnadsräkning" });
+  it("typer som systemet satt (kostnadsräkning) skrivs inte över och dokumentet får inga delar", async () => {
+    const s = setup({ kinds: ["KOSTNADSRAKNING"], kindsManual: true });
     await run(s);
     expect(await s.parts.listForDocument(DOC)).toEqual([]);
-    expect(s.documents.updateMetadata.mock.calls[0]![1]).not.toHaveProperty("documentType");
+    expect(s.documents.updateMetadata.mock.calls[0]?.[1]).not.toHaveProperty("kinds");
   });
 
-  it("användarsatt kategori (före delarna) blir EN manuell del och behålls", async () => {
-    const s = setup({ documentType: "AVTAL", analysisModel: null });
-    await run(s);
-    expect(simple(await s.parts.listForDocument(DOC))).toEqual([
-      { kind: "AVTAL", fromPage: 1, toPage: 5, source: "MANUAL", ordinal: 0 },
-    ]);
-    expect(s.documents.updateMetadata.mock.calls[0]![1]).toMatchObject({ documentType: "AVTAL" });
+  it("äldre rad: specialvärde och användarsatt kod räknas som satta för hand (ADR 0038)", async () => {
+    const special = setup({ documentType: "Kostnadsräkning" });
+    await run(special);
+    expect(special.documents.updateMetadata.mock.calls[0]?.[1]).not.toHaveProperty("kinds");
+    const userSet = setup({ documentType: "AVTAL", analysisModel: null });
+    await run(userSet);
+    expect(await userSet.parts.listForDocument(DOC)).toEqual([]);
+    expect(userSet.documents.updateMetadata.mock.calls[0]?.[1]).not.toHaveProperty("kinds");
   });
 
   it("utan sidor (ingen text server-side) → inga delar, filnamns-heuristik", async () => {
     const s = setup({ fileName: "Stämning.pdf" }, []);
     await run(s);
     expect(await s.parts.listForDocument(DOC)).toEqual([]);
-    expect(s.documents.updateMetadata.mock.calls[0]![1]).toMatchObject({ documentType: "STAMNING" });
+    expect(s.documents.updateMetadata.mock.calls[0]?.[1]).toMatchObject({ kinds: ["STAMNING"] });
   });
 
-  it("utan sidor behålls en användarsatt kategori", async () => {
-    const s = setup({ documentType: "AVTAL", analysisModel: null }, []);
+  it("utan sidor behålls typer som en person satt", async () => {
+    const s = setup({ kinds: ["AVTAL"], kindsManual: true }, []);
     await run(s);
-    expect(s.documents.updateMetadata.mock.calls[0]![1]).toMatchObject({ documentType: "AVTAL" });
+    expect(s.documents.updateMetadata.mock.calls[0]?.[1]).not.toHaveProperty("kinds");
   });
 
   it("utan parts-repo: segmenteringen ger ändå kategorin (inga delar skrivs)", async () => {
     const s = setup();
     await createClassifyDocumentHandler({ documents: s.documents, readPages: s.readPages })(jobFor(DOC));
-    expect(s.documents.updateMetadata.mock.calls[0]![1]).toMatchObject({ documentType: "KALLELSE" });
+    expect(s.documents.updateMetadata.mock.calls[0]?.[1]).toMatchObject({ kinds: ["KALLELSE", "STAMNING", "FUP"] });
   });
 
   it("classifyPart (LLM) anropas bara på kandidatsidor utan rubrik, inom taket", async () => {
@@ -164,21 +168,5 @@ describe("classify-document — dokumentdelar", () => {
     expect(simple(await s.parts.listForDocument(DOC))).toEqual([
       { kind: "BEVIS", fromPage: 1, toPage: 40, source: "AUTO", ordinal: 0 },
     ]);
-  });
-});
-
-describe("document-parts-writer — regler", () => {
-  it("isSpecialDocumentType", () => {
-    expect(isSpecialDocumentType("E-post")).toBe(true);
-    expect(isSpecialDocumentType("DOM")).toBe(false);
-    expect(isSpecialDocumentType(null)).toBe(false);
-  });
-
-  it("manualKindOf: bara kod, aldrig server-analyserad och ≠ filnamnsgissningen", () => {
-    const base = { id: DOC, matterId: MATTER, fileName: "x.pdf" };
-    expect(manualKindOf({ ...base, documentType: "AVTAL" })).toBe("AVTAL");
-    expect(manualKindOf({ ...base, documentType: "AVTAL", analysisModel: "ollama:q" })).toBeNull();
-    expect(manualKindOf({ ...base, fileName: "hyresavtal.pdf", documentType: "AVTAL" })).toBeNull();
-    expect(manualKindOf({ ...base, documentType: "Kostnadsräkning" })).toBeNull();
   });
 });

@@ -57,16 +57,21 @@ describe("document.setPartKind", () => {
     expect((await repos.documents.getById("d1" as never))?.documentType).toBe("KALLELSE");
   });
 
-  it("första delen → documentType följer med", async () => {
-    const { caller, repos } = makeCaller();
+  it("dokumentets typer följer delarna (sidordning) och behåller de egna typerna (ADR 0038)", async () => {
+    const { caller, repos } = makeCaller({ kinds: ["KALLELSE", "STAMNING", "Sekretess"] });
     await caller.setPartKind({ partId: "p1", kind: "DELGIVNINGSKVITTO" });
-    expect((await repos.documents.getById("d1" as never))?.documentType).toBe("DELGIVNINGSKVITTO");
+    expect(await repos.documents.getById("d1" as never)).toMatchObject({
+      kinds: ["DELGIVNINGSKVITTO", "STAMNING", "Sekretess"], kindsManual: false, documentType: "DELGIVNINGSKVITTO",
+    });
   });
 
-  it("specialvärde i documentType skrivs inte över", async () => {
-    const { caller, repos } = makeCaller({ documentType: "Kostnadsräkning" });
+  it("typer som en person eller systemet satt rörs inte (även äldre specialvärde)", async () => {
+    const { caller, repos } = makeCaller({ kinds: ["AVTAL"], kindsManual: true });
     await caller.setPartKind({ partId: "p1", kind: "DOM" });
-    expect((await repos.documents.getById("d1" as never))?.documentType).toBe("Kostnadsräkning");
+    expect((await repos.documents.getById("d1" as never))?.kinds).toEqual(["AVTAL"]);
+    const legacy = makeCaller({ documentType: "Kostnadsräkning" });
+    await legacy.caller.setPartKind({ partId: "p1", kind: "DOM" });
+    expect((await legacy.repos.documents.getById("d1" as never))?.documentType).toBe("Kostnadsräkning");
   });
 
   it("okänd/raderad del → NOT_FOUND; okänd kategori avvisas av zod", async () => {

@@ -93,13 +93,13 @@ async function askOllama(config: LlmConfig, doFetch: FetchLike, text: string): P
 }
 
 /**
- * De vokabulär-taggar LLM:en nämner (skiftlägesokänslig delsträngsmatchning mot
- * den giltiga listan). Garanterar resultat ⊆ vokabulären (hallucinationer
- * filtreras bort), i vokabulärens ordning.
+ * De av byråns egna typer som LLM:en nämner (skiftlägesokänslig
+ * delsträngsmatchning mot listan). Garanterar resultat ⊆ listan
+ * (hallucinationer filtreras bort), i listans ordning.
  */
-function matchTags(raw: string, vocabulary: readonly string[]): string[] {
+function matchKinds(raw: string, vocabulary: readonly string[]): string[] {
   const upper = raw.toUpperCase();
-  return vocabulary.filter((tag) => tag.trim() !== "" && upper.includes(tag.toUpperCase()));
+  return vocabulary.filter((kind) => kind.trim() !== "" && upper.includes(kind.toUpperCase()));
 }
 
 /**
@@ -120,12 +120,12 @@ export function createOllamaPartClassifier(
 }
 
 /**
- * Bygg en tagg-förslagare bunden till `config` (#621 B2). Returnerar en funktion
- * `(text, vocabulary) → string[]` som föreslår en DELMÄNGD av byråns vokabulär.
- * Fail-soft: tom vokabulär / för kort text / LLM-fel → tom lista (användaren
- * taggar då manuellt). Resultatet är garanterat ⊆ vokabulären.
+ * Bygg en förslagare av byråns egna dokumenttyper (ADR 0038, tidigare taggar
+ * #621 B2). Returnerar `(text, vocabulary) → string[]`, en DELMÄNGD av byråns
+ * egna typer. Fail-soft: tom lista / för kort text / LLM-fel → tom lista.
+ * Resultatet är garanterat ⊆ listan.
  */
-export function createOllamaTagSuggester(
+export function createOllamaKindSuggester(
   config: LlmConfig,
   opts: { fetch?: FetchLike } = {},
 ): (text: string, vocabulary: readonly string[]) => Promise<string[]> {
@@ -134,9 +134,9 @@ export function createOllamaTagSuggester(
     if (vocabulary.length === 0 || text.trim().length < MIN_TEXT) return [];
     const out = await chat(
       config, doFetch,
-      "Du etiketterar svenska juridiska dokument. Välj BARA bland de givna etiketterna. Svara med en kommaseparerad lista (eller tomt om ingen passar).",
-      `Giltiga etiketter: ${vocabulary.join(", ")}.\nVilka av dessa passar dokumentet? Hitta inte på egna.\n\nDokument:\n"""${text.slice(0, MAX_TEXT)}"""`,
+      "Du typar svenska juridiska dokument. Välj BARA bland de givna dokumenttyperna. Svara med en kommaseparerad lista (eller tomt om ingen passar).",
+      `Giltiga dokumenttyper: ${vocabulary.join(", ")}.\nVilka av dessa passar dokumentet? Hitta inte på egna.\n\nDokument:\n"""${text.slice(0, MAX_TEXT)}"""`,
     );
-    return out ? matchTags(out, vocabulary) : [];
+    return out ? matchKinds(out, vocabulary) : [];
   };
 }

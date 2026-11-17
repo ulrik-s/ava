@@ -115,10 +115,11 @@ describe("runScenario (#880)", () => {
     expect(accontos.every((a) => a.args.settlementBreakdown.rows.some((r: Any) => r.label.includes("Upparbetat arbete")))).toBe(true);
 
     // Inkommande svaromål registreras med direction INKOMMANDE.
-    const svaromal = calls.find((x) => x.method === "document.register" && x.args.documentType === "Svaromål");
+    const svaromal = calls.find((x) => x.method === "document.register" && x.args.title === "Svaromål från motpartsombud");
+    expect(svaromal?.args.kinds).toEqual(["INLAGA"]);
     expect(svaromal?.args.direction).toBe("INKOMMANDE");
     // Utgående inlaga med direction UTGAENDE.
-    const inlaga = calls.find((x) => x.method === "document.register" && x.args.documentType === "Inlaga");
+    const inlaga = calls.find((x) => x.method === "document.register" && x.args.kinds?.[0] === "INLAGA" && x.args.direction === "UTGAENDE");
     expect(inlaga?.args.direction).toBe("UTGAENDE");
 
     // Avslutas med kostnadsräkning → beslut → slutreglering.

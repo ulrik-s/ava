@@ -135,10 +135,10 @@ describe("administrationen körs om av servern (#1344)", () => {
       expect((await repos.offices.getById(id))?.name).toBe("Filial");
     });
 
-    it("medlem: övriga inställningar med oförändrat bankgiro → accepterade", async () => {
-      const res = await replayer.replay(call("organization.updateSettings", { documentTags: ["Avtal"], bankgiro: "111-1111" }), asMember);
+    it("medlem: övriga inställningar med oförändrat bankgiro → accepterade (köat anrop i äldre form, ADR 0038)", async () => {
+      const res = await replayer.replay(call("organization.updateSettings", { documentTags: ["Sekretess"], bankgiro: "111-1111" }), asMember);
       expect(res).toMatchObject({ status: "accepted" });
-      expect((await repos.organizations.getById(ORG))?.documentTags).toEqual(["Avtal"]);
+      expect(await repos.organizations.getById(ORG)).toMatchObject({ documentKinds: ["Sekretess"], documentTags: [] });
     });
 
     it("admin: byte av bankgiro → accepterat", async () => {

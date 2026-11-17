@@ -11,16 +11,20 @@ export const KNOWN_KINDS = [
   "DELGIVNINGSKVITTO",
   "INLAGA",
   "DOM",
+  "FORORDNANDE",
+  "FORELAGGANDE",
   "BEVIS",
   "FULLMAKT",
   "AVTAL",
   "FAKTURA",
+  "KOSTNADSRAKNING",
   "RAPPORT",
+  "EPOST",
   "OKLASSIFICERAT",
 ] as const;
 export type DocumentKind = (typeof KNOWN_KINDS)[number];
 
-/** True om `value` är en känd kategori-kod (annars t.ex. "Kostnadsräkning"/fritext). */
+/** True om `value` är en inbyggd typkod (annars en av byråns egna typer, ADR 0038). */
 export function isDocumentKind(value: unknown): value is DocumentKind {
   return typeof value === "string" && (KNOWN_KINDS as readonly string[]).includes(value);
 }
@@ -37,13 +41,17 @@ export const KIND_DESCRIPTIONS: Readonly<Record<DocumentKind, string>> = {
   FUP: "förundersökningsprotokoll från polis eller åklagare (förhör, utredning i brottmål)",
   DELGIVNINGSKVITTO: "delgivningskvitto eller mottagningsbevis som ska undertecknas och skickas tillbaka",
   INLAGA: "inlaga eller skrift till domstol eller myndighet: yttrande, svaromål, överklagande, bemötande",
-  DOM: "dom, beslut eller föreläggande från domstol eller myndighet (domslut, domskäl)",
+  DOM: "dom eller beslut från domstol eller myndighet (domslut, domskäl)",
+  FORORDNANDE: "förordnande, t.ex. som offentlig försvarare, målsägandebiträde, särskild företrädare eller god man",
+  FORELAGGANDE: "föreläggande från domstol eller myndighet att göra något inom viss tid",
   BEVIS: "bevisning, bilaga, fotografi, intyg som åberopas som bevis",
   FULLMAKT: "fullmakt att företräda någon",
   AVTAL: "avtal, kontrakt, hyresavtal, köpeavtal, överenskommelse",
   FAKTURA: "faktura, kvitto, räkning med belopp att betala",
+  KOSTNADSRAKNING: "kostnadsräkning: ombudets eller försvararens yrkande om ersättning för arbete, tidsspillan och utlägg",
   RAPPORT: "utlåtande, sakkunnigutlåtande, utredning, rapport",
-  OKLASSIFICERAT: "inget av ovanstående (t.ex. brev, e-post, anteckning)",
+  EPOST: "e-postmeddelande",
+  OKLASSIFICERAT: "inget av ovanstående (t.ex. brev eller anteckning)",
 };
 
 /**
@@ -62,12 +70,16 @@ const FILENAME_RULES: ReadonlyArray<readonly [RegExp, DocumentKind]> = [
   [/delgivning/, "DELGIVNINGSKVITTO"],
   [/(\bfup\b|förundersökning|forundersokning)/, "FUP"],
   [/(inlaga|yttr|svaromål|svaromal|överklag|overklag|bemötande|bemotande)/, "INLAGA"],
+  [/(förordnande|forordnande)/, "FORORDNANDE"],
+  [/(föreläggande|forelaggande)/, "FORELAGGANDE"],
+  [/(kostnadsräkning|kostnadsrakning)/, "KOSTNADSRAKNING"],
   [/(dom|beslut|tingsr|domstol)/, "DOM"],
   [/(bevis|fotografi|bilaga|exhibit)/, "BEVIS"],
   [/(fullmakt|poa|power)/, "FULLMAKT"],
   [/(avtal|kontrakt|hyres|köpe|köpeavtal)/, "AVTAL"],
   [/(faktura|invoice|kvitto|receipt)/, "FAKTURA"],
   [/(rapport|utlatande|utlåtande|expert)/, "RAPPORT"],
+  [/\.(eml|msg)$/, "EPOST"],
 ];
 
 export function guessFromFilename(name: string): DocumentKind {
@@ -76,18 +88,8 @@ export function guessFromFilename(name: string): DocumentKind {
 }
 
 /**
- * Specialvärde i `documentType` (ej en kategorikod: "Kostnadsräkning",
- * "E-post", äldre fritext). Klassificeringen skriver aldrig över det, och
- * sådana dokument får inga delar (#1220).
- */
-export function isSpecialDocumentType(documentType: string | null | undefined): boolean {
-  return !!documentType && !isDocumentKind(documentType);
-}
-
-/**
  * Visningsnamn per kategori — UI:t visar aldrig råa koder ("STAMNING"). DOM
- * täcker även beslut och förelägganden (se `KIND_DESCRIPTIONS`), därav
- * "Dom/beslut".
+ * täcker även beslut (se `KIND_DESCRIPTIONS`), därav "Dom/beslut".
  */
 export const KIND_LABELS: Readonly<Record<DocumentKind, string>> = {
   STAMNING: "Stämning",
@@ -96,17 +98,21 @@ export const KIND_LABELS: Readonly<Record<DocumentKind, string>> = {
   DELGIVNINGSKVITTO: "Delgivningskvitto",
   INLAGA: "Inlaga",
   DOM: "Dom/beslut",
+  FORORDNANDE: "Förordnande",
+  FORELAGGANDE: "Föreläggande",
   BEVIS: "Bevis",
   FULLMAKT: "Fullmakt",
   AVTAL: "Avtal",
   FAKTURA: "Faktura",
+  KOSTNADSRAKNING: "Kostnadsräkning",
   RAPPORT: "Rapport",
+  EPOST: "E-post",
   OKLASSIFICERAT: "Övrigt",
 };
 
 /**
- * Visningsnamn för ett `documentType`-värde. Kända koder → etikett; allt annat
- * (specialvärden som "Kostnadsräkning"/"E-post", äldre fritext) visas som det är.
+ * Visningsnamn för en typ. Inbyggda koder → etikett; byråns egna typer
+ * (ADR 0038) är sitt eget visningsnamn.
  */
 export function kindLabel(value: string): string {
   return isDocumentKind(value) ? KIND_LABELS[value] : value;

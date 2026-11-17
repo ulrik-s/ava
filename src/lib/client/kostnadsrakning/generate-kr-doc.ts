@@ -15,7 +15,6 @@
 
 import type { KrDocumentFields, TimeEntryInput } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
 import { asId, type BillingRunId, type MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import type { DocUtils, RegisterMut } from "./generate-faktura-doc";
@@ -95,7 +94,7 @@ export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
   const storagePath = `documents/content/${docId}.pdf`;
   await register.mutateAsync({
     id: asId<"DocumentId">(docId), matterId, fileName, mimeType: "application/pdf",
-    sizeBytes: bytes.byteLength, storagePath, documentType: KOSTNADSRAKNING_DOCUMENT_TYPE,
+    sizeBytes: bytes.byteLength, storagePath, kinds: ["KOSTNADSRAKNING"],
     analysisStatus: "DONE",
     ...omitUndefined({ billingRunId: ownBillingRunId }),
   });

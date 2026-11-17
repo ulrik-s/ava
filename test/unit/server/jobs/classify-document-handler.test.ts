@@ -15,8 +15,8 @@ function jobFor(documentId: string): Job {
 describe("createClassifyDocumentHandler", () => {
   it("klassificerar via filnamn + skriver tillbaka metadata", async () => {
     const documents = {
-      getById: vi.fn(async () => ({ id: "d1", fileName: "Stämning.pdf" })),
-      updateMetadata: vi.fn(async () => ({})),
+      getById: vi.fn(() => Promise.resolve({ id: "d1", fileName: "Stämning.pdf" })),
+      updateMetadata: vi.fn(() => Promise.resolve({})),
     };
     const handler = createClassifyDocumentHandler({ documents: documents });
     await handler(jobFor("d1"));
@@ -25,6 +25,8 @@ describe("createClassifyDocumentHandler", () => {
     const [id, patch] = documents.updateMetadata.mock.calls[0]!;
     expect(id).toBe("d1");
     expect(patch).toMatchObject({
+      kinds: ["STAMNING"],
+      kindsManual: false,
       documentType: "STAMNING",
       analysisStatus: "DONE",
       analysisModel: "filename-heuristic",
@@ -34,8 +36,8 @@ describe("createClassifyDocumentHandler", () => {
 
   it("saknat dokument (raderat) → ingen skrivning", async () => {
     const documents = {
-      getById: vi.fn(async () => null),
-      updateMetadata: vi.fn(async () => ({})),
+      getById: vi.fn(() => Promise.resolve(null)),
+      updateMetadata: vi.fn(() => Promise.resolve({})),
     };
     const handler = createClassifyDocumentHandler({ documents: documents });
     await handler(jobFor("borta"));
@@ -44,29 +46,41 @@ describe("createClassifyDocumentHandler", () => {
 
   it("använder injicerad classify (Fas 3 LLM-väg) + model-etikett", async () => {
     const documents = {
-      getById: vi.fn(async () => ({ id: "d1", fileName: "x.bin" })),
-      updateMetadata: vi.fn(async () => ({})),
+      getById: vi.fn(() => Promise.resolve({ id: "d1", fileName: "x.bin" })),
+      updateMetadata: vi.fn(() => Promise.resolve({})),
     };
-    const classify = vi.fn(async () => "AVTAL" as const);
+    const classify = vi.fn(() => Promise.resolve("AVTAL" as const));
     const handler = createClassifyDocumentHandler({ documents: documents, classify, model: "ollama:llama" });
     await handler(jobFor("d1"));
     // Utan readPages finns ingen text server-side → tom sträng.
     expect(classify).toHaveBeenCalledWith(expect.objectContaining({ fileName: "x.bin" }), "");
-    expect(documents.updateMetadata.mock.calls[0]![1]).toMatchObject({ documentType: "AVTAL", analysisModel: "ollama:llama" });
+    expect(documents.updateMetadata.mock.calls[0]?.[1]).toMatchObject({ kinds: ["AVTAL"], analysisModel: "ollama:llama" });
   });
 
-  it("suggestTags (#621 B2) slår ihop förslag med befintliga taggar (union, ingen clobber)", async () => {
+  it("suggestKinds (ADR 0038): byråns egna typer läggs efter delarnas, och taggarna töms", async () => {
     const documents = {
-      getById: vi.fn(async () => ({ id: "d1", fileName: "x.pdf", tags: ["Manuell", "Sekretess"] })),
-      updateMetadata: vi.fn(async () => ({})),
+      getById: vi.fn(() => Promise.resolve({ id: "d1", fileName: "avtal.pdf", tags: ["Gammal"] })),
+      updateMetadata: vi.fn(() => Promise.resolve({})),
     };
-    const suggestTags = vi.fn(async () => ["Sekretess", "Brådskande"]);
-    const handler = createClassifyDocumentHandler({ documents: documents, suggestTags });
+    const suggestKinds = vi.fn(() => Promise.resolve(["Sekretess", "Brådskande"]));
+    const handler = createClassifyDocumentHandler({ documents: documents, suggestKinds });
     await handler(jobFor("d1"));
-    // union(["Manuell","Sekretess"], ["Sekretess","Brådskande"]) → dedupat
-    expect(documents.updateMetadata.mock.calls[0]![1]).toMatchObject({
-      tags: ["Manuell", "Sekretess", "Brådskande"],
+    expect(documents.updateMetadata.mock.calls[0]?.[1]).toMatchObject({
+      kinds: ["AVTAL", "Sekretess", "Brådskande"], kindsManual: false, tags: [],
     });
+  });
+
+  it("typer som en person eller systemet satt rörs inte (ingen typ i patchen)", async () => {
+    const documents = {
+      getById: vi.fn(() => Promise.resolve({ id: "d1", fileName: "avtal.pdf", kinds: ["KOSTNADSRAKNING"], kindsManual: true })),
+      updateMetadata: vi.fn(() => Promise.resolve({})),
+    };
+    const suggestKinds = vi.fn(() => Promise.resolve(["Sekretess"]));
+    await createClassifyDocumentHandler({ documents: documents, suggestKinds })(jobFor("d1"));
+    const patch = documents.updateMetadata.mock.calls[0]?.[1];
+    expect(patch).not.toHaveProperty("kinds");
+    expect(patch).toMatchObject({ analysisStatus: "DONE" });
+    expect(suggestKinds).not.toHaveBeenCalled();
   });
 
   it("suggestFromText (#988) körs EFTER metadata-skrivningen, med jobbets text", async () => {
@@ -74,7 +88,7 @@ describe("createClassifyDocumentHandler", () => {
     // klassificeringen. Jobbet är idempotent och körs om.
     const calls: string[] = [];
     const documents = {
-      getById: vi.fn(async () => ({ id: "d1", fileName: "Stämning.pdf", storagePath: "documents/content/a.pdf", mimeType: "application/pdf" })),
+      getById: vi.fn(() => Promise.resolve({ id: "d1", fileName: "Stämning.pdf", storagePath: "documents/content/a.pdf", mimeType: "application/pdf" })),
       updateMetadata: vi.fn(async () => { calls.push("updateMetadata"); return {}; }),
     };
     const suggestFromText = vi.fn(async () => { calls.push("suggestFromText"); });
@@ -85,7 +99,7 @@ describe("createClassifyDocumentHandler", () => {
     expect(suggestFromText).toHaveBeenCalledWith("d1", "");
   });
 
-  it("#1215: sidorna läses EN gång, indexeras först och texten delas av classify/tags/förslag", async () => {
+  it("#1215: sidorna läses EN gång, indexeras först och texten delas av classify/typförslag/förslag", async () => {
     const calls: string[] = [];
     const doc = { id: "d1", fileName: "Stämning.pdf", storagePath: "documents/content/a.pdf", mimeType: "application/pdf", tags: [] };
     const documents = {
@@ -95,10 +109,10 @@ describe("createClassifyDocumentHandler", () => {
     const readPages = vi.fn(async () => { calls.push("readPages"); return ["sida ett", "sida två"]; });
     const pageIndex = { replacePages: vi.fn(async () => { calls.push("replacePages"); }) };
     const classify = vi.fn(async () => { calls.push("classify"); return "STAMNING" as const; });
-    const suggestTags = vi.fn(async () => ["Tvist"]);
-    const suggestFromText = vi.fn(async () => {});
+    const suggestKinds = vi.fn(() => Promise.resolve(["Tvist"]));
+    const suggestFromText = vi.fn(() => Promise.resolve());
     await createClassifyDocumentHandler({
-      documents: documents, readPages, pageIndex, classify, suggestTags, suggestFromText,
+      documents: documents, readPages, pageIndex, classify, suggestKinds, suggestFromText,
     })(jobFor("d1"));
 
     expect(readPages).toHaveBeenCalledTimes(1);
@@ -107,24 +121,24 @@ describe("createClassifyDocumentHandler", () => {
     expect(calls.slice(0, 3)).toEqual(["readPages", "replacePages", "classify"]);
     const text = "sida ett\n\nsida två";
     expect(classify).toHaveBeenCalledWith(expect.anything(), text);
-    expect(suggestTags).toHaveBeenCalledWith(expect.anything(), text);
+    expect(suggestKinds).toHaveBeenCalledWith(expect.anything(), text);
     expect(suggestFromText).toHaveBeenCalledWith("d1", text);
   });
 
   it("#1215: readPages utan pageIndex → texten används, inget indexeras", async () => {
     const documents = {
-      getById: vi.fn(async () => ({ id: "d1", fileName: "x.pdf" })),
-      updateMetadata: vi.fn(async () => ({})),
+      getById: vi.fn(() => Promise.resolve({ id: "d1", fileName: "x.pdf" })),
+      updateMetadata: vi.fn(() => Promise.resolve({})),
     };
-    const classify = vi.fn(async () => "AVTAL" as const);
+    const classify = vi.fn(() => Promise.resolve("AVTAL" as const));
     await createClassifyDocumentHandler({ documents: documents, readPages: async () => ["avtal"], classify })(jobFor("d1"));
     expect(classify).toHaveBeenCalledWith(expect.anything(), "avtal");
   });
 
   it("utan suggestFromText hoppas förslagssteget över (klient-tier:erna)", async () => {
     const documents = {
-      getById: vi.fn(async () => ({ id: "d1", fileName: "x.pdf" })),
-      updateMetadata: vi.fn(async () => ({})),
+      getById: vi.fn(() => Promise.resolve({ id: "d1", fileName: "x.pdf" })),
+      updateMetadata: vi.fn(() => Promise.resolve({})),
     };
     // Ska inte kasta trots att dep:en saknas — optional call, inte ett villkor.
     await createClassifyDocumentHandler({ documents: documents })(jobFor("d1"));
@@ -132,19 +146,18 @@ describe("createClassifyDocumentHandler", () => {
   });
 
   it("raderat dokument → varken metadata eller förslag skrivs", async () => {
-    const suggestFromText = vi.fn(async () => {});
-    const documents = { getById: vi.fn(async () => null), updateMetadata: vi.fn(async () => ({})) };
+    const suggestFromText = vi.fn(() => Promise.resolve());
+    const documents = { getById: vi.fn(() => Promise.resolve(null)), updateMetadata: vi.fn(() => Promise.resolve({})) };
     await createClassifyDocumentHandler({ documents: documents, suggestFromText })(jobFor("borta"));
     expect(suggestFromText).not.toHaveBeenCalled();
   });
 
-  it("utan suggestTags rörs `tags` inte (ingen tags-nyckel i patchen)", async () => {
+  it("utan suggestKinds blir typerna bara klassificerarens", async () => {
     const documents = {
-      getById: vi.fn(async () => ({ id: "d1", fileName: "x.pdf", tags: ["Manuell"] })),
-      updateMetadata: vi.fn(async () => ({})),
+      getById: vi.fn(() => Promise.resolve({ id: "d1", fileName: "x.pdf" })),
+      updateMetadata: vi.fn(() => Promise.resolve({})),
     };
-    const handler = createClassifyDocumentHandler({ documents: documents });
-    await handler(jobFor("d1"));
-    expect(documents.updateMetadata.mock.calls[0]![1]).not.toHaveProperty("tags");
+    await createClassifyDocumentHandler({ documents: documents })(jobFor("d1"));
+    expect(documents.updateMetadata.mock.calls[0]?.[1]).toMatchObject({ kinds: ["OKLASSIFICERAT"] });
   });
 });

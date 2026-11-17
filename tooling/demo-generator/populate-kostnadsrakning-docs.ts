@@ -14,7 +14,7 @@
  * Speglar `populateInvoiceDocs`: renderar kostnadsräkningen till PDF med APPENS
  * renderare (`renderKostnadsrakningPdf`, samma som i appen — inga HTML-dokument,
  * #1439), skriver binären via sink:en och registrerar via `document.register` med
- * documentType="Kostnadsräkning" (samma tagg som `kostnadsrakning.record`
+ * typen KOSTNADSRAKNING (samma som `kostnadsrakning.record`
  * sätter i prod, så `findKrDocument` i billing-panelen hittar den).
  */
 
@@ -117,7 +117,7 @@ export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?
       fileName: `Kostnadsräkning ${run.matter.matterNumber}.pdf`,
       mimeType: "application/pdf", sizeBytes: size, storagePath,
       title: `Kostnadsräkning — ${run.matter.matterNumber}`,
-      documentType: "Kostnadsräkning", analysisStatus: "DONE",
+      kinds: ["KOSTNADSRAKNING"], analysisStatus: "DONE",
       // Kostnadsräkningen skickas till domstolen (#901) → syns i "skickat till domstol"-filtret.
       direction: "UTGAENDE", recipient: "DOMSTOL",
       createdAt: run.createdAt ? new Date(run.createdAt).toISOString() : undefined,

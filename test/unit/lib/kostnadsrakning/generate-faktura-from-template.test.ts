@@ -1,6 +1,6 @@
 /**
  * Tester för generateFakturaFromTemplate (#852/#1439) — faktura-dokumentet är en
- * PDF: registrerar documentType=Faktura + invoiceId och renderar
+ * PDF: registrerar typen FAKTURA (ADR 0038) + invoiceId och renderar
  * fakturanummer/mottagare/belopp i PDF:en. Inga nya HTML-dokument.
  */
 
@@ -44,7 +44,7 @@ describe("generateFakturaFromTemplate", () => {
       utils,
     });
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      matterId: "m1", documentType: "Faktura", invoiceId: "inv-9", mimeType: "application/pdf",
+      matterId: "m1", kinds: ["FAKTURA"], invoiceId: "inv-9", mimeType: "application/pdf",
     }));
     expect(persistGeneratedDoc).toHaveBeenCalled();
     // uuid-id: servern lagrar bara uuid-nycklade rader (#1143, missades i #1124).

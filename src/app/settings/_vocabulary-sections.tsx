@@ -3,15 +3,16 @@
 /**
  * Byråns ordlistor i inställningarna — en lista strängar som sparas hel via
  * `organization.updateSettings`:
- * - `DocumentTagsSection` (#621) — giltiga dokument-etiketter. Dokument får bara
- *   bära taggar ur denna lista (LLM-förslag + manuell redigering valideras mot den).
+ * - `DocumentKindsSection` (ADR 0038) — byråns egna dokumenttyper, utöver de
+ *   inbyggda. Valen i "Redigera uppgifter…" och det AI:n föreslår bland.
  * - `MatterTypesSection` — ärendetyperna man väljer bland när ett ärende läggs upp.
  */
 
 import { useState } from "react";
 import { trpc } from "@/lib/client/trpc";
+import { KIND_LABELS, KNOWN_KINDS } from "@/lib/shared/document-kind";
 
-type VocabularyField = "documentTags" | "matterTypes";
+type VocabularyField = "documentKinds" | "matterTypes";
 
 interface VocabularySectionProps {
   field: VocabularyField;
@@ -20,13 +21,13 @@ interface VocabularySectionProps {
   placeholder: string;
 }
 
-export function DocumentTagsSection() {
+export function DocumentKindsSection() {
   return (
     <VocabularySection
-      field="documentTags"
-      intro="Etiketter som dokument kan taggas med. AI:n föreslår ur listan och handläggare kan komplettera per dokument — bara dessa värden är giltiga."
-      empty="Inga etiketter ännu."
-      placeholder="Ny etikett, t.ex. Sekretess"
+      field="documentKinds"
+      intro={`Byråns egna dokumenttyper. De inbyggda finns alltid: ${KNOWN_KINDS.map((k) => KIND_LABELS[k]).join(", ")}. Ett dokument kan ha flera typer; AI:n föreslår bland dessa och handläggarna väljer i "Redigera uppgifter…".`}
+      empty="Inga egna dokumenttyper ännu."
+      placeholder="Ny dokumenttyp, t.ex. Sekretessbeslut"
     />
   );
 }

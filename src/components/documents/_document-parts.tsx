@@ -12,7 +12,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/client/trpc";
 import { isDocumentKind, KIND_LABELS, KNOWN_KINDS, kindLabel } from "@/lib/shared/document-kind";
-import { kindsOf } from "@/lib/shared/document-part-kinds";
+import { documentKinds, type KindsCarrier } from "@/lib/shared/document-kinds";
 import type { DocumentPart } from "@/lib/shared/schemas/document";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
 
@@ -20,17 +20,16 @@ import type { DocumentId } from "@/lib/shared/schemas/ids";
 export type DocumentPartView = Pick<DocumentPart, "id" | "kind" | "fromPage" | "toPage" | "source">;
 
 /** Dokumentet sett av del-UI:t. */
-export interface PartsDocLike {
+export interface PartsDocLike extends Omit<KindsCarrier, "parts"> {
   id: DocumentId;
   fileName: string;
   storagePath: string;
-  documentType?: string | null | undefined;
   parts?: readonly DocumentPartView[] | undefined;
 }
 
-/** "Kallelse + Stämning + FUP" — etiketter, aldrig råa koder. null = ingen typ. */
-export function documentKindsLabel(doc: Pick<PartsDocLike, "documentType" | "parts">): string | null {
-  const kinds = kindsOf(doc);
+/** "Kallelse + Stämning + FUP" — dokumentets typer (ADR 0038), aldrig råa koder. null = ingen typ. */
+export function documentKindsLabel(doc: KindsCarrier): string | null {
+  const kinds = documentKinds(doc);
   return kinds.length > 0 ? kinds.map(kindLabel).join(" + ") : null;
 }
 

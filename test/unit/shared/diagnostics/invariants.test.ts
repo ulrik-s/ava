@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest-compat";
 import { detectMatterInvariants, type MatterInvariantInput } from "@/lib/shared/diagnostics/invariants";
-import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
 import { asId } from "@/lib/shared/schemas/ids";
 
 function input(over: Partial<MatterInvariantInput> = {}): MatterInvariantInput {
@@ -28,7 +27,7 @@ describe("detectMatterInvariants — KR_PENDING_NO_DOC", () => {
   it("flaggar inte när ett KR-dokument finns i ärendet", () => {
     const v = detectMatterInvariants(input({
       billingRuns: [pendingKr],
-      documents: [{ documentType: KOSTNADSRAKNING_DOCUMENT_TYPE }],
+      documents: [{ kinds: ["KOSTNADSRAKNING"] }],
     }));
     expect(v).toHaveLength(0);
   });

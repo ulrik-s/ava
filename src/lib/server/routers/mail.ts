@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { kindsFields } from "@/lib/shared/document-kinds";
 import { mailDocumentId } from "@/lib/shared/mail-document-id";
 import { asId, documentFolderIdSchema, type MatterId, matterIdSchema, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE } from "@/lib/shared/time-hours";
@@ -132,7 +133,8 @@ async function storeMail(ctx: MailCtx & { ports: { content: { write(p: string, b
     analysisStatus: "PENDING" as const,
     uploadedById: asId<"UserId">(ctx.user.id),
     title: input.subject,
-    documentType: "E-post",
+    // Systemet satte typen → AI:n ändrar den inte (ADR 0038).
+    ...kindsFields(["EPOST"], true),
     createdAt: new Date(input.receivedAt),
   });
   await emit.documentUploaded(ctx, { id: asId<"DocumentId">(id), fileName, matterId: input.matterId });

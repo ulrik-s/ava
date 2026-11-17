@@ -137,7 +137,7 @@ describe("classify-document → kontakt-/händelseförslag (server-first)", () =
     expect(replaced).toEqual([{ id: documentId, pages: [TEXT] }]);
   });
 
-  it("#1215: med LLM + vokabulär delar klassificering och taggar samma (enda) läsning", async () => {
+  it("#1215: med LLM + byråns egna typer delar klassificering och typförslag samma (enda) läsning", async () => {
     const { documentId, suggestions, documents } = setup();
     let reads = 0;
     const base = contentWith(new TextEncoder().encode(TEXT));
@@ -165,7 +165,7 @@ describe("classify-document → kontakt-/händelseförslag (server-first)", () =
     // taggprompten går till LLM:en.
     expect(prompts).toHaveLength(1);
     expect(prompts.every((p) => p.includes("Anna Andersson"))).toBe(true);
-    expect(patches[0]).toMatchObject({ documentType: "STAMNING", tags: ["Tvist"], analysisModel: "ollama:test" });
+    expect(patches[0]).toMatchObject({ kinds: ["STAMNING", "Tvist"], documentType: "STAMNING", tags: [], analysisModel: "ollama:test" });
   });
 
   it("#1215: index-document-kön får en worker när sidor kan läsas och skrivas", async () => {

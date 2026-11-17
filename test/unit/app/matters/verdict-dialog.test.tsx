@@ -86,7 +86,7 @@ describe("VerdictDialog", () => {
     expect(text).toContain("Sammanställning");
     expect(text).toContain("Mottagare: Rättshjälpsmyndighet/domstol");
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-9", documentType: "Faktura",
+      id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-9", kinds: ["FAKTURA"],
     }));
     expect(persistGeneratedDoc).toHaveBeenCalled();
     await waitFor(() => expect(onClose).toHaveBeenCalled());

@@ -443,7 +443,7 @@ describe("organization.updateSettings", () => {
 
 /**
  * Behörighet (#1370): byråns uppgifter, kontor och uppläggning av byråer är
- * admin-only. En medlem får bara ändra dokument-etiketterna, och får skicka
+ * admin-only. En medlem får bara ändra byråns egna dokumenttyper, och får skicka
  * hela formuläret så länge övriga fält är oförändrade.
  */
 describe("organization — behörighet för icke-admin (#1370)", () => {
@@ -496,18 +496,19 @@ describe("organization — behörighet för icke-admin (#1370)", () => {
     expect(mockPrisma.organization.update).not.toHaveBeenCalled();
   });
 
-  it("LAWYER: dokument-etiketter sparas, även när formulärets övriga fält skickas oförändrade", async () => {
+  it("LAWYER: byråns egna dokumenttyper sparas, även när formulärets övriga fält skickas oförändrade", async () => {
     mockPrisma.organization.findFirst.mockResolvedValue(CURRENT);
     mockPrisma.organization.update.mockResolvedValue(CURRENT);
     await makeCaller("org-a", "LAWYER").updateSettings({
-      documentTags: ["Avtal"], name: "Advokat AB", address: "Storgatan 1", website: "https://byra.se", bankgiro: "123-4567",
+      documentKinds: ["Sekretess", "Avtal"], name: "Advokat AB", address: "Storgatan 1", website: "https://byra.se", bankgiro: "123-4567",
       // Samma karta i annan nyckelordning är oförändrad.
       hourlyRates: { TIDSSPILLAN: 150000, ARBETE: 250000 },
       // Tomt fält och saknat räknas lika.
       phone: "",
     });
     expect(mockPrisma.organization.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ documentTags: ["Avtal"] }) }),
+      // Avtal är inbyggd och hör inte till byråns egna; taggfältet töms (ADR 0038).
+      expect.objectContaining({ data: expect.objectContaining({ documentKinds: ["Sekretess"], documentTags: [] }) }),
     );
   });
 

@@ -8,7 +8,8 @@
 import type { DocumentDirection, DocumentRecipient } from "@/lib/shared/schemas/document";
 
 export interface DocTemplate {
-  documentType: string;
+  /** Dokumentets typ (ADR 0038): en inbyggd kod eller en av demobyråns egna typer. */
+  kind: string;
   direction: DocumentDirection;
   /** Motpart/mottagare (#901) — driver "dok skickade till domstol"-filtret. */
   recipient: DocumentRecipient;
@@ -124,17 +125,17 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
   // Varje ärende får en kallelse: utan den stod Händelser och
   // Förslag tomma i de flesta ärenden.
   kallelse: {
-    documentType: "Kallelse", direction: "INKOMMANDE", recipient: "DOMSTOL",
+    kind: "KALLELSE", direction: "INKOMMANDE", recipient: "DOMSTOL",
     title: "Kallelse från domstolen", summary: "Domstolen kallar till förhandling och förelägger parterna att inkomma med bevisuppgift.",
     subFolder: "Kallelser",
     body: kallelseBody,
   },
   fullmakt: {
-    documentType: "Fullmakt", direction: "UTGAENDE", recipient: "KLIENT",
+    kind: "FULLMAKT", direction: "UTGAENDE", recipient: "KLIENT",
     title: "Fullmakt", summary: "Klienten befullmäktigar ombudet att företräda i ärendet.",
   },
   stamningsansokan: {
-    documentType: "Stämningsansökan", direction: "UTGAENDE", recipient: "DOMSTOL",
+    kind: "STAMNING", direction: "UTGAENDE", recipient: "DOMSTOL",
     title: "Stämningsansökan", summary: "Ansökan om stämning ges in till tingsrätten med yrkanden och grunder.",
     // Partsblocket är det extraktionen (#988) läser: rollord + namn + person-
     // respektive organisationsnummer, precis som i en riktig ansökan.
@@ -150,15 +151,15 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
     ].join("\n"),
   },
   inlaga: {
-    documentType: "Inlaga", direction: "UTGAENDE", recipient: "DOMSTOL",
+    kind: "INLAGA", direction: "UTGAENDE", recipient: "DOMSTOL",
     title: "Inlaga till tingsrätten", summary: "Komplettering av talan samt bemötande av motpartens invändningar.",
   },
   brevTillOmbud: {
-    documentType: "Korrespondens", direction: "UTGAENDE", recipient: "MOTPART",
+    kind: "Korrespondens", direction: "UTGAENDE", recipient: "MOTPART",
     title: "Brev till motpartsombud", summary: "Förfrågan om förlikning samt begäran om handlingar.",
   },
   svaromal: {
-    documentType: "Svaromål", direction: "INKOMMANDE", recipient: "MOTPART",
+    kind: "INLAGA", direction: "INKOMMANDE", recipient: "MOTPART",
     title: "Svaromål från motpartsombud", summary: "Motparten bestrider käromålet och åberopar egen bevisning.",
     body: [
       "SVAROMÅL",
@@ -170,11 +171,11 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
     ].join("\n"),
   },
   brevFranOmbud: {
-    documentType: "Korrespondens", direction: "INKOMMANDE", recipient: "MOTPART",
+    kind: "Korrespondens", direction: "INKOMMANDE", recipient: "MOTPART",
     title: "Brev från motpartsombud", summary: "Motpartsombudet återkommer angående förlikning och tidplan.",
   },
   dom: {
-    documentType: "Dom", direction: "INKOMMANDE", recipient: "DOMSTOL",
+    kind: "DOM", direction: "INKOMMANDE", recipient: "DOMSTOL",
     title: "Dom från tingsrätten", summary: "Tingsrätten meddelar dom i målet. Se domslut och domskäl.",
     subFolder: "Domar",
     body: [
@@ -191,40 +192,40 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
   // ett ärende i BESLUTAD/ÖVERKLAGAD utan en enda handling som förklarar varför —
   // panelen visar en prutning och en pågående överklagan, akten är tom.
   arvodesbeslut: {
-    documentType: "Beslut", direction: "INKOMMANDE", recipient: "DOMSTOL",
+    kind: "DOM", direction: "INKOMMANDE", recipient: "DOMSTOL",
     title: "Beslut om ersättning till offentlig försvarare",
     summary: "Tingsrätten sätter ned det yrkade arvodet. Beslutet får överklagas särskilt.",
     subFolder: "Beslut",
   },
   overklagandeInlaga: {
-    documentType: "Inlaga", direction: "UTGAENDE", recipient: "DOMSTOL",
+    kind: "INLAGA", direction: "UTGAENDE", recipient: "DOMSTOL",
     title: "Överklagande av arvodesbeslut",
     summary: "Överklagande till hovrätten av tingsrättens nedsättning av arvodet, med begäran om full ersättning.",
     subFolder: "Överklaganden",
   },
   beslutRattshjalp: {
-    documentType: "Beslut", direction: "INKOMMANDE", recipient: "MYNDIGHET",
+    kind: "DOM", direction: "INKOMMANDE", recipient: "MYNDIGHET",
     title: "Beslut om rättshjälp", summary: "Rättshjälpsmyndighetens beslut om rättshjälpsavgiftens procentsats för ärendet.",
   },
   // Jämknings-beslut om rättshjälpsavgiftens procentsats (#901) — 5 % resp. 40 %.
   beslutRattshjalpAvgift5: {
-    documentType: "Beslut", direction: "INKOMMANDE", recipient: "MYNDIGHET",
+    kind: "DOM", direction: "INKOMMANDE", recipient: "MYNDIGHET",
     title: "Beslut om rättshjälpsavgift — 5 %", summary: "Rättshjälpsmyndighetens beslut: rättshjälpsavgiften fastställs till 5 % (arbetslös, lågt ekonomiskt underlag).",
   },
   beslutRattshjalpAvgift40: {
-    documentType: "Beslut", direction: "INKOMMANDE", recipient: "MYNDIGHET",
+    kind: "DOM", direction: "INKOMMANDE", recipient: "MYNDIGHET",
     title: "Beslut om rättshjälpsavgift — 40 %", summary: "Rättshjälpsmyndighetens jämkningsbeslut: rättshjälpsavgiften höjs till 40 % efter att klienten fått anställning (högre ekonomiskt underlag).",
   },
   rattsskyddsansokan: {
-    documentType: "Ansökan", direction: "UTGAENDE", recipient: "FORSAKRING",
+    kind: "Ansökan", direction: "UTGAENDE", recipient: "FORSAKRING",
     title: "Ansökan om rättsskydd", summary: "Begäran till försäkringsbolaget om att rättsskyddet i hemförsäkringen ska tas i anspråk för tvisten.",
   },
   rattsskyddAvslag: {
-    documentType: "Beslut", direction: "INKOMMANDE", recipient: "FORSAKRING",
+    kind: "DOM", direction: "INKOMMANDE", recipient: "FORSAKRING",
     title: "Avslag på rättsskydd", summary: "Försäkringsbolaget avslår rättsskydd — tvist anses ännu inte ha uppkommit. Ärendet drivs istället med rättshjälp.",
   },
   rattsskyddBeslutPositivt: {
-    documentType: "Beslut", direction: "INKOMMANDE", recipient: "FORSAKRING",
+    kind: "DOM", direction: "INKOMMANDE", recipient: "FORSAKRING",
     title: "Beslut om rättsskydd", summary: "Försäkringsbolaget beviljar rättsskydd: ersätter högst 100 timmar arvode till eget ombud. Från ersättningen avräknas självrisk 20 %, dock lägst 1 800 kr.",
   },
 };

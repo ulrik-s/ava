@@ -201,7 +201,7 @@
   },
   "src/app/invoices/[id]/_client.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 13
+      "count": 11
     }
   },
   "src/app/invoices/page.tsx": {
@@ -334,11 +334,6 @@
     },
     "@typescript-eslint/restrict-template-expressions": {
       "count": 2
-    }
-  },
-  "src/components/documents/_document-tags.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
     }
   },
   "src/components/documents/document-browser.tsx": {
@@ -707,9 +702,6 @@
     }
   },
   "src/lib/server/jobs/handlers/classify-document-handler.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
     "@typescript-eslint/require-await": {
       "count": 1
     }
@@ -839,7 +831,7 @@
   },
   "src/lib/server/routers/organization.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
+      "count": 2
     }
   },
   "src/lib/server/routers/paymentPlan.ts": {
@@ -2929,10 +2921,10 @@
   },
   "test/unit/server/jobs/classify-document-handler.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 4
+      "count": 1
     },
     "@typescript-eslint/require-await": {
-      "count": 29
+      "count": 8
     },
     "no-restricted-syntax": {
       "count": 1
@@ -2940,10 +2932,10 @@
   },
   "test/unit/server/jobs/classify-document-parts.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 11
+      "count": 2
     },
     "@typescript-eslint/require-await": {
-      "count": 4
+      "count": 3
     }
   },
   "test/unit/server/jobs/email-dispatch-handler.test.ts": {

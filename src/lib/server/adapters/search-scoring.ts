@@ -9,7 +9,9 @@
  * dokument träffar filtret om någon del har typen och räknas i varje dels typ.
  */
 
-import { countKinds, type KindCarrier, kindsOf } from "@/lib/shared/document-part-kinds";
+import { kindLabel } from "@/lib/shared/document-kind";
+import { documentKinds, type KindsCarrier } from "@/lib/shared/document-kinds";
+import { countKinds } from "@/lib/shared/document-part-kinds";
 
 /**
  * Kompilerad sökterm — antingen substring-matchning (snabb path) eller
@@ -56,11 +58,15 @@ export function compileNeedle(query: string): NeedleMatcher {
   };
 }
 
-/** Metadata-fälten som poängsätts (utöver innehållet). */
-export interface ScorableMeta {
+/** Metadata-fälten som poängsätts (utöver innehållet). Typerna via läsregeln (ADR 0038). */
+export interface ScorableMeta extends KindsCarrier {
   fileName?: string | null | undefined;
-  documentType?: string | null | undefined;
   summary?: string | null | undefined;
+}
+
+/** Typernas visningsnamn — sökningen matchar "Stämning", inte koden STAMNING. */
+function kindText(d: KindsCarrier): string {
+  return documentKinds(d).map(kindLabel).join(" ");
 }
 
 /** Viktad träff: `weight` om needle matchar `text`, annars 0. */
@@ -70,7 +76,7 @@ function hit(matcher: NeedleMatcher, text: string, weight: number): number {
 
 /** Sökbar metadata-text (filnamn + typ + sammanfattning). */
 export function metaHaystack(d: ScorableMeta): string {
-  return [d.fileName ?? "", d.documentType ?? "", d.summary ?? ""].join(" ");
+  return [d.fileName ?? "", kindText(d), d.summary ?? ""].join(" ");
 }
 
 /**
@@ -78,12 +84,12 @@ export function metaHaystack(d: ScorableMeta): string {
  * och +1 i typen (de mer specifika fälten). 0 = ingen metadata-träff.
  */
 export function metadataScore(d: ScorableMeta, matcher: NeedleMatcher): number {
-  return hit(matcher, metaHaystack(d), 1) + hit(matcher, d.fileName ?? "", 2) + hit(matcher, d.documentType ?? "", 1);
+  return hit(matcher, metaHaystack(d), 1) + hit(matcher, d.fileName ?? "", 2) + hit(matcher, kindText(d), 1);
 }
 
-/** Facet-räknare per kategori (delarnas typer, #1220), sorterad fallande. */
+/** Facet-räknare per typ (ADR 0038), sorterad fallande. */
 export function computeFacetEntries(
-  queryMatches: readonly KindCarrier[],
+  queryMatches: readonly KindsCarrier[],
 ): Array<{ type: string; count: number }> {
   return [...countKinds(queryMatches).entries()]
     .map(([type, count]) => ({ type, count }))
@@ -92,12 +98,12 @@ export function computeFacetEntries(
 
 /**
  * Typ-filtret som predikat. Tom lista/undefined = alla typer; annars bara
- * dokument där NÅGON del (eller documentType, utan delar) finns i listan.
+ * dokument som har NÅGON av typerna (ADR 0038).
  */
 export function documentTypeFilter(
   documentTypes: readonly string[] | undefined,
-): (d: KindCarrier) => boolean {
+): (d: KindsCarrier) => boolean {
   if (!documentTypes || documentTypes.length === 0) return () => true;
   const allowed = new Set(documentTypes);
-  return (d) => kindsOf(d).some((k) => allowed.has(k));
+  return (d) => documentKinds(d).some((k) => allowed.has(k));
 }

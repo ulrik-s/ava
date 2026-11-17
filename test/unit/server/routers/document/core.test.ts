@@ -217,20 +217,19 @@ describe("document.analyze", () => {
 });
 
 describe("document.listDocumentTypes", () => {
-  it("räknar unika documentType:er, hoppar null, sorterar på sv", async () => {
+  it("räknar dokument per typ (ADR 0038), även flera typer och äldre rader; hoppar typlösa", async () => {
     const { caller } = makeCaller({
       documents: [
-        { id: "d1", matterId: "m1", documentType: "Faktura", fileName: "1" },
-        { id: "d2", matterId: "m1", documentType: "Avtal", fileName: "2" },
+        { id: "d1", matterId: "m1", kinds: ["FAKTURA"], fileName: "1" },
+        { id: "d2", matterId: "m1", kinds: ["AVTAL", "Ärende"], fileName: "2" },
         { id: "d3", matterId: "m1", documentType: "Avtal", fileName: "3" },
         { id: "d4", matterId: "m1", documentType: null, fileName: "4" },
-        { id: "d5", matterId: "m1", documentType: "Ärende", fileName: "5" },
       ],
     });
     const res = await caller.listDocumentTypes();
     expect(res).toEqual([
-      { type: "Avtal", count: 2 },
-      { type: "Faktura", count: 1 },
+      { type: "AVTAL", count: 2 },
+      { type: "FAKTURA", count: 1 },
       { type: "Ärende", count: 1 },
     ]);
   });
@@ -276,20 +275,22 @@ describe("document.markExternallyEdited", () => {
   });
 });
 
-describe("document.setTags (#621)", () => {
+describe("document.setTags (#621, föråldrad — ADR 0038)", () => {
+  // En byrå som inte flyttats än: taggvokabulären läses som egna typer.
   const withVocab = (documents: Array<Record<string, unknown>>) => ({
     organizations: [{ id: ORG, name: "Byrå A", documentTags: ["Sekretess", "Brådskande", "Original"] }],
     documents,
   });
 
-  it("sätter etiketter ur vokabulären (dedupar, bumpar INTE version)", async () => {
+  it("taggar blir egna typer (dedupade, bumpar INTE version)", async () => {
     const { caller, store } = makeCaller(withVocab([
       { id: "d1", matterId: "m1", fileName: "a.pdf", version: 3 },
     ]));
     await caller.setTags({ documentId: "d1", tags: ["Sekretess", "Original", "Sekretess"] });
     const doc = docs(store).find((d) => d.id === "d1")!;
-    expect(doc.tags).toEqual(["Sekretess", "Original"]);
-    expect(doc.version).toBe(3); // etiketter = metadata → ingen version-bump (#619)
+    expect(doc.kinds).toEqual(["Sekretess", "Original"]);
+    expect(doc.tags).toEqual([]);
+    expect(doc.version).toBe(3); // typer = metadata → ingen version-bump (#619)
   });
 
   it("vägrar etiketter utanför vokabulären (BAD_REQUEST)", async () => {
@@ -299,12 +300,12 @@ describe("document.setTags (#621)", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("tom lista rensar etiketterna", async () => {
+  it("tom lista tar bort de egna typerna (taggarna) men behåller de inbyggda", async () => {
     const { caller, store } = makeCaller(withVocab([
-      { id: "d1", matterId: "m1", fileName: "a.pdf", tags: ["Sekretess"] },
+      { id: "d1", matterId: "m1", fileName: "a.pdf", documentType: "AVTAL", tags: ["Sekretess"] },
     ]));
     await caller.setTags({ documentId: "d1", tags: [] });
-    expect(docs(store).find((d) => d.id === "d1")!.tags).toEqual([]);
+    expect(docs(store).find((d) => d.id === "d1")!.kinds).toEqual(["AVTAL"]);
   });
 
   it("vägrar dokument från annan org", async () => {
@@ -323,7 +324,7 @@ describe("document.updateMetadata", () => {
     await caller.updateMetadata({ documentId: "d1", title: "Manuell titel" });
     const doc = docs(store).find((d) => d.id === "d1")!;
     expect(doc.title).toBe("Manuell titel");
-    expect(doc.documentType).toBe("Avtal"); // oförändrad
+    expect(doc.documentType).toBe("Avtal"); // oförändrad (ingen typ skickad)
   });
 
   it("vägrar uppdatera dokument från annan org", async () => {

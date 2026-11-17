@@ -122,7 +122,7 @@ export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: Binary
       fileName: `${label} ${inv.matter.matterNumber}.pdf`,
       mimeType: "application/pdf", sizeBytes: size, storagePath,
       title: `${label} — ${inv.matter.matterNumber}`,
-      documentType: "Faktura", analysisStatus: "DONE",
+      kinds: ["FAKTURA"], analysisStatus: "DONE",
       createdAt: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString() : undefined,
     });
     count++;

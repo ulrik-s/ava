@@ -1,6 +1,6 @@
 /**
  * `classify-document`-handler (#518) — klassificerar ett uppladdat dokument
- * server-side och skriver tillbaka kategorin på dokumentet.
+ * server-side och skriver tillbaka dokumentets typer (ADR 0038).
  *
  * Fas 2: klassificeringen är filnamns-heuristik (`guessFromFilename`) —
  * deterministisk, ingen LLM, ingen modell-nedladdning. Fas 3 injicerar en
@@ -8,32 +8,32 @@
  *
  * Med `readPages` + `pageIndex` (#1215) läses dokumentets text EN gång per
  * jobb, indexeras per sida för fulltextsökning och återanvänds av
- * klassificering, taggförslag och förslagsskrivning.
+ * klassificering, typförslag och förslagsskrivning.
  *
  * Med en injicerad `suggestFromText` (#988) skriver jobbet dessutom kontakt-
  * och händelseförslag ur dokumentets text — det är server-first-tier:ns väg in
  * i `SuggestionsPanel`/`EventsPanel`.
  *
- * Sammansatta dokument (#1220): sidorna segmenteras till DELAR (kallelse +
- * stämning + FUP …) — rubrikheuristik per sida + `classifyPart` (LLM) bara på
- * kandidat-startsidor, med tak. Delarna skrivs via `replaceDocumentParts`
- * (AUTO ersätts, MANUAL bevaras vid oförändrat sidantal) och `documentType`
- * blir första delens typ — utom specialvärden (Kostnadsräkning, E-post, …)
- * som aldrig skrivs över.
+ * Typerna (ADR 0038): sidorna segmenteras till DELAR (kallelse + stämning +
+ * FUP …) — rubrikheuristik per sida + `classifyPart` (LLM) bara på kandidat-
+ * startsidor, med tak. Dokumentets typer blir delarnas typer i sidordning plus
+ * de av byråns egna typer som `suggestKinds` föreslår. Har en person eller
+ * systemet satt typerna (`kindsAreManual`) rörs varken typerna eller delarna.
  *
- * Idempotent: kör om → samma kategori skrivs igen (ofarligt), och
+ * Idempotent: kör om → samma typer skrivs igen (ofarligt), och
  * förslagsskrivningen dedupar på sitt håll. Saknat dokument (raderat innan
  * jobbet kördes) → tyst no-op.
  */
 
-import { type DocumentKind, guessFromFilename, isSpecialDocumentType } from "@/lib/shared/document-kind";
+import { type DocumentKind, guessFromFilename } from "@/lib/shared/document-kind";
+import { kindsAreManual, kindsFields } from "@/lib/shared/document-kinds";
 import { type PartClassifier, type SegmentOptions, segmentPages } from "@/lib/shared/document-segmentation";
 import { joinPages } from "@/lib/shared/extract-text";
 import type { Document } from "@/lib/shared/schemas/document";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
 import type { DocumentRepository } from "../../repositories/document-repository";
 import type { JobHandler } from "../job-worker-runtime";
-import { manualKindOf, type PartsRepo, replaceDocumentParts } from "./document-parts-writer";
+import { type PartsRepo, replaceDocumentParts } from "./document-parts-writer";
 import { type ClassifiableDoc, classifiableFields, documentJobSchema, type PageDeps, readAndIndexPages } from "./document-text";
 
 export interface ClassifyDocumentDeps extends PageDeps {
@@ -53,14 +53,13 @@ export interface ClassifyDocumentDeps extends PageDeps {
   classifyPart?: PartClassifier;
   /** Tak för LLM-anrop per dokument (default i segmenteringen). */
   maxLlmCalls?: number;
-  /** Dokumentdel-repo (#1220). Saknas → delar skrivs inte (bara documentType). */
+  /** Dokumentdel-repo (#1220). Saknas → delar skrivs inte (bara typerna). */
   parts?: PartsRepo;
   /**
-   * Föreslå etiketter ur byråns vokabulär (#621 B2, LLM-väg). Returnerar en
-   * delmängd av vokabulären; slås ihop (union) med dokumentets befintliga
-   * taggar så manuellt satta taggar ALDRIG skrivs över. Saknas → taggar rörs ej.
+   * Föreslå bland byråns egna dokumenttyper (ADR 0038, LLM-väg). Returnerar en
+   * delmängd av listan; läggs efter delarnas typer. Saknas → inga egna typer.
    */
-  suggestTags?: (doc: ClassifiableDoc, text: string) => Promise<string[]>;
+  suggestKinds?: (doc: ClassifiableDoc, text: string) => Promise<string[]>;
   /**
    * Skapa kontakt- och händelseförslag ur dokumentets TEXT (#988). Körs EFTER
    * metadata-skrivningen: misslyckas extraktionen får klassificeringen ändå
@@ -88,17 +87,21 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
   });
 
   /**
-   * Delar + kategori för dokumentet. Utan sidor (ingen text) → inga delar. En
-   * användarsatt kategori (`manualKindOf`) segmenteras inte om utan blir en
-   * manuell del över hela dokumentet.
+   * Delarnas typer i sidordning. Utan sidor (ingen text) → inga delar, bara
+   * klassificerarens typ för hela dokumentet.
    */
-  async function classifyParts(doc: Document, fields: ClassifiableDoc, pages: string[]): Promise<DocumentKind> {
+  async function partKinds(doc: Document, fields: ClassifiableDoc, pages: string[]): Promise<DocumentKind[]> {
     const fallback = await classify(fields, joinPages(pages));
-    const seed = manualKindOf(doc);
-    if (pages.length === 0) return seed ?? fallback;
-    const computed = seed ? [] : await segmentPages(pages, segmentOpts(fallback));
-    const parts = deps.parts ? await replaceDocumentParts(deps.parts, doc, computed, pages.length, seed) : computed;
-    return seed ?? parts[0]?.kind ?? fallback;
+    if (pages.length === 0) return [fallback];
+    const computed = await segmentPages(pages, segmentOpts(fallback));
+    const parts = deps.parts ? await replaceDocumentParts(deps.parts, doc, computed, pages.length) : computed;
+    return parts.length > 0 ? parts.map((p) => p.kind) : [fallback];
+  }
+
+  /** Dokumentets typer ur analysen: delarna + byråns egna typer som föreslås. */
+  async function autoKinds(doc: Document, fields: ClassifiableDoc, pages: string[], text: string): Promise<string[]> {
+    const suggested = deps.suggestKinds ? await deps.suggestKinds(fields, text) : [];
+    return [...await partKinds(doc, fields, pages), ...suggested];
   }
 
   return async (job): Promise<void> => {
@@ -110,16 +113,10 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
     // sedan fallerar är dokumentet sökbart.
     const pages = await readAndIndexPages(deps, documentId, fields);
     const text = joinPages(pages);
-    // Specialvärden (Kostnadsräkning, E-post, fritext) skrivs aldrig över och får inga delar.
-    const typePatch = isSpecialDocumentType(doc.documentType) ? {} : { documentType: await classifyParts(doc, fields, pages) };
-    // LLM-föreslagna taggar slås ihop med befintliga (union) → AI lägger till,
-    // användarens manuella taggar bevaras. Utan suggestTags rörs taggarna inte.
-    const tagPatch = deps.suggestTags
-      ? { tags: [...new Set([...(doc.tags ?? []), ...(await deps.suggestTags(fields, text))])] }
-      : {};
+    // Typer som en person eller systemet satt skrivs aldrig över (ADR 0038).
+    const kinds = kindsAreManual(doc) ? {} : kindsFields(await autoKinds(doc, fields, pages, text), false);
     await deps.documents.updateMetadata(documentId, {
-      ...typePatch,
-      ...tagPatch,
+      ...kinds,
       analyzedAt: now(),
       analysisStatus: "DONE",
       analysisModel: model,

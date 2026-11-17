@@ -46,6 +46,7 @@ import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/se
 import { emailStatusLine } from "@/lib/server/integrations/email/disabled-email-sender";
 import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-service";
 import { DEFAULT_INTEGRITY_INTERVAL_MS, runContentIntegrityCheck, scheduleContentIntegrity } from "@/lib/server/integrity/content-integrity";
+import { backfillDocumentKinds } from "@/lib/server/jobs/document-kinds-backfill";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { makeEmailPort } from "@/lib/server/jobs/queue-backed-email-sender";
@@ -55,6 +56,7 @@ import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { startErrorReporting } from "@/lib/server/observability/posthog-sink";
 import type { IBackupStore, IFeedbackSink, ILedgerService } from "@/lib/server/ports";
 import { appRouter } from "@/lib/server/routers/_app";
+import { organizationKinds } from "@/lib/shared/document-kinds";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { createLogger, jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -179,14 +181,19 @@ function main(): void {
     // dokumentets text. Deterministisk extraktion → kräver ingen LLM, bara
     // content-store:n ovan.
     suggestions: api.repos,
-    // #621 B2: LLM föreslår taggar ur byråns vokabulär (läses lazy per jobb).
-    vocabulary: async () => (await api.repos.organizations.getById(asId<"OrganizationId">(config.organizationId)))?.documentTags ?? [],
+    // ADR 0038: LLM föreslår byråns egna dokumenttyper (läses lazy per jobb).
+    vocabulary: async () => organizationKinds(await api.repos.organizations.getById(asId<"OrganizationId">(config.organizationId))),
     // #1215: jobben indexerar sidtexten för fulltextsökningen (document.search).
     pageIndex: api.pageIndex,
   });
   void startJobRuntime({ connectionString: config.databaseUrl, handlers })
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })
     .catch((err) => log(`jobb-kö start misslyckades (fortsätter utan): ${String(err)}`));
+
+  // ADR 0038: flytta dokumenttyper från de äldre fälten — efter omstarten, så
+  // även rader som den gamla servern hann skriva kommer med. Best effort.
+  void backfillDocumentKinds(api.repos, [asId<"OrganizationId">(config.organizationId)], (m) => log(`dokumenttyper: ${m}`))
+    .then((r) => log(`dokumenttyper flyttade: ${r.documents} dokument, ${r.organizations} byråer, ${r.failed} fel`));
 
   // Integritetskontroll (#1145): dokument med metadata men utan innehåll loggas
   // som `content.integrity.missing` (level error) vid start och sedan dagligen.

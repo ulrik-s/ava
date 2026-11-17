@@ -3,7 +3,7 @@
  * återställa serverns dokumentklassning.
  */
 import { describe, expect, it } from "vitest-compat";
-import { withoutServerOwned } from "@/lib/server/sync/server-owned-fields";
+import { withKindsFromLegacy, withoutServerOwned } from "@/lib/server/sync/server-owned-fields";
 
 const classified = {
   id: "d1", fileName: "stamning.pdf", documentType: "STAMNING", tags: ["tvist"], summary: "Stämning",
@@ -32,5 +32,32 @@ describe("withoutServerOwned", () => {
   it("andra entiteter lämnas orörda", () => {
     const row = { id: "t1", analysisStatus: "X" };
     expect(withoutServerOwned("timeEntry", {}, row)).toBe(row);
+  });
+});
+
+describe("withKindsFromLegacy (ADR 0038 — äldre klienters dokumentrader)", () => {
+  const stored = { id: "d1", kinds: ["KALLELSE", "Korrespondens"], kindsManual: false, documentType: "KALLELSE", tags: [] };
+
+  it("rader med kinds, andra entiteter och rader utan äldre fält passerar orörda", () => {
+    const withKinds = { kinds: ["DOM"], documentType: "DOM" };
+    expect(withKindsFromLegacy("document", stored, withKinds)).toBe(withKinds);
+    expect(withKindsFromLegacy("matter", null, { documentType: "x" })).toEqual({ documentType: "x" });
+    expect(withKindsFromLegacy("document", stored, { fileName: "nytt.pdf" })).toEqual({ fileName: "nytt.pdf" });
+  });
+
+  it("oförändrade äldre fält tas bort — typerna står kvar (även egna typer från taggar)", () => {
+    expect(withKindsFromLegacy("document", stored, { fileName: "a.pdf", documentType: "KALLELSE", tags: [] })).toEqual({ fileName: "a.pdf" });
+    // En flik som hämtade raden före flytten: fritext + taggar, samma typer.
+    expect(withKindsFromLegacy("document", stored, { documentType: "Kallelse", tags: ["Korrespondens"] })).toEqual({});
+  });
+
+  it("ändrad typ från en gammal flik blir nya typer; flaggan står kvar", () => {
+    expect(withKindsFromLegacy("document", stored, { documentType: "DOM", tags: [] }))
+      .toEqual({ kinds: ["DOM"], kindsManual: false, documentType: "DOM", tags: [] });
+  });
+
+  it("ett nytt dokument från en gammal flik får typer; specialvärden räknas som satta för hand", () => {
+    expect(withKindsFromLegacy("document", null, { id: "d2", documentType: "Kostnadsräkning" }))
+      .toEqual({ id: "d2", kinds: ["KOSTNADSRAKNING"], kindsManual: true, documentType: "KOSTNADSRAKNING", tags: [] });
   });
 });

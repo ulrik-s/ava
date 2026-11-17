@@ -1,6 +1,6 @@
 {
   "src/app/contacts/[id]/_client.tsx": 422,
-  "src/app/invoices/[id]/_client.tsx": 652,
+  "src/app/invoices/[id]/_client.tsx": 598,
   "src/app/matters/[id]/_billing-panel.tsx": 698,
   "src/app/matters/[id]/_kostnadsrakning-modal.tsx": 568,
   "src/app/matters/page.tsx": 427,
@@ -14,7 +14,6 @@
   "src/lib/server/data-store/in-memory/mutation-queue.ts": 406,
   "src/lib/server/db/schema.ts": 726,
   "src/lib/server/routers/billingRun.ts": 1179,
-  "src/lib/server/routers/document/core.ts": 408,
   "src/lib/server/routers/invoice.ts": 558,
   "src/lib/server/routers/matter.ts": 448,
   "src/lib/server/routers/reports.ts": 624,

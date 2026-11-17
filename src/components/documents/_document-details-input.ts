@@ -4,7 +4,7 @@
  */
 
 import { cleanFileName } from "@/lib/shared/document-file-name";
-import { isDocumentKind, type DocumentKind } from "@/lib/shared/document-kind";
+import { documentKinds, type KindsCarrier } from "@/lib/shared/document-kinds";
 import type { DocumentDirection, DocumentRecipient } from "@/lib/shared/schemas/document";
 
 /** Mänskliga etiketter för dokumentets motpart/mottagare (#901). */
@@ -13,11 +13,10 @@ export const DOCUMENT_RECIPIENT_LABELS: Record<string, string> = {
   FORSAKRING: "Försäkring", MYNDIGHET: "Myndighet", OVRIGT: "Övrigt",
 };
 
-/** Det dialogen behöver av dokumentet. */
-export interface EditableDocument {
+/** Det dialogen behöver av dokumentet (typerna via läsregeln, ADR 0038). */
+export interface EditableDocument extends KindsCarrier {
   fileName: string;
   title?: string | null | undefined;
-  documentType?: string | null | undefined;
   direction?: DocumentDirection | null | undefined;
   recipient?: DocumentRecipient | null | undefined;
   summary?: string | null | undefined;
@@ -27,8 +26,8 @@ export interface EditableDocument {
 export interface DocumentDetailsValues {
   title: string;
   fileName: string;
-  /** En känd typ, eller `""` = behåll nuvarande (t.ex. specialvärdet "E-post"). */
-  documentType: DocumentKind | "";
+  /** Dokumentets typer i vald ordning — den första är huvudtypen. */
+  kinds: string[];
   direction: DocumentDirection | "";
   recipient: DocumentRecipient | "";
   summary: string;
@@ -37,7 +36,7 @@ export interface DocumentDetailsValues {
 export interface DocumentDetailsChanges {
   title?: string | null;
   fileName?: string;
-  documentType?: DocumentKind;
+  kinds?: string[];
   direction?: DocumentDirection | null;
   recipient?: DocumentRecipient | null;
   summary?: string | null;
@@ -47,7 +46,7 @@ export function detailsFromDocument(d: EditableDocument): DocumentDetailsValues 
   return {
     title: d.title ?? "",
     fileName: d.fileName,
-    documentType: isDocumentKind(d.documentType) ? d.documentType : "",
+    kinds: documentKinds(d),
     direction: d.direction ?? "",
     recipient: d.recipient ?? "",
     summary: d.summary ?? "",
@@ -81,7 +80,7 @@ export function detailsChanges(d: EditableDocument, v: DocumentDetailsValues): D
     ...pick("title", nullableChange(v.title, d.title)),
     ...pick("summary", nullableChange(v.summary, d.summary)),
     ...pick("fileName", { changed: name !== null && name !== d.fileName, value: v.fileName }),
-    ...(v.documentType && v.documentType !== d.documentType ? { documentType: v.documentType } : {}),
+    ...pick("kinds", { changed: v.kinds.join("\u0000") !== documentKinds(d).join("\u0000"), value: v.kinds }),
     ...pick("direction", choiceChange(v.direction, d.direction)),
     ...pick("recipient", choiceChange(v.recipient, d.recipient)),
   };

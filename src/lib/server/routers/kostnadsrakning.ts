@@ -4,7 +4,7 @@
  *
  * En kostnadsräkning är ett dokument (HTML eller PDF) som lever som ett
  * vanligt document-objekt i AVA. Skillnaden mot vanlig upload:
- *   1. Vi taggar documentType="Kostnadsräkning"
+ *   1. Typen är KOSTNADSRAKNING (ADR 0038), satt av systemet
  *   2. Vi emittar `kostnadsrakning.generated` med matterId + totalbelopp
  *      så regelmotorn kan trigga uppföljnings-actions (kopiera till
  *      ekonomi, posta i bokföring etc).
@@ -13,8 +13,8 @@
  */
 
 import { z } from "zod";
+import { kindsFields } from "@/lib/shared/document-kinds";
 import { documentStoragePathSchema, foreignStoragePath } from "@/lib/shared/document-storage-path";
-import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
 import { asId, billingRunIdSchema, documentIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
 import { emit } from "../events/emit";
@@ -58,7 +58,8 @@ export const kostnadsrakningRouter = router({
         folderId: null,
         billingRunId: input.billingRunId ?? null,
         organizationId: ctx.orgId,
-        documentType: KOSTNADSRAKNING_DOCUMENT_TYPE,
+        // Systemet satte typen → AI:n ändrar den inte (ADR 0038).
+        ...kindsFields(["KOSTNADSRAKNING"], true),
         analysisStatus: "DONE" as const,
         analyzedAt: new Date(),
         uploadedById: asId<"UserId">(ctx.user.id),

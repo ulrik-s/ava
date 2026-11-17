@@ -33,7 +33,7 @@ export interface DocumentRepository extends Repository<Document> {
   ): Promise<{ documents: DocumentListRow[]; total: number }>;
   /** Alla dokument i ett ärende (createdAt desc) — för trädvyn. */
   listByMatter(matterId: MatterId): Promise<DocumentListRow[]>;
-  /** Distinkta documentType-värden i org:en + antal per typ (namn-sorterat, sv). */
+  /** Dokumentets typer i org:en + antal dokument per typ (ADR 0038). */
   listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>>;
   /** Dokument by id, org-scopat via ärendet. Null om saknas/annan org/raderat. */
   getByIdInOrg(id: DocumentId, organizationId: OrganizationId): Promise<DocumentAccessRow | null>;
@@ -42,6 +42,11 @@ export interface DocumentRepository extends Repository<Document> {
    * integritetskontrollen som letar metadata utan innehåll.
    */
   listStoredContent(): Promise<StoredContentRow[]>;
+  /**
+   * Ej raderade dokument som har typer bara i de äldre fälten (`documentType`/
+   * `tags`) — underlaget för serverns backfill (ADR 0038).
+   */
+  listWithLegacyKinds(): Promise<Document[]>;
   /** Flytta alla dokument i en folder till en annan (vid folder-radering). */
   reassignFolder(fromFolderId: DocumentFolderId, toFolderId: DocumentFolderId | null): Promise<void>;
 }

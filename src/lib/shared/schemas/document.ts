@@ -63,6 +63,15 @@ export const documentSchema = z.object({
   uploadedById: userIdSchema,
   // AI-genererad metadata (fylls async efter upload)
   title: z.string().nullish(),
+  /**
+   * Dokumentets typer (ADR 0038), primär först: inbyggda koder (`KNOWN_KINDS`)
+   * eller byråns egna typer. Läs alltid via `documentKinds(doc)` — äldre rader
+   * har dem bara i `documentType`/`tags`.
+   */
+  kinds: z.array(z.string()).default([]),
+  /** Satta av en person eller av systemet som skapade dokumentet → AI:n ändrar dem inte. */
+  kindsManual: z.boolean().default(false),
+  /** Föråldrad: Spegel av primärtypen för äldre klienter (ADR 0038, utfasas). */
   documentType: z.string().nullish(),
   /** Riktning (#880): inkommande (t.ex. svaromål från motpartsombud, dom) vs
    *  utgående (inlaga, brev byrån skickar). Nullish på dok där det saknar mening
@@ -71,8 +80,7 @@ export const documentSchema = z.object({
   /** Motpart/mottagare (#901): DOMSTOL/MOTPART/KLIENT/FORSAKRING/MYNDIGHET/OVRIGT.
    *  Tillsammans med `direction` driver den filtret "dok skickade till domstol". */
   recipient: documentRecipientSchema.nullish(),
-  /** Etiketter ur byråns vokabulär (#621) — flera per dokument, satta av
-   *  LLM (förslag) + användare. Komplement till `documentType`. */
+  /** Föråldrad: Ersatt av `kinds` (ADR 0038); läses bara för äldre rader. */
   tags: z.array(z.string()).default([]),
   summary: z.string().nullish(),
   analyzedAt: optionalDateLike,
@@ -116,14 +124,6 @@ export const documentPartSchema = z.object({
 }).passthrough();
 
 export type DocumentPart = z.infer<typeof documentPartSchema>;
-
-/**
- * Kanonisk `documentType`-tagg för genererade kostnadsräkningar. Sätts av
- * `kostnadsrakningRouter.record` och används av billing-UI:t + diagnostik-
- * invarianten ([[invariants]]) för att hitta KR-dokumentet i ett ärende.
- * En enda källa så taggen inte kan divergera mellan skrivning och läsning.
- */
-export const KOSTNADSRAKNING_DOCUMENT_TYPE = "Kostnadsräkning";
 
 /**
  * DocumentAnalysisSuggestion — AI-extraherat kontakt-förslag. Lagras i

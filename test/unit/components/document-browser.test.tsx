@@ -107,10 +107,9 @@ vi.mock("@/lib/client/trpc", () => ({
       delete: { useMutation: () => mutationStubs.delete },
       analyze: { useMutation: (opts?: AnalyzeOptions) => { analyzeOptions = opts ?? {}; return mutationStubs.analyze; } },
       register: { useMutation: () => mutationStubs.register },
-      setTags: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       takeoverLease: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
     },
-    organization: { getSettings: { useQuery: () => ({ data: { documentTags: [] } }) } },
+    organization: { getSettings: { useQuery: () => ({ data: { documentKinds: [] } }) } },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

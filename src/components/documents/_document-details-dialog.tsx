@@ -1,21 +1,21 @@
 "use client";
 
 /**
- * "Redigera uppgifter…" i dokumentets ⋯-meny: titel, filnamn, klassning
- * (dokumenttyp), riktning, mottagare och sammanfattning. En Spara gör ett
- * `document.updateDetails` med det som ändrats. En ändrad klassning skrivs
- * inte över av en ny AI-analys (se routern).
+ * "Redigera uppgifter…" i dokumentets ⋯-meny: titel, filnamn, typer
+ * (ADR 0038), riktning, mottagare och sammanfattning. En Spara gör ett
+ * `document.updateDetails` med det som ändrats. Typer som en person satt
+ * skrivs inte över av en ny AI-analys (se routern).
  */
 
 import { useId, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { trpc } from "@/lib/client/trpc";
 import { cleanFileName } from "@/lib/shared/document-file-name";
-import { KIND_LABELS, KNOWN_KINDS } from "@/lib/shared/document-kind";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
 import {
   canSaveDetails, detailsChanges, detailsFromDocument, DOCUMENT_RECIPIENT_LABELS, type DocumentDetailsValues, type EditableDocument,
 } from "./_document-details-input";
+import { DocumentKindsPicker, kindOptions } from "./_document-kinds-picker";
 
 const INPUT = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 const LABEL = "block text-sm font-medium text-gray-700 mb-1";
@@ -37,11 +37,6 @@ function fileNameHint(input: string, original: string): string {
   return preview && preview !== input ? `Sparas som: ${preview}` : "Filändelsen behålls. Själva filen påverkas inte.";
 }
 
-/** Förstavalet i dokumenttypen när ingen känd typ är vald (t.ex. "E-post (oförändrad)"). */
-function unchangedTypeLabel(documentType: string | null | undefined): string {
-  return documentType ? `${documentType} (oförändrad)` : "Ej klassificerad";
-}
-
 function DetailsForm({ docId, doc, onClose }: { docId: DocumentId; doc: EditableDocument; onClose: () => void }) {
   const [v, setV] = useState<DocumentDetailsValues>(() => detailsFromDocument(doc));
   const set = <K extends keyof DocumentDetailsValues>(k: K) => (value: DocumentDetailsValues[K]) => setV({ ...v, [k]: value });
@@ -49,6 +44,7 @@ function DetailsForm({ docId, doc, onClose }: { docId: DocumentId; doc: Editable
   const update = trpc.document.updateDetails.useMutation({
     onSuccess: () => { void utils.document.invalidate(); onClose(); },
   });
+  const custom = trpc.organization.getSettings.useQuery().data?.documentKinds ?? [];
   const changes = detailsChanges(doc, v);
   const canSave = Object.keys(changes).length > 0 && canSaveDetails(doc, v);
   return (
@@ -57,14 +53,7 @@ function DetailsForm({ docId, doc, onClose }: { docId: DocumentId; doc: Editable
       <Field label="Filnamn" hint={fileNameHint(v.fileName, doc.fileName)}>
         {(id) => <input id={id} className={INPUT} value={v.fileName} onChange={(e) => set("fileName")(e.target.value)} />}
       </Field>
-      <Field label="Dokumenttyp" hint="Rättar AI:ns klassning. En ny AI-analys skriver inte över ditt val.">
-        {(id) => (
-          <select id={id} className={INPUT} value={v.documentType} onChange={(e) => set("documentType")(e.target.value as DocumentDetailsValues["documentType"])}>
-            {v.documentType === "" && <option value="">{unchangedTypeLabel(doc.documentType)}</option>}
-            {KNOWN_KINDS.map((k) => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
-          </select>
-        )}
-      </Field>
+      <DocumentKindsPicker options={kindOptions(custom, v.kinds)} selected={v.kinds} onChange={set("kinds")} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Riktning">
           {(id) => (

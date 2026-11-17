@@ -12,7 +12,7 @@ import { preparePdfjsForServer } from "@/lib/server/documents/pdfjs-server-runti
 import { type SuggestionRepos, writeSuggestionsFromText } from "@/lib/server/documents/suggest-from-text";
 import { isEmailDisabled } from "@/lib/server/integrations/email/disabled-email-sender";
 import { createSmtpSender, type SmtpConfig } from "@/lib/server/integrations/email/smtp-sender";
-import { createOllamaPartClassifier, createOllamaTagSuggester, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
+import { createOllamaPartClassifier, createOllamaKindSuggester, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
 import type { IContentStore, IDocumentPageIndex } from "@/lib/server/ports";
 import { extractPages } from "@/lib/shared/extract-text";
 import { createClassifyDocumentHandler, type ClassifyDocumentDeps } from "./handlers/classify-document-handler";
@@ -37,8 +37,8 @@ export interface JobHandlerConfig {
    * content finns ingen text att läsa server-side → steget hoppas över.
    */
   suggestions?: SuggestionRepos;
-  /** Byråns etikett-vokabulär (#621 B2). Satt + content + llm → LLM föreslår
-   *  taggar ur listan vid klassificeringen. Lazy så den läses per jobb. */
+  /** Byråns egna dokumenttyper (ADR 0038). Satt + content + llm → LLM föreslår
+   *  bland dem vid klassificeringen. Lazy så den läses per jobb. */
   vocabulary?: () => Promise<readonly string[]>;
   /** Dokumentdel-repo (#1220). Satt → klassificeringsjobbet skriver delar. */
   parts?: ClassifyDocumentDeps["parts"];
@@ -82,20 +82,20 @@ function buildSuggest(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "sugges
 }
 
 /**
- * Bygg `classifyPart` (+ `suggestTags`) för dokumentjobbet. Med content-store +
+ * Bygg `classifyPart` (+ `suggestKinds`) för dokumentjobbet. Med content-store +
  * LLM-konfig: segmenteringen frågar ollama om kandidat-startsidorna (#1220;
- * fail-soft till rubrikheuristik/filnamn). Med dessutom en vokabulär (#621 B2):
- * föreslå taggar ur listan. Utan content/llm → bara heuristik.
+ * fail-soft till rubrikheuristik/filnamn). Med dessutom byråns egna typer
+ * (ADR 0038): föreslå bland dem. Utan content/llm → bara heuristik.
  */
-function buildClassify(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "classifyPart" | "suggestTags" | "model"> {
+function buildClassify(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "classifyPart" | "suggestKinds" | "model"> {
   if (!cfg.content || !cfg.llm) return {};
-  const tagger = createOllamaTagSuggester(cfg.llm);
+  const suggester = createOllamaKindSuggester(cfg.llm);
   const { vocabulary } = cfg;
   return {
     model: `ollama:${cfg.llm.model}`,
     classifyPart: createOllamaPartClassifier(cfg.llm),
     ...(vocabulary ? {
-      suggestTags: async (_doc, text) => tagger(text, await vocabulary()),
+      suggestKinds: async (_doc, text) => suggester(text, await vocabulary()),
     } : {}),
   };
 }

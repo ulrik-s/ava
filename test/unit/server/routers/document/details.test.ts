@@ -19,6 +19,7 @@ const part = (id: string, ordinal: number, pages: [number, number], kind: string
 
 function makeCaller(docExtra: Record<string, unknown> = {}, parts = [part("p1", 0, [1, 2], "KALLELSE"), part("p2", 1, [3, 3], "STAMNING")]) {
   const source = prebakeJoins({
+    organizations: [{ id: ORG, name: "Byrån", documentKinds: ["Korrespondens"] }],
     matters: [
       { id: "m1", organizationId: ORG, matterNumber: "2026-1", title: "T" },
       { id: "m2", organizationId: "org-b", matterNumber: "2026-2", title: "Annan" },
@@ -58,19 +59,27 @@ describe("document.updateDetails", () => {
     expect(await doc(repos)).toMatchObject({ title: "Ny titel", direction: "INKOMMANDE", recipient: "DOMSTOL", summary: null });
   });
 
-  it("ändrad klassning: typen sätts och första delen blir MANUAL", async () => {
+  it("flera typer: sätts i ordning, av en person (kindsManual), primärtypen speglas", async () => {
     const { caller, repos } = makeCaller();
-    await caller.updateDetails({ documentId: "d1", documentType: "DOM" });
-    expect((await doc(repos))?.documentType).toBe("DOM");
-    const [first, second] = await repos.documentParts.listForDocument("d1" as never);
-    expect(first).toMatchObject({ kind: "DOM", source: "MANUAL" });
-    expect(second).toMatchObject({ kind: "STAMNING", source: "AUTO" });
+    await caller.updateDetails({ documentId: "d1", kinds: ["Förordnande", "DOM", "Korrespondens"] });
+    expect(await doc(repos)).toMatchObject({ kinds: ["FORORDNANDE", "DOM", "Korrespondens"], kindsManual: true, documentType: "FORORDNANDE" });
   });
 
-  it("utan delar sätts bara typen", async () => {
-    const { caller, repos } = makeCaller({}, []);
-    await caller.updateDetails({ documentId: "d1", documentType: "AVTAL" });
-    expect((await doc(repos))?.documentType).toBe("AVTAL");
+  it("okänd egen typ nekas med hänvisning till inställningarna", async () => {
+    const { caller } = makeCaller();
+    await expect(caller.updateDetails({ documentId: "d1", kinds: ["Påhittad"] })).rejects.toThrow(/Okända dokumenttyper: Påhittad/);
+  });
+
+  it("en äldre fritexttyp som dokumentet redan har går att behålla", async () => {
+    const { caller, repos } = makeCaller({ kinds: ["Gammal fritext"] });
+    await caller.updateDetails({ documentId: "d1", kinds: ["Gammal fritext", "DOM"] });
+    expect((await doc(repos))?.kinds).toEqual(["Gammal fritext", "DOM"]);
+  });
+
+  it("äldre form (documentType från en gammal flik): byter primärtypen, resten står kvar", async () => {
+    const { caller, repos } = makeCaller({ kinds: ["KALLELSE", "Korrespondens"] });
+    await caller.updateDetails({ documentId: "d1", documentType: "DOM" });
+    expect(await doc(repos)).toMatchObject({ kinds: ["DOM", "Korrespondens"], kindsManual: true });
   });
 
   it("annan byrås dokument → nekas", async () => {
@@ -78,14 +87,13 @@ describe("document.updateDetails", () => {
     await expect(caller.updateDetails({ documentId: "d2", title: "x" })).rejects.toThrow();
   });
 
-  it("en ny AI-analys skriver inte över den rättade klassningen", async () => {
+  it("en ny AI-analys skriver inte över typerna en person satt", async () => {
     const { caller, repos } = makeCaller();
-    await caller.updateDetails({ documentId: "d1", documentType: "DOM" });
+    await caller.updateDetails({ documentId: "d1", kinds: ["DOM"] });
     // Samma sidantal som delarna täcker (3) → manuella delar bevaras vid omkörning.
     const pages = ["KALLELSE\nText.", "forts.", "STÄMNINGSANSÖKAN\nText."];
     const job = { id: "j", name: JOB_QUEUES.classifyDocument, data: { documentId: "d1" }, expireInSeconds: 60, heartbeatSeconds: null, retryCount: 0, signal: AbortSignal.abort() } as Job;
     await createClassifyDocumentHandler({ documents: repos.documents, parts: repos.documentParts, readPages: () => Promise.resolve(pages) })(job);
-    expect((await doc(repos))?.documentType).toBe("DOM");
-    expect((await repos.documentParts.listForDocument("d1" as never))[0]).toMatchObject({ kind: "DOM", source: "MANUAL" });
+    expect(await doc(repos)).toMatchObject({ kinds: ["DOM"], kindsManual: true, analysisStatus: "DONE" });
   });
 });

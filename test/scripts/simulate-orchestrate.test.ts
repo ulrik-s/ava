@@ -183,12 +183,12 @@ describe("runSimulation (#880 integration)", () => {
     }
   });
 
-  it("Inställningar har data: två kontor (ett huvudkontor), dokument-etiketter och standardvyer", async () => {
+  it("Inställningar har data: två kontor (ett huvudkontor), egna dokumenttyper och standardvyer", async () => {
     const { c } = await simulateDemo();
     const offices = await c.organization.listOffices() as Any[];
     expect(offices.map((o: Any) => o.name)).toEqual(["Stockholm — huvudkontor", "Göteborg"]); // huvudkontoret först
     expect(offices.filter((o: Any) => o.isMain)).toHaveLength(1);
-    expect((await c.organization.getSettings()).documentTags.length).toBeGreaterThan(3);
+    expect((await c.organization.getSettings()).documentKinds).toEqual(["Korrespondens", "Ansökan"]);
     const defaults = await c.prefs.listOrgDefaults() as Any[];
     expect(defaults.map((d: Any) => d.key).sort()).toEqual(["list.contacts", "list.invoices"]);
   });
