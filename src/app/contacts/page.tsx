@@ -35,7 +35,7 @@ const contactColumns: Column<ContactRow>[] = [
 ];
 
 function ContactsTable({ rows }: { rows: ContactRow[] }) {
-  return <DataTable prefKey="list.contacts" columns={contactColumns} data={rows} rowKey={(c) => c.id} emptyMessage="Inga kontakter." />;
+  return <DataTable prefKey="list.contacts" columns={contactColumns} data={rows} rowKey={(c) => c.id} emptyMessage="Inga parter." />;
 }
 
 function ContactsContent() {
@@ -75,19 +75,19 @@ function ContactsContent() {
       header={(
         <>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Kontakter</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Parter</h1>
         <button
           onClick={() => setShowForm(!showForm)}
           disabled={readOnly}
           title={readOnly ? "Inte tillgängligt i demo-läget" : undefined}
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
-          {showForm ? "Avbryt" : "+ Ny kontakt"}
+          {showForm ? "Avbryt" : "+ Ny part"}
         </button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
-        <input type="text" placeholder="Sök kontakter..."
+        <input type="text" placeholder="Sök parter..."
           value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="flex-1 sm:max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         <select value={typeFilter}

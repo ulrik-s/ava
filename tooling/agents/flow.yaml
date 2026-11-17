@@ -11,7 +11,11 @@
 #              (`blockerad`, `väntar-på-användaren`) eller en typ (`bugg`).
 #   by         Vem som får göra övergången: `any` (agenter och Ulrik) eller
 #              `ulrik` (bara Ulrik själv, kontrolleras i händelseloggen: inget
-#              GitHub-app-märke). Ulrik får alltid göra alla övergångar.
+#              GitHub-app-märke). Ulrik får alltid göra alla övergångar, utom
+#              dem tillståndet nekar med `refuse`.
+#   refuse     Mål som nekas från tillståndet för ALLA, även Ulrik. Vakten tar
+#              bort etiketten och kommenterar `comment` (varför, och vad man
+#              gör i stället).
 #   timeout    Flödesvaktens klocka (varje timme): så länge får en sak stå i
 #              tillståndet/flaggan innan vakten gör något själv.
 #   agent      Rutinen som arbetar med saken i det tillståndet. Flödesvakten
@@ -66,12 +70,20 @@ machines:
         dispatch: false
         transitions:
           - to: levererad
+        # Ulrik satte verifierad på fem nedbrutna av misstag (#1667): det tog bort
+        # nedbruten och startade loop 2 i onödan.
+        refuse:
+          to: [verifierad]
+          comment: Förfrågan är redan nedbruten i uppgifter, så `verifierad` behövs inte och gör ingenting. Den når användarna med nästa release.
       levererad:
         label: levererad
         color: "0e8a16"
         description: Levererad i produktion (se release:-etiketten); stängs av en Action
         agent: null
         transitions: []
+        refuse:
+          to: [verifierad]
+          comment: Förfrågan är redan levererad. Behöver användaren något mer skickar hen en ny förfrågan.
       finns-redan:
         label: finns-redan
         color: "bfdadc"

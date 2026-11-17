@@ -12,6 +12,11 @@ const mockPrisma = {
     update: vi.fn(),
     create: vi.fn(),
   },
+  // #1640: updateSettings med markerade ärendetyper läser byråns ärenden.
+  matter: {
+    findMany: vi.fn().mockResolvedValue([]),
+    update: vi.fn(),
+  },
   office: {
     findMany: vi.fn(),
     findFirst: vi.fn(),

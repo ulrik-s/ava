@@ -43,6 +43,11 @@ function targetErrors(name: string, m: Machine): string[] {
   return out;
 }
 
+function refuseErrors(name: string, m: Machine): string[] {
+  return Object.entries(m.states).flatMap(([id, s]) =>
+    (s.refuse?.to ?? []).filter((to) => !(to in m.states)).map((to) => `${name}.${id}: refuse nekar ${to}, som inte finns`));
+}
+
 function labelErrors(name: string, m: Machine): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -120,6 +125,7 @@ export function flowErrors(flow: Flow): string[] {
   return [
     ...Object.entries(flow.machines).flatMap(([name, m]) => [
       ...targetErrors(name, m),
+      ...refuseErrors(name, m),
       ...labelErrors(name, m),
       ...reachabilityErrors(name, m),
       ...agentErrors(flow, name, m),

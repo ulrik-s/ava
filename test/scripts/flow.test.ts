@@ -64,6 +64,7 @@ machines:
         description: d
         agent: L9
         transitions: [{ to: b }]
+        refuse: { to: [z], comment: k }
         timeout: { after: 1h, to: c, comment: k }
       lost:
         label: x
@@ -80,7 +81,7 @@ machines:
       s: { label: f, color: "111111", description: annan, agent: null }
 `);
     const errors = flowErrors(broken).join("\n");
-    for (const part of ["starttillståndet saknas", "övergången till b", "timeouten går till c", "används två gånger", "saknar färg", "går inte att nå", "agenten L9", "olika färg"]) {
+    for (const part of ["starttillståndet saknas", "övergången till b", "refuse nekar z", "timeouten går till c", "används två gånger", "saknar färg", "går inte att nå", "agenten L9", "olika färg"]) {
       expect(errors).toContain(part);
     }
   });
@@ -131,6 +132,17 @@ describe("övergångar", () => {
 
   it("Ulrik själv får göra alla övergångar", () => {
     expect(change("verifierad", ["undersökt", "verifierad"], "undersökt", true)).toEqual({ kind: "allow", remove: ["undersökt"] });
+  });
+
+  it("refuse nekar även Ulrik: verifierad på nedbruten eller levererad", () => {
+    const d = change("verifierad", ["nedbruten", "verifierad"], "nedbruten", true);
+    expect(d.kind).toBe("reject");
+    expect(d.kind === "reject" && d.reason).toContain("redan nedbruten");
+    expect(d.kind === "reject" && d.restore).toBeNull();
+    // Har nedbruten redan tagits bort läggs den tillbaka.
+    expect(change("verifierad", ["verifierad"], "nedbruten", true)).toMatchObject({ kind: "reject", restore: "nedbruten" });
+    expect(change("verifierad", ["levererad", "verifierad"], "levererad", true)).toMatchObject({ kind: "reject", restore: null });
+    expect(change("verifierad", ["nedbruten", "verifierad"], "nedbruten")).toMatchObject({ kind: "reject" });
   });
 
   it("en övergång som inte finns stoppas", () => {
@@ -249,6 +261,15 @@ describe("flödesvakten mot GitHub", () => {
     const d = handleLabel(flow, payload("verifierad", ["undersökt", "verifierad"]), gitHub("ulrik-s/ava-feedback", gh.run), true, () => {});
     expect(d).toEqual({ kind: "allow", remove: ["undersökt"] });
     expect(gh.calls.some((c) => c.includes("labels/und%C3%A4rs") || c.includes("labels/unders%C3%B6kt"))).toBe(true);
+  });
+
+  it("Ulrik får inte verifiera en nedbruten förfrågan; nedbruten står kvar och vakten förklarar", () => {
+    const gh = fakeGh({ "/events": [[ghEvent(1, "nedbruten", true), ghEvent(2, "verifierad", false)]] });
+    const d = handleLabel(flow, payload("verifierad", ["nedbruten", "verifierad"]), gitHub("ulrik-s/ava-feedback", gh.run), true, () => {});
+    expect(d.kind).toBe("reject");
+    expect(gh.calls.some((c) => c.includes("issues/9/labels/verifierad"))).toBe(true);
+    expect(gh.calls.some((c) => c.includes("labels/nedbruten") || c.includes("labels[]="))).toBe(false);
+    expect(gh.calls.some((c) => c.includes("/comments") && c.includes("redan nedbruten"))).toBe(true);
   });
 
   it("i rapportläge ändras inget", () => {

@@ -29,7 +29,7 @@ export function FeatureUnavailable({ title, description }: Props) {
         </p>
         <ul className="mt-3 text-xs text-amber-800 space-y-1">
           <li>• <Link href="/matters" className="underline">Ärenden</Link></li>
-          <li>• <Link href="/contacts" className="underline">Kontakter</Link></li>
+          <li>• <Link href="/contacts" className="underline">Parter</Link></li>
           <li>• <Link href="/invoices" className="underline">Fakturor</Link></li>
           <li>• <Link href="/time" className="underline">Tidregistrering</Link></li>
           <li>• <Link href="/reports" className="underline">Rapporter</Link></li>

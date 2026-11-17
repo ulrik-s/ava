@@ -10,9 +10,9 @@
  */
 
 import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
-import { lockedPaymentMethod } from "@/lib/shared/public-assignment";
+import { lockedPaymentMethod, type PublicAssignmentSettings } from "@/lib/shared/public-assignment";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
-import type { OrganizationId } from "@/lib/shared/schemas/ids";
+import { asId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import type { Repositories } from "../repositories/repositories";
 import { TRPCError } from "../trpc-core";
@@ -86,4 +86,39 @@ export async function logBillingChanges(
   if (input.rattsskyddNekadAt && !before.rattsskyddNekadAt) {
     await logMatterNote(repos, ctx, before.id, rattsskyddNekadNote(input.rattsskyddNekadAt.slice(0, 10)));
   }
+}
+
+/** Sortering på id (kodpunktsordning, oberoende av locale). */
+const byId = (a: Matter, b: Matter): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+/** Har ärendet en markerad ärendetyp men ett annat betalningssätt? */
+function needsLockedMethod(org: PublicAssignmentSettings, matter: Matter): PaymentMethod | undefined {
+  const locked = lockedPaymentMethod(org, matter.matterType);
+  return locked && matter.paymentMethod !== locked ? locked : undefined;
+}
+
+/**
+ * Befintliga ärenden (#1640): byråns ärenden vars ärendetyp är markerad som
+ * offentligt uppdrag men som har ett annat betalningssätt får det låsta
+ * betalningssättet, oavsett fakturor. Varje byte loggas som en vanlig
+ * betalningssättsändring ({@link logBillingChanges}) med anropets användare
+ * som författare. Körs inne i anroparens transaktion. Returnerar de ändrade
+ * ärendena.
+ */
+export async function applyPaymentMethodToExistingMatters(
+  repos: Pick<Repositories, "matters" | "serviceNotes">, ctx: NoteCtx, org: PublicAssignmentSettings,
+): Promise<MatterId[]> {
+  const changed: MatterId[] = [];
+  // Fast ordning (id): i ett köat anrop får anteckningarna id i skrivordning,
+  // så klientens och serverns körning ska gå igenom ärendena likadant.
+  const matters = await repos.matters.listByOrg(asId<"OrganizationId">(ctx.orgId));
+  for (const matter of matters.sort(byId)) {
+    const method = needsLockedMethod(org, matter);
+    if (!method) continue;
+    // Jämför mot läget FÖRE uppdateringen — in-memory-lagret kan mutera raden.
+    await logBillingChanges(repos, ctx, matter, { paymentMethod: method });
+    await repos.matters.update(matter.id, { paymentMethod: method });
+    changed.push(matter.id);
+  }
+  return changed;
 }

@@ -396,11 +396,11 @@ function BrowserHeader({
           </button>
         </div>
         {viewMode === "tree" && (
-          <button onClick={showNewFolder} className="text-sm text-blue-600 hover:underline">
+          <button onClick={showNewFolder} className="text-sm text-blue-700 hover:underline">
             + Ny mapp
           </button>
         )}
-        <label className="text-sm text-blue-600 hover:underline cursor-pointer">
+        <label className="text-sm text-blue-700 hover:underline cursor-pointer">
           {uploading ? "Laddar upp..." : "+ Ladda upp"}
           <input
             ref={fileInputRef}
