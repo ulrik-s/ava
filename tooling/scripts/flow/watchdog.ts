@@ -93,6 +93,35 @@ export function dueNudges(machine: Machine, nudge: Nudge, items: readonly WatchI
   });
 }
 
+/** En öppen agent-PR: issuen den stänger (`Closes #N`) och när den skapades. */
+export interface AgentPull { number: number; issue: number; createdAt: string }
+/** En mergad PR som stänger en issue. */
+export interface MergedPull { number: number; mergedAt: string }
+/** En dubblett: PR:en som ska stängas och den den dubblerar. */
+export interface DuplicatePull { number: number; keep: number }
+
+/** Issuen en PR-body stänger (`Closes #N`), eller null. */
+export function closesIssue(body: string): number | null {
+  const n = /\bCloses #(\d+)\b/.exec(body)?.[1];
+  return n === undefined ? null : Number(n);
+}
+
+/**
+ * Dubbletter: två körningar som byggt samma issue (#1681). En öppen PR är
+ * dubblett om en annan PR för issuen mergats EFTER att den skapades, eller om
+ * en äldre öppen PR bygger samma issue. En PR som skapats efter mergen är ett
+ * omtag, ingen dubblett.
+ */
+export function duplicatePulls(open: readonly AgentPull[], merged: ReadonlyMap<number, MergedPull>): DuplicatePull[] {
+  return open.flatMap((p) => {
+    const m = merged.get(p.issue);
+    const keep = m !== undefined && m.mergedAt > p.createdAt
+      ? m.number
+      : Math.min(...open.filter((o) => o.issue === p.issue).map((o) => o.number));
+    return keep === p.number ? [] : [{ number: p.number, keep }];
+  });
+}
+
 /** En CI-körning (GitHub Actions). */
 export interface CiRun {
   id: number;

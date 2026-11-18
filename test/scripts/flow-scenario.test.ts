@@ -176,7 +176,7 @@ describe("scenario: en implementation i ava", () => {
     const fired: string[] = [];
     const fetchFn: FetchFn = (url) => { fired.push(url); return noFetch(url, { method: "POST", headers: {}, body: "" }); };
     const items = watchItems(codePr, gitHub(gh.repo, gh.run));
-    const started = await runNudges(flow, codePr, items, { now: gh.now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: () => {} });
+    const started = await runNudges(flow, codePr, items, { now: gh.now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: () => {}, started: new Set() });
     expect(started).toBe(1);
     expect(fired).toHaveLength(1);
   });

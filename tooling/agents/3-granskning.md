@@ -50,6 +50,10 @@ tillstånd, t.ex. efter en nekad skrivning. Finns en godkännandekommentar från
 dig vars `Granskad commit:` är lika med nuvarande head-sha: sätt bara
 `granskad` och gå till C. Annars: granska som nedan.
 
+**Två PR:er för samma issue** (samma `Closes #N`): granska bara den äldsta.
+Klockan stänger den nyare som dubblett (#1681), och likaså en PR vars
+tvilling redan mergats. Sätt inte `blockerad` och fråga inte Ulrik.
+
 För var och en:
 
 1. Läs den kopplade issuen (`Closes #N`) och hela diffen.

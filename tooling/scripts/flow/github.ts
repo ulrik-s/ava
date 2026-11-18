@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
 import type { LabelEvent } from "./transition";
-import type { CiRun } from "./watchdog";
+import { type CiRun, closesIssue, type MergedPull } from "./watchdog";
 
 /** Kör `gh` med argumenten och ger stdout. */
 export type GhRunner = (args: readonly string[]) => string;
@@ -34,6 +34,11 @@ const itemSchema = z.object({
   body: z.string().nullable().default(""),
   labels: z.array(z.object({ name: z.string() })),
   pull_request: z.unknown().optional(),
+  created_at: z.string().optional(),
+});
+
+const mergedSearchSchema = z.object({
+  items: z.array(z.object({ number: z.number(), body: z.string().nullable(), pull_request: z.object({ merged_at: z.string().nullable() }) })),
 });
 
 const lastRunSchema = z.object({ workflow_runs: z.array(z.object({ created_at: z.string(), conclusion: z.string().nullable(), head_sha: z.string() })) });
@@ -47,8 +52,8 @@ const runsSchema = z.object({
 /** En etiketthändelse med tidpunkt. */
 export interface TimedLabelEvent extends LabelEvent { at: string }
 
-/** En öppen issue eller PR. */
-export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean }
+/** En öppen issue eller PR (`createdAt` bara för PR:er). */
+export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string }
 
 const repoEventSchema = z.object({
   id: z.number(),
@@ -83,8 +88,17 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
     /** Öppna PR:er via PR-ändpunkten (issuelistan räcker inte för alla tokens). */
     openPulls(): OpenItem[] {
       const pages = parseJsonWith(pagesSchema(itemSchema), run(["api", `repos/${repo}/pulls?state=open&per_page=100`, "--paginate", "--slurp"]));
-      return pages.flat().map((p) => ({ number: p.number, title: p.title, body: p.body ?? "", labels: p.labels.map((l) => l.name), isPr: true }));
+      return pages.flat().map((p) => ({ number: p.number, title: p.title, body: p.body ?? "", labels: p.labels.map((l) => l.name), isPr: true, createdAt: p.created_at ?? "" }));
     },
+    /** Den senast mergade PR:en som stänger issuen (`Closes #n`), eller null. */
+    mergedPullClosing(n: number): MergedPull | null {
+      const r = parseJsonWith(mergedSearchSchema, run(["api", "-X", "GET", "search/issues", "-f", `q=repo:${repo} is:pr is:merged "Closes #${n}"`]));
+      const hits = r.items.flatMap((i) => (i.pull_request.merged_at !== null && closesIssue(i.body ?? "") === n
+        ? [{ number: i.number, mergedAt: i.pull_request.merged_at }]
+        : []));
+      return hits.sort((a, b) => b.mergedAt.localeCompare(a.mergedAt))[0] ?? null;
+    },
+    closePull(n: number): void { run(["api", "-X", "PATCH", `repos/${repo}/pulls/${n}`, "-f", "state=closed"]); },
     openItems(): OpenItem[] {
       const pages = parseJsonWith(pagesSchema(itemSchema), run(["api", `repos/${repo}/issues?state=open&per_page=100`, "--paginate", "--slurp"]));
       return pages.flat().map((i) => ({ number: i.number, title: i.title, body: i.body ?? "", labels: i.labels.map((l) => l.name), isPr: i.pull_request !== undefined }));
