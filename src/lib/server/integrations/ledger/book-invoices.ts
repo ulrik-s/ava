@@ -23,7 +23,7 @@
  */
 
 import { buildSemanticVoucher, type VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
-import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
+import { isIssued } from "@/lib/shared/invoice-state-machine";
 import type { LedgerAttachment, LedgerConnector } from "./port";
 
 /** Fakturaraden drivrutinen behöver — en delmängd av listvyns rad. */
@@ -40,12 +40,10 @@ export interface BookableInvoice {
   matter: { matterNumber: string | null } | null;
 }
 
-/** Statusar som INTE bokförs. Se modulens header för varför. */
-const SKIPPED_STATUSES: ReadonlySet<string> = new Set<InvoiceStatus>(["DRAFT", "CANCELLED"]);
-
 /** Är fakturan en kandidat för bokföring? */
 export function isBookable(inv: BookableInvoice): boolean {
-  return !inv.fortnoxId && !SKIPPED_STATUSES.has(inv.status);
+  // Utställda bokförs (isIssued, samma regel som SIE-exporten); se modulens header.
+  return !inv.fortnoxId && isIssued(inv.status);
 }
 
 /** Utfallet per faktura — `error` sätts i st.f. att kasta, se `bookUnbookedInvoices`. */

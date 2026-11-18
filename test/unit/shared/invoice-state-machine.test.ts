@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import {
+  isIssued,
   canTransition,
   assertInvoiceTransition,
   transitionErrorMessage,
@@ -82,5 +83,15 @@ describe("transitionErrorMessage", () => {
     expect(msg).toMatch(/SENT/);
     expect(msg).toMatch(/CANCELLED/);
     expect(msg).not.toMatch(/INSTALLMENT_PLAN/); // ej tillåtet från DRAFT
+  });
+});
+
+describe("isIssued (#1676)", () => {
+  it("utställd = allt utom Skapad och Annullerad; kundförlust räknas; okänd status räknas inte", () => {
+    const issued: Record<InvoiceStatus, boolean> = {
+      DRAFT: false, SENT: true, PAID: true, CANCELLED: false, BAD_DEBT: true, INSTALLMENT_PLAN: true,
+    };
+    for (const [status, expected] of Object.entries(issued)) expect(isIssued(status)).toBe(expected);
+    expect(isIssued("OKÄND")).toBe(false);
   });
 });

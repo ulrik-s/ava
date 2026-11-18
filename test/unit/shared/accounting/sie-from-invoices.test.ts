@@ -19,9 +19,16 @@ const inv = (over: Partial<ExportableInvoice> = {}): ExportableInvoice => ({
 const lines = (sie: string) => sie.split("\r\n");
 
 describe("countExportable", () => {
-  it("räknar bara utfärdade (SENT/PAID/INSTALLMENT_PLAN)", () => {
-    const rows = [inv(), inv({ status: "PAID" }), inv({ status: "DRAFT" }), inv({ status: "CANCELLED" })];
-    expect(countExportable(rows)).toBe(2);
+  it("räknar utställda fakturor, kundförlust inräknad (#1676)", () => {
+    const rows = [inv(), inv({ status: "PAID" }), inv({ status: "BAD_DEBT" }), inv({ status: "INSTALLMENT_PLAN" }), inv({ status: "DRAFT" }), inv({ status: "CANCELLED" })];
+    expect(countExportable(rows)).toBe(4);
+  });
+});
+
+describe("kundförlust i SIE (#1676)", () => {
+  it("en kundförlust bokförs som i Fortnox-flödet (ADR 0007)", () => {
+    const sie = invoicesToSie([inv({ status: "BAD_DEBT" })], { company, generatedDate: "20260612" });
+    expect(sie).toContain('#VER "A" "20260042" 20260525 "Faktura F-2026-0042"');
   });
 });
 

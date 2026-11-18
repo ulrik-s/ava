@@ -9,6 +9,7 @@
  * på BAS-standard när ingen mappning är konfigurerad.
  */
 
+import { isIssued } from "../invoice-state-machine";
 import type { VatRate } from "../vat";
 import { DEFAULT_LEDGER_ACCOUNT_MAP, toSieAccountMap } from "./account-map";
 import { buildSemanticVoucher, type SemanticVoucherInput } from "./semantic-voucher";
@@ -16,9 +17,6 @@ import { renderSie, type SieAccountMap, type SieCompany } from "./sie";
 
 /** BAS-standardkonton för en advokatbyrå (default tills byrån mappar själv). */
 export const DEFAULT_BAS_ACCOUNT_MAP: SieAccountMap = toSieAccountMap(DEFAULT_LEDGER_ACCOUNT_MAP);
-
-/** Bara utfärdade fakturor bokförs (samma som Fortnox-connectorn); ej DRAFT/CANCELLED/BAD_DEBT. */
-export const SIE_EXPORTABLE_STATUSES: readonly string[] = ["SENT", "PAID", "INSTALLMENT_PLAN"];
 
 /** Minsta faktura-fält exporten behöver. */
 export interface ExportableInvoice extends SemanticVoucherInput {
@@ -37,7 +35,7 @@ export interface SieExportOptions {
 
 /** Hur många av fakturorna som är exporterbara (för UI-gating). */
 export function countExportable(invoices: readonly { status: string }[]): number {
-  return invoices.filter((i) => SIE_EXPORTABLE_STATUSES.includes(i.status)).length;
+  return invoices.filter((i) => isIssued(i.status)).length;
 }
 
 /** Verifikatnummer ur fakturanumrets siffror (unikt), annars löpande index. */
@@ -51,7 +49,8 @@ export function invoicesToSie(
   invoices: readonly ExportableInvoice[],
   opts: SieExportOptions,
 ): string {
-  const exportable = invoices.filter((i) => SIE_EXPORTABLE_STATUSES.includes(i.status));
+  // Utställda fakturor, kundförlust inräknad (ADR 0007): samma regel som Fortnox-flödet (#1676).
+  const exportable = invoices.filter((i) => isIssued(i.status));
   const series = opts.series ?? "A";
   return renderSie({
     company: opts.company,
