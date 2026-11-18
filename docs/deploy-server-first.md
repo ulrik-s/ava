@@ -48,7 +48,7 @@ kommer att få från sina klienter, inte en teknikdetalj.
 ```bash
 git clone https://github.com/ulrik-s/ava && cd ava
 # Bygg i en container — hosten behöver bara docker + git, ingen bun/node.
-docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server oven/bun:1 sh -c \
+docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server oven/bun:1.4.4 sh -c \
   'bun install --frozen-lockfile && bun run server-first:build && bash tooling/scripts/build-demo.sh'
 ```
 
@@ -103,7 +103,7 @@ docker compose -f tooling/docker/docker-compose.production.yml up -d --build
 avarun() { docker run --rm --network ava_default -v "$PWD:/app" -w /app \
   -e AVA_DATABASE_URL="postgres://ava:$POSTGRES_PASSWORD@postgres:5432/ava" \
   -e AVA_ORGANIZATION_ID -e AVA_ORG_NAME -e AVA_ADMIN_EMAIL -e AVA_ADMIN_NAME \
-  oven/bun:1 bun "$@"; }
+  oven/bun:1.4.4 bun "$@"; }
 avarun tooling/scripts/db-migrate.ts
 AVA_ORG_NAME="Byrån AB" AVA_ADMIN_EMAIL=anna@byra.se AVA_ADMIN_NAME="Anna" \
   avarun tooling/scripts/seed-selfhosted-local.ts
@@ -525,7 +525,7 @@ deployen tog (se *Återställning*).
 
 ```bash
 git checkout --detach <sha>                      # sha:n står i releasens namn
-docker run --rm -v "$PWD:/app" -w /app oven/bun:1 sh -c \
+docker run --rm -v "$PWD:/app" -w /app oven/bun:1.4.4 sh -c \
   'bun install --frozen-lockfile >/dev/null && bun run server-first:build'
 docker compose -f tooling/docker/docker-compose.production.yml up -d --build server-first
 git checkout main                                # nästa deploy-prod.sh tar det härifrån

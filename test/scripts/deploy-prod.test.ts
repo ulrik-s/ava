@@ -177,7 +177,7 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     // Prod-klienten byggs utan demodata (#1352) och på roten.
     expect(calls[build]).toContain("-e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server -e AVA_VERSION -e AVA_VERSION_DATE");
     // Outlook-tillägget byggs in under out/addin med domän och Entra-app ur miljön.
-    expect(calls[build]).toContain("-e AVA_DOMAIN -e OAUTH2_PROXY_CLIENT_ID -e OIDC_ISSUER_URL oven/bun:1");
+    expect(calls[build]).toContain("-e AVA_DOMAIN -e OAUTH2_PROXY_CLIENT_ID -e OIDC_ISSUER_URL oven/bun:1.4.4");
     expect(calls[build]).toContain("bun office-addin/build.ts --out out/addin");
     expect(build).toBeLessThan(migrate);
     expect(migrate).toBeLessThan(up);
@@ -208,7 +208,7 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     const { status, out, calls } = deploy();
     expect(status, out).toBe(0);
     expect(calls).toContain("db-url via miljön");
-    expect(calls.find((c) => c.includes("db-migrate.ts"))).toContain("-e AVA_DATABASE_URL oven/bun:1");
+    expect(calls.find((c) => c.includes("db-migrate.ts"))).toContain("-e AVA_DATABASE_URL oven/bun:1.4.4");
     expect(calls.join("\n")).not.toContain(PASSWORD);
     expect(out).not.toContain(PASSWORD);
   });
