@@ -32,7 +32,7 @@ export function PhonePanels({ panels, closable, onClose, choices }: Props) {
           {panels.map((p) => (
             <span key={p.id} className="flex items-center">
               <button type="button" role="tab" aria-selected={p.id === active?.id} onClick={() => setActiveId(p.id)}
-                className={`whitespace-nowrap rounded px-3 py-1.5 text-sm ${p.id === active?.id ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"}`}>
+                className={`whitespace-nowrap rounded px-3 py-1.5 text-sm font-semibold dark:font-normal ${p.id === active?.id ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"}`}>
                 {p.title}
               </button>
               {onClose && closable?.has(p.id) && (

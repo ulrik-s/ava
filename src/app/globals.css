@@ -234,6 +234,8 @@ body {
   --dv-separator-border: #6b7280;
 }
 :root:not(.dark) .dockview-theme-light .dv-tab.dv-active-tab { box-shadow: inset 0 3px 0 #2563eb; }
+/* Feta fliknamn, vald som inaktiv flik (#1672). `+N` ligger utanför `.dv-tab`. */
+:root:not(.dark) .dockview-theme-light .dv-tab { font-weight: 600; }
 /* dockview sätter `outline: none` inline på gruppen, därav !important. */
 :root:not(.dark) .dockview-theme-light .dv-groupview { outline: 1px solid #9ca3af !important; outline-offset: -1px; }
 :root:not(.dark) .dockview-theme-light .dv-split-view-container.dv-horizontal > .dv-view-container > .dv-view:not(:first-child)::before { width: 2px; }

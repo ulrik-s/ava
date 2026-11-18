@@ -184,6 +184,10 @@ test("smal grupp: dolda flikar nås via en tydlig knapp, även med tangentbordet
   for (const t of ["Parter", "Anteckningar", "Händelser"]) {
     await page.getByRole("tab", { name: new RegExp(`^${t}`) }).dragTo(page.getByRole("tab", { name: /^Utlägg/ }));
   }
+  // dockview räknar om `+N` när flikraden byter storlek eller scrollas, inte när
+  // en flik läggs till i en rad som redan är full. Med feta fliknamn (#1672)
+  // blir raden full tidigare, så scrolla den som en användare gör.
+  await groupOf(page, "Tid").locator(".dv-tabs-container").evaluate((el) => { el.scrollLeft = el.scrollWidth; });
   const more = groupOf(page, "Tid").getByRole("button", { name: /^\d+ dold(a)? flik(ar)?$/ });
   await expect(more).toBeVisible();
   await expect(more).toHaveAccessibleName(/^\d+ dolda flikar$/);
@@ -315,6 +319,8 @@ const tabLook = (page: Page) => page.evaluate(() => {
     activeMark: style(".dv-tab.dv-active-tab")?.boxShadow,
     inactiveColor: style(".dv-tab.dv-inactive-tab")?.color,
     inactiveBg: style(".dv-tab.dv-inactive-tab")?.backgroundColor,
+    activeWeight: style(".dv-tab.dv-active-tab")?.fontWeight,
+    inactiveWeight: style(".dv-tab.dv-inactive-tab")?.fontWeight,
     separator: sep ? getComputedStyle(sep, "::before").backgroundColor : null,
   };
 });
@@ -333,12 +339,32 @@ test("ljust läge: tydliga flikar och avdelare på Startsidan och ett ärende (#
   const light = {
     row: "rgb(209, 213, 219)", group: "rgb(255, 255, 255)", groupOutline: "solid",
     activeColor: "rgb(17, 24, 39)", activeMark: "rgb(37, 99, 235) 0px 3px 0px 0px inset", separator: "rgb(107, 114, 128)",
+    activeWeight: "600", // feta fliknamn (#1672)
   };
   // Startsidan har en flik per grupp; ärendet har inaktiva flikar bredvid de valda.
   await openLight(page, base, "/");
   expect(await tabLook(page)).toMatchObject(light);
   await openLight(page, base, `/matters/${matterIdWith(seed, "timeEntries")}/`);
-  expect(await tabLook(page)).toEqual({ ...light, inactiveColor: "rgb(17, 24, 39)", inactiveBg: "rgb(209, 213, 219)" });
+  expect(await tabLook(page)).toEqual({ ...light, inactiveColor: "rgb(17, 24, 39)", inactiveBg: "rgb(209, 213, 219)", inactiveWeight: "600" });
+});
+
+/** Summan av `+N` i dockytans överflödesknappar, och flikrader som inte rymmer sina flikar. */
+const hiddenTabs = (page: Page) => page.evaluate(() => ({
+  badges: [...document.querySelectorAll(".dv-tabs-overflow-dropdown-default")]
+    .reduce((sum, el) => sum + (Number.parseInt(el.textContent, 10) || 0), 0),
+  fullRows: [...document.querySelectorAll(".dv-tabs-container")].filter((el) => el.scrollWidth > el.clientWidth).length,
+}));
+
+test("ljust läge: feta fliknamn döljer inga fler flikar vid 13\" (#1672)", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  await page.addInitScript(() => { localStorage.setItem("ava.theme", "light"); });
+  for (const path of ["/", `/matters/${matterIdWith(seed, "timeEntries")}/`]) {
+    await openLight(page, base, path);
+    expect(await hiddenTabs(page)).toEqual({ badges: 0, fullRows: 0 });
+  }
 });
 
 test("mörkt läge: dockytans flikar oförändrade (#1635)", async ({ page, baseURL }) => {
@@ -351,5 +377,6 @@ test("mörkt läge: dockytans flikar oförändrade (#1635)", async ({ page, base
     row: "rgb(37, 37, 38)", group: "rgb(30, 30, 30)", groupOutline: "none",
     activeColor: "rgb(255, 255, 255)", activeMark: "none",
     inactiveColor: expect.stringMatching(/^rgb\((150, 150, 150|98, 98, 98)\)$/), inactiveBg: "rgb(45, 45, 45)", separator: "rgb(68, 68, 68)",
+    activeWeight: "400", inactiveWeight: "400",
   });
 });
