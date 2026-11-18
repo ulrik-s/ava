@@ -9,7 +9,8 @@
 import { describe, expect, it } from "vitest-compat";
 import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
-import { isProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { isProcedureCall, queueEntrySchema } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { MAX_PROCEDURE_TOUCHES } from "@/lib/server/data-store/in-memory/procedure-touches";
 import { uuidv7 } from "@/lib/shared/uuid";
 
 const entry = (id: string) => ({ id, matterId: uuidv7(), userId: uuidv7(), date: new Date(), minutes: 30, description: "Samtal", hourlyRate: 1500 });
@@ -63,6 +64,25 @@ describe("runQueuedProcedure", () => {
     })).rejects.toThrow("PRECONDITION_FAILED");
     expect(ds.pendingCount()).toBe(0);
     expect(await ds.store.timeEntries.findUnique({ where: { id } })).toBeNull();
+  });
+
+  it("fler rörda rader än servern tar emot → rullas tillbaka lokalt och köas inte (#1674)", async () => {
+    const ds = await store();
+    const ids = Array.from({ length: MAX_PROCEDURE_TOUCHES + 1 }, () => uuidv7());
+    await expect(ds.runQueuedProcedure({ path: "billingRun.create", input: {} }, async () => {
+      for (const id of ids) await ds.store.timeEntries.create({ data: entry(id) as never });
+    })).rejects.toThrow(/högst 10000/);
+    expect(ds.pendingCount()).toBe(0);
+    expect(await ds.store.timeEntries.findUnique({ where: { id: ids[0] ?? "" } })).toBeNull();
+  });
+
+  it("många rörda rader inom gränsen köas som ett anrop, och kön tar emot posten", async () => {
+    const ds = await store();
+    await ds.runQueuedProcedure({ path: "billingRun.create", input: {} }, async () => {
+      for (let i = 0; i < 150; i++) await ds.store.timeEntries.create({ data: entry(uuidv7()) as never });
+    });
+    expect(ds.pendingEntries()[0]).toMatchObject({ path: "billingRun.create" });
+    expect(queueEntrySchema.safeParse(ds.pendingEntries()[0]).success).toBe(true);
   });
 
   it("lyssnarna på lokala ändringar får EN signal per anrop", async () => {

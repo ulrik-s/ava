@@ -28,6 +28,7 @@ import { uuidv7 } from "@/lib/shared/uuid";
 import type { ChangeChannel } from "./change-channel";
 import { IdbEntryStore, v2Location, type EntryStoreLocation, type LegacyListPlace } from "./idb-entry-store";
 import { reportIdbProblem } from "./idb-open";
+import { MAX_PROCEDURE_TOUCHES, rowRefSchema } from "./procedure-touches";
 import type { MutationEvent } from "./writable-delegate";
 
 const rowRecord = z.record(z.string(), z.unknown());
@@ -63,15 +64,12 @@ const queuedMutationSchema = z.object({
   owner: queueOwnerSchema.exactOptional(),
 });
 
-/** En rad som ett köat procedur-anrop skrev lokalt (för att läsa tillbaka serverns läge). */
-const procedureTouchSchema = z.object({ entity: z.string(), id: z.string() });
-
 /**
  * Ett köat procedur-anrop (#1265, ADR 0037): servern kör om `path(input)`
  * auktoritativt med samma `appRouter`. Klientens lokala resultat är bara
  * optimistiskt — `touches` säger vilka rader som ska ersättas av serverns läge.
  */
-const queuedProcedureCallSchema = z.object({
+export const queuedProcedureCallSchema = z.object({
   type: z.literal("procedure"),
   mutationId: z.string(),
   /** tRPC-sökvägen, t.ex. `timeEntry.create` (se `QUEUED_PROCEDURES`). */
@@ -79,7 +77,7 @@ const queuedProcedureCallSchema = z.object({
   input: rowRecord,
   /** Klientkodens version när anropet köades (för migrering, #1247/#1269). */
   codeVersion: z.string(),
-  touches: z.array(procedureTouchSchema),
+  touches: z.array(rowRefSchema).max(MAX_PROCEDURE_TOUCHES),
   enqueuedAt: z.number(),
   /** Köformatet posten skrevs i (#1247). Saknas på poster från före stämplingen = 1. */
   format: z.number().optional(),
@@ -91,8 +89,7 @@ export const queueEntrySchema = z.union([queuedProcedureCallSchema, queuedMutati
 
 /** En radpost i kön. */
 export type QueuedMutation = z.infer<typeof queuedMutationSchema>;
-/** En rad som ett köat procedur-anrop skrev lokalt. */
-export type ProcedureTouch = z.infer<typeof procedureTouchSchema>;
+export type { ProcedureTouch } from "./procedure-touches";
 /** Ett köat procedur-anrop. */
 export type QueuedProcedureCall = z.infer<typeof queuedProcedureCallSchema>;
 /** En post i kön: en färdig rad eller ett procedur-anrop. */

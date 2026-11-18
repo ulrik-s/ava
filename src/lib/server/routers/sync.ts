@@ -13,7 +13,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { assertAdmin } from "../auth/assert-admin";
-import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
+import { type QueuedMutation, queuedProcedureCallSchema as queuedCallShape } from "../data-store/in-memory/mutation-queue";
+import { rowRefSchema } from "../data-store/in-memory/procedure-touches";
 import { MAX_ROW_REFS } from "../data-store/in-memory/sync-transport";
 import { analyzeIfNewContent, storagePathBefore } from "../sync/classify-new-content";
 import type { SyncDeviceStore } from "../sync/sync-device-store";
@@ -51,18 +52,16 @@ const queuedMutationSchema = z.object({
   owner: queueOwnerSchema,
 });
 
-/** En utpekad rad: entitet + id (procedur-anropens `touches`, #1348:s `rows`). */
-const rowRefSchema = z.object({ entity: z.string().max(100), id: z.string().max(100) });
-
-/** Ett köat procedur-anrop (#1265, ADR 0037). Fälten i `input` valideras av proceduren själv. */
-const queuedProcedureCallSchema = z.object({
-  type: z.literal("procedure"),
+/**
+ * Ett köat procedur-anrop (#1265, ADR 0037): klientens köschema, så att
+ * servern tar emot det klienten köar (#1674: `touches` hade olika gränser), med
+ * serverns striktare krav på id och längder. Fälten i `input` valideras av
+ * proceduren själv.
+ */
+const queuedProcedureCallSchema = queuedCallShape.extend({
   mutationId: z.string().uuid(),
   path: z.string().min(1).max(200),
-  input: z.record(z.string(), z.unknown()),
   codeVersion: z.string().max(200),
-  touches: z.array(rowRefSchema).max(MAX_ROW_REFS),
-  enqueuedAt: z.number(),
   /** Köformatet (#1247) — saknas på poster köade före stämplingen. */
   format: z.number().int().positive().optional(),
   owner: queueOwnerSchema,
