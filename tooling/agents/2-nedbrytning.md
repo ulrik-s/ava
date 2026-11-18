@@ -39,7 +39,8 @@ rapport ("Dubblett av #N") och originalet #N.
 - **Originalet är levererat** (`levererad` + `release:<tagg>`): sätt samma två
   etiketter på dubbletten, skriv till dess användare (MED markören
   `<!-- till-anvandaren -->`) "Det här är nu ute i AVA <tagg>. Tack för att du
-  hörde av dig!". Stäng den inte: Actionen gör det (se A).
+  hörde av dig!". En dubblett med `intern` har ingen användare: hoppa över
+  meddelandet. Stäng den inte: Actionen gör det (se A).
 - **Originalet är stängt utan leverans** (Ulrik avstod): kommentera på
   dubbletten (utan markör) och sätt `blockerad`, så att Ulrik bestämmer vad
   dubblettens användare ska få veta.
@@ -164,7 +165,8 @@ För varje godkänd:
    `nedbruten`.
 
 Är det oklart hur något ska bete sig för användaren: fråga användaren enligt
-regel 2c och skapa inga issues förrän svaret har kommit. Gäller oklarheten
+regel 2c och skapa inga issues förrän svaret har kommit. En förfrågan med
+`intern` har ingen användare: fråga Ulrik i stället och sätt `blockerad`. Gäller oklarheten
 något annat, kräver förfrågan en skyddad sökväg, eller är den något som
 inte borde byggas (säkerhetsrisk, bryter mot advokatsekretess, orimligt
 stor)? Skriv då en konkret fråga till Ulrik i en kommentar, sätt `blockerad`

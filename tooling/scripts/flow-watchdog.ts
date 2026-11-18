@@ -1,15 +1,16 @@
 #!/usr/bin/env bun
 /**
  * Flödesvaktens klocka: körs varje timme av GitHub Actions. Verkställer
- * timeouterna i tooling/agents/flow.yaml, knuffar, stänger dubblett-PR:er och
- * avbryter CI som hänger.
+ * timeouterna i tooling/agents/flow.yaml, knuffar, stänger dubblett-PR:er,
+ * flyttar förfrågningar från kodrepot till inkorgen och avbryter CI som hänger.
  *
  *   bun tooling/scripts/flow-watchdog.ts <maskin> [<maskin> …] [--ci]
  *
  * FLOW_GUARD_MODE=enforce gör ändringarna; annars (report) loggas de bara.
  */
 import { dispatchTarget, type FetchFn, fire } from "./flow/dispatch";
-import { type GitHub, gitHub } from "./flow/github";
+import { type GitHub, gitHub, runGhWithToken } from "./flow/github";
+import { moveStrayIssues } from "./flow/inbox";
 import { loadFlow } from "./flow/load";
 import type { Flow, Machine } from "./flow/schema";
 import {
@@ -134,12 +135,19 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   const machines = args.filter((a) => !a.startsWith("--")).map((name) => flow.machines[name]);
   const started = new Set<string>();
+  const intakeRepo = flow.machines.intake?.repo;
+  const token = process.env.FLOW_TRANSFER_TOKEN;
   for (const m of machines) {
     if (!m) continue;
     const gh = gitHub(m.repo);
     runTimeouts(m, gh, Date.now(), enforce, console.log);
     if (enforce) await runNudges(flow, m, watchItems(m, gh), { now: Date.now(), env: process.env, fetchFn: fetch, log: console.log, started });
     if (m.items === "pulls") closeDuplicatePulls(gh, enforce, console.log);
+    // Inkorgen: en förfrågan i kodrepot flyttas till intaget (kräver en token som når båda).
+    if (m.items === "issues" && intakeRepo && m.repo !== intakeRepo) {
+      const mover = token ? { source: gitHub(m.repo, runGhWithToken(token)), intake: gitHub(intakeRepo, runGhWithToken(token)), intakeRepo } : null;
+      moveStrayIssues(gh, mover, { now: Date.now(), enforce, log: console.log });
+    }
   }
   const ciRepo = machines[0]?.repo;
   if (args.includes("--ci") && ciRepo) cancelHung(gitHub(ciRepo), Date.now(), flow.ci.hang_minutes, enforce, console.log);

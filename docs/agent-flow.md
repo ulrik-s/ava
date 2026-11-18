@@ -59,6 +59,7 @@ stateDiagram-v2
 | `väntar-på-användaren` | alla | 7 d → tas bort | En fråga till användaren (i AVA) väntar på svar |
 | `blockerad` | alla | — | Agenten behöver ett beslut av Ulrik |
 | `agentstatus` | alla | — | Statussidan för agentkedjan (uppdateras av flödesvakten) |
+| `intern` | Ulrik | — | Internt arbete (Ulrik eller en agent) — ingen användare att fråga |
 
 ## code-issue (`ulrik-s/ava`, issues)
 

@@ -19,9 +19,16 @@ Force-push and branch deletion on `main` are blocked.
 
 The loop for every change:
 
-1. **Issue first.** Work starts from a GitHub issue (create one if missing).
-   Capture follow-ups / tech-debt as issues too so nothing is lost — label
-   `architecture` / `tech-debt` / `tooling` / `documentation`.
+1. **Inkorgen först.** Nytt arbete — idéer, buggar, uppföljningar, teknisk
+   skuld — blir ett issue i `ulrik-s/ava-feedback` (inkorgen) med `intern` och
+   `bugg` eller `förslag`. Loop 1 verifierar, Ulrik beslutar (`verifierad`) och
+   loop 2 bryter ner i arbetsorder (`agent-task`) i `ulrik-s/ava`. I `ava` hör
+   bara arbetsorder hemma: klockan flyttar ett issue där utan arbetsorder-flagga
+   till inkorgen när det är äldre än 2 timmar och ingen öppen PR stänger det.
+   Bygger du något direkt (Ulrik ber om det i en session): skapa issuet i `ava`
+   och öppna PR:en direkt. Se [`docs/feedback-pipeline.md`](docs/feedback-pipeline.md).
+   **Stäng med `Closes #N`** i PR:en: GitHub känner inte igen "Stänger", och
+   "Refs" stänger inget (15 klara issues stod öppna, genomgången 2026-11-18).
 2. **Branch from `main`**, one topic per branch (`issue-NN-<slug>`).
 3. **Conventional Commits** are mandatory — `feat(scope): …`, `fix:`, `chore:`,
    `refactor:`, `docs:`, `test:`, `ci:`. Enforced by `.husky/commit-msg`

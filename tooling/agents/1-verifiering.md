@@ -36,7 +36,7 @@ Nekas kommandot: gå vidare och nämn det i sammanfattningen.
 
 ## Vilka
 
-Högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `user-request` som är i
+Högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `user-request` eller `intern` som är i
 tillståndet **mottagen** eller **undersökt** (alltså saknar `verifierad`,
 `nedbruten`, `levererad`, `dubblett`, `finns-redan` och `uppdelad`) och saknar
 `blockerad`, äldst först, och som är något av:
@@ -53,6 +53,24 @@ tillståndet **mottagen** eller **undersökt** (alltså saknar `verifierad`,
 
 Issues med `väntar-på-användaren` utan nytt svar väntar fortfarande. Rör dem
 inte (utom 7-dagarsgränsen nedan).
+
+### Interna förfrågningar (`intern`)
+
+En förfrågan med `intern` kommer från Ulrik eller en agent, inte från en
+användare i AVA: ava-feedback är inkorgen för allt arbete, och en issue som
+skapas i ava utan arbetsorder-flagga flyttas hit av klockan. Verifiera den som
+alla andra, med de här skillnaderna:
+
+- Det finns ingen användare att fråga. Skriv aldrig `<!-- till-anvandaren -->`
+  och sätt aldrig `väntar-på-användaren`. Är det oklart vad som ska byggas:
+  skriv frågan till Ulrik i en kommentar och sätt `blockerad`.
+- **Finns redan:** skriv rapporten med belägg och sätt `finns-redan` direkt.
+  Det finns ingen användare att visa vägen.
+- **Flera orelaterade saker:** dela inte själv. Föreslå delarna i rapporten
+  och sätt `blockerad`, så delar Ulrik.
+- **En bugg** återskapas mot `main`, inte mot en användares release.
+- I rapporten är **Dialog med användaren** "Ingen (internt arbete)."
+
 
 ## För varje issue
 

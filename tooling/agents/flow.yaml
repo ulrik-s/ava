@@ -131,6 +131,14 @@ machines:
       agentstatus:
         color: "0e8a16"
         description: Statussidan för agentkedjan (uppdateras av flödesvakten)
+      # Inkorgen för allt arbete: förfrågningar från Ulrik eller en agent. Loop 1
+      # verifierar dem som andra, men det finns ingen användare att fråga.
+      intern:
+        color: "6e7781"
+        description: Internt arbete (Ulrik eller en agent) — ingen användare att fråga
+        # Sätts av Ulrik eller av klockan med hans token (flytten från ava), aldrig
+        # av en agent: agenternas förhandsgodkända skrivningar ändras inte.
+        by: ulrik
 
   code-issue:
     repo: ulrik-s/ava
@@ -140,7 +148,7 @@ machines:
     states:
       ny:
         label: null
-        description: Utan granskningstillstånd (vanliga issues stannar här).
+        description: Utan granskningstillstånd. Utan arbetsorder-flagga flyttas den till inkorgen av klockan.
         agent: null
         transitions:
           - to: att-granska

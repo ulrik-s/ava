@@ -11,12 +11,17 @@ import { type CiRun, closesIssue, type MergedPull } from "./watchdog";
 /** Kör `gh` med argumenten och ger stdout. */
 export type GhRunner = (args: readonly string[]) => string;
 
-/** Den riktiga `gh`. */
-export const runGh: GhRunner = (args) => {
-  const r = spawnSync("gh", [...args], { encoding: "utf8" });
+const runner = (env: NodeJS.ProcessEnv): GhRunner => (args) => {
+  const r = spawnSync("gh", [...args], { encoding: "utf8", env });
   if (r.status !== 0) throw new Error(`gh ${args.join(" ")}: ${r.stderr}`);
   return r.stdout;
 };
+
+/** Den riktiga `gh`. */
+export const runGh: GhRunner = runner(process.env);
+
+/** `gh` med en annan token: flytten till inkorgen kräver en som når båda repona. */
+export const runGhWithToken = (token: string): GhRunner => runner({ ...process.env, GH_TOKEN: token });
 
 const eventSchema = z.object({
   id: z.number(),
@@ -52,7 +57,7 @@ const runsSchema = z.object({
 /** En etiketthändelse med tidpunkt. */
 export interface TimedLabelEvent extends LabelEvent { at: string }
 
-/** En öppen issue eller PR (`createdAt` bara för PR:er). */
+/** En öppen issue eller PR. */
 export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string }
 
 const repoEventSchema = z.object({
@@ -98,10 +103,20 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
         : []));
       return hits.sort((a, b) => b.mergedAt.localeCompare(a.mergedAt))[0] ?? null;
     },
+    /** Flyttar issuen till ett annat repo (`gh issue transfer`). Ger dess nya nummer där. */
+    transferIssue(n: number, to: string): number {
+      const url = run(["issue", "transfer", String(n), to, "-R", repo]).trim();
+      const num = Number(/\/issues\/(\d+)$/.exec(url)?.[1]);
+      if (!Number.isInteger(num) || num <= 0) throw new Error(`oväntat svar från gh issue transfer: ${url}`);
+      return num;
+    },
     closePull(n: number): void { run(["api", "-X", "PATCH", `repos/${repo}/pulls/${n}`, "-f", "state=closed"]); },
     openItems(): OpenItem[] {
       const pages = parseJsonWith(pagesSchema(itemSchema), run(["api", `repos/${repo}/issues?state=open&per_page=100`, "--paginate", "--slurp"]));
-      return pages.flat().map((i) => ({ number: i.number, title: i.title, body: i.body ?? "", labels: i.labels.map((l) => l.name), isPr: i.pull_request !== undefined }));
+      return pages.flat().map((i) => ({
+        number: i.number, title: i.title, body: i.body ?? "", labels: i.labels.map((l) => l.name), isPr: i.pull_request !== undefined,
+        ...(i.created_at === undefined ? {} : { createdAt: i.created_at }),
+      }));
     },
     hasOpenPr(n: number): boolean {
       const r = parseJsonWith(z.object({ total_count: z.number() }), run(["api", "-X", "GET", "search/issues", "-f", `q=repo:${repo} is:pr is:open "Closes #${n}"`]));
