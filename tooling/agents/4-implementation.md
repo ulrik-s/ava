@@ -38,9 +38,26 @@ Ulrik själv. Kontrollera det i händelseloggen, på samma sätt som `verifierad
 i regel 2. Satte en agent den: ta bort den och gå vidare.
 Finns ingen: avsluta.
 
-1. Sätt `pågår` och ta bort `granskad`.
-2. `git fetch origin && git checkout -b claude/<nr>-<kort-slug> origin/main`
-   (prefixet `claude/` krävs i molnet).
+1. **Ta issuen.** Två körningar kan välja samma issue samtidigt, eftersom
+   klockans knuff och rutinens schema startar körningar utan flödesvaktens
+   lås (#1681). Finns redan en öppen PR med `Closes #<nr>`
+   (`gh api -X GET search/issues -f q='repo:ulrik-s/ava is:pr is:open "Closes #<nr>"' --jq .total_count`
+   är större än 0): välj nästa issue. Annars tar du issuen med en push.
+   Branchnamnet räknas fram ur den senaste `granskad`-händelsen, så alla
+   körningar får samma namn, och git släpper bara in den första pushen:
+   1. Id:t för den senaste `granskad`-händelsen (nedan `<G>`):
+      `gh api "repos/ulrik-s/ava/issues/<nr>/events?per_page=100" --paginate --jq '.[] | select(.event == "labeled" and .label.name == "granskad") | .id' | tail -1`
+   2. `git fetch origin && git checkout -b claude/<nr>-g<G> origin/main`
+   3. `git commit --allow-empty -m "chore: tar #<nr> (<tal>)"`, där `<tal>` är
+      ditt eget slumptal (läs t.ex. `date +%s%N` först och skriv in värdet),
+      så att två körningar aldrig får samma commit.
+   4. `git push origin HEAD:claude/<nr>-g<G>`
+
+   Avvisas pushen har en annan körning issuen. Rör då inga etiketter, gå
+   tillbaka till `origin/main` och välj nästa issue. Den räknas inte som en
+   av dina tre. Den tomma commiten försvinner när PR:en squash-mergas.
+2. Sätt `pågår` och ta bort `granskad`. Allt arbete för issuen görs på
+   `claude/<nr>-g<G>` (prefixet `claude/` krävs i molnet).
 3. **Arkitektur först (regel 4b):** läs issuens fält "Arkitektur", förebilden
    och de ADR:er som gäller, och gör likadant som förebilden. Upptäcker du
    att det inte går utan något nytt (mönster, beroende, lager): sluta och
@@ -83,7 +100,7 @@ Finns ingen: avsluta.
    (`Closes #N`). Har ingen PR öppnats inom 4 timmar lägger flödesvakten
    tillbaka issuen i kön (`granskad`).
 8. Räkna taket igen (steg 0) och välj nästa issue enligt samma regler. Börja
-   från en ren `origin/main` med en ny branch, och ta aldrig en issue som
+   om från steg 1 (en ny branch från `origin/main`), och ta aldrig en issue som
    `Beror på` en issue du byggt i samma körning: den är inte mergad än.
    Sluta efter tre PR:er, när taket är nått, eller när inget mer finns.
 
@@ -91,7 +108,7 @@ Finns ingen: avsluta.
 
 Är issuen oklar, kräver den en skyddad sökväg eller destruktiv migration,
 eller går CI inte att få grön? Kommentera på issuen vad du försökt och vad
-som behövs, ta bort `pågår` och sätt `blockerad`. Lämna en eventuell
-halvfärdig branch opushad.
+som behövs, ta bort `pågår` och sätt `blockerad`. Pusha inte det
+halvfärdiga: branchen ska bara ha commiten som tog issuen.
 
 Avsluta med en rad: vad som gjordes (PR-nummer eller "inget att göra").

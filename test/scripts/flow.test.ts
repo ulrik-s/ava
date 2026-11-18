@@ -11,10 +11,10 @@ import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
 import { flowErrors, loadFlow, parseFlow } from "../../tooling/scripts/flow/load";
 import type { Flow, Machine } from "../../tooling/scripts/flow/schema";
 import { decide, type LabelEvent, normalizeRemovals, previousStateLabel } from "../../tooling/scripts/flow/transition";
-import { dueNudges, dueTimeouts, hungRuns, parseDuration } from "../../tooling/scripts/flow/watchdog";
+import { closesIssue, dueNudges, dueTimeouts, duplicatePulls, hungRuns, parseDuration } from "../../tooling/scripts/flow/watchdog";
 import { expectedFiles, staleFiles } from "../../tooling/scripts/flow-gen";
 import { dispatchLabel, handleLabel, machineFor, normalize } from "../../tooling/scripts/flow-guard";
-import { cancelHung, runNudges, runTimeouts } from "../../tooling/scripts/flow-watchdog";
+import { AGENT_PR, cancelHung, closeDuplicatePulls, runNudges, runTimeouts } from "../../tooling/scripts/flow-watchdog";
 
 const flow: Flow = loadFlow();
 const machine = (name: string): Machine => {
@@ -389,7 +389,7 @@ describe("händelsestyrningen", () => {
       { id: 3, label: "granskad", number: 7, isPr: true, at: "2026-11-17T10:00:00Z" },
       { id: 1, label: "verifierad", number: 5, isPr: false, at: "2026-11-17T09:58:00Z" },
     ]);
-    expect(api.openPulls()).toEqual([{ number: 7, title: "PR", body: "", labels: ["agent-pr"], isPr: true }]);
+    expect(api.openPulls()).toEqual([{ number: 7, title: "PR", body: "", labels: ["agent-pr"], isPr: true, createdAt: "" }]);
   });
 
   it("dispatchLabel med låset: en tidigare start i fönstret → ingen ny körning", async () => {
@@ -436,10 +436,68 @@ describe("knuffen", () => {
     const urls: string[] = [];
     const fetchFn: FetchFn = (url) => { urls.push(url); return Promise.resolve({ ok: true, status: 200 }); };
     const lines: string[] = [];
-    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l) => lines.push(l) })).toBe(1);
+    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l) => lines.push(l), started: new Set() })).toBe(1);
     expect(urls[0]).toContain("trig_019KfqBDJkYMiLG43Dr7QMo2/fire");
     expect(lines[0]).toContain("knuff L4");
-    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: {}, fetchFn, log: () => {} })).toBe(0);
+    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: {}, fetchFn, log: () => {}, started: new Set() })).toBe(0);
+  });
+
+  it("startar en rutin högst en gång per klockkörning, även över maskiner (#1681)", async () => {
+    const urls: string[] = [];
+    const fetchFn: FetchFn = (url) => { urls.push(url); return Promise.resolve({ ok: true, status: 200 }); };
+    const lines: string[] = [];
+    const ctx = { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l: string) => lines.push(l), started: new Set<string>() };
+    const two = [item(["behöver-ändras"], 2), { ...item(["behöver-ändras"], 2), number: 4 }];
+    expect(await runNudges(flow, codePr, two, ctx)).toBe(1);
+    expect(urls).toHaveLength(1);
+    expect(lines.filter((l) => l.includes("redan startad"))).toHaveLength(1);
+    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], ctx)).toBe(0);
+  });
+});
+
+describe("dubblett-PR:er (#1681)", () => {
+  const pull = (number: number, issue: number, createdAt: string) => ({ number, issue, createdAt });
+
+  it("läser Closes #N ur bodyn, exakt nummer", () => {
+    expect(closesIssue("Fixar menyn.\n\nCloses #1646")).toBe(1646);
+    expect(closesIssue("Closes #16460")).toBe(16460);
+    expect(closesIssue("Ingen koppling")).toBeNull();
+  });
+
+  it("den mergade eller äldsta behålls; en PR skapad efter mergen är ett omtag", () => {
+    const merged = new Map([[1646, { number: 1665, mergedAt: "2026-11-17T21:08:00Z" }]]);
+    const open = [pull(1666, 1646, "2026-11-17T20:50:57Z"), pull(1668, 1647, "2026-11-17T21:01:00Z"), pull(1690, 1647, "2026-11-17T21:05:00Z")];
+    expect(duplicatePulls(open, merged)).toEqual([{ number: 1666, keep: 1665 }, { number: 1690, keep: 1668 }]);
+    expect(duplicatePulls([pull(1700, 1646, "2026-11-18T09:00:00Z")], merged)).toEqual([]);
+  });
+
+  it("agent-pr är en flagga i flödet", () => {
+    expect(codePr.flags[AGENT_PR]).toBeDefined();
+  });
+
+  it("klockan stänger dubbletterna med en kommentar; i rapportläge ändras inget", () => {
+    const pr = (number: number, issue: number, createdAt: string, labels = [AGENT_PR]) =>
+      ({ number, title: "t", body: `Text\n\nCloses #${issue}`, labels: labels.map((name) => ({ name })), created_at: createdAt });
+    const answers = {
+      "pulls?state=open": [[pr(1666, 1646, "2026-11-17T20:50:57Z"), pr(1668, 1647, "2026-11-17T21:01:00Z"), pr(1690, 1647, "2026-11-17T21:05:00Z"), pr(1700, 1646, "2026-11-17T20:00:00Z", [])]],
+      "is:merged": { items: [
+        { number: 1665, body: "Closes #1646", pull_request: { merged_at: "2026-11-17T21:08:00Z" } },
+        { number: 1600, body: "Closes #1646", pull_request: { merged_at: null } },
+        { number: 1601, body: "Closes #16460", pull_request: { merged_at: "2026-11-18T00:00:00Z" } },
+      ] },
+    };
+    const gh = fakeGh(answers);
+    const lines: string[] = [];
+    expect(closeDuplicatePulls(gitHub("ulrik-s/ava", gh.run), true, (l) => lines.push(l))).toEqual([{ number: 1666, keep: 1665 }, { number: 1690, keep: 1668 }]);
+    expect(gh.calls.filter((c) => c.includes("state=closed"))).toEqual([
+      "api -X PATCH repos/ulrik-s/ava/pulls/1666 -f state=closed",
+      "api -X PATCH repos/ulrik-s/ava/pulls/1690 -f state=closed",
+    ]);
+    expect(gh.calls.some((c) => c.includes("issues/1666/comments") && c.includes("dubblett av #1665"))).toBe(true);
+    expect(lines[0]).toContain("#1666: dubblett av #1665");
+    const report = fakeGh(answers);
+    expect(closeDuplicatePulls(gitHub("ulrik-s/ava", report.run), false, () => {})).toHaveLength(2);
+    expect(report.calls.some((c) => c.includes("state=closed") || c.includes("/comments"))).toBe(false);
   });
 });
 
