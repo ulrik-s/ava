@@ -373,8 +373,21 @@ gissa: var, vad som ska ändras, och hur det ska se ut eller bete sig.
 **Inte med:** det som uttryckligen INTE ska ändras, eller som användaren
 inte bad om (t.ex. "kreditrisk visas inte", "fakturans PDF rörs inte").
 
+**Prioritet:** hög | medel | låg — en mening varför, och storlek S, M eller L.
+
 **Öppna frågor:** Inga.
 ```
+
+**Prioriteten** följer en fast regel, så att Ulrik kan jämföra förfrågningar:
+- **hög:** kan ge fel belopp (faktura, moms, taxa, bokföring), förlorad eller
+  läckt data, en säkerhetsrisk, eller stoppar en användare helt.
+- **medel:** märks för användarna eller bromsar arbetet, men det finns en väg
+  runt.
+- **låg:** internt städ, verktyg och utvecklartakt som ingen användare märker.
+
+Sätt flaggan som hör ihop med den (`prio-hög`, `prio-medel` eller
+`prio-låg`) samtidigt som tillståndet. Har förfrågan redan en prio-flagga har
+Ulrik satt den: ändra den inte.
 
 **"Öppna frågor" ska vara "Inga" när slutsatsen är Bekräftad.** Har du en öppen
 fråga om vad som ska byggas, då är du inte klar: fråga användaren i stället

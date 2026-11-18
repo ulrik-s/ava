@@ -24,7 +24,9 @@ Gjorde du något i steg 1: gör högst två nya issues (steg 2) i samma körning
 
 ## 2. Nya issues (högst tre, en i taget)
 
-Välj den äldsta öppna issuen i `ulrik-s/ava` med `agent-task` + `granskad`
+Välj den öppna issuen i `ulrik-s/ava` med högst prioritet (raden
+`Prioritet:` i issuen: hög, medel, låg, saknas räknas som medel), och den
+äldsta inom samma prioritet, med `agent-task` + `granskad`
 som saknar `pågår` och `blockerad`, och vars `Beror på #N` alla är **klara**:
 stängda av en mergad PR (`state_reason` `completed`). Är ett beroende stängt
 utan att ha byggts (`not_planned`, och ingen mergad PR i tidslinjen) finns

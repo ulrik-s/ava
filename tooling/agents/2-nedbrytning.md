@@ -102,7 +102,9 @@ Skriv aldrig till användaren i A3. Det gör loop 1, som har dialogen.
 ## B. Nedbrytning av verifierade förfrågningar
 
 Ta högst 5 ÖPPNA issues i `ulrik-s/ava-feedback` som har `verifierad` men inte
-`nedbruten` eller `blockerad`, äldst först. Kontrollera för var och en att
+`nedbruten` eller `blockerad`: högst prioritet först (`prio-hög`, `prio-medel`,
+`prio-låg`, utan flagga sist), och äldst först inom samma prioritet.
+Kontrollera för var och en att
 `verifierad` satts av Ulrik själv (regel 2). Annars: ta bort den, sätt
 `blockerad`, kommentera och gå vidare.
 
@@ -158,6 +160,8 @@ För varje godkänd:
      ska byggas), dels de från steg 3. Loop 4 bygger den inte förrän alla är
      stängda. Bero bara på issues som redan finns, aldrig på en som skapas
      senare, så att det aldrig blir en cirkel.
+   - Näst sist, på egen rad: `Prioritet: <hög|medel|låg>` från intagets
+     prio-flagga (utan flagga: `medel`). Loop 4 bygger högst prioritet först.
    - Sist, på egen rad: `Intag: ava-feedback#<nr>`
 7. Kommentera på intag-issuen med listan över skapade issues
    (`ulrik-s/ava#N`), och under rubriken **Beroenden** vilka issues från

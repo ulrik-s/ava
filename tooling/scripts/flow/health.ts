@@ -86,13 +86,34 @@ function waitsForUlrik(item: HealthItem): string | null {
   return null;
 }
 
+/** Prioritetsflaggorna i flödets ordning (`prio-hög`, `prio-medel`, `prio-låg`). */
+export function prioOrder(flow: Flow): string[] {
+  return [...new Set(Object.values(flow.machines).flatMap((m) => Object.keys(m.flags).filter((f) => f.startsWith("prio-"))))];
+}
+
+/** Det som väntar på Ulrik, högst prioritet först (utan flagga sist), med prioriteten först på raden. */
+function waitingByPrio(items: readonly HealthItem[], order: readonly string[]): string[] {
+  const rank = (i: HealthItem): number => {
+    const r = order.findIndex((p) => i.labels.includes(p));
+    return r === -1 ? order.length : r;
+  };
+  const tag = (i: HealthItem): string => {
+    const p = order[rank(i)];
+    return p === undefined ? "" : `[${p.slice("prio-".length)}] `;
+  };
+  return items
+    .flatMap((i) => (waitsForUlrik(i) === null ? [] : [i]))
+    .sort((a, b) => rank(a) - rank(b) || a.number - b.number)
+    .map((i) => `${tag(i)}${waitsForUlrik(i) ?? ""}`);
+}
+
 /** Hela kedjans hälsa. */
 export function healthReport(flow: Flow, snap: HealthSnapshot): HealthReport {
   const alarms = snap.items.flatMap((i) => itemAlarms(flow, i, snap.now));
   if (snap.lastClockRun === null || hoursSince(snap.lastClockRun, snap.now) > 3) {
     alarms.push({ key: "clock", text: "Flödesvaktens klocka har inte gått på över 3 timmar (PR-vakten/verifieringen startar den)." });
   }
-  const waitingForUlrik = snap.items.flatMap((i) => waitsForUlrik(i) ?? []);
+  const waitingForUlrik = waitingByPrio(snap.items, prioOrder(flow));
   const moving = snap.items
     .filter((i) => waitsForUlrik(i) === null && currentStates(flow, i).length > 0)
     .map((i) => line(i, i.awaitingRelease ? "klar — väntar på nästa release" : currentStates(flow, i).join(", ")));
