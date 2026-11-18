@@ -40,7 +40,7 @@ describe("task.list", () => {
     await makeCaller("u-anna", "org-x").list();
     expect(mockPrisma.task.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: "u-anna", organizationId: "org-x" },
+        where: { userId: "u-anna", organizationId: "org-x", deletedAt: null },
       }),
     );
   });
@@ -63,7 +63,7 @@ describe("task.listForMatter (#1162)", () => {
     mockPrisma.matter.findFirst.mockResolvedValue({ id: "m-1", organizationId: "org-x" });
     await makeCaller("u-anna", "org-x").listForMatter({ matterId: "m-1" });
     const arg = mockPrisma.task.findMany.mock.calls[0]![0] as { where: Record<string, unknown> };
-    expect(arg.where).toEqual({ matterId: "m-1", organizationId: "org-x" });
+    expect(arg.where).toEqual({ matterId: "m-1", organizationId: "org-x", deletedAt: null });
   });
 
   it("ärende i annan byrå → NOT_FOUND, inga uppgifter läses", async () => {

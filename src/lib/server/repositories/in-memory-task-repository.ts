@@ -32,7 +32,7 @@ export class InMemoryTaskRepository extends InMemoryRepository<Task> implements 
 
   private async list(where: Record<string, unknown>): Promise<TaskListRow[]> {
     return (await this.delegate.findMany({
-      where,
+      where: { ...where, deletedAt: null }, // mjukt raderade syns inte, som i Postgres (#1678)
       orderBy: { dueAt: "asc" },
       include: { matter: { select: { id: true, matterNumber: true, title: true } } },
     })) as TaskListRow[];

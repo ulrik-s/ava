@@ -17,7 +17,9 @@
  * Stödda operatorer:
  *   - Where: equals (implicit), contains (mode insensitive), startsWith,
  *     in, gte/lte/gt/lt, not, OR, AND
- *   - OrderBy: { field: "asc" | "desc" } eller array av samma
+ *   - OrderBy: { field: "asc" | "desc" } eller array av samma. Strängar i
+ *     svensk ordning (Å, Ä, Ö efter Z), saknade värden sist vid stigande och
+ *     först vid fallande ordning — som Postgres (#1678).
  *   - Pagination: skip, take
  *
  * Ej stödda (kastar / tigande ignoreras):
@@ -28,6 +30,23 @@
  */
 
 export type SortDir = "asc" | "desc";
+
+/**
+ * Svensk ordning, oberoende av webbläsarens eller processens språk: Å, Ä, Ö
+ * efter Z. Utan språk följde `localeCompare` miljön (en-US i Bun: Å bland A).
+ */
+const SWEDISH = new Intl.Collator("sv");
+
+/**
+ * Saknade värden (null/undefined) sist vid stigande ordning, som Postgres
+ * (NULLS LAST för ASC, NULLS FIRST för DESC). `null` när båda har värden.
+ */
+function nullsLast(a: unknown, b: unknown): number | null {
+  const aMissing = a === null || a === undefined;
+  const bMissing = b === null || b === undefined;
+  if (!aMissing && !bMissing) return null;
+  return Number(aMissing) - Number(bMissing);
+}
 
 /** Försök tolka v som Date — Date, eller ISO-8601-sträng. Annars null. */
 function toDate(v: unknown): Date | null {
@@ -199,8 +218,14 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
     if (ad && bd) return ad.getTime() - bd.getTime();
     const x = sortable(a); const y = sortable(b);
     if (typeof x === "number" && typeof y === "number") return x - y;
-    if (typeof x === "string" && typeof y === "string") return x.localeCompare(y);
+    if (typeof x === "string" && typeof y === "string") return SWEDISH.compare(x, y);
     return 0;
+  }
+
+  /** Två raders ordning på ett fält: saknade värden som Postgres, annars `cmp`. */
+  private compareField(a: unknown, b: unknown, dir: SortDir): number {
+    const order = nullsLast(a, b) ?? this.cmp(a, b);
+    return dir === "desc" ? -order : order;
   }
 
   // ─── OrderBy ──────────────────────────────────────────────────────
@@ -210,8 +235,8 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
     return [...rows].sort((a, b) => {
       for (const clause of clauses) {
         for (const [field, dir] of Object.entries(clause)) {
-          const cmpRes = this.cmp(a[field], b[field]);
-          if (cmpRes !== 0) return dir === "desc" ? -cmpRes : cmpRes;
+          const order = this.compareField(a[field], b[field], dir);
+          if (order !== 0) return order;
         }
       }
       return 0;

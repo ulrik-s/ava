@@ -8,12 +8,23 @@ import { and, asc, desc, eq, ilike, inArray, isNull, like, or, sql } from "drizz
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Contact } from "@/lib/shared/schemas/contact";
 import type { ContactId, OrganizationId } from "@/lib/shared/schemas/ids";
+import { containsPattern } from "../db/like-pattern";
 import { contacts, matterContacts, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
   ContactFull, ContactListOptions, ContactListResult, ContactListRow, ContactRepository,
 } from "./contact-repository";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
+
+/** Sökningen: termen bokstavligt, `%` och `_` är vanliga tecken — som i minnesrepot (#1678). */
+function searchWhere(pattern: string) {
+  return or(
+    ilike(contacts.name, pattern),
+    like(contacts.personalNumber, pattern),
+    like(contacts.orgNumber, pattern),
+    ilike(contacts.email, pattern),
+  );
+}
 
 export class DrizzleContactRepository extends DrizzleRepository<Contact> implements ContactRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
@@ -32,14 +43,7 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
       isNull(contacts.parentId), // bara topp-nivå
       isNull(contacts.deletedAt),
       opts.contactType ? eq(contacts.contactType, opts.contactType) : undefined,
-      opts.search
-        ? or(
-            ilike(contacts.name, `%${opts.search}%`),
-            like(contacts.personalNumber, `%${opts.search}%`),
-            like(contacts.orgNumber, `%${opts.search}%`),
-            ilike(contacts.email, `%${opts.search}%`),
-          )
-        : undefined,
+      opts.search ? searchWhere(containsPattern(opts.search)) : undefined,
     );
     const rows = await this.db
       .select().from(contacts)

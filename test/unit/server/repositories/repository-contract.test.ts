@@ -21,22 +21,20 @@
  *
  * Kontraktet genereras ur `ENTITY_REGISTRY`: en ny synkad entitet utan
  * fixtur här fäller testet, så nästa repo-par inte kan glida isär otestat.
+ * Listor, sökning, sortering och mjuk radering prövas i
+ * `repository-list-contract.test.ts` (#1678).
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
-import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { ENTITY_NAME_BY_SOURCE_KEY } from "@/lib/server/data-store/in-memory/entity-source-keys";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 import type { ChangeLogEntry } from "@/lib/server/repositories/change-log-recorder";
-import { enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
-import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
-import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { EntityRepo } from "@/lib/server/sync/entity-repo";
 import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
-import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
+import { DRIZZLE_NAME, openDrizzleRepos, openInMemoryRepos } from "./contract-backends";
 
 type Row = Record<string, unknown>;
 type RepoKey = keyof Omit<Repositories, "transaction" | "transactionWithDb">;
@@ -162,24 +160,13 @@ interface Backend {
 }
 
 const BACKENDS: Backend[] = [
-  {
-    name: "in-memory", derivesOrg: false,
-    open: async (sink) => ({ repos: buildInMemoryRepositories(new DemoDataStore({}, (e) => { sink(fromEvent(e)); })), close: async () => {} }),
-  },
-  {
-    name: "Drizzle (pglite)", derivesOrg: true,
-    open: async (sink) => {
-      const handle: TestDbHandle = await createTestDb();
-      const repos = buildDrizzleRepositories(handle.db);
-      enableChangeLogOnAll(repos, { record: async (entry) => { sink(fromLog(entry)); } });
-      return { repos, close: () => handle.close() };
-    },
-  },
+  { name: "in-memory", derivesOrg: false, open: (sink) => Promise.resolve(openInMemoryRepos((e) => { sink(fromEvent(e)); })) },
+  { name: DRIZZLE_NAME, derivesOrg: true, open: (sink) => openDrizzleRepos((entry) => { sink(fromLog(entry)); }) },
 ];
 
 describe("kontraktet täcker varje synkad entitet (genererat ur ENTITY_REGISTRY)", () => {
   it("varje sourceKey med ett repo har en fixtur", () => {
-    const sample = buildInMemoryRepositories(new DemoDataStore({}, () => {}));
+    const sample = openInMemoryRepos().repos;
     const withRepo = Object.values(ENTITY_REGISTRY).map((e) => e.sourceKey).filter((k) => k in sample);
     expect(withRepo.filter((k) => !(k in FIXTURES))).toEqual([]);
   });
