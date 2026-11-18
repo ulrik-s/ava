@@ -8,7 +8,7 @@ import { conflictClassOf } from "@/lib/shared/conflict-policy";
 
 describe("conflictClassOf", () => {
   it("append-only entiteter → append", () => {
-    for (const e of ["timeEntry", "expense", "payment", "billingRun", "writeOff", "calendarEvent"]) {
+    for (const e of ["timeEntry", "expense", "payment", "billingRun", "writeOff", "calendarEvent", "conflictCheck"]) {
       expect(conflictClassOf(e)).toBe("append");
     }
   });

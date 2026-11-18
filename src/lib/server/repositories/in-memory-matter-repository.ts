@@ -19,6 +19,7 @@ function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<
   const ins = (s: string) => ({ contains: s, mode: "insensitive" as const });
   return {
     organizationId,
+    deletedAt: null, // mjukt raderade syns inte, som i Postgres (#1678)
     ...(f.status ? { status: f.status } : {}),
     ...(f.employeeId ? { timeEntries: { some: { userId: f.employeeId } } } : {}),
     ...(f.ids ? { id: { in: [...f.ids] } } : {}),
@@ -82,12 +83,12 @@ export class InMemoryMatterRepository extends InMemoryRepository<Matter> impleme
   }
 
   async listByResponsibleLawyer(organizationId: OrganizationId, responsibleLawyerId: UserId): Promise<Matter[]> {
-    return (await this.delegate.findMany({ where: { organizationId, responsibleLawyerId } })) as Matter[];
+    return (await this.delegate.findMany({ where: { organizationId, responsibleLawyerId, deletedAt: null } })) as Matter[];
   }
 
   async listByNumberPrefix(organizationId: OrganizationId, prefix: string): Promise<Matter[]> {
     return (await this.delegate.findMany({
-      where: { organizationId, matterNumber: { startsWith: prefix } },
+      where: { organizationId, matterNumber: { startsWith: prefix }, deletedAt: null },
     })) as Matter[];
   }
 }
