@@ -27,6 +27,8 @@ class FakeRegistration {
   private cbs: Array<() => void> = [];
   addEventListener(_t: string, cb: () => void): void { this.cbs.push(cb); }
   fireUpdateFound(w: FakeWorker): void { this.installing = w; for (const cb of this.cbs) cb(); }
+  updates = 0;
+  update(): Promise<void> { this.updates++; return Promise.resolve(); }
 }
 
 let registration: FakeRegistration;
@@ -69,6 +71,17 @@ describe("PwaRegister", () => {
     render(<PwaRegister enabled={false} basePath="" />);
     await act(async () => { await Promise.resolve(); });
     expect(register).not.toHaveBeenCalled();
+  });
+
+  it("frågar servern efter ny version när fliken blir synlig (#1685); slutar när komponenten tas bort", async () => {
+    const { unmount } = render(<PwaRegister enabled basePath="" />);
+    await waitFor(() => expect(register).toHaveBeenCalled());
+    await act(async () => { await Promise.resolve(); });
+    fireEvent(document, new Event("visibilitychange"));
+    expect(registration.updates).toBe(1);
+    unmount();
+    fireEvent(document, new Event("visibilitychange"));
+    expect(registration.updates).toBe(1);
   });
 
   it("ingen fråga när ingen uppdatering väntar", async () => {

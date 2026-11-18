@@ -77,3 +77,41 @@ export function watchForTakeover(container: SwControlledContainerLike, onTakeove
     controlled = true;
   });
 }
+
+/** Hur ofta en öppen flik frågar servern efter en ny version (#1685). */
+export const UPDATE_CHECK_MS = 30 * 60_000;
+
+/** Den del av `ServiceWorkerRegistration` som ber servern om en ny version. */
+export interface SwUpdatableLike {
+  update(): Promise<unknown>;
+}
+
+/** Klockan och fliken som kontrollerna behöver (injicerbara i tester). */
+export interface UpdateCheckEnv {
+  setInterval(handler: () => void, ms: number): number;
+  clearInterval(id: number): void;
+  document: {
+    readonly visibilityState: string;
+    addEventListener(type: "visibilitychange", listener: () => void): void;
+    removeEventListener(type: "visibilitychange", listener: () => void): void;
+  };
+}
+
+/**
+ * Fråga servern efter en ny version var `everyMs` och när fliken blir synlig
+ * igen (#1685). Webbläsaren gör det annars bara vid en hel omladdning, och
+ * jurister har AVA öppet hela dagen, så rutan "En ny version" visades aldrig.
+ * Själva bytet sker fortfarande bara när användaren väljer "Ladda om".
+ * Ger en funktion som stoppar kontrollerna.
+ */
+export function checkForUpdates(registration: SwUpdatableLike, env: UpdateCheckEnv, everyMs = UPDATE_CHECK_MS): () => void {
+  // Offline eller servern nere: nästa kontroll försöker igen.
+  const check = (): void => { registration.update().catch(() => undefined); };
+  const onVisible = (): void => { if (env.document.visibilityState === "visible") check(); };
+  const id = env.setInterval(check, everyMs);
+  env.document.addEventListener("visibilitychange", onVisible);
+  return () => {
+    env.clearInterval(id);
+    env.document.removeEventListener("visibilitychange", onVisible);
+  };
+}
