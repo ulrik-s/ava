@@ -45,6 +45,15 @@ describe("template", () => {
   it("kör 'date'-filter på ISO-sträng", () => {
     expect(template("{{event.ts | date}}", { event: { ts: "2026-05-18T10:00:00Z" } })).toBe("2026-05-18");
   });
+
+  it("'date'-filtret ger den svenska dagen — nyårsnatten 00:30 är den 1 januari (#1677)", () => {
+    expect(template("{{event.ts | date}}", { event: { ts: "2025-12-31T23:30:00Z" } })).toBe("2026-01-01");
+    expect(template("{{event.ts | date}}", { event: { ts: new Date("2026-06-30T22:30:00Z") } })).toBe("2026-07-01");
+  });
+
+  it("'date'-filtret lämnar ett ogiltigt datum som text", () => {
+    expect(template("{{event.ts | date}}", { event: { ts: "snart" } })).toBe("snart");
+  });
 });
 
 describe("templateValue", () => {

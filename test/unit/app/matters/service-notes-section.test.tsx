@@ -88,6 +88,19 @@ describe("ServiceNotesSection", () => {
     expect(invalidate).toHaveBeenCalledWith({ matterId: "m1" });
   });
 
+  it("en ny anteckning får svenskt datum + klockslag — nyårsnatten 00:30 (#1677)", () => {
+    vi.setSystemTime(new Date("2025-12-31T23:30:00Z"));
+    try {
+      render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
+      fireEvent.click(screen.getByText("+ Ny anteckning"));
+    } finally {
+      vi.setSystemTime();
+    }
+    fireEvent.change(screen.getByPlaceholderText(/Vad hände/), { target: { value: "Jour" } });
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-01-01", time: "00:30" }));
+  });
+
   it("submit utan text gör ingen mutation (required + trim-vakt)", () => {
     render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("+ Ny anteckning"));

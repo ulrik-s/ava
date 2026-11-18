@@ -16,7 +16,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 import {
   arvodeLadderRows, awardedBaseOre, buildClientArvodeLines, buildClientView, buildCreditView, buildPayerView, buildSettlementViews,
   creditPayload, feeBaseSuffix, ladderBaseOre, radgivningOre, shareLabel, svd,
-  totalPrutningNetOre, vatLabel, type SettlementBreakdown,
+  toViewLine, totalPrutningNetOre, vatLabel, type SettlementBreakdown,
 } from "@/lib/shared/settlement-view";
 
 /** En nedbrytning där varje fält är satt — testerna varierar ett i taget. */
@@ -46,6 +46,18 @@ describe("svd", () => {
   it("tomt för null och undefined — inte 'Invalid Date'", () => {
     expect(svd(null)).toBe("");
     expect(svd(undefined)).toBe("");
+  });
+
+  it("den svenska dagen, också på servern (UTC) — nyårsnatten 00:30 är den 1 januari (#1677)", () => {
+    expect(svd(new Date("2025-12-31T23:30:00Z"))).toBe("2026-01-01");
+    expect(svd("2026-06-30T22:30:00Z")).toBe("2026-07-01");
+  });
+});
+
+describe("toViewLine", () => {
+  it("tidsradens datum är den svenska dagen (#1677)", () => {
+    const line = toViewLine({ date: new Date("2025-12-31T23:30:00Z"), description: "Förhör", minutes: 30, amountOre: 50_000, kind: "ARBETE" });
+    expect(line).toEqual({ date: "2026-01-01", description: "Förhör", minutes: 30, amountOre: 50_000, kind: "ARBETE" });
   });
 });
 

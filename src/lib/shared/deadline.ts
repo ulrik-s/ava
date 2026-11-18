@@ -1,8 +1,10 @@
 /**
  * Frister (#1162): när är en uppgift "inne"? En frist är ett DATUM, så vi
- * jämför kalenderdagar i lokal tid — inte klockslag. En frist kl. 00:00 i dag
- * är lika mycket "i dag" som en kl. 23:59.
+ * jämför kalenderdagar i svensk tid (#1677) — inte klockslag. En frist kl.
+ * 00:00 i dag är lika mycket "i dag" som en kl. 23:59.
  */
+
+import { toIsoDate } from "./iso-date";
 
 /** `overdue` = passerad, `today` = i dag, `upcoming` = framtida, `none` = ingen frist. */
 export type DeadlineState = "overdue" | "today" | "upcoming" | "none";
@@ -15,15 +17,18 @@ export interface Deadline {
 
 const DAY_MS = 86_400_000;
 
-/** Lokal midnatt för en tidpunkt (demo-datalagret ger ibland ISO-strängar). */
-function localDay(d: Date | string): number {
-  const x = d instanceof Date ? d : new Date(d);
-  return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+/**
+ * Den svenska kalenderdagen som UTC-midnatt (ms) — skillnaden mellan två är
+ * alltid hela dygn, även över sommartidsskiftet. Demo-datalagret ger ibland
+ * ISO-strängar, därav `string`.
+ */
+function stockholmDayMs(d: Date | string): number {
+  return Date.parse(toIsoDate(d));
 }
 
 export function deadlineOf(dueAt: Date | string | null | undefined, now: Date = new Date()): Deadline {
   if (dueAt == null || Number.isNaN(new Date(dueAt).getTime())) return { state: "none", daysLate: 0 };
-  const daysLate = Math.round((localDay(now) - localDay(dueAt)) / DAY_MS);
+  const daysLate = (stockholmDayMs(now) - stockholmDayMs(dueAt)) / DAY_MS;
   if (daysLate > 0) return { state: "overdue", daysLate };
   return { state: daysLate === 0 ? "today" : "upcoming", daysLate };
 }

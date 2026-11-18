@@ -7,7 +7,7 @@
  * Kostnadsräkningen till domstol har en egen mall och berörs inte.
  */
 
-import { describe, it, expect } from "vitest-compat";
+import { describe, it, expect, vi } from "vitest-compat";
 import { buildFakturaView, fakturaHeading, type FakturaTemplateArgs, type InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
 import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 import { formatCurrency } from "@/lib/client/utils";
@@ -44,6 +44,27 @@ describe("fakturaHeading", () => {
     expect(fakturaHeading({ invoiceType: "CREDIT", notes: null })).toBe("Kreditfaktura");
     expect(fakturaHeading({ invoiceType: "STANDARD", notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim)." }))
       .toBe("Rådgivningsfaktura");
+  });
+});
+
+describe("fakturadatum = svensk kalenderdag (#1677)", () => {
+  it("nyårsnatten 00:30 svensk tid (23:30 UTC) är den 1 januari — på fakturan och i specifikationen", () => {
+    const v = buildFakturaView({
+      invoice: invoice({ invoiceDate: new Date("2025-12-31T23:30:00Z") }), recipient: "Cecilia Carlsson", meta: META,
+      spec: spec({ timeLines: [{ date: "2025-12-31T23:30:00Z", description: "Förhör", minutes: 60, amountOre: 162_600 }] }),
+    });
+    expect(v.date).toBe("2026-01-01");
+    expect(v.timeLines[0]?.date).toBe("2026-01-01");
+  });
+
+  it("utan fakturadatum står dagens svenska datum", () => {
+    vi.setSystemTime(new Date("2025-12-31T23:30:00Z"));
+    try {
+      const v = buildFakturaView({ invoice: invoice({ invoiceDate: null }), recipient: "Cecilia Carlsson", meta: META, spec: spec() });
+      expect(v.date).toBe("2026-01-01");
+    } finally {
+      vi.setSystemTime();
+    }
   });
 });
 

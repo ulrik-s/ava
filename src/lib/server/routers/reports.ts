@@ -7,6 +7,7 @@ import {
 } from "@/lib/shared/billed-per-lawyer";
 import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
 
@@ -133,7 +134,8 @@ function toInvoiceInputs(invoices: RawInvoice[], writtenOff: Map<string, Date>):
   }));
 }
 
-/** Föregående kalendermånad relativt periodstarten (UTC). */
+/** Föregående kalendermånad relativt periodstarten. UTC med avsikt: rapportens perioder räknas i UTC-dygn
+ *  (slutet = 23:59:59.999Z, vars svenska dag vore NÄSTA dag) — etiketterna tas därför ur UTC-dygnet. */
 function previousCalendarMonth(periodStart: Date): { from: Date; to: Date } {
   const y = periodStart.getUTCFullYear();
   const m = periodStart.getUTCMonth();
@@ -268,8 +270,7 @@ function buildWeeklyRows(timeEntries: ReportTimeEntry[], fromDate: Date, toDate:
     const cell = grid.get(weekKey(w.isoYear, w.week))!;
     return {
       isoYear: w.isoYear, week: w.week,
-      start: w.start.toISOString().slice(0, 10),
-      end: w.end.toISOString().slice(0, 10),
+      start: stockholmDay(w.start), end: stockholmDay(w.end), // UTC-midnatt → samma svenska dag
       ...cell,
     };
   });
@@ -502,10 +503,7 @@ export const reportsRouter = router({
       return {
         user: { id: user.id, name: user.name },
         period: { from: input.from, to: input.to },
-        prevPeriod: {
-          from: prevPeriod.from.toISOString().slice(0, 10),
-          to: prevPeriod.to.toISOString().slice(0, 10),
-        },
+        prevPeriod: { from: prevPeriod.from.toISOString().slice(0, 10), to: prevPeriod.to.toISOString().slice(0, 10) }, // eslint-disable-line no-restricted-syntax -- UTC med avsikt: se previousCalendarMonth
         invoices: rows,
         billedOre: result.billedOre,
         writeOffOre: result.writeOffOre,

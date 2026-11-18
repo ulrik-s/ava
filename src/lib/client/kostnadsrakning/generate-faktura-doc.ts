@@ -17,6 +17,7 @@ import type { inferRouterInputs } from "@trpc/server";
 import { finalInvoiceNumber } from "@/lib/client/billing/invoice-number-finality";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { uuidv7 } from "@/lib/shared/uuid";
 import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta, InvoiceSpecification } from "./faktura-template";
 
@@ -84,7 +85,7 @@ export async function generateFakturaFromTemplate(args: GenerateFakturaFromTempl
   const bytes = await renderFakturaPdf(buildFakturaView({ invoice, recipient, meta, spec, breakdown }));
   // uuid — servern lagrar bara uuid-nycklade rader (#1124; fakturan missades där).
   const docId = uuidv7();
-  const fileName = `Faktura ${invoice.invoiceNumber ?? meta.matterNumber} ${new Date().toISOString().slice(0, 10)}.pdf`;
+  const fileName = `Faktura ${invoice.invoiceNumber ?? meta.matterNumber} ${stockholmDay(new Date())}.pdf`;
   const storagePath = `documents/content/${docId}.pdf`;
   await register.mutateAsync({
     id: asId<"DocumentId">(docId), matterId, fileName, mimeType: FAKTURA_MIME,

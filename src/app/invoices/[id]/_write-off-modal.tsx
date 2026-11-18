@@ -7,6 +7,7 @@
 
 import { useId, useState } from "react";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 interface Props {
   invoiceId: InvoiceId;
@@ -21,7 +22,7 @@ interface Props {
 export function WriteOffModal({ invoiceId, outstanding, isPending, error, onSubmit, onClose }: Props) {
   const [amountSek, setAmountSek] = useState(String(Math.round(outstanding / 100)));
   const [reason, setReason] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(stockholmDay(new Date()));
 
   const amountId = useId();
   const reasonId = useId();

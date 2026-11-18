@@ -10,6 +10,7 @@ import { periodFrom, periodTo } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
 import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { TimeEntryEditModal, timeActionsColumn, useTimeEntryEditing } from "./_time-entry-editing";
 
 interface TimeRow {
@@ -170,7 +171,7 @@ export default function TimePage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<TimeForm>({
     matterId: asId<"MatterId">(""),
-    date: new Date().toISOString().split("T")[0]!,
+    date: stockholmDay(new Date()),
     minutes: 30,
     description: "",
     billable: true,
@@ -183,7 +184,7 @@ export default function TimePage() {
     onSuccess: () => {
       void utils.timeEntry.list.invalidate();
       setShowForm(false);
-      setForm({ matterId: asId<"MatterId">(""), date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true });
+      setForm({ matterId: asId<"MatterId">(""), date: stockholmDay(new Date()), minutes: 30, description: "", billable: true });
     },
   });
 

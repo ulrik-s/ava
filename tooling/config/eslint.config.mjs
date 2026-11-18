@@ -19,6 +19,77 @@ import importX from "eslint-plugin-import-x";
  * funktion refaktoreras kör `bun run lint:prune` bort dess post och filen krymper
  * i git. Se docs/quality.md ("max-lines-cap & ventil") och #41.
  */
+
+/**
+ * `no-restricted-syntax` för alla ts/tsx. En senare config-post som sätter
+ * samma regel ERSÄTTER listan (ESLint slår inte ihop regel-options), så
+ * snävare kataloger sprider in den här listan och lägger till sina egna.
+ */
+const RESTRICTED_SYNTAX_BASE = [
+  // Förbjud dubbel-castar (`x as unknown as T` / `x as any as T`): de
+  // kringgår typsystemet helt (raderar formen via unknown/any och påstår en
+  // ny). Använd riktiga typer i stället — branda drizzle-kolumner + `asId`
+  // vid gränsen, zod-parse extern data, eller typa seamen. Befintliga brott
+  // är baselineade i `eslint-suppressions.json` och avvecklas i #562/ADR 0026;
+  // NYA dubbel-castar fäller CI (Static analysis kör `lint` med --max-warnings 0).
+  {
+    selector:
+      "TSAsExpression[expression.type='TSAsExpression'][expression.typeAnnotation.type=/^TS(Unknown|Any)Keyword$/]",
+    message:
+      "Dubbel-cast (`as unknown as` / `as any as`) är förbjuden — den raderar typsäkerheten. Använd riktiga typer: branda kolumner + asId, zod-parse, eller typa seamen (#562, ADR 0026).",
+  },
+  {
+    selector:
+      "TSTypeAssertion[expression.type='TSTypeAssertion']",
+    message:
+      "Dubbel-cast (`<T><U>x`) är förbjuden — den raderar typsäkerheten. Använd riktiga typer (#562, ADR 0026).",
+  },
+  {
+    // Rå JSON.parse ger `any` som sedan castas. All extern text ska gå
+    // genom zod: parseJsonWith/safeParseJsonWith i src/lib/shared/parse-json.ts (#1469).
+    selector:
+      "CallExpression[callee.type='MemberExpression'][callee.object.name='JSON'][callee.property.name='parse']",
+    message:
+      "Direkt JSON.parse är förbjuden — använd parseJsonWith(schema, text) / safeParseJsonWith(schema, text) från @/lib/shared/parse-json så värdet valideras med zod (#1469).",
+  },
+];
+
+/**
+ * En kalenderdag i AVA är ALLTID dagen i Europe/Stockholm (#1677). Ett datum
+ * skuret ur `toISOString()` är UTC-dygnet: mellan 00 och 01 (02 sommartid)
+ * svensk tid blir det gårdagen, och på nyårsnatten förra året. Gäller hela src/.
+ * Ett ställe som MEDVETET räknar i UTC-dygn stänger av regeln på raden med
+ * `-- UTC med avsikt: <varför>`.
+ */
+const RESTRICTED_UTC_DAY = [
+  {
+    selector:
+      "CallExpression[callee.property.name=/^(slice|substring|substr|split)$/][callee.object.type='CallExpression'][callee.object.callee.property.name='toISOString']",
+    message:
+      "Ett datum ur toISOString() är UTC-dygnet, inte den svenska kalenderdagen (fel dag 00–02 svensk tid). Använd stockholmDay(d) från @/lib/shared/stockholm-time eller toIsoDate(d) från @/lib/shared/iso-date (#1677).",
+  },
+];
+
+/**
+ * Datumformatering utan tidszon i kod som kör på servern (#1677): servern kör
+ * i UTC, så `toLocaleDateString("sv-SE")` ger UTC-dygnet. Gäller server- och
+ * delad kod; klientens visning kör i användarens (svenska) webbläsare.
+ */
+const RESTRICTED_TZLESS_FORMAT = [
+  {
+    selector:
+      "CallExpression[callee.property.name=/^toLocale(Date|Time)String$/]:not(:has(Property[key.name='timeZone']))",
+    message:
+      "Datumformatering utan tidszon räknar i processens tidszon (UTC på servern). Använd toIsoDate/stockholmDay, eller ange { timeZone: \"Europe/Stockholm\" } (#1677).",
+  },
+  {
+    selector:
+      "NewExpression[callee.object.name='Intl'][callee.property.name='DateTimeFormat']:not(:has(Property[key.name='timeZone']))",
+    message:
+      "Intl.DateTimeFormat utan timeZone räknar i processens tidszon (UTC på servern). Ange { timeZone: \"Europe/Stockholm\" } (#1677).",
+  },
+];
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -47,35 +118,8 @@ const eslintConfig = defineConfig([
       // query-yta (IDataStore.ts, block-disabled + dokumenterad). Skärper från
       // next/typescript:s `warn` → `error` så NYA `any` blockerar CI.
       "@typescript-eslint/no-explicit-any": "error",
-      // Förbjud dubbel-castar (`x as unknown as T` / `x as any as T`): de
-      // kringgår typsystemet helt (raderar formen via unknown/any och påstår en
-      // ny). Använd riktiga typer i stället — branda drizzle-kolumner + `asId`
-      // vid gränsen, zod-parse extern data, eller typa seamen. Befintliga brott
-      // är baselineade i `eslint-suppressions.json` och avvecklas i #562/ADR 0026;
-      // NYA dubbel-castar fäller CI (Static analysis kör `lint` med --max-warnings 0).
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector:
-            "TSAsExpression[expression.type='TSAsExpression'][expression.typeAnnotation.type=/^TS(Unknown|Any)Keyword$/]",
-          message:
-            "Dubbel-cast (`as unknown as` / `as any as`) är förbjuden — den raderar typsäkerheten. Använd riktiga typer: branda kolumner + asId, zod-parse, eller typa seamen (#562, ADR 0026).",
-        },
-        {
-          selector:
-            "TSTypeAssertion[expression.type='TSTypeAssertion']",
-          message:
-            "Dubbel-cast (`<T><U>x`) är förbjuden — den raderar typsäkerheten. Använd riktiga typer (#562, ADR 0026).",
-        },
-        {
-          // Rå JSON.parse ger `any` som sedan castas. All extern text ska gå
-          // genom zod: parseJsonWith/safeParseJsonWith i src/lib/shared/parse-json.ts (#1469).
-          selector:
-            "CallExpression[callee.type='MemberExpression'][callee.object.name='JSON'][callee.property.name='parse']",
-          message:
-            "Direkt JSON.parse är förbjuden — använd parseJsonWith(schema, text) / safeParseJsonWith(schema, text) från @/lib/shared/parse-json så värdet valideras med zod (#1469).",
-        },
-      ],
+      // Dubbel-castar + rå JSON.parse — se RESTRICTED_SYNTAX_BASE ovan.
+      "no-restricted-syntax": ["error", ...RESTRICTED_SYNTAX_BASE],
       // Promise-säkerhet: oavsiktligt obevakade promises, async-callbacks i
       // synkron/void-kontext, och `await` på icke-thenables är vanliga
       // buggkällor som bara typinfo kan upptäcka (#9).
@@ -155,6 +199,15 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unsafe-member-access": "error",
       "@typescript-eslint/no-unsafe-return": "error",
       "@typescript-eslint/no-unsafe-argument": "error",
+      // Kalenderdagen är Stockholmsdagen (#1677) — se RESTRICTED_UTC_DAY ovan.
+      "no-restricted-syntax": ["error", ...RESTRICTED_SYNTAX_BASE, ...RESTRICTED_UTC_DAY],
+    },
+  },
+  {
+    // Server- och delad kod formaterar inte datum i processens tidszon (#1677).
+    files: ["src/lib/server/**/*.ts", "src/lib/shared/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", ...RESTRICTED_SYNTAX_BASE, ...RESTRICTED_UTC_DAY, ...RESTRICTED_TZLESS_FORMAT],
     },
   },
   {

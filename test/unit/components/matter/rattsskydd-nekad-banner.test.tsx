@@ -39,4 +39,9 @@ describe("RattsskyddNekadBanner", () => {
     fireEvent.click(screen.getByRole("button", { name: "Byt till rättshjälp" }));
     expect(mutate).toHaveBeenCalledWith({ id: matterId, paymentMethod: "RATTSHJALP" });
   });
+
+  it("avslagsdatumet är den svenska dagen, även för en svensk midnatt (#1677)", () => {
+    render(<RattsskyddNekadBanner matterId={matterId} paymentMethod="RATTSSKYDD" rattsskyddNekadAt={new Date("2026-04-30T22:00:00Z")} />);
+    expect(screen.getByText(/Rättsskydd nekades 2026-05-01/)).toBeInTheDocument();
+  });
 });

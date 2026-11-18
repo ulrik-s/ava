@@ -63,8 +63,8 @@ describe("isWithinBookingWindow", () => {
   });
 
   it("tar Date lika väl som sträng", () => {
-    expect(isWithinBookingWindow(new Date(2030, 5, 15), CI_YEAR)).toBe(true);
-    expect(isWithinBookingWindow(new Date(2026, 5, 15), CI_YEAR)).toBe(false);
+    expect(isWithinBookingWindow(new Date("2030-06-15T12:00:00Z"), CI_YEAR)).toBe(true);
+    expect(isWithinBookingWindow(new Date("2026-06-15T12:00:00Z"), CI_YEAR)).toBe(false);
   });
 });
 
@@ -81,33 +81,33 @@ describe("assertWithinBookingWindow", () => {
 
 describe("bookingDateWithin", () => {
   it("behåller dagens datum när det redan ligger i fönstret", () => {
-    expect(bookingDateWithin(CI_YEAR, new Date(2030, 2, 9))).toBe("2030-03-09");
+    expect(bookingDateWithin(CI_YEAR, new Date("2030-03-09T12:00:00Z"))).toBe("2030-03-09");
   });
 
   it("flyttar året men behåller månad/dag — verifikaten sprids över CI-året", () => {
-    expect(bookingDateWithin(CI_YEAR, new Date(2026, 7, 27))).toBe("2030-08-27");
+    expect(bookingDateWithin(CI_YEAR, new Date("2026-08-27T12:00:00Z"))).toBe("2030-08-27");
   });
 
   it("klampar till start när det flyttade datumet ändå faller utanför", () => {
     const kvartal: BookingWindow = { from: "2030-01-01", to: "2030-03-31" };
-    expect(bookingDateWithin(kvartal, new Date(2026, 7, 27))).toBe("2030-01-01");
+    expect(bookingDateWithin(kvartal, new Date("2026-08-27T12:00:00Z"))).toBe("2030-01-01");
   });
 
   // 2030 är inget skottår. Utan kontrollen hade en körning den 29 februari
   // 2028 daterat verifikatet 2030-02-29 — en dag som inte finns, och som
   // Fortnox avvisar.
   it("klampar hellre än att hitta på den 29 februari i ett icke-skottår", () => {
-    expect(bookingDateWithin(CI_YEAR, new Date(2028, 1, 29))).toBe("2030-01-01");
+    expect(bookingDateWithin(CI_YEAR, new Date("2028-02-29T12:00:00Z"))).toBe("2030-01-01");
   });
 
   it("behåller den 29 februari när målåret ÄR ett skottår", () => {
     const skottar: BookingWindow = { from: "2032-01-01", to: "2032-12-31" };
-    expect(bookingDateWithin(skottar, new Date(2028, 1, 29))).toBe("2032-02-29");
+    expect(bookingDateWithin(skottar, new Date("2028-02-29T12:00:00Z"))).toBe("2032-02-29");
   });
 
   it("resultatet ligger alltid i fönstret", () => {
     for (const month of [0, 3, 6, 11]) {
-      const d = bookingDateWithin(CI_YEAR, new Date(2026, month, 15));
+      const d = bookingDateWithin(CI_YEAR, new Date(Date.UTC(2026, month, 15, 12)));
       expect(isWithinBookingWindow(d, CI_YEAR), d).toBe(true);
     }
   });
@@ -175,5 +175,31 @@ describe("withBookingWindow", () => {
     expect(await guarded.pushInvoice?.({
       invoiceNumber: "F-1", invoiceDate: "2030-01-01", amount: 100, vatRate: 2500, customerName: "K",
     })).toEqual({ externalId: "F-1" });
+  });
+});
+
+describe("fönstret räknas på den svenska dagen (#1677)", () => {
+  it("nyårsnatten 00:30 svensk tid (23:30 UTC) ligger i det NYA årets fönster", () => {
+    expect(isWithinBookingWindow(new Date("2029-12-31T23:30:00Z"), CI_YEAR)).toBe(true);
+    expect(isWithinBookingWindow(new Date("2030-12-31T23:30:00Z"), CI_YEAR)).toBe(false);
+  });
+
+  it("felet namnger den svenska dagen", () => {
+    expect(() => assertWithinBookingWindow("2030-12-31T23:30:00Z", CI_YEAR)).toThrow(/2031-01-01/);
+  });
+
+  it("sommartid: 22:30 UTC är redan nästa svenska dag", () => {
+    expect(bookingDateWithin(CI_YEAR, new Date("2030-06-30T22:30:00Z"))).toBe("2030-07-01");
+    expect(bookingDateWithin(CI_YEAR, new Date("2026-06-30T22:30:00Z"))).toBe("2030-07-01");
+  });
+
+  it("nyårsnatten i ett annat år flyttas till fönstrets 1 januari", () => {
+    expect(bookingDateWithin(CI_YEAR, new Date("2025-12-31T23:30:00Z"))).toBe("2030-01-01");
+  });
+
+  it("skottdagskontrollen gäller oavsett klockslag", () => {
+    const skottar: BookingWindow = { from: "2032-01-01", to: "2032-12-31" };
+    expect(bookingDateWithin(skottar, new Date("2028-02-28T23:30:00Z"))).toBe("2032-02-29");
+    expect(bookingDateWithin(CI_YEAR, new Date("2028-02-28T23:30:00Z"))).toBe("2030-01-01");
   });
 });

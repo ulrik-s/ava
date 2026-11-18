@@ -20,6 +20,7 @@
  * verifikatets `#TRANS`-summa blir 0, vilket SIE kräver.
  */
 
+import { toIsoDate } from "@/lib/shared/iso-date";
 import type { SemanticVoucher, VoucherRole } from "./semantic-voucher";
 
 /** Byrå-metadata för SIE-headern. */
@@ -54,14 +55,9 @@ export interface SieRenderInput {
   program?: { name: string; version: string };
 }
 
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-/** `Date | string` → `YYYYMMDD`. */
-function toSieDate(d: Date | string): string {
-  const dt = typeof d === "string" ? new Date(d) : d;
-  return `${dt.getFullYear()}${pad2(dt.getMonth() + 1)}${pad2(dt.getDate())}`;
+/** `Date | string` → `YYYYMMDD`, kalenderdagen i Stockholm (#1677). */
+export function toSieDate(d: Date | string): string {
+  return toIsoDate(d).replaceAll("-", "");
 }
 
 /** Citera ett fält enligt SIE (dubbla citationstecken, escape:a inre `"`). */

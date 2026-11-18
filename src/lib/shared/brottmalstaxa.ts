@@ -38,7 +38,7 @@
  */
 
 import type { TimeEntryKind } from "./schemas/enums";
-import { stockholmYear } from "./stockholm-time";
+import { stockholmDay, stockholmYear } from "./stockholm-time";
 
 export type TaxaLevel = 1 | 2 | 3 | 4;
 
@@ -203,10 +203,10 @@ export function coverageEntryValueOre(entry: CoverageEntryLike, date: Date | str
   return Math.round((entry.minutes / 60) * coverageEntryRateOre(entry.kind, date));
 }
 
-/** Dagnyckel (YYYY-MM-DD) — jämförelsen i § 2 gäller DAG, inte tidpunkt. */
+/** Dagnyckel (YYYY-MM-DD, svensk dag #1677) — jämförelsen i § 2 gäller DAG, inte tidpunkt. */
 function dayKey(date: Date | string): string {
   const d = new Date(date);
-  return Number.isNaN(d.getTime()) ? String(date) : (d.toISOString().split("T")[0] ?? "");
+  return Number.isNaN(d.getTime()) ? String(date) : stockholmDay(d);
 }
 
 /**

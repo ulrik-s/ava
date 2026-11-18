@@ -16,21 +16,12 @@ import {
   type LedgerAccountMap,
 } from "@/lib/shared/accounting/account-map";
 import { encodePc8 } from "@/lib/shared/accounting/pc8";
+import { toSieDate } from "@/lib/shared/accounting/sie";
 import {
   countExportable,
   invoicesToSie,
   type ExportableInvoice,
 } from "@/lib/shared/accounting/sie-from-invoices";
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-/** Dagens datum som `YYYYMMDD` (lokal tid). */
-function todayStamp(): string {
-  const d = new Date();
-  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
-}
 
 export function SieExportButton() {
   const invoices = trpc.invoice.list.useQuery({});
@@ -40,7 +31,7 @@ export function SieExportButton() {
   const exportableCount = countExportable(rows);
 
   function handleExport(): void {
-    const stamp = todayStamp();
+    const stamp = toSieDate(new Date()); // dagens datum, Stockholm (#1677)
     // Byråns mappning om konfigurerad (#249), annars BAS-standard.
     const map = (org.data?.ledgerAccountMap as LedgerAccountMap | null) ?? DEFAULT_LEDGER_ACCOUNT_MAP;
     const sie = invoicesToSie(rows, {

@@ -13,6 +13,7 @@
  */
 
 import { primitiveText } from "@/lib/shared/primitive-text";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 /** Hämta ett värde via dotterminerad path. `events.0.id` läses som arr[0].id. */
 export function lookup(root: unknown, path: string): unknown {
@@ -38,7 +39,7 @@ const FILTERS: Record<string, (v: unknown) => unknown> = {
   lower: (v) => templateText(v).toLowerCase(),
   date: (v) => {
     const d = v instanceof Date ? v : new Date(templateText(v));
-    try { return d.toISOString().slice(0, 10); } catch { return templateText(v); }
+    try { return stockholmDay(d); } catch { return templateText(v); } // svensk kalenderdag (#1677)
   },
   json: (v) => JSON.stringify(v),
 };

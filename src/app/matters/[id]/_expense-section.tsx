@@ -8,6 +8,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { chargedVatOre, expenseNetOre } from "@/lib/shared/expense-vat";
+import { toIsoDate } from "@/lib/shared/iso-date";
 import type { MileageExpensePayload } from "@/lib/shared/mileage-rate";
 import type { ExpenseId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
@@ -47,7 +48,7 @@ interface Expense {
 
 function initialForm(): ExpenseForm {
   return {
-    date: new Date().toISOString().split("T")[0]!,
+    date: toIsoDate(new Date()),
     amount: 0,
     description: "",
     billable: true,
@@ -60,7 +61,7 @@ function toForm(e: Expense): ExpenseForm {
   // Visa beloppet EXKL. moms i formuläret oavsett hur det lagrats.
   const exclOre = splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).exclVat;
   return {
-    date: new Date(e.date).toISOString().split("T")[0]!,
+    date: toIsoDate(e.date),
     amount: exclOre / 100,
     description: e.description,
     billable: e.billable,

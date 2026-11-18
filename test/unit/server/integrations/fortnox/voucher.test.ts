@@ -110,3 +110,23 @@ describe("inbetalningsverifikat (#1173)", () => {
     expect(() => renderFortnoxVoucher(buildPaymentVoucher({ amount: 1, paidAt: "2026-09-20" }), mapping)).toThrow(/bank/);
   });
 });
+
+describe("verifikatets datum = svensk kalenderdag (#1677)", () => {
+  const dated = (date: Date | string): SemanticVoucher => ({
+    date, description: "Datumtest",
+    rows: [{ role: "kundfordran", debit: 100, credit: 0 }, { role: "intaktArvode", debit: 0, credit: 100 }],
+  });
+
+  it("nyårsnatten 00:30 svensk tid (23:30 UTC) bokförs den 1 januari — samma år som fakturanumret", () => {
+    expect(renderFortnoxVoucher(dated("2025-12-31T23:30:00Z"), mapping).TransactionDate).toBe("2026-01-01");
+    expect(renderFortnoxVoucher(dated(new Date("2025-12-31T23:30:00Z")), mapping).TransactionDate).toBe("2026-01-01");
+  });
+
+  it("sommartid: 00:30 svensk tid (22:30 UTC) hör till den nya dagen", () => {
+    expect(renderFortnoxVoucher(dated("2026-06-30T22:30:00Z"), mapping).TransactionDate).toBe("2026-07-01");
+  });
+
+  it("ett rent fakturadatum behåller sin dag", () => {
+    expect(renderFortnoxVoucher(dated("2026-01-15"), mapping).TransactionDate).toBe("2026-01-15");
+  });
+});

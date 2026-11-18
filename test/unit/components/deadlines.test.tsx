@@ -4,8 +4,12 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest-compat";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 
-const day = (offset: number): Date => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + offset); return d; };
+/** Svensk kalenderdag `offset` dagar från i dag, som UTC-midnatt. Fristen
+ *  räknas i svensk tid (#1677) — en lokal midnatt hade gett gårdagen i en
+ *  UTC-process mellan 22 och 24 UTC. */
+const day = (offset: number): Date => new Date(Date.parse(stockholmDay(new Date())) + offset * 86_400_000);
 
 describe("DeadlineBadge", () => {
   it("frist i dag → stor röd 'FRIST IDAG' (role=alert)", () => {

@@ -13,7 +13,7 @@
  */
 
 import type { SemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
-import { renderSie, type SieAccountMap, type SieCompany, type SieVoucherMeta } from "@/lib/shared/accounting/sie";
+import { renderSie, toSieDate, type SieAccountMap, type SieCompany, type SieVoucherMeta } from "@/lib/shared/accounting/sie";
 import type {
   LedgerCapabilities,
   LedgerConnector,
@@ -42,14 +42,6 @@ const SIE_CAPABILITIES: LedgerCapabilities = {
   exportSie: true,
 };
 
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function sieDate(d: Date): string {
-  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
-}
-
 export class SieLedgerConnector implements LedgerConnector {
   readonly name = "sie";
 
@@ -64,7 +56,7 @@ export class SieLedgerConnector implements LedgerConnector {
     const clock = this.deps.clock ?? (() => new Date());
     return renderSie({
       company: this.deps.company,
-      generatedDate: sieDate(clock()),
+      generatedDate: toSieDate(clock()),
       accountMap: this.deps.accountMap,
       vouchers,
     });

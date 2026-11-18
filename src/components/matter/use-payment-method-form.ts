@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import { parseDecimal } from "@/components/ui/decimal-input";
+import { toIsoDate } from "@/lib/shared/iso-date";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 
@@ -70,9 +71,9 @@ export interface PaymentMethodForm {
   toUpdateInput: () => PaymentMethodUpdateInput;
 }
 
-/** ISO-datum (yyyy-mm-dd) ur ett valfritt datumfält, tomt om saknas. */
+/** ISO-datum (yyyy-mm-dd, svensk dag #1677) ur ett valfritt datumfält, tomt om saknas. */
 function isoDate(d: DateLike): string {
-  return d ? new Date(d).toISOString().slice(0, 10) : "";
+  return d ? toIsoDate(d) : "";
 }
 
 /** Talvärde → text för ett formulärfält (delat med `divisor`); null → tomt. */
