@@ -74,6 +74,11 @@ describe("dockytans ljusa tema (#1635)", () => {
     expect(css).toContain(`${LIGHT_SCOPE} .dv-tab.dv-active-tab { box-shadow:`);
   });
 
+  it("fliknamnen är feta på vald och inaktiv flik, bara i ljust läge (#1672)", () => {
+    expect(css).toContain(`${LIGHT_SCOPE} .dv-tab { font-weight: 600; }`);
+    expect(css.replaceAll(":not(.dark)", "")).not.toMatch(/\.dark[^{}]*\.dv-tab[^{}]*\{[^}]*font-weight/);
+  });
+
   it("avdelare och gruppkant är mörkare grå", () => {
     expect(luminance(lightVar("dv-separator-border"))).toBeLessThan(luminance("#d1d5db"));
     expect(css).toMatch(/:root:not\(\.dark\) \.dockview-theme-light \.dv-groupview \{ outline: 1px solid #9ca3af !important;/);
