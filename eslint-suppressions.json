@@ -210,9 +210,6 @@
     }
   },
   "src/app/matters/[id]/_billing-panel.tsx": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 1
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }

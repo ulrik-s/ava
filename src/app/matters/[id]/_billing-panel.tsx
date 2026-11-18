@@ -356,7 +356,6 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
       courtCaseNumber={strOrUndef(matter.courtCaseNumber)}
       {...data}
       initialLevel={(matter.taxaLevel ?? undefined) as 1 | 2 | 3 | 4 | undefined}
-      initialHasFTax={matter.taxaHasFTax ?? undefined}
       initialHufStart={matter.taxaHufStart ?? undefined}
       initialIsTaxe={matter.isTaxeArende ?? undefined}
       radgivningPaid={!!matter.radgivningBetaldAt}

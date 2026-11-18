@@ -144,7 +144,7 @@ export const matters = pgTable("matters", {
   isTaxeArende: boolDefault("is_taxe_arende", false),
   taxaLevel: integer("taxa_level"),
   taxaHuvudforhandlingMin: integer("taxa_huvudforhandling_min"),
-  taxaHasFTax: boolDefault("taxa_has_f_tax", false),
+  taxaHasFTax: boolDefault("taxa_has_f_tax", true), // F-skatt är normen (#1675, 0051)
   taxaHufStart: timestamp("taxa_huf_start", { withTimezone: true }),
   radgivningBetaldAt: timestamp("radgivning_betald_at", { withTimezone: true }),
   /** Klientens andel (självrisk/avgift) i bips — rättsskydd/rättshjälp (#778). */
