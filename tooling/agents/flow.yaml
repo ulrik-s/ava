@@ -131,6 +131,18 @@ machines:
       agentstatus:
         color: "0e8a16"
         description: Statussidan för agentkedjan (uppdateras av flödesvakten)
+      # Prioritet: loop 1 sätter en enligt regeln i 1-verifiering.md, Ulrik kan
+      # byta. Statussidan sorterar efter den, och loop 2 och 4 tar högst först.
+      # Ordningen här är prioritetsordningen.
+      prio-hög:
+        color: "d93f0b"
+        description: Kan ge fel belopp, förlorad data, en säkerhetsrisk eller stoppa en användare
+      prio-medel:
+        color: "fbca04"
+        description: Märks för användarna eller bromsar arbetet, men det finns en väg runt
+      prio-låg:
+        color: "c2e0c6"
+        description: Internt städ, verktyg och utvecklartakt
       # Inkorgen för allt arbete: förfrågningar från Ulrik eller en agent. Loop 1
       # verifierar dem som andra, men det finns ingen användare att fråga.
       intern:

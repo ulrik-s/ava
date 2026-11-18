@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
-import { healthReport, type HealthItem, newAlarms, previousAlarmKeys, renderStatus } from "../../tooling/scripts/flow/health";
+import { healthReport, type HealthItem, newAlarms, previousAlarmKeys, prioOrder, renderStatus } from "../../tooling/scripts/flow/health";
 import { loadFlow } from "../../tooling/scripts/flow/load";
 import { commitType, nextVersion, releaseDecision } from "../../tooling/scripts/flow/release";
 import { collectItems, lastClockRun, openIntakeRefs, publishStatus } from "../../tooling/scripts/flow-health";
@@ -47,6 +47,19 @@ describe("hälsokontrollen", () => {
     expect(report.alarms).toEqual([]);
     expect(report.waitingForUlrik).toHaveLength(2);
     expect(report.moving).toEqual(["ava#5 En sak — pågår"]);
+  });
+
+  it("det som väntar på Ulrik sorteras efter prioritet, utan flagga sist, med prioriteten först på raden", () => {
+    const fb = (number: number, labels: string[]) => item({ repo: "ulrik-s/ava-feedback", number, labels, labeledAt: { undersökt: ago(1) } });
+    const report = healthReport(flow, {
+      now,
+      lastClockRun: ago(0.5),
+      items: [fb(30, ["intern", "undersökt"]), fb(20, ["intern", "undersökt", "prio-låg"]), fb(40, ["intern", "undersökt", "prio-hög"]), fb(10, ["intern", "undersökt", "prio-hög"])],
+    });
+    expect(report.waitingForUlrik.map((l) => l.split(" En sak")[0])).toEqual([
+      "[hög] ava-feedback#10", "[hög] ava-feedback#40", "[låg] ava-feedback#20", "ava-feedback#30",
+    ]);
+    expect(prioOrder(flow)).toEqual(["prio-hög", "prio-medel", "prio-låg"]);
   });
 
   it("nedbruten och klar (väntar på release) larmar inte; den som fortfarande byggs gör det", () => {

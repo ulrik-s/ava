@@ -14,6 +14,9 @@
     { "name": "väntar-på-användaren", "color": "fbca04", "description": "En fråga till användaren (i AVA) väntar på svar" },
     { "name": "blockerad", "color": "b60205", "description": "Agenten behöver ett beslut av Ulrik" },
     { "name": "agentstatus", "color": "0e8a16", "description": "Statussidan för agentkedjan (uppdateras av flödesvakten)" },
+    { "name": "prio-hög", "color": "d93f0b", "description": "Kan ge fel belopp, förlorad data, en säkerhetsrisk eller stoppa en användare" },
+    { "name": "prio-medel", "color": "fbca04", "description": "Märks för användarna eller bromsar arbetet, men det finns en väg runt" },
+    { "name": "prio-låg", "color": "c2e0c6", "description": "Internt städ, verktyg och utvecklartakt" },
     { "name": "intern", "color": "6e7781", "description": "Internt arbete (Ulrik eller en agent) — ingen användare att fråga" }
   ],
   "code": [

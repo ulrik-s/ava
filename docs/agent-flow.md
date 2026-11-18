@@ -59,6 +59,9 @@ stateDiagram-v2
 | `väntar-på-användaren` | alla | 7 d → tas bort | En fråga till användaren (i AVA) väntar på svar |
 | `blockerad` | alla | — | Agenten behöver ett beslut av Ulrik |
 | `agentstatus` | alla | — | Statussidan för agentkedjan (uppdateras av flödesvakten) |
+| `prio-hög` | alla | — | Kan ge fel belopp, förlorad data, en säkerhetsrisk eller stoppa en användare |
+| `prio-medel` | alla | — | Märks för användarna eller bromsar arbetet, men det finns en väg runt |
+| `prio-låg` | alla | — | Internt städ, verktyg och utvecklartakt |
 | `intern` | Ulrik | — | Internt arbete (Ulrik eller en agent) — ingen användare att fråga |
 
 ## code-issue (`ulrik-s/ava`, issues)
@@ -153,6 +156,9 @@ gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/f%C3%B6rslag
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/finns-redan
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/levererad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/nedbruten
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/prio-h%C3%B6g
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/prio-l%C3%A5g
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/prio-medel
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/unders%C3%B6kt
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/uppdelad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/user-request
@@ -182,6 +188,9 @@ gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=finns-redan'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=förslag'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=levererad'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=nedbruten'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=prio-hög'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=prio-låg'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=prio-medel'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=release:v*'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=undersökt'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=uppdelad'
