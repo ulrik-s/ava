@@ -56,6 +56,32 @@ redan beslutat (`verifierad`/`nedbruten`) får han i stället `blockerad` med
 vad som behöver avgöras. Kvittot står på statusissuen
 (`<!-- omprövning:vX.Y.Z -->`).
 
+## Inkorgen för allt arbete
+
+`ulrik-s/ava-feedback` är inkorgen för **allt** nytt arbete, inte bara
+användarnas förfrågningar: Ulriks egna idéer och buggar, agenternas
+uppföljningar och teknisk skuld går samma väg. En förfrågan som inte kommer
+från en användare i AVA har flaggan `intern` (satt av Ulrik eller klockan).
+Loop 1 verifierar den som andra, men det finns ingen användare att fråga:
+frågor går till Ulrik (`blockerad`), och AVA visar den aldrig för användarna
+(de ser bara förfrågningar med sitt eget märke).
+
+I `ulrik-s/ava` hör bara arbetsorder hemma: `agent-task` (loop 2),
+`refaktorisering` och `arkitektur-rapport` (loop 5). Klockan flyttar ett
+annat issue till inkorgen som `intern` + `bugg`/`förslag` när det är äldre än
+2 timmar och ingen öppen PR stänger det, så att direkt arbete i en session
+(issue + PR) får vara kvar.
+
+Flytten kräver en token som når båda repona: hemligheten
+`FLOW_TRANSFER_TOKEN` i `ulrik-s/ava` (en fine-grained PAT med *Issues: read
+and write* på båda repona), som `agent-flow.yml` skickar till klockans steg.
+Utan den loggar klockan bara vad som skulle flyttas.
+
+Genomgången 2026-11-18 flyttade de 70 gamla issuena: de klara och
+inaktuella stängdes med belägg, resten ligger i inkorgen som `intern` +
+`undersökt` med genomgången som verifieringsrapport och väntar på Ulriks
+`verifierad`.
+
 ## Varför det ser ut så här
 
 - **Privat intag.** Kodrepot är publikt. Användare skriver klientnamn och
