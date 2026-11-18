@@ -3,6 +3,7 @@
 import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
 import { trpc } from "@/lib/client/trpc";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
+import { toIsoDate } from "@/lib/shared/iso-date";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import { applicableStandardAtgarder, type StandardAtgard } from "@/lib/shared/standard-atgard";
@@ -68,7 +69,7 @@ export function useStandardAtgarder(paymentMethod: PaymentMethod | undefined): S
 
 export function toEditForm(entry: TimeEntryLike): EditForm {
   return {
-    date: new Date(entry.date).toISOString().split("T")[0]!,
+    date: toIsoDate(entry.date),
     minutes: entry.minutes,
     description: entry.description ?? "",
     billable: entry.billable,
@@ -78,7 +79,7 @@ export function toEditForm(entry: TimeEntryLike): EditForm {
 }
 
 export function emptyForm(): EditForm {
-  return { date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true, kind: "ARBETE", standardAtgardId: "" };
+  return { date: toIsoDate(new Date()), minutes: 30, description: "", billable: true, kind: "ARBETE", standardAtgardId: "" };
 }
 
 /**

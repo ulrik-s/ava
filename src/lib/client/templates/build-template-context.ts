@@ -7,6 +7,8 @@
  * befintliga seed-mallar fungerar utan ändring.
  */
 
+import { stockholmDay } from "@/lib/shared/stockholm-time";
+
 export interface TemplateMatter {
   matterNumber: string;
   title: string;
@@ -38,11 +40,6 @@ export interface BuildTemplateContextInput {
   client?: TemplateContact | null;
   /** Override:bar "idag" för deterministiska tester. */
   now?: Date;
-}
-
-/** `YYYY-MM-DD` lokalt — stabil shape som seed-mallar förväntar sig. */
-function formatToday(now: Date): string {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 function buildMatter(matter: TemplateMatter): Record<string, unknown> {
@@ -84,7 +81,7 @@ function buildOrganization(organization: TemplateOrganization | null | undefined
 export function buildTemplateContext(input: BuildTemplateContextInput): Record<string, unknown> {
   const now = input.now ?? new Date();
   return {
-    today: formatToday(now),
+    today: stockholmDay(now), // `YYYY-MM-DD` i svensk tid — stabil shape för seed-mallarna (#1677)
     matter: buildMatter(input.matter),
     recipient: buildRecipient(input.recipient),
     client: buildClient(input.client),

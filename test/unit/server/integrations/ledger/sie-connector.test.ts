@@ -22,7 +22,7 @@ const exportable: ExportableVoucher = {
   },
 };
 
-function makeConnector(vouchers: ExportableVoucher[]) {
+function makeConnector(vouchers: ExportableVoucher[], now = new Date("2026-06-12T08:00:00Z")) {
   const ranges: { from: string; to: string }[] = [];
   const connector = new SieLedgerConnector({
     company: { name: "Byrå AB" },
@@ -31,7 +31,7 @@ function makeConnector(vouchers: ExportableVoucher[]) {
       ranges.push(range);
       return vouchers;
     },
-    clock: () => new Date("2026-06-12T08:00:00Z"),
+    clock: () => now,
   });
   return { connector, ranges };
 }
@@ -65,5 +65,10 @@ describe("SieLedgerConnector", () => {
     const sie = await connector.exportSie({ from: "2026-01-01", to: "2026-01-31" });
     expect(sie).toContain("#SIETYP 4");
     expect(sie.includes("#VER")).toBe(false);
+  });
+
+  it("#GEN är den svenska dagen — nyårsnatten 00:30 (23:30 UTC) är den 1 januari (#1677)", async () => {
+    const { connector } = makeConnector([], new Date("2025-12-31T23:30:00Z"));
+    expect(await connector.exportSie({ from: "2026-01-01", to: "2026-01-31" })).toContain("#GEN 20260101");
   });
 });

@@ -29,6 +29,7 @@ import {
   type ReceivableSuggestion,
 } from "@/lib/shared/payments/match-receivables";
 import { asId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { paymentImportLayout } from "./_import-layout";
 
 interface InvoiceRowData {
@@ -119,7 +120,7 @@ export default function PaymentImportPage() {
       await recordPayment.mutateAsync({
         invoiceId: b.invoiceId,
         amount: b.amountOre,
-        paidAt: b.tx.valueDate ?? new Date().toISOString().slice(0, 10),
+        paidAt: b.tx.valueDate ?? stockholmDay(new Date()),
         note: b.tx.debtorName ? `Betalfils-import — ${b.tx.debtorName}` : "Betalfils-import",
         reference: b.reference,
       });

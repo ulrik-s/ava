@@ -13,6 +13,7 @@ import { payableCoverageEntries } from "./brottmalstaxa";
 import type { RattsskyddClientParts } from "./coverage-billing";
 import { arvodeInclVatOre } from "./invoice-calc";
 import type { SpecDeduction, SpecTimeLine } from "./invoice-specification";
+import { toIsoDate } from "./iso-date";
 import { radgivningTextRad } from "./rattshjalp";
 import type { PaymentMethod, TimeEntryKind } from "./schemas/enums";
 
@@ -126,9 +127,10 @@ export function radgivningOre(radgivningInvoiced: boolean, rateOre: number): { r
   return { radgivningGrossOre: arvodeInclVatOre(rateOre), radgivningNetOre: rateOre };
 }
 
-export const svd = (d: Date | string | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
+/** Datum på dokumenten = svensk kalenderdag (#1677), byggs på servern (UTC). Tomt utan datum. */
+export const svd = (d: Date | string | null | undefined): string => (d ? toIsoDate(d) : "");
 export const toViewLine = (l: SpecTimeLine): SettlementViewLine => ({
-  date: new Date(l.date).toISOString().slice(0, 10), description: l.description, minutes: l.minutes,
+  date: toIsoDate(l.date), description: l.description, minutes: l.minutes,
   amountOre: l.amountOre, kind: l.kind,
 });
 

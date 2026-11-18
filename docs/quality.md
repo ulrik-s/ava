@@ -228,6 +228,20 @@ i `src/lib/shared/`) och direkt `JSON.parse` i src (förbjudet via
 `no-restricted-syntax`; använd `parseJsonWith`/`safeParseJsonWith` i
 `src/lib/shared/parse-json.ts` så texten alltid valideras med zod).
 
+#### Kalenderdag = Stockholmsdagen (#1677)
+
+En kalenderdag i AVA är ALLTID dagen i Europe/Stockholm. Servern kör i UTC, så
+processens tidszon ger fel dag mellan 00 och 01 (02 sommartid) svensk tid —
+på nyårsnatten fel år. Använd `stockholmDay`/`stockholmTime`/`stockholmYear`
+i `src/lib/shared/stockholm-time.ts` eller `toIsoDate`/`toLocalTime` i
+`src/lib/shared/iso-date.ts`. `no-restricted-syntax` spärrar
+`toISOString().slice/split/substring` i hela `src/`, och i
+`src/lib/{server,shared}/` även `toLocaleDateString`/`toLocaleTimeString`/
+`Intl.DateTimeFormat` utan `timeZone`. Ett ställe som medvetet räknar i
+UTC-dygn stänger av regeln på raden med `-- UTC med avsikt: <varför>`.
+Tester använder absoluta tidpunkter (`Z`/offset), inte `new Date(år, mån, dag)`:
+CI kör i UTC och utvecklarna i Stockholm.
+
 ### Duplikat (`bun run duplicates`)
 
 | Mått | Gräns |

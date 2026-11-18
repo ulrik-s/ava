@@ -28,6 +28,11 @@ describe("buildTemplateContext", () => {
     expect((ctx.organization as { name: string }).name).toBe("Demo Advokatbyrå");
   });
 
+  it("today är den svenska dagen — nyårsnatten 00:30 (23:30 UTC) är den 1 januari (#1677)", () => {
+    const ctx = buildTemplateContext({ matter: { matterNumber: "2026-0001", title: "T" }, now: new Date("2025-12-31T23:30:00Z") });
+    expect(ctx.today).toBe("2026-01-01");
+  });
+
   it("recipient = null när ingen mottagare angiven", () => {
     const ctx = buildTemplateContext({
       matter: { matterNumber: "2026-0002", title: "X" },

@@ -1,17 +1,32 @@
 /**
- * Byråns tidszon (Europe/Stockholm) för kalenderdagar och år. Servern kör i
- * UTC (docker): räknat i UTC hamnar svensk midnatt på föregående dag (#1167),
- * och 00–01 svensk tid på nyårsnatten i FÖRRA året (#1350).
+ * Byråns tidszon (Europe/Stockholm) för kalenderdagar, klockslag och år. Servern
+ * kör i UTC (docker): räknat i UTC hamnar svensk midnatt på föregående dag
+ * (#1167), och 00–01 svensk tid på nyårsnatten i FÖRRA året (#1350).
+ *
+ * EN regel (#1677): en kalenderdag i AVA är ALLTID dagen i Stockholm — aldrig
+ * processens tidszon och aldrig `toISOString().slice(0, 10)` (UTC-dygnet).
+ * ESLint spärrar det senare i `src/`.
  */
 
-const DAY_FMT = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" });
+/** Byråns tidszon, för `Intl`-format som inte finns som hjälpare här. */
+export const STOCKHOLM_TZ = "Europe/Stockholm";
+
+const DAY_FMT = new Intl.DateTimeFormat("sv-SE", { timeZone: STOCKHOLM_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+const TIME_FMT = new Intl.DateTimeFormat("sv-SE", { timeZone: STOCKHOLM_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 /**
  * Kalenderdagen i byråns tidszon, "YYYY-MM-DD" (#1167). Räknat i UTC blev en
  * frist på svensk midnatt (25/9 00:00 = 24/9 22:00 UTC) gårdagens datum.
+ * Ett rent datum ("2026-01-15" → UTC-midnatt = 01:00 svensk tid) behåller sin dag.
+ * Ogiltigt datum kastar `RangeError`, precis som `toISOString()`.
  */
 export function stockholmDay(d: Date): string {
   return DAY_FMT.format(d);
+}
+
+/** Klockslaget i byråns tidszon, "HH:MM" (24-timmars) (#1677). */
+export function stockholmTime(d: Date): string {
+  return TIME_FMT.format(d);
 }
 
 /**

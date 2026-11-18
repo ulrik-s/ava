@@ -16,6 +16,7 @@
 import type { KrDocumentFields, TimeEntryInput } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { asId, type BillingRunId, type MatterId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { uuidv7 } from "@/lib/shared/uuid";
 import type { DocUtils, RegisterMut } from "./generate-faktura-doc";
 
@@ -90,7 +91,7 @@ export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
 
   // uuid — servern lagrar bara uuid-nycklade rader (dataförlusten 2026-09-23).
   const docId = uuidv7(now.getTime());
-  const fileName = `Kostnadsräkning ${meta.matterNumber} ${now.toISOString().slice(0, 10)}.pdf`;
+  const fileName = `Kostnadsräkning ${meta.matterNumber} ${stockholmDay(now)}.pdf`;
   const storagePath = `documents/content/${docId}.pdf`;
   await register.mutateAsync({
     id: asId<"DocumentId">(docId), matterId, fileName, mimeType: "application/pdf",

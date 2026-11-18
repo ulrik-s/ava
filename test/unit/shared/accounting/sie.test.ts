@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
 import type { SemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
-import { renderSie, type SieAccountMap, type SieRenderInput } from "@/lib/shared/accounting/sie";
+import { renderSie, toSieDate, type SieAccountMap, type SieRenderInput } from "@/lib/shared/accounting/sie";
 
 const accountMap: SieAccountMap = {
   kundfordran: { number: "1510", name: "Kundfordringar" },
@@ -87,5 +87,27 @@ describe("renderSie", () => {
     });
     expect(out).toContain('#VER "A" "1" 20260525');
     expect(out).toContain('#VER "A" "2" 20260525');
+  });
+});
+
+describe("toSieDate — svensk kalenderdag, YYYYMMDD (#1677)", () => {
+  it("nyårsnatten 00:30 svensk tid (23:30 UTC) är den 1 januari", () => {
+    expect(toSieDate(new Date("2025-12-31T23:30:00Z"))).toBe("20260101");
+  });
+
+  it("sommartid: 22:30 UTC är redan nästa svenska dag", () => {
+    expect(toSieDate("2026-06-30T22:30:00Z")).toBe("20260701");
+  });
+
+  it("ett rent datum behåller sin dag", () => {
+    expect(toSieDate("2026-01-15")).toBe("20260115");
+  });
+
+  it("verifikatet i filen får den svenska dagen", () => {
+    const out = renderSie({
+      ...baseInput,
+      vouchers: [{ meta: { series: "A", number: "9" }, voucher: { ...voucher, date: new Date("2025-12-31T23:30:00Z") } }],
+    });
+    expect(out).toContain('#VER "A" "9" 20260101');
   });
 });

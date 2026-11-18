@@ -53,6 +53,11 @@ describe("paymentFormFromMatter", () => {
       nekad: "2026-04-01", rates: { ARBETE: 300000 },
     });
   });
+
+  it("ett datum sparat som svensk midnatt visas som den svenska dagen (#1677)", () => {
+    // 2026-03-31T22:00Z = 1 april 00:00 svensk sommartid — UTC-dygnet hade gett 31 mars.
+    expect(paymentFormFromMatter({ ...EMPTY, paymentMethodDecidedAt: new Date("2026-03-31T22:00:00Z") }).decidedAt).toBe("2026-04-01");
+  });
 });
 
 describe("paymentUpdateInput", () => {

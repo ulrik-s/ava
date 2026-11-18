@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 interface Props {
   invoiceId: InvoiceId;
@@ -20,7 +21,7 @@ interface Props {
 export function PlanModal({ invoiceId, isPending, error, onSubmit, onClose }: Props) {
   const [planMonthlySek, setPlanMonthlySek] = useState("");
   const [planDayOfMonth, setPlanDayOfMonth] = useState("1");
-  const [planStart, setPlanStart] = useState(new Date().toISOString().slice(0, 10));
+  const [planStart, setPlanStart] = useState(stockholmDay(new Date()));
   const [planNotes, setPlanNotes] = useState("");
 
   const planMonthlyId = useId();

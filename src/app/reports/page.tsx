@@ -13,6 +13,7 @@ import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, type UserId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { ArSummarySection } from "./_ar-summary";
 import { reportsLayout } from "./_reports-layout";
 
@@ -122,10 +123,9 @@ function ReportsFilterBar({ from, to, userId, users, canExport, onFrom, onTo, on
 }
 
 export default function ReportsPage() {
-  const now = new Date();
-  // split("T") ger alltid minst ett element → [0] är aldrig undefined.
-  const firstOfYear = new Date(now.getFullYear(), 0, 1).toISOString().split("T")[0]!;
-  const today = now.toISOString().split("T")[0]!;
+  // Svensk kalenderdag (#1677): årets första dag ur dagens svenska år.
+  const today = stockholmDay(new Date());
+  const firstOfYear = `${today.slice(0, 4)}-01-01`;
 
   const [from, setFrom] = useState(firstOfYear);
   const [to, setTo] = useState(today);

@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/client/utils";
 import {
   mileageAmountOre, mileageExpensePayload, mileageRateKrPerMil, type MileageExpensePayload, type MileageTrip,
 } from "@/lib/shared/mileage-rate";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { VatPreview } from "./_vat-preview";
 
 /** Formulärets värden; `krPerMil` undefined = orört, följer profilen. */
@@ -34,7 +35,7 @@ const INPUT_CLASS = "w-full rounded border border-gray-300 px-3 py-1.5 text-sm";
 const LABEL_CLASS = "block text-xs text-gray-500 mb-1";
 
 function initialState(): MileageFormState {
-  return { date: new Date().toISOString().split("T")[0] ?? "", from: "", to: "", mil: null, krPerMil: undefined };
+  return { date: stockholmDay(new Date()), from: "", to: "", mil: null, krPerMil: undefined };
 }
 
 /** Komplett resa, eller null så länge något fält saknas. */

@@ -74,8 +74,9 @@ describe("förordnandemål: FU nedlagd efter två förhör", () => {
     const html = renderHandlebars(KOSTNADSRAKNING_DEFAULT_HTML, kr.templateContext);
     expect(html).not.toMatch(/\{\{/);
     expect(html).toContain("förordnandemål (DVFS 2025:5)");
-    // Varje förhör + den sammanlagda tiden (decimaltimmar i arbetsredogörelsen, #1218)
-    expect(html).toContain("Förhör kl. 08:00–08:50");
+    // Varje förhör + den sammanlagda tiden (decimaltimmar i arbetsredogörelsen, #1218).
+    // Klockslaget är det SVENSKA (#1677): förut stod UTC-tiden 08:00 på servern.
+    expect(html).toContain("Förhör kl. 09:00–09:50");
     expect(html).toContain("0,83");
     expect(html).toContain("0,58");
     expect(html).toContain("1,42 tim");

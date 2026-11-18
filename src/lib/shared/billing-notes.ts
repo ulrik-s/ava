@@ -13,13 +13,11 @@
 
 import { formatKr } from "./format-kr";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, PAYMENT_METHOD_LABELS, type InvoiceStatus, type InvoiceType, type PaymentMethod } from "./schemas/enums";
-import { stockholmDay } from "./stockholm-time";
-
-const TIME_FMT = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit" });
+import { stockholmDay, stockholmTime } from "./stockholm-time";
 
 /** Anteckningens datum + klockslag i byråns tidszon ("YYYY-MM-DD", "HH:mm"). */
 export function noteTimestamp(at: Date): { date: string; time: string } {
-  return { date: stockholmDay(at), time: TIME_FMT.format(at) };
+  return { date: stockholmDay(at), time: stockholmTime(at) };
 }
 
 /** Fakturanumret, eller "(utan nummer)" för en faktura som saknar ett. */

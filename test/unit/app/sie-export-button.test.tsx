@@ -58,4 +58,18 @@ describe("SieExportButton", () => {
     expect(content).toContain(pc8('#VER "A" "20260042"'));
     expect(content.includes(pc8('"F-1"'))).toBe(false);
   });
+
+  it("filnamnet och #GEN bär dagens SVENSKA datum — nyårsnatten 00:30 är den 1 januari (#1677)", () => {
+    downloadMock.mockClear();
+    vi.setSystemTime(new Date("2025-12-31T23:30:00Z"));
+    try {
+      render(<SieExportButton />);
+      fireEvent.click(screen.getByRole("button", { name: /Exportera SIE/ }));
+    } finally {
+      vi.setSystemTime();
+    }
+    const [filename, bytes] = downloadMock.mock.calls[0] as [string, Uint8Array];
+    expect(filename).toBe("bokforing_20260101.sie");
+    expect(bin(bytes)).toContain(pc8("#GEN 20260101"));
+  });
 });

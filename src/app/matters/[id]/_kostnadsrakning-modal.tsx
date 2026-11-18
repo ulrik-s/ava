@@ -257,7 +257,7 @@ function useKostnadsrakningModal(props: Props) {
     setError(null);
     setGenerating(true);
     try {
-      const fileName = `Kostnadsräkning ${props.matterNumber} ${new Date().toISOString().slice(0, 10)}.pdf`;
+      const fileName = `Kostnadsräkning ${props.matterNumber} ${primitiveText(ctx.templateContext.today)}.pdf`; // räkningens svenska datum (#980, #1677)
       // uuid — servern lagrar bara uuid-nycklade rader (dataförlusten 2026-09-23).
       const docId = uuidv7();
       // Riktig PDF direkt (pdf-lib, client-side) — öppnas inline i webbläsaren,

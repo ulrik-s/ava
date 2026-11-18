@@ -31,6 +31,7 @@ import { formatDecimalHours } from "@/lib/shared/kr-format";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
+import { svd as svDate } from "@/lib/shared/settlement-view"; // svensk kalenderdag (#1677)
 import { roundingOf } from "@/lib/shared/whole-kronor";
 
 export type { InvoiceSpecification };
@@ -156,8 +157,6 @@ export interface FakturaView {
   expenseNetTotal: string;
   expenseGrossTotal: string;
 }
-
-const svDate = (d: Date | string | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
 
 type Fc = (ore: number) => string;
 
@@ -420,7 +419,7 @@ function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "fo
     footnote: footnoteFor(invoice),
     invoiceNumber: invoice.invoiceNumber ?? "—",
     ocr: invoice.ocrReference ?? "",
-    date: (invoice.invoiceDate ? new Date(invoice.invoiceDate) : new Date()).toLocaleDateString("sv-SE"),
+    date: svDate(invoice.invoiceDate || new Date()),
     matterNumber: meta.matterNumber,
     matterTitle: meta.matterTitle,
     recipient: a.recipient,

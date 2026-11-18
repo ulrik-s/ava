@@ -16,7 +16,7 @@ import { TINY_JPEG, TINY_PNG } from "../../../helpers/tiny-images";
 
 const nb = (s: string): string => s.replace(/ /g, " ");
 
-const DAY = new Date("2026-09-24T12:00:00");
+const DAY = new Date("2026-09-24T12:00:00+02:00"); // svensk tid (#1677)
 
 function line(p: Partial<KrTimeLineLike>): KrTimeLineLike {
   return { date: "2026-09-01", description: "Arbete", minutes: 60, kind: "ARBETE", rateOrePerH: 162_600, amountOre: 162_600, ...p };
@@ -56,8 +56,8 @@ describe("kr-format", () => {
   });
   it("datum i ord och klockslag", () => {
     expect(toSwedishLongDate(DAY)).toBe("24 september 2026");
-    expect(toSwedishLongDate("2026-01-05T12:00:00")).toBe("5 januari 2026");
-    expect(toLocalTime("2026-01-05T08:05:00")).toBe("08:05");
+    expect(toSwedishLongDate("2026-01-05T12:00:00+01:00")).toBe("5 januari 2026");
+    expect(toLocalTime("2026-01-05T08:05:00+01:00")).toBe("08:05");
   });
 });
 
@@ -160,7 +160,7 @@ describe("sammanställningen — löpande räkning", () => {
     expect(buildKrDocument(BASE).totals.vatLabel).toBe("Moms (25%)");
   });
   it("huvudförhandlingen ingår som arvodesrad och i redogörelsen", () => {
-    const huf = { start: new Date("2026-09-22T09:00:00"), end: new Date("2026-09-22T11:30:00"), minutes: 150, rateOrePerH: 162_600, amountOre: 406_500 };
+    const huf = { start: new Date("2026-09-22T09:00:00+02:00"), end: new Date("2026-09-22T11:30:00+02:00"), minutes: 150, rateOrePerH: 162_600, amountOre: 406_500 };
     const d = buildKrDocument({ ...BASE, huf, timeLines: [line({})], claim: krClaim({ arvodeRowsOre: [569_100], expenseChargedNetOre: 0, expensePassThroughOre: 0 }) });
     expect(nb(d.summaryRows[0]?.amount ?? "")).toBe("5 691,00 kr");
     expect(nb(d.summaryRows[0]?.quantity ?? "")).toBe("3,5 á 1 626 kr");
@@ -190,7 +190,7 @@ describe("arbetsredogörelsen", () => {
 
 describe("taxeärenden", () => {
   const taxa = (kind: TaxaResult["kind"]): TaxaResult => ({ kind, level: 1, intervalLabel: "2 tim - 2 tim 14 min", ersattningExclVat: 563_500, gransvardeExclVat: 0, notes: [] });
-  const huf = { start: new Date("2026-09-22T09:00:00"), end: new Date("2026-09-22T11:10:00"), minutes: 130, rateOrePerH: 0, amountOre: 0 };
+  const huf = { start: new Date("2026-09-22T09:00:00+02:00"), end: new Date("2026-09-22T11:10:00+02:00"), minutes: 130, rateOrePerH: 0, amountOre: 0 };
   /** Ingen tidsspillan utöver taxan. */
   const noExtra: TidsspillanUtover = { ingarOvrigMinutes: 0, ingarVardagMinutes: 0, extraVardagMinutes: 0, extraOvrigMinutes: 0, vardagRateOre: 0, ovrigRateOre: 0, amountOre: 0 };
 
@@ -210,7 +210,7 @@ describe("taxeärenden", () => {
       kind: "taxa", forhorMinutes: 85, taxa: taxa("taxa-applies"), arvodeExclVat: 0, gransvardeOverskrids: true,
       tidsspillan: { ingarOvrigMinutes: 30, ingarVardagMinutes: 30, extraVardagMinutes: 120, extraOvrigMinutes: 30, vardagRateOre: 148_700, ovrigRateOre: 97_500, amountOre: 0 },
     };
-    const d = buildKrDocument({ ...BASE, basis: { kind: "forordnande", ford }, forhor: [{ start: "2026-03-02T08:00:00", end: "2026-03-02T08:50:00" }] });
+    const d = buildKrDocument({ ...BASE, basis: { kind: "forordnande", ford }, forhor: [{ start: "2026-03-02T08:00:00+01:00", end: "2026-03-02T08:50:00+01:00" }] });
     expect(d.summaryRows.map((r) => [r.label, nb(r.quantity), nb(r.amount)])).toEqual([
       ["ARVODE ENLIGT TAXA I FÖRORDNANDEMÅL", "1,42 tim", "5 635,00 kr"],
       ["TIDSSPILLAN UTÖVER TAXAN", "2 á 1 487 kr", "2 974,00 kr"],

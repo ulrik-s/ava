@@ -27,8 +27,8 @@ const FORSVARARE: BuildInput = {
   defender: { name: "Test Testsson", title: "Advokat" },
   organization: ORG,
   courtName: "Teststads tingsrätt",
-  hufStart: new Date("2026-06-20T09:00:00"), hufEnd: new Date("2026-06-20T09:00:00"),
-  yrkandeDate: new Date("2026-06-24T12:00:00"),
+  hufStart: new Date("2026-06-20T09:00:00+02:00"), hufEnd: new Date("2026-06-20T09:00:00+02:00"),
+  yrkandeDate: new Date("2026-06-24T12:00:00+02:00"),
   isTaxeArende: false,
   timeEntries: [
     ...arbete(3),
@@ -218,7 +218,7 @@ describe("renderKostnadsrakningPdf — taxeärenden", () => {
   it("brottmålstaxa: taxeraden och noterna på sida 1, HUF i redogörelsen (ingår i taxan)", async () => {
     const pages = await render({
       ...FORSVARARE, isTaxeArende: true, taxaLevel: 1,
-      hufStart: new Date("2026-06-20T09:00:00"), hufEnd: new Date("2026-06-20T11:10:00"),
+      hufStart: new Date("2026-06-20T09:00:00+02:00"), hufEnd: new Date("2026-06-20T11:10:00+02:00"), // svensk tid (#1677)
     });
     expect(pages[0]).toContain("ARVODE ENLIGT BROTTMÅLSTAXAN");
     expect((pages[0] ?? []).some((t) => t.startsWith("Brottmålstaxa (DVFS 2025:6), nivå 1"))).toBe(true);

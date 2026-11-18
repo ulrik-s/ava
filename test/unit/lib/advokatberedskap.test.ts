@@ -83,6 +83,20 @@ describe("payableCoverageEntries — DVFS 2025:9 § 2", () => {
     expect(payableCoverageEntries(entries).some((e) => e.kind === "ADVOKATBEREDSKAP")).toBe(false);
   });
 
+  it("dagen är den SVENSKA dagen (#1677): förhör 00:30 svensk tid hör till nästa dag", () => {
+    // 2026-05-02T22:30Z = 3 maj 00:30 svensk tid — inte samma dag som beredskapen den 2 maj.
+    const natt = [beredskap("2026-05-02"), obekvam("2026-05-02T22:30:00.000Z")];
+    expect(payableCoverageEntries(natt).some((e) => e.kind === "ADVOKATBEREDSKAP")).toBe(true);
+    // 2026-05-02T21:30Z = 2 maj 23:30 svensk tid — samma dag, garantin faller bort.
+    const kvall = [beredskap("2026-05-02"), obekvam("2026-05-02T21:30:00.000Z")];
+    expect(payableCoverageEntries(kvall).some((e) => e.kind === "ADVOKATBEREDSKAP")).toBe(false);
+  });
+
+  it("ett ogiltigt datum jämförs som text i stället för att krascha", () => {
+    const entries = [beredskap("okänt"), obekvam("okänt")];
+    expect(payableCoverageEntries(entries).some((e) => e.kind === "ADVOKATBEREDSKAP")).toBe(false);
+  });
+
   it("ICKE-debiterbart arbete tar inte garantin", () => {
     // "Berättigad ersättning för arbete" — är arbetet inte debiterbart utgår
     // ingen ersättning för det, och garantin står kvar.

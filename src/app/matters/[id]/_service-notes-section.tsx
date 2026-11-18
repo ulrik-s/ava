@@ -10,6 +10,7 @@ import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
+import { noteTimestamp } from "@/lib/shared/billing-notes";
 import type { MatterId, ServiceNoteId } from "@/lib/shared/schemas/ids";
 
 interface ServiceNote {
@@ -18,15 +19,6 @@ interface ServiceNote {
   time: string;
   text: string;
   author?: { name?: string | null } | null;
-}
-
-function nowParts(): { date: string; time: string } {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return {
-    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-  };
 }
 
 /** Fallande sortering på notens egna datum+tid (senaste först). */
@@ -70,7 +62,7 @@ function noteColumns(opts: { onEdit: (n: ServiceNote) => void; onDelete: (id: Se
 /** Initialvärden för formuläret: redigerad nots fält, annars nu + tom text. */
 function initialValues(initial?: ServiceNote | null): { date: string; time: string; text: string } {
   if (initial) return { date: initial.date, time: initial.time, text: initial.text };
-  const n = nowParts();
+  const n = noteTimestamp(new Date()); // samma svenska datum + klockslag som serverns anteckningar (#1677)
   return { date: n.date, time: n.time, text: "" };
 }
 

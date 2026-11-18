@@ -222,11 +222,6 @@
       "count": 7
     }
   },
-  "src/app/matters/[id]/_expense-section.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    }
-  },
   "src/app/matters/[id]/_generate-modal.tsx": {
     "@typescript-eslint/no-unnecessary-type-conversion": {
       "count": 1
@@ -257,11 +252,6 @@
       "count": 2
     }
   },
-  "src/app/reports/page.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    }
-  },
   "src/app/search/page.tsx": {
     "@typescript-eslint/no-deprecated": {
       "count": 2
@@ -269,11 +259,6 @@
   },
   "src/app/setup/page.tsx": {
     "@typescript-eslint/no-deprecated": {
-      "count": 2
-    }
-  },
-  "src/app/time/page.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },
@@ -367,11 +352,6 @@
   },
   "src/components/shell/demo-bootstrap.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    }
-  },
-  "src/components/time/time-entry-form.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },

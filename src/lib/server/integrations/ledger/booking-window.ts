@@ -81,9 +81,10 @@ export function assertWithinBookingWindow(date: Date | string, window: BookingWi
 }
 
 /** Finns datumet på riktigt? `2030-02-29` gör det inte — 2030 är inget skottår,
- *  och Fortnox avvisar ett verifikat daterat en dag som aldrig inträffar. */
+ *  och Fortnox avvisar ett verifikat daterat en dag som aldrig inträffar. Mitt
+ *  på UTC-dagen ligger på samma svenska dag oavsett processens tidszon (#1677). */
 function isRealDate(iso: string): boolean {
-  return toIsoDate(new Date(`${iso}T00:00:00`)) === iso;
+  return toIsoDate(`${iso}T12:00:00Z`) === iso;
 }
 
 /**
