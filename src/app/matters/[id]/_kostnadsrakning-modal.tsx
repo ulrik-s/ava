@@ -51,8 +51,6 @@ interface Props extends KrDocumentFields {
     amount: number; vatRate?: number; vatIncluded?: boolean; billable?: boolean;
   }>;
   initialLevel?: TaxaLevel | undefined;
-  /** @deprecated Alla advokater har F-skatt — fältet ignoreras. */
-  initialHasFTax?: boolean | undefined;
   initialHufStart?: string | Date | null | undefined;
   initialIsTaxe?: boolean | undefined;
   /** Rättshjälp (#383): klienten har betalat rådgivningstimmen separat →
