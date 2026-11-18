@@ -16,6 +16,8 @@ export type ConflictClass = "append" | "lww" | "surface";
 const APPEND: ReadonlySet<string> = new Set([
   "timeEntry", "expense", "payment", "paymentPlanReminder", "billingRun",
   "writeOff", "accontoDeduction", "document", "calendarEvent",
+  // Jävskontrollens logg kan bara läggas till (radvägens `appendOnly`, #1344).
+  "conflictCheck",
 ]);
 
 const LWW: ReadonlySet<string> = new Set([

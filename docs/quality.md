@@ -357,6 +357,31 @@ Den fäller på:
 Ta nästa lediga nummer när du skriver en migration. Om kontrollen säger att
 `main` redan har ditt nummer, byt nummer på din fil.
 
+### Grindar som prövar betydelse (#1678)
+
+Grindarna ovan kontrollerar struktur. De såg inte att `taxa_has_f_tax` hade
+DEFAULT false medan koden antog true (#1675). Tre tester kontrollerar i stället
+att samma begrepp betyder samma sak på alla ställen där det hanteras. De körs i
+den vanliga testsviten:
+
+| Grind | Test | Prövar |
+|---|---|---|
+| Drizzle ↔ zod | `test/unit/server/db/drizzle-zod-parity.test.ts` | Per kolumn: standardvärde, NOT NULL mot zod:s null, enum-värden (typnivå, fäller i `bun run typecheck`), kolumner utan zod-fält och tvärtom. Dessutom `x.fält ?? true/false` i `src/` som motsäger kolumnens standardvärde. |
+| Synkregistren | `test/unit/server/sync/sync-registry-coverage.test.ts` | Varje synkad entitet är procedurägd eller radpush, exakt ett av dem. Registren nämner bara synkade entiteter. En köad procedur skriver en procedurägd entitet. Konfliktklassen följer skrivsättet. |
+| Repo-kontraktet utanför CRUD | `test/unit/server/repositories/repository-list-contract.test.ts` | Samma scenarier mot minnesrepot och Drizzle (pglite eller `PG_TEST_URL`): svensk namnordning, null sist, mjukt raderade rader utanför listor, `%`/`_` som vanliga tecken. |
+
+Varje grind är en **ratchet** med en lista över dagens kända avvikelser
+(`test/helpers/ratchet.ts`). Varje post anger skälet och issuen som ska rätta
+den. En ny avvikelse fäller testet. En listad avvikelse som inte längre finns
+fäller också testet, och då ska posten strykas, precis som med `lint:prune`.
+Listan får bara krympa. Lägg aldrig till en post för att få igenom ny kod.
+Rätta i stället koden, eller skriv en issue och motivera posten i PR:en.
+
+Rader som skapas i minnesrepot valideras inte med zod, så zod-schemats
+standardvärden gäller inte där. Det standardvärde koden faktiskt använder i
+minnesrepot är reservvärdet vid läsningen (`?? true`). Därför prövar
+Drizzle ↔ zod-grinden också reservvärdena.
+
 ### Lasttest (`bun run load:test`, #1366)
 
 Många samtidiga användare mot server-first i docker (Postgres 16 + pg-boss),

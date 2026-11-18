@@ -21,6 +21,7 @@ import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQ
 import { KIND_LABELS, KNOWN_KINDS } from "@/lib/shared/document-kind";
 import { groupPartsByDocument, partForPage } from "@/lib/shared/document-part-kinds";
 import { asId, type DocumentId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { containsPattern } from "../db/like-pattern";
 import { documentPages, documentParts, documents, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { IDocumentPageIndex, IndexableDocument, ISearchIndex, ISearchOpts, SearchHit, SearchResponse } from "../ports";
@@ -68,7 +69,7 @@ interface Scored extends Candidate { score: number }
 
 /** ILIKE-mönster ur needlen: escape `\ % _`, `*` → `%`, substring på båda sidor. */
 export function likePatternOf(raw: string): string {
-  return `%${raw.replace(/[\\%_]/g, "\\$&").replace(/\*/g, "%")}%`;
+  return containsPattern(raw).replace(/\*/g, "%");
 }
 
 function parseNeedle(query: string): Needle | null {

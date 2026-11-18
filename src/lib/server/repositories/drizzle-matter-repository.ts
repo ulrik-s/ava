@@ -5,9 +5,10 @@
  * (robustare än korrelerade subqueries; jfr document-folder-repo:t).
  */
 
-import { and, asc, desc, eq, ilike, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, like, or, type SQL, sql } from "drizzle-orm";
 import type { ContactId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
+import { containsPattern, prefixPattern } from "../db/like-pattern";
 import { contacts, documents, matterContacts, matters, timeEntries } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -41,7 +42,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
   }
 
   private listWhere(organizationId: OrganizationId, f: MatterListFilter) {
-    const pat = f.search ? `%${f.search}%` : "";
+    const pat = f.search ? containsPattern(f.search) : "";
     return and(
       eq(matters.organizationId, organizationId),
       isNull(matters.deletedAt),
@@ -152,7 +153,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
     const rows = await this.db.select().from(matters)
       .where(and(
         eq(matters.organizationId, organizationId),
-        ilike(matters.matterNumber, `${prefix}%`),
+        like(matters.matterNumber, prefixPattern(prefix)), // bokstavligt, som startsWith i minnesrepot (#1678)
         isNull(matters.deletedAt),
       ));
     return this.asRows(rows);

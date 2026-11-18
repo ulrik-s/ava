@@ -111,7 +111,9 @@
   (`test/unit/server/repositories/repository-contract.test.ts`, #1249): CRUD
   med versionshöjning, mjuk borttagning, byrå ur egen kolumn, byråavgränsning
   och frysning. Kontraktet genereras ur `ENTITY_REGISTRY` — en ny entitet utan
-  fixtur fäller testet.
+  fixtur fäller testet. Listorna prövas i `repository-list-contract.test.ts`
+  (#1678): svensk namnordning, null sist, mjukt raderade rader och `%`/`_` i
+  söktermer. Kända avvikelser står med issue i en ratchet-lista.
 
 ### Self-hosted server (server-first, ADR 0016)
 - `src/bin/server-first.ts` → `buildServerFirstApi`: tRPC-over-HTTP (`appRouter`)

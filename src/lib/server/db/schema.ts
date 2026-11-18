@@ -26,7 +26,7 @@ import type { DocumentPartSource } from "@/lib/shared/schemas/document";
 import type {
   AmountRounding, BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, InvoiceStatus,
   ConflictCheckStatus, InvoiceType, MatterRole, MatterStatus, PaymentMethod, PaymentPlanStatus, ReminderType,
-  SuggestionStatus, UserRole, VehicleType,
+  SuggestionStatus, TimeEntryKind, UserRole, VehicleType,
 } from "@/lib/shared/schemas/enums";
 import type {
   AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId,
@@ -270,8 +270,8 @@ export const timeEntries = pgTable("time_entries", {
   minutes: integer("minutes").notNull(),
   description: text("description").notNull(),
   hourlyRate: integer("hourly_rate").notNull(),
-  /** ARBETE (default) eller TIDSSPILLAN (#891) — styr slutregleringens norm. */
-  kind: text("kind").$type<"ARBETE" | "ARBETE_OBEKVAM_TID" | "TIDSSPILLAN" | "TIDSSPILLAN_OVRIG_TID" | "FORHANDLING">(),
+  /** Arvodeskategorin (#891, #950) — null = ARBETE. Styr slutregleringens norm. */
+  kind: text("kind").$type<TimeEntryKind>(),
   /** Byråns standardåtgärd posten registrerades ur (#956) — spårbarhet: går att
    *  se vilka poster som kommer ur en standard och om tiden justerats. */
   standardAtgardId: text("standard_atgard_id"),

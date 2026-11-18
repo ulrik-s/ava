@@ -21,13 +21,14 @@ export class InMemoryContactRepository extends InMemoryRepository<Contact> imple
   }
 
   async listAllForOrg(organizationId: OrganizationId): Promise<Contact[]> {
-    return (await this.delegate.findMany({ where: { organizationId, parentId: null } })) as Contact[];
+    return (await this.delegate.findMany({ where: { organizationId, parentId: null, deletedAt: null } })) as Contact[];
   }
 
   async listForOrg(organizationId: OrganizationId, opts: ContactListOptions): Promise<ContactListResult> {
     const where = {
       organizationId,
       parentId: null,
+      deletedAt: null, // mjukt raderade syns inte, som i Postgres (#1678)
       ...(opts.contactType ? { contactType: opts.contactType } : {}),
       ...(opts.search
         ? {
@@ -69,10 +70,10 @@ export class InMemoryContactRepository extends InMemoryRepository<Contact> imple
   }
 
   async findByPersonalNumber(organizationId: OrganizationId, personalNumber: string): Promise<Contact | null> {
-    return (await this.delegate.findFirst({ where: { personalNumber, organizationId } })) as Contact | null;
+    return (await this.delegate.findFirst({ where: { personalNumber, organizationId, deletedAt: null } })) as Contact | null;
   }
 
   async findByOrgNumber(organizationId: OrganizationId, orgNumber: string): Promise<Contact | null> {
-    return (await this.delegate.findFirst({ where: { orgNumber, organizationId } })) as Contact | null;
+    return (await this.delegate.findFirst({ where: { orgNumber, organizationId, deletedAt: null } })) as Contact | null;
   }
 }

@@ -8,6 +8,7 @@ import {
   documentFolderIdSchema,
   documentPartIdSchema,
   documentAnalysisSuggestionIdSchema,
+  invoiceIdSchema,
   matterEventSuggestionIdSchema,
   matterIdSchema,
   contactIdSchema,
@@ -52,6 +53,8 @@ export const documentSchema = z.object({
   id: documentIdSchema,
   matterId: matterIdSchema,
   folderId: documentFolderIdSchema.nullish(),
+  /** Fakturan dokumentet genererades för (#397), null för övriga dokument. */
+  invoiceId: invoiceIdSchema.nullish(),
   /** Faktureringskörningen dokumentet genererades för (#1230) — kostnadsräkningens
    *  PDF länkas till sin körning så "Ångra kostnadsräkning" kan ta bort den. */
   billingRunId: billingRunIdSchema.nullish(),

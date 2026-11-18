@@ -168,6 +168,24 @@ describe("InMemoryQueryEngine — orderBy", () => {
     expect(r.map((x) => x.id)).toEqual(["sthlm", "gbg", "malmo"]);
   });
 
+  it("svensk ordning oavsett miljöns språk: Å, Ä, Ö efter Z (#1678)", () => {
+    const people = ["Örjan", "Åsa", "ärla", "Bertil", "anna", "Adam", "Zelda"].map((name, i) => ({ id: String(i), name }));
+    const r = new InMemoryQueryEngine<(typeof people)[number]>().query(people, { orderBy: { name: "asc" } });
+    expect(r.map((x) => x.name)).toEqual(["Adam", "anna", "Bertil", "Zelda", "Åsa", "ärla", "Örjan"]);
+  });
+
+  it("saknade värden sist vid stigande och först vid fallande ordning, som Postgres (#1678)", () => {
+    const tasks = [
+      { id: "senare", dueAt: new Date("2026-03-01") },
+      { id: "utan", dueAt: null },
+      { id: "forst", dueAt: new Date("2026-01-01") },
+      { id: "saknas" },
+    ];
+    const q = new InMemoryQueryEngine<Record<string, unknown>>();
+    expect(q.query(tasks, { orderBy: { dueAt: "asc" } }).map((x) => x.id)).toEqual(["forst", "senare", "utan", "saknas"]);
+    expect(q.query(tasks, { orderBy: { dueAt: "desc" } }).map((x) => x.id)).toEqual(["utan", "saknas", "senare", "forst"]);
+  });
+
   it("orderBy som array — fallback till första", () => {
     const r = engine.query(rows, { orderBy: [{ status: "asc" }, { count: "desc" }] });
     // ACTIVE först (3 st), sen CLOSED. Inom ACTIVE: count desc.
