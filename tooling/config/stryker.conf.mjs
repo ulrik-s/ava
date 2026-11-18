@@ -15,7 +15,7 @@
  * i resten av sviten läcker annars mock.module mellan filerna.
  */
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
-export default {
+const config = {
   appendPlugins: ["@hughescr/stryker-bun-runner"],
   testRunner: "bun",
   mutate: [
@@ -50,3 +50,5 @@ export default {
   tempDirName: ".stryker-tmp",
   cleanTempDir: true,
 };
+
+export default config;
