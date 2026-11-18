@@ -152,7 +152,7 @@ function TimeCard({ ymd }: { ymd: string }) {
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           <Clock size={16} className="text-gray-500" /> Tidrapportering
           {entries.data && (
-            <span className="text-xs font-normal text-gray-600">({formatDecimalHoursWithUnit(entries.data.totalMinutes)})</span>
+            <span>({formatDecimalHoursWithUnit(entries.data.totalMinutes)})</span>
           )}
         </h2>
         <Link href="/time" className="text-sm text-blue-700 hover:underline inline-flex items-center gap-1">

@@ -8,6 +8,7 @@
  * - Fakturor: annullerade och kreditfakturor dolda från början (#1522).
  * - Ärendet: fliken Betalningssätt borta, ändras via huvudet (#1499).
  * - Rutornas rubrikrader: ett steg starkare färg i ljust läge, mörkt läge oförändrat (#1636).
+ * - Startsidan: tidsumman i Tidrapportering ser ut som rubriken (#1673).
  */
 import type { Locator, Page } from "@playwright/test";
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
@@ -173,8 +174,32 @@ test("Startsidan i ljust läge: rubrikraderna har den starkare tonen och läsbar
   }
 });
 
+/** Tidsumman `(X h)` i Tidrapporteringens rubrik, och rubriken själv (#1673). */
+async function timeSumLook(page: Page): Promise<{ sum: string[]; heading: string[] }> {
+  const heading = page.getByRole("heading", { name: /^Tidrapportering/ });
+  await expect(heading).toBeVisible({ timeout: 30_000 });
+  const sum = heading.locator("span").filter({ hasText: /^\(.+ h\)$/ });
+  await expect(sum).toBeVisible();
+  const look = (l: Locator) => l.evaluate((el) => { const s = getComputedStyle(el); return [s.fontWeight, s.fontSize, s.color]; });
+  return { sum: await look(sum), heading: await look(heading) };
+}
+
+test("Startsidan: tidsumman i Tidrapportering ser ut som rubriken (#1673)", async ({ page }) => {
+  await page.goto(`${BASE}/`);
+  const { sum, heading } = await timeSumLook(page);
+  expect(sum[0]).toBe("600");
+  expect(sum).toEqual(heading);
+});
+
 test.describe("mörkt läge", () => {
   test.use({ colorScheme: "dark" });
+
+  test("Startsidan: tidsumman följer rubrikens färg (#1673)", async ({ page }) => {
+    await page.goto(`${BASE}/`);
+    await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+    const { sum, heading } = await timeSumLook(page);
+    expect(sum).toEqual(heading);
+  });
 
   test("Startsidans rubrikrader har samma färger som före #1636", async ({ page }) => {
     await page.goto(`${BASE}/`);
