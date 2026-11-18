@@ -90,6 +90,12 @@ describe("MattersPage", () => {
     expect(screen.getAllByText(/Ärenden/i).length).toBeGreaterThan(0);
   });
 
+  it("sidrubriken heter som menyvalet: Ärenden / jävskontroll (#1690)", () => {
+    render(<MattersPage />);
+    const heading = screen.getByRole("heading", { level: 1, name: "Ärenden / jävskontroll" });
+    expect(heading.className).toBe("text-2xl font-bold text-gray-900");
+  });
+
   it("renderar lista med ärenden", () => {
     mattersQuery.data = {
       matters: [

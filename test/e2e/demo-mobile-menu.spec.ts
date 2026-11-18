@@ -48,7 +48,7 @@ async function openStart(page: Page, width: number, height: number): Promise<voi
 
 async function expectMatters(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/matters\/?$/);
-  await expect(page.getByRole("heading", { name: "Ärenden", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ärenden / jävskontroll", level: 1, exact: true })).toBeVisible();
 }
 
 test("telefon (390×844): ☰ öppnar menyn och leder vidare från startsidan", async ({ page }) => {
