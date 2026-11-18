@@ -95,6 +95,16 @@ describe("Dashboard", () => {
     expect(screen.getByText("(1 h)")).toBeInTheDocument();
   });
 
+  it("tidsumman ärver rubrikens utseende, Att bevakas räknare är oförändrad (#1673)", () => {
+    timeQuery.data = { entries: [], totalMinutes: 60 };
+    watchlistQuery.data = { items: [{ kind: "deadline", severity: "passed", title: "Tidsfrist passerad: Svaromål", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: "2026-01-01", amountOre: null, link: { route: "matters", id: "m1" }, taskId: "t9" }] };
+    render(<Dashboard />);
+    const sum = screen.getByText("(1 h)");
+    expect(sum.className).toBe("");
+    expect(sum.closest("h2")?.className).toContain("font-semibold text-gray-900");
+    expect(screen.getByText("(1, 1 passerade)").className).toBe("text-xs font-normal text-gray-600");
+  });
+
   it("dedupar 'Senaste ärenden' från timeEntries", () => {
     timeQuery.data = {
       entries: [
