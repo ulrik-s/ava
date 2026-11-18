@@ -1,0 +1,37 @@
+name: Mutationstestning
+
+# Natt: Stryker muterar domänkärnan (tooling/config/stryker.conf.mjs) — taxor,
+# kostnadsräkning, moms, verifikat, fakturornas tillstånd, kalenderdagar — och
+# kör testerna som når varje mutant. En överlevande mutant är en rad som inget
+# test kontrollerar på riktigt. Poängen är en ratchet (`thresholds.break`):
+# under golvet fäller körningen. Rapporten laddas upp som artefakt.
+
+on:
+  schedule:
+    - cron: "30 2 * * *" # 02:30 UTC varje natt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    name: Mutationstestning (domänkärnan)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/bun-setup
+      - name: Stryker
+        run: bun run mutation
+      - name: Rapport
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: mutationsrapport
+          path: reports/mutation/
+          retention-days: 14
