@@ -39,6 +39,7 @@ import {
   type QueueOwner,
 } from "./mutation-queue";
 import { PendingWrites, type PendingWritesView } from "./pending-writes";
+import { recordTouch } from "./procedure-touches";
 import { ReconcileEngine, type ConflictRecord, type ReconcileResult } from "./reconcile-engine";
 import type { SyncTransport } from "./sync-transport";
 import type { MutationEvent } from "./writable-delegate";
@@ -156,12 +157,6 @@ async function repairHydrated(
 function withRepairedRows(entries: readonly QueueEntry[], repaired: readonly QueuedMutation[]): QueueEntry[] {
   let next = 0;
   return entries.map((e) => (isProcedureCall(e) ? e : repaired[next++] ?? e));
-}
-
-/** Lägg till en berörd rad (en gång per rad) i ett procedur-anrops fångst. */
-function recordTouch(touches: ProcedureTouch[], event: MutationEvent<Record<string, unknown>>): void {
-  const id = typeof event.row.id === "string" ? event.row.id : "";
-  if (!touches.some((t) => t.entity === event.entity && t.id === id)) touches.push({ entity: event.entity, id });
 }
 
 function keyOf(entity: string, row: Record<string, unknown>): string {

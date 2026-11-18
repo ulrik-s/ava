@@ -6,7 +6,7 @@
 
 import { isUuid } from "@/lib/shared/uuid";
 import { SOURCE_KEY_BY_ENTITY } from "../data-store/in-memory/entity-source-keys";
-import type { PulledChange, RowRef } from "../data-store/in-memory/sync-transport";
+import { MAX_ROW_REFS, type PulledChange, type RowRef } from "../data-store/in-memory/sync-transport";
 import type { Repositories } from "../repositories/repositories";
 
 /** En rad i den strukturella formen sync-bryggan hanterar. */
@@ -59,10 +59,17 @@ export async function getInOrg(repos: Repositories, entity: string, id: string, 
  * #879) blir en tombstone — en annan byrås rad blir aldrig data. Entiteter som
  * inte synkas hoppas.
  */
-export function canonicalRows(repos: Repositories, refs: readonly RowRef[], orgId: string): Promise<PulledChange[]> {
+export async function canonicalRows(repos: Repositories, refs: readonly RowRef[], orgId: string): Promise<PulledChange[]> {
   const readable = refs.filter((ref) => entityRepo(repos, ref.entity) !== null);
-  return Promise.all(readable.map(async (ref): Promise<PulledChange> => {
-    const row = isUuid(ref.id) ? await getInOrg(repos, ref.entity, ref.id, orgId) : null;
-    return row ? { entity: ref.entity, row } : { entity: ref.entity, row: { id: ref.id }, deleted: true };
-  }));
+  const out: PulledChange[] = [];
+  // I omgångar: ett anrop kan röra tusentals rader (#1674) och får inte tömma databaspoolen.
+  for (let i = 0; i < readable.length; i += MAX_ROW_REFS) {
+    out.push(...await Promise.all(readable.slice(i, i + MAX_ROW_REFS).map((ref) => canonicalRow(repos, ref, orgId))));
+  }
+  return out;
+}
+
+async function canonicalRow(repos: Repositories, ref: RowRef, orgId: string): Promise<PulledChange> {
+  const row = isUuid(ref.id) ? await getInOrg(repos, ref.entity, ref.id, orgId) : null;
+  return row ? { entity: ref.entity, row } : { entity: ref.entity, row: { id: ref.id }, deleted: true };
 }
