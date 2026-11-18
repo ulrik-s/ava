@@ -72,6 +72,8 @@ jobs:
           # Knuffen startar agenten igen för saker som stått still (flow.yaml: nudge).
           ROUTINE_TOKEN_L3: ${{ secrets.ROUTINE_TOKEN_L3 }}
           ROUTINE_TOKEN_L4: ${{ secrets.ROUTINE_TOKEN_L4 }}
+          # Flytten till inkorgen (flow/inbox.ts) — en token som når ava och ava-feedback.
+          FLOW_TRANSFER_TOKEN: ${{ secrets.FLOW_TRANSFER_TOKEN }}
         run: |
           if [ -n "$NORMALIZE" ]; then
             bun tooling/scripts/flow-guard.ts normalize "$NORMALIZE"
