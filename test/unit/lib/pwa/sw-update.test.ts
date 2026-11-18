@@ -8,6 +8,9 @@
 import { describe, expect, it, vi } from "vitest-compat";
 import {
   activateUpdate,
+  checkForUpdates,
+  UPDATE_CHECK_MS,
+  type UpdateCheckEnv,
   watchForTakeover,
   watchForUpdate,
   type SwContainerLike,
@@ -136,5 +139,50 @@ describe("watchForTakeover (#1355)", () => {
     expect(onTakeover).not.toHaveBeenCalled();
     container.fireControllerChange();
     expect(onTakeover).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("checkForUpdates (#1685)", () => {
+  /** En klocka och en flik som testet styr. */
+  function fakeEnv() {
+    const timers = new Map<number, () => void>();
+    const visibility: Array<() => void> = [];
+    const doc = { visibilityState: "visible" };
+    const env: UpdateCheckEnv = {
+      setInterval: (fn, ms) => { expect(ms).toBe(UPDATE_CHECK_MS); timers.set(timers.size + 1, fn); return timers.size; },
+      clearInterval: (id) => { timers.delete(id); },
+      document: {
+        get visibilityState() { return doc.visibilityState; },
+        addEventListener: (_t, cb) => { visibility.push(cb); },
+        removeEventListener: (_t, cb) => { visibility.splice(visibility.indexOf(cb), 1); },
+      },
+    };
+    const tick = (): void => { for (const fn of timers.values()) fn(); };
+    const show = (state: string): void => { doc.visibilityState = state; for (const cb of [...visibility]) cb(); };
+    return { env, tick, show, timers, visibility };
+  }
+
+  it("frågar servern var halvtimme och när fliken blir synlig, inte när den göms", () => {
+    const update = vi.fn(() => Promise.resolve());
+    const { env, tick, show } = fakeEnv();
+    checkForUpdates({ update }, env);
+    expect(update).not.toHaveBeenCalled();
+    tick();
+    expect(update).toHaveBeenCalledTimes(1);
+    show("hidden");
+    expect(update).toHaveBeenCalledTimes(1);
+    show("visible");
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it("ett misslyckat försök (offline) sväljs; stopp tar bort klockan och lyssnaren", async () => {
+    const update = vi.fn(() => Promise.reject(new Error("offline")));
+    const { env, tick, timers, visibility } = fakeEnv();
+    const stop = checkForUpdates({ update }, env);
+    tick();
+    await Promise.resolve();
+    stop();
+    expect(timers.size).toBe(0);
+    expect(visibility).toHaveLength(0);
   });
 });

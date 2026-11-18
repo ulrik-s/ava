@@ -17,7 +17,7 @@
 
 import { useEffect, useState } from "react";
 import { recoverFromChunkError, watchChunkErrors } from "@/lib/client/pwa/chunk-reload";
-import { activateUpdate, watchForTakeover, watchForUpdate, type SwWorkerLike } from "@/lib/client/pwa/sw-update";
+import { activateUpdate, checkForUpdates, watchForTakeover, watchForUpdate, type SwWorkerLike } from "@/lib/client/pwa/sw-update";
 import { registerServiceWorker } from "@/lib/client/register-service-worker";
 
 interface PwaRegisterProps {
@@ -55,6 +55,7 @@ export function PwaRegister({
   useEffect(() => {
     if (!enabled) return;
     let active = true;
+    let stopChecks: (() => void) | null = null;
     void registerServiceWorker(`${basePath}/sw.js`, `${basePath}/`).then((result) => {
       const container = navigator.serviceWorker;
       if (!active || !result.registration) return;
@@ -62,8 +63,11 @@ export function PwaRegister({
         if (active) setNotice({ kind: "waiting", worker });
       });
       watchForTakeover(container, () => { if (active) setNotice({ kind: "updated" }); });
+      stopChecks = checkForUpdates(result.registration, {
+        setInterval: (fn, ms) => window.setInterval(fn, ms), clearInterval: (id) => window.clearInterval(id), document,
+      });
     });
-    return () => { active = false; };
+    return () => { active = false; stopChecks?.(); };
   }, [enabled, basePath]);
 
   useEffect(() => {
