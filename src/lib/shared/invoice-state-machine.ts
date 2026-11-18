@@ -20,7 +20,7 @@
  * [ADR 0015]: ../../../docs/adr/0015-faktura-tillstandsmaskin.md
  */
 
-import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
+import { type InvoiceStatus, invoiceStatusSchema } from "@/lib/shared/schemas/enums";
 
 /**
  * Tillåtna övergångar per tillstånd (exkl. den implicita `from === to`).
@@ -46,6 +46,22 @@ export const INVOICE_TRANSITIONS: Record<InvoiceStatus, readonly InvoiceStatus[]
 
 /** Tillstånd som BARA får nås efter att fakturan passerat `SENT`. */
 export const REQUIRES_SENT: readonly InvoiceStatus[] = ["PAID", "INSTALLMENT_PLAN", "BAD_DEBT"];
+
+/**
+ * Utställda fakturor (#1676): allt utom Skapad och Annullerad. De bokförs (Fortnox
+ * och SIE), räknas som fakturerade och som kundfordringar. Kundförlust är en
+ * verklig affärshändelse och räknas (ADR 0007). En ny status måste tas ställning
+ * till här — kompilatorn kräver det.
+ */
+const ISSUED: Record<InvoiceStatus, boolean> = {
+  DRAFT: false, SENT: true, PAID: true, CANCELLED: false, BAD_DEBT: true, INSTALLMENT_PLAN: true,
+};
+
+/** Är fakturan utställd? En status som inte finns räknas inte. */
+export function isIssued(status: string): boolean {
+  const parsed = invoiceStatusSchema.safeParse(status);
+  return parsed.success && ISSUED[parsed.data];
+}
 
 /** Är `to` en laglig efterföljare till `from`? Samma tillstånd = alltid ok. */
 export function canTransition(from: InvoiceStatus, to: InvoiceStatus): boolean {

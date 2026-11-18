@@ -16,13 +16,11 @@
  * [ADR 0007]: ../../../docs/adr/0007-kundfordringar-konstaterad-kundforlust.md
  */
 
+import { isIssued } from "./invoice-state-machine";
 import { primitiveText } from "./primitive-text";
 import { computeInvoiceLedger } from "./write-off-calc";
 
 type Row = Record<string, unknown>;
-
-/** Status som räknas som "utställd" (fakturerat). DRAFT/CANCELLED exkluderas. */
-const ISSUED_STATUSES = new Set(["SENT", "PAID", "BAD_DEBT", "INSTALLMENT_PLAN"]);
 
 /** Id:n på fakturor som har en kreditnota — de annullerades av krediteringen. */
 export function creditedInvoiceIds(invoices: readonly Row[]): Set<string> {
@@ -37,7 +35,7 @@ export function creditedInvoiceIds(invoices: readonly Row[]): Set<string> {
 
 /** Var fakturan utställd? Utställd status, eller annullerad AV en kreditering. */
 function wasIssued(inv: Row, creditedIds: ReadonlySet<string>): boolean {
-  if (ISSUED_STATUSES.has(String(inv.status))) return true;
+  if (isIssued(String(inv.status))) return true;
   return String(inv.status) === "CANCELLED" && creditedIds.has(primitiveText(inv.id));
 }
 
@@ -93,7 +91,7 @@ function invoiceLedgerRow(
   credited: Map<string, number>,
   written: Map<string, number>,
 ): ArInvoiceLedgerRow | null {
-  if (!ISSUED_STATUSES.has(String(inv.status)) || inv.invoiceType === "CREDIT") return null;
+  if (!isIssued(String(inv.status)) || inv.invoiceType === "CREDIT") return null;
   const id = primitiveText(inv.id);
   const p = paid.get(id) ?? 0;
   const c = credited.get(id) ?? 0;

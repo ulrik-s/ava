@@ -18,10 +18,10 @@
  * Ren och ramverks-agnostisk → enhetstestbar isolerat. Alla belopp i öre.
  */
 
+import { isIssued } from "@/lib/shared/invoice-state-machine";
 import type { InvoiceId, UserId } from "@/lib/shared/schemas/ids";
 
 /** Utfärdade statusar som räknas som "gått ut" (fakturan har lämnat huset). */
-const ISSUED_STATUSES: ReadonlySet<string> = new Set(["SENT", "PAID", "BAD_DEBT", "INSTALLMENT_PLAN"]);
 
 export interface BilledInvoiceInput {
   id: InvoiceId;
@@ -118,7 +118,7 @@ export function billedPerLawyer(opts: BilledPerLawyerOpts): BilledPerLawyerResul
     if (share <= 0) continue;
 
     // Fakturerat i perioden: utfärdad + invoiceDate inom perioden.
-    if (ISSUED_STATUSES.has(inv.status) && inRange(inv.invoiceDate, opts.period)) {
+    if (isIssued(inv.status) && inRange(inv.invoiceDate, opts.period)) {
       invoices.push({ id: inv.id, invoiceDate: inv.invoiceDate, amountOre: inv.amountOre, shareOre: share });
       billedOre += share;
     }
