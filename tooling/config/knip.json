@@ -34,7 +34,8 @@
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [
-    "tailwindcss"
+    "tailwindcss",
+    "@hughescr/stryker-bun-runner"
   ],
   "ignoreBinaries": [
     "dot",

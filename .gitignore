@@ -63,6 +63,8 @@ next-env.d.ts
 
 # Test- och kvalitetsrapporter (samlad output-mapp)
 /reports/
+# Strykers sandlåda (mutationstestning, bun run mutation)
+/.stryker-tmp/
 
 # Genererat SQLite-schema (committas inte — bygger sig själv från schema.prisma)
 /data/prisma/schema.sqlite.prisma

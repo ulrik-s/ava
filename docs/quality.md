@@ -516,6 +516,24 @@ Höj `LINE_FLOOR` / `FUNC_FLOOR` i
 (bundle) resp. `coverageThreshold` i `helper-ui/bunfig.toml`. Stegvis höjning är
 poängen — varje test-PR ska minst hålla nuvarande nivå. Gater tightnar bara.
 
+## Mutationstestning (domänkärnan)
+
+Täckningen mäter att en rad KÖRS, inte att testerna kontrollerar resultatet.
+`bun run mutation` (Stryker + `@hughescr/stryker-bun-runner`, kräver Bun ≥ 1.4)
+ändrar domänkärnans kod lite i taget — `>` → `>=`, `?? true` → `?? false`, tar
+bort ett anrop — och kör de tester som når raden. En överlevande mutant är en
+rad som inget test kontrollerar. Kärnan och testurvalet står i
+[`stryker.conf.mjs`](../tooling/config/stryker.conf.mjs): taxor, kostnadsräkning,
+moms, verifikat, fakturornas tillstånd och kalenderdagar. Rapporten hamnar i
+`reports/mutation/`.
+
+- **Ratchet:** `thresholds.break` ligger strax under dagens poäng och höjs bara.
+- **Timeout är ingen dom:** router-testerna tar sekunder att ladda, därför
+  `timeoutMS: 60_000` — med kortare gräns räknades mutanter som hann få timeout
+  som fångade och poängen blev för hög.
+- **Ekvivalenta mutanter** (som inte ändrar beteendet, t.ex. `x ?? true` → `x && true`
+  när mottagaren själv har `true` som standard) går inte att döda; lämna dem.
+
 ## Referenser
 
 - [bun test](https://bun.sh/docs/cli/test) / [bun coverage](https://bun.sh/docs/test/coverage)
