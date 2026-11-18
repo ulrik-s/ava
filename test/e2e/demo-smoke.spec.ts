@@ -89,7 +89,7 @@ test("menyvalet Ärenden / jävskontroll öppnar ärendelistan (#1643)", async (
   await page.goto(`${BASE}/`);
   await page.locator("[data-desktop-sidebar]").getByRole("link", { name: "Ärenden / jävskontroll" }).click();
   await expect(page).toHaveURL(/\/matters\/?$/, { timeout: 15_000 });
-  await expect(page.getByRole("heading", { level: 1, name: /Ärenden/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Ärenden / jävskontroll", exact: true })).toBeVisible({ timeout: 15_000 });
 });
 
 test("gamla /conflicts/ skickar vidare till ärendelistan (#1643)", async ({ page }) => {
