@@ -71,7 +71,7 @@ fi
 
 docker run -d --name "$TAG-oauth2" --network "$NETWORK" --network-alias oauth2-proxy -e AVA_STUB_EMAIL="$EMAIL" \
   -v "$ROOT/tooling/scripts/caddy-e2e/oauth2-proxy-stub.ts:/stub.ts:ro" \
-  oven/bun:1 bun /stub.ts >/dev/null
+  oven/bun:1.4.4 bun /stub.ts >/dev/null
 docker run -d --name "$TAG-caddy" --network "$NETWORK" -p "127.0.0.1:$PORT:80" -e AVA_DOMAIN=:80 \
   -v "$ROOT/tooling/docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
   -v "$WORK/releases:/srv/releases:ro" \

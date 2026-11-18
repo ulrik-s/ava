@@ -49,6 +49,10 @@ SYSTEMD_DIR="${AVA_SYSTEMD_DIR:-/etc/systemd/system}"
 BACKUP_UNITS="ava-backup-request.path ava-backup-request.service"
 DEPLOY_UNITS="ava-deploy.timer ava-deploy.service"
 CADDYFILE="tooling/docker/caddy/Caddyfile"
+# Bygget och migreringen kör i samma Bun som CI testar (.github/actions/bun-setup).
+# Var `oven/bun:1` (flytande): produktionen gick på 1.4 medan CI testade 1.3.
+# Ett test håller de två lika.
+BUN_IMAGE="oven/bun:1.4.4"
 READY_TRIES="${AVA_DEPLOY_READY_TRIES:-30}"
 READY_PAUSE="${AVA_DEPLOY_READY_PAUSE:-2}"
 DRY_RUN=0
@@ -144,7 +148,7 @@ install_units() {
 }
 
 step "kontrollerar att inget annat bygge kör"
-if [ -n "$(docker ps -q --filter ancestor=oven/bun:1)" ]; then
+if [ -n "$(docker ps -q --filter ancestor="$BUN_IMAGE")" ]; then
   echo "ett annat bygge (oven/bun) kör redan — avbryter" >&2
   exit 1
 fi
@@ -224,7 +228,7 @@ export AVA_VERSION_DATE="${AVA_VERSION_DATE:-$(git log -1 --format=%cI HEAD 2>/d
 # Outlook-tillägget byggs in under out/addin (serveras på /addin/, docs/outlook-addin.md):
 # domänen och Entra-appens id kommer ur ava-server.env.
 run docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= -e AVA_BUILD_TARGET=server -e AVA_VERSION -e AVA_VERSION_DATE \
-  -e AVA_DOMAIN -e OAUTH2_PROXY_CLIENT_ID -e OIDC_ISSUER_URL oven/bun:1 sh -c \
+  -e AVA_DOMAIN -e OAUTH2_PROXY_CLIENT_ID -e OIDC_ISSUER_URL "$BUN_IMAGE" sh -c \
   'bun install --frozen-lockfile >/dev/null && bun run server-first:build >/dev/null && bash tooling/scripts/build-demo.sh >/tmp/build.log 2>&1 && bun office-addin/build.ts --out out/addin >>/tmp/build.log 2>&1 || { tail -30 /tmp/build.log; exit 1; }'
 
 step "kontrollerar byggd CSS mot globals.css"
@@ -242,7 +246,7 @@ STATE_DB="migreringen avbröts — körda filer står i schema_migrations (varje
 export AVA_DATABASE_URL="postgres://${POSTGRES_USER:-ava}:$POSTGRES_PASSWORD@postgres:5432/${POSTGRES_DB:-ava}"
 run docker run --rm --network ava_default -v "$PWD:/app" -w /app \
   -e AVA_DATABASE_URL \
-  oven/bun:1 bun tooling/scripts/db-migrate.ts
+  "$BUN_IMAGE" bun tooling/scripts/db-migrate.ts
 STATE_DB="migrerad ($sha)"
 
 step "startar om servern med ny kod (klienten är fortfarande den gamla)"
