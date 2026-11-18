@@ -224,6 +224,42 @@ describe("CachingSyncDataStore (#415)", () => {
       expect(res.conflicts[0]).toMatchObject({ conflictClass: "surface", reason: "stale-status" });
       expect(ds.pendingCount()).toBe(0); // acked trots konflikt (blockerar inte kön)
     });
+
+    // #1710: avvisningen sparas post för post, medan resten av kön ännu spelas upp.
+    it("onConflicts anropas per avvisad post under uppspelningen — före kvitteringen, och en gång", async () => {
+      const transport = new FakeTransport();
+      const calls: Array<{ ids: string[]; pending: number }> = [];
+      const ds = await CachingSyncDataStore.create({
+        transport,
+        onConflicts: (conflicts) => {
+          calls.push({ ids: conflicts.map((c) => c.mutation.mutationId), pending: ds.pendingCount() });
+          return Promise.resolve();
+        },
+      });
+      for (let i = 0; i < 3; i++) await ds.store.invoices.create({ data: { id: uuidv7(), organizationId: ORG, matterId: uuidv7(), status: "DRAFT" } as never });
+      const [first, second, third] = ds.pendingEntries().map((e) => e.mutationId);
+      transport.pushImpl = (m) => (m.mutationId === second ? { status: "accepted", row: m.row } : { status: "conflict", reason: "stale-status" });
+
+      const res = await ds.reconcile();
+
+      // Posten låg kvar i kön när avvisningen sparades, och ingen sparas igen efteråt.
+      expect(calls).toEqual([{ ids: [first], pending: 3 }, { ids: [third], pending: 1 }]);
+      expect(res.conflicts.map((c) => c.mutation.mutationId)).toEqual([first, third]);
+      expect(ds.pendingCount()).toBe(0);
+    });
+
+    it("går avvisningen inte att spara ligger posten kvar i kön", async () => {
+      const transport = new FakeTransport();
+      const ds = await CachingSyncDataStore.create({ transport, onConflicts: () => Promise.reject(new Error("lagringen är full")) });
+      await ds.store.invoices.create({ data: { id: uuidv7(), organizationId: ORG, matterId: uuidv7(), status: "DRAFT" } as never });
+      transport.pushImpl = () => ({ status: "conflict", reason: "stale-status" });
+
+      const res = await ds.reconcile();
+
+      expect(res.blocked?.error).toEqual(new Error("lagringen är full"));
+      expect(res.conflicts).toEqual([]);
+      expect(ds.pendingCount()).toBe(1);
+    });
   });
 
   describe("createEphemeral (demo-vägen #419 — synkron, writeBack, inget synk-mål)", () => {

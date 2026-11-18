@@ -99,6 +99,10 @@ export class SimTab {
   online = true;
   /** Antal anrop kvar innan nätet går ned mitt i en synk (null = inget avbrott planerat). */
   dropAfter: number | null = null;
+  /** Antal anrop kvar innan fliken dör mitt i en synk: anropet får aldrig något svar (null = fliken lever). */
+  dieAfter: number | null = null;
+  /** Fliken har dött: dess synk blir aldrig klar. */
+  dead = false;
   /** Nästa svar tappas efter att servern behandlat anropet. */
   loseNextResponse = false;
   store!: CachingSyncDataStore;
@@ -129,6 +133,8 @@ export class SimTab {
 
   private async request(input: string | URL | Request, init?: RequestInit): Promise<Response> {
     if (this.dropAfter !== null && this.dropAfter-- <= 0) { this.online = false; this.dropAfter = null; }
+    if (this.dieAfter !== null && this.dieAfter-- <= 0) this.dead = true;
+    if (this.dead) return new Promise<Response>(() => undefined);
     if (!this.online) throw new TypeError("Failed to fetch (simulerat avbrott)");
     const req = new Request(input, init);
     return this.net.send(this.name, async () => {

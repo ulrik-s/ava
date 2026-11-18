@@ -68,7 +68,8 @@ export interface CachingSyncDeps {
   cursor?: CursorStore;
   /**
    * Ändringar servern avvisade i en reconcile (#1266) — sparas så att ingen
-   * försvinner tyst. Utan den (demo, tester) glöms de som förut.
+   * försvinner tyst. Anropas post för post, innan posten kvitteras (#1710).
+   * Utan den (demo, tester) glöms de som förut.
    */
   onConflicts?: (conflicts: readonly ConflictRecord[]) => Promise<void>;
   /**
@@ -175,7 +176,6 @@ export class CachingSyncDataStore {
       /** Lyssnare på lokala ändringar (köad + persisterad) — driver synk-efter-spara. */
       localChangeListeners: Set<() => void>;
       afterReconcile: (() => Promise<unknown>) | undefined;
-      onConflicts: ((conflicts: readonly ConflictRecord[]) => Promise<void>) | undefined;
       /**
        * Aktiv under `runQueuedProcedure` (#1265): lokala radskrivningar samlas
        * här som `touches` i stället för att köas som rader. `null` = ingen.
@@ -362,8 +362,9 @@ export class CachingSyncDataStore {
     };
 
     const prune = (keep: ReadonlySet<string>): number => pruneLocal(store, keep);
-    const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply, prune });
-    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile, onConflicts: deps.onConflicts, capture, writes });
+    const { onConflicts } = deps; // sparar varje avvisning innan dess köpost kvitteras (#1710)
+    const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply, prune, ...(onConflicts ? { onReject: (c: ConflictRecord) => onConflicts([c]) } : {}) });
+    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile, capture, writes });
   }
 
   /** Reconcile mot servern (pull→apply→replay→advance) — online-vägen.
@@ -377,7 +378,6 @@ export class CachingSyncDataStore {
     // eller avvisad — kom bara dit, så raderna läses om från servern här.
     this.engine.restoreLater(this.queue.takeSettledElsewhere().flatMap(refsOf));
     const result = await this.engine.reconcile();
-    if (result.conflicts.length > 0) await this.hooks.onConflicts?.(result.conflicts);
     if (result.pulled + result.pushed + result.rebased + result.replayed + result.restored + result.pruned > 0) {
       this.rebakeJoins();
       await this.persistSnapshot();

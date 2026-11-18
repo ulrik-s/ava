@@ -110,6 +110,13 @@ export interface ReconcileDeps {
    * tester) tas inget bort.
    */
   prune?: (keep: ReadonlySet<string>) => number;
+  /**
+   * Spara en avvisad post (#1710, ADR 0037). Inväntas INNAN posten kvitteras:
+   * dör fliken mitt i uppspelningen finns ändringen antingen kvar i kön eller
+   * bland de avvisade ändringarna. Kastar den kvitteras inte posten, och kön
+   * stannar där. Utan den (demo, tester) kvitteras posten direkt.
+   */
+  onReject?: (conflict: ConflictRecord) => void | Promise<void>;
 }
 
 /** Vad alla sidor i en reconcile gav (#1388, #1360). */
@@ -235,16 +242,36 @@ export class ReconcileEngine {
 
   /**
    * Spela upp kön (FIFO). accepted/rebased → applicera + ack; conflict eller
-   * avvisat fel → ytlägg + ack; ett fel som ska försökas igen → stanna här.
+   * avvisat fel → ytlägg + spara ({@link ReconcileDeps.onReject}) + ack; ett fel
+   * som ska försökas igen → stanna här.
    */
   private async replayQueue(plan: RestorePlan): Promise<Tally & { blocked: BlockedEntry | null }> {
     const tally: Tally = { pushed: 0, rebased: 0, replayed: 0, conflicts: [] };
     for (const m of [...this.deps.queue.pending()]) {
-      const blocked = await this.replayEntry(m, tally, plan);
+      const before = tally.conflicts.length;
+      const blocked = await this.replayEntry(m, tally, plan) ?? await this.saveRejection(m, tally, before);
       if (blocked) return { ...tally, blocked };
       await this.deps.queue.ack(m.mutationId);
     }
     return { ...tally, blocked: null };
+  }
+
+  /**
+   * Spara postens avvisning innan den kvitteras (#1710). `before` = antalet
+   * konflikter före posten: en post ger högst en. Går den inte att spara är
+   * posten inte avgjord: den stryks ur resultatet, ligger kvar i kön och
+   * spelas upp igen nästa gång.
+   */
+  private async saveRejection(m: QueueEntry, tally: Tally, before: number): Promise<BlockedEntry | null> {
+    const conflict = tally.conflicts[before];
+    if (!conflict || !this.deps.onReject) return null;
+    try {
+      await this.deps.onReject(conflict);
+      return null;
+    } catch (error) {
+      tally.conflicts.length = before;
+      return { mutation: m, error, attempts: 0 };
+    }
   }
 
   /** En post: null när den är klar (ska ackas), annars varför kön stannar här. */
