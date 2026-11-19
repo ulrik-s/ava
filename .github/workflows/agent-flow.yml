@@ -9,7 +9,8 @@ name: Flödesvakt
 
 on:
   issues:
-    types: [labeled]
+    # closed: var issuen sista blockeraren för en arbetsorder startas loop 4 (beroenden, #1720).
+    types: [labeled, closed]
   issue_comment:
     types: [created]
   pull_request_target:
