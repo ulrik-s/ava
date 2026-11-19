@@ -8,7 +8,7 @@
  *
  * Utan FLOW_GUARD_MODE=enforce loggas bara vad som skulle göras.
  */
-import { type Column, columnFor, decideColumn, decidePrio } from "./flow/board";
+import { AUTO_APPROVE_MS, AUTO_LABEL, autoApprovable, autoApproveDue, type Column, type ColumnAction, columnFor, decideColumn, decidePrio, rekFor } from "./flow/board";
 import { type BoardApi, type BoardItem, projectBoard } from "./flow/board-github";
 import { type GitHub, gitHub, type OpenItem, runGhWithToken } from "./flow/github";
 import { loadFlow } from "./flow/load";
@@ -16,11 +16,24 @@ import { loadFlow } from "./flow/load";
 /** Projektets namn i GitHub. */
 export const BOARD_TITLE = "AVA – flödet";
 
-/** Det synken behöver. */
-export interface SyncDeps { board: BoardApi; intake: GitHub; intakeRepo: string; open: readonly OpenItem[]; enforce: boolean; log: (l: string) => void }
+/** Det synken behöver. `now` styr vetofönstret för det automatiska godkännandet. */
+export interface SyncDeps { board: BoardApi; intake: GitHub; intakeRepo: string; open: readonly OpenItem[]; enforce: boolean; log: (l: string) => void; now: number }
 
 /** Vad en synk gjorde. */
-export interface SyncResult { added: number[]; approved: number[]; declined: number[]; reset: number[]; archived: number[] }
+export interface SyncResult {
+  added: number[]; approved: number[]; declined: number[]; reset: number[]; archived: number[]; vetoed: number[]; autoApproved: number[];
+}
+
+/**
+ * Markören först i synkens kommentarer: de är tavlans, inte Ulriks egna ord,
+ * fast de skrivs med hans token (agenterna läser Ulriks kommentarer som beslut).
+ */
+export const BOARD_MARKER = "<!-- tavlan -->";
+
+const AUTO_COMMENT = `${BOARD_MARKER}\nGodkänd automatiskt: ${AUTO_APPROVE_MS / 3_600_000} timmar i "Godkänns automatiskt" utan veto. ` +
+  "Loop 1 bedömde den som en liten bekräftad bugg eller ett internt verktyg, inom ADR:erna och utan risk (pengar, inloggning, migration, klientdata). " +
+  "Var det fel: ta bort `verifierad` innan loop 2 hunnit bryta ner den, eller stäng den.";
+const VETO_COMMENT = `${BOARD_MARKER}\nVeto på tavlan: godkänns inte automatiskt. Ulrik beslutar själv (Att besluta).`;
 
 function addMissing(d: SyncDeps, onBoard: ReadonlySet<number>, result: SyncResult): void {
   for (const i of d.open) {
@@ -32,28 +45,54 @@ function addMissing(d: SyncDeps, onBoard: ReadonlySet<number>, result: SyncResul
     d.board.setColumn(itemId, columnFor(i.labels));
     const prio = decidePrio(i.labels, null);
     if (prio.kind === "set-board") d.board.setPrio(itemId, prio.prio);
+    const rek = rekFor(i.labels);
+    if (rek !== null) d.board.setRek(itemId, rek);
   }
 }
 
-function applyColumn(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): void {
+/** Verkställer kortets kolumn. Ger beslutet, så att det automatiska godkännandet vet om Ulrik flyttat kortet. */
+function applyColumn(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): ColumnAction {
   const action = decideColumn(labels, item.column);
-  if (action.kind === "none") return;
   if (action.kind === "approve") {
     result.approved.push(item.number);
     d.log(`#${item.number}: godkänd på tavlan → verifierad`);
     if (d.enforce) d.intake.addLabel(item.number, "verifierad");
-    return;
-  }
-  if (action.kind === "decline") {
+  } else if (action.kind === "decline") {
     result.declined.push(item.number);
     d.log(`#${item.number}: avböjd på tavlan → stängs`);
     if (d.enforce) {
       d.intake.comment(item.number, "Avböjd av Ulrik på tavlan. Stängs utan att byggas.");
       d.intake.closeIssue(item.number, "not_planned");
     }
-    return;
+  } else if (action.kind === "veto") {
+    veto(d, item, result);
+  } else if (action.kind === "set") {
+    setColumn(d, item, action.column, result);
   }
-  setColumn(d, item, action.column, result);
+  return action;
+}
+
+function veto(d: SyncDeps, item: BoardItem, result: SyncResult): void {
+  result.vetoed.push(item.number);
+  d.log(`#${item.number}: veto på tavlan → godkänns inte automatiskt`);
+  if (!d.enforce) return;
+  d.intake.removeLabel(item.number, AUTO_LABEL);
+  d.intake.comment(item.number, VETO_COMMENT);
+}
+
+/** När `auto-godkänn` senast sattes (ISO), ur händelseloggen. */
+function autoSince(d: SyncDeps, n: number): string | undefined {
+  return d.intake.labelEvents(n).filter((e) => e.added && e.label === AUTO_LABEL).at(-1)?.at;
+}
+
+/** Godkänner automatiskt när vetofönstret gått ut. */
+function autoApprove(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): void {
+  if (!autoApprovable(labels) || !autoApproveDue(labels, autoSince(d, item.number), d.now)) return;
+  result.autoApproved.push(item.number);
+  d.log(`#${item.number}: inget veto på ${AUTO_APPROVE_MS / 3_600_000} h → verifierad`);
+  if (!d.enforce) return;
+  d.intake.comment(item.number, AUTO_COMMENT);
+  d.intake.addLabel(item.number, "verifierad");
 }
 
 function setColumn(d: SyncDeps, item: BoardItem, column: Column, result: SyncResult): void {
@@ -71,9 +110,23 @@ function applyPrio(d: SyncDeps, item: BoardItem, labels: readonly string[]): voi
   d.intake.addLabel(item.number, `prio-${action.prio}`);
 }
 
+function applyRek(d: SyncDeps, item: BoardItem, labels: readonly string[]): void {
+  const rek = rekFor(labels);
+  if (rek !== null && rek !== item.rek && d.enforce) d.board.setRek(item.itemId, rek);
+}
+
+/** Ett kort på tavlan: kolumn, prio, rekommendation och automatiskt godkännande. */
+function applyItem(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): void {
+  const action = applyColumn(d, item, labels, result);
+  applyPrio(d, item, labels);
+  applyRek(d, item, labels);
+  // Bara om Ulrik inte flyttat kortet själv (godkänt, avböjt eller lagt in veto).
+  if (action.kind === "none" || action.kind === "set") autoApprove(d, item, labels, result);
+}
+
 /** En synk: nya kort läggs till, Ulriks flyttar verkställs, resten följer etiketterna, stängda arkiveras. */
 export function syncBoard(d: SyncDeps): SyncResult {
-  const result: SyncResult = { added: [], approved: [], declined: [], reset: [], archived: [] };
+  const result: SyncResult = { added: [], approved: [], declined: [], reset: [], archived: [], vetoed: [], autoApproved: [] };
   const items = d.board.items().filter((i) => i.repo === d.intakeRepo);
   const labelsOf = new Map(d.open.map((i) => [i.number, i.labels]));
   addMissing(d, new Set(items.map((i) => i.number)), result);
@@ -84,8 +137,7 @@ export function syncBoard(d: SyncDeps): SyncResult {
       if (d.enforce) d.board.archive(item.itemId);
       continue;
     }
-    applyColumn(d, item, labels, result);
-    applyPrio(d, item, labels);
+    applyItem(d, item, labels, result);
   }
   return result;
 }
@@ -101,7 +153,8 @@ if (import.meta.main) {
     const board = projectBoard(run, flow.ulrik, BOARD_TITLE, console.log);
     const intake = gitHub(intakeRepo, run);
     const open = intake.openItems().filter((i) => !i.isPr && !i.labels.includes("agentstatus"));
-    const r = syncBoard({ board, intake, intakeRepo, open, enforce: process.env.FLOW_GUARD_MODE === "enforce", log: console.log });
-    console.log(`tavlan ${board.url}: ${r.added.length} nya, ${r.approved.length} godkända, ${r.declined.length} avböjda, ${r.reset.length} tillbakalagda, ${r.archived.length} arkiverade`);
+    const r = syncBoard({ board, intake, intakeRepo, open, enforce: process.env.FLOW_GUARD_MODE === "enforce", log: console.log, now: Date.now() });
+    console.log(`tavlan ${board.url}: ${r.added.length} nya, ${r.approved.length} godkända, ${r.autoApproved.length} automatiskt godkända, `
+      + `${r.vetoed.length} veton, ${r.declined.length} avböjda, ${r.reset.length} tillbakalagda, ${r.archived.length} arkiverade`);
   }
 }

@@ -7,6 +7,11 @@
  * Andra flyttar läggs tillbaka. Prioriteten går åt andra hållet också: ändrar
  * Ulrik `Prio` på tavlan blir det etiketten.
  *
+ * Automatiskt godkännande: loop 1 sätter `auto-godkänn` på en liten bekräftad
+ * bugg eller ett internt verktyg utan risk. Kortet står i "Godkänns
+ * automatiskt", och efter 24 h utan veto sätter synken `verifierad` med Ulriks
+ * token. Veto: flytta kortet till Att besluta (eller Avböjd).
+ *
  * GitHub kan inte starta en workflow när ett kort flyttas, så synken läser av
  * tavlan med jämna mellanrum (`flow-board.ts`). Rena funktioner här.
  */
@@ -15,6 +20,7 @@
 export const COLUMNS = [
   { name: "Ny", color: "GRAY", description: "Loop 1 verifierar förfrågan" },
   { name: "Att besluta", color: "YELLOW", description: "Flytta till Godkänd för att bygga, eller till Avböjd" },
+  { name: "Godkänns automatiskt", color: "PINK", description: "Godkänns efter 24 h. Flytta till Att besluta (veto) eller Avböjd för att stoppa" },
   { name: "Svara", color: "RED", description: "Blockerad: läs senaste kommentaren och svara" },
   { name: "Väntar på användaren", color: "PURPLE", description: "En fråga till användaren i AVA" },
   { name: "Godkänd", color: "BLUE", description: "Loop 2 bryter ner i arbetsorder" },
@@ -32,6 +38,9 @@ export const PRIOS = ["hög", "medel", "låg"] as const;
 /** En prioritet. */
 export type Prio = (typeof PRIOS)[number];
 
+/** Loop 1:s flagga för det som godkänns automatiskt efter vetofönstret. */
+export const AUTO_LABEL = "auto-godkänn";
+
 /** Etiketterna som ger en kolumn, i företrädesordning: det som väntar på någon går först. */
 const RULES: ReadonlyArray<readonly [Column, readonly string[]]> = [
   ["Svara", ["blockerad"]],
@@ -39,6 +48,7 @@ const RULES: ReadonlyArray<readonly [Column, readonly string[]]> = [
   ["Godkänd", ["verifierad"]],
   ["Byggs", ["nedbruten", "dubblett"]],
   ["Klar", ["levererad", "finns-redan", "uppdelad"]],
+  ["Godkänns automatiskt", [AUTO_LABEL]],
   ["Att besluta", ["undersökt"]],
 ];
 
@@ -55,12 +65,13 @@ export type ColumnAction =
   | { kind: "none" }
   | { kind: "set"; column: Column }
   | { kind: "approve" }
-  | { kind: "decline" };
+  | { kind: "decline" }
+  | { kind: "veto" };
 
 /** Ulrik kan godkänna det som ännu inte är beslutat. */
-const APPROVABLE: readonly Column[] = ["Ny", "Att besluta"];
+const APPROVABLE: readonly Column[] = ["Ny", "Att besluta", "Godkänns automatiskt"];
 /** Ulrik kan avböja det där inget byggs ännu. */
-const DECLINABLE: readonly Column[] = ["Ny", "Att besluta", "Svara", "Väntar på användaren"];
+const DECLINABLE: readonly Column[] = ["Ny", "Att besluta", "Godkänns automatiskt", "Svara", "Väntar på användaren"];
 
 /** Beslutet för ett kort: följ etiketterna, eller verkställ Ulriks flytt. */
 export function decideColumn(labels: readonly string[], board: string | null): ColumnAction {
@@ -68,7 +79,39 @@ export function decideColumn(labels: readonly string[], board: string | null): C
   if (board === derived) return { kind: "none" };
   if (board === "Godkänd" && APPROVABLE.includes(derived)) return { kind: "approve" };
   if (board === "Avböjd" && DECLINABLE.includes(derived)) return { kind: "decline" };
+  if (board === "Att besluta" && derived === "Godkänns automatiskt") return { kind: "veto" };
   return { kind: "set", column: derived };
+}
+
+/** Rekommendationerna (valen i projektets Rekommendation-fält, `rek-<r>` som etikett). */
+export const REKS = ["godkänn", "avböj", "fråga"] as const;
+
+/** En rekommendation från loop 1. */
+export type Rek = (typeof REKS)[number];
+
+/** Rekommendationen etiketterna bär, eller null. */
+export const rekFor = (labels: readonly string[]): Rek | null => REKS.find((r) => labels.includes(`rek-${r}`)) ?? null;
+
+/** Vetofönstret: så länge står ett kort i "Godkänns automatiskt" innan det godkänns. */
+export const AUTO_APPROVE_MS = 24 * 3_600_000;
+
+/** Flaggor som stoppar det automatiska godkännandet: någon väntar på svar. */
+const HOLD = ["blockerad", "väntar-på-användaren"];
+
+/**
+ * Får förfrågan godkännas automatiskt? Loop 1 har bedömt den (`auto-godkänn`
+ * på en undersökt förfrågan), och koden kontrollerar det som går att se:
+ * en bugg eller internt arbete, aldrig en användares förslag, och ingen väntar.
+ */
+export function autoApprovable(labels: readonly string[]): boolean {
+  const has = (l: string): boolean => labels.includes(l);
+  const kindOk = has("intern") || (has("bugg") && !has("förslag"));
+  return has(AUTO_LABEL) && has("undersökt") && !has("verifierad") && kindOk && !HOLD.some(has);
+}
+
+/** Har förfrågan stått vetofönstret ut sedan `auto-godkänn` sattes (`since`, ISO)? */
+export function autoApproveDue(labels: readonly string[], since: string | undefined, now: number): boolean {
+  return since !== undefined && autoApprovable(labels) && now - new Date(since).getTime() >= AUTO_APPROVE_MS;
 }
 
 /** Vad synken gör med ett korts prioritet. */

@@ -7,11 +7,11 @@
  */
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
-import { type Column, COLUMNS, type Prio, PRIOS } from "./board";
+import { type Column, COLUMNS, type Prio, PRIOS, type Rek, REKS } from "./board";
 import type { GhRunner } from "./github";
 
 /** Ett kort på tavlan. */
-export interface BoardItem { itemId: string; number: number; repo: string; open: boolean; column: string | null; prio: string | null }
+export interface BoardItem { itemId: string; number: number; repo: string; open: boolean; column: string | null; prio: string | null; rek: string | null }
 
 /** Det synken behöver av tavlan. */
 export interface BoardApi {
@@ -20,6 +20,7 @@ export interface BoardApi {
   add(contentId: string): string;
   setColumn(itemId: string, column: Column): void;
   setPrio(itemId: string, prio: Prio): void;
+  setRek(itemId: string, rek: Rek): void;
   archive(itemId: string): void;
 }
 
@@ -38,6 +39,7 @@ const literal = (opts: readonly Option[]): string =>
   `[${opts.map((o) => `{name:${JSON.stringify(o.name)},color:${o.color},description:${JSON.stringify(o.description)}}`).join(",")}]`;
 
 const PRIO_OPTIONS: readonly Option[] = PRIOS.map((p, i) => ({ name: p, color: ["RED", "YELLOW", "GREEN"][i] ?? "GRAY", description: `prio-${p}` }));
+const REK_OPTIONS: readonly Option[] = REKS.map((r, i) => ({ name: r, color: ["GREEN", "RED", "YELLOW"][i] ?? "GRAY", description: `rek-${r} (loop 1)` }));
 
 const project = z.object({ id: z.string(), number: z.number(), title: z.string(), url: z.string() });
 
@@ -75,11 +77,12 @@ function ensureStatus(run: GhRunner, fields: SelectField[]): SelectField {
     { id: status.id }).updateProjectV2Field.projectV2Field;
 }
 
-function ensurePrio(run: GhRunner, projectId: string, fields: SelectField[]): SelectField {
-  const prio = fields.find((f) => f.name === "Prio");
-  if (prio) return prio;
+/** Ett valfält med namnet `name`; skapas med `options` om det saknas. */
+function ensureSelect(run: GhRunner, projectId: string, fields: SelectField[], name: string, options: readonly Option[]): SelectField {
+  const found = fields.find((f) => f.name === name);
+  if (found) return found;
   return gql(run, z.object({ createProjectV2Field: z.object({ projectV2Field: selectField }) }),
-    `mutation($p:ID!){createProjectV2Field(input:{projectId:$p,dataType:SINGLE_SELECT,name:"Prio",singleSelectOptions:${literal(PRIO_OPTIONS)}}){projectV2Field{${SELECT_FIELD}}}}`,
+    `mutation($p:ID!){createProjectV2Field(input:{projectId:$p,dataType:SINGLE_SELECT,name:${JSON.stringify(name)},singleSelectOptions:${literal(options)}}){projectV2Field{${SELECT_FIELD}}}}`,
     { p: projectId }).createProjectV2Field.projectV2Field;
 }
 
@@ -110,7 +113,10 @@ function readItems(run: GhRunner, projectId: string): BoardItem[] {
     for (const i of items.nodes) {
       const c = i.content;
       if (c?.number === undefined || !c.repository) continue;
-      out.push({ itemId: i.id, number: c.number, repo: c.repository.nameWithOwner, open: c.state === "OPEN", column: valueOf(i, "Status"), prio: valueOf(i, "Prio") });
+      out.push({
+        itemId: i.id, number: c.number, repo: c.repository.nameWithOwner, open: c.state === "OPEN",
+        column: valueOf(i, "Status"), prio: valueOf(i, "Prio"), rek: valueOf(i, "Rekommendation"),
+      });
     }
     more = items.pageInfo.hasNextPage;
     after = items.pageInfo.endCursor;
@@ -129,7 +135,8 @@ export function projectBoard(run: GhRunner, owner: string, title: string, log: (
   const p = findOrCreateProject(run, owner, title, log);
   const { fields, hasBoard } = readFields(run, p.id);
   const status = ensureStatus(run, fields);
-  const prio = ensurePrio(run, p.id, fields);
+  const prio = ensureSelect(run, p.id, fields, "Prio", PRIO_OPTIONS);
+  const rek = ensureSelect(run, p.id, fields, "Rekommendation", REK_OPTIONS);
   ensureBoardView(run, p.id, hasBoard);
   const setOption = (itemId: string, f: SelectField, name: string): void => {
     gql(run, z.looseObject({}),
@@ -143,6 +150,7 @@ export function projectBoard(run: GhRunner, owner: string, title: string, log: (
       "mutation($p:ID!,$c:ID!){addProjectV2ItemById(input:{projectId:$p,contentId:$c}){item{id}}}", { p: p.id, c: contentId }).addProjectV2ItemById.item.id,
     setColumn: (itemId, column) => setOption(itemId, status, column),
     setPrio: (itemId, value) => setOption(itemId, prio, value),
+    setRek: (itemId, value) => setOption(itemId, rek, value),
     archive: (itemId) => {
       gql(run, z.looseObject({}), "mutation($p:ID!,$i:ID!){archiveProjectV2Item(input:{projectId:$p,itemId:$i}){item{id}}}", { p: p.id, i: itemId });
     },
