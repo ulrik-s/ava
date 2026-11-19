@@ -28,6 +28,9 @@
     { "name": "refaktorisering", "color": "bfd4f2", "description": "Förslag från arkitekturgenomgången — byggs först när Ulrik satt granskad" },
     { "name": "arkitektur-rapport", "color": "0052cc", "description": "Veckans arkitekturgenomgång (loop 5)" },
     { "name": "blockerad", "color": "b60205", "description": "Agenten behöver ett beslut av Ulrik" },
+    { "name": "prio-hög", "color": "d93f0b", "description": "Effektiv prioritet hög (egen eller ärvd från det som väntar på den)" },
+    { "name": "prio-medel", "color": "fbca04", "description": "Effektiv prioritet medel (egen eller ärvd från det som väntar på den)" },
+    { "name": "prio-låg", "color": "c2e0c6", "description": "Effektiv prioritet låg (egen eller ärvd från det som väntar på den)" },
     { "name": "agent-pr", "color": "5319e7", "description": "PR skapad av implementationsloopen" },
     { "name": "människa-godkänd", "color": "000000", "description": "Ulrik tillåter att agent-PR:en rör skyddade sökvägar/migrationer" }
   ]

@@ -31,6 +31,12 @@ För var och en (äldst först):
      förebild (öppna den: gör den samma sorts sak?) och rätt ADR:er? Kräver
      issuen i själva verket något nytt (mönster, beroende, lager) som inte
      står där: sätt `blockerad` med ett ADR-utkast.
+   - **Grunden en gång (se "Grunden först" i `2-nedbrytning.md`):** bygger
+     issuen en grund (tabell, procedur, delad typ eller modul) som redan finns
+     på `main` eller som en annan öppen `agent-task` bygger? Sätt
+     `behöver-ändras` och skriv vilken issue den ska bero på (`Beror på #N`)
+     eller vilken kod den ska använda. Två sätt att göra samma sak är
+     designskuld.
    - **Kräver den skyddade sökvägar** eller en destruktiv migration? Sätt då
      `blockerad` med en förklaring.
 3. Utfall:

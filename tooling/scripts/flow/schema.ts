@@ -36,6 +36,8 @@ const stateSchema = z.object({
   agent: z.string().nullable(),
   /** Starta agenten när saken går in i tillståndet (standard: ja). */
   dispatch: z.boolean().default(true),
+  /** Starta inte agenten så länge saken har öppna GitHub-beroenden (blocked by); starta den när sista stängs. */
+  wait_for_blockers: z.boolean().default(false),
   transitions: z.array(transitionSchema).default([]),
   /** Mål som nekas härifrån för ALLA, även Ulrik; `comment` säger varför och vad man gör i stället. */
   refuse: z.object({ to: z.array(z.string()).min(1), comment: z.string() }).optional(),

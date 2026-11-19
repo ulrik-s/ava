@@ -21,6 +21,12 @@ export function dispatchTarget(flow: Flow, machine: Machine, label: string): Fir
   return routine ? { id: state.agent, routine } : null;
 }
 
+/** Väntar tillståndet som `label` sätter på att sakens blockerare stängs (`wait_for_blockers`)? */
+export function waitsForBlockers(machine: Machine, label: string): boolean {
+  const stateId = stateOfLabel(machine, label);
+  return stateId !== null && machine.states[stateId]?.wait_for_blockers === true;
+}
+
 /**
  * Fönstret där en rutin bara startas EN gång. Varje etikett startade förr en ny
  * körning, så flera ändringar i följd gav flera samtidiga körningar av samma

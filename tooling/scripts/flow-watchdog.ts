@@ -2,7 +2,8 @@
 /**
  * Flödesvaktens klocka: körs varje timme av GitHub Actions. Verkställer
  * timeouterna i tooling/agents/flow.yaml, knuffar, stänger dubblett-PR:er,
- * flyttar förfrågningar från kodrepot till inkorgen och avbryter CI som hänger.
+ * flyttar förfrågningar från kodrepot till inkorgen, speglar beroenden och
+ * sätter den effektiva prioriteten (flow-deps.ts) och avbryter CI som hänger.
  *
  *   bun tooling/scripts/flow-watchdog.ts <maskin> [<maskin> …] [--ci]
  *
@@ -10,6 +11,7 @@
  */
 import { dispatchTarget, type FetchFn, fire } from "./flow/dispatch";
 import { type GitHub, gitHub, runGhWithToken } from "./flow/github";
+import { prioOrder } from "./flow/health";
 import { moveStrayIssues } from "./flow/inbox";
 import { loadFlow } from "./flow/load";
 import type { Flow, Machine } from "./flow/schema";
@@ -17,6 +19,7 @@ import {
   type AgentPull, closesIssue, type DuplicatePull, dueNudges, dueTimeouts, duplicatePulls, hungRuns, type MergedPull,
   nudgeLabels, timedLabels, type WatchAction, type WatchItem,
 } from "./flow/watchdog";
+import { runDependencies } from "./flow-deps";
 import type { Log } from "./flow-guard";
 
 function lastAdded(gh: GitHub, n: number): Record<string, string> {
@@ -39,6 +42,7 @@ export function watchItems(machine: Machine, gh: GitHub): WatchItem[] {
       labels: i.labels,
       labeledAt: lastAdded(gh, i.number),
       hasOpenPr: needsPrCheck(machine, i.labels) && gh.hasOpenPr(i.number),
+      ...((i.deps?.blockedBy ?? 0) > 0 ? { blocked: true } : {}),
     }));
 }
 
@@ -140,11 +144,16 @@ if (import.meta.main) {
   for (const m of machines) {
     if (!m) continue;
     const gh = gitHub(m.repo);
+    const codeIssues = m.items === "issues" && intakeRepo !== undefined && m.repo !== intakeRepo;
+    // Beroendena först, så att knuffen ser vad som är blockerat. Ett fel där får inte stoppa klockan.
+    if (codeIssues) {
+      try { runDependencies(gh, prioOrder(flow), { enforce, log: console.log }); } catch (e) { console.log(`beroenden: ${e instanceof Error ? e.message : String(e)}`); }
+    }
     runTimeouts(m, gh, Date.now(), enforce, console.log);
     if (enforce) await runNudges(flow, m, watchItems(m, gh), { now: Date.now(), env: process.env, fetchFn: fetch, log: console.log, started });
     if (m.items === "pulls") closeDuplicatePulls(gh, enforce, console.log);
     // Inkorgen: en förfrågan i kodrepot flyttas till intaget (kräver en token som når båda).
-    if (m.items === "issues" && intakeRepo && m.repo !== intakeRepo) {
+    if (codeIssues) {
       const mover = token ? { source: gitHub(m.repo, runGhWithToken(token)), intake: gitHub(intakeRepo, runGhWithToken(token)), intakeRepo } : null;
       moveStrayIssues(gh, mover, { now: Date.now(), enforce, log: console.log });
     }

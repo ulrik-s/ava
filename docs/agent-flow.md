@@ -103,6 +103,9 @@ stateDiagram-v2
 | `refaktorisering` | alla | — | Förslag från arkitekturgenomgången — byggs först när Ulrik satt granskad |
 | `arkitektur-rapport` | alla | — | Veckans arkitekturgenomgång (loop 5) |
 | `blockerad` | alla | — | Agenten behöver ett beslut av Ulrik |
+| `prio-hög` | Ulrik | — | Effektiv prioritet hög (egen eller ärvd från det som väntar på den) |
+| `prio-medel` | Ulrik | — | Effektiv prioritet medel (egen eller ärvd från det som väntar på den) |
+| `prio-låg` | Ulrik | — | Effektiv prioritet låg (egen eller ärvd från det som väntar på den) |
 
 ## code-pr (`ulrik-s/ava`, pulls)
 

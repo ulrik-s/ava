@@ -20,6 +20,9 @@ export interface HealthItem {
   mergeState?: string;
   /** Nedbruten förfrågan utan öppna implementations-issues: klar, väntar bara på nästa release. */
   awaitingRelease?: boolean;
+  /** Öppna GitHub-beroenden: blockerare den väntar på, och saker som väntar på den. */
+  blockedBy?: number;
+  blocking?: number;
 }
 
 /** Läget i hela kedjan vid ett tillfälle. */
@@ -41,7 +44,13 @@ export interface HealthReport {
 }
 
 const ref = (i: HealthItem): string => `${i.repo.split("/")[1] ?? i.repo}#${i.number}`;
-const line = (i: HealthItem, what: string): string => `${ref(i)} ${i.title} — ${what}`;
+/** En grund som andra väntar på säger hur många. */
+const waitedOn = (i: HealthItem): string => {
+  const n = i.blocking ?? 0;
+  return n > 0 ? ` (${n} väntar på den)` : "";
+};
+const line = (i: HealthItem, what: string): string => `${ref(i)} ${i.title} — ${what}${waitedOn(i)}`;
+const isBlocked = (i: HealthItem): boolean => (i.blockedBy ?? 0) > 0;
 const hoursSince = (iso: string | undefined, now: number): number =>
   iso === undefined ? 0 : (now - new Date(iso).getTime()) / 3_600_000;
 
@@ -55,9 +64,16 @@ function currentStates(flow: Flow, item: HealthItem): string[] {
   return machine ? stateLabels(machine).filter((l) => item.labels.includes(l)) : [];
 }
 
-/** Väntar saken på något annat än en agent (en människa eller nästa release)? */
+/** Väntar saken på något annat än en agent (en människa, ett beroende eller nästa release)? */
 const waitsOnSomeoneElse = (flow: Flow, item: HealthItem): boolean =>
-  item.awaitingRelease === true || item.labels.some((l) => flow.nudge.skip_flags.includes(l));
+  item.awaitingRelease === true || isBlocked(item) || item.labels.some((l) => flow.nudge.skip_flags.includes(l));
+
+/** Vad som händer med en sak som rör sig. */
+function movingText(flow: Flow, i: HealthItem): string {
+  if (i.awaitingRelease) return "klar — väntar på nästa release";
+  const states = currentStates(flow, i).join(", ");
+  return isBlocked(i) ? `${states} — väntar på ${i.blockedBy ?? 0} beroende(n)` : states;
+}
 
 function stuckAlarm(flow: Flow, item: HealthItem, now: number): Alarm[] {
   const label = currentStates(flow, item)[0];
@@ -116,7 +132,7 @@ export function healthReport(flow: Flow, snap: HealthSnapshot): HealthReport {
   const waitingForUlrik = waitingByPrio(snap.items, prioOrder(flow));
   const moving = snap.items
     .filter((i) => waitsForUlrik(i) === null && currentStates(flow, i).length > 0)
-    .map((i) => line(i, i.awaitingRelease ? "klar — väntar på nästa release" : currentStates(flow, i).join(", ")));
+    .map((i) => line(i, movingText(flow, i)));
   return { alarms, waitingForUlrik, moving };
 }
 
