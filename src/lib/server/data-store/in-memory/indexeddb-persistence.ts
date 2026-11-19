@@ -105,8 +105,9 @@ export class IndexedDbPersistence implements LocalStorePersistence {
    * (#1362, #1711, #1714): ett avbrott mellan dem lämnade förr ett migrerat
    * snapshot märkt med det gamla formatet. Har en nyare version av appen (en
    * annan flik) hunnit spara sitt format skrivs ingenting över —
-   * `LocalDataTooNewError` i stället. Märken och position läses i samma
-   * ögonblick som raderna klonas, så de beskriver just de raderna.
+   * `LocalDataTooNewError` i stället. Flikens märken och position läses i
+   * samma svar som raderna klonas (`entries`), så de beskriver just de raderna —
+   * också när rader bärs över och källan klonas först i den andra läsningens svar.
    * Svarar med de märkta poster fliken inte känner igen; då skrevs ingenting.
    */
   private async write(source: DemoSource, settled: ReadonlySet<string> | null): Promise<string[]> {
@@ -118,10 +119,13 @@ export class IndexedDbPersistence implements LocalStorePersistence {
       const plan = this.plan(storedMarks, mine, settled);
       unknown = plan.unknown;
       if (unknown.length > 0) return [];
-      const marks: SnapshotMarks = { pending: [...mine.pending, ...plan.carried], owed: mine.owed };
-      const entries = (rows: DemoSource): KvEntries => [[KEY, rows], [VERSION_KEY, version], [MARKS_KEY, marks], ...this.positionEntry()];
-      if (plan.rows.length === 0) return entries(source);
-      return { keys: [KEY], next: ([stored]) => entries(carryRows(source, stored, plan.rows)) };
+      const entries = (own: SnapshotMarks, stored?: unknown): KvEntries => {
+        const marks: SnapshotMarks = { pending: [...own.pending, ...plan.carried], owed: own.owed };
+        const rows = plan.rows.length === 0 ? source : carryRows(source, stored, plan.rows);
+        return [[KEY, rows], [VERSION_KEY, version], [MARKS_KEY, marks], ...this.positionEntry()];
+      };
+      if (plan.rows.length === 0) return entries(mine);
+      return { keys: [KEY], next: ([stored]) => entries(this.tab?.marks() ?? NO_MARKS, stored) };
     });
     return unknown;
   }

@@ -53,15 +53,22 @@ function fakeServer() {
 /** En webbläsarprofil: flikarna delar snapshot och kö. */
 function browser(transport: SyncTransport, channels?: ReturnType<typeof changeChannelHub>) {
   const factory = new IDBFactory();
-  return async function openTab(): Promise<CachingSyncDataStore> {
+  return async function openTab(own: SyncTransport = transport): Promise<CachingSyncDataStore> {
     const cursor = new InMemoryCursorStore();
     return CachingSyncDataStore.create({
-      transport,
+      transport: own,
       cursor,
       persistence: new IndexedDbPersistence(factory, "tabs-source", undefined, cursor),
       queuePersistence: new IndexedDbMutationQueuePersistence(factory, "tabs-queue", channels?.()),
     });
   };
+}
+
+/** Samma server, men varje `pull` väntar tills `release` anropas. */
+function heldPull(transport: SyncTransport): { transport: SyncTransport; release: () => void } {
+  let release = (): void => undefined;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  return { transport: { ...transport, pull: (since, epoch) => gate.then(() => transport.pull(since, epoch)) }, release };
 }
 
 const ids = async (tab: CachingSyncDataStore): Promise<string[]> =>
@@ -208,5 +215,36 @@ describe("snapshotet behåller inga provisoriska rader utan köpost (#1714, fel 
 
     const fresh = await openTab();
     expect(await fresh.store.timeEntries.findUnique({ where: { id: provisional } })).toBeNull();
+  });
+
+  it("B sparar mitt i sin egen reconcile: raderna som ska läsas om går inte förlorade", async () => {
+    const server = fakeServer();
+    const openTab = browser(server.transport, changeChannelHub());
+    const held = heldPull(server.transport);
+    const a = await openTab();
+    const b = await openTab(held.transport);
+    const provisional = uuidv7();
+    await b.runQueuedProcedure({ path: "timeEntry.create", input: {} }, async () => {
+      await b.store.timeEntries.create({ data: entry(provisional) as never });
+    });
+    await settle();
+    // B står i sin pull när A kvitterar anropet och kanalen får B att läsa om kön.
+    const running = b.reconcile();
+    await settle();
+    await a.reconcile();
+    await settle();
+    expect(b.pendingCount()).toBe(0);
+    // Sparningen lämnar över raderna till motorn, medan dess reconcile pågår.
+    const other = uuidv7();
+    await b.store.timeEntries.create({ data: entry(other) as never });
+    held.release();
+    await running;
+    await b.reconcile();
+    await b.reconcile();
+
+    expect(await ids(b)).toEqual([...server.created, other].sort());
+    const fresh = await openTab();
+    await fresh.reconcile();
+    expect(await ids(fresh)).toEqual([...server.created, other].sort());
   });
 });

@@ -198,7 +198,7 @@ describe("IndexedDbPersistence — märken för köade ändringar (#1714)", () =
     };
     const persistence = new IndexedDbPersistence(factory, dbName, format);
     persistence.attach(view);
-    return { state, persistence };
+    return { state, persistence, view };
   }
 
   const hydrateFresh = (factory: IDBFactory, dbName: string) => new IndexedDbPersistence(factory, dbName).hydrate();
@@ -227,6 +227,35 @@ describe("IndexedDbPersistence — märken för köade ändringar (#1714)", () =
     await a.persistence.save({ users: [{ id: "u1" }, { id: "x", name: "köad" }] });
     expect(a.state.refreshes).toBe(0);
     expect((await hydrateFresh(factory, "marks-two-tabs"))?.users).toEqual([{ id: "u1" }, { id: "x", name: "köad" }, { id: "y" }]);
+  });
+
+  it("en lokal ändring mellan läsningarna: märkena hör till raderna som klonas", async () => {
+    const factory = new IDBFactory();
+    const a = tab(factory, "marks-late-change");
+    a.state.pending = [{ id: "X", refs: [ref("x")] }];
+    a.state.queue = ["X"];
+    await a.persistence.save({ users: [{ id: "x" }] });
+    // B känner X och bär över raden, vilket kräver en läsning till. Mellan de
+    // två svaren köar B posten Z och skriver dess rad i källan.
+    const b = tab(factory, "marks-late-change");
+    b.state.queue = ["X"];
+    const source = { users: [{ id: "u1" }] };
+    let reads = 0;
+    b.view.marks = () => {
+      if (++reads === 2) {
+        b.state.pending = [{ id: "Z", refs: [ref("z")] }];
+        source.users.push({ id: "z" });
+      }
+      return { pending: b.state.pending, owed: b.state.owed };
+    };
+    await b.persistence.save(source);
+
+    expect(reads).toBe(2);
+    expect((await hydrateFresh(factory, "marks-late-change"))?.users).toEqual([{ id: "u1" }, { id: "z" }, { id: "x" }]);
+    expect(await new IdbKv(factory, "marks-late-change", "source").get("marks")).toEqual({
+      pending: [{ id: "Z", refs: [ref("z")] }, { id: "X", refs: [ref("x")] }],
+      owed: [],
+    });
   });
 
   it("en märkt post som är avgjord bärs inte över: de provisoriska raderna försvinner", async () => {
