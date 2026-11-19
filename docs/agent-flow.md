@@ -62,6 +62,10 @@ stateDiagram-v2
 | `prio-hög` | alla | — | Kan ge fel belopp, förlorad data, en säkerhetsrisk eller stoppa en användare |
 | `prio-medel` | alla | — | Märks för användarna eller bromsar arbetet, men det finns en väg runt |
 | `prio-låg` | alla | — | Internt städ, verktyg och utvecklartakt |
+| `rek-godkänn` | alla | — | Loop 1 rekommenderar att den byggs |
+| `rek-avböj` | alla | — | Loop 1 rekommenderar att den inte byggs |
+| `rek-fråga` | alla | — | Loop 1 — Ulrik behöver avgöra något först |
+| `auto-godkänn` | alla | — | Liten bekräftad bugg eller internt verktyg utan risk — godkänns efter 24 h utan veto |
 | `intern` | Ulrik | — | Internt arbete (Ulrik eller en agent) — ingen användare att fråga |
 
 ## code-issue (`ulrik-s/ava`, issues)
@@ -151,6 +155,7 @@ den här listan. `verifierad` och `människa-godkänd` sätter bara Ulrik.
 
 ```bash
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/agentstatus
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/auto-godk%C3%A4nn
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/blockerad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/bugg
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/dubblett
@@ -162,6 +167,9 @@ gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/nedbruten
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/prio-h%C3%B6g
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/prio-l%C3%A5g
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/prio-medel
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/rek-avb%C3%B6j
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/rek-fr%C3%A5ga
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/rek-godk%C3%A4nn
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/unders%C3%B6kt
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/uppdelad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/user-request
@@ -183,6 +191,7 @@ gh api repos/ulrik-s/ava-feedback/issues -F title=@* -F body=@* -f 'labels[]=use
 gh api repos/ulrik-s/ava-feedback/issues -F title=@* -F body=@* -f 'labels[]=user-request' -f 'labels[]=förslag'
 gh api repos/ulrik-s/ava-feedback/issues/N/comments -F body=@*
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=agentstatus'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=auto-godkänn'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=blockerad'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=bugg'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=dubblett'
@@ -194,6 +203,9 @@ gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=nedbruten'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=prio-hög'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=prio-låg'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=prio-medel'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=rek-avböj'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=rek-fråga'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=rek-godkänn'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=release:v*'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=undersökt'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=uppdelad'

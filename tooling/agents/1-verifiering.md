@@ -375,6 +375,12 @@ inte bad om (t.ex. "kreditrisk visas inte", "fakturans PDF rörs inte").
 
 **Prioritet:** hög | medel | låg — en mening varför, och storlek S, M eller L.
 
+**Rekommendation:** Godkänn | Avböj | Fråga — en mening varför.
+
+**Arkitektur:** följer ADR 00xx, förebild `sökväg` | kräver nytt: vad (mönster, beroende, lager, ADR-ändring).
+
+**Risk:** ingen | pengar, inloggning, migration, klientdata, skyddad
+
 **Öppna frågor:** Inga.
 ```
 
@@ -388,6 +394,46 @@ inte bad om (t.ex. "kreditrisk visas inte", "fakturans PDF rörs inte").
 Sätt flaggan som hör ihop med den (`prio-hög`, `prio-medel` eller
 `prio-låg`) samtidigt som tillståndet. Har förfrågan redan en prio-flagga har
 Ulrik satt den: ändra den inte.
+
+## Rekommendation
+
+Ulrik har många förfrågningar att besluta om. Din rekommendation gör att han
+kan godkänna de enkla i klump och lägga tiden på de svåra. Bedöm mot koden och
+ADR:erna (`docs/adr/`), inte bara mot förfrågan:
+
+- **Godkänn:** värd att bygga, omfånget är klart och den följer arkitekturen.
+- **Avböj:** inte värd det, strider mot en ADR eller arkitekturen, eller
+  kostar mycket mer än den ger.
+- **Fråga:** Ulrik måste avgöra något först: ett produktval, en ADR-ändring,
+  ett oklart omfång eller ett överlapp med en annan förfrågan.
+
+**Arkitektur** namnger ADR:erna och en verklig förebild i koden (öppna den),
+eller vad som är nytt. **Risk** listar det som ändringen rör: `pengar`
+(faktura, moms, taxa, bokföring, betalningar, belopp), `inloggning` (roller,
+behörigheter, tokens), `migration` (databasschema, omskrivning av data),
+`klientdata` (klient- och personuppgifter, sekretess, export, loggning),
+`skyddad` (`tooling/config/`, `src/lib/shared/schemas/`, `.github/`,
+`AGENTS.md`, `tooling/docker/` eller annat som Agentvakten skyddar).
+
+Sätt flaggan som hör ihop med rekommendationen (`rek-godkänn`, `rek-avböj`
+eller `rek-fråga`) samtidigt som `undersökt`, och ta bort en äldre `rek-*`.
+
+**Automatiskt godkännande.** Sätt dessutom `auto-godkänn` bara om ALLT gäller:
+
+1. en bugg med slutsatsen **Bekräftad**, eller en förfrågan med `intern` där
+   ändringen är verktyg, tester, CI eller dokumentation (inget beteende för
+   användarna),
+2. storlek **S** (en arbetsorder, en liten PR),
+3. den följer befintliga ADR:er och en förebild: inget nytt,
+4. **Risk: ingen**,
+5. rekommendationen är **Godkänn**,
+6. aldrig på en användares förslag (`förslag` utan `intern`).
+
+Är du osäker: sätt den inte. Kortet står då i "Godkänns automatiskt" på
+tavlan, och efter 24 timmar utan veto sätter tavlans synk `verifierad` med
+Ulriks token. Har Ulrik tagit bort `auto-godkänn` (en `unlabeled`-händelse
+från honom i händelseloggen) är det hans veto: sätt den aldrig igen på den
+förfrågan.
 
 **"Öppna frågor" ska vara "Inga" när slutsatsen är Bekräftad.** Har du en öppen
 fråga om vad som ska byggas, då är du inte klar: fråga användaren i stället

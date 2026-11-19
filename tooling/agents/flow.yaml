@@ -147,6 +147,23 @@ machines:
       prio-låg:
         color: "c2e0c6"
         description: Internt städ, verktyg och utvecklartakt
+      # Rekommendationen: loop 1 sätter en (1-verifiering.md, "Rekommendation")
+      # tillsammans med undersökt, och den syns på tavlan. auto-godkänn: en
+      # liten bekräftad bugg eller ett internt verktyg utan risk. Tavlans synk
+      # sätter verifierad med Ulriks token efter 24 h om han inte lagt in veto
+      # (flyttat kortet till Att besluta, som tar bort flaggan).
+      rek-godkänn:
+        color: "0e8a16"
+        description: Loop 1 rekommenderar att den byggs
+      rek-avböj:
+        color: "b60205"
+        description: Loop 1 rekommenderar att den inte byggs
+      rek-fråga:
+        color: "fbca04"
+        description: Loop 1 — Ulrik behöver avgöra något först
+      auto-godkänn:
+        color: "5319e7"
+        description: Liten bekräftad bugg eller internt verktyg utan risk — godkänns efter 24 h utan veto
       # Inkorgen för allt arbete: förfrågningar från Ulrik eller en agent. Loop 1
       # verifierar dem som andra, men det finns ingen användare att fråga.
       intern:

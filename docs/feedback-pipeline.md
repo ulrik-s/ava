@@ -94,7 +94,21 @@ Etiketterna är sanningen; tavlan följer dem. Två flyttar är Ulriks beslut:
 - **till Avböjd** (där inget byggs ännu) → stängd som "not planned".
 
 Andra flyttar läggs tillbaka. Fältet **Prio** följer prio-flaggan, och ändrar
-Ulrik det på tavlan blir det etiketten.
+Ulrik det på tavlan blir det etiketten. Fältet **Rekommendation** visar loop 1:s
+rekommendation (`rek-godkänn`, `rek-avböj`, `rek-fråga`), så att Ulrik kan
+sortera och godkänna de gröna i klump (tabellvyn: markera rader, sätt Status).
+
+**Automatiskt godkännande.** En liten bekräftad bugg eller ett internt verktyg,
+inom ADR:erna och utan risk (pengar, inloggning, migration, klientdata,
+skyddade sökvägar), får `auto-godkänn` av loop 1 (kriterierna i
+`1-verifiering.md`, "Rekommendation") och står i **Godkänns automatiskt**.
+Efter 24 timmar utan veto sätter synken `verifierad` med Ulriks token och en
+kommentar (markerad `<!-- tavlan -->`, så att agenterna inte läser den som
+Ulriks ord). Koden kontrollerar det som syns i etiketterna: en användares
+förslag godkänns aldrig automatiskt, och inget som väntar på svar. **Veto:**
+flytta kortet till Att besluta (flaggan tas bort och loop 1 sätter den inte
+igen) eller till Avböjd. Bara Ulriks "ska vi bygga det" hoppas över;
+granskningen av arbetsordrar och PR:er, CI och Agentvakten gäller som vanligt.
 
 GitHub kan inte starta en workflow när ett kort flyttas, så `tavla.yml` (i
 ava, publikt) läser av tavlan var 5:e minut med `tooling/scripts/flow-board.ts`.
