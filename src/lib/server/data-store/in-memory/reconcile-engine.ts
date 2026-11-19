@@ -154,13 +154,16 @@ export class ReconcileEngine {
 
   async reconcile(): Promise<ReconcileResult> {
     const since = await this.deps.cursor.get();
+    // Planen tar raderna som väntar NU. En sparning mitt i körningen kan lägga
+    // till fler (`restoreLater`, #1714): de står efter `taken` och behålls.
+    const taken = this.unrestored.length;
     const plan = new RestorePlan(this.unrestored);
     const pull = await this.pullAll(since, await this.deps.cursor.getEpoch(), plan);
     // Först när alla sidor är hämtade vet klienten vad servern har (#1360).
     const pruned = pull.keep ? this.pruneMissing(pull.keep) : 0;
     const replay = await this.replayQueue(plan);
     const restore = await plan.run(pendingKeysOf(this.deps.queue.pending()), this.deps.transport, this.deps.apply);
-    this.unrestored = restore.unrestored;
+    this.unrestored = [...restore.unrestored, ...this.unrestored.slice(taken)];
     // Stannade kön, eller gick en avvisad rad inte att återställa, flyttas inte
     // cursorn: rader som hoppades hämtas igen nästa gång (idempotent).
     const held = replay.blocked !== null || restore.unrestored.length > 0;
@@ -210,9 +213,15 @@ export class ReconcileEngine {
   /**
    * Rader vars lokala läge ska ersättas med serverns i nästa reconcile (#1402):
    * en annan flik avgjorde ändringen som skrev dem här, och svaret kom bara dit.
+   * Får anropas medan en reconcile pågår: raderna tas då i nästa.
    */
   restoreLater(refs: readonly RowRef[]): void {
     this.unrestored.push(...refs);
+  }
+
+  /** Rader som väntar på att läsas om från servern (#1714) — sparas med snapshotet. */
+  owed(): readonly RowRef[] {
+    return this.unrestored;
   }
 
   /** Radernas kanoniska läge just nu (#1348, "Kasta") — samma hämtning som efter en avvisning. */

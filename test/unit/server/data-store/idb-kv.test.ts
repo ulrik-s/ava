@@ -45,3 +45,59 @@ describe("IdbKv", () => {
     expect(await kv.getAll([])).toEqual([]);
   });
 });
+
+describe("IdbKv.update — läs och skriv i en transaktion (#1714)", () => {
+  it("steget får de lagrade värdena (null för en saknad nyckel) och skriver sitt svar", async () => {
+    const kv = new IdbKv(new IDBFactory(), "kv-update", "s");
+    await kv.put("a", 1);
+    let seen: unknown[] = [];
+    await kv.update(["a", "b"], (stored) => {
+      seen = stored;
+      return [["b", 2], ["c", 3]];
+    });
+    expect(seen).toEqual([1, null]);
+    expect(await kv.getAll(["a", "b", "c"])).toEqual([1, 2, 3]);
+  });
+
+  it("ett steg kan läsa mer i samma transaktion innan det skriver", async () => {
+    const kv = new IdbKv(new IDBFactory(), "kv-update-chain", "s");
+    await kv.putAll([["pekare", "stor"], ["stor", { n: 7 }]]);
+    await kv.update(["pekare"], ([key]) => ({
+      keys: [String(key)],
+      next: ([value]) => [["kopia", value]],
+    }));
+    expect(await kv.get("kopia")).toEqual({ n: 7 });
+  });
+
+  it("utan nycklar körs steget direkt, med en tom lista", async () => {
+    const kv = new IdbKv(new IDBFactory(), "kv-update-empty", "s");
+    await kv.update([], (stored) => [["antal", stored.length]]);
+    expect(await kv.get("antal")).toBe(0);
+  });
+
+  it("ett steg som inte skriver något lämnar lagringen orörd", async () => {
+    const kv = new IdbKv(new IDBFactory(), "kv-update-noop", "s");
+    await kv.put("a", 1);
+    await kv.update(["a"], () => []);
+    expect(await kv.get("a")).toBe(1);
+  });
+
+  it("kastar steget avbryts transaktionen: inget skrivs och felet kastas vidare", async () => {
+    const kv = new IdbKv(new IDBFactory(), "kv-update-throw", "s");
+    await kv.put("a", 1);
+    await expect(kv.update(["a"], () => { throw new Error("nej"); })).rejects.toThrow("nej");
+    // Också i ett senare steg, efter att det första redan läst.
+    await expect(kv.update(["a"], () => ({ keys: ["a"], next: () => { throw new Error("senare"); } }))).rejects.toThrow("senare");
+    expect(await kv.get("a")).toBe(1);
+  });
+
+  it("putAll med vakt: vakten får det lagrade värdet och kan vägra", async () => {
+    const kv = new IdbKv(new IDBFactory(), "kv-guard", "s");
+    await kv.put("format", 2);
+    let seen: unknown = undefined;
+    await kv.putAll([["a", 1]], { key: "format", check: (stored) => { seen = stored; } });
+    expect(seen).toBe(2);
+    await expect(kv.putAll([["a", 9]], { key: "format", check: () => { throw new Error("för nytt"); } })).rejects.toThrow("för nytt");
+    expect(await kv.get("a")).toBe(1);
+  });
+});

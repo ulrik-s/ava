@@ -30,8 +30,8 @@ import type { QueuedCallIdentity } from "../../queued-call";
 import { pendingKeysOf, refKey, refsOf, type ApplyCanonical } from "./canonical-restore";
 import type { CursorStore } from "./cursor-store";
 import { InMemoryCursorStore } from "./cursor-store";
-import { SOURCE_KEY_BY_ENTITY } from "./entity-source-keys";
 import { repairLegacyIds } from "./legacy-id-repair";
+import { keyOf, pruneLocal, writeCanonical } from "./local-source-writes";
 import { LocalStore } from "./local-store";
 import type { LocalStorePersistence } from "./local-store-persistence";
 import {
@@ -41,6 +41,7 @@ import {
 import { PendingWrites, type PendingWritesView } from "./pending-writes";
 import { recordTouch } from "./procedure-touches";
 import { ReconcileEngine, type ConflictRecord, type ReconcileResult } from "./reconcile-engine";
+import { QueueSnapshotTab } from "./snapshot-tab";
 import type { SyncTransport } from "./sync-transport";
 import type { MutationEvent } from "./writable-delegate";
 
@@ -96,42 +97,6 @@ export interface ProcedureCallInput {
 }
 
 /**
- * Skriv en kanonisk server-rad TYST till lokal source (ingen re-enqueue):
- * upsert på `id`, eller ta bort vid tombstone. `entity` är singular (ADR 0017);
- * source-arrayen är plural → slå upp via {@link SOURCE_KEY_BY_ENTITY}.
- */
-function writeCanonical(store: LocalStore, entity: string, row: Record<string, unknown>, deleted: boolean): void {
-  const key = SOURCE_KEY_BY_ENTITY[entity];
-  if (!key) return; // okänd entitet → hoppa defensivt
-  const src = store.currentSource as Record<string, Record<string, unknown>[] | undefined>;
-  const arr = (src[key] ??= []);
-  const idx = arr.findIndex((r) => r.id === row.id);
-  if (deleted) {
-    if (idx >= 0) arr.splice(idx, 1);
-    return;
-  }
-  if (idx >= 0) arr[idx] = row;
-  else arr.push(row);
-}
-
-/**
- * Omsynk efter en återställd server (#1360): ta bort lokala rader i synkade
- * entiteter vars nyckel (`entitet:id`) inte finns i `keep`. Svarar med antalet.
- */
-function pruneLocal(store: LocalStore, keep: ReadonlySet<string>): number {
-  const src = store.currentSource as Record<string, Record<string, unknown>[] | undefined>;
-  let pruned = 0;
-  for (const [entity, key] of Object.entries(SOURCE_KEY_BY_ENTITY)) {
-    const rows = src[key];
-    if (!rows) continue;
-    const kept = rows.filter((row) => keep.has(keyOf(entity, row)));
-    pruned += rows.length - kept.length;
-    src[key] = kept;
-  }
-  return pruned;
-}
-
-/**
  * Rader med icke-uuid-id (skapade innan klienten genererade uuid) nådde aldrig
  * servern. Ge dem deterministiska uuid:n, skriv om alla referenser, köa dem som
  * create och persistera — innan första reconcile. No-op när allt redan är uuid.
@@ -158,10 +123,6 @@ async function repairHydrated(
 function withRepairedRows(entries: readonly QueueEntry[], repaired: readonly QueuedMutation[]): QueueEntry[] {
   let next = 0;
   return entries.map((e) => (isProcedureCall(e) ? e : repaired[next++] ?? e));
-}
-
-function keyOf(entity: string, row: Record<string, unknown>): string {
-  return `${entity}:${String(row.id)}`;
 }
 
 export class CachingSyncDataStore {
@@ -291,9 +252,14 @@ export class CachingSyncDataStore {
   /** Hydrera (kö + source ur persistens) och komponera klossarna (server-vägen). */
   static async create(deps: CachingSyncDeps): Promise<CachingSyncDataStore> {
     const queue = await MutationQueue.hydrate(deps.queuePersistence, deps.owner);
+    // Fliken kopplas före hydreringen (#1714): snapshotet delas av alla flikar,
+    // och märks med de köade ändringar varje flik bär.
+    const tab = new QueueSnapshotTab(queue);
+    deps.persistence?.attach?.(tab);
     const hydrated = deps.persistence ? await deps.persistence.hydrate() : null;
     const source = await repairHydrated(hydrated ?? deps.seed ?? {}, queue, deps.persistence);
     const store = CachingSyncDataStore.wire(deps, queue, source);
+    tab.bind(store.engine);
     // En annan flik köade eller kvitterade (#1346): kön är omläst — räkna om
     // läget och synka (en flik i taget skickar, #1332), ifall den andra fliken stängs.
     queue.onExternalChange(() => { for (const listener of store.hooks.localChangeListeners) listener(); });

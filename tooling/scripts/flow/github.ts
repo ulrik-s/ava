@@ -43,6 +43,7 @@ const itemSchema = z.object({
   created_at: z.string().optional(),
   /** Bara på issues: antalet ÖPPNA blockerare (`blocked_by`) och öppna saker den blockerar. */
   issue_dependencies_summary: z.object({ blocked_by: z.number(), blocking: z.number() }).nullable().optional(),
+  node_id: z.string().optional(),
 });
 type ItemRow = z.infer<typeof itemSchema>;
 
@@ -67,8 +68,8 @@ export interface TimedLabelEvent extends LabelEvent { at: string }
 /** Öppna beroenden: blockerare som inte är stängda, och öppna saker den blockerar. */
 export interface Deps { blockedBy: number; blocking: number }
 
-/** En öppen issue eller PR. `id` (inte numret) behövs för att lägga till ett beroende. */
-export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string; id?: number; deps?: Deps }
+/** En öppen issue eller PR. `id` (inte numret) behövs för att lägga till ett beroende, `nodeId` (GraphQL) för projekttavlan. */
+export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string; id?: number; nodeId?: string; deps?: Deps }
 
 /** En öppen issue i ett beroende: nummer, id och etiketter. */
 export interface DepIssue { number: number; id: number; labels: string[] }
@@ -79,6 +80,7 @@ function toOpenItem(i: ItemRow): OpenItem {
     number: i.number, title: i.title, body: i.body ?? "", labels: i.labels.map((l) => l.name), isPr: i.pull_request !== undefined,
     ...(i.created_at === undefined ? {} : { createdAt: i.created_at }),
     ...(i.id === undefined ? {} : { id: i.id }),
+    ...(i.node_id === undefined ? {} : { nodeId: i.node_id }),
     ...(deps ? { deps: { blockedBy: deps.blocked_by, blocking: deps.blocking } } : {}),
   };
 }
@@ -141,6 +143,9 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
       return num;
     },
     closePull(n: number): void { run(["api", "-X", "PATCH", `repos/${repo}/pulls/${n}`, "-f", "state=closed"]); },
+    closeIssue(n: number, reason: "completed" | "not_planned"): void {
+      run(["api", "-X", "PATCH", `repos/${repo}/issues/${n}`, "-f", "state=closed", "-f", `state_reason=${reason}`]);
+    },
     openItems(): OpenItem[] {
       const pages = parseJsonWith(pagesSchema(itemSchema), run(["api", `repos/${repo}/issues?state=open&per_page=100`, "--paginate", "--slurp"]));
       return pages.flat().map(toOpenItem);

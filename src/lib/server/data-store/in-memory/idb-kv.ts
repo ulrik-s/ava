@@ -15,6 +15,18 @@ export interface KvWriteGuard {
   readonly check: (stored: unknown) => void;
 }
 
+/** Nycklar och värden att skriva. */
+export type KvEntries = ReadonlyArray<readonly [string, unknown]>;
+
+/** Ett steg i {@link IdbKv.update}: de lagrade värdena → det som ska skrivas, eller en läsning till. */
+export type KvStep = (stored: unknown[]) => KvEntries | KvRead;
+
+/** En läsning till i samma transaktion, och steget som får dess värden. */
+export interface KvRead {
+  readonly keys: readonly string[];
+  readonly next: KvStep;
+}
+
 export class IdbKv {
   constructor(
     private readonly factory: IDBFactory,
@@ -88,23 +100,44 @@ export class IdbKv {
    * `guard` läses `guard.key` först i samma transaktion; kastar `guard.check`
    * avbryts transaktionen, ingenting skrivs och felet kastas vidare.
    */
-  async putAll(entries: ReadonlyArray<readonly [string, unknown]>, guard?: KvWriteGuard): Promise<void> {
+  async putAll(entries: KvEntries, guard?: KvWriteGuard): Promise<void> {
+    await this.update(guard ? [guard.key] : [], ([stored]) => {
+      guard?.check(stored);
+      return entries;
+    });
+  }
+
+  /**
+   * Läs och skriv i EN transaktion (#1714): `step` får de lagrade värdena för
+   * `keys` (`null` för en nyckel som saknas) och svarar med det som ska skrivas,
+   * eller med en ny läsning ({@link KvRead}) i samma transaktion. Ingen annan
+   * fliks skrivning hamnar mellan läsningen och skrivningen. Kastar `step`
+   * avbryts transaktionen, ingenting skrivs och felet kastas vidare.
+   */
+  async update(keys: readonly string[], step: KvStep): Promise<void> {
     const db = await this.open();
     try {
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(this.storeName, "readwrite");
         const store = tx.objectStore(this.storeName);
         let refused: unknown = null;
-        const write = (): void => { for (const [key, value] of entries) store.put(value, key); };
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("indexedDB put misslyckades"));
         tx.onabort = () => reject(refused ?? tx.error ?? new Error("indexedDB-transaktion avbröts"));
-        if (!guard) { write(); return; }
-        const req = store.get(guard.key);
-        req.onsuccess = () => {
-          try { guard.check(req.result); } catch (e) { refused = e; tx.abort(); return; }
-          write();
+        const advance = (read: KvRead, stored: unknown[]): void => {
+          let result: KvEntries | KvRead;
+          try { result = read.next(stored); } catch (e) { refused = e; tx.abort(); return; }
+          if ("next" in result) run(result);
+          else for (const [key, value] of result) store.put(value, key);
         };
+        const run = (read: KvRead): void => {
+          const requests = read.keys.map((key) => store.get(key));
+          const done = (): void => advance(read, requests.map((req): unknown => req.result ?? null));
+          const last = requests.at(-1);
+          if (last) last.onsuccess = done;
+          else done();
+        };
+        run({ keys, next: step });
       });
     } finally {
       db.close();
