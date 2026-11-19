@@ -37,4 +37,11 @@ describe("IdbKv", () => {
     expect(await kv.get("a")).toBe(1);
     expect(await kv.get("b")).toBe(2);
   });
+
+  it("getAll läser flera nycklar i ordning; en saknad nyckel → null (#1711)", async () => {
+    const kv = new IdbKv(new IDBFactory(), "kv-get-all", "s");
+    await kv.putAll([["a", 1], ["c", { n: 3 }]]);
+    expect(await kv.getAll(["c", "b", "a"])).toEqual([{ n: 3 }, null, 1]);
+    expect(await kv.getAll([])).toEqual([]);
+  });
 });

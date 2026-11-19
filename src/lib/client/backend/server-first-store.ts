@@ -17,6 +17,7 @@ import superjson from "superjson";
 import { toLinkFetch, type InjectableFetch } from "@/lib/client/link-fetch";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
+import { InMemoryCursorStore, type CursorStore } from "@/lib/server/data-store/in-memory/cursor-store";
 import { IndexedDbPersistence } from "@/lib/server/data-store/in-memory/indexeddb-persistence";
 import { LEGACY_ID_NAMESPACE } from "@/lib/server/data-store/in-memory/legacy-id-repair";
 import type { LocalStorePersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
@@ -69,6 +70,8 @@ export interface ServerFirstStoreDeps {
 interface LocalParts {
   persistence?: LocalStorePersistence;
   queuePersistence?: MutationQueuePersistence;
+  /** Delta-cursorn och synkepoken (#1711); saknas = i minnet (bindningsfasen). */
+  cursor?: CursorStore;
   rejected: RejectedChangesPersistence;
   owner?: QueueOwner;
   /** Sparas något lokalt (räddning + byte-synk), eller är allt i minnet? */
@@ -82,10 +85,17 @@ function rejectedPersistence(place: LocalDataPlace): RejectedChangesPersistence 
     : new IndexedDbRejectedChangesPersistence(place.factory, rejectedLocation(place));
 }
 
-/** Platsens databaser; köposterna stämplas med användaren (#1347). */
+/**
+ * Platsens databaser; köposterna stämplas med användaren (#1347). Flikens
+ * cursor och epok (#1711) sparas i snapshotets databas, i samma transaktion
+ * som snapshotet: en omladdad flik fortsätter från positionen som hör till
+ * raderna den hydrerar, och rensningen tar bort båda tillsammans.
+ */
 function placeParts(place: LocalDataPlace): LocalParts {
+  const cursor = new InMemoryCursorStore();
   return {
-    persistence: new IndexedDbPersistence(place.factory, dbNameIn(place.ns, LOCAL_DB.localStore)),
+    persistence: new IndexedDbPersistence(place.factory, dbNameIn(place.ns, LOCAL_DB.localStore), undefined, cursor),
+    cursor,
     queuePersistence: new IndexedDbMutationQueuePersistence(place.factory, queueLocation(place)),
     rejected: rejectedPersistence(place),
     ...(place.ns.kind === "user" ? { owner: place.ns.scope } : {}),
@@ -119,6 +129,7 @@ function storageOf(deps: ServerFirstStoreDeps, local: LocalParts) {
   return omitUndefined({
     persistence: deps.persistence ?? local.persistence,
     queuePersistence: deps.queuePersistence ?? local.queuePersistence,
+    cursor: local.cursor,
     owner: local.owner,
   });
 }

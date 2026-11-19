@@ -4,7 +4,7 @@
 
 import { IDBFactory } from "fake-indexeddb";
 import { describe, it, expect } from "vitest-compat";
-import { InMemoryCursorStore, IndexedDbCursorStore } from "@/lib/server/data-store/in-memory/cursor-store";
+import { InMemoryCursorStore, IndexedDbCursorStore, syncPositionSchema } from "@/lib/server/data-store/in-memory/cursor-store";
 import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
 
 const EPOCH = "01a0f754-b809-7662-8de5-646987f19b9e";
@@ -22,6 +22,38 @@ describe("InMemoryCursorStore", () => {
     expect(await c.getEpoch()).toBeUndefined();
     await c.setEpoch(EPOCH);
     expect(await c.getEpoch()).toBe(EPOCH);
+  });
+});
+
+describe("InMemoryCursorStore — flikens position (#1711)", () => {
+  it("positionen är cursorn, och epoken när servern skickat en", async () => {
+    const c = new InMemoryCursorStore(3);
+    expect(c.position()).toEqual({ cursor: 3 });
+    await c.setEpoch(EPOCH);
+    expect(c.position()).toEqual({ cursor: 3, epoch: EPOCH });
+  });
+
+  it("restore fortsätter från en sparad position, med eller utan epok", async () => {
+    const c = new InMemoryCursorStore();
+    c.restore({ cursor: 7, epoch: EPOCH });
+    expect(await c.get()).toBe(7);
+    expect(await c.getEpoch()).toBe(EPOCH);
+    c.restore({ cursor: 0 });
+    expect(await c.get()).toBe(0);
+    expect(await c.getEpoch()).toBeUndefined();
+  });
+});
+
+describe("syncPositionSchema (#1711)", () => {
+  it("godtar en cursor med eller utan epok", () => {
+    expect(syncPositionSchema.safeParse({ cursor: 0 }).success).toBe(true);
+    expect(syncPositionSchema.safeParse({ cursor: 4, epoch: EPOCH }).success).toBe(true);
+  });
+
+  it("avvisar en trasig post", () => {
+    for (const bad of [null, 4, { cursor: -1 }, { cursor: 1.5 }, { cursor: 1, epoch: "inte-ett-uuid" }, { cursor: 1, extra: true }]) {
+      expect(syncPositionSchema.safeParse(bad).success).toBe(false);
+    }
   });
 });
 
