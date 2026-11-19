@@ -40,6 +40,7 @@ const itemSchema = z.object({
   labels: z.array(z.object({ name: z.string() })),
   pull_request: z.unknown().optional(),
   created_at: z.string().optional(),
+  node_id: z.string().optional(),
 });
 
 const mergedSearchSchema = z.object({
@@ -57,8 +58,8 @@ const runsSchema = z.object({
 /** En etiketthändelse med tidpunkt. */
 export interface TimedLabelEvent extends LabelEvent { at: string }
 
-/** En öppen issue eller PR. */
-export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string }
+/** En öppen issue eller PR. `nodeId` är GraphQL-id:t (för projekttavlan). */
+export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string; nodeId?: string }
 
 const repoEventSchema = z.object({
   id: z.number(),
@@ -111,11 +112,15 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
       return num;
     },
     closePull(n: number): void { run(["api", "-X", "PATCH", `repos/${repo}/pulls/${n}`, "-f", "state=closed"]); },
+    closeIssue(n: number, reason: "completed" | "not_planned"): void {
+      run(["api", "-X", "PATCH", `repos/${repo}/issues/${n}`, "-f", "state=closed", "-f", `state_reason=${reason}`]);
+    },
     openItems(): OpenItem[] {
       const pages = parseJsonWith(pagesSchema(itemSchema), run(["api", `repos/${repo}/issues?state=open&per_page=100`, "--paginate", "--slurp"]));
       return pages.flat().map((i) => ({
         number: i.number, title: i.title, body: i.body ?? "", labels: i.labels.map((l) => l.name), isPr: i.pull_request !== undefined,
         ...(i.created_at === undefined ? {} : { createdAt: i.created_at }),
+        ...(i.node_id === undefined ? {} : { nodeId: i.node_id }),
       }));
     },
     hasOpenPr(n: number): boolean {

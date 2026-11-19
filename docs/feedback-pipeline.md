@@ -82,6 +82,27 @@ inaktuella stängdes med belägg, resten ligger i inkorgen som `intern` +
 `undersökt` med genomgången som verifieringsrapport och väntar på Ulriks
 `verifierad`.
 
+## Tavlan
+
+Ulriks vy är projekttavlan **AVA – flödet** (GitHub Projects, användarägd).
+Varje öppen förfrågan i inkorgen är ett kort i den kolumn som dess etiketter
+ger: Ny, Att besluta, Svara, Väntar på användaren, Godkänd, Byggs, Klar.
+Etiketterna är sanningen; tavlan följer dem. Två flyttar är Ulriks beslut:
+
+- **till Godkänd** (från Ny eller Att besluta) → `verifierad`, satt med
+  Ulriks token, så flödesvakten ser det som hans beslut,
+- **till Avböjd** (där inget byggs ännu) → stängd som "not planned".
+
+Andra flyttar läggs tillbaka. Fältet **Prio** följer prio-flaggan, och ändrar
+Ulrik det på tavlan blir det etiketten.
+
+GitHub kan inte starta en workflow när ett kort flyttas, så `tavla.yml` (i
+ava, publikt) läser av tavlan var 5:e minut med `tooling/scripts/flow-board.ts`.
+Projektet, kolumnerna, Prio-fältet och tavelvyn skapas av synken själv.
+Kräver hemligheten `FLOW_BOARD_TOKEN` i ava: en klassisk PAT med `project`
+och `repo`. Statusissuen (#11) finns kvar för larmen, som tavlan inte kan
+skicka.
+
 ## Varför det ser ut så här
 
 - **Privat intag.** Kodrepot är publikt. Användare skriver klientnamn och
