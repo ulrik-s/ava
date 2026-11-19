@@ -6,9 +6,12 @@
  */
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest-compat";
+import { adoptLegacyDatabases } from "@/lib/client/backend/local-data/adopt-legacy";
 import { dbNameIn, LOCAL_DB, localScopeSchema, userNamespace } from "@/lib/client/backend/local-data/local-namespace";
 import { InMemoryRejectedChangesPersistence, RejectedChanges } from "@/lib/client/backend/rejected-changes";
 import { createServerFirstStore } from "@/lib/client/backend/server-first-store";
+import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
+import { LOCAL_DATA_VERSION } from "@/lib/server/data-store/in-memory/local-data-format";
 import { InMemoryMutationQueuePersistence } from "@/lib/server/data-store/in-memory/mutation-queue";
 
 const anna = localScopeSchema.parse({ organizationId: "org-1", principalId: "u-anna" });
@@ -57,5 +60,60 @@ describe("createServerFirstStore — lokala databaser", () => {
       queuePersistence: new InMemoryMutationQueuePersistence(),
     });
     expect(store.pendingEntries()).toEqual([]);
+  });
+});
+
+/**
+ * Snapshotets märken (#1714) ligger i användarens egen snapshot-databas, och
+ * ett snapshot som flyttas in från den gemensamma databasen från före #1347
+ * lyfts till dagens format utan att skriva över nyare rader.
+ */
+describe("createServerFirstStore — snapshotets format och märken (#1714)", () => {
+  const ownDb = dbNameIn(userNamespace(anna), LOCAL_DB.localStore);
+  const open = (factory: IDBFactory) => createServerFirstStore({
+    fetch: noServer, skipInitialReconcile: true,
+    local: { factory, ns: userNamespace(anna), adoptsLegacy: false },
+  });
+
+  it("märkena sparas bredvid snapshotet, i användarens namnrymd", async () => {
+    const factory = new IDBFactory();
+    const store = await open(factory);
+    await store.store.contacts.create({ data: contact as never });
+    const [mutation] = store.pendingEntries();
+    const kv = new IdbKv(factory, ownDb, "source");
+    expect(await kv.get("format")).toBe(LOCAL_DATA_VERSION);
+    expect(await kv.get("marks")).toEqual({
+      pending: [{ id: mutation?.mutationId, refs: [{ entity: "contact", id: contact.id }] }],
+      owed: [],
+    });
+  });
+
+  it("ett gemensamt snapshot i äldre format flyttas in och lyfts, utan att en rad går förlorad", async () => {
+    const factory = new IDBFactory();
+    await new IdbKv(factory, LOCAL_DB.localStore, "source").putAll([["current", { contacts: [contact] }], ["format", 2], ["sync", { cursor: 3 }]]);
+    await adoptLegacyDatabases(factory, anna);
+
+    const store = await open(factory);
+    expect(await store.store.contacts.findUnique({ where: { id: contact.id } })).toMatchObject({ name: "Klient" });
+    const kv = new IdbKv(factory, ownDb, "source");
+    expect(await kv.get("format")).toBe(LOCAL_DATA_VERSION);
+    expect(await kv.get("marks")).toEqual({ pending: [], owed: [] });
+    expect(await kv.get("sync")).toEqual({ cursor: 3 });
+  });
+
+  it("inflyttningen skriver inte över ett nyare snapshot hos användaren", async () => {
+    const factory = new IDBFactory();
+    const first = await open(factory);
+    await first.store.contacts.create({ data: contact as never });
+    const own = new IdbKv(factory, ownDb, "source");
+    const marks = await own.get("marks");
+    await new IdbKv(factory, LOCAL_DB.localStore, "source").putAll([["current", { contacts: [] }], ["format", 2]]);
+    await adoptLegacyDatabases(factory, anna);
+
+    expect(await own.get("format")).toBe(LOCAL_DATA_VERSION);
+    expect(await own.get("marks")).toEqual(marks);
+    const reopened = await open(factory);
+    expect(await reopened.store.contacts.findUnique({ where: { id: contact.id } })).toMatchObject({ name: "Klient" });
+    expect(reopened.pendingCount()).toBe(1);
   });
 });

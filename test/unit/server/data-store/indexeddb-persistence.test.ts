@@ -9,7 +9,8 @@ import { describe, it, expect } from "vitest-compat";
 import { InMemoryCursorStore } from "@/lib/server/data-store/in-memory/cursor-store";
 import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
 import { IndexedDbPersistence } from "@/lib/server/data-store/in-memory/indexeddb-persistence";
-import { LocalDataTooNewError } from "@/lib/server/data-store/in-memory/local-data-format";
+import { LOCAL_DATA_VERSION, LocalDataTooNewError } from "@/lib/server/data-store/in-memory/local-data-format";
+import type { SnapshotMark, SnapshotMarks, SnapshotTab } from "@/lib/server/data-store/in-memory/snapshot-marks";
 
 describe("IndexedDbPersistence", () => {
   it("hydrate på tom DB → null", async () => {
@@ -138,7 +139,7 @@ describe("IndexedDbPersistence — synkpositionen (#1711)", () => {
     const t = tab(factory, "pos-format-1");
     expect(await t.persistence.hydrate()).toEqual({ users: [{ id: "u1" }] });
     expect(t.cursor.position()).toEqual({ cursor: 0 });
-    expect(await kv.get("format")).toBe(2);
+    expect(await kv.get("format")).toBe(LOCAL_DATA_VERSION);
     expect(await kv.get("sync")).toEqual({ cursor: 0 });
   });
 
@@ -163,5 +164,208 @@ describe("IndexedDbPersistence — synkpositionen (#1711)", () => {
     await p.save({ users: [{ id: "u1" }] });
     expect(await new IdbKv(factory, "pos-none", "source").get("sync")).toBeNull();
     expect(await p.hydrate()).toEqual({ users: [{ id: "u1" }] });
+  });
+});
+
+/**
+ * Märkena (#1714): flera flikar delar snapshotet. En flik som sparar bär över
+ * raderna för en annan fliks köade ändringar, och en ny flik läser om raderna
+ * för poster som redan avgjorts.
+ */
+describe("IndexedDbPersistence — märken för köade ändringar (#1714)", () => {
+  const ref = (id: string) => ({ entity: "user", id });
+
+  /** En flik med en kö i minnet: `pending` är flikens egna poster, `queue` allt den känner till. */
+  function tab(factory: IDBFactory, dbName: string, format?: ConstructorParameters<typeof IndexedDbPersistence>[2]) {
+    const state = {
+      pending: [] as SnapshotMark[],
+      owed: [] as Array<{ entity: string; id: string }>,
+      queue: [] as string[],
+      /** Vad kön innehåller när fliken läser om den. */
+      stored: null as string[] | null,
+      adopted: undefined as SnapshotMarks | null | undefined,
+      refreshes: 0,
+    };
+    const view: SnapshotTab = {
+      marks: () => ({ pending: state.pending, owed: state.owed }),
+      position: (id) => (state.queue.includes(id) ? state.queue.indexOf(id) : null),
+      refresh: () => {
+        state.refreshes++;
+        if (state.stored) state.queue = state.stored;
+        return Promise.resolve();
+      },
+      adopt: (stored) => { state.adopted = stored; },
+    };
+    const persistence = new IndexedDbPersistence(factory, dbName, format);
+    persistence.attach(view);
+    return { state, persistence, view };
+  }
+
+  const hydrateFresh = (factory: IDBFactory, dbName: string) => new IndexedDbPersistence(factory, dbName).hydrate();
+
+  it("två flikar skriver inte bort varandras köade rader", async () => {
+    const factory = new IDBFactory();
+    const a = tab(factory, "marks-two-tabs");
+    const b = tab(factory, "marks-two-tabs");
+    a.state.pending = [{ id: "X", refs: [ref("x")] }];
+    a.state.queue = ["X"];
+    await a.persistence.save({ users: [{ id: "u1" }, { id: "x", name: "köad" }] });
+    // B känner inte till X: kön läses om, och raden bärs över.
+    b.state.pending = [{ id: "Y", refs: [ref("y")] }];
+    b.state.queue = ["Y"];
+    b.state.stored = ["X", "Y"];
+    await b.persistence.save({ users: [{ id: "u1" }, { id: "y" }] });
+
+    expect(b.state.refreshes).toBe(1);
+    expect(await hydrateFresh(factory, "marks-two-tabs")).toEqual({ users: [{ id: "u1" }, { id: "y" }, { id: "x", name: "köad" }] });
+    expect(await new IdbKv(factory, "marks-two-tabs", "source").get("marks")).toEqual({
+      pending: [{ id: "Y", refs: [ref("y")] }, { id: "X", refs: [ref("x")] }],
+      owed: [],
+    });
+    // A sparar igen: B:s rad bärs över åt andra hållet, utan omläsning (A känner Y).
+    a.state.queue = ["X", "Y"];
+    await a.persistence.save({ users: [{ id: "u1" }, { id: "x", name: "köad" }] });
+    expect(a.state.refreshes).toBe(0);
+    expect((await hydrateFresh(factory, "marks-two-tabs"))?.users).toEqual([{ id: "u1" }, { id: "x", name: "köad" }, { id: "y" }]);
+  });
+
+  it("en lokal ändring mellan läsningarna: märkena hör till raderna som klonas", async () => {
+    const factory = new IDBFactory();
+    const a = tab(factory, "marks-late-change");
+    a.state.pending = [{ id: "X", refs: [ref("x")] }];
+    a.state.queue = ["X"];
+    await a.persistence.save({ users: [{ id: "x" }] });
+    // B känner X och bär över raden, vilket kräver en läsning till. Mellan de
+    // två svaren köar B posten Z och skriver dess rad i källan.
+    const b = tab(factory, "marks-late-change");
+    b.state.queue = ["X"];
+    const source = { users: [{ id: "u1" }] };
+    let reads = 0;
+    b.view.marks = () => {
+      if (++reads === 2) {
+        b.state.pending = [{ id: "Z", refs: [ref("z")] }];
+        source.users.push({ id: "z" });
+      }
+      return { pending: b.state.pending, owed: b.state.owed };
+    };
+    await b.persistence.save(source);
+
+    expect(reads).toBe(2);
+    expect((await hydrateFresh(factory, "marks-late-change"))?.users).toEqual([{ id: "u1" }, { id: "z" }, { id: "x" }]);
+    expect(await new IdbKv(factory, "marks-late-change", "source").get("marks")).toEqual({
+      pending: [{ id: "Z", refs: [ref("z")] }, { id: "X", refs: [ref("x")] }],
+      owed: [],
+    });
+  });
+
+  it("en märkt post som är avgjord bärs inte över: de provisoriska raderna försvinner", async () => {
+    const factory = new IDBFactory();
+    const b = tab(factory, "marks-settled");
+    b.state.pending = [{ id: "P", refs: [ref("prov")] }];
+    b.state.queue = ["P"];
+    await b.persistence.save({ users: [{ id: "u1" }, { id: "prov" }] });
+    // A har kvitterat P: efter omläsningen ligger den fortfarande inte i kön.
+    const a = tab(factory, "marks-settled");
+    a.state.stored = [];
+    await a.persistence.save({ users: [{ id: "u1" }, { id: "srv" }] });
+
+    expect(a.state.refreshes).toBe(1);
+    expect(await hydrateFresh(factory, "marks-settled")).toEqual({ users: [{ id: "u1" }, { id: "srv" }] });
+    expect(await new IdbKv(factory, "marks-settled", "source").get("marks")).toEqual({ pending: [], owed: [] });
+  });
+
+  it("flikens rader att läsa om (owed) sparas med snapshotet", async () => {
+    const factory = new IDBFactory();
+    const b = tab(factory, "marks-owed");
+    b.state.owed = [ref("prov")];
+    await b.persistence.save({ users: [{ id: "prov" }] });
+    const fresh = tab(factory, "marks-owed");
+    await fresh.persistence.hydrate();
+    expect(fresh.state.adopted).toEqual({ pending: [], owed: [ref("prov")] });
+  });
+
+  it("hydrate lämnar märkena till fliken; utan snapshot lämnas inga", async () => {
+    const factory = new IDBFactory();
+    const empty = tab(factory, "marks-hydrate");
+    expect(await empty.persistence.hydrate()).toBeNull();
+    expect(empty.state.adopted).toBeUndefined();
+
+    const a = tab(factory, "marks-hydrate");
+    a.state.pending = [{ id: "X", refs: [ref("x")] }];
+    a.state.queue = ["X"];
+    await a.persistence.save({ users: [{ id: "x" }] });
+    const fresh = tab(factory, "marks-hydrate");
+    expect(await fresh.persistence.hydrate()).toEqual({ users: [{ id: "x" }] });
+    expect(fresh.state.adopted).toEqual({ pending: [{ id: "X", refs: [ref("x")] }], owed: [] });
+  });
+
+  it("ett snapshot i format 2 (före #1714) lyfts utan förlust; märken saknas", async () => {
+    const factory = new IDBFactory();
+    const kv = new IdbKv(factory, "marks-format-2", "source");
+    await kv.putAll([["current", { users: [{ id: "u1" }, { id: "köad" }] }], ["format", 2], ["sync", { cursor: 4 }]]);
+
+    const t = tab(factory, "marks-format-2");
+    t.state.pending = [{ id: "X", refs: [ref("köad")] }];
+    t.state.queue = ["X"];
+    expect(await t.persistence.hydrate()).toEqual({ users: [{ id: "u1" }, { id: "köad" }] });
+    expect(t.state.adopted).toBeNull();
+    expect(await kv.get("format")).toBe(LOCAL_DATA_VERSION);
+    expect(await kv.get("current")).toEqual({ users: [{ id: "u1" }, { id: "köad" }] });
+    expect(await kv.get("marks")).toEqual({ pending: [{ id: "X", refs: [ref("köad")] }], owed: [] });
+  });
+
+  it("ett nyare format: LocalDataTooNewError, och varken rader eller märken skrivs", async () => {
+    const factory = new IDBFactory();
+    const a = tab(factory, "marks-too-new");
+    a.state.pending = [{ id: "X", refs: [ref("x")] }];
+    a.state.queue = ["X"];
+    await a.persistence.save({ users: [{ id: "x" }] });
+    const kv = new IdbKv(factory, "marks-too-new", "source");
+    await kv.put("format", LOCAL_DATA_VERSION + 1);
+
+    const b = tab(factory, "marks-too-new");
+    let refused: unknown = null;
+    await b.persistence.save({ users: [{ id: "u2" }] }).catch((e: unknown) => { refused = e; });
+    expect(refused).toBeInstanceOf(LocalDataTooNewError);
+    await expect(b.persistence.hydrate()).rejects.toBeInstanceOf(LocalDataTooNewError);
+    expect(await kv.get("current")).toEqual({ users: [{ id: "x" }] });
+    expect(await kv.get("marks")).toEqual({ pending: [{ id: "X", refs: [ref("x")] }], owed: [] });
+  });
+
+  it("en flik med äldre kod (format 2) skriver inte ett snapshot utan märken över ett med", async () => {
+    const factory = new IDBFactory();
+    const a = tab(factory, "marks-old-tab");
+    a.state.pending = [{ id: "X", refs: [ref("x")] }];
+    a.state.queue = ["X"];
+    await a.persistence.save({ users: [{ id: "x" }] });
+
+    const old = new IndexedDbPersistence(factory, "marks-old-tab", { version: 2, migrations: {} });
+    let refused: unknown = null;
+    await old.save({ users: [] }).catch((e: unknown) => { refused = e; });
+    expect(refused).toBeInstanceOf(LocalDataTooNewError);
+    expect(await new IdbKv(factory, "marks-old-tab", "source").get("current")).toEqual({ users: [{ id: "x" }] });
+  });
+
+  it("utan kopplad flik (tester, demo) sparas källan som den är, och gamla märken töms", async () => {
+    const factory = new IDBFactory();
+    const a = tab(factory, "marks-no-tab");
+    a.state.pending = [{ id: "X", refs: [ref("x")] }];
+    a.state.queue = ["X"];
+    await a.persistence.save({ users: [{ id: "x" }] });
+
+    await new IndexedDbPersistence(factory, "marks-no-tab").save({ users: [{ id: "u2" }] });
+    expect(await hydrateFresh(factory, "marks-no-tab")).toEqual({ users: [{ id: "u2" }] });
+    expect(await new IdbKv(factory, "marks-no-tab", "source").get("marks")).toEqual({ pending: [], owed: [] });
+  });
+
+  it("trasiga lagrade märken räknas som inga", async () => {
+    const factory = new IDBFactory();
+    const kv = new IdbKv(factory, "marks-broken", "source");
+    await kv.putAll([["current", { users: [{ id: "u1" }] }], ["format", LOCAL_DATA_VERSION], ["marks", "trasig"]]);
+    const t = tab(factory, "marks-broken");
+    expect(await t.persistence.hydrate()).toEqual({ users: [{ id: "u1" }] });
+    expect(t.state.adopted).toBeNull();
+    await t.persistence.save({ users: [{ id: "u2" }] });
+    expect(await kv.get("current")).toEqual({ users: [{ id: "u2" }] });
   });
 });

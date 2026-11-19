@@ -10,12 +10,19 @@
 
 import type { DemoSource } from "@/lib/shared/demo-source";
 import { LocalStore } from "./local-store";
+import type { SnapshotTab } from "./snapshot-marks";
 
 export interface LocalStorePersistence {
   /** Läs hela källan (eller `null` om inget persisterat ännu). */
   hydrate(): Promise<DemoSource | null>;
   /** Spara hela källan. */
   save(source: DemoSource): Promise<void>;
+  /**
+   * Koppla fliken (#1714), före `hydrate`: en lagring som delas av flera
+   * flikar märker då vilka köade ändringar snapshotet bär, och skriver inte
+   * över en annan fliks. Saknas den (i minnet, demo) sparas källan som den är.
+   */
+  attach?(tab: SnapshotTab): void;
 }
 
 /** In-memory-adapter — håller en (djupkopierad) ögonblicksbild. */

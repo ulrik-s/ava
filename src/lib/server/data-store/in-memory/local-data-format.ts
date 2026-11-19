@@ -24,7 +24,7 @@
 import type { DemoSource } from "@/lib/shared/demo-source";
 
 /** Formatet den här koden skriver. */
-export const LOCAL_DATA_VERSION = 2;
+export const LOCAL_DATA_VERSION = 3;
 
 /** Lyfter ett snapshot från version `n` till `n + 1`. */
 export type LocalDataMigration = (source: DemoSource) => DemoSource;
@@ -37,9 +37,15 @@ export type LocalDataMigration = (source: DemoSource) => DemoSource;
  *     äldre kod inte ska skriva ett snapshot UTAN position över ett med: den
  *     sparade positionen hade då pekat förbi rader snapshotet saknar. Ett
  *     snapshot i format 1 har ingen position, och synkar från 0.
+ *   - 2 → 3 (#1714): märkena för de köade ändringar snapshotet bär sparas
+ *     bredvid det (`snapshot-marks.ts`). Raderna ändras inte. Versionen höjs
+ *     för att en flik med äldre kod inte ska skriva ett snapshot UTAN märken
+ *     över ett med: de sparade märkena hade då beskrivit ett annat snapshot.
+ *     Ett snapshot i format 2 har inga märken, och antas bära köns rader.
  */
 export const LOCAL_DATA_MIGRATIONS: Readonly<Record<number, LocalDataMigration>> = Object.freeze({
   1: (source: DemoSource): DemoSource => source,
+  2: (source: DemoSource): DemoSource => source,
 });
 
 /** Lokala data skrevs av en nyare AVA-version än den som körs. */
