@@ -21,6 +21,8 @@ export interface WatchItem {
   labeledAt: Readonly<Record<string, string>>;
   /** Finns en öppen PR som stänger saken? */
   hasOpenPr: boolean;
+  /** Har saken öppna GitHub-beroenden? Då väntar den på dem och knuffas inte. */
+  blocked?: boolean;
 }
 
 /** Vad klockan ska göra med en sak. */
@@ -84,7 +86,7 @@ export function dueNudges(machine: Machine, nudge: Nudge, items: readonly WatchI
   const period = parseDuration(nudge.after);
   const labels = new Set(nudgeLabels(machine));
   return items.flatMap((item) => {
-    if (item.labels.some((l) => nudge.skip_flags.includes(l))) return [];
+    if (item.blocked === true || item.labels.some((l) => nudge.skip_flags.includes(l))) return [];
     const label = item.labels.find((l) => labels.has(l));
     const since = label === undefined ? undefined : item.labeledAt[label];
     if (label === undefined || since === undefined) return [];

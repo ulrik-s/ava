@@ -34,13 +34,20 @@ const eventSchema = z.object({
 const pagesSchema = <T extends z.ZodType>(item: T) => z.array(z.array(item));
 
 const itemSchema = z.object({
+  id: z.number().optional(),
   number: z.number(),
   title: z.string().default(""),
   body: z.string().nullable().default(""),
   labels: z.array(z.object({ name: z.string() })),
   pull_request: z.unknown().optional(),
   created_at: z.string().optional(),
+  /** Bara på issues: antalet ÖPPNA blockerare (`blocked_by`) och öppna saker den blockerar. */
+  issue_dependencies_summary: z.object({ blocked_by: z.number(), blocking: z.number() }).nullable().optional(),
 });
+type ItemRow = z.infer<typeof itemSchema>;
+
+/** En issue i ett beroende (GitHubs `blocked_by`/`blocking`). */
+const depSchema = z.object({ id: z.number(), number: z.number(), state: z.string(), repository_url: z.string(), labels: z.array(z.object({ name: z.string() })) });
 
 const mergedSearchSchema = z.object({
   items: z.array(z.object({ number: z.number(), body: z.string().nullable(), pull_request: z.object({ merged_at: z.string().nullable() }) })),
@@ -57,8 +64,24 @@ const runsSchema = z.object({
 /** En etiketthändelse med tidpunkt. */
 export interface TimedLabelEvent extends LabelEvent { at: string }
 
-/** En öppen issue eller PR. */
-export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string }
+/** Öppna beroenden: blockerare som inte är stängda, och öppna saker den blockerar. */
+export interface Deps { blockedBy: number; blocking: number }
+
+/** En öppen issue eller PR. `id` (inte numret) behövs för att lägga till ett beroende. */
+export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string; id?: number; deps?: Deps }
+
+/** En öppen issue i ett beroende: nummer, id och etiketter. */
+export interface DepIssue { number: number; id: number; labels: string[] }
+
+function toOpenItem(i: ItemRow): OpenItem {
+  const deps = i.issue_dependencies_summary;
+  return {
+    number: i.number, title: i.title, body: i.body ?? "", labels: i.labels.map((l) => l.name), isPr: i.pull_request !== undefined,
+    ...(i.created_at === undefined ? {} : { createdAt: i.created_at }),
+    ...(i.id === undefined ? {} : { id: i.id }),
+    ...(deps ? { deps: { blockedBy: deps.blocked_by, blocking: deps.blocking } } : {}),
+  };
+}
 
 const repoEventSchema = z.object({
   id: z.number(),
@@ -72,6 +95,13 @@ const repoEventSchema = z.object({
 export interface RepoLabelEvent { id: number; label: string; number: number; isPr: boolean; at: string }
 
 const enc = (label: string): string => encodeURIComponent(label);
+
+function openDeps(run: GhRunner, repo: string, n: number, kind: "blocked_by" | "blocking"): DepIssue[] {
+  const rows = parseJsonWith(z.array(depSchema), run(["api", `repos/${repo}/issues/${n}/dependencies/${kind}?per_page=100`]));
+  return rows
+    .filter((r) => r.state === "open" && r.repository_url.endsWith(`/repos/${repo}`))
+    .map((r) => ({ number: r.number, id: r.id, labels: r.labels.map((l) => l.name) }));
+}
 
 /** GitHub-operationerna för ett repo. */
 export function gitHub(repo: string, run: GhRunner = runGh) {
@@ -113,10 +143,15 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
     closePull(n: number): void { run(["api", "-X", "PATCH", `repos/${repo}/pulls/${n}`, "-f", "state=closed"]); },
     openItems(): OpenItem[] {
       const pages = parseJsonWith(pagesSchema(itemSchema), run(["api", `repos/${repo}/issues?state=open&per_page=100`, "--paginate", "--slurp"]));
-      return pages.flat().map((i) => ({
-        number: i.number, title: i.title, body: i.body ?? "", labels: i.labels.map((l) => l.name), isPr: i.pull_request !== undefined,
-        ...(i.created_at === undefined ? {} : { createdAt: i.created_at }),
-      }));
+      return pages.flat().map(toOpenItem);
+    },
+    /** Öppna issues i repot som blockerar `n` (GitHub-beroenden). */
+    blockers(n: number): DepIssue[] { return openDeps(run, repo, n, "blocked_by"); },
+    /** Öppna issues i repot som `n` blockerar. */
+    blocked(n: number): DepIssue[] { return openDeps(run, repo, n, "blocking"); },
+    /** `n` kan inte byggas förrän issuen med id `blockerId` är klar. GitHub vägrar cirklar (HTTP 422). */
+    addBlocker(n: number, blockerId: number): void {
+      run(["api", "-X", "POST", `repos/${repo}/issues/${n}/dependencies/blocked_by`, "-F", `issue_id=${blockerId}`]);
     },
     hasOpenPr(n: number): boolean {
       const r = parseJsonWith(z.object({ total_count: z.number() }), run(["api", "-X", "GET", "search/issues", "-f", `q=repo:${repo} is:pr is:open "Closes #${n}"`]));

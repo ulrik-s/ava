@@ -82,6 +82,33 @@ inaktuella stängdes med belägg, resten ligger i inkorgen som `intern` +
 `undersökt` med genomgången som verifieringsrapport och väntar på Ulriks
 `verifierad`.
 
+## Beroenden
+
+Arbetsordrarna i ava bildar ett nät (#1720): kräver en ändring att koden ser
+ut på ett visst sätt, beror den på arbetsordern som bygger det. Ett nät, inte
+träd, eftersom en grund ofta bär flera funktioner, och inte epics: epiken är
+förfrågan i inkorgen, medan en grund kan höra till flera.
+
+- **Loop 2** bygger grunden först ("Grunden först" i `2-nedbrytning.md`):
+  använd det som finns, bero på den öppna arbetsorder som bygger det, eller
+  gör en egen `Grund:`-arbetsorder som flera kan bero på. Loop 3 sätter
+  `behöver-ändras` på en arbetsorder som bygger en grund en gång till.
+- **`Beror på #N`** i arbetsordern är källan. Flödesvakten speglar raderna som
+  GitHub-beroenden (blocked by), så att nätet syns (Blocked-ikonen) och
+  räknas. Beroenden som Ulrik lägger direkt i GitHub gäller också. GitHub
+  vägrar cirklar; en sådan rad gör arbetsordern `blockerad` med en förklaring.
+- **Vakten** startar inte loop 4 på en arbetsorder som har öppna blockerare
+  (`wait_for_blockers` på `granskad` i flow.yaml), och startar den när den
+  sista stängs (`issues: closed` i agent-flow.yml). Klockan knuffar inte
+  blockerade, och när de blir fria tar knuffen dem.
+- **Prioriteten ärvs** (`tooling/scripts/flow-deps.ts`, varje timme): den
+  egna står på raden `Prioritet:` (från förfrågans prio), och en grund får
+  den högsta bland det som väntar på den, som `prio-*`-flagga. Loop 4 tar
+  högst först.
+- **Statussidan**: en blockerad sak larmar inte som fastnad; den står under
+  "Rör sig" med hur många beroenden den väntar på. En grund visar hur många
+  som väntar på den.
+
 ## Varför det ser ut så här
 
 - **Privat intag.** Kodrepot är publikt. Användare skriver klientnamn och

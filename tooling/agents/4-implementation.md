@@ -24,10 +24,15 @@ Gjorde du något i steg 1: gör högst två nya issues (steg 2) i samma körning
 
 ## 2. Nya issues (högst tre, en i taget)
 
-Välj den öppna issuen i `ulrik-s/ava` med högst prioritet (raden
-`Prioritet:` i issuen: hög, medel, låg, saknas räknas som medel), och den
-äldsta inom samma prioritet, med `agent-task` + `granskad`
-som saknar `pågår` och `blockerad`, och vars `Beror på #N` alla är **klara**:
+Välj den öppna issuen i `ulrik-s/ava` med högst prioritet, och den äldsta
+inom samma prioritet. Prioriteten är `prio-*`-flaggan: den effektiva, som
+klockan sätter (den egna, eller den högsta bland det som väntar på issuen,
+så att en grund byggs före det som står på den). Saknas flaggan gäller raden
+`Prioritet:`, och saknas båda räknas den som medel. Issuen ska ha
+`agent-task` + `granskad`, sakna `pågår` och `blockerad`, inte ha några öppna
+GitHub-beroenden
+(`gh api "repos/ulrik-s/ava/issues/<nr>/dependencies/blocked_by" --jq '[.[] | select(.state == "open")] | length'`
+är 0), och alla dess `Beror på #N` ska vara **klara**:
 stängda av en mergad PR (`state_reason` `completed`). Är ett beroende stängt
 utan att ha byggts (`not_planned`, och ingen mergad PR i tidslinjen) finns
 koden inte på `main`: bygg inte. Sätt `blockerad` och kommentera vilket

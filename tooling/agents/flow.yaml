@@ -22,6 +22,10 @@
 #              startar den direkt när saken går in i tillståndet (via
 #              rutinens API-token), om inte `dispatch: false` — för tillstånd
 #              som agenten själv sätter mitt i sitt arbete.
+#   wait_for_blockers
+#              Agenten startas inte så länge saken har öppna GitHub-beroenden
+#              (blocked by, speglade ur `Beror på #N`); den startas när den
+#              sista blockeraren stängs. Se docs/feedback-pipeline.md.
 
 version: 1
 ulrik: ulrik-s
@@ -187,6 +191,7 @@ machines:
         color: "0e8a16"
         description: Godkänd av granskningsloopen
         agent: L4
+        wait_for_blockers: true
         transitions:
           - to: pagar
           - to: att-granska
@@ -217,6 +222,22 @@ machines:
       blockerad:
         color: "b60205"
         description: Agenten behöver ett beslut av Ulrik
+      # Effektiv prioritet, satt av klockan: den egna (raden `Prioritet:` som
+      # loop 2 skriver) eller den högsta bland det som väntar på issuen
+      # (beroendena), om den är högre. Loop 4 tar högst först. Agenter sätter
+      # dem inte. Ordningen här är prioritetsordningen.
+      prio-hög:
+        color: "d93f0b"
+        description: Effektiv prioritet hög (egen eller ärvd från det som väntar på den)
+        by: ulrik
+      prio-medel:
+        color: "fbca04"
+        description: Effektiv prioritet medel (egen eller ärvd från det som väntar på den)
+        by: ulrik
+      prio-låg:
+        color: "c2e0c6"
+        description: Effektiv prioritet låg (egen eller ärvd från det som väntar på den)
+        by: ulrik
 
   code-pr:
     repo: ulrik-s/ava

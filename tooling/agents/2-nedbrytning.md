@@ -156,10 +156,11 @@ För varje godkänd:
      skapa INGA issues. Sätt `blockerad` på intag-issuen med ett ADR-utkast.
    - **Testplan**: vilka tester som ska finnas (enhet/komponent/E2E).
    - **Beroenden**: en rad `Beror på #N` per issue som måste vara mergad
-     först: dels de du skapat tidigare för SAMMA förfrågan (i den ordning de
-     ska byggas), dels de från steg 3. Loop 4 bygger den inte förrän alla är
-     stängda. Bero bara på issues som redan finns, aldrig på en som skapas
-     senare, så att det aldrig blir en cirkel.
+     först: grunderna den står på (se "Grunden först" nedan), de du skapat
+     tidigare för SAMMA förfrågan (i den ordning de ska byggas), och de från
+     steg 3. Loop 4 bygger den inte förrän alla är stängda. Bero bara på
+     issues som redan finns, aldrig på en som skapas senare, så att det
+     aldrig blir en cirkel.
    - Näst sist, på egen rad: `Prioritet: <hög|medel|låg>` från intagets
      prio-flagga (utan flagga: `medel`). Loop 4 bygger högst prioritet först.
    - Sist, på egen rad: `Intag: ava-feedback#<nr>`
@@ -175,6 +176,32 @@ något annat, kräver förfrågan en skyddad sökväg, eller är den något som
 inte borde byggas (säkerhetsrisk, bryter mot advokatsekretess, orimligt
 stor)? Skriv då en konkret fråga till Ulrik i en kommentar, sätt `blockerad`
 och skapa inga issues.
+
+## Grunden först
+
+Innan du skriver arbetsordrarna (steg 5): vad kräver förfrågan av koden under
+det synliga? En tabell eller kolumn, en tRPC-procedur, en delad typ eller
+modul, en post i ett synkregister. För varje sådan grund:
+
+1. **Finns den på `main`?** Använd den; den är förebilden under **Arkitektur**.
+2. **Bygger en öppen arbetsorder den redan** (`agent-task` i alla tillstånd,
+   och öppna `agent-pr`)? Skriv `Beror på #N`. Bygg den aldrig en gång till
+   på ett eget sätt: två sätt att göra samma sak är hur designskulden uppstår.
+3. **Ingen bygger den:** gör en egen arbetsorder för grunden, skapad före dem
+   som använder den. Rubriken börjar med `Grund:`, och den beskriver grunden
+   generellt (vad den ska kunna, inte bara det den här förfrågan behöver), så
+   att nästa förfrågan kan bero på den i stället för att bygga en egen. De
+   arbetsordrar som använder den får `Beror på #<grunden>`.
+
+Ett beroende skrivs när ändringen annars inte går att bygga, går sönder eller
+måste skrivas om. "Bör göras först" är inget beroende; det hindrar bara att
+saker byggs parallellt.
+
+Flödesvakten speglar varje `Beror på #N` som ett GitHub-beroende (blocked by),
+startar inte loop 4 förrän alla blockerare är stängda, och ger en grund den
+högsta prioriteten bland det som väntar på den (`prio-*`). Du skriver bara den
+egna prioriteten (raden `Prioritet:`). GitHub vägrar cirklar: skriver du en
+blir arbetsordern `blockerad` med en förklaring.
 
 ## Beroenden mellan förfrågningar
 
