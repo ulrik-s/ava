@@ -1,0 +1,37 @@
+# Projekttavlan "AVA – flödet" (tooling/scripts/flow-board.ts): synkar korten
+# med inkorgen i ulrik-s/ava-feedback och verkställer Ulriks flyttar —
+# Godkänd → verifierad, Avböjd → stängd. GitHub kan inte starta en workflow när
+# ett kort flyttas, så den läser av tavlan var 5:e minut. Ligger i ava (publikt
+# repo, gratis minuter) fast inkorgen är privat: allt går via token:en.
+#
+# Kräver hemligheten FLOW_BOARD_TOKEN: en klassisk PAT med scopes `project` och
+# `repo` (ett användarägt projekt nås inte med GITHUB_TOKEN eller en
+# fine-grained token). Utan den loggar skriptet bara att tavlan inte synkas.
+name: Tavla
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tavla
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Tavla (synk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/bun-setup
+      - run: bun tooling/scripts/flow-board.ts
+        env:
+          FLOW_GUARD_MODE: enforce
+          FLOW_BOARD_TOKEN: ${{ secrets.FLOW_BOARD_TOKEN }}
