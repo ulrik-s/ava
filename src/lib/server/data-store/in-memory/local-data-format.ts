@@ -24,13 +24,23 @@
 import type { DemoSource } from "@/lib/shared/demo-source";
 
 /** Formatet den här koden skriver. */
-export const LOCAL_DATA_VERSION = 1;
+export const LOCAL_DATA_VERSION = 2;
 
 /** Lyfter ett snapshot från version `n` till `n + 1`. */
 export type LocalDataMigration = (source: DemoSource) => DemoSource;
 
-/** `LOCAL_DATA_MIGRATIONS[n]` lyfter version `n` → `n + 1`. Tom så länge version 1 är den enda. */
-export const LOCAL_DATA_MIGRATIONS: Readonly<Record<number, LocalDataMigration>> = Object.freeze({});
+/**
+ * `LOCAL_DATA_MIGRATIONS[n]` lyfter version `n` → `n + 1`.
+ *
+ *   - 1 → 2 (#1711): synkpositionen sparas bredvid snapshotet, i samma
+ *     transaktion. Raderna ändras inte. Versionen höjs för att en flik med
+ *     äldre kod inte ska skriva ett snapshot UTAN position över ett med: den
+ *     sparade positionen hade då pekat förbi rader snapshotet saknar. Ett
+ *     snapshot i format 1 har ingen position, och synkar från 0.
+ */
+export const LOCAL_DATA_MIGRATIONS: Readonly<Record<number, LocalDataMigration>> = Object.freeze({
+  1: (source: DemoSource): DemoSource => source,
+});
 
 /** Lokala data skrevs av en nyare AVA-version än den som körs. */
 export class LocalDataTooNewError extends Error {

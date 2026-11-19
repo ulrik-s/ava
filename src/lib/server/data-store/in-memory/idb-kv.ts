@@ -46,6 +46,25 @@ export class IdbKv {
     }
   }
 
+  /**
+   * Läs flera nycklar i EN transaktion (#1711): värdena hör ihop — en annan
+   * fliks skrivning hamnar aldrig mellan dem. `null` för en nyckel som saknas.
+   */
+  async getAll(keys: readonly string[]): Promise<unknown[]> {
+    const db = await this.open();
+    try {
+      return await new Promise<unknown[]>((resolve, reject) => {
+        const tx = db.transaction(this.storeName, "readonly");
+        const store = tx.objectStore(this.storeName);
+        const requests = keys.map((key) => store.get(key));
+        tx.oncomplete = () => resolve(requests.map((req): unknown => req.result ?? null));
+        tx.onerror = () => reject(tx.error ?? new Error("indexedDB get misslyckades"));
+      });
+    } finally {
+      db.close();
+    }
+  }
+
   /** Alla nycklar (för rensning, #1347). */
   async keys(): Promise<string[]> {
     const db = await this.open();
