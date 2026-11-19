@@ -215,6 +215,11 @@ export class ReconcileEngine {
     this.unrestored.push(...refs);
   }
 
+  /** Rader som väntar på att läsas om från servern (#1714) — sparas med snapshotet. */
+  owed(): readonly RowRef[] {
+    return this.unrestored;
+  }
+
   /** Radernas kanoniska läge just nu (#1348, "Kasta") — samma hämtning som efter en avvisning. */
   canonical(refs: readonly RowRef[]): Promise<PulledChange[]> {
     return fetchCanonical(this.deps.transport, refs);
