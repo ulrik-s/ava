@@ -197,7 +197,7 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {view.timeLines.map((l, i) => (
-              <tr key={i}>
+              <tr key={i} className="align-top">
                 <td className="py-1.5 whitespace-nowrap">{new Date(l.date).toLocaleDateString("sv-SE")}</td>
                 <td className="py-1.5">{l.description}</td>
                 <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(aPrisOre(l))}/h</td>
@@ -290,7 +290,7 @@ function WriteOffsCard({ writeOffs }: { writeOffs: ReadonlyArray<{ amount: numbe
       <table className="min-w-full text-sm">
         <tbody className="divide-y divide-gray-100">
           {writeOffs.map((w, i) => (
-            <tr key={i}>
+            <tr key={i} className="align-top">
               <td className="py-1.5 whitespace-nowrap text-gray-600">
                 {w.writtenOffAt ? new Date(w.writtenOffAt).toLocaleDateString("sv-SE") : "—"}
               </td>
@@ -515,7 +515,7 @@ function SpecificationCard({ timeEntries, expenses, rounding }: { timeEntries: S
             </thead>
             <tbody className="divide-y divide-gray-100">
               {timeEntries.map((t) => (
-                <tr key={t.id}>
+                <tr key={t.id} className="align-top">
                   <td className="py-1.5 whitespace-nowrap">{new Date(t.date).toLocaleDateString("sv-SE")}</td>
                   <td className="py-1.5">{t.description}</td>
                   <td className="py-1.5 text-right whitespace-nowrap">{formatDecimalHoursWithUnit(t.minutes)}</td>
@@ -537,7 +537,7 @@ function SpecificationCard({ timeEntries, expenses, rounding }: { timeEntries: S
           <table className="min-w-full text-sm">
             <tbody className="divide-y divide-gray-100">
               {expenses.map((e) => (
-                <tr key={e.id}>
+                <tr key={e.id} className="align-top">
                   <td className="py-1.5 whitespace-nowrap">{new Date(e.date).toLocaleDateString("sv-SE")}</td>
                   <td className="py-1.5">{e.description}</td>
                   <td className="py-1.5 text-right"><Money ore={expenseInclOf(e)} basis="gross" className="font-mono" /></td>
@@ -562,7 +562,7 @@ function AccontoDeductions({ deductions }: { deductions: AccontoDeductionRow[] }
       <table className="min-w-full text-sm">
         <tbody className="divide-y divide-gray-100">
           {deductions.map((d: AccontoDeductionRow) => d.accontoInvoice && (
-            <tr key={d.id}>
+            <tr key={d.id} className="align-top">
               <td className="py-2">
                 <EntityLink route="invoices" id={d.accontoInvoice.id} className="text-blue-600 hover:underline">
                   Aconto {new Date(d.accontoInvoice.invoiceDate).toLocaleDateString("sv-SE")}

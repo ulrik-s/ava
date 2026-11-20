@@ -57,6 +57,7 @@ describe("SyncDevicesSection", () => {
     render(<SyncDevicesSection now={NOW} />);
     const rows = screen.getAllByTestId("sync-device-row");
     expect(rows).toHaveLength(3);
+    for (const row of rows) expect(row).toHaveClass("align-top"); // cellerna börjar längst upp (#1753)
     expect(rows[0]).toHaveTextContent(/Anna Advokat.*Chrome på macOS.*Inget.*OK/);
     expect(rows[1]).toHaveTextContent(/Okänd användare.*Okänd enhet.*3 ändringar \(äldsta .*\).*Osynkat > 1 dygn/);
     expect(rows[2]).toHaveTextContent(/1 ändring.*Ingen synk på en vecka/);

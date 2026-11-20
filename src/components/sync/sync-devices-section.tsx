@@ -30,7 +30,7 @@ function DeviceRow({ device, userName, now }: { device: SyncDevice; userName: st
   const forget = useForgetSyncDevice();
   const health = HEALTH[deviceHealth(device, now)];
   return (
-    <tr className="border-t border-gray-100" data-testid="sync-device-row">
+    <tr className="align-top border-t border-gray-100" data-testid="sync-device-row">
       <td className="py-2 pr-3">{userName}</td>
       <td className="py-2 pr-3 text-gray-600">{device.label ?? "Okänd enhet"}</td>
       <td className="py-2 pr-3">{when(device.lastSeenAt)}</td>

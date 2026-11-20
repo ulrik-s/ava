@@ -114,6 +114,7 @@ describe("FeedbackButton — tabellen", () => {
     expect(within(first).getByText("Väntar på ditt svar")).toBeInTheDocument();
     expect(within(first).getByRole("img", { name: "Nytt meddelande" })).toBeInTheDocument();
     expect(within(second).getByText("Under arbete")).toBeInTheDocument();
+    expect(first).toHaveClass("align-top"); // cellerna börjar längst upp (#1753)
     expect(screen.queryByText("Levererad i v0.5.0")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Visa avslutade (1)" }));
     expect(screen.getByText("Levererad i v0.5.0")).toBeInTheDocument();

@@ -662,7 +662,7 @@ function RattshjalpRateSchedule({ matter, rows }: { matter: MatterContext; rows:
         <thead className="text-xs text-gray-500"><tr><th className="text-left py-1">Från</th><th className="text-left">Till</th><th className="text-right">Avgift</th></tr></thead>
         <tbody className="divide-y divide-gray-100">
           {accontos.map((a, i) => (
-            <tr key={i}>
+            <tr key={i} className="align-top">
               <td className="py-1.5 whitespace-nowrap text-gray-600">{svDate(a.date)}</td>
               <td className="whitespace-nowrap text-gray-600">{i + 1 < accontos.length ? svDate(accontos[i + 1]!.date) : "pågående"}</td>
               <td className="text-right font-mono">{a.bips / 100} %</td>

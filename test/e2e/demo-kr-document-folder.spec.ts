@@ -72,3 +72,22 @@ test.describe("släpp filer utifrån i dokumentvyn (#1615)", () => {
     await expect(page.getByText("Möte om förlikning.eml")).toBeVisible({ timeout: 30_000 });
   });
 });
+
+// #1753: dokumentträdets rader är toppjusterade. Klassen sitter på <tr>, och
+// cellerna ärver justeringen i en riktig webbläsare (td { vertical-align: inherit }).
+test("dokumentträdet: cellerna i mapp- och dokumentrader börjar längst upp", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await seedDemoLogin(page, BASE);
+  const seed = await fetchDemoSeed(page, BASE);
+  await page.goto(`${BASE}/matters/${matterWithKrStatus(seed, "INSKICKAD")}/`);
+  await showPanel(page, "Dokument");
+  await page.getByRole("button", { name: "Träd", exact: true }).click();
+  await expect(page.getByText("Rot", { exact: true })).toBeVisible({ timeout: 30_000 });
+
+  const folderRow = page.locator("tr").filter({ has: page.getByText("Domstol", { exact: true }) }).first();
+  const documentRow = page.locator("tr").filter({ has: page.getByLabel("Dokumentåtgärder") }).first();
+  for (const row of [folderRow, documentRow]) {
+    await expect(row).toBeVisible();
+    expect(await row.locator("td").first().evaluate((td) => getComputedStyle(td).verticalAlign)).toBe("top");
+  }
+});

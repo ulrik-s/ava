@@ -19,6 +19,7 @@ interface BillingRunRow {
   invoiceId?: string | null; invoice?: { id: string; invoiceNumber?: string | null; status?: string } | null;
   reference?: string | null;
   kostnadsrakningStatus?: string | null; awardedOre?: number | null; beslutSlutgiltigt?: boolean | null;
+  clientShareBips?: number | null;
 }
 
 let runsData: { runs: BillingRunRow[] } = { runs: [] };
@@ -431,6 +432,21 @@ describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
     radgivningError = { message: "nätverksfel" };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP" }} />);
     expect(screen.getByRole("alert")).toHaveTextContent("Rådgivningsfakturan kunde inte skapas: nätverksfel");
+  });
+
+  it("Rättshjälpsavgift över tid: acontoraderna är toppjusterade, slutliga beslutet inte (#1753)", () => {
+    runsData = { runs: [
+      { id: "a1", type: "ACCONTO", status: "INVOICED", recipient: "KLIENT", amountOre: 10_000, createdAt: "2026-01-05", clientShareBips: 2000 },
+      { id: "a2", type: "ACCONTO", status: "INVOICED", recipient: "KLIENT", amountOre: 10_000, createdAt: "2026-03-05", clientShareBips: 4000 },
+    ] };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")}
+      matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05", clientShareBips: 3000 }} />);
+    const card = screen.getByText("Rättshjälpsavgift över tid").parentElement;
+    if (!card) throw new Error("kortet Rättshjälpsavgift över tid saknas");
+    const schedule = within(card);
+    expect(schedule.getByText("20 %").closest("tr")).toHaveClass("align-top");
+    expect(schedule.getByText("40 %").closest("tr")).toHaveClass("align-top");
+    expect(schedule.getByText(/Slutligt myndighetsbeslut/).closest("tr")).not.toHaveClass("align-top");
   });
 
   it("självrisk-aconto-hint visas när självrisken nått tröskeln (#854)", () => {
