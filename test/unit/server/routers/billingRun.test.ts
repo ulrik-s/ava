@@ -52,21 +52,21 @@ describe("billingRun.createAcconto", () => {
     expect(te.frozenAt).toBeFalsy();
   });
 
-  it("proposedAmountOre = %-sats × upparbetat (inga tidigare aconton) — #397", async () => {
+  it("proposedAmountOre = %-sats × upparbetat + moms (inga tidigare aconton) — #397, #1726", async () => {
     const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" }); // 5000 kr
     const res = await caller.billingRun.createAcconto({
       matterId: "m-1", clientShareBips: 2000, amountOre: 100000,
     });
-    // 20% × 500000 − 0 = 100000
-    expect((res.run as { proposedAmountOre: number }).proposedAmountOre).toBe(100000);
+    // 20% × 500000 = 100000, + 25 % moms − 0 = 125000
+    expect((res.run as { proposedAmountOre: number }).proposedAmountOre).toBe(125000);
   });
 
-  it("proposedAmountOre drar av tidigare ACCONTO-runs (#397)", async () => {
+  it("proposedAmountOre = andelen inkl. moms minus tidigare ACCONTO-runs (#397, #1726)", async () => {
     const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" }); // 5000 kr
     await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 100000 });
     const second = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 5000, amountOre: 1 });
-    // 50% × 500000 − 100000 (tidigare) = 150000
-    expect((second.run as { proposedAmountOre: number }).proposedAmountOre).toBe(150000);
+    // 50% × 500000 = 250000, + 25 % moms = 312500, − 100000 (tidigare, brutto) = 212500
+    expect((second.run as { proposedAmountOre: number }).proposedAmountOre).toBe(212500);
   });
 });
 
