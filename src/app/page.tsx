@@ -2,8 +2,8 @@
 
 /**
  * Dashboard — översikt för inloggad användare:
- *   - "Att bevaka" — härledda påminnelser (#1062)
- *   - "Att bevaka" överst — frister/bevakningar i rött när de är inne (#1167)
+ *   - "Frister" överst — frister i rött när de är inne (#1167) och
+ *     "Bör faktureras" (#1062, #1735)
  *   - Tidrapportering för vald dag (summa + lista)
  *   - Senaste 5 ärenden man jobbat i (timeEntry order desc, dedup)
  *
@@ -53,7 +53,7 @@ function dayLabel(ymd: string): string {
 export default function Dashboard() {
   const [ymd, setYmd] = useState<string>(todayYmd());
   const panels = [
-    { id: "watch", title: "Att bevaka", render: () => <WatchlistCard /> },
+    { id: "watch", title: "Frister", render: () => <WatchlistCard /> },
     { id: "time", title: "Tidrapportering", render: () => <TimeCard ymd={ymd} /> },
     { id: "recent", title: "Senaste ärenden", render: () => <RecentMattersCard /> },
   ];
@@ -81,9 +81,9 @@ export default function Dashboard() {
 const DASHBOARD_LIMIT = 5;
 
 /**
- * Startsidans "Att bevaka". Visar de mest brådskande posterna och länkar
+ * Startsidans "Frister". Visar de mest brådskande posterna och länkar
  * vidare — kortet ska tala om ATT något behöver uppmärksamhet, inte ersätta
- * hela listan. Self-gating: har man inget att bevaka renderas ingenting, så
+ * hela listan. Self-gating: har man inga frister renderas ingenting, så
  * kortet aldrig blir tomt utfyllnad.
  */
 function WatchlistCard() {
@@ -91,14 +91,14 @@ function WatchlistCard() {
   const complete = useCompleteWatch();
   const items = q.data?.items ?? [];
   // En panel ska inte stå tom och tyst — säg att det är lugnt (#1184).
-  if (items.length === 0) return <p className="p-4 text-sm text-gray-500">Inget att bevaka just nu.</p>;
+  if (items.length === 0) return <p className="p-4 text-sm text-gray-500">Inga frister just nu.</p>;
 
   const passed = items.filter((i) => i.severity === "passed").length;
   return (
     <div className="bg-white rounded-lg border border-gray-200 mb-6">
       <div className={sectionHeaderClass("amber")}>
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-          🔔 Att bevaka
+          🔔 Frister
           <span className="text-xs font-normal text-gray-600">
             ({items.length}{passed > 0 ? `, ${passed} passerade` : ""})
           </span>

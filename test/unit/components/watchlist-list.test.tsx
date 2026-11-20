@@ -53,15 +53,8 @@ describe("WatchlistList", () => {
   });
 
   it("namnger signaltypen för skärmläsare", () => {
-    render(<WatchlistList items={[item({ kind: "failedDispatch" })]} emptyText="" />);
-    expect(screen.getByText(/Utskick misslyckades:/)).toBeInTheDocument();
-  });
-
-  it("faktureringsåtgärd: 💼, etiketten Fakturering och länk till ärendet (#1221)", () => {
-    render(<WatchlistList items={[item({ kind: "billingAction", title: "Skicka faktura F-1", detail: "Fakturan är skapad men inte skickad." })]} emptyText="" />);
-    expect(screen.getByText("💼")).toBeInTheDocument();
-    expect(screen.getByText(/Fakturering:/)).toBeInTheDocument();
-    expect(screen.getByRole("link").getAttribute("href")).toContain("id=m1");
+    render(<WatchlistList items={[item({ kind: "unbilled" })]} emptyText="" />);
+    expect(screen.getByText(/Ofakturerat:/)).toBeInTheDocument();
   });
 
   it("renderar flera poster utan nyckelkrock när ärende och datum saknas", () => {

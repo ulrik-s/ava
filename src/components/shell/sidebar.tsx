@@ -17,9 +17,9 @@ const navigation = [
   // menyval för båda (#1643). /conflicts skickar hit.
   { name: "Ärenden / jävskontroll", href: "/matters", icon: "🔍" },
   { name: "Startsida", href: "/", icon: "📊" },
-  // EN lista för det som ska bevakas (#1167): bevakningar/frister + härledda
-  // signaler. "Att göra" visade samma poster en gång till och förvirrade.
-  { name: "Att bevaka", href: "/watchlist", icon: "🔔" },
+  // EN lista för frister och "Bör faktureras" (#1167, #1735). "Att göra"
+  // visade samma poster en gång till och förvirrade.
+  { name: "Frister", href: "/watchlist", icon: "🔔" },
   // Det som kräver ett beslut: takvarningar, jävsträffar, synkrutor (#1734).
   { name: "Att åtgärda", href: "/action-items", icon: "🛠️" },
   { name: "Parter", href: "/contacts", icon: "👤" },

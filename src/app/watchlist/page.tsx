@@ -1,12 +1,9 @@
 "use client";
 
 /**
- * "Att bevaka" (#1062) — allt som behöver uppmärksamhet, över alla ärenden.
- *
- * Varje signal syns redan någonstans i gränssnittet, men bara där man redan
- * tittar: täckningsvarningen inne i ärendet, förfallodagen på fakturan,
- * statusen på ett utskick. Poängen med den här sidan är motsatsen — att få veta
- * utan att öppna något.
+ * Frister (#1062, #1735) — tidsfrister och "Bör faktureras", över alla ärenden.
+ * Adressen är fortfarande `/watchlist` (bokmärken). Takvarningar och
+ * jävskontroller står i Att åtgärda (`@/app/action-items/page`).
  *
  * Inget lagras och inget går att avfärda. Posterna är härledda och städar sig
  * själva när man åtgärdat dem; se `@/lib/shared/watchlist`.
@@ -23,12 +20,7 @@ import type { WatchlistKind } from "@/lib/shared/watchlist";
 const FILTERS: Array<{ key: WatchlistKind | "all"; label: string }> = [
   { key: "all", label: "Allt" },
   { key: "deadline", label: "Tidsfrister" },
-  { key: "coverageCap", label: "Täckningstak" },
   { key: "unbilled", label: "Ofakturerat" },
-  { key: "overdueInvoice", label: "Förfallna fakturor" },
-  { key: "failedDispatch", label: "Misslyckade utskick" },
-  { key: "billingAction", label: "Fakturering" },
-  { key: "conflictCheck", label: "Jävskontroll" },
 ];
 
 export default function WatchlistPage() {
@@ -54,7 +46,7 @@ export default function WatchlistPage() {
         <>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Att bevaka</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Frister</h1>
           <p className="text-sm text-gray-500">
             {q.isLoading ? "Hämtar…"
               : all.length === 0 ? "Inget behöver din uppmärksamhet."
@@ -96,7 +88,7 @@ export default function WatchlistPage() {
       <WatchlistList
         items={items}
         onComplete={complete}
-        emptyText={kind === "all" ? "Inget att bevaka just nu." : "Inget att bevaka i den kategorin."}
+        emptyText={kind === "all" ? "Inga frister just nu." : "Inga frister i den kategorin."}
       />
     </ListPage>
   );

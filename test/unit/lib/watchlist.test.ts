@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest-compat";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
-  coverageItems, dagar, deadlineItems, failedDispatchItems, overdueInvoiceItems,
+  coverageItems, dagar, deadlineItems,
   sortWatchlist, unbilledItems, daysBetween,
   DEFAULT_THRESHOLDS, type WatchlistItem,
 } from "@/lib/shared/watchlist";
@@ -135,49 +135,10 @@ describe("deadlineItems", () => {
     expect(item?.detail).toContain("4 dagar sedan");
   });
 
-  it("utan ärende länkar till Att bevaka (/tasks fanns inte, #1167) och bär uppgiftens id", () => {
+  it("utan ärende länkar till Frister (/tasks fanns inte, #1167) och bär uppgiftens id", () => {
     const [item] = deadlineItems([{ ...bas, matterId: null, matterNumber: null, dueAt: "2026-09-06" }], NOW);
     expect(item?.link).toBeNull();
     expect(item?.taskId).toBe(bas.id); // så den kan bockas av i listan
-  });
-});
-
-describe("overdueInvoiceItems", () => {
-  const bas = { id: "i1", invoiceNumber: "F-2026-0001", matterId: "m1", matterNumber: "2026-0001" };
-
-  it("ignorerar fakturor som inte förfallit", () => {
-    expect(overdueInvoiceItems([{ ...bas, dueDate: "2026-10-01", outstandingOre: 1_000_00 }], NOW)).toEqual([]);
-  });
-
-  // En betald faktura kan ha passerat förfallodagen utan att vara ett problem.
-  it("ignorerar förfallna fakturor UTAN utestående", () => {
-    expect(overdueInvoiceItems([{ ...bas, dueDate: "2026-08-01", outstandingOre: 0 }], NOW)).toEqual([]);
-  });
-
-  it("räknar dagar över förfallodag", () => {
-    const [item] = overdueInvoiceItems([{ ...bas, dueDate: "2026-08-26", outstandingOre: 1_000_00 }], NOW);
-    expect(item?.severity).toBe("passed");
-    expect(item?.detail).toContain("10 dagar");
-  });
-});
-
-describe("failedDispatchItems", () => {
-  it("förklarar VARFÖR fakturan är obetald", () => {
-    const [item] = failedDispatchItems([{
-      invoiceId: "i1", invoiceNumber: "F-2026-0002", recipient: "klient@example.test",
-      error: "550 rejected", failedAt: "2026-09-01", matterId: "m1", matterNumber: "2026-0001",
-    }]);
-    expect(item?.severity).toBe("passed");
-    expect(item?.detail).toContain("550 rejected");
-    expect(item?.detail).toContain("inte kommit fram");
-  });
-
-  it("klarar utskick utan felmeddelande", () => {
-    const [item] = failedDispatchItems([{
-      invoiceId: "i1", invoiceNumber: null, recipient: "x@y.test",
-      error: null, failedAt: null, matterId: null, matterNumber: null,
-    }]);
-    expect(item?.detail).not.toContain("undefined");
   });
 });
 
@@ -219,16 +180,16 @@ describe("sortWatchlist", () => {
   });
 
   // En frist som går ut IDAG är det enda som fortfarande går att rädda i dag —
-  // den får inte hamna under förfallna fakturor (startsidan visar bara fem).
+  // den får inte hamna under det som redan passerat (startsidan visar bara fem).
   it("en tidsfrist som går ut idag kommer före allt som redan passerat", () => {
     const out = sortWatchlist([
-      item({ kind: "overdueInvoice", severity: "passed", at: "2026-08-01", amountOre: 500_00 }),
+      item({ kind: "coverageCap", severity: "passed", at: "2026-08-01", amountOre: 500_00 }),
       item({ kind: "deadline", severity: "approaching", at: "2026-09-29", title: "idag" }),
       item({ kind: "deadline", severity: "passed", at: "2026-09-20" }),
       item({ kind: "deadline", severity: "approaching", at: "2026-10-05", title: "senare" }),
     ], "2026-09-29");
     expect(out.map((i) => i.title === "idag" ? "idag" : `${i.kind}:${i.severity}`)).toEqual([
-      "idag", "overdueInvoice:passed", "deadline:passed", "deadline:approaching",
+      "idag", "coverageCap:passed", "deadline:passed", "deadline:approaching",
     ]);
   });
 
@@ -273,14 +234,5 @@ describe("svensk böjning", () => {
       [{ id: "t", title: "Ge in", dueAt: "2026-09-05", matterId: null, matterNumber: null }], NOW2,
     );
     expect(item?.title).toContain("idag");
-  });
-
-  it("böjer även dagar över förfallodag", () => {
-    const NOW2 = new Date("2026-09-05T00:00:00Z");
-    const [item] = overdueInvoiceItems(
-      [{ id: "i", invoiceNumber: "F-1", dueDate: "2026-09-04", outstandingOre: 100, matterId: null, matterNumber: null }],
-      NOW2,
-    );
-    expect(item?.detail).toBe("1 dag över förfallodag.");
   });
 });

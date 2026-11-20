@@ -61,7 +61,7 @@ describe("RejectedChangesList", () => {
   });
 });
 
-describe("RejectedChangesNotice (Att bevaka)", () => {
+describe("RejectedChangesNotice (Att åtgärda)", () => {
   it("syns bara när något väntar, och länkar till vyn", async () => {
     await rejectedChanges.attach(new InMemoryRejectedChangesPersistence());
     const { container } = render(<RejectedChangesNotice />);

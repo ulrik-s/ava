@@ -475,7 +475,7 @@ describe("BillingPanel — informationsrutorna är borta (#1221)", () => {
     expect(screen.queryByRole("button", { name: "Registrera prutning" })).not.toBeInTheDocument();
   });
 
-  it("efter en faktureringshändelse hämtas Anteckningar och Att bevaka om", async () => {
+  it("efter en faktureringshändelse hämtas Anteckningar och Frister om", async () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));

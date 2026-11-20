@@ -1,7 +1,7 @@
 /**
  * watchlistRouter mot riktig DemoDataStore (#1167): `matterId` begränsar listan
- * till ett ärendes poster — "Att bevaka" i ärendet är samma lista som den
- * globala, bara filtrerad.
+ * till ett ärendes poster — Frister i ärendet är samma lista som sidan
+ * Frister, bara filtrerad. Listan har bara tidsfrister och Bör faktureras (#1735).
  */
 
 import { describe, expect, it } from "vitest-compat";
@@ -72,28 +72,27 @@ describe("watchlist.list", () => {
     expect(item?.severity).toBe("approaching"); // inte "passerad" ett dygn för tidigt
   });
 
-  it("förfallna fakturor är oförändrade efter att regeln flyttats (#1731)", async () => {
-    const inv = (id: string, status: string, dueDate: Date | null): Record<string, unknown> => ({
-      id, matterId: "m1", invoiceNumber: id, amount: 10_000, status, invoiceType: "STANDARD",
-      invoiceDate: inDays(-40), dueDate, createdAt: inDays(-40),
-    });
-    const pay = (invoiceId: string, amount: number): Record<string, unknown> => ({
-      id: `${invoiceId}-p`, invoiceId, amount, paymentDate: inDays(-2), createdAt: inDays(-2),
+  it("bara tidsfrister och Bör faktureras — inga takvarningar, fakturor, utskick, faktureringssteg eller jävsträffar (#1735)", async () => {
+    const matter = (id: string, p: Record<string, unknown>): Record<string, unknown> => ({
+      id, organizationId: "o1", matterNumber: `2026-${id}`, title: id, status: "ACTIVE", responsibleLawyerId: "u1", ...p,
     });
     const { items } = await caller([], [
-      inv("F-sen", "SENT", inDays(-12)),
-      inv("F-plan", "INSTALLMENT_PLAN", inDays(-1)),
-      inv("F-betald", "SENT", inDays(-5)),
-      inv("F-status", "PAID", inDays(-5)),
-      inv("F-idag", "SENT", new Date()),
-      inv("F-utan", "SENT", null),
-    ], [pay("F-sen", 4_000), pay("F-betald", 10_000)]).list({ mine: false });
-    const overdue = items.filter((i) => i.kind === "overdueInvoice");
-    expect(overdue.map((i) => i.title).sort()).toEqual(["Förfallen faktura F-plan", "Förfallen faktura F-sen"]);
-    const sen = overdue.find((i) => i.title.endsWith("F-sen"));
-    expect(sen?.amountOre).toBe(6_000);
-    expect(sen?.detail).toBe("12 dagar över förfallodag.");
-    expect(sen?.at).toBe(stockholmDay(inDays(-12)));
+      // Förfallen och dessutom skapad men oskickad: varken förfallen faktura eller "Skicka faktura".
+      { id: "F-sen", matterId: "m1", invoiceNumber: "F-sen", amount: 10_000, status: "SENT", invoiceType: "STANDARD", invoiceDate: inDays(-40), dueDate: inDays(-12), createdAt: inDays(-40) },
+      { id: "F-ny", matterId: "m1", invoiceNumber: "F-ny", amount: 10_000, status: "CREATED", invoiceType: "STANDARD", invoiceDate: inDays(-20), dueDate: inDays(10), createdAt: inDays(-20) },
+    ], [], {
+      matters: [
+        matter("cap", { paymentMethod: "RATTSHJALP", rattshjalpMaxTimmar: 1 }),
+        matter("hits", { conflictCheckStatus: "HITS", conflictCheckHits: 2 }),
+        matter("pending", { conflictCheckStatus: "PENDING" }),
+      ],
+      timeEntries: [
+        // 1 h på ett 1-timmestak (takvarning) och 300 000 kr ofakturerat (Bör faktureras).
+        { id: "te1", organizationId: "o1", matterId: "cap", userId: "u1", minutes: 60, hourlyRate: 30_000_000, billable: true, date: inDays(-1) },
+      ],
+    }).list({ mine: false });
+    expect([...new Set(items.map((i) => i.kind))].sort()).toEqual(["deadline", "unbilled"]);
+    expect(items.find((i) => i.kind === "unbilled")).toMatchObject({ title: "Bör faktureras", matterNumber: "2026-cap" });
   });
 });
 

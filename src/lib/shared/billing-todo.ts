@@ -1,17 +1,11 @@
 /**
- * Faktureringens "måste göras" (#1221) — EN uppsättning predikat för när ett
- * ärende väntar på en faktureringsåtgärd. Ren logik, ingen I/O.
- *
- * Samma predikat driver två ställen: faktureringspanelens åtgärdsrutor (med sina
- * knappar) och "Att bevaka"-signalen `billingAction` (startsidan, /watchlist och
- * ärendets panel). Då kan de aldrig säga emot varandra: rutan i panelen och
- * posten i Att bevaka försvinner av samma skäl, i samma ögonblick.
+ * Faktureringens "måste göras" (#1221) — predikat för när ett ärende väntar på
+ * en faktureringsåtgärd. Ren logik, ingen I/O. De driver faktureringspanelens
+ * åtgärdsrutor; Frister visar dem inte (#1735).
  */
 
-import { settlementArvodeNet } from "./billing-work-value";
-import { computeCoverageSplit } from "./coverage-billing";
-import { availableKrActions, canKrAction, krStateOf, type KostnadsrakningStatus } from "./kostnadsrakning-flow";
-import type { BillingRunRecipient, BillingRunStatus, BillingRunType, InvoiceStatus, PaymentMethod, TimeEntryKind } from "./schemas/enums";
+import { canKrAction, krStateOf, type KostnadsrakningStatus } from "./kostnadsrakning-flow";
+import type { BillingRunRecipient, BillingRunStatus, BillingRunType, InvoiceStatus, PaymentMethod } from "./schemas/enums";
 import type { BillingRunId } from "./schemas/ids";
 
 /** Det predikaten läser ur en billing-run (panelens rader och repo-raderna passar båda). */
@@ -35,37 +29,11 @@ export function isActiveKr(r: TodoRun): boolean {
 }
 
 /**
- * Väntar kostnadsräkningen på att domstolens beslut registreras? `TINGSRATT` =
- * första beslutet, `HOVRATT` = efter överklagande. Null = inget beslut väntar.
- */
-export function krAwaitingBeslut(runs: readonly TodoRun[]): "TINGSRATT" | "HOVRATT" | null {
-  const kr = runs.find(isActiveKr);
-  if (!kr) return null;
-  const acts = availableKrActions(krStateOf(kr));
-  if (acts.includes("REGISTRERA_HOVRATT_BESLUT")) return "HOVRATT";
-  return acts.includes("REGISTRERA_BESLUT") ? "TINGSRATT" : null;
-}
-
-/**
  * Kan faktura skapas på kostnadsräkningen? Beslutet är registrerat men fakturan
- * inte skapad. KR-kortets "Skapa faktura"-knapp och Att bevaka läser båda detta.
+ * inte skapad. KR-kortets "Skapa faktura"-knapp läser detta.
  */
 export function krCanCreateInvoice(r: TodoRun): boolean {
   return canKrAction(krStateOf(r), "SKAPA_FAKTURA");
-}
-
-/** Beslutad kostnadsräkning som väntar på sin faktura. */
-export interface KrAwaitingInvoice {
-  /** Beslutet är hovrättens (slutgiltiga), inte tingsrättens. */
-  hovratt: boolean;
-  awardedOre: number | null;
-}
-
-/** Väntar den aktiva kostnadsräkningen på att fakturan skapas? Null = nej. */
-export function krAwaitingInvoice(runs: readonly TodoRun[]): KrAwaitingInvoice | null {
-  const kr = runs.find(isActiveKr);
-  if (!kr || !krCanCreateInvoice(kr)) return null;
-  return { hovratt: kr.beslutSlutgiltigt ?? false, awardedOre: kr.awardedOre ?? null };
 }
 
 /** Har klienten redan fått ett självrisk-aconto? */
@@ -96,37 +64,4 @@ export function insurerPruningPending(method: PaymentMethod | null | undefined, 
   const payerFinal = runs.find((r) => r.type === "FINAL" && r.recipient === "FORSAKRING");
   if (!payerFinal || payerFinal.invoice?.status === "PAID") return false;
   return !runs.some((r) => r.recipient === "FORSAKRING" && r.prutningOre != null);
-}
-
-/** Skapad men inte skickad (#1138): fakturan har nummer men har inte gått ut. */
-export function isUnsentInvoice(inv: { status: InvoiceStatus | string }): boolean {
-  return inv.status === "DRAFT";
-}
-
-/** Tidsposten som självrisken räknas på. */
-export interface SjalvriskEntry {
-  minutes: number;
-  hourlyRate: number;
-  billable: boolean;
-  date: Date | string;
-  kind?: TimeEntryKind | null | undefined;
-  frozenAt?: Date | string | null | undefined;
-  frozenByBillingRunId?: BillingRunId | null | undefined;
-}
-
-/**
- * Klientens självrisk i ett rättshjälpsärende, på samma underlag som
- * slutregleringen (`billingRun.coverageSplit`): väntar en kostnadsräkning på dom
- * är det dess frysta poster, annars allt ofryst. Den låsta rådgivningstimmen är
- * fryst och ingår därför aldrig.
- */
-export function rattshjalpSjalvriskOre(
-  entries: readonly SjalvriskEntry[], runs: readonly TodoRun[], clientShareBips: number, now: Date,
-): number {
-  const pendingKr = runs.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
-  const work = pendingKr
-    ? entries.filter((e) => e.frozenByBillingRunId === pendingKr.id)
-    : entries.filter((e) => !e.frozenAt && !e.frozenByBillingRunId);
-  const totalOre = settlementArvodeNet("RATTSHJALP", { timeEntries: work }, now);
-  return computeCoverageSplit({ method: "RATTSHJALP", totalOre, clientShareBips }).clientOre;
 }

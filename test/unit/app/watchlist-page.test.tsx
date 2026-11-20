@@ -12,7 +12,7 @@ const createMutate = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    // Bocka av + ny bevakning (#1167).
+    // Bocka av + ny frist (#1167).
     useUtils: () => ({ watchlist: { list: { invalidate: vi.fn() } }, task: { listForMatter: { invalidate: vi.fn() } } }),
     task: {
       complete: { useMutation: () => ({ mutate: completeMutate, isPending: false }) },
@@ -46,10 +46,10 @@ beforeEach(() => {
   lastArgs = null;
 });
 
-describe("Att bevaka-sidan", () => {
+describe("sidan Frister (#1735)", () => {
   it("visar rubriken", () => {
     render(<WatchlistPage />);
-    expect(screen.getByRole("heading", { name: /Att bevaka/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Frister" })).toBeInTheDocument();
   });
 
   it("säger ifrån när ingenting behöver uppmärksamhet", () => {
@@ -83,12 +83,23 @@ describe("Att bevaka-sidan", () => {
     expect(screen.queryByText("Tidsfrist")).not.toBeInTheDocument();
   });
 
-  it("filtret Fakturering visar bara faktureringsåtgärder (#1221)", () => {
-    query.data = { items: [item({ kind: "deadline" }), item({ kind: "billingAction", title: "Skicka faktura F-1" })] };
+  it("filterknapparna är Allt, Tidsfrister och Ofakturerat (#1735)", () => {
     render(<WatchlistPage />);
-    fireEvent.click(screen.getByRole("button", { name: "Fakturering" }));
-    expect(screen.getByText("Skicka faktura F-1")).toBeInTheDocument();
-    expect(screen.queryByText("Tidsfrist")).not.toBeInTheDocument();
+    const knappar = screen.getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed")).map((b) => b.textContent);
+    expect(knappar).toEqual(["Allt", "Tidsfrister", "Ofakturerat"]);
+  });
+
+  it("filtret Tidsfrister döljer Bör faktureras", () => {
+    query.data = { items: [item({ kind: "deadline" }), item({ kind: "unbilled", title: "Bör faktureras" })] };
+    render(<WatchlistPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Tidsfrister" }));
+    expect(screen.getByText("Tidsfrist")).toBeInTheDocument();
+    expect(screen.queryByText("Bör faktureras")).not.toBeInTheDocument();
+  });
+
+  it("utan poster: 'Inga frister just nu.'", () => {
+    render(<WatchlistPage />);
+    expect(screen.getByText("Inga frister just nu.")).toBeInTheDocument();
   });
 
   it("markerar valt filter för skärmläsare", () => {
@@ -112,7 +123,7 @@ describe("Att bevaka-sidan", () => {
     query.data = { items: [item({ kind: "deadline" })] };
     render(<WatchlistPage />);
     fireEvent.click(screen.getByRole("button", { name: "Ofakturerat" }));
-    expect(screen.getByText(/Inget att bevaka i den kategorin/i)).toBeInTheDocument();
+    expect(screen.getByText("Inga frister i den kategorin.")).toBeInTheDocument();
   });
 
   it("visar hämtningsläge", () => {
@@ -137,12 +148,12 @@ describe("Att bevaka-sidan", () => {
     expect(screen.queryByRole("checkbox", { name: /Ofakturerat/ })).not.toBeInTheDocument();
   });
 
-  it("ny bevakning: titel + datum krävs, skapas som uppgift med datumet (lokal midnatt)", () => {
+  it("ny frist: titel + datum krävs, skapas som uppgift med datumet (lokal midnatt)", () => {
     render(<WatchlistPage />);
     const add = screen.getByRole<HTMLButtonElement>("button", { name: "Lägg till" });
-    fireEvent.change(screen.getByLabelText("Ny bevakning"), { target: { value: "Ring klienten" } });
+    fireEvent.change(screen.getByLabelText("Ny frist"), { target: { value: "Ring klienten" } });
     expect(add.disabled).toBe(true); // datum saknas
-    fireEvent.change(screen.getByLabelText("Bevakningsdatum"), { target: { value: "2026-10-02" } });
+    fireEvent.change(screen.getByLabelText("Datum"), { target: { value: "2026-10-02" } });
     fireEvent.click(add);
     expect(createMutate).toHaveBeenCalledWith({ title: "Ring klienten", dueAt: new Date("2026-10-02T00:00:00") });
   });

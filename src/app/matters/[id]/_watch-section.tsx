@@ -1,13 +1,11 @@
 "use client";
 
 /**
- * Att bevaka i ärendet (#1162, #1167). Ärendets bevakningar — alla användares
+ * Frister i ärendet (#1162, #1167, #1735). Ärendets frister — alla användares
  * (en frist angår alla som arbetar i ärendet). Alla på byrån kan bocka av,
- * återöppna och radera vilken bevakning som helst (#1231). En bevakning
- * som är inne eller passerad lyser rött med stor fet text, och samma poster
- * finns i den globala "Att bevaka". Under dem: ärendets övriga signaler ur den
- * globala listan (täckningstak, ofakturerat, förfallna fakturor) — EN lista,
- * inte två (Att göra och Att bevaka visade samma saker och förvirrade).
+ * återöppna och radera vilken frist som helst (#1231). En frist som är inne
+ * eller passerad lyser rött med stor fet text, och samma poster finns på
+ * sidan Frister. Under dem: "Bör faktureras" för ärendet — inget annat.
  */
 
 import { useId, useState } from "react";
@@ -43,9 +41,9 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
     ((users.data?.users ?? []) as Array<{ id: string; name: string | null }>).find((u) => u.id === id)?.name ?? "kollega";
 
   return (
-    <section aria-label="Att bevaka" className="bg-white rounded-lg border border-gray-200 mb-6">
+    <section aria-label="Frister" className="bg-white rounded-lg border border-gray-200 mb-6">
       <div className={sectionHeaderClass("amber")}>
-        <h2 className="font-semibold text-gray-900">Att bevaka ({open.length})</h2>
+        <h2 className="font-semibold text-gray-900">Frister ({open.length})</h2>
         {done.length > 0 && (
           <button type="button" onClick={() => setShowDone((v) => !v)} className="text-sm text-blue-700 hover:underline">
             {showDone ? "Dölj klara" : `Visa klara (${done.length})`}
@@ -53,7 +51,7 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
         )}
       </div>
       <AddTaskForm matterId={matterId} />
-      {open.length === 0 && <p className="px-6 py-3 text-sm text-gray-500">Inga öppna bevakningar i ärendet.</p>}
+      {open.length === 0 && <p className="px-6 py-3 text-sm text-gray-500">Inga öppna frister i ärendet.</p>}
       <ul className="divide-y divide-gray-100">
         {[...open, ...(showDone ? done : [])].map((t) => (
           <TaskRow key={t.id} task={t} matterId={matterId} ownerName={t.userId === me.data?.id ? null : nameOf(t.userId)} />
@@ -65,16 +63,13 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
 }
 
 /**
- * Ärendets övriga signaler ur den globala "Att bevaka" (täckningstak,
- * ofakturerat, förfallna fakturor). Tidsfristerna står redan ovan som
- * bevakningar — de tas inte med två gånger. Jävskontrollen står under
- * Parter (#1733).
+ * "Bör faktureras" för ärendet ur sidan Frister (#1735). Tidsfristerna står
+ * redan ovan — de tas inte med två gånger.
  */
-const HIDDEN_SIGNALS: ReadonlySet<string> = new Set(["deadline", "conflictCheck"]);
 
 function MatterSignals({ matterId }: { matterId: MatterId }) {
   const q = trpc.watchlist.list.useQuery({ mine: false, matterId });
-  const items = (q.data?.items ?? []).filter((i) => !HIDDEN_SIGNALS.has(i.kind));
+  const items = (q.data?.items ?? []).filter((i) => i.kind === "unbilled");
   if (items.length === 0) return null;
   return (
     <div className="px-6 py-3 border-t border-gray-100">
@@ -83,7 +78,7 @@ function MatterSignals({ matterId }: { matterId: MatterId }) {
   );
 }
 
-/** Invalidera allt som visar bevakningar: ärendet och den globala listan. */
+/** Invalidera allt som visar frister: ärendet och sidan Frister. */
 function useInvalidateTasks(matterId: MatterId): () => void {
   const utils = trpc.useUtils();
   return () => {
@@ -109,16 +104,16 @@ function AddTaskForm({ matterId }: { matterId: MatterId }) {
   return (
     <form onSubmit={submit} className="px-6 py-3 flex flex-wrap items-end gap-2 border-b border-gray-100">
       <div className="flex-1 min-w-[12rem]">
-        <label htmlFor={titleId} className="block text-xs font-medium text-gray-500 mb-1">Bevakning</label>
+        <label htmlFor={titleId} className="block text-xs font-medium text-gray-500 mb-1">Frist</label>
         <input id={titleId} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="t.ex. Överklagandefrist löper ut"
           className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
       </div>
       <div>
-        <label htmlFor={dateId} className="block text-xs font-medium text-gray-500 mb-1">Bevakningsdatum</label>
+        <label htmlFor={dateId} className="block text-xs font-medium text-gray-500 mb-1">Datum</label>
         <input id={dateId} type="date" value={date} onChange={(e) => setDate(e.target.value)}
           className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
       </div>
-      {/* En bevakning har alltid ett datum — det är datumet som gör den bevakningsbar. */}
+      {/* En frist har alltid ett datum. */}
       <button type="submit" disabled={!title.trim() || !date || create.isPending}
         className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50">
         Lägg till
@@ -128,7 +123,7 @@ function AddTaskForm({ matterId }: { matterId: MatterId }) {
 }
 
 /**
- * En bevakning. Kryssrutan och Radera fungerar för alla på byrån (#1231);
+ * En frist. Kryssrutan och Radera fungerar för alla på byrån (#1231);
  * ägarens namn visas när det är någon annans — som information, inte spärr.
  */
 function TaskRow({ task, matterId, ownerName }: { task: MatterTask; matterId: MatterId; ownerName: string | null }) {
@@ -144,7 +139,7 @@ function TaskRow({ task, matterId, ownerName }: { task: MatterTask; matterId: Ma
     else complete.mutate({ id });
   };
   const confirmDelete = (): void => {
-    if (confirm(`Radera bevakningen "${task.title}"?`)) remove.mutate({ id });
+    if (confirm(`Radera fristen "${task.title}"?`)) remove.mutate({ id });
   };
   return (
     <li className={`px-6 py-3 flex flex-wrap items-center gap-3 ${due ? "bg-red-50 border-l-4 border-red-600" : ""}`}>

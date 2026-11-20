@@ -1,5 +1,6 @@
 /**
- * "Att bevaka"-router (#1062) — samlar de fem signalerna i en enda fråga.
+ * Frister-router (#1062, #1735): tidsfrister och "Bör faktureras" i `list`,
+ * takvarningar och jävskontroller i `actionItems` (#1734).
  *
  * Varje signal härleds ur data som redan finns; ingenting lagras. Se
  * `@/lib/shared/watchlist` för varför (kort: en härledd påminnelse städar sig
@@ -11,19 +12,13 @@
  */
 
 import { z } from "zod";
-import { outstandingOre, overdueDays } from "@/lib/shared/invoice-overdue";
-import { isRadgivningInvoice } from "@/lib/shared/radgivning-entry";
-import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
-  billingActionItems, conflictCheckItems, coverageItems, deadlineItems, failedDispatchItems, overdueInvoiceItems,
-  sortWatchlist, unbilledItems,
-  DEFAULT_THRESHOLDS, type BillingActionMatter, type CoverageMatter, type DeadlineTask, type FailedDispatch,
-  type OverdueInvoice, type UnbilledMatter, type WatchlistItem,
+  conflictCheckItems, coverageItems, deadlineItems, sortWatchlist, unbilledItems,
+  DEFAULT_THRESHOLDS, type CoverageMatter, type DeadlineTask, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";
-import { billingActionMatters } from "../billing/billing-action-input";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -45,8 +40,6 @@ interface MatterRow {
   matterNumber: string;
   status?: string | null;
   paymentMethod?: PaymentMethod | null;
-  clientShareBips?: number | null;
-  radgivningBetaldAt?: Date | string | null;
   rattsskyddMaxOre?: number | null;
   rattshjalpMaxTimmar?: number | null;
   responsibleLawyerId?: string | null;
@@ -118,59 +111,6 @@ async function deadlineInput(ctx: Ctx, userId: string): Promise<DeadlineTask[]> 
   return out;
 }
 
-/** Förfallna fakturor med utestående belopp. Betalt eller avskrivet räknas bort. */
-type InvoiceRow = Awaited<ReturnType<Repositories["invoices"]["listForOrg"]>>[number];
-
-/** Fakturaraden som bevakningspost, eller null om den inte är förfallen (delad regel, #1731). */
-function toOverdue(inv: InvoiceRow, now: Date): OverdueInvoice | null {
-  const candidate = { ...inv, status: String(inv.status) };
-  const due = isoDate(inv.dueDate);
-  if (due === null || overdueDays(candidate, now) === null) return null;
-  return {
-    id: String(inv.id), invoiceNumber: inv.invoiceNumber ?? null, dueDate: due,
-    outstandingOre: outstandingOre(candidate),
-    matterId: inv.matter ? String(inv.matter.id) : null,
-    matterNumber: inv.matter?.matterNumber ?? null,
-  };
-}
-
-function overdueInput(rows: readonly InvoiceRow[], now: Date): OverdueInvoice[] {
-  return rows.map((r) => toOverdue(r, now)).filter((r): r is OverdueInvoice => r !== null);
-}
-
-/** Faktureringsåtgärder som väntar (#1221) — ur samma org-breda läsningar som övriga signaler. */
-async function billingActionInput(
-  ctx: Ctx, matters: readonly MatterRow[], invoices: readonly InvoiceRow[], entries: readonly EntryRow[], now: Date,
-): Promise<BillingActionMatter[]> {
-  const [runs, org, radgivningEntries] = await Promise.all([
-    ctx.repos.billingRuns.listForOrg(ctx.orgId),
-    ctx.repos.organizations.getById(ctx.orgId),
-    // Rådgivningsposten kan vara ej debiterbar (#1235) — `entries` är bara debiterbara.
-    ctx.repos.timeEntries.listByInvoiceIds(invoices.filter(isRadgivningInvoice).map((i) => i.id)),
-  ]);
-  return billingActionMatters({
-    matters, now,
-    runs, entries, radgivningEntries,
-    invoices: invoices.map((i) => ({ ...i, day: isoDate(i.invoiceDate) })),
-    // Byråns gränsbelopp (#885), annars default — samma som panelens ruta.
-    sjalvriskThresholdOre: org?.accontoThresholdOre ?? SJALVRISK_ACCONTO_THRESHOLD_ORE,
-  });
-}
-
-/** Misslyckade fakturautskick — fakturan nådde aldrig mottagaren. */
-async function failedInput(ctx: Ctx): Promise<FailedDispatch[]> {
-  const rows = await ctx.repos.invoiceDispatches.listByStatusForOrg(ctx.orgId, "failed");
-  return rows.map((d) => ({
-    invoiceId: String(d.invoiceId),
-    invoiceNumber: d.invoice?.invoiceNumber ?? null,
-    recipient: d.recipient,
-    error: d.error ?? null,
-    failedAt: isoDate(d.failedAt),
-    matterId: null,
-    matterNumber: null,
-  }));
-}
-
 /** "Bara mina ärenden": ärenden där användaren är ansvarig, annars hela byrån. */
 async function selectMatters(ctx: Ctx, userId: string, mine: boolean): Promise<MatterRow[]> {
   const all = (await ctx.repos.matters.listByOrg(ctx.orgId)) as MatterRow[];
@@ -184,20 +124,20 @@ const scopeInput = z.object({
 
 export const watchlistRouter = router({
   /**
-   * Allt som behöver uppmärksamhet, sorterat efter hur bråttom det är.
+   * Frister (#1735): tidsfrister och "Bör faktureras", sorterade efter hur
+   * bråttom det är. Övriga signaler står på sina egna platser.
    *
-   * `mine` (default) begränsar ärendedrivna signaler till den egna
+   * `mine` (default) begränsar "Bör faktureras" till den egna
    * ärendeportföljen — annars drunknar en delägare i kollegornas ärenden.
    * Tidsfristerna är alltid den egna användarens: en uppgift har en ägare.
    */
   list: orgProcedure
     .input(scopeInput.extend({
-      /** Bara ett ärendes poster — "Att bevaka" i ärendet (#1167). */
+      /** Bara ett ärendes poster — fliken Frister i ärendet (#1167). */
       matterId: matterIdSchema.optional(),
     }).optional())
     .query(async ({ ctx, input }): Promise<{ items: WatchlistItem[]; generatedAt: string }> => {
       const userId = input?.userId ?? ctx.user.id;
-      const mine = input?.mine ?? true;
       const now = new Date();
       // Trösklarna är kodens defaults i v1. De VARIERAR mellan byråer (en byrå
       // fakturerar vid 25 000 kr, en annan vid 50 000) och hör därför hemma i
@@ -205,34 +145,14 @@ export const watchlistRouter = router({
       // samma ändring som signalerna själva. Se #1063.
       const thresholds = DEFAULT_THRESHOLDS;
 
-      const matters = await selectMatters(ctx, userId, mine);
-      const matterIds = new Set(matters.map((m) => m.id));
-
-      const [invoices, entries] = await Promise.all([
-        ctx.repos.invoices.listForOrg(ctx.orgId, {}),
+      const [matters, entries, deadlines] = await Promise.all([
+        selectMatters(ctx, userId, input?.mine ?? true),
         ctx.repos.timeEntries.listBillableForOrg(ctx.orgId),
-      ]);
-      const [coverage, deadlines, failed, billing] = await Promise.all([
-        coverageInput(ctx, matters),
         deadlineInput(ctx, userId),
-        failedInput(ctx),
-        billingActionInput(ctx, matters, invoices, entries, now),
       ]);
-      const unbilled = unbilledInput(matters, entries);
-      const overdue = overdueInput(invoices, now);
-
-      // Faktura-signalerna är org-breda i datalagret; filtrera dem mot samma
-      // ärendeurval så "mina" betyder samma sak för alla fem signalerna.
-      const ownInvoice = (matterId: string | null): boolean => !mine || matterId === null || matterIds.has(matterId);
-
       const items = sortWatchlist([
-        ...coverageItems(coverage),
-        ...unbilledItems(unbilled, now, thresholds),
+        ...unbilledItems(unbilledInput(matters, entries), now, thresholds),
         ...deadlineItems(deadlines, now, thresholds),
-        ...overdueInvoiceItems(overdue.filter((i) => ownInvoice(i.matterId)), now),
-        ...failedDispatchItems(failed),
-        ...billingActionItems(billing, now),
-        ...conflictCheckItems(matters),
       ], stockholmDay(now));
 
       const scoped = input?.matterId ? items.filter((i) => i.matterId === String(input.matterId)) : items;

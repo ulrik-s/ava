@@ -173,7 +173,7 @@ async function minTextContrast(header: Locator): Promise<number> {
 }
 
 const START_HEADERS = [
-  { tone: "amber", heading: /Att bevaka/, light: ["bg-amber-200", "border-amber-300", "border-l-amber-600"],
+  { tone: "amber", heading: /Frister/, light: ["bg-amber-200", "border-amber-300", "border-l-amber-600"],
     dark: ["rgba(245, 158, 11, 0.28)", "rgba(245, 158, 11, 0.4)", "rgba(245, 158, 11, 0.4)"] },
   { tone: "indigo", heading: /Tidrapportering/, light: ["bg-indigo-200", "border-indigo-300", "border-l-indigo-600"],
     dark: ["rgba(99, 102, 241, 0.28)", "rgba(99, 102, 241, 0.4)", "rgba(99, 102, 241, 0.4)"] },

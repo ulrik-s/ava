@@ -16,6 +16,5 @@
   "src/lib/server/routers/reports.ts": 622,
   "src/lib/shared/brottmalstaxa.ts": 537,
   "src/lib/shared/kostnadsrakning.ts": 685,
-  "src/lib/shared/schemas/billing.ts": 407,
-  "src/lib/shared/watchlist.ts": 478
+  "src/lib/shared/schemas/billing.ts": 407
 }

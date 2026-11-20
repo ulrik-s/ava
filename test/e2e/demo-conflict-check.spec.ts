@@ -2,7 +2,7 @@
  * E2E (demo): jävskontrollen när ett ärende skapas (#1246, #1354).
  *
  * Klienten är motpart i ett av byråns ärenden → det nya ärendet får träffar att
- * bedöma, som syns i Att bevaka och Att åtgärda (#1734) tills en advokat bedömt dem med en motivering.
+ * bedöma, som syns i Att åtgärda (#1734) men inte i Frister (#1735) tills en advokat bedömt dem med en motivering.
  * I ärendet står kontrollen och bedömningen (vem, när, varför) under fliken
  * Parter (#1733). Demon har ingen server,
  * så kontrollen avgörs direkt i fliken.
@@ -37,12 +37,13 @@ test("nytt ärende med en klient som är motpart i ett annat ärende → träffa
   const title = `Jävskontroll e2e ${Date.now()}`;
   await createMatterFor(page, title, "Anna Andersson");
 
-  // Träffarna syns i Att bevaka (där byråns andra ärenden kan ha egna träffar)…
-  await page.getByRole("link", { name: /Att bevaka/ }).first().click();
-  await page.getByRole("button", { name: "Jävskontroll" }).click();
-  await expect(page.getByText(/Jävskontroll: \d+ träffar att bedöma/).first()).toBeVisible({ timeout: 15_000 });
+  // Frister visar inga jävsträffar (#1735)…
+  await page.getByRole("link", { name: /Frister/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Frister" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Jävskontroll" })).toHaveCount(0);
+  await expect(page.getByText(/Jävskontroll: \d+ träffar att bedöma/)).toHaveCount(0);
 
-  // …på sidan Att åtgärda, nådd från sidomenyn (#1734)…
+  // …träffarna står på sidan Att åtgärda, nådd från sidomenyn (#1734)…
   await page.getByRole("link", { name: /Att åtgärda/ }).first().click();
   await expect(page.getByRole("heading", { name: "Att åtgärda" }).first()).toBeVisible();
   await expect(page.getByText(/Jävskontroll: \d+ träffar att bedöma/).first()).toBeVisible({ timeout: 15_000 });

@@ -86,7 +86,7 @@ test("dra en flik till en annan grupp och återställ", async ({ page, baseURL }
   await expect(groupOf(page, "Tid").getByRole("tab", { name: /^Parter/ })).toHaveCount(1);
 
   await page.getByRole("button", { name: "Återställ layout" }).click();
-  await expect(groupOf(page, "Att bevaka").getByRole("tab", { name: /^Parter/ })).toHaveCount(1, { timeout: 15_000 });
+  await expect(groupOf(page, "Frister").getByRole("tab", { name: /^Parter/ })).toHaveCount(1, { timeout: 15_000 });
 });
 
 test("maximera Dokument-panelen och återställ den (#1263)", async ({ page, baseURL }) => {
@@ -280,7 +280,7 @@ test("Startsidan: ta bort Tidrapportering med ×, den förblir borta, och Lägg 
   await page.getByRole("link", { name: /Ärenden/ }).first().click();
   await expect(page).toHaveURL(/\/matters\/?$/);
   await page.getByRole("link", { name: /Startsida/ }).first().click();
-  await expect(page.getByRole("tab", { name: /^Att bevaka/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("tab", { name: /^Frister/ })).toBeVisible({ timeout: 30_000 });
   await expect(tidTab).toHaveCount(0);
 
   await page.getByRole("button", { name: "Lägg till ruta" }).click();
@@ -298,7 +298,7 @@ test("Startsidan och menyn saknar Kalender, och /calendar/ skickar till Startsid
   await page.goto(`${base}/calendar/`, { waitUntil: "load" });
   await expect(page).toHaveURL(new RegExp(`${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/?$`), { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Startsida", level: 1 })).toBeVisible({ timeout: 30_000 });
-  for (const title of ["Att bevaka", "Tidrapportering", "Senaste ärenden"]) {
+  for (const title of ["Frister", "Tidrapportering", "Senaste ärenden"]) {
     await expect(page.getByRole("tab", { name: new RegExp(`^${title}`) })).toBeVisible();
   }
   await expect(page.getByRole("tab", { name: /^Kalender/ })).toHaveCount(0);

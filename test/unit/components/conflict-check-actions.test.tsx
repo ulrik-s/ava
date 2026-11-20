@@ -39,7 +39,7 @@ const openForm = (): void => {
 };
 
 describe("ConflictCheckActions", () => {
-  it("kör om kontrollen och uppdaterar ärendet och Att bevaka", () => {
+  it("kör om kontrollen och uppdaterar ärendet och Frister", () => {
     render(<ConflictCheckActions matterId={M} hasHits={false} />);
     fireEvent.click(screen.getByRole("button", { name: "Kör jävskontrollen igen" }));
     expect(recheck).toHaveBeenCalledWith({ id: M });

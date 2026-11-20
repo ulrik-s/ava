@@ -4,57 +4,34 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import {
-  hasSjalvriskAconto, insurerPruningPending, isActiveKr, isUnsentInvoice, krAwaitingBeslut, krAwaitingInvoice, krCanCreateInvoice,
-  rattshjalpSjalvriskOre, sjalvriskAccontoDue, type TodoRun,
+  hasSjalvriskAconto, insurerPruningPending, isActiveKr, krCanCreateInvoice, sjalvriskAccontoDue, type TodoRun,
 } from "@/lib/shared/billing-todo";
-import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { asId } from "@/lib/shared/schemas/ids";
 
 const kr = (kostnadsrakningStatus: TodoRun["kostnadsrakningStatus"], extra: Partial<TodoRun> = {}): TodoRun => ({
   type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", recipient: "DOMSTOL", kostnadsrakningStatus, ...extra,
 });
 
-describe("isActiveKr / krAwaitingBeslut", () => {
-  it("inskickad → tingsrättens beslut väntar", () => {
+describe("isActiveKr", () => {
+  it("inskickad, överklagad och beslutad KR är aktiv", () => {
     expect(isActiveKr(kr("INSKICKAD"))).toBe(true);
-    expect(krAwaitingBeslut([kr("INSKICKAD")])).toBe("TINGSRATT");
-  });
-
-  it("överklagad → hovrättens beslut väntar", () => {
-    expect(krAwaitingBeslut([kr("OVERKLAGAD")])).toBe("HOVRATT");
-  });
-
-  it("beslutad → inget beslut väntar (nästa steg är fakturan)", () => {
-    expect(krAwaitingBeslut([kr("BESLUTAD")])).toBeNull();
+    expect(isActiveKr(kr("OVERKLAGAD"))).toBe(true);
+    expect(isActiveKr(kr("BESLUTAD"))).toBe(true);
   });
 
   it("ångrad, fakturerad eller statuslös KR är inte aktiv", () => {
     expect(isActiveKr(kr("INSKICKAD", { status: "VOIDED" }))).toBe(false);
     expect(isActiveKr(kr("FAKTURERAD"))).toBe(false);
     expect(isActiveKr(kr(null))).toBe(false);
-    expect(krAwaitingBeslut([])).toBeNull();
   });
 });
 
-describe("krCanCreateInvoice / krAwaitingInvoice (#1225)", () => {
+describe("krCanCreateInvoice (#1225)", () => {
   it("bara en beslutad KR kan faktureras", () => {
     expect(krCanCreateInvoice(kr("BESLUTAD"))).toBe(true);
     expect(krCanCreateInvoice(kr("BESLUTAD", { beslutSlutgiltigt: true }))).toBe(true);
     expect(krCanCreateInvoice(kr("INSKICKAD"))).toBe(false);
     expect(krCanCreateInvoice(kr("OVERKLAGAD"))).toBe(false);
     expect(krCanCreateInvoice(kr("FAKTURERAD"))).toBe(false);
-  });
-
-  it("beslutad aktiv KR → dömt belopp + tingsrätt/hovrätt", () => {
-    expect(krAwaitingInvoice([kr("BESLUTAD", { awardedOre: 40_000 })])).toEqual({ hovratt: false, awardedOre: 40_000 });
-    expect(krAwaitingInvoice([kr("BESLUTAD", { beslutSlutgiltigt: true })])).toEqual({ hovratt: true, awardedOre: null });
-  });
-
-  it("ingen aktiv KR, ej beslutad eller ångrad → null", () => {
-    expect(krAwaitingInvoice([])).toBeNull();
-    expect(krAwaitingInvoice([kr("INSKICKAD")])).toBeNull();
-    expect(krAwaitingInvoice([kr("BESLUTAD", { status: "VOIDED" })])).toBeNull();
-    expect(krAwaitingInvoice([kr("FAKTURERAD", { awardedOre: 1 })])).toBeNull();
   });
 });
 
@@ -86,32 +63,5 @@ describe("insurerPruningPending", () => {
     expect(insurerPruningPending("RATTSSKYDD", [{ ...payer, invoice: { status: "PAID" } }])).toBe(false);
     expect(insurerPruningPending("RATTSSKYDD", [])).toBe(false);
     expect(insurerPruningPending("PRIVAT", [payer])).toBe(false);
-  });
-});
-
-describe("isUnsentInvoice", () => {
-  it("bara Skapad (DRAFT) räknas som oskickad", () => {
-    expect(isUnsentInvoice({ status: "DRAFT" })).toBe(true);
-    expect(isUnsentInvoice({ status: "SENT" })).toBe(false);
-  });
-});
-
-describe("rattshjalpSjalvriskOre", () => {
-  const now = new Date("2026-06-01T12:00:00Z");
-  const norm = timkostnadsnormFtaxForDate(now);
-  const entry = (minutes: number, extra: Record<string, unknown> = {}) => ({
-    minutes, hourlyRate: 0, billable: true, date: now, kind: "ARBETE" as const, ...extra,
-  });
-
-  it("ofryst arbete på normen × klientens andel; låsta poster ingår inte", () => {
-    const entries = [entry(120), entry(60, { frozenAt: now })];
-    expect(rattshjalpSjalvriskOre(entries, [], 2500, now)).toBe(Math.round((2 * norm * 2500) / 10000));
-  });
-
-  it("väntar en kostnadsräkning på dom räknas dess frysta poster", () => {
-    const krId = asId<"BillingRunId">("kr-1");
-    const entries = [entry(60, { frozenAt: now, frozenByBillingRunId: krId }), entry(600)];
-    const runs: TodoRun[] = [{ id: krId, type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", recipient: "DOMSTOL" }];
-    expect(rattshjalpSjalvriskOre(entries, runs, 10000, now)).toBe(norm);
   });
 });

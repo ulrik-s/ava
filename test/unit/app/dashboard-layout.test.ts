@@ -22,7 +22,7 @@ function record(screen: "laptop" | "large") {
 }
 
 describe("startsidans standardlayout (#1184)", () => {
-  it("laptop: Att bevaka + Senaste ärenden till vänster, Tidrapportering till höger", () => {
+  it("laptop: Frister + Senaste ärenden till vänster, Tidrapportering till höger", () => {
     const calls = record("laptop");
     expect(calls.map((c) => c.id)).toEqual(["watch", "time", "recent"]);
     expect(calls[1]?.ref).toEqual({ referencePanel: "watch", direction: "right" });

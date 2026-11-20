@@ -1,6 +1,6 @@
 "use client";
 
-/** Bevakningen i Att bevaka (#1266): avvisade ändringar som väntar på juristen. */
+/** Rutan i Att åtgärda (#1266, #1734): avvisade ändringar som väntar på juristen. */
 
 import Link from "next/link";
 import { useRejectedChanges } from "@/lib/client/sync/use-rejected-changes";

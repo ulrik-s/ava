@@ -293,7 +293,7 @@ describe("InvoiceDetailPage", () => {
     });
   });
 
-  it("efter statusändring hämtas ärendets Anteckningar och Att bevaka om (#1221)", async () => {
+  it("efter statusändring hämtas ärendets Anteckningar och Frister om (#1221)", async () => {
     renderPage();
     await waitFor(() => screen.getByRole("button", { name: /Annullera/i }));
     setStatusOpts?.onSuccess();
