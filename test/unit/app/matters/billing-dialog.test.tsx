@@ -73,13 +73,25 @@ beforeEach(() => {
 });
 
 describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
-  it("förfyller beloppet enligt formeln: 20 % × 5000 kr − 0 = 1000 kr", () => {
+  it("förfyller beloppet enligt formeln inkl. moms: 20 % × 5000 kr + moms − 0 = 1250 kr (#1726)", () => {
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     expect(screen.getByText("Aconto till klient")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
     expect(accontoMutate).toHaveBeenCalledWith({
-      matterId: "m1", clientShareBips: 2000, amountOre: 100_000, recipient: "KLIENT", invoiceDate: toIsoDate(new Date()),
+      matterId: "m1", clientShareBips: 2000, amountOre: 125_000, recipient: "KLIENT", invoiceDate: toIsoDate(new Date()),
     });
+  });
+
+  it("rutan visar allt inkl. moms: upparbetat + moms, tidigare aconton och förslaget (#1726)", () => {
+    proposalData = { workValueOre: 500_000, priorAccontoSumOre: 60_000, timeEntries: [], expenses: [] };
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    const stat = (label: string): string => screen.getByText(label).nextElementSibling?.textContent ?? "";
+    expect(stat("Upparbetat")).toMatch(/6\s?250,00/); // 5000 kr + 25 % moms
+    expect(stat("Tidigare aconton")).toMatch(/600,00/);
+    expect(stat("Förslag")).toMatch(/650,00/); // 1250 − 600
+    expect(screen.getByText("Belopp inkl. moms")).toBeInTheDocument();
+    expect(screen.queryByText("Belopp exkl. moms")).toBeNull();
+    expect(screen.getAllByRole<HTMLInputElement>("textbox")[1]?.value).toBe("650");
   });
 
   it("fakturadatum går att ändra och skickas med (#1173)", () => {
@@ -89,29 +101,29 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ invoiceDate: "2030-06-15" }));
   });
 
-  it("förifyller med ärendets %-sats istället för 20 %: 25 % × 5000 = 1250 kr (#778)", () => {
+  it("förifyller med ärendets %-sats istället för 20 %: 25 % × 5000 + moms = 1563 kr (#778, #1726)", () => {
     const metaWithShare = { ...meta, clientShareBips: 2500 };
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={metaWithShare} onClose={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
-    expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ clientShareBips: 2500, amountOre: 125_000 }));
+    expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ clientShareBips: 2500, amountOre: 156_300 }));
   });
 
-  it("drar av tidigare aconton i förslaget: 20 % × 5000 − 600 = 400 kr", () => {
+  it("drar av tidigare aconton i förslaget: 20 % × 5000 + moms − 600 = 650 kr (#1726)", () => {
     proposalData = {
       workValueOre: 500_000, priorAccontoSumOre: 60_000, // 600 kr tidigare
       timeEntries: [], expenses: [],
     };
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
-    expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ amountOre: 40_000 }));
+    expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ amountOre: 65_000 }));
   });
 
-  it("procent → bips + omräknat förslag: 30 % → 3000 bips, 1500 kr", () => {
+  it("procent → bips + omräknat förslag: 30 % → 3000 bips, 1875 kr inkl. moms", () => {
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     const [percent] = screen.getAllByRole("textbox"); // [%-andel, belopp]
     fireEvent.change(percent!, { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
-    expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ clientShareBips: 3000, amountOre: 150_000 }));
+    expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ clientShareBips: 3000, amountOre: 187_500 }));
   });
 
   it("manuell justering av beloppet vinner över förslaget", () => {
@@ -149,7 +161,7 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
 
   it("visar moms-uppdelning för det inkl-moms-belopp som anges (#778)", () => {
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
-    // Förslag 1000 kr inkl moms → moms 200 kr, exkl 800 kr.
+    // Förslag 1250 kr inkl moms → moms 250 kr, exkl 1000 kr.
     expect(screen.getByText(/Varav moms \(25 %\):/)).toBeInTheDocument();
     expect(screen.getByText(/exkl\. moms:/)).toBeInTheDocument();
   });

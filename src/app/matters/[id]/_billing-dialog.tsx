@@ -20,6 +20,7 @@ import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/genera
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { toIsoDate } from "@/lib/shared/iso-date";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import { roundToKronor } from "@/lib/shared/whole-kronor";
@@ -154,15 +155,17 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   );
 }
 
+/** Rutan visar allt inkl. moms, utan växling (#1726): upparbetat får 25 % moms
+ *  som acontofakturan, och tidigare aconton och förslaget är redan brutto. */
 function ProposalSummary({ workValueOre, priorOre, suggestedOre }: { workValueOre: number; priorOre: number; suggestedOre: number }) {
   return (
     <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
       <div className="grid grid-cols-3 gap-2 text-center">
-        <Stat label="Upparbetat" value={workValueOre} />
+        <Stat label="Upparbetat" value={arvodeInclVatOre(workValueOre)} />
         <Stat label="Tidigare aconton" value={priorOre} />
         <Stat label="Förslag" value={suggestedOre} strong />
       </div>
-      <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-gray-400">Belopp exkl. moms</p>
+      <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-gray-400">Belopp inkl. moms</p>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Suspense } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import InvoiceDetailPage from "@/app/invoices/[id]/_client";
+import { VatDisplayProvider } from "@/lib/client/vat/vat-display-context";
 
 const invoiceQuery = {
   data: undefined as Record<string, unknown> | undefined,
@@ -146,6 +147,19 @@ describe("InvoiceDetailPage", () => {
       expect(screen.getByRole("heading", { name: /Faktura/i })).toBeInTheDocument(),
     );
     expect(screen.getByText("Skickad")).toBeInTheDocument();
+  });
+
+  it("beloppsrubriken följer momsväxlingen: inkl. → exkl. efter klick (#1726)", async () => {
+    window.localStorage.clear();
+    render(<VatDisplayProvider><Suspense fallback={<div>laddar</div>}><InvoiceDetailPage id="i1" /></Suspense></VatDisplayProvider>);
+    await waitFor(() => expect(screen.getByText("Belopp inkl. moms")).toBeInTheDocument());
+    expect(screen.queryByText("Belopp (brutto)")).toBeNull();
+    const amountBtn = screen.getByText("Belopp inkl. moms").nextElementSibling?.querySelector("button");
+    if (!amountBtn) throw new Error("beloppsknappen saknas");
+    fireEvent.click(amountBtn);
+    expect(screen.getByText("Belopp exkl. moms")).toBeInTheDocument();
+    expect(screen.queryByText("Belopp inkl. moms")).toBeNull();
+    window.localStorage.clear();
   });
 
   it("renderar Acconto-rubrik för ACCONTO-typ", async () => {

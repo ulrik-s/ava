@@ -23,6 +23,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 import type { SettlementView } from "@/lib/shared/settlement-view";
 import { roundingOf } from "@/lib/shared/whole-kronor";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
+import { AmountHeading } from "./_amount-heading";
 import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
 import { InvoiceActions } from "./_invoice-actions";
@@ -334,8 +335,7 @@ function InvoiceHeader({ inv }: { inv: Inv }) {
 }
 
 function SummaryGrid({
-  inv,
-  paidSum,
+  inv, paidSum,
   writtenOffSum,
   outstanding,
   accontoDeductionTotal,
@@ -351,7 +351,7 @@ function SummaryGrid({
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div><p className="text-xs text-gray-500">Status</p><p className="font-medium">{INVOICE_STATUS_LABELS[inv.status] ?? inv.status}</p></div>
-      <div><p className="text-xs text-gray-500">Belopp (brutto)</p><p><Money ore={inv.amount} basis="gross" className="font-mono" /></p></div>
+      <div><AmountHeading /><p><Money ore={inv.amount} basis="gross" className="font-mono" /></p></div>
       {inv.invoiceType === "FINAL" && (
         <>
           <div><p className="text-xs text-gray-500">Acontoavdrag</p><p>−<Money ore={accontoDeductionTotal} basis="gross" className="font-mono" /></p></div>

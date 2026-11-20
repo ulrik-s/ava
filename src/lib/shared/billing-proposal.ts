@@ -6,12 +6,14 @@
 
 import { matterArvodeNet, matterEntryValueOre, type ValuationMatter } from "./billing-work-value";
 import { payableCoverageEntries } from "./brottmalstaxa";
+import { arvodeInclVatOre } from "./invoice-calc";
 import type { ExpenseKind, TimeEntryKind } from "./schemas/enums";
 import { shareOfRow } from "./whole-kronor";
 
 /**
- * Föreslaget aconto-belopp i öre:
- *   belopp = %-sats (bips) × upparbetat värde − Σ tidigare aconton.
+ * Föreslaget aconto-belopp i öre, inkl. moms (#1726):
+ *   belopp = (%-sats (bips) × upparbetat värde exkl. moms) + 25 % moms − Σ tidigare aconton.
+ * Tidigare aconton sparas brutto, så andelen måste ha momsen på innan avdraget.
  * Klampas till ≥ 0 (ett aconto kan aldrig bli negativt).
  */
 export function proposedAccontoOre(
@@ -19,8 +21,8 @@ export function proposedAccontoOre(
   clientShareBips: number,
   priorAccontoSumOre: number,
 ): number {
-  // Förslaget blir acontofakturans enda rad → hela kronor (#1438).
-  return Math.max(0, shareOfRow(workValueOre, clientShareBips) - priorAccontoSumOre);
+  // Andelen blir acontofakturans enda rad → hela kronor (#1438) innan momsen.
+  return Math.max(0, arvodeInclVatOre(shareOfRow(workValueOre, clientShareBips)) - priorAccontoSumOre);
 }
 
 
