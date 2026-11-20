@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DEFAULT_MATTER_FOLDERS } from "@/lib/shared/default-matter-folders";
+import { MATTER_NUMBER_RE } from "@/lib/shared/matter-number-display";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { previousCourtCaseNumberAfterChange } from "@/lib/shared/previous-court-case-number";
 import {
@@ -77,9 +78,6 @@ const matterCreateInput = z.object({
   klientId: contactIdSchema.optional(),
 });
 type MatterCreateInput = z.infer<typeof matterCreateInput>;
-
-/** Format `<PREFIX?><YYYY>-<NNNN>` — fångar (prefix, år, löpnummer). */
-const MATTER_NUMBER_RE = /^([A-ZÅÄÖ]{1,3})?(\d{4})-(\d{4,})$/;
 
 /** Löpnumret i ett ärendenummer OM det avser `year`, annars 0. */
 function seqForYear(matterNumber: string, year: number): number {

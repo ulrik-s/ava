@@ -3,6 +3,7 @@
  * kolumnen "Träff" som visas efter en sammanslagen sökning (#1642).
  */
 
+import { MatterNumber } from "@/components/matter/matter-number";
 import type { Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { coverageStatus } from "@/lib/shared/coverage-cap";
@@ -12,6 +13,8 @@ import type { MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 export interface MatterRow {
   id: string;
   matterNumber: string;
+  /** Ansvarig jurist — juristens prefix visas framför numret (#1727). */
+  responsibleLawyerId?: string | null | undefined;
   title: string;
   matterType?: string | null | undefined;
   status: MatterStatus;
@@ -88,7 +91,11 @@ function matterNumberSortKey(matterNumber: string): string {
 /** Ärendelistans kolumner, som före sökning. */
 export const matterColumns: Column<MatterRow>[] = [
   { key: "matterNumber", label: "Ärendenr", sortable: true, sortValue: (m) => matterNumberSortKey(m.matterNumber),
-    render: (m) => <span className="text-sm font-mono text-gray-500">{m.matterNumber}</span> },
+    render: (m) => (
+      <span className="text-sm font-mono text-gray-500">
+        <MatterNumber matterNumber={m.matterNumber} responsibleLawyerId={m.responsibleLawyerId} />
+      </span>
+    ) },
   { key: "title", label: "Titel", sortable: true, sortValue: (m) => m.title,
     render: (m) => (
       <span>
