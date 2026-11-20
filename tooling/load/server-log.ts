@@ -47,9 +47,19 @@ export function summarizeServerLog(parsed: ReadonlyMap<string, { ms: number[]; e
   return Object.fromEntries([...parsed.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([path, e]) => [path, summarize(e.ms, e.errors)]));
 }
 
-/** Läs serverloggarna (sedan `since`) ur containrarna och sammanfatta. */
-export async function serverTimings(containers: readonly string[], since: string): Promise<Record<string, LatencySummary>> {
-  const logs = await Promise.all(containers.map((c) =>
-    run("docker", ["logs", "--since", since, c], { maxBuffer: 256 * 1024 * 1024 }).then((r) => `${r.stdout}\n${r.stderr}`, () => "")));
+/** Läser en containers logg sedan `since` (stdout och stderr ihop). */
+export type ContainerLogReader = (container: string, since: string) => Promise<string>;
+
+/** Den riktiga läsaren: `docker logs --since <since> <container>`. */
+const dockerLogs: ContainerLogReader = (container, since) =>
+  run("docker", ["logs", "--since", since, container], { maxBuffer: 256 * 1024 * 1024 }).then((r) => `${r.stdout}\n${r.stderr}`);
+
+/** Läs serverloggarna (sedan `since`) ur containrarna och sammanfatta. En container som inte går att läsa räknas som tom. */
+export async function serverTimings(
+  containers: readonly string[],
+  since: string,
+  readLog: ContainerLogReader = dockerLogs,
+): Promise<Record<string, LatencySummary>> {
+  const logs = await Promise.all(containers.map((c) => readLog(c, since).catch(() => "")));
   return summarizeServerLog(parseServerLog(logs.join("\n")));
 }
