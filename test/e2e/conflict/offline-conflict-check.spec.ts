@@ -8,7 +8,7 @@
  *      i ett eget ärende — det ser juristens flik inte,
  *   3. juristen lägger upp ett ärende för klienten offline,
  *   4. online igen: servern kör kontrollen och hittar kollegans ärende →
- *      "Jävskontroll: 1 träffar att bedöma" i juristens Att bevaka.
+ *      "Jävskontroll: 1 träffar att bedöma" i juristens Att åtgärda (#1735).
  */
 import { asId } from "../../../src/lib/shared/schemas/ids";
 import { clientFor, mintToken } from "../../../tooling/scripts/selfhosted-trpc-client";
@@ -44,7 +44,6 @@ test("ärende skapat offline: servern kör jävskontrollen och hittar det jurist
   const { matters } = await admin.matter.list.query({ search: `Offline-uppdrag ${stamp}` });
   expect(matters[0]).toMatchObject({ conflictCheckStatus: "HITS", conflictCheckHits: 1 });
 
-  await page.goto("/ava/watchlist/");
-  await page.getByRole("button", { name: "Jävskontroll" }).click();
+  await page.goto("/ava/action-items/");
   await expect(page.getByText("Jävskontroll: 1 träffar att bedöma").first()).toBeVisible({ timeout: 30_000 });
 });

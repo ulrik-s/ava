@@ -1,5 +1,5 @@
 /**
- * #1162/#1167: Att bevaka i ärendet.
+ * #1162/#1167/#1735: Frister i ärendet.
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
@@ -71,25 +71,26 @@ describe("WatchSection", () => {
     expect(screen.getByText("Gjord")).toBeInTheDocument();
   });
 
-  it("heter Att bevaka (EN lista med den globala, #1167)", () => {
+  it("heter Frister (N) och har tomtext om frister (#1735)", () => {
     render(<WatchSection matterId={M} />);
-    expect(screen.getByRole("region", { name: "Att bevaka" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Att bevaka/ })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Frister" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Frister (0)" })).toBeInTheDocument();
+    expect(screen.getByText("Inga öppna frister i ärendet.")).toBeInTheDocument();
   });
 
-  it("lägg till: bevakning + datum (lokal midnatt) i ärendet, uppdaterar ärendet och globala Att bevaka", () => {
+  it("lägg till: frist + datum (lokal midnatt) i ärendet, uppdaterar ärendet och sidan Frister", () => {
     render(<WatchSection matterId={M} />);
     const add = screen.getByRole<HTMLButtonElement>("button", { name: "Lägg till" });
-    fireEvent.change(screen.getByLabelText("Bevakning"), { target: { value: "Överklagandefrist" } });
-    expect(add.disabled).toBe(true); // en bevakning har alltid ett datum
-    fireEvent.change(screen.getByLabelText("Bevakningsdatum"), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText("Frist"), { target: { value: "Överklagandefrist" } });
+    expect(add.disabled).toBe(true); // en frist har alltid ett datum
+    fireEvent.change(screen.getByLabelText("Datum"), { target: { value: "2026-10-01" } });
     fireEvent.click(add);
     expect(createMutate).toHaveBeenCalledWith({ title: "Överklagandefrist", matterId: "m1", dueAt: new Date("2026-10-01T00:00:00") });
     expect(invalidate.matter).toHaveBeenCalled();
     expect(invalidate.watchlist).toHaveBeenCalled();
   });
 
-  it("visar ärendets övriga signaler ur globala listan — men inte tidsfristerna igen", () => {
+  it("visar Bör faktureras ur sidan Frister — men inte tidsfristerna igen", () => {
     signals = [
       { kind: "unbilled", severity: "approaching", title: "30 000 kr ofakturerat", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: null, amountOre: 3_000_000, link: { route: "matters", id: "m1" } },
       { kind: "deadline", severity: "passed", title: "Tidsfrist passerad: X", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: "2026-01-01", amountOre: null, link: { route: "matters", id: "m1" } },
@@ -116,12 +117,12 @@ describe("WatchSection", () => {
     expect(screen.queryByText("(Cecilia)")).not.toBeInTheDocument(); // egen: inget namn
   });
 
-  it("Radera: bekräfta → task.delete och ärendet + globala Att bevaka uppdateras (#1231)", () => {
+  it("Radera: bekräfta → task.delete och ärendet + sidan Frister uppdateras (#1231)", () => {
     tasks = [{ id: "t2", title: "Dom", dueAt: null, status: "TODO", userId: "bo" }];
     const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValue(true);
     render(<WatchSection matterId={M} />);
     fireEvent.click(screen.getByRole("button", { name: "Radera: Dom" }));
-    expect(confirmSpy).toHaveBeenCalledWith('Radera bevakningen "Dom"?');
+    expect(confirmSpy).toHaveBeenCalledWith('Radera fristen "Dom"?');
     expect(deleteMutate).toHaveBeenCalledWith({ id: "t2" });
     expect(invalidate.matter).toHaveBeenCalledWith({ matterId: "m1" });
     expect(invalidate.watchlist).toHaveBeenCalled();
@@ -162,6 +163,16 @@ describe("WatchSection", () => {
     expect(screen.queryByText(/Jävskontroll/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("conflict-actions")).not.toBeInTheDocument();
     expect(screen.queryByTestId("conflict-review")).not.toBeInTheDocument();
+  });
+
+  it("visar bara Bör faktureras under fristerna, inget annat (#1735)", () => {
+    signals = [
+      { kind: "coverageCap", severity: "approaching", title: "Närmar sig täckningstaket (85 %)", detail: "", matterId: "m1", matterNumber: "1", at: null, amountOre: null, link: null },
+      { kind: "unbilled", severity: "approaching", title: "Bör faktureras", detail: "", matterId: "m1", matterNumber: "1", at: null, amountOre: 1, link: null },
+    ];
+    render(<WatchSection matterId={M} />);
+    expect(screen.getByText("Bör faktureras")).toBeInTheDocument();
+    expect(screen.queryByText(/täckningstaket/)).not.toBeInTheDocument();
   });
 
   it("med bara jävskontrollen bland signalerna visas ingen signallista (#1733)", () => {

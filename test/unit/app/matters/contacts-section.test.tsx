@@ -122,7 +122,7 @@ describe("ContactsSection", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("en ny part uppdaterar ärendet och Att bevaka — jävskontrollen kan ha ändrats (#1354)", () => {
+  it("en ny part hämtar om ärendet och watchlist.list (#1354)", () => {
     searchHits = [{ id: "c2", name: "Berit Befintlig", contactType: "PERSON" }];
     const dialog = openPicker();
     fireEvent.change(within(dialog).getByRole("searchbox"), { target: { value: "berit" } });

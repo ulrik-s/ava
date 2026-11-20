@@ -1,6 +1,6 @@
 /**
  * Paritet (ADR 0020) för rapport-läsningarna: TimeEntry.listForLawyerInPeriod/
- * listBillableForOrg/listByInvoiceIds, Expense.listForLawyerInPeriod, Payment/WriteOff.listByInvoiceIds.
+ * listBillableForOrg, Expense.listForLawyerInPeriod, Payment/WriteOff.listByInvoiceIds.
  * in-memory (LocalStore) + Drizzle (pglite).
  */
 
@@ -25,7 +25,7 @@ const FROM = new Date("2026-06-01");
 const TO = new Date("2026-06-30T23:59:59.999Z");
 
 describe("Report-läsningar — in-memory", () => {
-  it("listForLawyerInPeriod (time+expense, KLIENT) + listBillableForOrg + listByInvoiceIds", async () => {
+  it("listForLawyerInPeriod (time+expense, KLIENT) + listBillableForOrg + Payment/WriteOff.listByInvoiceIds", async () => {
     const mId = uuidv7();
     const uId = uuidv7();
     const cId = uuidv7();
@@ -57,8 +57,6 @@ describe("Report-läsningar — in-memory", () => {
     expect(lawyerTime[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
     expect((await te.listBillableForOrg(asId<"OrganizationId">(ORG))).length).toBe(2); // 2 billable totalt
     // Kopplade till fakturan oavsett debiterbar (#1235).
-    expect((await te.listByInvoiceIds([asId<"InvoiceId">(invId)])).map((t) => t.minutes)).toEqual([30]);
-    expect(await te.listByInvoiceIds([])).toHaveLength(0);
     expect(await ex.listForLawyerInPeriod(asId<"OrganizationId">(ORG), asId<"UserId">(uId), FROM, TO)).toHaveLength(1);
     expect((await pay.listByInvoiceIds([asId<"InvoiceId">(invId)]))[0]!.amount).toBe(200);
     expect(await pay.listByInvoiceIds([])).toHaveLength(0);
@@ -71,7 +69,7 @@ describe("Report-läsningar — Drizzle (pglite)", () => {
   beforeAll(async () => { handle = await createTestDb(); });
   afterAll(async () => { await handle.close(); });
 
-  it("listForLawyerInPeriod (time+expense, KLIENT) + listBillableForOrg + listByInvoiceIds", async () => {
+  it("listForLawyerInPeriod (time+expense, KLIENT) + listBillableForOrg + Payment/WriteOff.listByInvoiceIds", async () => {
     const db = handle.db;
     const org = uuidv7();
     const mId = uuidv7();
@@ -103,8 +101,6 @@ describe("Report-läsningar — Drizzle (pglite)", () => {
     expect(lawyerTime[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
     expect((await te.listBillableForOrg(asId<"OrganizationId">(org))).length).toBe(2);
     // Kopplade till fakturan oavsett debiterbar, raderade utelämnas (#1235).
-    expect((await te.listByInvoiceIds([asId<"InvoiceId">(invId)])).map((t) => t.minutes)).toEqual([30]);
-    expect(await te.listByInvoiceIds([])).toHaveLength(0);
     expect(await ex.listForLawyerInPeriod(asId<"OrganizationId">(org), asId<"UserId">(uId), FROM, TO)).toHaveLength(1);
     expect((await pay.listByInvoiceIds([asId<"InvoiceId">(invId)]))[0]!.amount).toBe(200);
     expect(await pay.listByInvoiceIds([])).toHaveLength(0);

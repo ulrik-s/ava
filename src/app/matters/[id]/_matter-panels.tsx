@@ -20,7 +20,7 @@ export type MatterPanelId = (typeof MATTER_PANEL_IDS)[number];
 
 const TITLES: Record<MatterPanelId, string> = {
   time: "Tid", expenses: "Utlägg", billing: "Fakturering", receivables: "Domstolsbetalningar",
-  watch: "Att bevaka", contacts: "Parter", documents: "Dokument",
+  watch: "Frister", contacts: "Parter", documents: "Dokument",
   events: "Händelser", suggestions: "Förslag", notes: "Anteckningar",
 };
 

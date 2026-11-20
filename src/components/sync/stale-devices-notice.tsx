@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Bevakningen i Att bevaka för admin (#1267): enheter där en ändring fastnat
+ * Rutan i Att åtgärda för admin (#1267, #1734): enheter där en ändring fastnat
  * i webbläsaren eller som slutat synka.
  */
 

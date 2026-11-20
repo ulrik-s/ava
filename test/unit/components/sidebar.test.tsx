@@ -52,11 +52,12 @@ describe("Sidebar", () => {
     expect(links.some((l) => l.getAttribute("href") === "/conflicts")).toBe(false);
   });
 
-  it("har Att åtgärda direkt efter Att bevaka, aktiv på sin sida (#1734)", () => {
+  it("har Att åtgärda direkt efter Frister, aktiv på sin sida (#1734)", () => {
     pathnameMock.mockReturnValue("/action-items");
     render(<Sidebar />);
     const links = screen.getAllByRole("link");
     const hrefs = links.map((l) => l.getAttribute("href"));
+    expect(links[hrefs.indexOf("/watchlist")]).toHaveTextContent("🔔Frister");
     const action = links[hrefs.indexOf("/watchlist") + 1];
     expect(action).toHaveAttribute("href", "/action-items");
     expect(action).toHaveTextContent("🛠️Att åtgärda");

@@ -5,7 +5,7 @@
  *   raden, och hela dokumentet gick att scrolla en bit.
  * - `sr-only`-etiketter (position: absolute) i en panel räknades mot dockviews
  *   `.dv-view`, som då fick en egen scrollbar ovanpå panelens: två scrollbarer
- *   i t.ex. ärendets "Att bevaka".
+ *   i t.ex. ärendets "Frister".
  */
 import type { Page } from "@playwright/test";
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterIdWith, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
@@ -51,13 +51,13 @@ for (const [label, width, height] of [["hela menyn", 1470, 700], ["ikonmenyn", 9
   });
 }
 
-test("ärendets Att bevaka och startsidan: bara panelkroppen scrollar, inte dockview-vyn", async ({ page }) => {
+test("ärendets Frister och startsidan: bara panelkroppen scrollar, inte dockview-vyn", async ({ page }) => {
   await page.setViewportSize({ width: 1470, height: 956 });
   await seedDemoLogin(page, BASE);
   const seed = await fetchDemoSeed(page, BASE);
   await open(page, `/matters/${matterIdWith(seed, "timeEntries")}/`);
-  await showPanel(page, "Att bevaka");
-  await expect(page.locator("section[aria-label='Att bevaka']").first()).toBeVisible();
+  await showPanel(page, "Frister");
+  await expect(page.locator("section[aria-label='Frister']").first()).toBeVisible();
   expect(await scrollingDockViews(page)).toBe(0);
 
   await open(page, "/");

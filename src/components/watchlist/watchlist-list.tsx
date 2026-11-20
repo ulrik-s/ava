@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Presentation av "Att bevaka"-poster (#1062). Delas av startsidans kort och
- * den fullständiga sidan — samma rad ska se likadan ut på båda ställena,
+ * Presentation av Frister- och Att åtgärda-poster (#1062, #1734). Delas av
+ * startsidans kort och de fullständiga sidorna — samma rad ska se likadan ut på båda ställena,
  * annars börjar folk lita på det ena och inte det andra.
  *
  * Komponenten är ren presentation: all härledning sker i
@@ -21,9 +21,6 @@ const KIND_META: Record<WatchlistKind, { icon: string; label: string }> = {
   coverageCap: { icon: "📊", label: "Täckningstak" },
   unbilled: { icon: "💰", label: "Ofakturerat" },
   deadline: { icon: "⏳", label: "Tidsfrist" },
-  overdueInvoice: { icon: "📄", label: "Förfallen faktura" },
-  failedDispatch: { icon: "✉️", label: "Utskick misslyckades" },
-  billingAction: { icon: "💼", label: "Fakturering" },
   conflictCheck: { icon: "⚖️", label: "Jävskontroll" },
 };
 

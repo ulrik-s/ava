@@ -580,11 +580,6 @@
       "count": 1
     }
   },
-  "src/lib/server/billing/billing-action-input.ts": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    }
-  },
   "src/lib/server/data-store/in-memory/cursor-store.ts": {
     "@typescript-eslint/no-deprecated": {
       "count": 1
@@ -841,11 +836,8 @@
     }
   },
   "src/lib/server/routers/watchlist.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
-    },
     "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 2
+      "count": 1
     }
   },
   "src/lib/server/rules/execute.ts": {
@@ -889,11 +881,6 @@
   },
   "src/lib/shared/accounting/pc8.ts": {
     "@typescript-eslint/no-misused-spread": {
-      "count": 1
-    }
-  },
-  "src/lib/shared/billing-todo.ts": {
-    "@typescript-eslint/no-redundant-type-constituents": {
       "count": 1
     }
   },
@@ -1026,11 +1013,6 @@
   "src/lib/shared/uuid.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
-    }
-  },
-  "src/lib/shared/watchlist.ts": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
     }
   },
   "test/bun-compat.ts": {
@@ -2506,11 +2488,6 @@
       "count": 2
     }
   },
-  "test/unit/lib/watchlist-billing-action.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
   "test/unit/lib/write-off-migration.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
@@ -3092,7 +3069,7 @@
       "count": 2
     },
     "@typescript-eslint/restrict-template-expressions": {
-      "count": 18
+      "count": 16
     }
   },
   "test/unit/server/routers/billingRun-amount-rounding.test.ts": {

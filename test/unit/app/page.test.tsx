@@ -1,5 +1,5 @@
 /**
- * Test för Dashboard — Att bevaka + tidrapportering + senaste ärenden, med
+ * Test för Dashboard — Frister + tidrapportering + senaste ärenden, med
  * dagsväxlare (#1167). Kalendern är borttagen (#1623).
  */
 
@@ -9,7 +9,7 @@ import Dashboard from "@/app/page";
 
 const timeQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
 const meQuery: { data: unknown } = { data: { id: "u1", name: "Anna" } };
-/** "Att bevaka" (#1062) — tom lista → panelen säger att det är lugnt (#1184). */
+/** "Frister" (#1062, #1735) — tom lista → panelen säger att det är lugnt (#1184). */
 const watchlistQuery: { data: unknown; isLoading: boolean } = { data: { items: [] }, isLoading: false };
 
 const completeMutate = vi.fn();
@@ -29,7 +29,7 @@ vi.mock("@/lib/client/trpc", () => ({
     user: { current: { useQuery: () => meQuery } },
     watchlist: { list: { useQuery: () => watchlistQuery } },
     task: {
-      // Att bevaka-kortet: bocka av tidsfrister direkt (#1167).
+      // Frister-kortet: bocka av tidsfrister direkt (#1167).
       complete: { useMutation: () => ({ mutate: completeMutate, isPending: false }) },
     },
   },
@@ -46,10 +46,11 @@ describe("Dashboard", () => {
   it("renderar rubrik + panelerna", () => {
     render(<Dashboard />);
     expect(screen.getByRole("heading", { name: /Startsida/i })).toBeInTheDocument();
-    expect(screen.queryByText(/Att göra/)).not.toBeInTheDocument(); // samma lista som Att bevaka, borttagen
+    expect(screen.queryByText(/Att göra/)).not.toBeInTheDocument(); // samma lista som Frister, borttagen
     expect(screen.getByText(/Tidrapportering/i)).toBeInTheDocument();
     expect(screen.getByText(/Senaste ärenden/i)).toBeInTheDocument();
-    expect(screen.getByText("Inget att bevaka just nu.")).toBeInTheDocument();
+    expect(screen.getByText("Inga frister just nu.")).toBeInTheDocument();
+    expect(screen.queryByText(/Att bevaka/)).not.toBeInTheDocument();
   });
 
   it("har ingen Kalender-ruta (#1623)", () => {
@@ -66,9 +67,10 @@ describe("Dashboard", () => {
     expect(igår.className).toContain("bg-blue-50");
   });
 
-  it("Att bevaka: tidsfrist kan bockas av direkt på startsidan", () => {
+  it("Frister: rutan heter Frister och tidsfrist kan bockas av direkt på startsidan", () => {
     watchlistQuery.data = { items: [{ kind: "deadline", severity: "passed", title: "Tidsfrist passerad: Svaromål", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: "2026-01-01", amountOre: null, link: { route: "matters", id: "m1" }, taskId: "t9" }] };
     render(<Dashboard />);
+    expect(screen.getByRole("heading", { name: /🔔 Frister/ })).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(/FÖRSENAD/);
     fireEvent.click(screen.getByRole("checkbox", { name: "Markera klar: Tidsfrist passerad: Svaromål" }));
     expect(completeMutate).toHaveBeenCalledWith({ id: "t9" });
@@ -95,7 +97,7 @@ describe("Dashboard", () => {
     expect(screen.getByText("(1 h)")).toBeInTheDocument();
   });
 
-  it("tidsumman ärver rubrikens utseende, Att bevakas räknare är oförändrad (#1673)", () => {
+  it("tidsumman ärver rubrikens utseende, Fristers räknare är oförändrad (#1673)", () => {
     timeQuery.data = { entries: [], totalMinutes: 60 };
     watchlistQuery.data = { items: [{ kind: "deadline", severity: "passed", title: "Tidsfrist passerad: Svaromål", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: "2026-01-01", amountOre: null, link: { route: "matters", id: "m1" }, taskId: "t9" }] };
     render(<Dashboard />);
