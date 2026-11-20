@@ -79,7 +79,7 @@ describe("watchlist.list", () => {
     const { items } = await caller([], [
       // Förfallen och dessutom skapad men oskickad: varken förfallen faktura eller "Skicka faktura".
       { id: "F-sen", matterId: "m1", invoiceNumber: "F-sen", amount: 10_000, status: "SENT", invoiceType: "STANDARD", invoiceDate: inDays(-40), dueDate: inDays(-12), createdAt: inDays(-40) },
-      { id: "F-ny", matterId: "m1", invoiceNumber: "F-ny", amount: 10_000, status: "CREATED", invoiceType: "STANDARD", invoiceDate: inDays(-20), dueDate: inDays(10), createdAt: inDays(-20) },
+      { id: "F-ny", matterId: "m1", invoiceNumber: "F-ny", amount: 10_000, status: "DRAFT", invoiceType: "STANDARD", invoiceDate: inDays(-20), dueDate: inDays(10), createdAt: inDays(-20) },
     ], [], {
       matters: [
         matter("cap", { paymentMethod: "RATTSHJALP", rattshjalpMaxTimmar: 1 }),
