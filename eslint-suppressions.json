@@ -842,7 +842,7 @@
   },
   "src/lib/server/routers/watchlist.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/no-unnecessary-type-conversion": {
       "count": 2

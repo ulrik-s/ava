@@ -63,6 +63,11 @@ export const invoiceDispatchRouter = router({
     ctx.repos.invoiceDispatches.listByStatusForOrg(asId<"OrganizationId">(ctx.orgId), "queued"),
   ),
 
+  /** Misslyckade utskick i org:en — fakturalistans "Kom inte fram" (#1731). */
+  listFailed: orgProcedure.query(({ ctx }) =>
+    ctx.repos.invoiceDispatches.listByStatusForOrg(asId<"OrganizationId">(ctx.orgId), "failed"),
+  ),
+
   queue: orgProcedure
     .input(z.object({
       invoiceId: invoiceIdSchema,

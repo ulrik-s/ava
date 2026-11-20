@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+import { outstandingOre, overdueDays } from "@/lib/shared/invoice-overdue";
 import { isRadgivningInvoice } from "@/lib/shared/radgivning-entry";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
@@ -117,28 +118,24 @@ async function deadlineInput(ctx: Ctx, userId: string): Promise<DeadlineTask[]> 
   return out;
 }
 
-/** Statusar som betyder "fordran lever och kan förfalla". */
-const LIVE_INVOICE_STATUSES = new Set(["SENT", "INSTALLMENT_PLAN"]);
-
 /** Förfallna fakturor med utestående belopp. Betalt eller avskrivet räknas bort. */
 type InvoiceRow = Awaited<ReturnType<Repositories["invoices"]["listForOrg"]>>[number];
 
-/** Fakturaraden som bevakningspost, eller null om den inte kan förfalla. */
-function toOverdue(inv: InvoiceRow): OverdueInvoice | null {
-  if (!LIVE_INVOICE_STATUSES.has(String(inv.status))) return null;
+/** Fakturaraden som bevakningspost, eller null om den inte är förfallen (delad regel, #1731). */
+function toOverdue(inv: InvoiceRow, now: Date): OverdueInvoice | null {
+  const candidate = { ...inv, status: String(inv.status) };
   const due = isoDate(inv.dueDate);
-  if (due === null) return null;
-  const paid = (inv.payments ?? []).reduce((s, p) => s + p.amount, 0);
+  if (due === null || overdueDays(candidate, now) === null) return null;
   return {
     id: String(inv.id), invoiceNumber: inv.invoiceNumber ?? null, dueDate: due,
-    outstandingOre: inv.amount - paid,
+    outstandingOre: outstandingOre(candidate),
     matterId: inv.matter ? String(inv.matter.id) : null,
     matterNumber: inv.matter?.matterNumber ?? null,
   };
 }
 
-function overdueInput(rows: readonly InvoiceRow[]): OverdueInvoice[] {
-  return rows.map(toOverdue).filter((r): r is OverdueInvoice => r !== null);
+function overdueInput(rows: readonly InvoiceRow[], now: Date): OverdueInvoice[] {
+  return rows.map((r) => toOverdue(r, now)).filter((r): r is OverdueInvoice => r !== null);
 }
 
 /** Faktureringsåtgärder som väntar (#1221) — ur samma org-breda läsningar som övriga signaler. */
@@ -214,7 +211,7 @@ export const watchlistRouter = router({
         billingActionInput(ctx, matters, invoices, entries, now),
       ]);
       const unbilled = unbilledInput(matters, entries);
-      const overdue = overdueInput(invoices);
+      const overdue = overdueInput(invoices, now);
 
       // Faktura-signalerna är org-breda i datalagret; filtrera dem mot samma
       // ärendeurval så "mina" betyder samma sak för alla fem signalerna.

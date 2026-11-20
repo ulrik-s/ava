@@ -148,6 +148,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   // ── Fakturautskick ───────────────────────────────────────────────
   "invoiceDispatch.list": "Utskickshistorik för fakturor.",
   "invoiceDispatch.listQueued": "Köade fakturautskick som väntar på att skickas.",
+  "invoiceDispatch.listFailed": "Fakturautskick som misslyckades: fakturan kom aldrig fram till mottagaren.",
   "invoiceDispatch.queue": "Köa en faktura för utskick.",
   "invoiceDispatch.recordManual": "Registrera ett utskick som redan gjorts för hand, t.ex. via advokatens egen mailklient. Skapas direkt som skickat, aldrig köat — annars skulle utskicks-workern skicka igen.",
   "invoiceDispatch.updateStatus": "Uppdatera ett utskicks status (skickat, levererat, misslyckat).",
