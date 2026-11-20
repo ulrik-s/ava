@@ -102,7 +102,7 @@ export function DocumentRow({
         draggable={!isUploading}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
-        className={`hover:bg-gray-50 ${isDragging ? "opacity-50" : ""} ${isUploading ? "opacity-60 pointer-events-none" : ""}`}
+        className={`align-top hover:bg-gray-50 ${isDragging ? "opacity-50" : ""} ${isUploading ? "opacity-60 pointer-events-none" : ""}`}
         title={isUploading ? "Laddar upp…" : undefined}
       >
         <td className="px-3 sm:px-6 py-2.5 text-sm">

@@ -461,6 +461,25 @@ describe("InvoiceDetailPage", () => {
     expect(screen.getByText("Summa").closest("tr")?.textContent).toContain("1,75 h");
   });
 
+  it("tabellernas datarader är toppjusterade; summaraden i specifikationen är det inte (#1753)", async () => {
+    const settlementBreakdown = { timeLines: [{ date: "2026-03-01", description: "Möte", minutes: 90, amountOre: 150_000 }],
+      rows: [], totalLabel: "Att betala", totalOre: 150_000 };
+    const writeOffs = [{ amount: 10_000, writtenOffAt: new Date("2026-04-02"), reason: "Konkurs" }];
+    const accontoDeductions = [{ id: "ad1", accontoInvoice: { id: "ai1", invoiceDate: new Date("2026-03-01"), amount: 200_000 } }];
+    invoiceQuery.data = { ...baseInvoice, invoiceType: "FINAL", settlementBreakdown, writeOffs };
+    const { unmount } = renderPage();
+    await waitFor(() => expect(screen.getByText("Möte")).toBeInTheDocument());
+    for (const text of ["Möte", "Konkurs"]) expect(screen.getByText(text).closest("tr")).toHaveClass("align-top");
+    expect(screen.getByText("Summa").closest("tr")).not.toHaveClass("align-top");
+    unmount();
+    invoiceQuery.data = { ...baseInvoice, invoiceType: "FINAL", accontoDeductions,
+      timeEntries: [{ id: "t1", date: new Date("2026-03-01"), description: "Brev", minutes: 7, hourlyRate: 100_000 }],
+      expenses: [{ id: "e1", date: new Date("2026-03-02"), description: "Porto", amount: 4_999, vatRate: 0, vatIncluded: false }] };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Brev")).toBeInTheDocument());
+    for (const text of ["Brev", "Porto", /Aconto 2026-03-01/]) expect(screen.getByText(text).closest("tr")).toHaveClass("align-top");
+  });
+
   it("renderar PAID-status utan Registrera betalning-knapp", async () => {
     invoiceQuery.data = { ...baseInvoice, status: "PAID" };
     renderPage();

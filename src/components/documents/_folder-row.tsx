@@ -65,7 +65,7 @@ export function FolderRow({
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className={`hover:bg-gray-50 ${
+        className={`align-top hover:bg-gray-50 ${
           isDropTarget ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" : ""
         } ${isDragging ? "opacity-50" : ""}`}
       >

@@ -121,6 +121,11 @@ describe("DocumentRow — kebab-meny + isUploading-guard", () => {
     expect(onDelete).not.toHaveBeenCalled();
   });
 
+  it("raden är toppjusterad, så att cellerna börjar längst upp (#1753)", () => {
+    const { container } = renderRow();
+    expect(container.querySelector("tbody tr")).toHaveClass("align-top");
+  });
+
   it("isUploading=true: filnamn-knappen är disabled", () => {
     renderRow({ isUploading: true });
     const nameBtn = screen.getByTitle(/Laddar upp — vänta/);

@@ -72,7 +72,7 @@ function RequestsTable({ items, seen, onOpen }: {
       </thead>
       <tbody className="divide-y divide-gray-100">
         {items.map((i) => (
-          <tr key={i.number} className="hover:bg-gray-50 cursor-pointer" onClick={() => onOpen(i.number)}>
+          <tr key={i.number} className="align-top hover:bg-gray-50 cursor-pointer" onClick={() => onOpen(i.number)}>
             <td className="py-1.5">{hasUnread(i, seen) && <UnreadDot label="Nytt meddelande" />}</td>
             <td className="py-1.5 pr-2">
               <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(i.number); }}
