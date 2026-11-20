@@ -7,7 +7,7 @@
  *
  *   bun tooling/scripts/flow-health.ts
  */
-import { type GitHub, gitHub, type OpenItem } from "./flow/github";
+import { type GitHub, gitHub, intakeRefOf, type OpenItem } from "./flow/github";
 import { type Alarm, healthReport, type HealthItem, type HealthReport, newAlarms, renderStatus } from "./flow/health";
 import { loadFlow, stateLabels } from "./flow/load";
 import type { Flow } from "./flow/schema";
@@ -24,9 +24,10 @@ function lastAdded(gh: GitHub, n: number): Record<string, string> {
 
 /** Intagsnumren som en ÖPPEN implementations-issue pekar på (`Intag: ava-feedback#N`, loop 2). */
 export function openIntakeRefs(items: readonly OpenItem[], intakeRepo: string): Set<number> {
-  const name = intakeRepo.split("/")[1] ?? intakeRepo;
-  const re = new RegExp(`^Intag: ${name}#(\\d+)\\s*$`, "m");
-  return new Set(items.flatMap((i) => (i.isPr ? [] : Number(re.exec(i.body)?.[1] ?? Number.NaN))).filter((n) => !Number.isNaN(n)));
+  return new Set(items.flatMap((i) => {
+    const n = i.isPr ? null : intakeRefOf(i.body, intakeRepo);
+    return n === null ? [] : [n];
+  }));
 }
 
 /** De öppna saker i flödet som har ett tillstånd eller är blockerade. */

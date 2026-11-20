@@ -11,7 +11,14 @@ import { type Column, COLUMNS, type Prio, PRIOS, type Rek, REKS } from "./board"
 import type { GhRunner } from "./github";
 
 /** Ett kort på tavlan. */
-export interface BoardItem { itemId: string; number: number; repo: string; open: boolean; column: string | null; prio: string | null; rek: string | null }
+export interface BoardItem {
+  itemId: string; number: number; repo: string; open: boolean; column: string | null; prio: string | null; rek: string | null;
+  /** Textfältet Läge: vad som händer med förfrågan nu. */
+  lage: string | null;
+}
+
+/** Textfältet på korten som säger vad som händer nu. */
+export const LAGE_FIELD = "Läge";
 
 /** Det synken behöver av tavlan. */
 export interface BoardApi {
@@ -21,6 +28,7 @@ export interface BoardApi {
   setColumn(itemId: string, column: Column): void;
   setPrio(itemId: string, prio: Prio): void;
   setRek(itemId: string, rek: Rek): void;
+  setLage(itemId: string, text: string): void;
   archive(itemId: string): void;
 }
 
@@ -28,7 +36,8 @@ interface Option { name: string; color: string; description: string }
 
 const selectField = z.object({ id: z.string(), name: z.string(), options: z.array(z.object({ id: z.string(), name: z.string() })) });
 type SelectField = z.infer<typeof selectField>;
-const anyField = z.union([selectField, z.looseObject({})]);
+const textField = z.object({ id: z.string(), name: z.string(), dataType: z.string() });
+const anyField = z.union([selectField, textField, z.looseObject({})]);
 
 function gql<T extends z.ZodType>(run: GhRunner, schema: T, query: string, vars: Record<string, string> = {}): z.output<T> {
   const args = ["api", "graphql", "-f", `query=${query}`, ...Object.entries(vars).flatMap(([k, v]) => ["-f", `${k}=${v}`])];
@@ -55,13 +64,28 @@ function findOrCreateProject(run: GhRunner, owner: string, title: string, log: (
 }
 
 const SELECT_FIELD = "... on ProjectV2SingleSelectField{id name options{id name}}";
+const PLAIN_FIELD = "... on ProjectV2Field{id name dataType}";
 
-function readFields(run: GhRunner, projectId: string): { fields: SelectField[]; hasBoard: boolean } {
+/** Projektets fält: valfälten, textfälten (namn → id) och om en tavelvy finns. */
+function readFields(run: GhRunner, projectId: string): { fields: SelectField[]; texts: Map<string, string>; hasBoard: boolean } {
   const node = gql(run, z.object({ node: z.object({
     fields: z.object({ nodes: z.array(anyField) }), views: z.object({ nodes: z.array(z.object({ layout: z.string() })) }),
-  }) }), `query($id:ID!){node(id:$id){... on ProjectV2{fields(first:30){nodes{${SELECT_FIELD}}} views(first:20){nodes{layout}}}}}`, { id: projectId }).node;
+  }) }), `query($id:ID!){node(id:$id){... on ProjectV2{fields(first:30){nodes{${SELECT_FIELD} ${PLAIN_FIELD}}} views(first:20){nodes{layout}}}}}`, { id: projectId }).node;
   const fields = node.fields.nodes.flatMap((f) => { const r = selectField.safeParse(f); return r.success ? [r.data] : []; });
-  return { fields, hasBoard: node.views.nodes.some((v) => v.layout === "BOARD_LAYOUT") };
+  const texts = new Map(node.fields.nodes.flatMap((f) => {
+    const r = textField.safeParse(f);
+    return r.success && r.data.dataType === "TEXT" ? [[r.data.name, r.data.id] as const] : [];
+  }));
+  return { fields, texts, hasBoard: node.views.nodes.some((v) => v.layout === "BOARD_LAYOUT") };
+}
+
+/** Ett textfält med namnet `name` (id); skapas om det saknas. */
+function ensureText(run: GhRunner, projectId: string, texts: ReadonlyMap<string, string>, name: string): string {
+  const found = texts.get(name);
+  if (found !== undefined) return found;
+  return gql(run, z.object({ createProjectV2Field: z.object({ projectV2Field: z.object({ id: z.string() }) }) }),
+    `mutation($p:ID!){createProjectV2Field(input:{projectId:$p,dataType:TEXT,name:${JSON.stringify(name)}}){projectV2Field{... on ProjectV2Field{id}}}}`,
+    { p: projectId }).createProjectV2Field.projectV2Field.id;
 }
 
 const sameOptions = (f: SelectField, opts: readonly Option[]): boolean =>
@@ -95,15 +119,17 @@ function ensureBoardView(run: GhRunner, projectId: string, hasBoard: boolean): v
 const itemSchema = z.object({
   id: z.string(),
   content: z.object({ number: z.number().optional(), state: z.string().optional(), repository: z.object({ nameWithOwner: z.string() }).optional() }).nullable(),
-  fieldValues: z.object({ nodes: z.array(z.object({ name: z.string().optional(), field: z.object({ name: z.string().optional() }).optional() })) }),
+  fieldValues: z.object({ nodes: z.array(z.object({ name: z.string().optional(), text: z.string().optional(), field: z.object({ name: z.string().optional() }).optional() })) }),
 });
 const page = z.object({ node: z.object({ items: z.object({
   pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }), nodes: z.array(itemSchema),
 }) }) });
-const ITEMS = "nodes{id content{... on Issue{number state repository{nameWithOwner}}} fieldValues(first:20){nodes{... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2SingleSelectField{name}}}}}}";
+const ITEMS = "nodes{id content{... on Issue{number state repository{nameWithOwner}}} fieldValues(first:20){nodes{... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2SingleSelectField{name}}} ... on ProjectV2ItemFieldTextValue{text field{... on ProjectV2Field{name}}}}}}";
 
 const valueOf = (i: z.infer<typeof itemSchema>, field: string): string | null =>
   i.fieldValues.nodes.find((v) => v.field?.name === field)?.name ?? null;
+const textOf = (i: z.infer<typeof itemSchema>, field: string): string | null =>
+  i.fieldValues.nodes.find((v) => v.field?.name === field)?.text ?? null;
 
 function readItems(run: GhRunner, projectId: string): BoardItem[] {
   const out: BoardItem[] = [];
@@ -115,7 +141,7 @@ function readItems(run: GhRunner, projectId: string): BoardItem[] {
       if (c?.number === undefined || !c.repository) continue;
       out.push({
         itemId: i.id, number: c.number, repo: c.repository.nameWithOwner, open: c.state === "OPEN",
-        column: valueOf(i, "Status"), prio: valueOf(i, "Prio"), rek: valueOf(i, "Rekommendation"),
+        column: valueOf(i, "Status"), prio: valueOf(i, "Prio"), rek: valueOf(i, "Rekommendation"), lage: textOf(i, LAGE_FIELD),
       });
     }
     more = items.pageInfo.hasNextPage;
@@ -133,10 +159,11 @@ const optionId = (f: SelectField, name: string): string => {
 /** Tavlan: hittar eller skapar projektet och dess fält, och ger operationerna synken behöver. */
 export function projectBoard(run: GhRunner, owner: string, title: string, log: (l: string) => void): BoardApi {
   const p = findOrCreateProject(run, owner, title, log);
-  const { fields, hasBoard } = readFields(run, p.id);
+  const { fields, texts, hasBoard } = readFields(run, p.id);
   const status = ensureStatus(run, fields);
   const prio = ensureSelect(run, p.id, fields, "Prio", PRIO_OPTIONS);
   const rek = ensureSelect(run, p.id, fields, "Rekommendation", REK_OPTIONS);
+  const lage = ensureText(run, p.id, texts, LAGE_FIELD);
   ensureBoardView(run, p.id, hasBoard);
   const setOption = (itemId: string, f: SelectField, name: string): void => {
     gql(run, z.looseObject({}),
@@ -151,6 +178,11 @@ export function projectBoard(run: GhRunner, owner: string, title: string, log: (
     setColumn: (itemId, column) => setOption(itemId, status, column),
     setPrio: (itemId, value) => setOption(itemId, prio, value),
     setRek: (itemId, value) => setOption(itemId, rek, value),
+    setLage: (itemId, text) => {
+      gql(run, z.looseObject({}),
+        "mutation($p:ID!,$i:ID!,$f:ID!,$t:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{text:$t}}){projectV2Item{id}}}",
+        { p: p.id, i: itemId, f: lage, t: text });
+    },
     archive: (itemId) => {
       gql(run, z.looseObject({}), "mutation($p:ID!,$i:ID!){archiveProjectV2Item(input:{projectId:$p,itemId:$i}){item{id}}}", { p: p.id, i: itemId });
     },

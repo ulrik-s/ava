@@ -110,9 +110,18 @@ flytta kortet till Att besluta (flaggan tas bort och loop 1 sätter den inte
 igen) eller till Avböjd. Bara Ulriks "ska vi bygga det" hoppas över;
 granskningen av arbetsordrar och PR:er, CI och Agentvakten gäller som vanligt.
 
-GitHub kan inte starta en workflow när ett kort flyttas, så `tavla.yml` (i
-ava, publikt) läser av tavlan var 5:e minut med `tooling/scripts/flow-board.ts`.
-Projektet, kolumnerna, Prio-fältet och tavelvyn skapas av synken själv.
+**Läge** (textfält på korten) säger vad som händer nu, i klartext: "Loop 1
+verifierar", "Godkänd — loop 2 bryter ner den", "Byggs: 1 av 3 arbetsorder
+klara" (ur arbetsordrarnas `Intag:`-rad), "Godkänns automatiskt 21 nov 21:30",
+"Levererad i v0.7.42". Synken skriver det när det ändrats, direkt efter en
+flytt, så att Ulrik ser att flytten tagits emot.
+
+GitHub kan inte starta en workflow när ett kort flyttas, och GitHubs schema
+är för opålitligt (var-5:e-minut-schemat gick två gånger på ett dygn). Därför
+läser `tavla.yml` (i ava, publikt) av tavlan **varje minut** i knappt sex
+timmar med `tooling/scripts/flow-board.ts` och startar sedan nästa körning
+själv; schemat varje timme är bara reserv. Stoppa kedjan genom att stänga av
+workflowen (Actions → Tavla → Disable). Projektet, kolumnerna, Prio-fältet och tavelvyn skapas av synken själv.
 Kräver hemligheten `FLOW_BOARD_TOKEN` i ava: en klassisk PAT med `project`
 och `repo`. Statusissuen (#11) finns kvar för larmen, som tavlan inte kan
 skicka.

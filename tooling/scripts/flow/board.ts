@@ -92,6 +92,53 @@ export type Rek = (typeof REKS)[number];
 /** Rekommendationen etiketterna bär, eller null. */
 export const rekFor = (labels: readonly string[]): Rek | null => REKS.find((r) => labels.includes(`rek-${r}`)) ?? null;
 
+/** Det Läge-texten behöver utöver etiketterna. */
+export interface LageContext {
+  /** När `auto-godkänn` sattes (ISO), för kort som godkänns automatiskt. */
+  autoSince?: string;
+  /** Arbetsordrarna i kodrepot för förfrågan: hur många som är klara av alla. */
+  workOrders?: { done: number; total: number };
+}
+
+const when = (ms: number): string =>
+  new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(ms);
+
+const releaseOf = (labels: readonly string[]): string | undefined => labels.find((l) => l.startsWith("release:"))?.slice("release:".length);
+
+function builtText(labels: readonly string[], ctx: LageContext): string {
+  if (labels.includes("dubblett")) return "Dubblett — följer originalet";
+  const wo = ctx.workOrders;
+  return wo && wo.total > 0 ? `Byggs: ${wo.done} av ${wo.total} arbetsorder klara` : "Bryts ner i arbetsorder i kodrepot";
+}
+
+function doneText(labels: readonly string[]): string {
+  if (labels.includes("finns-redan")) return "Fanns redan i AVA";
+  if (labels.includes("uppdelad")) return "Uppdelad i egna förfrågningar";
+  const release = releaseOf(labels);
+  return release === undefined ? "Levererad" : `Levererad i ${release}`;
+}
+
+/** Läge-texten per kolumn: vad som händer med förfrågan nu. */
+const LAGE: Readonly<Record<Column, (labels: readonly string[], ctx: LageContext) => string>> = {
+  "Ny": () => "Loop 1 verifierar förfrågan",
+  "Att besluta": (labels) => {
+    const rek = rekFor(labels);
+    return rek === null ? "Väntar på ditt beslut" : `Väntar på ditt beslut — rekommendation: ${rek}`;
+  },
+  "Godkänns automatiskt": (_, ctx) => (ctx.autoSince === undefined
+    ? "Godkänns automatiskt efter 24 h om du inte flyttar den"
+    : `Godkänns automatiskt ${when(new Date(ctx.autoSince).getTime() + AUTO_APPROVE_MS)} om du inte flyttar den`),
+  "Svara": () => "Blockerad — läs senaste kommentaren och svara i issuen",
+  "Väntar på användaren": () => "Loop 1 har frågat användaren i AVA och väntar på svar",
+  "Godkänd": () => "Godkänd — loop 2 bryter ner den i arbetsorder",
+  "Byggs": builtText,
+  "Klar": doneText,
+  "Avböjd": () => "Avböjd",
+};
+
+/** Läget på kortet, i klartext, ur etiketterna. */
+export const lageFor = (labels: readonly string[], ctx: LageContext = {}): string => LAGE[columnFor(labels)](labels, ctx);
+
 /** Vetofönstret: så länge står ett kort i "Godkänns automatiskt" innan det godkänns. */
 export const AUTO_APPROVE_MS = 24 * 3_600_000;
 

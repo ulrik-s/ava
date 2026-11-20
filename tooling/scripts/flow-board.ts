@@ -8,16 +8,24 @@
  *
  * Utan FLOW_GUARD_MODE=enforce loggas bara vad som skulle göras.
  */
-import { AUTO_APPROVE_MS, AUTO_LABEL, autoApprovable, autoApproveDue, type Column, type ColumnAction, columnFor, decideColumn, decidePrio, rekFor } from "./flow/board";
+import {
+  AUTO_APPROVE_MS, AUTO_LABEL, autoApprovable, autoApproveDue, type Column, type ColumnAction, columnFor, decideColumn, decidePrio, lageFor, rekFor,
+} from "./flow/board";
 import { type BoardApi, type BoardItem, projectBoard } from "./flow/board-github";
-import { type GitHub, gitHub, type OpenItem, runGhWithToken } from "./flow/github";
+import { type GitHub, gitHub, type OpenItem, runGhWithToken, type WorkOrderProgress } from "./flow/github";
 import { loadFlow } from "./flow/load";
 
 /** Projektets namn i GitHub. */
 export const BOARD_TITLE = "AVA – flödet";
 
-/** Det synken behöver. `now` styr vetofönstret för det automatiska godkännandet. */
-export interface SyncDeps { board: BoardApi; intake: GitHub; intakeRepo: string; open: readonly OpenItem[]; enforce: boolean; log: (l: string) => void; now: number }
+/**
+ * Det synken behöver. `now` styr vetofönstret för det automatiska godkännandet,
+ * `workOrders` (arbetsordrarnas framsteg per förfrågan) Läge-texten för det som byggs.
+ */
+export interface SyncDeps {
+  board: BoardApi; intake: GitHub; intakeRepo: string; open: readonly OpenItem[]; enforce: boolean; log: (l: string) => void; now: number;
+  workOrders?: WorkOrderProgress;
+}
 
 /** Vad en synk gjorde. */
 export interface SyncResult {
@@ -47,6 +55,7 @@ function addMissing(d: SyncDeps, onBoard: ReadonlySet<number>, result: SyncResul
     if (prio.kind === "set-board") d.board.setPrio(itemId, prio.prio);
     const rek = rekFor(i.labels);
     if (rek !== null) d.board.setRek(itemId, rek);
+    d.board.setLage(itemId, lageFor(i.labels, workOrdersOf(d, i.number)));
   }
 }
 
@@ -86,13 +95,33 @@ function autoSince(d: SyncDeps, n: number): string | undefined {
 }
 
 /** Godkänner automatiskt när vetofönstret gått ut. */
-function autoApprove(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): void {
-  if (!autoApprovable(labels) || !autoApproveDue(labels, autoSince(d, item.number), d.now)) return;
+/** Godkänner automatiskt när vetofönstret gått ut. Ger true om den godkändes. */
+function autoApprove(d: SyncDeps, item: BoardItem, labels: readonly string[], since: string | undefined, result: SyncResult): boolean {
+  if (!autoApproveDue(labels, since, d.now)) return false;
   result.autoApproved.push(item.number);
   d.log(`#${item.number}: inget veto på ${AUTO_APPROVE_MS / 3_600_000} h → verifierad`);
-  if (!d.enforce) return;
-  d.intake.comment(item.number, AUTO_COMMENT);
-  d.intake.addLabel(item.number, "verifierad");
+  if (d.enforce) {
+    d.intake.comment(item.number, AUTO_COMMENT);
+    d.intake.addLabel(item.number, "verifierad");
+  }
+  return true;
+}
+
+const workOrdersOf = (d: SyncDeps, n: number): { workOrders?: { done: number; total: number } } => {
+  const wo = d.workOrders?.get(n);
+  return wo === undefined ? {} : { workOrders: wo };
+};
+
+/** Etiketterna efter det synken just gjorde (godkänt eller veto), för Läge-texten. */
+function labelsAfter(labels: readonly string[], action: ColumnAction, autoApproved: boolean): readonly string[] {
+  if (action.kind === "approve" || autoApproved) return [...labels, "verifierad"];
+  return action.kind === "veto" ? labels.filter((l) => l !== AUTO_LABEL) : labels;
+}
+
+/** Sätter Läge-texten när den ändrats, så att Ulrik ser att något händer. */
+function applyLage(d: SyncDeps, item: BoardItem, labels: readonly string[], since: string | undefined): void {
+  const text = lageFor(labels, { ...workOrdersOf(d, item.number), ...(since === undefined ? {} : { autoSince: since }) });
+  if (text !== item.lage && d.enforce) d.board.setLage(item.itemId, text);
 }
 
 function setColumn(d: SyncDeps, item: BoardItem, column: Column, result: SyncResult): void {
@@ -117,11 +146,13 @@ function applyRek(d: SyncDeps, item: BoardItem, labels: readonly string[]): void
 
 /** Ett kort på tavlan: kolumn, prio, rekommendation och automatiskt godkännande. */
 function applyItem(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): void {
+  const since = autoApprovable(labels) ? autoSince(d, item.number) : undefined;
   const action = applyColumn(d, item, labels, result);
   applyPrio(d, item, labels);
   applyRek(d, item, labels);
   // Bara om Ulrik inte flyttat kortet själv (godkänt, avböjt eller lagt in veto).
-  if (action.kind === "none" || action.kind === "set") autoApprove(d, item, labels, result);
+  const auto = (action.kind === "none" || action.kind === "set") && autoApprove(d, item, labels, since, result);
+  if (action.kind !== "decline") applyLage(d, item, labelsAfter(labels, action, auto), since);
 }
 
 /** En synk: nya kort läggs till, Ulriks flyttar verkställs, resten följer etiketterna, stängda arkiveras. */
@@ -153,7 +184,12 @@ if (import.meta.main) {
     const board = projectBoard(run, flow.ulrik, BOARD_TITLE, console.log);
     const intake = gitHub(intakeRepo, run);
     const open = intake.openItems().filter((i) => !i.isPr && !i.labels.includes("agentstatus"));
-    const r = syncBoard({ board, intake, intakeRepo, open, enforce: process.env.FLOW_GUARD_MODE === "enforce", log: console.log, now: Date.now() });
+    const codeRepo = flow.machines["code-issue"]?.repo;
+    const workOrders = codeRepo === undefined ? undefined : gitHub(codeRepo, run).workOrders(intakeRepo);
+    const r = syncBoard({
+      board, intake, intakeRepo, open, enforce: process.env.FLOW_GUARD_MODE === "enforce", log: console.log, now: Date.now(),
+      ...(workOrders === undefined ? {} : { workOrders }),
+    });
     console.log(`tavlan ${board.url}: ${r.added.length} nya, ${r.approved.length} godkända, ${r.autoApproved.length} automatiskt godkända, `
       + `${r.vetoed.length} veton, ${r.declined.length} avböjda, ${r.reset.length} tillbakalagda, ${r.archived.length} arkiverade`);
   }

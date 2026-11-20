@@ -98,6 +98,19 @@ export interface RepoLabelEvent { id: number; label: string; number: number; isP
 
 const enc = (label: string): string => encodeURIComponent(label);
 
+/** Förfrågan en arbetsorder pekar på (`Intag: <intagsrepo>#N` på egen rad, loop 2), eller null. */
+export function intakeRefOf(body: string, intakeRepo: string): number | null {
+  const name = intakeRepo.split("/")[1] ?? intakeRepo;
+  const n = new RegExp(`^Intag: ${name}#(\\d+)\\s*$`, "m").exec(body)?.[1];
+  return n === undefined ? null : Number(n);
+}
+
+/** `gh api --paginate --slurp` på en sökning: en lista med sidor. */
+const searchPagesSchema = z.array(z.object({ items: z.array(z.object({ body: z.string().nullable(), state: z.string(), state_reason: z.string().nullable().optional() })) }));
+
+/** Arbetsordrarnas framsteg per förfrågan: klara (stängda som completed) av alla. */
+export type WorkOrderProgress = Map<number, { done: number; total: number }>;
+
 function openDeps(run: GhRunner, repo: string, n: number, kind: "blocked_by" | "blocking"): DepIssue[] {
   const rows = parseJsonWith(z.array(depSchema), run(["api", `repos/${repo}/issues/${n}/dependencies/${kind}?per_page=100`]));
   return rows
@@ -157,6 +170,19 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
     /** `n` kan inte byggas förrän issuen med id `blockerId` är klar. GitHub vägrar cirklar (HTTP 422). */
     addBlocker(n: number, blockerId: number): void {
       run(["api", "-X", "POST", `repos/${repo}/issues/${n}/dependencies/blocked_by`, "-F", `issue_id=${blockerId}`]);
+    },
+    /** Arbetsordrarna i det här repot per förfrågan i `intakeRepo` (en sökning). */
+    workOrders(intakeRepo: string): WorkOrderProgress {
+      const name = intakeRepo.split("/")[1] ?? intakeRepo;
+      const rows = parseJsonWith(searchPagesSchema, run(["api", "-X", "GET", "search/issues", "-f", `q=repo:${repo} is:issue "Intag: ${name}" in:body`, "-f", "per_page=100", "--paginate", "--slurp"])).flatMap((pg) => pg.items);
+      const out: WorkOrderProgress = new Map();
+      for (const r of rows) {
+        const n = intakeRefOf(r.body ?? "", intakeRepo);
+        if (n === null) continue;
+        const p = out.get(n) ?? { done: 0, total: 0 };
+        out.set(n, { done: p.done + (r.state === "closed" && r.state_reason === "completed" ? 1 : 0), total: p.total + 1 });
+      }
+      return out;
     },
     hasOpenPr(n: number): boolean {
       const r = parseJsonWith(z.object({ total_count: z.number() }), run(["api", "-X", "GET", "search/issues", "-f", `q=repo:${repo} is:pr is:open "Closes #${n}"`]));

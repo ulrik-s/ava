@@ -5,9 +5,9 @@
  * när ett kort flyttas.
  */
 import { describe, expect, it } from "vitest-compat";
-import { AUTO_APPROVE_MS, autoApprovable, autoApproveDue, COLUMN_LABELS, COLUMNS, columnFor, decideColumn, decidePrio, rekFor } from "../../tooling/scripts/flow/board";
+import { AUTO_APPROVE_MS, autoApprovable, autoApproveDue, COLUMN_LABELS, COLUMNS, columnFor, decideColumn, decidePrio, lageFor, rekFor } from "../../tooling/scripts/flow/board";
 import { type BoardApi, type BoardItem, projectBoard } from "../../tooling/scripts/flow/board-github";
-import { gitHub, type GhRunner, type OpenItem } from "../../tooling/scripts/flow/github";
+import { gitHub, type GhRunner, intakeRefOf, type OpenItem } from "../../tooling/scripts/flow/github";
 import { loadFlow } from "../../tooling/scripts/flow/load";
 import { BOARD_MARKER, syncBoard } from "../../tooling/scripts/flow-board";
 
@@ -58,6 +58,25 @@ describe("tavlans regler", () => {
     expect(decideColumn(["undersökt"], "Godkänns automatiskt")).toEqual({ kind: "set", column: "Att besluta" });
   });
 
+  it("Läge säger vad som händer nu, per kolumn", () => {
+    expect(lageFor(["user-request"])).toBe("Loop 1 verifierar förfrågan");
+    expect(lageFor(["undersökt"])).toBe("Väntar på ditt beslut");
+    expect(lageFor(["undersökt", "rek-godkänn"])).toBe("Väntar på ditt beslut — rekommendation: godkänn");
+    expect(lageFor(["undersökt", "auto-godkänn"])).toBe("Godkänns automatiskt efter 24 h om du inte flyttar den");
+    expect(lageFor(["undersökt", "auto-godkänn"], { autoSince: "2026-11-19T20:30:00Z" })).toMatch(/^Godkänns automatiskt 20 nov\.? 21:30 om du inte flyttar den$/);
+    expect(lageFor(["undersökt", "blockerad"])).toBe("Blockerad — läs senaste kommentaren och svara i issuen");
+    expect(lageFor(["väntar-på-användaren"])).toBe("Loop 1 har frågat användaren i AVA och väntar på svar");
+    expect(lageFor(["verifierad"])).toBe("Godkänd — loop 2 bryter ner den i arbetsorder");
+    expect(lageFor(["nedbruten"])).toBe("Bryts ner i arbetsorder i kodrepot");
+    expect(lageFor(["nedbruten"], { workOrders: { done: 1, total: 3 } })).toBe("Byggs: 1 av 3 arbetsorder klara");
+    expect(lageFor(["nedbruten"], { workOrders: { done: 0, total: 0 } })).toBe("Bryts ner i arbetsorder i kodrepot");
+    expect(lageFor(["dubblett"])).toBe("Dubblett — följer originalet");
+    expect(lageFor(["levererad", "release:v0.7.42"])).toBe("Levererad i v0.7.42");
+    expect(lageFor(["levererad"])).toBe("Levererad");
+    expect(lageFor(["finns-redan"])).toBe("Fanns redan i AVA");
+    expect(lageFor(["uppdelad"])).toBe("Uppdelad i egna förfrågningar");
+  });
+
   it("rekommendationen läses ur etiketten", () => {
     expect(rekFor(["rek-avböj", "undersökt"])).toBe("avböj");
     expect(rekFor(["undersökt"])).toBeNull();
@@ -106,6 +125,7 @@ function fakeBoard(items: BoardItem[]): BoardApi & { calls: string[] } {
     setColumn: (itemId, column) => { calls.push(`column ${itemId} ${column}`); },
     setPrio: (itemId, prio) => { calls.push(`prio ${itemId} ${prio}`); },
     setRek: (itemId, rek) => { calls.push(`rek ${itemId} ${rek}`); },
+    setLage: (itemId, text) => { calls.push(`lage ${itemId} ${text}`); },
     archive: (itemId) => { calls.push(`archive ${itemId}`); },
   };
 }
@@ -128,8 +148,10 @@ const NOW = Date.parse("2026-11-20T12:00:00Z");
 const hoursAgo = (h: number): string => new Date(NOW - h * 3_600_000).toISOString();
 const FB = "ulrik-s/ava-feedback";
 const open = (number: number, labels: string[]): OpenItem => ({ number, title: "t", body: "", labels, isPr: false, nodeId: `I_${number}` });
-const card = (number: number, column: string | null, prio: string | null = null, isOpen = true, rek: string | null = null): BoardItem =>
-  ({ itemId: `PVTI_${number}`, number, repo: FB, open: isOpen, column, prio, rek });
+const card = (number: number, column: string | null, prio: string | null = null, isOpen = true, extra: { rek?: string; lage?: string } = {}): BoardItem =>
+  ({ itemId: `PVTI_${number}`, number, repo: FB, open: isOpen, column, prio, rek: extra.rek ?? null, lage: extra.lage ?? null });
+/** Tavlans anrop utom Läge-texterna (de testas för sig). */
+const withoutLage = (calls: readonly string[]): string[] => calls.filter((c) => !c.startsWith("lage "));
 
 describe("synken", () => {
   const issues = [
@@ -146,7 +168,7 @@ describe("synken", () => {
     const gh = fakeGh();
     const r = syncBoard({ board, intake: gitHub(FB, gh.run), intakeRepo: FB, open: issues, enforce: true, log: () => {}, now: NOW });
     expect(r).toEqual({ added: [1], approved: [2], declined: [3], reset: [4], archived: [5], vetoed: [], autoApproved: [] });
-    expect(board.calls).toEqual([
+    expect(withoutLage(board.calls)).toEqual([
       "add I_1", "column item-I_1 Att besluta", "prio item-I_1 hög",
       "column PVTI_4 Att besluta",
       "archive PVTI_5",
@@ -183,12 +205,12 @@ describe("synken: rekommendation, veto och automatiskt godkännande", () => {
 
   it("nytt kort får rekommendationen; ett befintligt får den när den ändrats", () => {
     const { board } = sync([auto(1), open(2, ["undersökt", "rek-fråga"]), open(3, ["undersökt", "rek-avböj"])],
-      [card(2, "Att besluta", null, true, "godkänn"), card(3, "Att besluta", null, true, "avböj")], {});
-    expect(board.calls).toEqual(["add I_1", "column item-I_1 Godkänns automatiskt", "rek item-I_1 godkänn", "rek PVTI_2 fråga"]);
+      [card(2, "Att besluta", null, true, { rek: "godkänn" }), card(3, "Att besluta", null, true, { rek: "avböj" })], {});
+    expect(withoutLage(board.calls)).toEqual(["add I_1", "column item-I_1 Godkänns automatiskt", "rek item-I_1 godkänn", "rek PVTI_2 fråga"]);
   });
 
   it("efter 24 h utan veto sätts verifierad, med tavlans markör i kommentaren; före 24 h händer inget", () => {
-    const { r, gh } = sync([auto(4), auto(5)], [card(4, "Godkänns automatiskt", null, true, "godkänn"), card(5, "Godkänns automatiskt", null, true, "godkänn")],
+    const { r, gh } = sync([auto(4), auto(5)], [card(4, "Godkänns automatiskt", null, true, { rek: "godkänn" }), card(5, "Godkänns automatiskt", null, true, { rek: "godkänn" })],
       { 4: [{ label: "auto-godkänn", at: hoursAgo(25) }], 5: [{ label: "auto-godkänn", at: hoursAgo(2) }] });
     expect(r.autoApproved).toEqual([4]);
     const writes = gh.calls.filter((c) => !c.includes("/events"));
@@ -198,21 +220,74 @@ describe("synken: rekommendation, veto och automatiskt godkännande", () => {
   });
 
   it("veto: Ulrik flyttade kortet till Att besluta → flaggan bort, inget godkännande", () => {
-    const { r, gh } = sync([auto(6)], [card(6, "Att besluta", null, true, "godkänn")], { 6: [{ label: "auto-godkänn", at: hoursAgo(30) }] });
+    const { r, gh } = sync([auto(6)], [card(6, "Att besluta", null, true, { rek: "godkänn" })], { 6: [{ label: "auto-godkänn", at: hoursAgo(30) }] });
     expect(r.vetoed).toEqual([6]);
     expect(r.autoApproved).toEqual([]);
-    expect(gh.calls).toEqual([
+    expect(gh.calls.filter((c) => !c.includes("/events"))).toEqual([
       `api -X DELETE repos/${FB}/issues/6/labels/auto-godk%C3%A4nn`,
       `api repos/${FB}/issues/6/comments -f body=${BOARD_MARKER}\nVeto på tavlan: godkänns inte automatiskt. Ulrik beslutar själv (Att besluta).`,
     ]);
   });
 
+  it("Läge skrivs när texten ändrats, efter det synken just gjort; oförändrad text skrivs inte igen", () => {
+    const issues = [
+      open(10, ["intern", "undersökt"]), // Ulrik godkände: texten säger redan Godkänd
+      auto(11), // veto: texten säger Att besluta
+      open(12, ["intern", "nedbruten"]), // byggs, med framsteg
+      open(13, ["intern", "undersökt"]), // texten stämmer redan
+      auto(14), // godkänns automatiskt nu
+      open(15, ["intern"]), // avböjd: ingen text, den stängs
+    ];
+    const cards = [
+      card(10, "Godkänd"), card(11, "Att besluta", null, true, { rek: "godkänn" }), card(12, "Byggs"),
+      card(13, "Att besluta", null, true, { lage: "Väntar på ditt beslut" }), card(14, "Godkänns automatiskt", null, true, { rek: "godkänn" }), card(15, "Avböjd"),
+    ];
+    const board = fakeBoard(cards);
+    const gh = fakeGh({ 11: [{ label: "auto-godkänn", at: hoursAgo(30) }], 14: [{ label: "auto-godkänn", at: hoursAgo(25) }] });
+    syncBoard({ board, intake: gitHub(FB, gh.run), intakeRepo: FB, open: issues, enforce: true, log: () => {}, now: NOW, workOrders: new Map([[12, { done: 1, total: 2 }]]) });
+    expect(board.calls.filter((c) => c.startsWith("lage "))).toEqual([
+      "lage PVTI_10 Godkänd — loop 2 bryter ner den i arbetsorder",
+      "lage PVTI_11 Väntar på ditt beslut — rekommendation: godkänn",
+      "lage PVTI_12 Byggs: 1 av 2 arbetsorder klara",
+      "lage PVTI_14 Godkänd — loop 2 bryter ner den i arbetsorder",
+    ]);
+  });
+
+  it("nya kort får Läge direkt", () => {
+    const board = fakeBoard([]);
+    syncBoard({ board, intake: gitHub(FB, fakeGh().run), intakeRepo: FB, open: [open(20, ["intern", "nedbruten"])], enforce: true, log: () => {}, now: NOW, workOrders: new Map([[20, { done: 0, total: 1 }]]) });
+    expect(board.calls).toContain("lage item-I_20 Byggs: 0 av 1 arbetsorder klara");
+  });
+
   it("en användares förslag godkänns aldrig automatiskt, och i rapportläge skrivs inget", () => {
     const suggestion = open(7, ["user-request", "förslag", "undersökt", "auto-godkänn"]);
     expect(sync([suggestion], [card(7, "Godkänns automatiskt")], { 7: [{ label: "auto-godkänn", at: hoursAgo(48) }] }).r.autoApproved).toEqual([]);
-    const dry = sync([auto(8)], [card(8, "Godkänns automatiskt", null, true, "godkänn")], { 8: [{ label: "auto-godkänn", at: hoursAgo(48) }] }, false);
+    const dry = sync([auto(8)], [card(8, "Godkänns automatiskt", null, true, { rek: "godkänn" })], { 8: [{ label: "auto-godkänn", at: hoursAgo(48) }] }, false);
     expect(dry.r.autoApproved).toEqual([8]);
     expect(dry.gh.calls.filter((c) => !c.includes("/events"))).toEqual([]);
+  });
+});
+
+describe("arbetsordrarna per förfrågan", () => {
+  it("läser Intag-raden, bara på egen rad och för rätt intag", () => {
+    expect(intakeRefOf("…\nIntag: ava-feedback#34\n", FB)).toBe(34);
+    expect(intakeRefOf("se Intag: ava-feedback#34 i texten", FB)).toBeNull();
+    expect(intakeRefOf("Intag: annat#34", FB)).toBeNull();
+  });
+
+  it("räknar klara (stängda som completed) av alla, med en sökning", () => {
+    const calls: string[] = [];
+    const page = { items: [
+      { body: "Intag: ava-feedback#34", state: "closed", state_reason: "completed" },
+      { body: "Intag: ava-feedback#34", state: "open", state_reason: null },
+      { body: "Intag: ava-feedback#35", state: "closed", state_reason: "not_planned" },
+      { body: null, state: "open" },
+    ] };
+    const run: GhRunner = (args) => { calls.push(args.join(" ")); return JSON.stringify([page]); };
+    const wo = gitHub("ulrik-s/ava", run).workOrders(FB);
+    expect([...wo]).toEqual([[34, { done: 1, total: 2 }], [35, { done: 0, total: 1 }]]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('q=repo:ulrik-s/ava is:issue "Intag: ava-feedback" in:body');
   });
 });
 
@@ -222,15 +297,20 @@ function fakeGraphql(opts: { projectExists: boolean; statusOk: boolean; prio: bo
   const status = (ok: boolean) => ({ id: "F_status", name: "Status", options: (ok ? COLUMNS.map((c) => c.name) : ["Todo", "Done"]).map((n) => ({ id: `O_${n}`, name: n })) });
   const prio = { id: "F_prio", name: "Prio", options: (opts.prioNames ?? ["hög", "medel", "låg"]).map((n) => ({ id: `O_${n}`, name: n })) };
   const rek = { id: "F_rek", name: "Rekommendation", options: ["godkänn", "avböj", "fråga"].map((n) => ({ id: `O_${n}`, name: n })) };
+  const lage = { id: "F_lage", name: "Läge", dataType: "TEXT" };
+  const title = { id: "F_title", name: "Title", dataType: "TITLE" };
   const project = { id: "P_1", number: 9, title: "AVA – flödet", url: "https://github.com/users/ulrik-s/projects/9" };
   const item = (n: number, state: string, status: string) =>
-    ({ id: `PVTI_${n}`, content: { number: n, state, repository: { nameWithOwner: FB } }, fieldValues: { nodes: [{ name: status, field: { name: "Status" } }, {}] } });
+    ({ id: `PVTI_${n}`, content: { number: n, state, repository: { nameWithOwner: FB } }, fieldValues: { nodes: [{ name: status, field: { name: "Status" } }, { text: `läge ${n}`, field: { name: "Läge" } }, {}] } });
   const answer = (q: string, args: string): unknown => {
     if (q.includes("projectsV2(first:50)")) return { user: { id: "U_1", projectsV2: { nodes: opts.projectExists ? [project] : [] } } };
     if (q.includes("createProjectV2(")) return { createProjectV2: { projectV2: project } };
-    if (q.includes("fields(first:30)")) return { node: { fields: { nodes: [status(opts.statusOk), {}, ...(opts.prio ? [prio, rek] : [])] }, views: { nodes: [{ layout: opts.board ? "BOARD_LAYOUT" : "TABLE_LAYOUT" }] } } };
+    if (q.includes("fields(first:30)")) return { node: { fields: { nodes: [status(opts.statusOk), {}, title, ...(opts.prio ? [prio, rek, lage] : [])] }, views: { nodes: [{ layout: opts.board ? "BOARD_LAYOUT" : "TABLE_LAYOUT" }] } } };
     if (q.includes("updateProjectV2Field(")) return { updateProjectV2Field: { projectV2Field: status(true) } };
-    if (q.includes("createProjectV2Field(")) return { createProjectV2Field: { projectV2Field: q.includes('name:"Prio"') ? prio : rek } };
+    if (q.includes("createProjectV2Field(")) {
+      const made = q.includes("dataType:TEXT") ? { id: "F_lage" } : q.includes('name:"Prio"') ? prio : rek;
+      return { createProjectV2Field: { projectV2Field: made } };
+    }
     if (q.includes("items(first:100")) {
       return args.includes("after=") ? { node: { items: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [item(2, "CLOSED", "Klar"), { id: "PVTI_draft", content: null, fieldValues: { nodes: [] } }] } } }
         : { node: { items: { pageInfo: { hasNextPage: true, endCursor: "C1" }, nodes: [item(1, "OPEN", "Ny")] } } };
@@ -259,6 +339,7 @@ describe("projekttavlan i GitHub", () => {
     expect(joined).toContain('updateProjectV2Field(input:{fieldId:$id,singleSelectOptions:[{name:"Ny",color:GRAY');
     expect(joined).toContain('createProjectV2Field(input:{projectId:$p,dataType:SINGLE_SELECT,name:"Prio"');
     expect(joined).toContain('createProjectV2Field(input:{projectId:$p,dataType:SINGLE_SELECT,name:"Rekommendation"');
+    expect(joined).toContain('createProjectV2Field(input:{projectId:$p,dataType:TEXT,name:"Läge"');
     expect(joined).toContain("createProjectV2View(input:{projectId:$p,name:\"Tavla\",layout:BOARD_LAYOUT})");
   });
 
@@ -267,8 +348,8 @@ describe("projekttavlan i GitHub", () => {
     const board = projectBoard(gh.run, "ulrik-s", "AVA – flödet", () => {});
     expect(gh.calls.some((c) => /createProjectV2\(|updateProjectV2Field|createProjectV2Field|createProjectV2View/.test(c))).toBe(false);
     expect(board.items()).toEqual([
-      { itemId: "PVTI_1", number: 1, repo: FB, open: true, column: "Ny", prio: null, rek: null },
-      { itemId: "PVTI_2", number: 2, repo: FB, open: false, column: "Klar", prio: null, rek: null },
+      { itemId: "PVTI_1", number: 1, repo: FB, open: true, column: "Ny", prio: null, rek: null, lage: "läge 1" },
+      { itemId: "PVTI_2", number: 2, repo: FB, open: false, column: "Klar", prio: null, rek: null, lage: "läge 2" },
     ]);
     expect(gh.calls.some((c) => c.includes("after=C1"))).toBe(true);
   });
@@ -280,12 +361,14 @@ describe("projekttavlan i GitHub", () => {
     board.setColumn("PVTI_new", "Godkänd");
     board.setPrio("PVTI_new", "hög");
     board.setRek("PVTI_new", "fråga");
+    board.setLage("PVTI_new", "Byggs: 1 av 2 arbetsorder klara");
     board.archive("PVTI_new");
     const joined = gh.calls.join("\n");
     expect(joined).toContain("c=I_5");
     expect(joined).toContain("f=F_status -f o=O_Godkänd");
     expect(joined).toContain("f=F_prio -f o=O_hög");
     expect(joined).toContain("f=F_rek -f o=O_fråga");
+    expect(joined).toContain("f=F_lage -f t=Byggs: 1 av 2 arbetsorder klara");
     expect(joined).toContain("archiveProjectV2Item(");
   });
 

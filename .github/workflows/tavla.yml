@@ -1,8 +1,13 @@
 # Projekttavlan "AVA – flödet" (tooling/scripts/flow-board.ts): synkar korten
 # med inkorgen i ulrik-s/ava-feedback och verkställer Ulriks flyttar —
-# Godkänd → verifierad, Avböjd → stängd. GitHub kan inte starta en workflow när
-# ett kort flyttas, så den läser av tavlan var 5:e minut. Ligger i ava (publikt
-# repo, gratis minuter) fast inkorgen är privat: allt går via token:en.
+# Godkänd → verifierad, Avböjd → stängd — och skriver fältet Läge (vad som
+# händer nu). GitHub kan inte starta en workflow när ett kort flyttas.
+#
+# GitHubs eget schema är för opålitligt för det (var-5:e-minut-schemat gick två
+# gånger på ett dygn), så en körning läser av tavlan varje minut i knappt sex
+# timmar och startar sedan nästa själv. Schemat varje timme är bara reserv om
+# kedjan bryts. Ligger i ava (publikt repo, gratis minuter) fast inkorgen är
+# privat: allt går via token:en.
 #
 # Kräver hemligheten FLOW_BOARD_TOKEN: en klassisk PAT med scopes `project` och
 # `repo` (ett användarägt projekt nås inte med GITHUB_TOKEN eller en
@@ -11,27 +16,41 @@ name: Tavla
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: write # starta nästa körning (workflow_dispatch med GITHUB_TOKEN tillåts)
 
+# En körning åt gången; en ny väntar tills den pågående är klar.
 concurrency:
   group: tavla
   cancel-in-progress: false
 
 jobs:
   sync:
-    name: Tavla (synk)
+    name: Tavla (synk varje minut)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - uses: ./.github/actions/bun-setup
-      - run: bun tooling/scripts/flow-board.ts
+      - name: Synka tavlan varje minut i 5 h 40 min
         env:
           FLOW_GUARD_MODE: enforce
           FLOW_BOARD_TOKEN: ${{ secrets.FLOW_BOARD_TOKEN }}
+        run: |
+          end=$((SECONDS + 20400))
+          while [ "$SECONDS" -lt "$end" ]; do
+            bun tooling/scripts/flow-board.ts || echo "::warning::synken misslyckades, ett nytt försök om en minut"
+            sleep 60
+          done
+      # Nästa körning tar över (och läser in ny kod från main). Även efter fel.
+      - name: Starta nästa körning
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run tavla.yml --ref main -R "$GITHUB_REPOSITORY"
