@@ -65,11 +65,11 @@ function widthOf<T>(col: Column<T>, prefs: DataTablePrefs): number | undefined {
   return prefs.columns?.find((c) => c.key === col.key)?.width ?? col.defaultWidth;
 }
 
-/** Cell-klass för data-rader: wrappande kolumner bryter text över flera rader,
- *  övriga håller `nowrap` (default). */
+/** Cell-klass för data-rader: toppjusterad (så att cellerna linjerar med en wrappande cells
+ *  första rad), wrappande kolumner bryter text över flera rader, övriga håller `nowrap`. */
 function cellClass<T>(col: Column<T>): string {
   const wrap = col.wrap ? "whitespace-normal break-words" : "whitespace-nowrap";
-  return `px-3 py-2 ${wrap} ${hideBelowClass(col)}`.trimEnd();
+  return `px-3 py-2 align-top ${wrap} ${hideBelowClass(col)}`.trimEnd();
 }
 
 export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage, footer }: Props<T>) {

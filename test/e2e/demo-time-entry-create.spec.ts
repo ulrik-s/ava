@@ -7,6 +7,8 @@
  * här testet visar att det vanliga flödet fortsätter fungera för en jurist.
  */
 
+import type { Locator } from "@playwright/test";
+
 import {
   DEMO_BASE_URL, expect, fetchDemoSeed, matterIdWith, seedDemoConfig, seedDemoLogin, showPanel, test, type DemoSeed,
 } from "./_demo-test";
@@ -141,4 +143,46 @@ test("tidssidan: tid i timmar — 1,33 ger fel, 1,5 sparas och visas som 1,5", a
   await expect(page.getByRole("alert").filter({ hasText: "Ändra värdet" })).toHaveCount(0);
   await page.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(page.getByRole("row").filter({ hasText: description })).toContainText("1,5");
+});
+
+/** Överkanten (px) på cellens första textrad. */
+function firstLineTop(cell: Locator): Promise<number> {
+  return cell.evaluate((td) => {
+    const range = document.createRange();
+    range.selectNodeContents(td);
+    return range.getClientRects()[0]?.top ?? Number.NaN;
+  });
+}
+
+/*
+ * #1752: datacellerna i DataTable är toppjusterade. En lång beskrivning som
+ * bryts över flera rader ska inte flytta datumet ner till mitten av raden.
+ */
+test("en beskrivning över flera rader: datumet står i höjd med beskrivningens första rad", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const matterId = matterIdWith(await fetchDemoSeed(page, base), "timeEntries");
+
+  await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
+  const tid = page.getByRole("region", { name: "Tid" }).last();
+  await expect(tid).toBeVisible({ timeout: 25_000 });
+  await tid.getByRole("button", { name: /Registrera tid/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Registrera tid" });
+  const description = `E2E (#1752): ${"genomgång av handlingar inför huvudförhandlingen ".repeat(8)}`.trim();
+  await dialog.getByLabel("Beskrivning *").fill(description);
+  await dialog.locator("button[type=submit]").click();
+  await expect(dialog).toHaveCount(0);
+
+  const row = tid.locator("tbody tr", { hasText: "E2E (#1752)" });
+  const descCell = row.locator("td", { hasText: "E2E (#1752)" });
+  await expect(descCell).toBeVisible();
+  const dateCell = row.locator("td").first();
+
+  const lineHeight = await descCell.evaluate((td) => parseFloat(getComputedStyle(td).lineHeight));
+  const descBox = await descCell.boundingBox();
+  expect(descBox?.height ?? 0, "beskrivningen bryts över flera rader").toBeGreaterThan(lineHeight * 2);
+  expect(await dateCell.evaluate((td) => getComputedStyle(td).verticalAlign)).toBe("top");
+
+  expect(Math.abs(await firstLineTop(dateCell) - await firstLineTop(descCell))).toBeLessThanOrEqual(2);
 });
