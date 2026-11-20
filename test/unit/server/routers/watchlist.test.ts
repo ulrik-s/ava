@@ -12,7 +12,11 @@ import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 const inDays = (n: number): Date => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
 
-function caller(extraTasks: Array<Record<string, unknown>> = []) {
+function caller(
+  extraTasks: Array<Record<string, unknown>> = [],
+  invoices: Array<Record<string, unknown>> = [],
+  payments: Array<Record<string, unknown>> = [],
+) {
   const source: DemoSource = {
     matters: [
       { id: "m1", organizationId: "o1", matterNumber: "2026-0001", title: "A", responsibleLawyerId: "u1" },
@@ -23,7 +27,8 @@ function caller(extraTasks: Array<Record<string, unknown>> = []) {
       { id: "t2", organizationId: "o1", userId: "u1", title: "Frist i B", status: "TODO", dueAt: inDays(3), matterId: "m2", matter: { id: "m2", matterNumber: "2026-0002", title: "B" } },
       ...extraTasks,
     ],
-    invoices: [],
+    invoices,
+    payments,
     timeEntries: [],
     expenses: [],
   };
@@ -63,5 +68,29 @@ describe("watchlist.list", () => {
     const item = items.find((i) => i.title.includes("Midnatt"));
     expect(item?.at).toBe(today);
     expect(item?.severity).toBe("approaching"); // inte "passerad" ett dygn för tidigt
+  });
+
+  it("förfallna fakturor är oförändrade efter att regeln flyttats (#1731)", async () => {
+    const inv = (id: string, status: string, dueDate: Date | null): Record<string, unknown> => ({
+      id, matterId: "m1", invoiceNumber: id, amount: 10_000, status, invoiceType: "STANDARD",
+      invoiceDate: inDays(-40), dueDate, createdAt: inDays(-40),
+    });
+    const pay = (invoiceId: string, amount: number): Record<string, unknown> => ({
+      id: `${invoiceId}-p`, invoiceId, amount, paymentDate: inDays(-2), createdAt: inDays(-2),
+    });
+    const { items } = await caller([], [
+      inv("F-sen", "SENT", inDays(-12)),
+      inv("F-plan", "INSTALLMENT_PLAN", inDays(-1)),
+      inv("F-betald", "SENT", inDays(-5)),
+      inv("F-status", "PAID", inDays(-5)),
+      inv("F-idag", "SENT", new Date()),
+      inv("F-utan", "SENT", null),
+    ], [pay("F-sen", 4_000), pay("F-betald", 10_000)]).list({ mine: false });
+    const overdue = items.filter((i) => i.kind === "overdueInvoice");
+    expect(overdue.map((i) => i.title).sort()).toEqual(["Förfallen faktura F-plan", "Förfallen faktura F-sen"]);
+    const sen = overdue.find((i) => i.title.endsWith("F-sen"));
+    expect(sen?.amountOre).toBe(6_000);
+    expect(sen?.detail).toBe("12 dagar över förfallodag.");
+    expect(sen?.at).toBe(stockholmDay(inDays(-12)));
   });
 });

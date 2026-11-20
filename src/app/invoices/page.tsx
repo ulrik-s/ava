@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
@@ -8,7 +9,9 @@ import { ShowHiddenToggle, useHiddenRows } from "@/components/ui/show-hidden-tog
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { isHiddenInvoice } from "@/lib/shared/hidden-billing-rows";
+import { needsAttention, type InvoiceAttention } from "@/lib/shared/invoice-overdue";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, type InvoiceStatus, type InvoiceType } from "@/lib/shared/schemas/enums";
+import { AttentionFilterButton, AttentionMarks, useInvoiceAttention } from "./_attention";
 import { SieExportButton } from "./_sie-export-button";
 
 /** Fakturatyperna, ur de delade etiketterna (förr en egen lista utan kreditfaktura,
@@ -33,10 +36,15 @@ interface InvoiceRow {
   invoiceType: InvoiceType;
   status: InvoiceStatus;
   amount: number;
+  dueDate?: string | Date | null | undefined;
+  payments?: { amount: number }[] | null | undefined;
   matter: { id: string; matterNumber: string; title: string };
 }
 
-const invoiceColumns: Column<InvoiceRow>[] = [
+/** En rad i listan, med sina röda markeringar (#1731). */
+type ListedInvoice = InvoiceRow & { attention: InvoiceAttention };
+
+const invoiceColumns: Column<ListedInvoice>[] = [
   { key: "invoiceNumber", label: "Fakturanr", sortable: true, sortValue: (i) => i.invoiceNumber ?? "",
     render: (i) => (
       <EntityLink route="invoices" id={i.id} className="text-blue-600 hover:underline font-mono text-xs">
@@ -65,9 +73,12 @@ const invoiceColumns: Column<InvoiceRow>[] = [
     render: (i) => <span className="text-gray-600">{TYPE_LABELS[i.invoiceType]}</span> },
   { key: "status", label: "Status", sortable: true, sortValue: (i) => INVOICE_STATUS_LABELS[i.status] ?? i.status,
     render: (i) => (
-      <span className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${statusBadgeClass(i.status)}`}>
-        {INVOICE_STATUS_LABELS[i.status] ?? i.status}
-      </span>
+      <>
+        <span className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${statusBadgeClass(i.status)}`}>
+          {INVOICE_STATUS_LABELS[i.status] ?? i.status}
+        </span>
+        <AttentionMarks attention={i.attention} />
+      </>
     ),
   },
   { key: "amount", label: "Belopp", sortable: true, align: "right", sortValue: (i) => i.amount,
@@ -76,16 +87,21 @@ const invoiceColumns: Column<InvoiceRow>[] = [
 ];
 
 /** Listan, med annullerade fakturor och kreditfakturor dolda från början (#1522).
- *  Datan filtreras före `DataTable`, så summeringen räknar bara synliga rader. */
+ *  Datan filtreras före `DataTable`, så summeringen räknar bara synliga rader.
+ *  Knappen visar bara fakturor med röd markering (#1731). */
 function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
-  const { rows, toggle } = useHiddenRows(invoices, isHiddenInvoice);
+  const { rows, toggle } = useHiddenRows(useInvoiceAttention(invoices), isHiddenInvoice);
+  const [onlyMarked, setOnlyMarked] = useState(false);
   return (
     <>
-      <div className="mb-2 flex justify-end"><ShowHiddenToggle {...toggle} /></div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <AttentionFilterButton active={onlyMarked} onToggle={() => setOnlyMarked((v) => !v)} />
+        <ShowHiddenToggle {...toggle} />
+      </div>
       <DataTable
         prefKey="list.invoices"
         columns={invoiceColumns}
-        data={rows}
+        data={onlyMarked ? rows.filter((r) => needsAttention(r.attention)) : rows}
         rowKey={(i) => i.id}
         emptyMessage="Inga fakturor ännu."
       />

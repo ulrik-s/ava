@@ -138,3 +138,32 @@ describe("invoiceDispatch.updateStatus", () => {
     expect(failed.error).toBe("SMTP 550");
   });
 });
+
+describe("invoiceDispatch.listFailed (#1731)", () => {
+  function failedCaller() {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "Byrå" }, { id: "org-2", name: "Annan" }],
+      matters: [
+        { id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", createdAt: new Date() },
+        { id: "m-2", organizationId: "org-2", matterNumber: "2026-0002", title: "U", status: "ACTIVE", createdAt: new Date() },
+      ],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN" }],
+      invoices: [
+        { id: "inv-1", matterId: "m-1", amount: 100, status: "SENT", invoiceType: "STANDARD", invoiceDate: new Date(), createdAt: new Date() },
+        { id: "inv-2", matterId: "m-1", amount: 100, status: "SENT", invoiceType: "STANDARD", invoiceDate: new Date(), createdAt: new Date() },
+        { id: "inv-foreign", matterId: "m-2", amount: 100, status: "SENT", invoiceType: "STANDARD", invoiceDate: new Date(), createdAt: new Date() },
+      ],
+      invoiceDispatches: [
+        { id: "d-failed", invoiceId: "inv-1", channel: "email", recipient: "a@x.se", status: "failed", queuedAt: new Date() },
+        { id: "d-sent", invoiceId: "inv-2", channel: "email", recipient: "b@x.se", status: "sent", queuedAt: new Date() },
+        { id: "d-foreign", invoiceId: "inv-foreign", channel: "email", recipient: "c@x.se", status: "failed", queuedAt: new Date() },
+      ],
+    }, async () => {});
+    return callerFor(ds, "LAWYER");
+  }
+
+  it("returnerar bara misslyckade utskick i den egna byrån", async () => {
+    const failed = await failedCaller().invoiceDispatch.listFailed();
+    expect(failed.map((d) => d.id)).toEqual(["d-failed"]);
+  });
+});
