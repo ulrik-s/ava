@@ -28,6 +28,7 @@ import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
 import { InvoiceActions } from "./_invoice-actions";
 import { InvoiceDocumentsCard } from "./_invoice-documents";
+import { InvoiceHeader } from "./_invoice-header";
 import { invoiceLayout } from "./_invoice-layout";
 import { LedgerBooking } from "./_ledger-booking";
 import { PaymentModal } from "./_payment-modal";
@@ -313,26 +314,6 @@ type CreditRefView = Inv["creditNote"];
 const accontoDeductionsOf = (inv: Inv): AccontoDeductionRow[] => inv.accontoDeductions ?? [];
 const creditNoteOf = (inv: Inv): CreditRefView => inv.creditNote ?? null;
 const creditedInvoiceOf = (inv: Inv): CreditRefView => inv.creditedInvoice ?? null;
-
-function InvoiceHeader({ inv }: { inv: Inv }) {
-  const heading = inv.invoiceType === "ACCONTO" ? "Aconto-faktura"
-    : inv.invoiceType === "FINAL" ? "Slutfaktura"
-    : inv.invoiceType === "CREDIT" ? "Kreditfaktura"
-    : "Faktura";
-  const invoiceNumber = (inv as { invoiceNumber?: string | null }).invoiceNumber;
-  const ocrReference = (inv as { ocrReference?: string | null }).ocrReference;
-  return (
-    <div>
-      <EntityLink route="matters" id={inv.matter.id} className="text-sm text-blue-600 hover:underline">← {inv.matter.matterNumber} {inv.matter.title}</EntityLink>
-      <h1 className="text-2xl font-bold mt-2">
-        {heading}
-        {invoiceNumber && <span className="ml-3 text-base font-normal text-gray-700">{invoiceNumber}</span>}
-        <span className="ml-3 text-sm font-normal text-gray-500">{new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}</span>
-      </h1>
-      {ocrReference && <p className="text-sm text-gray-500 mt-1">OCR: <span className="font-mono">{ocrReference}</span></p>}
-    </div>
-  );
-}
 
 function SummaryGrid({
   inv, paidSum,

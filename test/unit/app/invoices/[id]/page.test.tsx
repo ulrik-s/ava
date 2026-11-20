@@ -2,7 +2,7 @@
  * Test för InvoiceDetailPage — fakturalisning, betalningar, plan, kreditera.
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { Suspense } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import InvoiceDetailPage from "@/app/invoices/[id]/_client";
@@ -41,6 +41,11 @@ vi.mock("@/components/layout/panel-page", () => ({
   ),
 }));
 
+/** Byråns användare (`user.list`): prefixen styr initialerna i länken till ärendet (#1728). */
+const usersQuery: { data: { users: Array<{ id: string; name: string; matterNumberPrefix?: string | null }> } } = {
+  data: { users: [] },
+};
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     // DataTable (#1146) läser/sparar vy-inställningar.
@@ -51,7 +56,10 @@ vi.mock("@/lib/client/trpc", () => ({
       setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
-    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
+    user: {
+      list: { useQuery: () => usersQuery },
+      current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
+    },
     useUtils: () => utilsMock,
     invoice: {
       getById: { useQuery: () => invoiceQuery },
@@ -112,6 +120,7 @@ const baseInvoice = {
 beforeEach(() => {
   vi.clearAllMocks();
   invoiceQuery.data = baseInvoice;
+  usersQuery.data.users = [];
   invoiceQuery.isLoading = false;
   invoiceQuery.error = null;
   stubs.recordPayment.mutate = vi.fn();
@@ -147,6 +156,14 @@ describe("InvoiceDetailPage", () => {
       expect(screen.getByRole("heading", { name: /Faktura/i })).toBeInTheDocument(),
     );
     expect(screen.getByText("Skickad")).toBeInTheDocument();
+  });
+
+  it("länken tillbaka till ärendet visar ansvarig jurists initialer framför numret (#1728)", async () => {
+    usersQuery.data.users = [{ id: "u-cd", name: "Cecilia D", matterNumberPrefix: "CD" }];
+    invoiceQuery.data = { ...baseInvoice, matter: { id: "m1", matterNumber: "2026-0001", title: "X", responsibleLawyerId: "u-cd" } };
+    renderPage();
+    const link = await screen.findByRole("link", { name: "← CD 2026-0001 X" });
+    expect(within(link).getByText("CD").tagName).toBe("STRONG");
   });
 
   it("beloppsrubriken följer momsväxlingen: inkl. → exkl. efter klick (#1726)", async () => {

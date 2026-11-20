@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ListPage } from "@/components/layout/list-page";
+import { MatterNumber } from "@/components/matter/matter-number";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 import { ShowHiddenToggle, useHiddenRows } from "@/components/ui/show-hidden-toggle";
@@ -38,7 +39,7 @@ interface InvoiceRow {
   amount: number;
   dueDate?: string | Date | null | undefined;
   payments?: { amount: number }[] | null | undefined;
-  matter: { id: string; matterNumber: string; title: string };
+  matter: { id: string; matterNumber: string; title: string; responsibleLawyerId?: string | null };
 }
 
 /** En rad i listan, med sina röda markeringar (#1731). */
@@ -65,7 +66,7 @@ const invoiceColumns: Column<ListedInvoice>[] = [
   { key: "matter", label: "Ärende", sortable: true, sortValue: (i) => i.matter.matterNumber,
     render: (i) => (
       <EntityLink route="matters" id={i.matter.id} className="hover:underline">
-        {i.matter.matterNumber} — {i.matter.title}
+        <MatterNumber matterNumber={i.matter.matterNumber} responsibleLawyerId={i.matter.responsibleLawyerId} /> — {i.matter.title}
       </EntityLink>
     ),
   },

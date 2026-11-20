@@ -61,7 +61,7 @@ export interface InvoiceListFilter {
  * write-offs/tid/utlägg/dok, och `deductedOnFinals` bara `id` (för räkning).
  */
 export interface InvoiceListRow extends Invoice {
-  matter: Pick<Matter, "id" | "matterNumber" | "title">;
+  matter: Pick<Matter, "id" | "matterNumber" | "title" | "responsibleLawyerId">;
   paymentPlan: PaymentPlan | null;
   payments: Payment[];
   accontoDeductions: Array<AccontoDeduction & { accontoInvoice: Invoice | null }>;
