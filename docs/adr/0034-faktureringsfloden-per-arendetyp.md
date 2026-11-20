@@ -41,7 +41,8 @@ En **enda deklarativ sanningskälla**: `src/lib/shared/billing-flow.ts`.
 - **In-kod-descriptors**: flödena är data i kod — ändra ett block när nytt besked
   kommer. Ändlig enum, ingen runtime/DB-konfiguration. Speglar
   [ADR 0015](0015-faktura-tillstandsmaskin.md):s `canTransition`/`assert`-mönster.
-- Minimal `MIX`/`PENDING`.
+- Minimal `MIX`/`PENDING`: båda faktureras som `PRIVAT` (`PENDING` medan beslut
+  om rättsskydd/rättshjälp väntar, #1730).
 
 ### Flödena (state-maskinerna)
 
@@ -51,7 +52,7 @@ En **enda deklarativ sanningskälla**: `src/lib/shared/billing-flow.ts`.
 | **RÄTTSSKYDD** | `ARBETE`: Aconto · Faktura till försäkring (FINAL→`SLUTREGLERAD`) · Slutreglera (försäkringsbesked, SETTLE→`SLUTREGLERAD`). `NEKAD` (avslagsdatum satt): inga åtgärder — banner föreslår rättshjälp. |
 | **RÄTTSHJÄLP** | `ARBETE`: Aconto · Kostnadsräkning till domstol (KOSTNADSRAKNING→`VANTAR_DOM`) · Slutreglera (dom, SETTLE→`SLUTREGLERAD`). `VANTAR_DOM`: Slutreglera (dom). |
 | **OFFENTLIGT_UPPDRAG** | `ARBETE`: Kostnadsräkning till domstol (→`VANTAR_DOM`) · Faktura till klient (återbetalningsskyldighet). `VANTAR_DOM`: klient-FINAL; domstolsfakturan skapas ur KR-maskinen, ej coverage-split. |
-| **PENDING** | Inga åtgärder förrän betalningssätt valts. |
+| **PENDING** | Som PRIVAT/MIX (aconto och faktura till klient) medan beslut om rättsskydd/rättshjälp väntar. |
 
 ### Två maskiner: fas per ärende, status per körning
 

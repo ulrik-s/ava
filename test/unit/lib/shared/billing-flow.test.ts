@@ -40,8 +40,10 @@ describe("currentPhase — härledning", () => {
 });
 
 describe("availableActions — statemaskinens kanter", () => {
-  it("PENDING: inga åtgärder förrän betalningssätt valts", () => {
-    expect(availableActions({ paymentMethod: "PENDING" }, [])).toEqual([]);
+  it("PENDING: som PRIVAT — aconto och faktura till klient medan beslut väntar (#1730)", () => {
+    const pending = availableActions({ paymentMethod: "PENDING" }, []);
+    expect(pending).toEqual(availableActions({ paymentMethod: "PRIVAT" }, []));
+    expect(pending.map((a) => a.label)).toEqual(["Aconto till klient", "Faktura till klient"]);
   });
 
   it("rättshjälp ARBETE: aconto + kostnadsräkning + slutreglera", () => {

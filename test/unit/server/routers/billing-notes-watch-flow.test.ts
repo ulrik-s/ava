@@ -159,7 +159,8 @@ describe("faktureringshändelser blir tjänsteanteckningar (#1221)", () => {
 
   it("betalningssätt och nekat rättsskydd loggas bara när de ändras", async () => {
     const c = makeCaller({ paymentMethod: "PENDING" });
-    expect(await actionTitles(c)).toEqual(["Välj betalningssätt"]);
+    // Ej fastställt går att fakturera (#1730) — inget "Välj betalningssätt".
+    expect(await actionTitles(c)).toEqual([]);
     await c.matter.update({ id: M, paymentMethod: "RATTSSKYDD" });
     await c.matter.update({ id: M, paymentMethod: "RATTSSKYDD", title: "Ny titel" });
     await c.matter.update({ id: M, rattsskyddNekadAt: "2026-02-01" });
@@ -200,9 +201,9 @@ describe("billingAction i Att bevaka (#1221)", () => {
   });
 
   it("mine: bara den ansvariga juristens ärenden", async () => {
-    const c = makeCaller({ paymentMethod: "PENDING" }, { otherLawyer: true });
+    const c = makeCaller({ paymentMethod: "RATTSHJALP", clientShareBips: 5000, radgivningBetaldAt: null }, { minutes: 1200, otherLawyer: true });
     expect(await actionTitles(c, true)).toEqual([]);
-    expect(await actionTitles(c, false)).toEqual(["Välj betalningssätt"]);
+    expect((await actionTitles(c, false)).some((t) => t.startsWith("Skicka självrisk-aconto ("))).toBe(true);
   });
 
   it("rättshjälp: beslutad kostnadsräkning → 'Skapa faktura …'; slutregleringen tar bort den (#1225)", async () => {
@@ -215,15 +216,17 @@ describe("billingAction i Att bevaka (#1221)", () => {
   });
 
   it("stängda ärenden väntar inte på något", async () => {
-    const c = makeCaller({ paymentMethod: "PENDING", status: "CLOSED" });
+    const c = makeCaller({ paymentMethod: "RATTSHJALP", clientShareBips: 5000, radgivningBetaldAt: null, status: "CLOSED" }, { minutes: 1200 });
     expect(await actionTitles(c)).toEqual([]);
   });
 
   it("ärendets panel: matterId-filtret ger ärendets faktureringsposter", async () => {
-    const c = makeCaller({ paymentMethod: "PENDING" });
+    const c = makeCaller({ paymentMethod: "RATTSHJALP", clientShareBips: 0, radgivningBetaldAt: new Date("2025-11-01") }, {
+      invoices: [{ id: "inv-r", organizationId: "org-1", matterId: "m-1", invoiceNumber: "F-2025-0001", amount: 100, status: "SENT", invoiceType: "STANDARD", notes: RADGIVNING_INVOICE_NOTES }],
+    });
     const { items } = await c.watchlist.list({ mine: false, matterId: M });
     expect(items.filter((i) => i.kind === "billingAction")).toEqual([
-      expect.objectContaining({ title: "Välj betalningssätt", matterNumber: "AA2026-0001", link: { route: "matters", id: "m-1" } }),
+      expect.objectContaining({ title: "Markera rådgivningsmötet som rådgivning", matterNumber: "AA2026-0001", link: { route: "matters", id: "m-1" } }),
     ]);
   });
 });

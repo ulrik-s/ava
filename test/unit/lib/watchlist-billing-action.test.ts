@@ -49,8 +49,9 @@ describe("billingActionItems", () => {
     expect(items.map((i) => [i.title, i.severity])).toEqual([["Skicka faktura F-1", "approaching"]]);
   });
 
-  it("inget betalningssätt → 'Välj betalningssätt'", () => {
-    expect(titles(matter({ paymentMethod: null }))).toEqual(["Välj betalningssätt"]);
+  it("ej fastställt eller inget betalningssätt → ingen 'Välj betalningssätt' (går att fakturera, #1730)", () => {
+    expect(titles(matter({ paymentMethod: null }))).toEqual([]);
+    expect(titles(matter({ paymentMethod: "PENDING" }))).toEqual([]);
   });
 
   it("rådgivningsposten saknas → 'Markera rådgivningsmötet som rådgivning'", () => {

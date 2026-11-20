@@ -180,7 +180,7 @@ export function invoiceVatBreakdown(work: UnfrozenWork): VatBreakdownLine[] {
  * SLUTREGLERINGSÅRETS normer — den retroaktiva höjningen över ett årsskifte (arbete
  * 2025 värderas på 2026 års norm). Arbete värderas på timkostnadsnormen,
  * tidsspillan på tidsspillan-normen, obekväm
- * tid och beredskap på sina DVFS-belopp. PRIVAT/MIX: posternas egna á-priser.
+ * tid och beredskap på sina DVFS-belopp. PRIVAT/MIX/PENDING: posternas egna á-priser.
  */
 export function settlementArvodeNet(method: PaymentMethod, work: ArvodeWork, settleDate: Date | string): number {
   const billable = work.timeEntries.filter((t) => t.billable);
@@ -189,8 +189,9 @@ export function settlementArvodeNet(method: PaymentMethod, work: ArvodeWork, set
   // gjorde att sammanställningens taxerader inte summerade till fakturabeloppet.
   // Domstolsverkets nivåer gäller allt domstolen/staten ersätter: täckningsärenden
   // (#950) OCH offentliga uppdrag (#1003) — domstolen betalar normen, inte vad
-  // byrån råkar ta. Bara PRIVAT/MIX debiterar byråns egen taxa (ligger på posten).
-  if (method === "PRIVAT" || method === "MIX") return arvodeNetOre(work);
+  // byrån råkar ta. Bara klientbetalda (PRIVAT/MIX/PENDING) debiterar byråns egen
+  // taxa (ligger på posten).
+  if (isClientPaid(method)) return arvodeNetOre(work);
   return kindValueRowsOre(billable, settleDate).reduce((s, r) => s + r, 0);
 }
 
@@ -216,10 +217,16 @@ export interface ValuationMatter {
   isTaxeArende?: boolean | null | undefined;
 }
 
-/** Värderas arbetet på posternas EGNA á-priser? Privat/blandat — och taxeärenden
+/** Betalar klienten själv (byråns egen taxa)? Privat, blandat — och ej fastställt,
+ *  som faktureras som privat medan beslut om rättsskydd/rättshjälp väntar (#1730). */
+function isClientPaid(method: PaymentMethod): boolean {
+  return method === "PRIVAT" || method === "MIX" || method === "PENDING";
+}
+
+/** Värderas arbetet på posternas EGNA á-priser? Klientbetalda — och taxeärenden
  *  (offentligt uppdrag), där brottmålstaxan styr och posterna bara är underlag. */
 function usesOwnRates(m: ValuationMatter): boolean {
-  return m.paymentMethod === "PRIVAT" || m.paymentMethod === "MIX" || (m.paymentMethod === "OFFENTLIGT_UPPDRAG" && m.isTaxeArende === true);
+  return isClientPaid(m.paymentMethod) || (m.paymentMethod === "OFFENTLIGT_UPPDRAG" && m.isTaxeArende === true);
 }
 
 /**

@@ -28,11 +28,6 @@ export interface TodoRun {
   invoice?: { status?: InvoiceStatus | null | undefined } | null | undefined;
 }
 
-/** Inget betalningssätt valt — ingen fakturering kan göras innan det är bestämt. */
-export function paymentMethodPending(method: PaymentMethod | null | undefined): boolean {
-  return (method ?? "PENDING") === "PENDING";
-}
-
 /** Aktiv kostnadsräkning (#828): livscykeln är inte klar och den är inte ångrad (#1121). */
 export function isActiveKr(r: TodoRun): boolean {
   return r.type === "KOSTNADSRAKNING" && r.status !== "VOIDED"
