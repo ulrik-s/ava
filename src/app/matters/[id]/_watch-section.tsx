@@ -13,8 +13,6 @@
 import { useId, useState } from "react";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
-import { ConflictCheckActions } from "@/components/watchlist/conflict-check-actions";
-import { ConflictReviewInfo } from "@/components/watchlist/conflict-review-info";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { trpc } from "@/lib/client/trpc";
 import { isDeadlineDue } from "@/lib/shared/deadline";
@@ -62,7 +60,6 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
         ))}
       </ul>
       <MatterSignals matterId={matterId} />
-      <ConflictReviewInfo matterId={matterId} />
     </section>
   );
 }
@@ -70,18 +67,18 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
 /**
  * Ärendets övriga signaler ur den globala "Att bevaka" (täckningstak,
  * ofakturerat, förfallna fakturor). Tidsfristerna står redan ovan som
- * bevakningar — de tas inte med två gånger.
+ * bevakningar — de tas inte med två gånger. Jävskontrollen står under
+ * Parter (#1733).
  */
+const HIDDEN_SIGNALS: ReadonlySet<string> = new Set(["deadline", "conflictCheck"]);
+
 function MatterSignals({ matterId }: { matterId: MatterId }) {
   const q = trpc.watchlist.list.useQuery({ mine: false, matterId });
-  const items = (q.data?.items ?? []).filter((i) => i.kind !== "deadline");
+  const items = (q.data?.items ?? []).filter((i) => !HIDDEN_SIGNALS.has(i.kind));
   if (items.length === 0) return null;
-  const conflict = items.find((i) => i.kind === "conflictCheck");
   return (
     <div className="px-6 py-3 border-t border-gray-100">
       <WatchlistList items={items} emptyText="" />
-      {/* Träffar = passerad; en kontroll som väntar = annalkande (#1246). */}
-      {conflict && <ConflictCheckActions matterId={matterId} hasHits={conflict.severity === "passed"} />}
     </div>
   );
 }
