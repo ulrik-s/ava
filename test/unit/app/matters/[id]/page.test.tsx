@@ -343,15 +343,22 @@ describe("MatterDetailPage", () => {
       expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
     });
 
-    it("rättsskydd: varningen bara i betalningsdialogen, inte i huvudet eller tidssektionen", async () => {
+    it("rättsskydd: varningen i huvudet (#1732) och i betalningsdialogen, inte i tidssektionen", async () => {
       matterQuery.data = { ...M, paymentMethod: "RATTSSKYDD", rattsskyddMaxOre: 10_000_000 };
       coverageQuery.data = { billableMinutes: 100 * 60, billableValueOre: 9_500_000 };
       const { container } = renderPage();
-      await waitFor(() => expect(header()).toBeInTheDocument());
-      expect(within(header()).queryByText(WARNING)).not.toBeInTheDocument();
+      await waitFor(() => expect(within(header()).getByText("⚠ Närmar sig taket (95 %)")).toBeInTheDocument());
       await waitFor(() => expect(within(openPaymentDialog()).getByText(WARNING)).toBeInTheDocument());
       fireEvent.click(screen.getByRole("button", { name: "Stäng" }));
       expect(within(panel(container, "time")).queryByText(WARNING)).not.toBeInTheDocument();
+    });
+
+    it("privat ärende: ingen takvarning i huvudet (#1732)", async () => {
+      matterQuery.data = { ...M, paymentMethod: "PRIVAT", rattsskyddMaxOre: 10_000_000 };
+      coverageQuery.data = { billableMinutes: 100 * 60, billableValueOre: 9_500_000 };
+      renderPage();
+      await waitFor(() => expect(header()).toBeInTheDocument());
+      expect(within(header()).queryByText(WARNING)).not.toBeInTheDocument();
     });
   });
 
