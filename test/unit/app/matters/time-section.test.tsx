@@ -91,6 +91,12 @@ describe("TimeSection — arvodeskategori (#953)", () => {
     expect(screen.getByText("Genomgång av handlingar").closest("td")).toHaveClass("whitespace-normal");
   });
 
+  it("datum och beskrivning är toppjusterade, så att de står i höjd med varandra (#1752)", () => {
+    render(<TimeSection matterId={matterId} />);
+    expect(screen.getByText("Genomgång av handlingar").closest("td")).toHaveClass("align-top");
+    expect(screen.getByText(new Date("2026-03-01").toLocaleDateString("sv-SE")).closest("td")).toHaveClass("align-top");
+  });
+
   it("formuläret erbjuder alla arvodeskategorier och skickar den valda", () => {
     render(<TimeSection matterId={matterId} />);
     fireEvent.click(screen.getByText("+ Registrera tid"));

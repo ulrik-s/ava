@@ -278,6 +278,18 @@ describe("DataTable — footer/summa + interaktioner", () => {
     expect(screen.getByText("Σ 40")).toBeInTheDocument();
   });
 
+  it("datacellerna är toppjusterade; rubrik, grupprubrik, grupp-summa och footer är det inte (#1752)", () => {
+    persisted.data = { user: { groupBy: "name" }, org: null };
+    const { container } = render(
+      <DataTable prefKey="x" columns={colsSummary} data={rows} rowKey={(r) => r.id} footer={() => ({ name: "Totalt" })} />,
+    );
+    expect(screen.getByText("40").closest("td")).toHaveClass("align-top", "px-3", "py-2");
+    expect(container.querySelector("tr.bg-blue-50 td")).not.toHaveClass("align-top");
+    expect(screen.getByText("Σ 40").closest("td")).not.toHaveClass("align-top");
+    expect(screen.getByText("Totalt").closest("td")).not.toHaveClass("align-top");
+    expect(container.querySelector("thead th")).not.toHaveClass("align-top");
+  });
+
   it("klick på chip-kryss (Ta bort) rensar sorteringen → persist", () => {
     persisted.data = { user: { sortBy: "name", sortDir: "asc" }, org: null };
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
