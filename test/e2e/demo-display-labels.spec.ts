@@ -85,7 +85,7 @@ test("ingen flik Betalningssätt; betalningssättet ändras via ärendehuvudet (
   await dialog.getByLabel("Betalningssätt", { exact: true }).selectOption("PRIVAT");
   await dialog.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(line).toHaveText("· Privat betalning", { timeout: 15_000 });
+  await expect(line).toHaveText("· Klient betalar allt själv", { timeout: 15_000 });
 });
 
 test("Fakturor döljer annullerade och kreditfakturor tills man väljer att visa dem (#1522)", async ({ page }) => {

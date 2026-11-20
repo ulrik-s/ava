@@ -67,11 +67,11 @@ export type ConflictCheckStatus = z.infer<typeof conflictCheckStatusSchema>;
 // ─── Payment method (per matter) ──────────────────────────────────────────
 
 export const PAYMENT_METHOD_LABELS = {
-  PENDING: "Ej fastställt",
+  PENDING: "EJ fastställt om rättsskydd/rättshjälp",
   RATTSHJALP: "Rättshjälp",
   RATTSSKYDD: "Rättsskydd",
   OFFENTLIGT_UPPDRAG: "Offentligt uppdrag",
-  PRIVAT: "Privat betalning",
+  PRIVAT: "Klient betalar allt själv",
   MIX: "Kombinerad",
 } as const satisfies Record<string, string>;
 export const paymentMethodSchema = enumFromLabels(PAYMENT_METHOD_LABELS);

@@ -42,9 +42,9 @@ describe("paymentMethodSummary", () => {
 
   it("övriga betalningssätt visar bara etiketten", () => {
     const rest = { insurerName: "Bolaget", clientShareBips: 2000 };
-    expect(paymentMethodSummary({ paymentMethod: "PRIVAT", ...rest })).toBe("Privat betalning");
+    expect(paymentMethodSummary({ paymentMethod: "PRIVAT", ...rest })).toBe("Klient betalar allt själv");
     expect(paymentMethodSummary({ paymentMethod: "OFFENTLIGT_UPPDRAG", ...rest })).toBe("Offentligt uppdrag");
     expect(paymentMethodSummary({ paymentMethod: "MIX", ...rest })).toBe("Kombinerad");
-    expect(paymentMethodSummary({ paymentMethod: "PENDING", ...rest })).toBe("Ej fastställt");
+    expect(paymentMethodSummary({ paymentMethod: "PENDING", ...rest })).toBe("EJ fastställt om rättsskydd/rättshjälp");
   });
 });
