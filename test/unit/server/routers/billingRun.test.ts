@@ -425,6 +425,18 @@ describe("billingRun — flödes-guard (#816 fas 3)", () => {
     await expect(caller.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "KLIENT" })).rejects.toThrow(/inte tillåten/);
   });
 
+  it("ej fastställt (PENDING): aconto + slutfaktura till klient på posternas egna priser, som PRIVAT (#1730)", async () => {
+    // Postens pris (3 000 kr/h) avviker från normen → beloppet visar vilken värdering som används.
+    const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "PENDING", hourlyRate: 300000 });
+    const acc = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 0, amountOre: 50000 });
+    expect(acc.run.workValueOreAtRun).toBe(300000);
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
+    expect(res.run.type).toBe("FINAL");
+    const priv = makeCaller({ workMinutes: 60, paymentMethod: "PRIVAT", hourlyRate: 300000 }).caller;
+    await priv.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 0, amountOre: 50000 });
+    expect(res.run.amountOre).toBe((await priv.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" })).run.amountOre);
+  });
+
   it("tillåter aconto + slutfaktura på ett PRIVAT-ärende (löpande räkning)", async () => {
     const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "PRIVAT" });
     await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 0, amountOre: 50000 });

@@ -5,22 +5,13 @@
 import { describe, expect, it } from "vitest-compat";
 import {
   hasSjalvriskAconto, insurerPruningPending, isActiveKr, isUnsentInvoice, krAwaitingBeslut, krAwaitingInvoice, krCanCreateInvoice,
-  paymentMethodPending, rattshjalpSjalvriskOre, sjalvriskAccontoDue, type TodoRun,
+  rattshjalpSjalvriskOre, sjalvriskAccontoDue, type TodoRun,
 } from "@/lib/shared/billing-todo";
 import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const kr = (kostnadsrakningStatus: TodoRun["kostnadsrakningStatus"], extra: Partial<TodoRun> = {}): TodoRun => ({
   type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", recipient: "DOMSTOL", kostnadsrakningStatus, ...extra,
-});
-
-describe("paymentMethodPending", () => {
-  it("PENDING eller saknat betalningssätt → väntar", () => {
-    expect(paymentMethodPending("PENDING")).toBe(true);
-    expect(paymentMethodPending(null)).toBe(true);
-    expect(paymentMethodPending(undefined)).toBe(true);
-    expect(paymentMethodPending("PRIVAT")).toBe(false);
-  });
 });
 
 describe("isActiveKr / krAwaitingBeslut", () => {

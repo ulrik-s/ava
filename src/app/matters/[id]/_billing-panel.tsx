@@ -29,7 +29,7 @@ import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
-import { insurerPruningPending, isActiveKr, krCanCreateInvoice, paymentMethodPending, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
+import { insurerPruningPending, isActiveKr, krCanCreateInvoice, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
 import type { KrDocumentFields } from "@/lib/shared/kostnadsrakning";
 import { availableKrActions, canVoidKostnadsrakning, krStateOf, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -408,8 +408,7 @@ export function BillingPanel({ matterId, matter }: Props) {
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
       <div className={sectionHeaderClass("green")}>
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
-        <BillingHeaderActions actions={actions} onPick={onPick}
-          hint={noActionsHint(flowMatter.paymentMethod)} />
+        <BillingActions actions={actions} onPick={onPick} />
       </div>
       <BillingSummary matterId={matterId} runs={rows} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
@@ -615,19 +614,6 @@ function RattshjalpKrDialog({ matterId, matter, onClose, onRecorded }: { matterI
       </div>
     </Modal>
   );
-}
-
-/** Header-zonen: skapa-faktura-menyn när det finns åtgärder, annars ev. vad som måste göras. */
-function BillingHeaderActions({ actions, onPick, hint }: { actions: readonly BillingAction[]; onPick: (a: BillingAction) => void; hint: string | null }) {
-  if (actions.length > 0) return <BillingActions actions={actions} onPick={onPick} />;
-  return hint ? <span className="text-xs text-gray-500">{hint}</span> : null;
-}
-
-/** Varför inga faktureringsåtgärder erbjuds (#824) — bara när juristen kan göra
- *  något åt det. Lägesbeskrivningarna ("slutreglerat", "nekat") står nu i
- *  ärendets Anteckningar (#1221) i stället för i panelen. */
-function noActionsHint(pm: PaymentMethod): string | null {
-  return paymentMethodPending(pm) ? "Välj betalningssätt för att fakturera" : null;
 }
 
 /** Skapa-faktura-menyn — alternativen kommer från flödesmodellen (#816); panelen

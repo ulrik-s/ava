@@ -377,10 +377,12 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     expect(krMutateAsync).toHaveBeenCalledWith({ matterId: "m1" });
   });
 
-  it("PENDING: ingen knapp men en förklaring (#824)", () => {
+  it("PENDING: aconto och faktura till klient som PRIVAT, inget 'Välj betalningssätt' (#1730)", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PENDING" }} />);
-    expect(screen.queryByRole("button", { name: "+ Skapa faktura" })).not.toBeInTheDocument();
-    expect(screen.getByText(/Välj betalningssätt för att fakturera/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
+    expect(screen.getByRole("button", { name: "Aconto till klient" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Faktura till klient" })).toBeInTheDocument();
+    expect(screen.queryByText(/Välj betalningssätt/)).not.toBeInTheDocument();
   });
 
   it("RATTSHJALP: kostnadsräkning till domstol (ej direktfaktura) — öppnar rättshjälps-dialogen", () => {

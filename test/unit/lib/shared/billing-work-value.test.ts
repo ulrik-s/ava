@@ -144,9 +144,9 @@ describe("sumKindValueOre", () => {
 describe("settlementArvodeNet", () => {
   const w = work([te({ minutes: 60, hourlyRate: 300_000, date: "2026-03-01" })]);
 
-  // Bara PRIVAT/MIX debiterar byråns egen taxa. Domstolen betalar normen,
-  // inte vad byrån råkar ta (#950/#1003).
-  it.each(["PRIVAT", "MIX"] as const)("%s behåller postens egen taxa", (m) => {
+  // Bara klientbetalda (PRIVAT/MIX, och PENDING medan beslut väntar, #1730)
+  // debiterar byråns egen taxa. Domstolen betalar normen, inte vad byrån råkar ta (#950/#1003).
+  it.each(["PRIVAT", "MIX", "PENDING"] as const)("%s behåller postens egen taxa", (m) => {
     expect(settlementArvodeNet(m, w, "2026-06-01")).toBe(300_000);
   });
 
