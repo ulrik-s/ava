@@ -9,6 +9,7 @@ import { labelForMatterRole, matterRoleOptions } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { matterRoleSchema, type MatterRole } from "@/lib/shared/schemas/enums";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
+import { ConflictCheckSection } from "./_conflict-check-section";
 
 type Contact = {
   id: string;
@@ -36,7 +37,7 @@ interface Props {
  * nytt ärende (#1136) — sök som i jävskontrollen, välj roll, eller skapa en
  * ny kontakt därifrån. En dropdown fungerar inte med många kontakter.
  * Med rollen Klient föreslås ärendets titel i en tom sökruta (#1645): klientens
- * namn är ofta detsamma som titeln.
+ * namn är ofta detsamma som titeln. Under parterna: jävskontrollen (#1733).
  */
 export function ContactsSection({ matterId, contacts, matterTitle }: Props) {
   const utils = trpc.useUtils();
@@ -45,7 +46,7 @@ export function ContactsSection({ matterId, contacts, matterTitle }: Props) {
 
   const addContact = trpc.matter.addContact.useMutation({
     onSuccess: () => {
-      // En ny part kontrolleras mot byråns ärenden (#1354) — jävskontrollen i Att bevaka ändras.
+      // En ny part kontrolleras mot byråns ärenden (#1354) — jävskontrollen här och i Att bevaka ändras.
       void utils.matter.getById.invalidate({ id: matterId });
       void utils.watchlist.list.invalidate();
       setPicking(false);
@@ -57,7 +58,7 @@ export function ContactsSection({ matterId, contacts, matterTitle }: Props) {
   });
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <section aria-label="Parter" className="bg-white rounded-lg border border-gray-200">
       <div className={sectionHeaderClass("blue")}>
         <h2 className="font-semibold text-gray-900">Parter ({contacts.length})</h2>
         <button onClick={() => setPicking(true)} className="text-sm text-blue-700 hover:underline">
@@ -74,7 +75,8 @@ export function ContactsSection({ matterId, contacts, matterTitle }: Props) {
       )}
 
       <ContactsList matterId={matterId} contacts={contacts} onRemove={(id) => removeContact.mutate({ matterContactId: id })} />
-    </div>
+      <ConflictCheckSection matterId={matterId} />
+    </section>
   );
 }
 

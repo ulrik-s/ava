@@ -2,6 +2,9 @@
   "intake": [
     { "name": "undersökt", "color": "c5def5", "description": "Verifieringsagenten har undersökt och skrivit sin rapport — väntar på Ulrik" },
     { "name": "verifierad", "color": "1d76db", "description": "ULRIKS beslut (satt för hand) — sant och värt att bygga; nedbrytningen får ta den" },
+    { "name": "designas", "color": "c5def5", "description": "Loop 2 designar lösningen; frågor till användaren eller Ulrik (högst 2 rundor)" },
+    { "name": "design-granskas", "color": "fbca04", "description": "Loop 3 granskar designen mot ADR:erna innan den bryts ner" },
+    { "name": "design-godkänd", "color": "0e8a16", "description": "Designen är godkänd utan öppna frågor; loop 2 bryter ner den enligt designen" },
     { "name": "nedbruten", "color": "5319e7", "description": "Nedbruten i implementations-issues i ava" },
     { "name": "levererad", "color": "0e8a16", "description": "Levererad i produktion (se release:-etiketten); stängs av en Action" },
     { "name": "finns-redan", "color": "bfdadc", "description": "Fanns redan (eller avsett beteende); användaren har fått veta hur — stängs av en Action" },

@@ -12,19 +12,26 @@ import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 const inDays = (n: number): Date => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
 
-function caller(extraTasks: Array<Record<string, unknown>> = []) {
+function caller(
+  extraTasks: Array<Record<string, unknown>> = [],
+  invoices: Array<Record<string, unknown>> = [],
+  payments: Array<Record<string, unknown>> = [],
+  more: { matters?: Array<Record<string, unknown>>; timeEntries?: Array<Record<string, unknown>> } = {},
+) {
   const source: DemoSource = {
     matters: [
       { id: "m1", organizationId: "o1", matterNumber: "2026-0001", title: "A", responsibleLawyerId: "u1" },
       { id: "m2", organizationId: "o1", matterNumber: "2026-0002", title: "B", responsibleLawyerId: "u1" },
+      ...(more.matters ?? []),
     ],
     tasks: [
       { id: "t1", organizationId: "o1", userId: "u1", title: "Frist i A", status: "TODO", dueAt: inDays(2), matterId: "m1", matter: { id: "m1", matterNumber: "2026-0001", title: "A" } },
       { id: "t2", organizationId: "o1", userId: "u1", title: "Frist i B", status: "TODO", dueAt: inDays(3), matterId: "m2", matter: { id: "m2", matterNumber: "2026-0002", title: "B" } },
       ...extraTasks,
     ],
-    invoices: [],
-    timeEntries: [],
+    invoices,
+    payments,
+    timeEntries: more.timeEntries ?? [],
     expenses: [],
   };
   const ds = new DemoDataStore(source, () => {});
@@ -63,5 +70,66 @@ describe("watchlist.list", () => {
     const item = items.find((i) => i.title.includes("Midnatt"));
     expect(item?.at).toBe(today);
     expect(item?.severity).toBe("approaching"); // inte "passerad" ett dygn för tidigt
+  });
+
+  it("förfallna fakturor är oförändrade efter att regeln flyttats (#1731)", async () => {
+    const inv = (id: string, status: string, dueDate: Date | null): Record<string, unknown> => ({
+      id, matterId: "m1", invoiceNumber: id, amount: 10_000, status, invoiceType: "STANDARD",
+      invoiceDate: inDays(-40), dueDate, createdAt: inDays(-40),
+    });
+    const pay = (invoiceId: string, amount: number): Record<string, unknown> => ({
+      id: `${invoiceId}-p`, invoiceId, amount, paymentDate: inDays(-2), createdAt: inDays(-2),
+    });
+    const { items } = await caller([], [
+      inv("F-sen", "SENT", inDays(-12)),
+      inv("F-plan", "INSTALLMENT_PLAN", inDays(-1)),
+      inv("F-betald", "SENT", inDays(-5)),
+      inv("F-status", "PAID", inDays(-5)),
+      inv("F-idag", "SENT", new Date()),
+      inv("F-utan", "SENT", null),
+    ], [pay("F-sen", 4_000), pay("F-betald", 10_000)]).list({ mine: false });
+    const overdue = items.filter((i) => i.kind === "overdueInvoice");
+    expect(overdue.map((i) => i.title).sort()).toEqual(["Förfallen faktura F-plan", "Förfallen faktura F-sen"]);
+    const sen = overdue.find((i) => i.title.endsWith("F-sen"));
+    expect(sen?.amountOre).toBe(6_000);
+    expect(sen?.detail).toBe("12 dagar över förfallodag.");
+    expect(sen?.at).toBe(stockholmDay(inDays(-12)));
+  });
+});
+
+describe("watchlist.actionItems (#1734)", () => {
+  const matter = (id: string, p: Record<string, unknown>): Record<string, unknown> => ({
+    id, organizationId: "o1", matterNumber: `2026-${id}`, title: id, status: "ACTIVE", responsibleLawyerId: "u1", ...p,
+  });
+  const more = {
+    matters: [
+      // Rättshjälp med 1 timmes tak och 1 timme upparbetat → takvarning.
+      matter("cap", { paymentMethod: "RATTSHJALP", rattshjalpMaxTimmar: 1 }),
+      matter("hits", { conflictCheckStatus: "HITS", conflictCheckHits: 2 }),
+      matter("pending", { conflictCheckStatus: "PENDING" }),
+      matter("reviewed", { conflictCheckStatus: "REVIEWED", conflictCheckHits: 2 }),
+      matter("other", { conflictCheckStatus: "HITS", conflictCheckHits: 1, responsibleLawyerId: "u2" }),
+    ],
+    timeEntries: [
+      { id: "te1", organizationId: "o1", matterId: "cap", userId: "u1", minutes: 60, hourlyRate: 100_000, billable: true, date: inDays(-1) },
+    ],
+  };
+  const titles = (items: Array<{ matterNumber: string | null; kind: string }>): string[] =>
+    items.map((i) => `${i.kind}:${i.matterNumber ?? ""}`).sort();
+
+  it("bara takvarningar och jävsträffar, inte frister, väntande eller bedömda kontroller", async () => {
+    const { items } = await caller([], [], [], more).actionItems({ mine: true });
+    expect(titles(items)).toEqual(["conflictCheck:2026-hits", "coverageCap:2026-cap"]);
+  });
+
+  it("mine: false tar med kollegornas ärenden", async () => {
+    const { items } = await caller([], [], [], more).actionItems({ mine: false });
+    expect(titles(items)).toEqual(["conflictCheck:2026-hits", "conflictCheck:2026-other", "coverageCap:2026-cap"]);
+  });
+
+  it("utan indata: egna ärenden", async () => {
+    const { items, generatedAt } = await caller([], [], [], more).actionItems();
+    expect(titles(items)).toEqual(["conflictCheck:2026-hits", "coverageCap:2026-cap"]);
+    expect(typeof generatedAt).toBe("string");
   });
 });

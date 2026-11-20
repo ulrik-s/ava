@@ -24,6 +24,13 @@ describe("matterArvodeNet", () => {
     expect(matterArvodeNet({ paymentMethod: "MIX" }, own, DATE)).toBe(500_000);
     expect(matterArvodeNet({ paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: true }, own, DATE)).toBe(500_000);
   });
+
+  it("ej fastställt (#1730): som privat, inte på normen som rättshjälp/rättsskydd", () => {
+    const own = { timeEntries: [entry(120, 250_000)] };
+    expect(matterArvodeNet({ paymentMethod: "PENDING" }, own, DATE)).toBe(matterArvodeNet({ paymentMethod: "PRIVAT" }, own, DATE));
+    expect(matterArvodeNet({ paymentMethod: "PENDING" }, own, DATE)).not.toBe(matterArvodeNet({ paymentMethod: "RATTSHJALP" }, own, DATE));
+    expect(matterArvodeNet({ paymentMethod: "PENDING" }, own, DATE)).not.toBe(matterArvodeNet({ paymentMethod: "RATTSSKYDD" }, own, DATE));
+  });
 });
 
 describe("matterEntryValueOre", () => {

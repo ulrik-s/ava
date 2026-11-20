@@ -21,6 +21,9 @@ const createContact = vi.fn();
 let contactCreated: ((c: { id: string; name: string }) => void) | undefined;
 const noopMut = () => ({ mutate: vi.fn(), isPending: false });
 const invalidated = { matter: vi.fn(), watchlist: vi.fn() };
+/** Ärendet (`matter.getById`): jävskontrollens fält styr posten under Parter (#1733). */
+let matterData: Record<string, unknown> | undefined;
+const checkConflicts = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -43,6 +46,9 @@ vi.mock("@/lib/client/trpc", () => ({
         useMutation: (o: { onSuccess: () => void }) => ({ mutate: (a: unknown) => { addContact(a); o.onSuccess(); }, isPending: false }),
       },
       removeContact: { useMutation: () => ({ mutate: removeContact, isPending: false }) },
+      getById: { useQuery: () => ({ data: matterData }) },
+      checkConflicts: { useMutation: () => ({ mutate: checkConflicts, isPending: false }) },
+      markConflictsReviewed: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
@@ -51,7 +57,10 @@ vi.mock("@/lib/client/trpc", () => ({
       setOrgDefault: { useMutation: noopMut },
       clearOrgDefault: { useMutation: noopMut },
     },
-    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
+    user: {
+      current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
+      list: { useQuery: () => ({ data: { users: [{ id: "u1", name: "Anna Advokat" }] } }) },
+    },
   },
 }));
 
@@ -62,7 +71,7 @@ const contacts = [
 /** Ärendets titel — med blanksteg runt, som trimmas innan den hamnar i sökrutan. */
 const TITLE = "  Skattetvist Exempel AB ";
 
-beforeEach(() => { vi.clearAllMocks(); searchHits = []; contactCreated = undefined; });
+beforeEach(() => { vi.clearAllMocks(); searchHits = []; contactCreated = undefined; matterData = undefined; });
 
 const openPicker = () => {
   render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} matterTitle={TITLE} />);
@@ -196,4 +205,51 @@ describe("ContactsSection", () => {
     fireEvent.click(screen.getByText("Ta bort"));
     expect(removeContact).toHaveBeenCalledWith({ matterContactId: "mc1" });
   });
+
+describe("jävskontrollen under Parter (#1733)", () => {
+  const MATTER = { id: "m1", matterNumber: "2026-0001", status: "ACTIVE" };
+  const renderSection = () =>
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={contacts} matterTitle={TITLE} />);
+
+  it("träffar: visar 'N träffar att bedöma', Bedöm träffarna och Kör jävskontrollen igen", () => {
+    matterData = { ...MATTER, conflictCheckStatus: "HITS", conflictCheckHits: 2 };
+    renderSection();
+    const group = screen.getByRole("group", { name: "Jävskontroll" });
+    expect(within(group).getByText("Jävskontroll: 2 träffar att bedöma")).toBeInTheDocument();
+    expect(within(group).getByRole("button", { name: "Bedöm träffarna" })).toBeInTheDocument();
+    fireEvent.click(within(group).getByRole("button", { name: "Kör jävskontrollen igen" }));
+    expect(checkConflicts).toHaveBeenCalledWith({ id: "m1" });
+  });
+
+  it("kontrollen väntar: visar att den väntar, utan Bedöm träffarna", () => {
+    matterData = { ...MATTER, conflictCheckStatus: "PENDING" };
+    renderSection();
+    const group = screen.getByRole("group", { name: "Jävskontroll" });
+    expect(within(group).getByText("Jävskontroll väntar")).toBeInTheDocument();
+    expect(within(group).queryByRole("button", { name: "Bedöm träffarna" })).not.toBeInTheDocument();
+  });
+
+  it("klar utan träffar: ingen status", () => {
+    matterData = { ...MATTER, conflictCheckStatus: "CLEAR", conflictCheckHits: 0 };
+    renderSection();
+    expect(screen.queryByRole("group", { name: "Jävskontroll" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Jävskontroll/)).not.toBeInTheDocument();
+  });
+
+  it("ärendet inte laddat: ingen status", () => {
+    renderSection();
+    expect(screen.queryByRole("group", { name: "Jävskontroll" })).not.toBeInTheDocument();
+  });
+
+  it("senaste bedömningen visas när den finns", () => {
+    matterData = {
+      ...MATTER, conflictCheckStatus: "REVIEWED", conflictReviewedById: "u1",
+      conflictReviewedAt: "2026-10-01T12:05:00Z", conflictReviewNote: "Annan person, ingen konflikt.",
+    };
+    renderSection();
+    const note = screen.getByRole("note", { name: "Jävskontrollens bedömning" });
+    expect(within(note).getByText(/Jävskontrollen bedömd/)).toBeInTheDocument();
+    expect(within(note).getByText("Annan person, ingen konflikt.")).toBeInTheDocument();
+  });
+});
 });

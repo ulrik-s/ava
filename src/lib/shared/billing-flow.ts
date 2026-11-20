@@ -12,7 +12,8 @@
  *
  * Designval (2026-06): **härledd fas** (stateless, ur billing-runs + matter —
  * ingen kolumn, ingen osynk), **in-kod-descriptors** (ändlig enum av flöden,
- * ingen runtime/DB-konfiguration), **minimal MIX/PENDING**. Speglar mönstret i
+ * ingen runtime/DB-konfiguration), **minimal MIX/PENDING** (båda faktureras
+ * som PRIVAT; PENDING medan beslut om rättsskydd/rättshjälp väntar, #1730). Speglar mönstret i
  * {@link file://./invoice-state-machine.ts} (deklarativ map + assert).
  *
  * Statemaskinen: `actionsByPhase[fas]` = de actions som är lagliga i fasen, och
@@ -50,7 +51,7 @@ export interface BillingFlow {
 
 const aconto = (): BillingAction => ({ type: "ACCONTO", label: "Aconto till klient", toPhase: "ARBETE", recipient: "KLIENT", dialog: "billing" });
 
-/** PRIVAT/MIX: löpande räkning till klienten — à-conto under arbetets gång +
+/** PRIVAT/MIX/PENDING: löpande räkning till klienten — à-conto under arbetets gång +
  *  slutfaktura. Ingen besluts-/domslivscykel (stannar i ARBETE). */
 const PRIVAT_FLOW: BillingFlow = {
   initialPhase: "ARBETE",
@@ -63,8 +64,9 @@ const PRIVAT_FLOW: BillingFlow = {
 };
 
 export const BILLING_FLOWS: Record<PaymentMethod, BillingFlow> = {
-  // Betalningssätt ej fastställt → inga faktureringsåtgärder ännu.
-  PENDING: { initialPhase: "ARBETE", actionsByPhase: { ARBETE: [] } },
+  // Betalningssätt ej fastställt (väntar på beslut om rättsskydd/rättshjälp)
+  // → faktureras klienten som PRIVAT/MIX under väntan (#1730).
+  PENDING: PRIVAT_FLOW,
   PRIVAT: PRIVAT_FLOW,
   MIX: PRIVAT_FLOW,
   // Rättsskydd: aconto under väntan, sedan slutreglering på försäkringsbeskedet

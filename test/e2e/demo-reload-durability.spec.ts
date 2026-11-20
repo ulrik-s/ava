@@ -151,5 +151,5 @@ test("Ändra ärende: ärendetyp, målnummer och betalningssätt sparas och stå
   await expect(header.getByTestId("matter-type")).toHaveText(listed, { timeout: 25_000 });
   await expect(header.getByTestId("matter-type")).toHaveCSS("font-weight", "700");
   await expect(header.getByTestId("matter-court-case-number")).toHaveText(`Målnummer: ${caseNumber}`);
-  await expect(page.getByTestId("matter-payment-line")).toContainText("Privat betalning");
+  await expect(page.getByTestId("matter-payment-line")).toContainText("Klient betalar allt själv");
 });

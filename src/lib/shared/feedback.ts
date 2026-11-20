@@ -172,6 +172,10 @@ export const INTAKE_LABELS = {
   alreadyExists: "finns-redan",
   /** Flera olika saker i samma förfrågan — delad i egna förfrågningar. */
   split: "uppdelad",
+  /** Designvägen (loop 2 designar, loop 3 granskar) innan nedbrytningen. */
+  designing: "designas",
+  designReview: "design-granskas",
+  designApproved: "design-godkänd",
   brokenDown: "nedbruten",
   delivered: "levererad",
 } as const;
@@ -183,6 +187,10 @@ const OPEN_STATE_BY_LABEL: ReadonlyArray<readonly [string, FeedbackState]> = [
   [INTAKE_LABELS.duplicate, "dubblett"],
   [INTAKE_LABELS.brokenDown, "pagar"],
   [INTAKE_LABELS.verified, "verifierad"],
+  // Designen är ett steg efter Ulriks beslut: för användaren är den fortfarande verifierad.
+  [INTAKE_LABELS.designing, "verifierad"],
+  [INTAKE_LABELS.designReview, "verifierad"],
+  [INTAKE_LABELS.designApproved, "verifierad"],
   [INTAKE_LABELS.notConfirmed, "ej_bekraftad"],
   [INTAKE_LABELS.investigated, "undersokt"],
 ];

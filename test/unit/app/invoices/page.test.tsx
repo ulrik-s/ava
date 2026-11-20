@@ -11,6 +11,7 @@ const invoicesQuery = {
   data: undefined as { items: Array<Record<string, unknown>>; total: number } | undefined,
   isLoading: false,
 };
+const failedQuery: { data: Array<{ invoiceId: string }> | undefined } = { data: [] };
 const setInvoices = (rows: Array<Record<string, unknown>> | undefined): void => {
   invoicesQuery.data = rows === undefined ? undefined : { items: rows, total: rows.length };
 };
@@ -25,6 +26,9 @@ vi.mock("@/lib/client/trpc", () => ({
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     invoice: {
       list: { useQuery: () => invoicesQuery },
+    },
+    invoiceDispatch: {
+      listFailed: { useQuery: () => failedQuery },
     },
     organization: {
       getSettings: { useQuery: () => ({ data: { name: "Byrå", orgNumber: "5566778899" } }) },
@@ -48,6 +52,7 @@ beforeEach(() => {
   setInvoices(undefined);
   invoicesQuery.isLoading = false;
   usersQuery.data.users = [];
+  failedQuery.data = [];
 });
 
 describe("InvoicesPage", () => {
@@ -211,5 +216,63 @@ describe("InvoicesPage", () => {
     expect(within(other).getByText("CD").tagName).toBe("STRONG");
     const own = screen.getByRole("link", { name: "CD2026-0002 — Fall 2" });
     expect(own.querySelector("strong")).toBeNull();
+  });
+
+  describe("förfallna och ej framkomna (#1731)", () => {
+    const daysAgo = (n: number): string => new Date(Date.now() - n * 86_400_000).toISOString();
+    const row = (id: string, status: string, dueDate: string | null, payments: number[] = []): Record<string, unknown> => ({
+      id, invoiceNumber: `F-${id}`, invoiceDate: daysAgo(40), invoiceType: "STANDARD", status, amount: 10000, dueDate,
+      payments: payments.map((amount) => ({ amount })),
+      matter: { id: "m1", matterNumber: "2026-0001", title: "T" },
+    });
+    const statusCell = (invoiceNumber: string): HTMLElement => {
+      const tr = screen.getByText(invoiceNumber).closest("tr");
+      if (!tr) throw new Error(`ingen rad för ${invoiceNumber}`);
+      return tr;
+    };
+
+    it("en förfallen faktura visar \"Förfallen N dagar\" i rött, singular för en dag", () => {
+      setInvoices([row("1", "SENT", daysAgo(12)), row("2", "INSTALLMENT_PLAN", daysAgo(1)), row("3", "SENT", daysAgo(5), [10000])]);
+      render(<InvoicesPage />);
+      const mark = screen.getByText("Förfallen 12 dagar");
+      expect(mark.className).toContain("text-red-700");
+      expect(statusCell("F-1")).toContainElement(mark);
+      expect(statusCell("F-2")).toContainElement(screen.getByText("Förfallen 1 dag"));
+      expect(statusCell("F-3").textContent).not.toContain("Förfallen"); // helt betald
+    });
+
+    it("en faktura med misslyckat utskick visar \"Kom inte fram\"; en faktura kan ha båda", () => {
+      failedQuery.data = [{ invoiceId: "1" }, { invoiceId: "2" }];
+      setInvoices([row("1", "SENT", daysAgo(3)), row("2", "PAID", daysAgo(3))]);
+      render(<InvoicesPage />);
+      expect(statusCell("F-1").textContent).toContain("Förfallen 3 dagar");
+      expect(statusCell("F-1").textContent).toContain("Kom inte fram");
+      expect(statusCell("F-2").textContent).toContain("Kom inte fram");
+      expect(statusCell("F-2").textContent).not.toContain("Förfallen");
+    });
+
+    it("knappen visar bara markerade fakturor och växlar tillbaka", () => {
+      failedQuery.data = [{ invoiceId: "3" }];
+      setInvoices([row("1", "SENT", daysAgo(3)), row("2", "PAID", daysAgo(3)), row("3", "DRAFT", null)]);
+      render(<InvoicesPage />);
+      const button = screen.getByRole("button", { name: "Förfallna och ej framkomna" });
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+      fireEvent.click(button);
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+      expect(screen.getByText("F-1")).toBeInTheDocument();
+      expect(screen.getByText("F-3")).toBeInTheDocument();
+      expect(screen.queryByText("F-2")).toBeNull();
+      fireEvent.click(button);
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+      expect(screen.getByText("F-2")).toBeInTheDocument();
+    });
+
+    it("innan misslyckade utskick laddats visas bara förfallen-markeringen", () => {
+      failedQuery.data = undefined;
+      setInvoices([row("1", "SENT", daysAgo(2))]);
+      render(<InvoicesPage />);
+      expect(statusCell("F-1").textContent).toContain("Förfallen 2 dagar");
+      expect(statusCell("F-1").textContent).not.toContain("Kom inte fram");
+    });
   });
 });

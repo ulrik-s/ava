@@ -152,15 +152,21 @@ describe("WatchSection", () => {
     expect(updateMutate).toHaveBeenCalledWith({ id: "t2", status: "TODO" });
   });
 
-  it("jävskontrollen i ärendets signaler får sina åtgärder (#1246)", () => {
-    signals = [{ kind: "conflictCheck", severity: "passed", title: "Jävskontroll: 1 träffar att bedöma", detail: "", matterId: "m1", matterNumber: "1", at: null, amountOre: null, link: null }];
+  it("visar ingen jävskontroll: varken posten, åtgärderna eller bedömningen — den står under Parter (#1733)", () => {
+    signals = [
+      { kind: "conflictCheck", severity: "passed", title: "Jävskontroll: 1 träffar att bedöma", detail: "", matterId: "m1", matterNumber: "1", at: null, amountOre: null, link: null },
+      { kind: "unbilled", severity: "approaching", title: "Ofakturerat", detail: "", matterId: "m1", matterNumber: "1", at: null, amountOre: 1, link: null },
+    ];
     render(<WatchSection matterId={M} />);
-    expect(screen.getByTestId("conflict-actions")).toHaveTextContent("träffar");
+    expect(screen.getByText("Ofakturerat")).toBeInTheDocument();
+    expect(screen.queryByText(/Jävskontroll/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("conflict-actions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("conflict-review")).not.toBeInTheDocument();
   });
 
-  it("utan jävskontroll bland signalerna visas inga åtgärder", () => {
-    signals = [{ kind: "unbilled", severity: "approaching", title: "Ofakturerat", detail: "", matterId: "m1", matterNumber: "1", at: null, amountOre: 1, link: null }];
+  it("med bara jävskontrollen bland signalerna visas ingen signallista (#1733)", () => {
+    signals = [{ kind: "conflictCheck", severity: "approaching", title: "Jävskontroll väntar", detail: "", matterId: "m1", matterNumber: "1", at: null, amountOre: null, link: null }];
     render(<WatchSection matterId={M} />);
-    expect(screen.queryByTestId("conflict-actions")).not.toBeInTheDocument();
+    expect(screen.queryByText("Jävskontroll väntar")).not.toBeInTheDocument();
   });
 });

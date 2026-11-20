@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Rättshjälpens takvarning där man arbetar i ärendet (#1520): i ärendehuvudet
- * (oavsett vilken panel som är öppen) och i tidssektionen. Bara rättshjälp:
- * rättsskyddets varning visas bara i betalningsdialogen från huvudet (#1499).
+ * Rättshjälpens takvarning i tidssektionen (#1520). Bara rättshjälp: rättsskyddets
+ * varning visas i ärendehuvudet och i betalningsdialogen, som visar den delade
+ * `CoverageCapWarning` direkt för båda betalningssätten (#1499, #1732).
  * Självstängande som försäkringsreferensen i `MatterHeaderDetails` — null för
  * andra betalningssätt.
  */

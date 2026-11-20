@@ -23,7 +23,7 @@
  */
 
 import {
-  insurerPruningPending, isUnsentInvoice, krAwaitingBeslut, krAwaitingInvoice, paymentMethodPending, sjalvriskAccontoDue,
+  insurerPruningPending, isUnsentInvoice, krAwaitingBeslut, krAwaitingInvoice, sjalvriskAccontoDue,
   type TodoRun,
 } from "./billing-todo";
 import { coverageStatus, type CoverageCapInput } from "./coverage-cap";
@@ -458,9 +458,6 @@ function krInvoiceItems(m: BillingActionMatter): WatchlistItem[] {
 /** Övriga skäl — ett per ärende, när predikatet slår till. */
 function stateItems(m: BillingActionMatter): WatchlistItem[] {
   const out: WatchlistItem[] = [];
-  if (paymentMethodPending(m.paymentMethod)) {
-    out.push(actionItem(m, { title: "Välj betalningssätt", detail: "Ärendet kan inte faktureras innan betalningssättet är bestämt." }));
-  }
   if (m.radgivningEntryMissing) {
     out.push(actionItem(m, { title: "Markera rådgivningsmötet som rådgivning", detail: "Annars yrkas rådgivningstimmen i kostnadsräkningen." }));
   }

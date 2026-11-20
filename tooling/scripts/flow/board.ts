@@ -24,6 +24,7 @@ export const COLUMNS = [
   { name: "Svara", color: "RED", description: "Blockerad: läs senaste kommentaren och svara" },
   { name: "Väntar på användaren", color: "PURPLE", description: "En fråga till användaren i AVA" },
   { name: "Godkänd", color: "BLUE", description: "Loop 2 bryter ner i arbetsorder" },
+  { name: "Designas", color: "BLUE", description: "Större ändring: loop 2 designar, loop 3 granskar. Frågor hamnar i Svara" },
   { name: "Byggs", color: "ORANGE", description: "Arbetsorder i ava byggs och granskas" },
   { name: "Klar", color: "GREEN", description: "Levererad eller avslutad" },
   { name: "Avböjd", color: "GRAY", description: "Flytta hit för att stänga utan att bygga" },
@@ -45,7 +46,8 @@ export const AUTO_LABEL = "auto-godkänn";
 const RULES: ReadonlyArray<readonly [Column, readonly string[]]> = [
   ["Svara", ["blockerad"]],
   ["Väntar på användaren", ["väntar-på-användaren"]],
-  ["Godkänd", ["verifierad"]],
+  ["Godkänd", ["verifierad", "design-godkänd"]],
+  ["Designas", ["designas", "design-granskas"]],
   ["Byggs", ["nedbruten", "dubblett"]],
   ["Klar", ["levererad", "finns-redan", "uppdelad"]],
   ["Godkänns automatiskt", [AUTO_LABEL]],
@@ -71,7 +73,7 @@ export type ColumnAction =
 /** Ulrik kan godkänna det som ännu inte är beslutat. */
 const APPROVABLE: readonly Column[] = ["Ny", "Att besluta", "Godkänns automatiskt"];
 /** Ulrik kan avböja det där inget byggs ännu. */
-const DECLINABLE: readonly Column[] = ["Ny", "Att besluta", "Godkänns automatiskt", "Svara", "Väntar på användaren"];
+const DECLINABLE: readonly Column[] = ["Ny", "Att besluta", "Godkänns automatiskt", "Svara", "Väntar på användaren", "Designas"];
 
 /** Beslutet för ett kort: följ etiketterna, eller verkställ Ulriks flytt. */
 export function decideColumn(labels: readonly string[], board: string | null): ColumnAction {
@@ -130,7 +132,12 @@ const LAGE: Readonly<Record<Column, (labels: readonly string[], ctx: LageContext
     : `Godkänns automatiskt ${when(new Date(ctx.autoSince).getTime() + AUTO_APPROVE_MS)} om du inte flyttar den`),
   "Svara": () => "Blockerad — läs senaste kommentaren och svara i issuen",
   "Väntar på användaren": () => "Loop 1 har frågat användaren i AVA och väntar på svar",
-  "Godkänd": () => "Godkänd — loop 2 bryter ner den i arbetsorder",
+  "Godkänd": (labels) => (labels.includes("design-godkänd")
+    ? "Designen godkänd — loop 2 bryter ner den enligt designen"
+    : "Godkänd — loop 2 bryter ner den i arbetsorder"),
+  "Designas": (labels) => (labels.includes("design-granskas")
+    ? "Designen granskas av loop 3 mot ADR:erna"
+    : "Loop 2 designar lösningen (frågor hamnar i Svara)"),
   "Byggs": builtText,
   "Klar": doneText,
   "Avböjd": () => "Avböjd",

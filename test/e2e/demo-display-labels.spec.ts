@@ -9,6 +9,7 @@
  * - Ärendet: fliken Betalningssätt borta, ändras via huvudet (#1499).
  * - Rutornas rubrikrader: ett steg starkare färg i ljust läge, mörkt läge oförändrat (#1636).
  * - Startsidan: tidsumman i Tidrapportering ser ut som rubriken (#1673).
+ * - Fakturor: förfallna fakturor markeras röda och knappen visar bara dem (#1731).
  */
 import type { Locator, Page } from "@playwright/test";
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
@@ -48,6 +49,27 @@ test("Fakturor, Avbetalningar och Användare visar svenska etiketter", async ({ 
   await expect(page.getByText(/\d\.\d{2}\s?kr\/mil|kr\/km/)).toHaveCount(0);
 });
 
+test("fakturalistan markerar förfallna fakturor och knappen visar bara de markerade (#1731)", async ({ page }) => {
+  await page.goto(`${BASE}/invoices/`);
+  const overdue = /^Förfallen \d+ dag(ar)?$/;
+  // Demodatat har fakturor med förfallodag långt bak i tiden (t.ex. 2025).
+  await expect(page.getByText(overdue).first()).toBeVisible({ timeout: 30_000 });
+  const button = page.getByRole("button", { name: "Förfallna och ej framkomna" });
+  await expect(button).toHaveAttribute("aria-pressed", "false");
+  const allRows = await page.locator("tbody tr").count();
+  await button.click();
+  await expect(button).toHaveAttribute("aria-pressed", "true");
+  const rows = page.locator("tbody tr");
+  const marked = await rows.count();
+  expect(marked).toBeGreaterThan(0);
+  expect(marked).toBeLessThan(allRows);
+  for (let n = 0; n < marked; n++) {
+    await expect(rows.nth(n).getByText(/^(Förfallen \d+ dag(ar)?|Kom inte fram)$/).first()).toBeVisible();
+  }
+  await button.click();
+  await expect(rows).toHaveCount(allRows);
+});
+
 // Betalningssättet i ärendehuvudet (#1518): etikett, försäkringsbolag (vid
 // rättsskydd) och klientens andel, på raden under titeln.
 const PAYMENT_LINES = [
@@ -85,7 +107,7 @@ test("ingen flik Betalningssätt; betalningssättet ändras via ärendehuvudet (
   await dialog.getByLabel("Betalningssätt", { exact: true }).selectOption("PRIVAT");
   await dialog.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(line).toHaveText("· Privat betalning", { timeout: 15_000 });
+  await expect(line).toHaveText("· Klient betalar allt själv", { timeout: 15_000 });
 });
 
 test("Fakturor döljer annullerade och kreditfakturor tills man väljer att visa dem (#1522)", async ({ page }) => {

@@ -18,11 +18,12 @@ import type { MatterId } from "@/lib/shared/schemas/ids";
 const SECONDARY = "px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50";
 const PRIMARY = "px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50";
 
-/** Invalidera allt som visar kontrollen: ärendet och Att bevaka. */
+/** Invalidera allt som visar kontrollen: ärendet, Att bevaka och Att åtgärda (#1734). */
 function useRefresh(matterId: MatterId): () => void {
   const utils = trpc.useUtils();
   return () => {
     void utils.watchlist.list.invalidate();
+    void utils.watchlist.actionItems.invalidate();
     void utils.matter.getById.invalidate({ id: matterId });
   };
 }
