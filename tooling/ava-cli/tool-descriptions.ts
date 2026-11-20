@@ -249,6 +249,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   // ── Att göra-vy ──────────────────────────────────────────────────
   "todo.list": "Sammanställd att göra-lista: uppgifter, frister och kalenderhändelser som kräver åtgärd.",
   "watchlist.list": "Att bevaka: härledda påminnelser över alla ärenden — täckningstak som nås, ofakturerat arbete över tröskel, tidsfrister, förfallna fakturor och misslyckade fakturautskick. Sorterat efter hur brådskande.",
+  "watchlist.actionItems": "Att åtgärda: takvarningar för rättshjälp och rättsskydd och jävskontroller med träffar som ingen advokat bedömt. `mine` (förvalt) begränsar till ärenden där användaren är ansvarig.",
 
   // ── Användare ────────────────────────────────────────────────────
   "user.list": "Byråns medarbetare.",

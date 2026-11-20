@@ -13,13 +13,13 @@ vi.mock("next/link", () => ({
 
 const recheck = vi.fn();
 const reviewed = vi.fn();
-const invalidate = { watchlist: vi.fn(), matter: vi.fn() };
+const invalidate = { watchlist: vi.fn(), actionItems: vi.fn(), matter: vi.fn() };
 let pending = false;
 let reviewError: { message: string } | null = null;
 let me: { id: string; role: string } | undefined = { id: "u1", role: "LAWYER" };
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ watchlist: { list: { invalidate: invalidate.watchlist } }, matter: { getById: { invalidate: invalidate.matter } } }),
+    useUtils: () => ({ watchlist: { list: { invalidate: invalidate.watchlist }, actionItems: { invalidate: invalidate.actionItems } }, matter: { getById: { invalidate: invalidate.matter } } }),
     user: { current: { useQuery: () => ({ data: me }) } },
     matter: {
       checkConflicts: { useMutation: (o: { onSuccess: () => void }) => ({ mutate: (a: unknown) => { recheck(a); o.onSuccess(); }, isPending: pending }) },
@@ -44,6 +44,7 @@ describe("ConflictCheckActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Kör jävskontrollen igen" }));
     expect(recheck).toHaveBeenCalledWith({ id: M });
     expect(invalidate.watchlist).toHaveBeenCalled();
+    expect(invalidate.actionItems).toHaveBeenCalled();
     expect(invalidate.matter).toHaveBeenCalledWith({ id: M });
   });
 

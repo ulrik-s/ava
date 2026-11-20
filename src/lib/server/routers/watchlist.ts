@@ -171,6 +171,17 @@ async function failedInput(ctx: Ctx): Promise<FailedDispatch[]> {
   }));
 }
 
+/** "Bara mina ärenden": ärenden där användaren är ansvarig, annars hela byrån. */
+async function selectMatters(ctx: Ctx, userId: string, mine: boolean): Promise<MatterRow[]> {
+  const all = (await ctx.repos.matters.listByOrg(ctx.orgId)) as MatterRow[];
+  return mine ? all.filter((m) => String(m.responsibleLawyerId ?? "") === userId) : all;
+}
+
+const scopeInput = z.object({
+  mine: z.boolean().default(true),
+  userId: userIdSchema.optional(),
+});
+
 export const watchlistRouter = router({
   /**
    * Allt som behöver uppmärksamhet, sorterat efter hur bråttom det är.
@@ -180,9 +191,7 @@ export const watchlistRouter = router({
    * Tidsfristerna är alltid den egna användarens: en uppgift har en ägare.
    */
   list: orgProcedure
-    .input(z.object({
-      mine: z.boolean().default(true),
-      userId: userIdSchema.optional(),
+    .input(scopeInput.extend({
       /** Bara ett ärendes poster — "Att bevaka" i ärendet (#1167). */
       matterId: matterIdSchema.optional(),
     }).optional())
@@ -196,8 +205,7 @@ export const watchlistRouter = router({
       // samma ändring som signalerna själva. Se #1063.
       const thresholds = DEFAULT_THRESHOLDS;
 
-      const all = (await ctx.repos.matters.listByOrg(ctx.orgId)) as MatterRow[];
-      const matters = mine ? all.filter((m) => String(m.responsibleLawyerId ?? "") === userId) : all;
+      const matters = await selectMatters(ctx, userId, mine);
       const matterIds = new Set(matters.map((m) => m.id));
 
       const [invoices, entries] = await Promise.all([
@@ -229,5 +237,22 @@ export const watchlistRouter = router({
 
       const scoped = input?.matterId ? items.filter((i) => i.matterId === String(input.matterId)) : items;
       return { items: scoped, generatedAt: now.toISOString() };
+    }),
+
+  /**
+   * "Att åtgärda" (#1734): takvarningar och jävskontroller med träffar som
+   * ingen har bedömt. En kontroll som bara väntar (`PENDING`) hör inte hit.
+   * Samma `mine`-urval och sortering som `list`.
+   */
+  actionItems: orgProcedure
+    .input(scopeInput.optional())
+    .query(async ({ ctx, input }): Promise<{ items: WatchlistItem[]; generatedAt: string }> => {
+      const now = new Date();
+      const matters = await selectMatters(ctx, input?.userId ?? ctx.user.id, input?.mine ?? true);
+      const items = sortWatchlist([
+        ...coverageItems(await coverageInput(ctx, matters)),
+        ...conflictCheckItems(matters.filter((m) => m.conflictCheckStatus === "HITS")),
+      ], stockholmDay(now));
+      return { items, generatedAt: now.toISOString() };
     }),
 });
