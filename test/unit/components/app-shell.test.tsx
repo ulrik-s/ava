@@ -27,7 +27,7 @@ describe("AppShell", () => {
   it("renderar Sidebar med användarnamn när tillgängligt", () => {
     currentQuery.data = { name: "Anna Advokat" };
     render(<AppShell>barn</AppShell>);
-    // Sidebar har länkar för varje nav-item — "Startsida" är första
+    // Sidebar har Startsida-knappen bredvid "AVA" (#1749)
     expect(screen.getAllByText("Startsida").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Anna Advokat").length).toBeGreaterThan(0);
   });

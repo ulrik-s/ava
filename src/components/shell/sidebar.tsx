@@ -9,6 +9,7 @@ import { loadFromStorage } from "@/lib/client/load-from-storage";
 import { cn } from "@/lib/client/utils";
 import { AppVersion } from "./app-version";
 import { FeedbackButton } from "./feedback-button";
+import { HomeButton } from "./home-button";
 import { useSignOutFlow } from "./sign-out-flow";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -16,7 +17,7 @@ const navigation = [
   // Överst (#89): ärendelistan kör också jävskontrollen (#1642), så ett
   // menyval för båda (#1643). /conflicts skickar hit.
   { name: "Ärenden / jävskontroll", href: "/matters", icon: "🔍" },
-  { name: "Startsida", href: "/", icon: "📊" },
+  // Startsidan nås med den runda knappen bredvid "AVA" (#1749), inte här.
   // EN lista för frister och "Bör faktureras" (#1167, #1735). "Att göra"
   // visade samma poster en gång till och förvirrade.
   { name: "Frister", href: "/watchlist", icon: "🔔" },
@@ -99,13 +100,22 @@ function LogoutButton({ iconOnly = false }: IconOnlyProp) {
   );
 }
 
+/** Användarnamn, "Advokat CRM" och (bara i full meny) versionen, #1578 och #1749. */
+function UserInfo({ userName, nameMargin, showVersion }: { userName?: string | null | undefined; nameMargin: string; showVersion: boolean }) {
+  return (
+    <div data-user-info className={cn("flex min-w-0 flex-col", nameMargin)}>
+      {userName && <p className="text-sm font-medium text-gray-900 truncate">{userName}</p>}
+      <span className="text-xs text-gray-500">Advokat CRM</span>
+      {showVersion && <AppVersion className="truncate" />}
+    </div>
+  );
+}
+
 /** Användarnamn + "Logga ut" (delas av mobil-drawern + desktop-sidofältet). */
-function UserSection({ userName, nameMargin = "mb-1", iconOnly = false }: { userName?: string | null | undefined; nameMargin?: string } & IconOnlyProp) {
+function UserSection({ userName, nameMargin = "mb-1", iconOnly = false, showVersion = false }: { userName?: string | null | undefined; nameMargin?: string; showVersion?: boolean } & IconOnlyProp) {
   return (
     <div className={cn("py-4 border-t border-gray-200", iconOnly ? "px-2" : "px-4")}>
-      {userName && !iconOnly && (
-        <p className={cn("text-sm font-medium text-gray-900 truncate", nameMargin)}>{userName}</p>
-      )}
+      {!iconOnly && <UserInfo userName={userName} nameMargin={nameMargin} showVersion={showVersion} />}
       <FeedbackButton iconOnly={iconOnly} />
       <LogoutButton iconOnly={iconOnly} />
     </div>
@@ -139,19 +149,17 @@ function useCollapsed(): [boolean, () => void] {
   return [collapsed, toggle];
 }
 
-/** Sidofältets huvud: "AVA" (+ "Advokat CRM" och versionen i fullt läge, #1578) och växlingsknappen. */
-function SidebarHeader({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+/**
+ * Sidofältets huvud: "AVA", Startsida-knappen (#1749) och växlingsknappen.
+ * Hopfällt staplas de, och huvudet växer i höjd i stället för att knappen krymps.
+ */
+function SidebarHeader({ collapsed, onToggle, homeActive }: { collapsed: boolean; onToggle: () => void; homeActive: boolean }) {
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
   const toggleLabel = collapsed ? "Fäll ut menyn" : "Fäll ihop menyn";
   return (
-    <div className={cn("flex h-16 items-center border-b border-gray-200", collapsed ? "flex-col justify-center gap-1 px-2" : "px-6")}>
+    <div className={cn("flex items-center border-b border-gray-200", collapsed ? "flex-col justify-center gap-1 px-2 py-2" : "h-16 gap-3 px-6")}>
       <h1 className={cn("font-bold text-gray-900", collapsed ? "text-base" : "text-xl")}>AVA</h1>
-      {!collapsed && (
-        <div className="ml-2 flex min-w-0 flex-col">
-          <span className="text-sm text-gray-500">Advokat CRM</span>
-          <AppVersion className="truncate" />
-        </div>
-      )}
+      <HomeButton active={homeActive} iconOnly={collapsed} />
       <button
         onClick={onToggle}
         aria-label={toggleLabel}
@@ -169,12 +177,12 @@ function DesktopSidebar({ pathname, userName }: { pathname: string; userName?: s
   const [collapsed, toggle] = useCollapsed();
   return (
     <div data-desktop-sidebar className={cn("hidden lg:flex lg:flex-col lg:border-r lg:border-gray-200 lg:bg-white lg:shrink-0", collapsed ? "lg:w-16" : "lg:w-64")}>
-      <SidebarHeader collapsed={collapsed} onToggle={toggle} />
+      <SidebarHeader collapsed={collapsed} onToggle={toggle} homeActive={isActive(pathname, "/")} />
       {/* Menyn scrollar själv i låga fönster — sidan aldrig (#1306). */}
       <nav className={cn("relative min-h-0 flex-1 overflow-y-auto py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
         <NavLinks pathname={pathname} iconOnly={collapsed} />
       </nav>
-      <UserSection userName={userName} iconOnly={collapsed} />
+      <UserSection userName={userName} iconOnly={collapsed} showVersion />
     </div>
   );
 }
@@ -187,8 +195,9 @@ function DesktopSidebar({ pathname, userName }: { pathname: string; userName?: s
 function IconSidebar({ pathname, userName }: { pathname: string; userName?: string | null | undefined }) {
   return (
     <div data-icon-sidebar className="hidden md:flex md:w-16 md:shrink-0 md:flex-col md:border-r md:border-gray-200 md:bg-white lg:hidden">
-      <div className="flex h-16 items-center justify-center border-b border-gray-200">
+      <div className="flex flex-col items-center justify-center gap-1 border-b border-gray-200 py-2">
         <h1 className="text-base font-bold text-gray-900">AVA</h1>
+        <HomeButton active={isActive(pathname, "/")} iconOnly />
       </div>
       {/* Menyn scrollar själv, sidan aldrig (#1306). `relative`: namnen är
           `sr-only` (absoluta) och räknades annars mot dokumentet. */}
@@ -225,7 +234,7 @@ export function Sidebar({ userName }: SidebarProps) {
       <div data-mobile-topbar className="md:hidden flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-bold text-gray-900">AVA</h1>
-          <span className="text-xs text-gray-500">Advokat CRM</span>
+          <HomeButton active={isActive(pathname, "/")} />
         </div>
         <div className="flex items-center gap-1">
           <ThemeToggle variant="inline" />
@@ -255,9 +264,9 @@ export function Sidebar({ userName }: SidebarProps) {
             className="absolute top-0 left-0 bottom-0 w-64 bg-white shadow-xl pt-4 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex h-12 items-center px-6 mb-2">
+            <div className="flex h-12 items-center gap-2 px-6 mb-2">
               <h1 className="text-xl font-bold text-gray-900">AVA</h1>
-              <span className="ml-2 text-sm text-gray-500">Advokat CRM</span>
+              <HomeButton active={isActive(pathname, "/")} onNavigate={() => setOpen(false)} />
             </div>
             <div className="relative min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
               <NavLinks pathname={pathname} onNavigate={() => setOpen(false)} py="py-2.5" />
