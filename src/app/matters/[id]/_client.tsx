@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 import { PanelPage } from "@/components/layout/panel-page";
+import { CoverageCapWarning } from "@/components/matter/coverage-cap-warning";
 import { EventsPanel } from "@/components/matter/events-panel";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -22,7 +23,6 @@ import { MatterHeaderDetails, MatterTypeText } from "./_matter-header-details";
 import { MatterHeaderEdit, type HeaderEditMatter } from "./_matter-header-edit";
 import { matterDefaultLayout, matterPanels } from "./_matter-panels";
 import { MatterPaymentLine, type NamedMatterContact } from "./_matter-payment-line";
-import { RattshjalpCapWarning } from "./_rattshjalp-cap-warning";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
 import { WatchSection } from "./_watch-section";
@@ -224,8 +224,9 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
       <MatterHeaderDetails courtCaseNumber={referenceOf(m)} previousCourtCaseNumber={referenceOf(m, "previousCourtCaseNumber")}
         insuranceReference={referenceOf(m, "insuranceReference")} description={m.description} contacts={contacts}
         responsibleLawyerName={responsibleLawyerName} />
-      <RattshjalpCapWarning matterId={asId<"MatterId">(m.id)} paymentMethod={m.paymentMethod}
-        rattshjalpMaxTimmar={m.rattshjalpMaxTimmar} layout="compact" />
+      {/* Takvarningen för både rättshjälp och rättsskydd, oavsett öppen panel (#1520, #1732). */}
+      <CoverageCapWarning matterId={asId<"MatterId">(m.id)} paymentMethod={m.paymentMethod}
+        rattsskyddMaxOre={m.rattsskyddMaxOre ?? null} rattshjalpMaxTimmar={m.rattshjalpMaxTimmar ?? null} layout="compact" />
     </div>
   );
 }
