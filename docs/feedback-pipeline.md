@@ -126,6 +126,27 @@ Kräver hemligheten `FLOW_BOARD_TOKEN` i ava: en klassisk PAT med `project`
 och `repo`. Statusissuen (#11) finns kvar för larmen, som tavlan inte kan
 skicka.
 
+## Design av större förfrågningar
+
+En godkänd förfrågan tar snabbvägen till arbetsordrar om den är liten (storlek
+S), följer befintliga ADR:er och inte rör något riskområde. Annars går den
+designvägen (#1746):
+
+1. **`designas`**: loop 2 skriver `## Design (runda N)` på förfrågan: mål,
+   datamodell, API, gränssnitt, grunder, arkitektur, risker, uppdelning och
+   öppna frågor ("Design" i `2-nedbrytning.md`).
+2. **Frågor**: hur något ska bete sig går till användaren (`väntar-på-användaren`),
+   en ny eller ändrad ADR eller ett produktval till Ulrik (`blockerad`, kortet
+   hamnar i Svara). Tekniska val inom ADR:erna är inga frågor: agenten väljer
+   och motiverar. Har runda 2 fortfarande frågor samlas alla i en enda fråga
+   till Ulrik.
+3. **`design-granskas`**: loop 3 granskar designen mot koden och ADR:erna,
+   och godkänner (`design-godkänd`) eller skickar tillbaka (`designas`).
+4. **`design-godkänd`**: loop 2 bryter ner den enligt designens uppdelning.
+
+Ulrik ser bara frågorna. I AVA syns designvägen som "Verifierad". På tavlan
+står den i kolumnen **Designas**.
+
 ## Beroenden
 
 Arbetsordrarna i ava bildar ett nät (#1720): kräver en ändring att koden ser

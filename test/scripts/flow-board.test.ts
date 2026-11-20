@@ -26,6 +26,18 @@ describe("tavlans regler", () => {
     expect(columnFor(["finns-redan"])).toBe("Klar");
     expect(columnFor(["undersökt", "auto-godkänn"])).toBe("Godkänns automatiskt");
     expect(columnFor(["undersökt", "auto-godkänn", "verifierad"])).toBe("Godkänd");
+    expect(columnFor(["designas"])).toBe("Designas");
+    expect(columnFor(["design-granskas"])).toBe("Designas");
+    expect(columnFor(["design-godkänd"])).toBe("Godkänd");
+    expect(columnFor(["designas", "blockerad"])).toBe("Svara");
+  });
+
+  it("designvägen: avböjas går, godkännas igen går inte; Läge säger vilket steg", () => {
+    expect(decideColumn(["designas"], "Avböjd")).toEqual({ kind: "decline" });
+    expect(decideColumn(["designas"], "Godkänd")).toEqual({ kind: "set", column: "Designas" });
+    expect(lageFor(["designas"])).toBe("Loop 2 designar lösningen (frågor hamnar i Svara)");
+    expect(lageFor(["design-granskas"])).toBe("Designen granskas av loop 3 mot ADR:erna");
+    expect(lageFor(["design-godkänd"])).toBe("Designen godkänd — loop 2 bryter ner den enligt designen");
   });
 
   it("etiketterna kolumnerna bygger på finns i intagets flöde", () => {

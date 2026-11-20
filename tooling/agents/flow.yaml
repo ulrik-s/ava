@@ -66,6 +66,31 @@ machines:
         agent: L2
         transitions:
           - to: nedbruten
+          # Designvägen (storlek M/L, nytt mönster eller riskområde): loop 2
+          # designar först, loop 3 granskar, sedan bryts den ner enligt designen.
+          - to: designas
+      designas:
+        label: designas
+        color: "c5def5"
+        description: Loop 2 designar lösningen; frågor till användaren eller Ulrik (högst 2 rundor)
+        agent: L2
+        transitions:
+          - to: design-granskas
+      design-granskas:
+        label: design-granskas
+        color: "fbca04"
+        description: Loop 3 granskar designen mot ADR:erna innan den bryts ner
+        agent: L3
+        transitions:
+          - to: design-godkand
+          - to: designas
+      design-godkand:
+        label: design-godkänd
+        color: "0e8a16"
+        description: Designen är godkänd utan öppna frågor; loop 2 bryter ner den enligt designen
+        agent: L2
+        transitions:
+          - to: nedbruten
       nedbruten:
         label: nedbruten
         color: "5319e7"

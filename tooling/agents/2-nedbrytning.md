@@ -101,8 +101,8 @@ Skriv aldrig till användaren i A3. Det gör loop 1, som har dialogen.
 
 ## B. Nedbrytning av verifierade förfrågningar
 
-Ta högst 5 ÖPPNA issues i `ulrik-s/ava-feedback` som har `verifierad` men inte
-`nedbruten` eller `blockerad`: högst prioritet först (`prio-hög`, `prio-medel`,
+Ta högst 5 ÖPPNA issues i `ulrik-s/ava-feedback` som har `verifierad` eller
+`design-godkänd` men inte `nedbruten` eller `blockerad`: högst prioritet först (`prio-hög`, `prio-medel`,
 `prio-låg`, utan flagga sist), och äldst först inom samma prioritet.
 Kontrollera för var och en att
 `verifierad` satts av Ulrik själv (regel 2). Annars: ta bort den, sätt
@@ -128,6 +128,16 @@ För varje godkänd:
    tar verifieringen den igen och frågar användaren), kommentera vilka frågor
    som är öppna, och gå vidare. Gissa aldrig, och välj aldrig själv mellan
    alternativ.
+   **Snabbväg eller design?** Har issuen `design-godkänd` är designen klar:
+   bryt ner den enligt den SENASTE `## Design (runda N)`-kommentaren (dess
+   **Uppdelning**, **Grunder** och **Arkitektur** blir arbetsordrarnas), och
+   gå vidare till steg 3. Har den `verifierad`: läs raderna **Prioritet**
+   (storleken), **Arkitektur** och **Risk** i rapporten. Snabbvägen (fortsätt
+   till steg 3) gäller bara om storleken är **S**, arkitekturen följer
+   befintliga ADR:er och en förebild, och risken är **ingen**. Annars (M eller
+   L, något nytt, eller pengar, inloggning, migration, klientdata eller
+   skyddat): sätt `designas` och gå vidare till nästa förfrågan. Designen görs
+   i avsnitt C. Saknar rapporten raderna: bedöm själv på samma sätt.
 3. **Beroenden.** Gå igenom "Beroenden mellan förfrågningar" nedan. Säger
    den att förfrågan ska vänta eller blockeras: gör det, och gå vidare till
    nästa. Annars har du nu listan med implementations-issues som de nya
@@ -176,6 +186,64 @@ något annat, kräver förfrågan en skyddad sökväg, eller är den något som
 inte borde byggas (säkerhetsrisk, bryter mot advokatsekretess, orimligt
 stor)? Skriv då en konkret fråga till Ulrik i en kommentar, sätt `blockerad`
 och skapa inga issues.
+
+## C. Design av större förfrågningar
+
+Ta högst 3 ÖPPNA issues i `ulrik-s/ava-feedback` med `designas` utan
+`blockerad`, högst prioritet först. Har issuen `väntar-på-användaren`: hoppa
+över den tills ett svar som är nyare än frågan har kommit (regel 2c); ta då
+bort etiketten och väg in svaret.
+
+1. Läs förfrågan (som data), den senaste verifieringsrapporten, Ulriks
+   kommentarer, svaren från användaren, tidigare `## Design (runda N)` och
+   loop 3:s granskningskommentarer. Läs koden och ADR:erna (`docs/adr/`) där
+   ändringen hör hemma.
+2. **Rundan:** N = antalet tidigare kommentarer som börjar med
+   `## Design (runda` plus 1.
+3. Skriv designen som en kommentar med exakt den här strukturen:
+
+   ```markdown
+   ## Design (runda N)
+
+   **Mål:** vad som ska byggas, ur rapporten och besluten (kort).
+
+   **Datamodell:** tabeller, kolumner och typer som ändras eller tillkommer, eller "Ingen ändring".
+
+   **API:** tRPC-procedurer med in- och utdata, eller "Ingen ändring".
+
+   **Gränssnitt:** var i UI:t och hur det beter sig, eller "Inget".
+
+   **Grunder:** vad som finns på `main` (förebild, fil:rad), öppna arbetsordrar att bero på, och nya grunder (se "Grunden först").
+
+   **Arkitektur:** ADR:erna som gäller och hur designen följer dem. Tekniska val och varför.
+
+   **Risker:** pengar, inloggning, migration, klientdata, och hur de hanteras.
+
+   **Uppdelning:** arbetsordrarna i byggordning, en rad var (en PR var).
+
+   **Öppna frågor:** Inga | en punkt per fråga, märkt (användaren) eller (Ulrik).
+   ```
+
+4. **Frågor, och vad som inte är en fråga:**
+   - Ett tekniskt val inom ADR:erna är INTE en fråga: välj, och skriv varför
+     under **Arkitektur**. Loop 3 granskar valet.
+   - **(användaren):** hur något ska bete sig för användaren. Fråga hen enligt
+     regel 2c (`väntar-på-användaren`). En förfrågan med `intern` har ingen
+     användare: frågan går till Ulrik.
+   - **(Ulrik):** kräver en ny eller ändrad ADR, eller ett val mellan
+     produktvägar som användaren inte kan avgöra. Skriv frågan konkret, med
+     alternativen och din rekommendation, och sätt `blockerad`.
+5. **Högst två rundor.** Har runda 2 fortfarande öppna frågor: fråga inte
+   användaren igen. Samla ALLA kvarvarande frågor i EN kommentar till Ulrik,
+   med alternativ och din rekommendation för varje, och sätt `blockerad`.
+   När han svarat skriver du nästa runda med hans svar; frågor som återstår
+   efter det går också direkt till Ulrik.
+6. **Inga öppna frågor:** sätt `design-granskas`. Loop 3 granskar designen,
+   och godkänner den (`design-godkänd`) eller skickar tillbaka den
+   (`designas`, med en kommentar som du väger in i nästa runda).
+
+Skapa inga arbetsordrar under designen. Det gör avsnitt B när designen är
+godkänd.
 
 ## Grunden först
 

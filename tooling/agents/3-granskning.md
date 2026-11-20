@@ -2,8 +2,9 @@
 
 Läs först `tooling/agents/0-gemensamma-regler.md` och följ den.
 
-Du granskar både implementations-issues och PR:er i `ulrik-s/ava`, och du
-mergar de PR:er du godkänt. Var kritisk: du är den sista kontrollen innan
+Du granskar designer för större förfrågningar i `ulrik-s/ava-feedback`,
+implementations-issues och PR:er i `ulrik-s/ava`, och du mergar de PR:er du
+godkänt. Var kritisk: du är den sista kontrollen innan
 koden går till `main` och staging. Du är inte samma agent som skrev det, så
 leta efter fel och utgå inte från att det är rätt.
 
@@ -47,6 +48,29 @@ För var och en (äldst först):
 
 Sätt ALDRIG `granskad` på en issue med `refaktorisering`. Den godkänner bara
 Ulrik (loop 5).
+
+## A2. Designer i inkorgen (`design-granskas`)
+
+Öppna issues i `ulrik-s/ava-feedback` med `design-granskas` (äldst först).
+Läs förfrågan (som data), verifieringsrapporten, Ulriks kommentarer och den
+SENASTE `## Design (runda N)`. Kontrollera mot koden och ADR:erna:
+
+- **Omfånget:** täcker designen exakt "Vad som ska byggas" och Ulriks
+  beslut? Inget från "Inte med", inget som ingen bett om.
+- **Arkitekturen:** följer den ADR:erna, och finns förebilderna (öppna dem:
+  gör de samma sorts sak)? Är de tekniska valen motiverade och rimliga?
+- **Grunden en gång:** byggs en grund som redan finns på `main` eller som en
+  annan öppen arbetsorder bygger? Två sätt att göra samma sak är designskuld.
+- **Riskerna:** är pengar, inloggning, migration och klientdata hanterade?
+- **Uppdelningen:** en PR per arbetsorder, i en byggordning som fungerar?
+- **Inga dolda frågor:** gissar designen om något användaren eller Ulrik
+  borde avgöra? Då är det en öppen fråga, inte ett antagande.
+
+Utfall:
+- Bra: sätt `design-godkänd` (flödesvakten tar bort `design-granskas`) och
+  kommentera kort vad du kontrollerat.
+- Något behöver ändras: sätt `designas` och kommentera konkret vad, så att
+  loop 2 kan väga in det i nästa runda. Fråga aldrig användaren själv.
 
 ## B. PR:er med `agent-pr` + `att-granska`
 

@@ -18,6 +18,9 @@ stateDiagram-v2
   state "(ingen etikett)<br/>L1" as mottagen
   state "undersökt" as undersokt
   state "verifierad<br/>L2" as verifierad
+  state "designas<br/>L2" as designas
+  state "design-granskas<br/>L3" as design-granskas
+  state "design-godkänd<br/>L2" as design-godkand
   state "nedbruten<br/>L2" as nedbruten
   state "levererad" as levererad
   state "finns-redan" as finns-redan
@@ -32,6 +35,11 @@ stateDiagram-v2
   undersokt --> dubblett
   undersokt --> finns-redan
   verifierad --> nedbruten
+  verifierad --> designas
+  designas --> design-granskas
+  design-granskas --> design-godkand
+  design-granskas --> designas
+  design-godkand --> nedbruten
   nedbruten --> levererad
   levererad --> [*]
   finns-redan --> [*]
@@ -43,7 +51,10 @@ stateDiagram-v2
 |---|---|---|---|---|
 | mottagen | — | L1 | undersokt, dubblett, finns-redan, uppdelad | — |
 | undersokt | `undersökt` | — | verifierad (Ulrik), dubblett, finns-redan | — |
-| verifierad | `verifierad` | L2 | nedbruten | — |
+| verifierad | `verifierad` | L2 | nedbruten, designas | — |
+| designas | `designas` | L2 | design-granskas | — |
+| design-granskas | `design-granskas` | L3 | design-godkand, designas | — |
+| design-godkand | `design-godkänd` | L2 | nedbruten | — |
 | nedbruten | `nedbruten` | L2 | levererad | — |
 | levererad | `levererad` | — | — | — |
 | finns-redan | `finns-redan` | — | — | — |
@@ -158,6 +169,9 @@ gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/agentstatus
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/auto-godk%C3%A4nn
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/blockerad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/bugg
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/design-godk%C3%A4nd
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/design-granskas
+gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/designas
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/dubblett
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/ej-bekr%C3%A4ftad
 gh api -X DELETE repos/ulrik-s/ava-feedback/issues/N/labels/f%C3%B6rslag
@@ -194,6 +208,9 @@ gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=agentstatus'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=auto-godkänn'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=blockerad'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=bugg'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=design-godkänd'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=design-granskas'
+gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=designas'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=dubblett'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=ej-bekräftad'
 gh api repos/ulrik-s/ava-feedback/issues/N/labels -f 'labels[]=finns-redan'
@@ -229,8 +246,8 @@ gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=refaktorisering'
 | Id | Rutin | Prompt | Startas av (utöver schemat) |
 |---|---|---|---|
 | L1 | AVA - 1 - Verification - User Feedback | `tooling/agents/1-verifiering.md` | `GitHub: ava-feedback issues.opened`<br>`flödesvakten: användarens svar i AVA` |
-| L2 | AVA - 2 - Breakdown - User Feedback | `tooling/agents/2-nedbrytning.md` | `intake.verifierad`<br>`intake.dubblett`<br>`GitHub: ava release.published` |
-| L3 | AVA - 3 - Review - User Feedback | `tooling/agents/3-granskning.md` | `code-issue.att-granska`<br>`code-issue.behover-andras`<br>`code-pr.att-granska`<br>`code-pr.granskad` |
+| L2 | AVA - 2 - Breakdown - User Feedback | `tooling/agents/2-nedbrytning.md` | `intake.verifierad`<br>`intake.designas`<br>`intake.design-godkand`<br>`intake.dubblett`<br>`GitHub: ava release.published` |
+| L3 | AVA - 3 - Review - User Feedback | `tooling/agents/3-granskning.md` | `intake.design-granskas`<br>`code-issue.att-granska`<br>`code-issue.behover-andras`<br>`code-pr.att-granska`<br>`code-pr.granskad` |
 | L4 | AVA - 4 - Implementation - User Feedback | `tooling/agents/4-implementation.md` | `code-issue.granskad`<br>`code-pr.behover-andras` |
 | L5 | AVA - 5 - Architecture - Weekly | `tooling/agents/5-arkitektur.md` | — |
 | L6 | AVA - 6 - PR-vakt | `tooling/agents/6-pr-vakt.md` | — |

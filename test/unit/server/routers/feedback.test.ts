@@ -240,6 +240,10 @@ describe("hjälpfunktioner", () => {
     // Ulriks beslut vinner över agentens bedömning — han kan verifiera ändå.
     [true, ["undersökt", "ej-bekräftad", "verifierad"], "verifierad"],
     [true, ["verifierad", "nedbruten"], "pagar"],
+    // Designvägen syns som verifierad för användaren.
+    [true, ["designas"], "verifierad"],
+    [true, ["design-granskas"], "verifierad"],
+    [true, ["design-godkänd"], "verifierad"],
     [true, ["undersökt", "dubblett"], "dubblett"],
     [true, ["finns-redan"], "finns_redan"],
     // Stängd av Actionen men fortfarande "finns redan" för användaren.
