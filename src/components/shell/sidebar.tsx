@@ -20,6 +20,8 @@ const navigation = [
   // EN lista för det som ska bevakas (#1167): bevakningar/frister + härledda
   // signaler. "Att göra" visade samma poster en gång till och förvirrade.
   { name: "Att bevaka", href: "/watchlist", icon: "🔔" },
+  // Det som kräver ett beslut: takvarningar, jävsträffar, synkrutor (#1734).
+  { name: "Att åtgärda", href: "/action-items", icon: "🛠️" },
   { name: "Parter", href: "/contacts", icon: "👤" },
   { name: "Dokumentsök", href: "/search", icon: "📄" },
   { name: "Dokumentmallar", href: "/templates", icon: "📝" },
