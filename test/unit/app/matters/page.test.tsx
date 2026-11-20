@@ -15,7 +15,10 @@ const mattersQuery: {
   isLoading: false,
 };
 const contactsQuery = { data: { contacts: [] } };
-const employeesQuery = { data: { users: [] } };
+/** Byråns användare (`user.list`) — prefixen styr initialerna i Ärendenr (#1727). */
+const employeesQuery: { data: { users: Array<{ id: string; name: string; matterNumberPrefix?: string | null }> } } = {
+  data: { users: [] },
+};
 const utilsMock = {
   matter: { list: { invalidate: vi.fn() } },
   contacts: { list: { invalidate: vi.fn() }, search: { invalidate: vi.fn() } },
@@ -81,6 +84,7 @@ beforeEach(() => {
   searchParamsGet.mockReturnValue(null);
   mattersQuery.data = { matters: [], total: 0, pages: 0 };
   matterTypes = [];
+  employeesQuery.data.users = [];
 });
 
 describe("MattersPage", () => {
@@ -212,6 +216,20 @@ describe("MattersPage", () => {
     expect(screen.getByRole("columnheader", { name: /Ärendetyp/ })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "Bodelning" })).toBeInTheDocument();
     expect(screen.getAllByRole("cell", { name: "—" }).length).toBeGreaterThan(0);
+  });
+
+  it("Ärendenr visar ansvarig jurists initialer när numret inte bär dem (#1727)", () => {
+    employeesQuery.data.users = [{ id: "u-cd", name: "Cecilia D", matterNumberPrefix: "CD" }];
+    const row = (id: string, matterNumber: string) => ({
+      id, matterNumber, title: `Fall ${id}`, status: "ACTIVE", responsibleLawyerId: "u-cd",
+      contacts: [], _count: { documents: 0, timeEntries: 0, contacts: 0 },
+    });
+    mattersQuery.data = { matters: [row("1", "AB2026-0001"), row("2", "CD2026-0002")], total: 2, pages: 1 };
+    render(<MattersPage />);
+    const other = screen.getByRole("cell", { name: "CD AB2026-0001" });
+    expect(within(other).getByText("CD").tagName).toBe("STRONG");
+    const own = screen.getByRole("cell", { name: "CD2026-0002" });
+    expect(own.querySelector("strong")).toBeNull();
   });
 
   it("fyller alla fält i Nytt ärende-formuläret → create med komplett payload", () => {
