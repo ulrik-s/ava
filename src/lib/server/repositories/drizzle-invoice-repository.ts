@@ -154,7 +154,10 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       const creditNoteRows = await this.db.select().from(invoices).where(eq(invoices.creditedInvoiceId, id)).limit(1);
       return {
         ...inv,
-        matter: { id: matter.id, matterNumber: matter.matterNumber, title: matter.title },
+        matter: {
+          id: matter.id, matterNumber: matter.matterNumber, title: matter.title,
+          responsibleLawyerId: matter.responsibleLawyerId,
+        },
         paymentPlan: plan[0] ?? null,
         payments: pays,
         accontoDeductions: accontoDeductionsFull,

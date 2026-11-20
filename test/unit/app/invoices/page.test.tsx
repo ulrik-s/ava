@@ -2,7 +2,7 @@
  * Test för InvoicesPage — listrendering, status, tomt-läge.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import InvoicesPage from "@/app/invoices/page";
 
@@ -13,6 +13,11 @@ const invoicesQuery = {
 };
 const setInvoices = (rows: Array<Record<string, unknown>> | undefined): void => {
   invoicesQuery.data = rows === undefined ? undefined : { items: rows, total: rows.length };
+};
+
+/** Byråns användare (`user.list`): prefixen styr initialerna i kolumnen Ärende (#1728). */
+const usersQuery: { data: { users: Array<{ id: string; name: string; matterNumberPrefix?: string | null }> } } = {
+  data: { users: [] },
 };
 
 vi.mock("@/lib/client/trpc", () => ({
@@ -32,6 +37,7 @@ vi.mock("@/lib/client/trpc", () => ({
       clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     user: {
+      list: { useQuery: () => usersQuery },
       current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
     },
   },
@@ -41,6 +47,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   setInvoices(undefined);
   invoicesQuery.isLoading = false;
+  usersQuery.data.users = [];
 });
 
 describe("InvoicesPage", () => {
@@ -190,5 +197,19 @@ describe("InvoicesPage", () => {
       render(<InvoicesPage />);
       expect(screen.queryByRole("button", { name: /annullerade/ })).toBeNull();
     });
+  });
+
+  it("Ärende visar ansvarig jurists initialer framför numret när numret inte bär dem (#1728)", () => {
+    usersQuery.data.users = [{ id: "u-cd", name: "Cecilia D", matterNumberPrefix: "CD" }];
+    const row = (id: string, matterNumber: string) => ({
+      id, invoiceDate: new Date("2026-02-01").toISOString(), invoiceType: "STANDARD", status: "SENT", amount: 1000,
+      matter: { id: `m${id}`, matterNumber, title: `Fall ${id}`, responsibleLawyerId: "u-cd" },
+    });
+    setInvoices([row("1", "AB2026-0001"), row("2", "CD2026-0002")]);
+    render(<InvoicesPage />);
+    const other = screen.getByRole("link", { name: "CD AB2026-0001 — Fall 1" });
+    expect(within(other).getByText("CD").tagName).toBe("STRONG");
+    const own = screen.getByRole("link", { name: "CD2026-0002 — Fall 2" });
+    expect(own.querySelector("strong")).toBeNull();
   });
 });

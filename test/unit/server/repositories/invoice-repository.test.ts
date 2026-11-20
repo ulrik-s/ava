@@ -136,7 +136,7 @@ describe("InvoiceRepository — in-memory", () => {
     const otherMatter = uuidv7();
     const store = new LocalStore({
       matters: [
-        { id: matterId, organizationId: "org-1", matterNumber: "2026-1", title: "T" },
+        { id: matterId, organizationId: "org-1", matterNumber: "2026-1", title: "T", responsibleLawyerId: "u-ansv" },
         { id: otherMatter, organizationId: "org-2", matterNumber: "2026-2", title: "U" },
       ],
       invoices: [
@@ -153,6 +153,7 @@ describe("InvoiceRepository — in-memory", () => {
     expect(all.map((i) => i.id).sort()).toEqual([invId, accontoId].sort()); // org-2-fakturan exkluderad
     const final = all.find((i) => i.id === invId)!;
     expect(final.matter.matterNumber).toBe("2026-1");
+    expect(final.matter.responsibleLawyerId).toBe("u-ansv"); // initialerna i fakturalistan (#1728)
     expect(final.payments).toHaveLength(1);
     expect((final.accontoDeductions[0]?.accontoInvoice as { id?: string } | null)?.id).toBe(accontoId);
     expect((await repo.listForOrg(asId<"OrganizationId">("org-1"), { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);
@@ -345,7 +346,8 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     const otherId = uuidv7();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
-    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
+    const lawyerId = uuidv7();
+    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T", responsibleLawyerId: lawyerId }));
     await db.insert(matters).values(v({ id: otherMatter, organizationId: otherOrg, matterNumber: "2026-2", title: "U" }));
     await db.insert(invoices).values(inv({ id: finalId, matterId: mId, invoiceType: "FINAL", status: "SENT" }) as never);
     await db.insert(invoices).values(inv({ id: accontoId, matterId: mId, invoiceType: "ACCONTO", status: "PAID" }) as never);
@@ -358,6 +360,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     expect(all.map((i) => i.id).sort()).toEqual([finalId, accontoId].sort()); // annan org exkluderad
     const final = all.find((i) => i.id === finalId)!;
     expect(final.matter.matterNumber).toBe("2026-1");
+    expect(final.matter.responsibleLawyerId).toBe(lawyerId); // initialerna i fakturalistan (#1728)
     expect(final.payments).toHaveLength(1);
     expect(final.accontoDeductions[0]?.accontoInvoice?.id).toBe(accontoId);
     expect((await repo.listForOrg(asId<"OrganizationId">(org), { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);

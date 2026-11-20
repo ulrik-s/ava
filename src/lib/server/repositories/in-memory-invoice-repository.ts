@@ -91,7 +91,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
       },
       orderBy: { invoiceDate: "desc" },
       include: {
-        matter: { select: { id: true, matterNumber: true, title: true } },
+        matter: { select: { id: true, matterNumber: true, title: true, responsibleLawyerId: true } },
         paymentPlan: true,
         payments: { orderBy: { paidAt: "desc" } },
         accontoDeductions: { include: { accontoInvoice: true } },
