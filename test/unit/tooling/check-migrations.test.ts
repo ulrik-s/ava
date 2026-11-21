@@ -23,6 +23,12 @@ describe("migrationernas namn och nummer", () => {
     expect(await checkMigrations()).toEqual([]);
   });
 
+  it("en ny migration utan expand/contract-märkning fälls (#1770)", async () => {
+    const { migrationFiles } = await import("../../../tooling/scripts/db-migrate");
+    const problems = await checkMigrations([...migrationFiles(), { filename: "0999_ny.sql", sql: "SELECT 1;" }]);
+    expect(problems).toEqual(["0999_ny.sql: saknar `-- kind: expand` eller `-- kind: contract` på första raden"]);
+  });
+
   it("namnfel rapporteras innan databasen rörs", async () => {
     const problems = await checkMigrations([
       { filename: "0001_a.sql", sql: "SELECT 1" }, { filename: "0001_b.sql", sql: "SELECT 1" }, { filename: "x.sql", sql: "SELECT 1" },

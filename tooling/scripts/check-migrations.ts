@@ -9,7 +9,9 @@
  *
  * Kontrollen kräver unika fyrsiffriga nummer, applicerar alla migrationer på
  * en tom Postgres (pglite) och jämför tabeller, kolumner, typer och NOT NULL
- * mot schemat. Körs som test i CI och går att köra lokalt:
+ * mot schemat. Från 0052 måste varje migration vara märkt `-- kind: expand`
+ * eller `-- kind: contract`, och en expand får inte innehålla destruktiv SQL
+ * (#1770, lib/migration-kind.ts) — den avgör om deployen kan backa servern. Körs som test i CI och går att köra lokalt:
  *
  *   bun run db:check-migrations
  */
@@ -19,6 +21,7 @@ import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import * as schema from "../../src/lib/server/db/schema";
 import { type Migration, migrationFiles } from "./db-migrate";
+import { kindProblems } from "./lib/migration-kind";
 
 /** `0033_matter_conflict_check.sql` — fyra siffror, understreck, gemener. */
 const NUMBERED = /^(\d{4})_[a-z0-9_]+\.sql$/;
@@ -111,7 +114,8 @@ export async function checkMigrations(migrations: readonly Migration[] = migrati
     ...duplicateMigrationNumbers(files).map((d) => `samma nummer: ${d}`),
   ];
   if (naming.length > 0) return naming;
-  return schemaDrift(expectedColumns(), await migratedColumns(migrations));
+  const kinds = migrations.flatMap((m) => kindProblems(m.filename, m.sql));
+  return [...kinds, ...schemaDrift(expectedColumns(), await migratedColumns(migrations))];
 }
 
 if (import.meta.main) {
