@@ -4,15 +4,16 @@
  * specifikationen som dokumentet renderas ur och verifikatet som bokförs.
  *
  * Varje seed slumpar ett ärende per betalningssätt och kör det genom de riktiga
- * routrarna. Ett fel återskapas med `AVA_BILLING_SEED=<seed>`.
+ * routrarna, med klockan fryst på seedens "nu" (`nowFor`). Ett fel återskapas
+ * med `AVA_BILLING_SEED=<seed>`.
  */
 
-import { describe, expect, it } from "vitest-compat";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { buildSemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
 import type { Invoice } from "@/lib/shared/schemas/billing";
 import { vatOnRow } from "@/lib/shared/whole-kronor";
 import { rng, type Rng } from "../../../helpers/seeded-rng";
-import { scenarioFor, worldFor } from "./billing-world";
+import { nowFor, scenarioFor, worldFor } from "./billing-world";
 
 const SEEDS: number[] = process.env.AVA_BILLING_SEED
   ? [Number(process.env.AVA_BILLING_SEED)]
@@ -62,9 +63,12 @@ const kr = (ore: number): number => Math.floor((ore + 50) / 100) * 100;
 
 describe.each(SEEDS)("seed %i", (seed) => {
   const r: Rng = rng(seed);
+  const now = nowFor(r);
+  beforeEach(() => { vi.setSystemTime(now); });
+  afterEach(() => { vi.setSystemTime(); });
 
   it("privat slutfaktura: raderna, specifikationen och verifikatet är samma hela kronor", async () => {
-    const s = scenarioFor(r, "PRIVAT");
+    const s = scenarioFor(r, "PRIVAT", now);
     const world = worldFor(s);
     const { invoice } = await world.caller.billingRun.createFinal({ matterId: world.matterId, recipient: "KLIENT" });
     assertWholeAndBalanced(seed, invoice);
@@ -81,7 +85,7 @@ describe.each(SEEDS)("seed %i", (seed) => {
   });
 
   it("aconto + slutfaktura: båda i hela kronor, och acontot bokförs exakt en gång", async () => {
-    const s = scenarioFor(r, "PRIVAT");
+    const s = scenarioFor(r, "PRIVAT", now);
     const world = worldFor(s);
     // Ett belopp med ören, som någon kan skriva in — fakturan avrundar det.
     const typed = r.int(10_000, 200_000);
@@ -100,7 +104,7 @@ describe.each(SEEDS)("seed %i", (seed) => {
   });
 
   it("rättshjälp: klientens och domstolens fakturor är hela kronor och summerar till det beviljade", async () => {
-    const s = scenarioFor(r, "RATTSHJALP");
+    const s = scenarioFor(r, "RATTSHJALP", now);
     const world = worldFor(s);
     const { run } = await world.caller.billingRun.createKostnadsrakning({ matterId: world.matterId });
     const claimed = run.workValueOreAtRun ?? -1;
@@ -115,7 +119,7 @@ describe.each(SEEDS)("seed %i", (seed) => {
   });
 
   it("rättshjälp med nedsättning i hela kronor: fakturorna summerar till domen, byrån bär resten", async () => {
-    const s = scenarioFor(r, "RATTSHJALP");
+    const s = scenarioFor(r, "RATTSHJALP", now);
     const world = worldFor(s);
     const { run } = await world.caller.billingRun.createKostnadsrakning({ matterId: world.matterId });
     const claimed = run.workValueOreAtRun ?? 0;
@@ -129,7 +133,7 @@ describe.each(SEEDS)("seed %i", (seed) => {
   });
 
   it("rättsskydd med försäkringens prutning: klienten får sin andel av totalen inkl moms, försäkringen resten", async () => {
-    const s = scenarioFor(r, "RATTSSKYDD");
+    const s = scenarioFor(r, "RATTSSKYDD", now);
     const world = worldFor(s);
     const insurerPrutningOre = 100 * r.int(0, 2_000);
     const preview = await world.caller.billingRun.coverageSplit({ matterId: world.matterId, insurerPrutningOre });

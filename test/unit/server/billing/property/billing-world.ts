@@ -4,6 +4,7 @@
  * taxa, kört genom de riktiga routrarna mot ett minneslager.
  */
 
+import { Temporal } from "@js-temporal/polyfill";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
@@ -11,12 +12,13 @@ import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
 import { TAXA_MAX_MINUTES, type TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
+import { STOCKHOLM_TZ } from "@/lib/shared/stockholm-time";
 import type { Rng } from "../../../helpers/seeded-rng";
 
 /** Betalningssätten egenskaperna gäller. */
 export type ScenarioMethod = "OFFENTLIGT_UPPDRAG" | "RATTSHJALP" | "RATTSSKYDD" | "PRIVAT";
 
-type Kind = "ARBETE" | "TIDSSPILLAN" | "ADVOKATBEREDSKAP";
+type Kind = "ARBETE" | "TIDSSPILLAN" | "TIDSSPILLAN_OVRIG_TID" | "ADVOKATBEREDSKAP";
 
 export type ScenarioEntry = {
   id: string; organizationId: string; userId: string; matterId: string; date: Date;
@@ -48,49 +50,71 @@ const PRINCIPAL: Principal = {
   id: asId<"UserId">(USER), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">(ORG),
 };
 
-/** Datum i innevarande år, före idag — samma års normer som yrkandet. */
-function dateThisYear(r: Rng): Date {
-  const now = new Date();
-  const start = Date.UTC(now.getUTCFullYear(), 0, 1);
-  return new Date(start + Math.floor(r.next() * Math.max(1, now.getTime() - start - 86_400_000)));
+const DAY_MS = 86_400_000;
+/** Spannet för seedens "nu": båda åren har kända normer, och årsskiftet ingår. */
+const NOW_FROM = Date.UTC(2025, 0, 15);
+const NOW_TO = Date.UTC(2026, 11, 31);
+
+/**
+ * Seedens "nu", slumpat ur seeden mellan 2025-01-15 och 2026-12-31. Testerna
+ * fryser klockan på det (`vi.setSystemTime`), så att en seed återskapar även
+ * fakturadatum, normår och serieår.
+ */
+export function nowFor(r: Rng): Date {
+  return new Date(NOW_FROM + Math.floor(r.next() * (NOW_TO - NOW_FROM)));
 }
+
+/** Datum i `now`:s år, före idag — samma års normer som yrkandet. */
+function dateThisYear(r: Rng, now: Date): Date {
+  const start = Date.UTC(now.getUTCFullYear(), 0, 1);
+  return new Date(start + Math.floor(r.next() * Math.max(1, now.getTime() - start - DAY_MS)));
+}
+
+const KINDS: readonly Kind[] = ["ARBETE", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID"];
 
 function kindsFor(method: ScenarioMethod): readonly Kind[] {
-  return method === "OFFENTLIGT_UPPDRAG" ? ["ARBETE", "TIDSSPILLAN", "ADVOKATBEREDSKAP"] : ["ARBETE", "TIDSSPILLAN"];
+  return method === "OFFENTLIGT_UPPDRAG" ? [...KINDS, "ADVOKATBEREDSKAP"] : KINDS;
 }
 
-function entry(r: Rng, method: ScenarioMethod, i: number): ScenarioEntry {
+function entry(r: Rng, method: ScenarioMethod, now: Date, i: number): ScenarioEntry {
   const kind = r.pick(kindsFor(method)) ?? "ARBETE";
   return {
-    id: `te-${i}`, organizationId: ORG, userId: USER, matterId: MATTER, date: dateThisYear(r),
+    id: `te-${i}`, organizationId: ORG, userId: USER, matterId: MATTER, date: dateThisYear(r, now),
     // Beredskap räknas per dygn, inte per minut.
     minutes: kind === "ADVOKATBEREDSKAP" ? 0 : 6 * r.int(1, 100),
     description: `Post ${i}`, hourlyRate: 100 * r.int(1_000, 3_500), billable: true, kind,
   };
 }
 
-function expense(r: Rng, i: number): ScenarioExpense {
+function expense(r: Rng, now: Date, i: number): ScenarioExpense {
   return {
-    id: `ex-${i}`, organizationId: ORG, userId: USER, matterId: MATTER, date: dateThisYear(r),
+    id: `ex-${i}`, organizationId: ORG, userId: USER, matterId: MATTER, date: dateThisYear(r, now),
     amount: r.int(100, 500_000), description: `Utlägg ${i}`, billable: true,
     vatRate: r.pick([0, 600, 2500]) ?? 2500, vatIncluded: r.next() < 0.5, passThrough: r.next() < 0.25,
   };
 }
 
-function hufFor(r: Rng): { hufStart: string; hufEnd: string } {
-  const start = Date.UTC(2026, 8, 22, 9, 0);
+/**
+ * Huvudförhandlingen: valfri veckodag i `now`:s år (före idag), start i hela
+ * kvartar över dygnet i svensk tid, och längd 0 till `TAXA_MAX_MINUTES`.
+ */
+function hufFor(r: Rng, now: Date): { hufStart: string; hufEnd: string } {
+  const day = Temporal.Instant.fromEpochMilliseconds(dateThisYear(r, now).getTime()).toZonedDateTimeISO("UTC").toPlainDate();
+  const quarter = r.int(0, 95);
+  const plainTime = new Temporal.PlainTime(Math.floor(quarter / 4), (quarter % 4) * 15);
+  const start = day.toZonedDateTime({ timeZone: STOCKHOLM_TZ, plainTime }).epochMilliseconds;
   return { hufStart: new Date(start).toISOString(), hufEnd: new Date(start + r.int(0, TAXA_MAX_MINUTES) * 60_000).toISOString() };
 }
 
-/** Slumpa ett ärende för betalningssättet. */
-export function scenarioFor(r: Rng, method: ScenarioMethod): Scenario {
-  const entries = Array.from({ length: r.int(1, 6) }, (_, i) => entry(r, method, i));
-  const expenses = Array.from({ length: r.int(0, 3) }, (_, i) => expense(r, i));
+/** Slumpa ett ärende för betalningssättet, med seedens `now` (se `nowFor`). */
+export function scenarioFor(r: Rng, method: ScenarioMethod, now: Date): Scenario {
+  const entries = Array.from({ length: r.int(1, 6) }, (_, i) => entry(r, method, now, i));
+  const expenses = Array.from({ length: r.int(0, 3) }, (_, i) => expense(r, now, i));
   return {
     method, entries, expenses,
     isTaxe: method === "OFFENTLIGT_UPPDRAG" && r.next() < 0.5,
     taxaLevel: (r.pick([1, 2, 3, 4] as const) ?? 1),
-    huf: hufFor(r),
+    huf: hufFor(r, now),
     clientShareBips: method === "RATTSHJALP" || method === "RATTSSKYDD" ? 100 * r.int(2, 40) : 0,
   };
 }
