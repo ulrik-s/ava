@@ -20,7 +20,7 @@
  *      `append`. En som får ändras är inte `append`,
  *   5. fält som servern äger finns bara på radpush-entiteter, annars rensas inget.
  *
- * Listan över kända avvikelser är en ratchet (`test/helpers/ratchet.ts`).
+ * Listan över kända avvikelser är en ratchet (`tooling/scripts/ratchet.ts`).
  */
 
 import { describe, expect, it } from "vitest-compat";
@@ -31,7 +31,7 @@ import { conflictClassOf, type ConflictClass } from "@/lib/shared/conflict-polic
 import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 import { PROCEDURE_OWNED_ENTITIES } from "@/lib/shared/sync/procedure-owned";
 import { QUEUED_PROCEDURES } from "@/lib/shared/sync/queued-procedures";
-import { type KnownDeviation, ratchetDiff } from "../../../helpers/ratchet";
+import { type KnownDeviation, ratchetDiff } from "../../../../tooling/scripts/ratchet";
 
 const STALE_MATRIX: KnownDeviation = {
   why: "ADR 0017:s konfliktmatris från före procedurkön (ADR 0037). Klassen används inte för procedurägda rader, som avvisas före konfliktprövningen.",
@@ -149,7 +149,7 @@ function allDeviations(r: Registers): string[] {
 
 describe("synkregistren täcker varje entitet, en gång (#1678)", () => {
   it("registren stämmer med varandra — utom de listade avvikelserna", () => {
-    expect(ratchetDiff(allDeviations(REGISTERS), KNOWN)).toEqual({ added: [], gone: [] });
+    expect(ratchetDiff(allDeviations(REGISTERS), Object.keys(KNOWN))).toEqual({ added: [], gone: [] });
   });
 
   it("varje synkad entitet skrivs på exakt ett sätt, och registren känner bara synkade entiteter", () => {
@@ -168,7 +168,7 @@ describe("synkregistren täcker varje entitet, en gång (#1678)", () => {
   });
 
   it("grinden ser en ny avvikelse i vart och ett av registren", () => {
-    const changed = (over: Partial<Registers>): readonly string[] => ratchetDiff(allDeviations({ ...REGISTERS, ...over }), KNOWN).added;
+    const changed = (over: Partial<Registers>): readonly string[] => ratchetDiff(allDeviations({ ...REGISTERS, ...over }), Object.keys(KNOWN)).added;
     expect(changed({ rowPolicy: { ...ROW_PUSH_POLICY, invoice: {} } })).toEqual(["invoice: skrivs på 2 sätt"]);
     expect(changed({ procedureOwned: new Set([...PROCEDURE_OWNED_ENTITIES].filter((e) => e !== "accontoDeduction")) }))
       .toEqual(["accontoDeduction: skrivs på 0 sätt"]);
