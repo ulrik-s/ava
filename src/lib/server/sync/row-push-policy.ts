@@ -68,7 +68,7 @@ export const ROW_PUSH_POLICY: Readonly<Record<string, RowPolicy>> = Object.freez
   matterEventSuggestion: { refs: { documentId: DOCUMENT } },
   serviceNote: { refs: { matterId: MATTER }, actor: "authorId" },
   userPreference: { owner: "userId" },
-  conflictCheck: { actor: "checkedById", appendOnly: true },
+  conflictCheck: { refs: { matterId: MATTER }, actor: "checkedById", appendOnly: true },
 });
 
 /** Beskeden när policyn avvisar en rad. */

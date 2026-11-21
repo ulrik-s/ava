@@ -13,7 +13,7 @@
 
 import { relations, sql } from "drizzle-orm";
 import {
-  bigint, bigserial, boolean, customType, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
+  bigint, bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 import type { DocumentKind } from "@/lib/shared/document-kind";
 import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
@@ -37,7 +37,7 @@ import type {
 } from "@/lib/shared/schemas/ids";
 import type { SettlementView } from "@/lib/shared/settlement-view";
 import type { StandardAtgard } from "@/lib/shared/standard-atgard";
-import { baseColumns, boolDefault, hourlyRatesColumn, ore, orgScopedColumns } from "./columns";
+import { baseColumns, boolDefault, conflictHitsColumn, hourlyRatesColumn, ore, orgScopedColumns, tsvector } from "./columns";
 
 export const organizations = pgTable("organizations", {
   ...baseColumns,
@@ -161,10 +161,12 @@ export const matters = pgTable("matters", {
   rattsskyddBeslutDatum: timestamp("rattsskydd_beslut_datum", { withTimezone: true }),
   /** Rättsskydd (#811): datum då rättsskydd nekades → föreslå rättshjälp. */
   rattsskyddNekadAt: timestamp("rattsskydd_nekad_at", { withTimezone: true }),
-  /** Jävskontrollen (#1246): status, antal träffar och när den kördes. */
+  /** Jävskontrollen (#1246): status, antal träffar, när den kördes, och träffarna (#1818, null = aldrig sparade). */
   conflictCheckStatus: text("conflict_check_status").$type<ConflictCheckStatus>(),
   conflictCheckHits: integer("conflict_check_hits"),
   conflictCheckedAt: timestamp("conflict_checked_at", { withTimezone: true }),
+  conflictCheckResults: conflictHitsColumn("conflict_check_results"),
+  conflictReviewedHits: conflictHitsColumn("conflict_reviewed_hits"),
   /** Bedömningen av träffarna (#1354): vem, när och motiveringen. */
   conflictReviewedById: uuid("conflict_reviewed_by_id").$type<UserId>(),
   conflictReviewedAt: timestamp("conflict_reviewed_at", { withTimezone: true }),
@@ -522,9 +524,6 @@ export const documentParts = pgTable("document_parts", {
   index("document_parts_matter_idx").on(t.matterId),
 ]);
 
-/** Postgres `tsvector` (fulltext-sökvektor) — läses aldrig som värde, bara i frågor. */
-const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });
-
 /**
  * Text per sida i ett dokument (#1215) — serverns fulltextindex. SERVER-ONLY:
  * ingen entitet (inget id/version/deletedAt), inget change_log, synkas aldrig
@@ -662,7 +661,8 @@ export const conflictChecks = pgTable("conflict_checks", {
   searchType: text("search_type").notNull().$type<"name" | "personalNumber" | "both">(),
   results: jsonb("results").notNull().default([]).$type<unknown[]>(),
   checkedById: uuid("checked_by_id").notNull().$type<UserId>(),
-});
+  matterId: uuid("matter_id").$type<MatterId>(), // #1818: ingen främmande nyckel; null = fristående eller äldre rad
+}, (t) => [index("conflict_checks_matter_idx").on(t.matterId)]);
 
 // ─── Relations (ADR 0020) — driver Drizzles relationella `with`-queries för
 //     repository-läsningar (getByIdWith…/list). Genererar ingen SQL (app-nivå).
