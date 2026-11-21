@@ -65,6 +65,12 @@ const routineSchema = z.object({
   prompt: z.string(),
   trigger_id: z.string().regex(/^trig_\w+$/),
   events: z.array(z.string()).default([]),
+  /**
+   * Högst så många starter av rutinen per låsfönster och klockkörning (#1837),
+   * aldrig två för samma sak. 1 för loopar som tar alla saker i en körning;
+   * fler bara för en loop som själv tar en sak åt gången med en push (L4).
+   */
+  parallel: z.number().int().min(1).max(5).default(1),
 });
 
 export const flowSchema = z.object({
