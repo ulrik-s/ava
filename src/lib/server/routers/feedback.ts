@@ -25,7 +25,7 @@ import type { FeedbackComment, FeedbackIssue, IFeedbackSink } from "../ports";
 import { orgProcedure, router } from "../trpc";
 
 /** Högst så många förfrågningar per användare och timme. */
-export const FEEDBACK_PER_HOUR = 5;
+export const FEEDBACK_PER_HOUR = 10;
 /** Högst så många svar i dialogen per användare och timme. */
 export const REPLIES_PER_HOUR = 20;
 const HOUR_MS = 3_600_000;
