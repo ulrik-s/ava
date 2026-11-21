@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { baseFields, orgScopedFields, dateLike } from "./common";
-import { documentTemplateIdSchema, conflictCheckIdSchema, userIdSchema } from "./ids";
+import { matterRoleSchema } from "./enums";
+import { documentTemplateIdSchema, conflictCheckIdSchema, contactIdSchema, matterIdSchema, userIdSchema } from "./ids";
 
 /**
  * DocumentTemplate (Dokumentmall) — Handlebars HTML, autofyller från
@@ -20,6 +21,23 @@ export const documentTemplateSchema = z.object({
 export type DocumentTemplate = z.infer<typeof documentTemplateSchema>;
 
 /**
+ * En träff i jävskontrollen som sparas på ärendet (#1818): kontakten, dess roll
+ * och ärendet den är kopplad till. Bär aldrig personnummer, organisationsnummer
+ * eller klientnamn.
+ */
+export const conflictHitSchema = z.object({
+  contactId: contactIdSchema,
+  contactName: z.string(),
+  role: matterRoleSchema,
+  matterId: matterIdSchema,
+  matterNumber: z.string(),
+  matterTitle: z.string(),
+});
+
+/** En träff i jävskontrollen, sparad på ärendet (#1818). */
+export type ConflictHit = z.infer<typeof conflictHitSchema>;
+
+/**
  * ConflictCheck — jävssök-logg. Lagras i `conflict-checks/<id>.json`.
  */
 export const conflictCheckSchema = z.object({
@@ -29,6 +47,8 @@ export const conflictCheckSchema = z.object({
   /** Sökresultat snapshot:ade vid söktillfället. JSON-array. */
   results: z.array(z.unknown()),
   checkedById: userIdSchema,
+  /** Ärendet kontrollen gällde (#1818). Null = en fristående kontroll eller en äldre rad. */
+  matterId: matterIdSchema.nullish(),
   createdAt: dateLike,
 }).passthrough();
 

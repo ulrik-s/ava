@@ -104,6 +104,15 @@ describe("jävskontrollens logg", () => {
     expect(await checkRowPolicy(input({ entity: "conflictCheck", kind: "update", existing: check, incoming: { searchTerm: "x" } }))).toEqual({ reason: ROW_POLICY_REASONS.appendOnly });
     expect(await checkRowPolicy(input({ entity: "conflictCheck", kind: "delete", existing: check, incoming: null }))).toEqual({ reason: ROW_POLICY_REASONS.appendOnly });
   });
+
+  it("ärendet på loggraden (#1818): eget och null tas emot, en annan byrås nekas, ett icke-uuid är ogiltigt", async () => {
+    const check = { id: uuidv7(), checkedById: ME, searchTerm: "Bo Berg" };
+    const push = (matterId: unknown) => checkRowPolicy(input({ entity: "conflictCheck", incoming: { ...check, matterId } }));
+    expect(await push(OWN_MATTER)).toBeNull();
+    expect(await push(null)).toBeNull();
+    expect(await push(FOREIGN_MATTER)).toEqual({ reason: ROW_POLICY_REASONS.otherOrg });
+    expect(await push("m-1")).toEqual({ reason: ROW_POLICY_REASONS.badRef });
+  });
 });
 
 describe("immutableOnUpdate", () => {
