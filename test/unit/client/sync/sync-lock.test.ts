@@ -3,22 +3,8 @@
  * som förut.
  */
 import { describe, expect, it } from "vitest-compat";
-import { SYNC_LOCK_NAME, withSyncLock, type SyncLocks } from "@/lib/client/sync/sync-lock";
-
-/** Web Locks i miniatyr: ett exklusivt lås per namn, i anropsordning. */
-function fakeLocks(): SyncLocks & { names: string[] } {
-  const tails = new Map<string, Promise<unknown>>();
-  const names: string[] = [];
-  return {
-    names,
-    request<T>(name: string, callback: () => Promise<T>): Promise<T> {
-      names.push(name);
-      const run = (tails.get(name) ?? Promise.resolve()).then(callback);
-      tails.set(name, run.catch(() => undefined));
-      return run;
-    },
-  };
-}
+import { SYNC_LOCK_NAME, withSyncLock } from "@/lib/client/sync/sync-lock";
+import { fakeLocks } from "../../../helpers/fake-locks";
 
 describe("withSyncLock", () => {
   it("två samtidiga synkar körs efter varandra, under det delade låset", async () => {

@@ -8,6 +8,9 @@
  * finns bara på säkra sidor (https eller localhost); annars körs synken utan
  * lås, som förut.
  *
+ * Både den första synken när storen startar (`createServerFirstStore`) och
+ * den löpande synken (`server-first-sync.tsx`) går under låset (#1758).
+ *
  * Det täcker bara flikar i samma webbläsare: två enheter, eller ett omförsök
  * medan servern fortfarande kör det första, skyddas av servern.
  */
