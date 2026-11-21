@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   const res = await runParsed(parseArgs(preprocess(process.argv.slice(2))), deps);
   if (res.stdout) process.stdout.write(`${res.stdout}\n`);
   if (res.stderr) process.stderr.write(`${res.stderr}\n`);
-  process.exit(res.code);
+  process.exitCode = res.code;
 }
 
 void main();
