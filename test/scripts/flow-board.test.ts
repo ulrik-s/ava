@@ -5,11 +5,13 @@
  * när ett kort flyttas.
  */
 import { describe, expect, it } from "vitest-compat";
-import { AUTO_APPROVE_MS, autoApprovable, autoApproveDue, COLUMN_LABELS, COLUMNS, columnFor, decideColumn, decidePrio, lageFor, rekFor } from "../../tooling/scripts/flow/board";
+import {
+  AUTO_APPROVE_MS, autoApprovable, autoApproveDue, COLUMN_LABELS, COLUMNS, columnFor, decideColumn, decidePrio, decideWorkOrder, lageFor, rekFor, WORK_ORDER_LAGE,
+} from "../../tooling/scripts/flow/board";
 import { type BoardApi, type BoardItem, projectBoard } from "../../tooling/scripts/flow/board-github";
 import { gitHub, type GhRunner, intakeRefOf, type OpenItem } from "../../tooling/scripts/flow/github";
 import { loadFlow } from "../../tooling/scripts/flow/load";
-import { BOARD_MARKER, syncBoard } from "../../tooling/scripts/flow-board";
+import { BOARD_MARKER, type CodeSide, HUMAN_APPROVED, syncBoard } from "../../tooling/scripts/flow-board";
 
 const flow = loadFlow();
 
@@ -90,18 +92,18 @@ describe("tavlans regler", () => {
     expect(lageFor(["uppdelad"])).toBe("Uppdelad i egna förfrågningar");
   });
 
-  it("en nedbruten förfrågan vars arbetsorder väntar på Ulrik står i Svara och säger vilken (#1776)", () => {
+  it("en nedbruten förfrågan med en blockerad arbetsorder står kvar i Byggs och hänvisar till arbetsorderns kort (#1779)", () => {
     const ctx = { workOrders: { done: 0, total: 2, blocked: ["ava#1764"] } };
-    expect(columnFor(["nedbruten"], ctx)).toBe("Svara");
-    expect(columnFor(["nedbruten"], { workOrders: { done: 0, total: 2, blocked: [] } })).toBe("Byggs");
-    expect(columnFor(["undersökt"], ctx)).toBe("Att besluta");
-    expect(lageFor(["nedbruten"], ctx)).toBe("Arbetsorder väntar på ditt svar: ava#1764 — läs senaste kommentaren där");
-    expect(lageFor(["nedbruten", "blockerad"], ctx)).toBe("Blockerad — läs senaste kommentaren och svara i issuen");
-    // Den byggs redan: att avböja eller godkänna den från Svara går inte, kortet läggs tillbaka.
-    expect(decideColumn(["nedbruten"], "Svara", ctx)).toEqual({ kind: "none" });
-    expect(decideColumn(["nedbruten"], "Avböjd", ctx)).toEqual({ kind: "set", column: "Svara" });
-    expect(decideColumn(["nedbruten"], "Godkänd", ctx)).toEqual({ kind: "set", column: "Svara" });
-    expect(decideColumn(["nedbruten"], "Svara")).toEqual({ kind: "set", column: "Byggs" });
+    expect(columnFor(["nedbruten"])).toBe("Byggs");
+    expect(lageFor(["nedbruten"], ctx)).toBe("Byggs: 0 av 2 klara — ava#1764 väntar på dig (kortet står i Svara)");
+  });
+
+  it("en arbetsorders kort: Godkänd släpper, Avböjd stänger, Svara står, annat läggs tillbaka", () => {
+    expect(decideWorkOrder("Svara")).toBe("none");
+    expect(decideWorkOrder("Godkänd")).toBe("approve");
+    expect(decideWorkOrder("Avböjd")).toBe("decline");
+    expect(decideWorkOrder("Byggs")).toBe("set");
+    expect(decideWorkOrder(null)).toBe("set");
   });
 
   it("rekommendationen läses ur etiketten", () => {
@@ -194,7 +196,10 @@ describe("synken", () => {
     const board = fakeBoard(cards);
     const gh = fakeGh();
     const r = syncBoard({ board, intake: gitHub(FB, gh.run), intakeRepo: FB, open: issues, enforce: true, log: () => {}, now: NOW });
-    expect(r).toEqual({ added: [1], approved: [2], declined: [3], reset: [4], archived: [5], vetoed: [], autoApproved: [] });
+    expect(r).toEqual({
+      added: [1], approved: [2], declined: [3], reset: [4], archived: [5], vetoed: [], autoApproved: [],
+      workOrders: { added: [], approved: [], declined: [], archived: [], prsApproved: [] },
+    });
     expect(withoutLage(board.calls)).toEqual([
       "add I_1", "column item-I_1 Att besluta", "prio item-I_1 hög",
       "column PVTI_4 Att besluta",
@@ -292,6 +297,70 @@ describe("synken: rekommendation, veto och automatiskt godkännande", () => {
     const dry = sync([auto(8)], [card(8, "Godkänns automatiskt", null, true, { rek: "godkänn" })], { 8: [{ label: "auto-godkänn", at: hoursAgo(48) }] }, false);
     expect(dry.r.autoApproved).toEqual([8]);
     expect(dry.gh.calls.filter((c) => !c.includes("/events"))).toEqual([]);
+  });
+});
+
+describe("blockerade arbetsordrar som egna kort (#1779)", () => {
+  const AVA = "ulrik-s/ava";
+  const wo = (n: number, labels: string[]): OpenItem => ({ ...open(n, labels), body: "Intag: ava-feedback#9" });
+  const pr = (n: number, closes: number, labels: string[]): OpenItem => ({ number: n, title: "p", body: `Closes #${closes}`, labels, isPr: true });
+  const woCard = (n: number, column: string | null, lage: string | null = WORK_ORDER_LAGE): BoardItem => ({ ...card(n, column, null, true, lage === null ? {} : { lage }), repo: AVA });
+  const sync = (codeOpen: OpenItem[], cards: BoardItem[], enforce = true) => {
+    const board = fakeBoard(cards);
+    const gh = fakeGh();
+    const code: CodeSide = { repo: AVA, gh: gitHub(AVA, gh.run), open: codeOpen, states: ["att-granska", "granskad", "pågår"] };
+    const r = syncBoard({ board, intake: gitHub(FB, fakeGh().run), intakeRepo: FB, open: [], enforce, log: () => {}, now: NOW, code });
+    return { r, board, gh };
+  };
+
+  it("en blockerad arbetsorder läggs på tavlan i Svara med instruktionen", () => {
+    const { r, board } = sync([wo(1764, ["agent-task", "granskad", "blockerad"]), wo(1765, ["agent-task", "granskad"])], []);
+    expect(r.workOrders.added).toEqual([1764]);
+    expect(board.calls).toEqual(["add I_1764", "column item-I_1764 Svara", `lage item-I_1764 ${WORK_ORDER_LAGE}`]);
+  });
+
+  it("Godkänd: blockerad bort, människa-godkänd på, och tillståndet sätts igen så att agenten startar", () => {
+    const { r, gh } = sync([wo(1764, ["agent-task", "granskad", "blockerad"])], [woCard(1764, "Godkänd")]);
+    expect(r.workOrders.approved).toEqual([1764]);
+    expect(gh.calls[0]).toBe(`api -X DELETE repos/${AVA}/issues/1764/labels/blockerad`);
+    expect(gh.calls[1]).toBe(`api repos/${AVA}/issues/1764/labels -f labels[]=${HUMAN_APPROVED}`);
+    expect(gh.calls[2]).toContain(`issues/1764/comments -f body=${BOARD_MARKER}`);
+    expect(gh.calls.slice(3)).toEqual([`api -X DELETE repos/${AVA}/issues/1764/labels/granskad`, `api repos/${AVA}/issues/1764/labels -f labels[]=granskad`]);
+  });
+
+  it("Avböjd stänger arbetsordern; en flytt någon annanstans läggs tillbaka; en gammal Läge-text skrivs om", () => {
+    const blocked = (n: number) => wo(n, ["agent-task", "att-granska", "blockerad"]);
+    const { r, gh, board } = sync([blocked(1), blocked(2), blocked(3)], [woCard(1, "Avböjd"), woCard(2, "Byggs"), woCard(3, "Svara", "gammal")]);
+    expect(r.workOrders.declined).toEqual([1]);
+    expect(gh.calls).toEqual([
+      `api repos/${AVA}/issues/1/comments -f body=Avböjd av Ulrik på tavlan. Arbetsordern stängs utan att byggas.`,
+      `api -X PATCH repos/${AVA}/issues/1 -f state=closed -f state_reason=not_planned`,
+    ]);
+    expect(board.calls).toEqual(["column PVTI_2 Svara", `lage PVTI_3 ${WORK_ORDER_LAGE}`]);
+  });
+
+  it("en arbetsorder som inte längre är blockerad (eller är stängd) arkiveras; utan tillstånd sätts inget igen", () => {
+    const { r, board, gh } = sync([wo(5, ["agent-task", "granskad"]), wo(6, ["agent-task", "blockerad"])], [woCard(5, "Svara"), { ...woCard(7, "Svara"), open: false }, woCard(6, "Godkänd")]);
+    expect(r.workOrders.archived).toEqual([5, 7]);
+    expect(board.calls).toEqual(["archive PVTI_5", "archive PVTI_7"]);
+    expect(gh.calls.filter((c) => c.includes("labels/granskad") || c.includes("labels[]=granskad"))).toEqual([]);
+  });
+
+  it("en agent-PR för en arbetsorder Ulrik godkänt får människa-godkänd; andra rörs inte", () => {
+    const { r, gh } = sync([
+      wo(10, ["agent-task", "pågår", HUMAN_APPROVED]), wo(11, ["agent-task", "pågår"]),
+      pr(20, 10, ["agent-pr"]), pr(21, 11, ["agent-pr"]), pr(22, 10, ["agent-pr", HUMAN_APPROVED]), pr(23, 10, []),
+      { ...pr(24, 0, ["agent-pr"]), body: "ingen stängning" },
+    ], []);
+    expect(r.workOrders.prsApproved).toEqual([20]);
+    expect(gh.calls).toEqual([`api repos/${AVA}/issues/20/labels -f labels[]=${HUMAN_APPROVED}`]);
+  });
+
+  it("i rapportläge skrivs inget", () => {
+    const { r, board, gh } = sync([wo(1, ["agent-task", "granskad", "blockerad"]), wo(2, ["agent-task", "granskad", "blockerad"])], [woCard(2, "Godkänd")], false);
+    expect(r.workOrders).toMatchObject({ added: [1], approved: [2] });
+    expect(board.calls).toEqual([]);
+    expect(gh.calls).toEqual([]);
   });
 });
 

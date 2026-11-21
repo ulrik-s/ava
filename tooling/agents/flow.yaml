@@ -264,6 +264,13 @@ machines:
       blockerad:
         color: "b60205"
         description: Agenten behöver ett beslut av Ulrik
+      # Ulrik godkände den blockerade arbetsordern på tavlan (#1779): blockerad
+      # togs bort, och tavlans synk sätter människa-godkänd på dess PR med
+      # Ulriks token, så att den får röra skyddade sökvägar.
+      människa-godkänd:
+        color: "000000"
+        description: Ulrik tillåter att agent-PR:en rör skyddade sökvägar/migrationer
+        by: ulrik
       # Effektiv prioritet, satt av klockan: den egna (raden `Prioritet:` som
       # loop 2 skriver) eller den högsta bland det som väntar på issuen
       # (beroendena), om den är högre. Loop 4 tar högst först. Agenter sätter
