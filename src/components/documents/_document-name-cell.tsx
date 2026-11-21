@@ -105,11 +105,14 @@ function RecipientBadge({ recipient, direction }: { recipient?: NameCellDoc["rec
 }
 
 /** Meta-raden under filnamnet (typ-badge, filnamn, analys-status). Utbruten
- *  ur DocumentNameButton — alla villkorade `&&`-render-grenar bor här. */
+ *  ur DocumentNameButton — alla villkorade `&&`-render-grenar bor här.
+ *  `flex-wrap`: märkena bryter rad, annars blir radens minsta bredd summan av
+ *  märkena och listvyns automatiska tabellayout scrollar på mobil (#1796).
+ *  Av samma skäl har filnamnet en fast minsta bredd (`w-0 min-w-16`). */
 function DocumentNameMeta({ doc, isAnalyzing, isWaitingAnalysis }: { doc: NameCellDoc; isAnalyzing: boolean; isWaitingAnalysis: boolean }) {
   const kinds = documentKindsLabel(doc);
   return (
-    <span className="flex items-center gap-1.5 text-xs text-gray-500 font-normal min-w-0">
+    <span className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 font-normal min-w-0">
       <DirectionBadge direction={doc.direction} />
       <RecipientBadge recipient={doc.recipient} direction={doc.direction} />
       {kinds && (
@@ -117,7 +120,7 @@ function DocumentNameMeta({ doc, isAnalyzing, isWaitingAnalysis }: { doc: NameCe
           {kinds}
         </span>
       )}
-      {doc.title && <span className="truncate">{doc.fileName}</span>}
+      {doc.title && <span className="w-0 min-w-16 grow truncate">{doc.fileName}</span>}
       {isWaitingAnalysis && <span className="text-amber-600 text-[10px]">⏳ analyseras…</span>}
       {doc.analysisError && !isAnalyzing && (
         <span className="text-red-500 text-[10px]" title={doc.analysisError}>
