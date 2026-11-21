@@ -371,7 +371,7 @@ den vanliga testsviten:
 | Repo-kontraktet utanför CRUD | `test/unit/server/repositories/repository-list-contract.test.ts` | Samma scenarier mot minnesrepot och Drizzle (pglite eller `PG_TEST_URL`): svensk namnordning, null sist, mjukt raderade rader utanför listor, `%`/`_` som vanliga tecken. |
 
 Varje grind är en **ratchet** med en lista över dagens kända avvikelser
-(`test/helpers/ratchet.ts`). Varje post anger skälet och issuen som ska rätta
+(`tooling/scripts/ratchet.ts`). Varje post anger skälet och issuen som ska rätta
 den. En ny avvikelse fäller testet. En listad avvikelse som inte längre finns
 fäller också testet, och då ska posten strykas, precis som med `lint:prune`.
 Listan får bara krympa. Lägg aldrig till en post för att få igenom ny kod.

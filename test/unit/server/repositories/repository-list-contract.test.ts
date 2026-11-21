@@ -14,7 +14,7 @@
  *   - sökningen skiljer inte på versaler och gemener, också för Å/Ä/Ö,
  *   - ärendenummerprefixet matchar exakt, med skiftläge.
  *
- * Kända avvikelser per backend står i en ratchet-lista (`test/helpers/ratchet.ts`).
+ * Kända avvikelser per backend står i en ratchet-lista (`tooling/scripts/ratchet.ts`).
  */
 
 import { isDeepStrictEqual } from "node:util";
@@ -24,7 +24,7 @@ import type { Contact } from "@/lib/shared/schemas/contact";
 import { asId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { uuidv7 } from "@/lib/shared/uuid";
-import { type KnownDeviation, ratchetDiff } from "../../../helpers/ratchet";
+import { type KnownDeviation, ratchetDiff } from "../../../../tooling/scripts/ratchet";
 import { DRIZZLE_NAME, type OpenRepos, openDrizzleRepos, openInMemoryRepos } from "./contract-backends";
 
 type BackendKind = "in-memory" | "drizzle";
@@ -201,7 +201,7 @@ for (const backend of BACKENDS) {
         if (mismatch !== null) found[`${backend.kind}: ${scenario.name}`] = mismatch;
       }
       const known = Object.fromEntries(Object.entries(KNOWN).filter(([key]) => key.startsWith(`${backend.kind}: `)));
-      const { added, gone } = ratchetDiff(Object.keys(found), known);
+      const { added, gone } = ratchetDiff(Object.keys(found), Object.keys(known));
       expect({ added: Object.fromEntries(added.map((key) => [key, found[key]])), gone }).toEqual({ added: {}, gone: [] });
     });
   });

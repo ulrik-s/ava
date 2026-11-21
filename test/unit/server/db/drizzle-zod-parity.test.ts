@@ -18,7 +18,7 @@
  *     boolesk kolumn med motsatt standardvärde. Rader som skapas i minnesrepot
  *     valideras inte, så där är reservvärdet det verkliga standardvärdet.
  *
- * Varje lista är en ratchet (`test/helpers/ratchet.ts`): dagens avvikelser står
+ * Varje lista är en ratchet (`tooling/scripts/ratchet.ts`): dagens avvikelser står
  * med issue, nya fäller testet och en rättad avvikelse måste strykas ur listan.
  */
 
@@ -38,7 +38,7 @@ import {
   taskSchema, timeEntrySchema, userSchema, writeOffSchema,
 } from "@/lib/shared/schemas";
 import { orgPreferenceSchema, userPreferenceSchema } from "@/lib/shared/schemas/preference";
-import { type KnownDeviation, ratchetDiff } from "../../../helpers/ratchet";
+import { type KnownDeviation, ratchetDiff } from "../../../../tooling/scripts/ratchet";
 
 /**
  * Tabell ↔ entitetsschema. Nyckeln är entitetens `sourceKey` (= tabellens
@@ -256,7 +256,7 @@ describe("Drizzle ↔ zod-paritet (#1678)", () => {
   });
 
   it("standardvärde, nullbarhet och fält stämmer — utom de listade", () => {
-    expect(ratchetDiff(columnDeviations(), KNOWN_COLUMN_DEVIATIONS)).toEqual({ added: [], gone: [] });
+    expect(ratchetDiff(columnDeviations(), Object.keys(KNOWN_COLUMN_DEVIATIONS))).toEqual({ added: [], gone: [] });
   });
 
   it("enum-värdena stämmer (typnivå: `bun run typecheck` fäller på en ny avvikelse)", () => {
@@ -270,7 +270,7 @@ describe("Drizzle ↔ zod-paritet (#1678)", () => {
   });
 
   it("kodens `?? true`/`?? false` motsäger inte databasens standardvärde — utom de listade", () => {
-    expect(ratchetDiff(fallbackDeviations(), KNOWN_FALLBACKS)).toEqual({ added: [], gone: [] });
+    expect(ratchetDiff(fallbackDeviations(), Object.keys(KNOWN_FALLBACKS))).toEqual({ added: [], gone: [] });
   });
 
   it("grinden ser det den ska: F-skatt-felet (#1675) och ett motsägande reservvärde", () => {
