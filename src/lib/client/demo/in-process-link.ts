@@ -18,7 +18,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import { appRouter } from "@/lib/server/routers/_app";
 import type { Context } from "@/lib/server/trpc-core";
 import { isQueuedProcedure, prepareQueuedInput } from "@/lib/shared/sync/queued-procedures";
-import { SharedExclusiveLock } from "./shared-exclusive-lock";
+import { MutationLock } from "./mutation-lock";
 
 /**
  * Spelar in ett köbart procedur-anrop (#1265, ADR 0037): kör `exec` lokalt och
@@ -38,20 +38,21 @@ export interface InProcessLinkOpts {
 
 export function inProcessLink(ctx: Context, opts: InProcessLinkOpts = {}): TRPCLink<AppRouter> {
   const caller = appRouter.createCaller(ctx);
-  // Köbara procedurer körs exklusivt (#1265): deras lokala skrivningar fångas
-  // som anropets `touches`, och en samtidig mutation får inte hamna där.
-  // Övriga mutationer körs delat; frågor läser bara och går förbi låset.
-  const lock = new SharedExclusiveLock();
+  // ALLA mutationer körs exklusivt (#1794), i demo och self-hosted: de delar
+  // LocalStore:s transaktionsbuffert, och en köbar procedurs lokala skrivningar
+  // fångas som anropets `touches` (#1265). Frågor läser bara och går förbi.
+  const lock = new MutationLock();
 
-  const run = (path: string, input: unknown, type: string): Promise<unknown> => {
-    const fn = resolvePath(caller, path);
+  const mutate = (path: string, input: unknown): Promise<unknown> => {
     const recorder = opts.recordProcedure;
-    if (!recorder || type !== "mutation") return fn(input);
-    const prepared = isQueuedProcedure(path) ? prepareQueuedInput(path, input) : null;
-    if (!prepared) return lock.shared(() => fn(input));
-    return lock.exclusive(() => recorder({ path, input: prepared }, (queued) =>
-      resolvePath(appRouter.createCaller({ ...ctx, queued, provisional: true }), path)(prepared)));
+    const prepared = recorder && isQueuedProcedure(path) ? prepareQueuedInput(path, input) : null;
+    if (!recorder || !prepared) return resolvePath(caller, path)(input);
+    return recorder({ path, input: prepared }, (queued) =>
+      resolvePath(appRouter.createCaller({ ...ctx, queued, provisional: true }), path)(prepared));
   };
+
+  const run = (path: string, input: unknown, type: string): Promise<unknown> =>
+    type === "mutation" ? lock.exclusive(() => mutate(path, input)) : resolvePath(caller, path)(input);
 
   return () => ({ op }) =>
     observable((observer) => {

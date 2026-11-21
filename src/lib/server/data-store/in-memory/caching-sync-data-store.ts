@@ -158,8 +158,8 @@ export class CachingSyncDataStore {
   /**
    * Kör en köbar procedur lokalt (#1265, ADR 0037) och köa ANROPET, inte
    * raderna den skrev. `run` körs i en lokal transaktion: kastar den rullas
-   * dess skrivningar tillbaka och ingenting köas. In-process-länken kör köbara
-   * procedurer exklusivt (`SharedExclusiveLock`), så ingen samtidig mutations
+   * dess skrivningar tillbaka och ingenting köas. In-process-länken kör alla
+   * mutationer exklusivt (`MutationLock`, #1794), så ingen samtidig mutations
    * skrivningar hamnar i fångsten.
    */
   runQueuedProcedure<T>(call: ProcedureCallInput, run: (queued: QueuedCallIdentity) => Promise<T>): Promise<T> {

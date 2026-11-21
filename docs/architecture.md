@@ -270,8 +270,9 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
 `timeEntry.create/update/delete`) köas som **anrop**, inte som färdiga rader:
 
 - **Klienten** kör proceduren lokalt som förut (offline fungerar). In-process-
-  länken ger en create ett klient-genererat UUIDv7 och kör anropet exklusivt
-  (`SharedExclusiveLock`), så `CachingSyncDataStore.runQueuedProcedure` kan
+  länken ger en create ett klient-genererat UUIDv7 och kör, som alla
+  mutationer, anropet exklusivt (`MutationLock`, #1794; frågor går förbi
+  låset), så `CachingSyncDataStore.runQueuedProcedure` kan
   fånga dess radskrivningar som `touches` i stället för att köa dem som rader.
   Kastar proceduren rullas skrivningarna tillbaka och ingenting köas.
 - **Servern** (`DrizzleProcedureReplayer`, `sync.replay`) kör samma
