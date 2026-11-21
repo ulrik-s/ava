@@ -120,9 +120,9 @@ describe("faktureringen i procedur-kön (#1276, steg 2a)", () => {
   });
 
   it("setStatus med en otillåten övergång avvisas — ingen anteckning skrivs", async () => {
-    const inv = await invoice("DRAFT");
+    const inv = await invoice("PAID");
     const before = (await handle.db.select().from(serviceNotes)).length;
-    const c = call("invoice.setStatus", { invoiceId: inv, status: "BAD_DEBT" });
+    const c = call("invoice.setStatus", { invoiceId: inv, status: "SENT" });
     expect(await replayer.replay(c, ctx)).toMatchObject({ status: "rejected", code: "BAD_REQUEST" });
     expect((await handle.db.select().from(serviceNotes)).length).toBe(before);
   });
