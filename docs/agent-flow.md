@@ -5,7 +5,7 @@ Varje sak har exakt ett tillstånd (en etikett). Flödesvakten
 (`.github/workflows/agent-flow.yml`) stoppar otillåtna övergångar, tar bort det
 gamla tillståndet och sköter timeouterna. Flaggor läggs ovanpå tillståndet.
 CI som hänger mer än 60 minuter avbryts. Står en sak längre än 2h
-i ett tillstånd med en agent startas agenten igen (knuffen, högst rutinens `parallel` starter per körning), utom med `blockerad` eller `väntar-på-användaren`.
+i ett tillstånd med en agent startas agenten igen (knuffen, högst rutinens `parallel` starter per körning), utom med `blockerad` eller `väntar-på-användaren` eller `auto-godkänn`.
 Klockan stänger också dubblett-PR:er: två körningar som byggt samma issue (den mergade eller äldsta behålls).
 
 ## intake (`ulrik-s/ava-feedback`, issues)
@@ -76,7 +76,7 @@ stateDiagram-v2
 | `rek-godkänn` | alla | — | Loop 1 rekommenderar att den byggs |
 | `rek-avböj` | alla | — | Loop 1 rekommenderar att den inte byggs |
 | `rek-fråga` | alla | — | Loop 1 — Ulrik behöver avgöra något först |
-| `auto-godkänn` | alla | — | Liten bekräftad bugg eller internt verktyg utan risk — godkänns efter 24 h utan veto |
+| `auto-godkänn` | alla | — | Godkänns efter 24 h utan veto — en liten bugg eller ett internt verktyg, eller en agents förslag |
 | `intern` | Ulrik | — | Internt arbete (Ulrik eller en agent) — ingen användare att fråga |
 
 ## code-issue (`ulrik-s/ava`, issues)

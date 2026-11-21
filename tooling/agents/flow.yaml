@@ -176,7 +176,9 @@ machines:
       # tillsammans med undersökt, och den syns på tavlan. auto-godkänn: en
       # liten bekräftad bugg eller ett internt verktyg utan risk. Tavlans synk
       # sätter verifierad med Ulriks token efter 24 h om han inte lagt in veto
-      # (flyttat kortet till Att besluta, som tar bort flaggan).
+      # (flyttat kortet till Att besluta, som tar bort flaggan). Utan undersökt
+      # är den en agents fråga med förslag (#1872): förslaget gäller efter 24 h
+      # om Ulrik inte svarar eller flyttar kortet till Svara (då blockerad).
       rek-godkänn:
         color: "0e8a16"
         description: Loop 1 rekommenderar att den byggs
@@ -188,7 +190,7 @@ machines:
         description: Loop 1 — Ulrik behöver avgöra något först
       auto-godkänn:
         color: "5319e7"
-        description: Liten bekräftad bugg eller internt verktyg utan risk — godkänns efter 24 h utan veto
+        description: Godkänns efter 24 h utan veto — en liten bugg eller ett internt verktyg, eller en agents förslag
       # Inkorgen för allt arbete: förfrågningar från Ulrik eller en agent. Loop 1
       # verifierar dem som andra, men det finns ingen användare att fråga.
       intern:
@@ -390,6 +392,7 @@ nudge:
   skip_flags:
     - blockerad
     - väntar-på-användaren
+    - auto-godkänn
 
 # Hälsokontrollen (statussidan "Agentkedjans status" i ava-feedback): en sak
 # som stått så här länge i ett agenttillstånd trots knuffar larmar, med push.

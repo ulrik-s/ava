@@ -5,11 +5,13 @@
  * - Användarens svar från AVA (`<!-- ava-user-reply:`): agenten som äger
  *   förfrågans tillstånd, eller verifieringen (L1) när tillståndet saknar
  *   agent — den tar "besvarade" förfrågningar också när de är undersökta.
- * - Ulriks egen kommentar (utan app) på något blockerat: tillståndets agent,
- *   som enligt regel 7 läser svaret och låser upp.
+ * - Ulriks egen kommentar (utan app) på något blockerat, eller på en agents
+ *   förslag som väntar på veto (#1872): tillståndets agent, som enligt regel 7
+ *   läser svaret och låser upp.
  *
  * Agenternas egna kommentarer (via appen) startar aldrig något.
  */
+import { isProposal } from "./board";
 import { stateLabels } from "./load";
 import type { Flow, Machine } from "./schema";
 
@@ -38,6 +40,6 @@ export function commentTarget(flow: Flow, machine: Machine, e: CommentEvent): st
   if (machine === flow.machines.intake && e.body.trimStart().startsWith(USER_REPLY_PREFIX)) {
     return stateAgent(machine, e.labels) ?? (flow.routines.L1 ? "L1" : null);
   }
-  if (e.byUlrik && e.labels.includes("blockerad")) return stateAgent(machine, e.labels);
+  if (e.byUlrik && (e.labels.includes("blockerad") || isProposal(e.labels))) return stateAgent(machine, e.labels);
   return null;
 }

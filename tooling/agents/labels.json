@@ -23,7 +23,7 @@
     { "name": "rek-godkänn", "color": "0e8a16", "description": "Loop 1 rekommenderar att den byggs" },
     { "name": "rek-avböj", "color": "b60205", "description": "Loop 1 rekommenderar att den inte byggs" },
     { "name": "rek-fråga", "color": "fbca04", "description": "Loop 1 — Ulrik behöver avgöra något först" },
-    { "name": "auto-godkänn", "color": "5319e7", "description": "Liten bekräftad bugg eller internt verktyg utan risk — godkänns efter 24 h utan veto" },
+    { "name": "auto-godkänn", "color": "5319e7", "description": "Godkänns efter 24 h utan veto — en liten bugg eller ett internt verktyg, eller en agents förslag" },
     { "name": "intern", "color": "6e7781", "description": "Internt arbete (Ulrik eller en agent) — ingen användare att fråga" }
   ],
   "code": [
