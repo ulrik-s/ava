@@ -409,3 +409,16 @@ describe("fakturan — byråns logga (#1439)", () => {
     expect(buildFakturaView({ invoice: invoice(), recipient: "K", meta: META }).logo).toBeNull();
   });
 });
+
+describe("fakturans moms utan uppdelning och spec (#1806)", () => {
+  const rows = (over: Record<string, unknown>) =>
+    buildFakturaView({ invoice: invoice(over), recipient: "K", meta: META }, String).splitRows.map((r) => [r.label, r.amount]);
+
+  it("utan vatOre → 25 %-moms, och netto = belopp − moms", () => {
+    expect(rows({ amount: 12_500, vatOre: null })).toEqual([["Netto (exkl moms)", "10000"], ["Moms", "2500"]]);
+  });
+
+  it("med vatOre → som förut", () => {
+    expect(rows({ amount: 10_600, vatOre: 600 })).toEqual([["Netto (exkl moms)", "10000"], ["Moms", "600"]]);
+  });
+});
