@@ -24,7 +24,7 @@ const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-anna"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
 };
 
-function makeCaller() {
+function makeCaller(invoiceDate: Date = new Date("2026-03-01")) {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "Byrån" }],
     users: [
@@ -47,7 +47,7 @@ function makeCaller() {
     invoices: [{
       id: "f-1", organizationId: "org-1", matterId: "m-1", invoiceNumber: "F-2026-001", invoiceType: "FINAL",
       status: "SENT", amount: 1_000_000, amountExclVat: 800_000, vat: 200_000, amountInclVat: 1_000_000,
-      invoiceDate: new Date("2026-03-01"), dueDate: new Date("2026-03-31"),
+      invoiceDate, dueDate: new Date("2026-03-31"),
       createdAt: new Date("2026-03-01"), updatedAt: new Date("2026-03-01"),
     }],
     payments: [{ id: "p-1", organizationId: "org-1", invoiceId: "f-1", amount: 400_000, paidAt: new Date("2026-03-20"), createdAt: new Date("2026-03-20") }],
@@ -106,5 +106,17 @@ describe("reports.firmOverview (#1016)", () => {
     const anna = res.lawyers.find((l) => l.name === "Anna")!;
     expect(anna.totalMinutes).toBe(120);
     expect(anna.billedOre).toBe(1_000_000);
+  });
+
+  it("perioden går på den svenska dagen, inte UTC-dygnet (#1798)", async () => {
+    const MARCH = { from: "2026-03-01", to: "2026-03-31" };
+    // 00:30 svensk tid (CET) den 1 mars = 23:30 UTC den 28 februari → med.
+    const first = await makeCaller(new Date("2026-02-28T23:30:00Z")).reports.firmOverview(MARCH);
+    expect(first.ar.fakturerat).toBe(1_000_000);
+    expect(first.lawyers.find((l) => l.name === "Anna")?.billedOre).toBe(1_000_000);
+    // 00:30 svensk tid (CEST) den 1 april = 22:30 UTC den 31 mars → inte med.
+    const after = await makeCaller(new Date("2026-03-31T22:30:00Z")).reports.firmOverview(MARCH);
+    expect(after.ar.fakturerat).toBe(0);
+    expect(after.lawyers.find((l) => l.name === "Anna")?.billedOre).toBe(0);
   });
 });
