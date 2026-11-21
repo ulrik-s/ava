@@ -11,9 +11,22 @@ import { type CiRun, closesIssue, type MergedPull } from "./watchdog";
 /** Kör `gh` med argumenten och ger stdout. */
 export type GhRunner = (args: readonly string[]) => string;
 
+/**
+ * Utdatagränsen för `gh` (#1774). spawnSync:s standard är 1 MB, men en sida
+ * ur ava:s händelselogg (100 händelser, var och en med issuens text) var
+ * 1,1 MB: gh dödades tyst, felet saknade text, och vakten startade ingen
+ * agent — varannan etikett i ava, så allt väntade på knuffen.
+ */
+const MAX_GH_OUTPUT = 64 * 1024 * 1024;
+
+/** Varför `gh` misslyckades: dess egen text, annars processfelet eller hur den avslutades. */
+export function ghFailure(r: { status: number | null; signal: string | null; stderr: string; error?: Error }): string {
+  return r.stderr.trim() || r.error?.message || `avslutades med ${r.signal ?? String(r.status)}`;
+}
+
 const runner = (env: NodeJS.ProcessEnv): GhRunner => (args) => {
-  const r = spawnSync("gh", [...args], { encoding: "utf8", env });
-  if (r.status !== 0) throw new Error(`gh ${args.join(" ")}: ${r.stderr}`);
+  const r = spawnSync("gh", [...args], { encoding: "utf8", env, maxBuffer: MAX_GH_OUTPUT });
+  if (r.status !== 0) throw new Error(`gh ${args.join(" ")}: ${ghFailure(r)}`);
   return r.stdout;
 };
 

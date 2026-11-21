@@ -403,6 +403,15 @@ describe("händelsestyrningen", () => {
     expect(await dispatchLabel(flow, payload("verifierad"), { ROUTINE_TOKEN_L2: "t" }, { fetch: okFetch(calls), log: () => {}, recentEvents: () => [lev(20, 4, "verifierad")] })).toBe(true);
   });
 
+  it("går låset inte att läsa startas rutinen ändå, och felet loggas (#1774)", async () => {
+    const calls: Call[] = [];
+    const lines: string[] = [];
+    const broken = (): never => { throw new Error("gh api repos/ulrik-s/ava/issues/events: avslutades med SIGTERM"); };
+    expect(await dispatchLabel(flow, payload("verifierad"), { ROUTINE_TOKEN_L2: "t" }, { fetch: okFetch(calls), log: (l) => lines.push(l), recentEvents: broken })).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(lines[0]).toBe("låset gick inte att läsa (gh api repos/ulrik-s/ava/issues/events: avslutades med SIGTERM) — startar ändå");
+  });
+
   it("ingen agent att starta: inget anrop", async () => {
     const calls: Call[] = [];
     expect(await dispatchLabel(flow, payload("bugg"), { ROUTINE_TOKEN_L2: "t" }, { fetch: okFetch(calls), log: () => {} })).toBe(false);
