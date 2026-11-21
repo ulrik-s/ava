@@ -35,6 +35,15 @@ function harness(over: Partial<SyncSchedulerDeps> = {}) {
 }
 
 describe("SyncScheduler", () => {
+  it("synkversionerna passar inte (#1772): beskedet visas, synken räknas inte som lyckad", async () => {
+    const h = harness();
+    h.setPending(2);
+    h.setReconcile(() => Promise.resolve({ pulled: 1, incompatible: "Servern kör en äldre version av AVA än den här sidan." }));
+    await h.scheduler.syncNow();
+    expect(h.last()).toMatchObject({ pendingCount: 2, lastSyncedAt: null, error: "Servern kör en äldre version av AVA än den här sidan." });
+    expect(h.calls.remote).toBe(1);
+  });
+
   it("en sparad ändring synkas strax efteråt — inte först vid nästa sidladdning", async () => {
     const h = harness();
     h.setPending(1);

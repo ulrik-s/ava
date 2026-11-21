@@ -15,6 +15,10 @@
  *     för många anrop (429), servern startar om eller är äldre än klienten
  *     (502/503), eller backenden synkar inte alls (501). Kön stannar vid
  *     posten och inget försök räknas — ett tåg utan nät avvisar ingenting.
+ *   - `quarantine` — servern tar inte posten från den här användaren (#1772,
+ *     den köades av en annan på samma dator). Posten läggs bland de avvisade
+ *     ändringarna med "Försök igen" och kön fortsätter — den blockerar inte
+ *     längre kön bakom en inloggning som ändå inte hjälper.
  *
  * Duck-typat på `TRPCClientError`s form (`data.code`/`data.httpStatus`, och
  * proxyns nakna svar i `meta.response.status`) så att modulen kan delas av
@@ -24,7 +28,21 @@
 import { ZodError } from "zod";
 
 /** Vad kön gör med en post vars uppspelning kastade. */
-export type SyncErrorClass = "reject" | "retry" | "halt";
+export type SyncErrorClass = "reject" | "retry" | "halt" | "quarantine";
+
+/** Servern vägrar posten från den här användaren (#1772) — `data.syncRefusal` i tRPC-felet. */
+export const FOREIGN_ENTRY_REFUSAL = "foreign-entry";
+
+/** Orsaken servern bifogar när den vägrar en post (`cause` i TRPCError → `data.syncRefusal`). */
+export class SyncRefusal extends Error {
+  constructor(readonly refusal: typeof FOREIGN_ENTRY_REFUSAL) {
+    super(refusal);
+    this.name = "SyncRefusal";
+  }
+}
+
+/** `data.syncRefusal` för ett fel vars orsak är en {@link SyncRefusal}. */
+export const syncRefusalFromCause = (cause: unknown): string | undefined => (cause instanceof SyncRefusal ? cause.refusal : undefined);
 
 /** tRPC-koder för ett anrop som är fel i sig — samma anrop ger samma svar igen. */
 const REJECT_CODES: ReadonlySet<string> = new Set([
@@ -78,6 +96,7 @@ const isUnreachable = (err: unknown): boolean => field(err, "name") === "TRPCCli
 /** Klassa ett fel från uppspelningen av en köpost. */
 export function classifySyncError(err: unknown): SyncErrorClass {
   if (err instanceof ZodError) return "reject";
+  if (field(field(err, "data"), "syncRefusal") === FOREIGN_ENTRY_REFUSAL) return "quarantine";
   const code = trpcCodeOf(err);
   if (code !== undefined) return classifyCode(code);
   const status = httpStatusOf(err);

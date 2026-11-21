@@ -518,6 +518,15 @@ sekund, utan omstart:
 bash tooling/scripts/deploy-prod.sh --rollback   # current ↔ previous; kör igen för att ångra
 ```
 
+**Klienterna** (#1772) märker en rollback av sig själva: varje pull bär
+serverns synkprotokoll (`src/lib/shared/sync/protocol.ts`). Talar servern en
+äldre version än klienten skickar klienten inga ändringar — de ligger kvar i
+kön — och statusen säger "Servern kör en äldre version av AVA …"; är klienten
+för gammal ber den användaren ladda om. Protokollet höjs bara när synkens
+trådformat ändras, så en vanlig rollback påverkar inte klienterna alls. En
+köpost som en annan användare på samma dator köade läggs bland de avvisade
+ändringarna (med "Försök igen") i stället för att stoppa kön.
+
 **Servern** går också att backa, men **migrationer går bara framåt**: backa bara
 till en version vars kod klarar det nuvarande schemat (migrationer som bara
 lägger till är ofarliga). Annars: återställ databasen från backupen som
