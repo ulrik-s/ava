@@ -8,6 +8,8 @@
  * ESLint spärrar det senare i `src/`.
  */
 
+import { Temporal } from "@js-temporal/polyfill";
+
 /** Byråns tidszon, för `Intl`-format som inte finns som hjälpare här. */
 export const STOCKHOLM_TZ = "Europe/Stockholm";
 
@@ -35,4 +37,27 @@ export function stockholmTime(d: Date): string {
  */
 export function stockholmYear(d: Date): number {
   return Number(stockholmDay(d).slice(0, 4));
+}
+
+/**
+ * Ögonblicket då den svenska kalenderdagen `day` ("YYYY-MM-DD") börjar, 00:00
+ * i Stockholm. Använd den på servern när ett ögonblick ska jämföras mot en
+ * svensk kalenderdag: aldrig UTC-dygnet (`setUTCHours`). Ogiltig dag kastar,
+ * som `Temporal.PlainDate.from`.
+ */
+export function stockholmDayStart(day: string): Date {
+  const start = Temporal.PlainDate.from(day).toZonedDateTime({ timeZone: STOCKHOLM_TZ });
+  return new Date(start.epochMilliseconds);
+}
+
+/**
+ * Gränserna för den svenska kalenderperioden `from`–`to` (båda "YYYY-MM-DD",
+ * båda dagarna med): från början av `from` till sista millisekunden före
+ * början av dagen efter `to`. Använd den på servern när ett ögonblick ska
+ * jämföras mot en svensk period (rapporter, månader, veckor), även över en
+ * omställning till eller från sommartid.
+ */
+export function stockholmPeriod(from: string, to: string): { from: Date; to: Date } {
+  const dayAfter = Temporal.PlainDate.from(to).add({ days: 1 }).toString();
+  return { from: stockholmDayStart(from), to: new Date(stockholmDayStart(dayAfter).getTime() - 1) };
 }
