@@ -1,152 +1,109 @@
-# AVA Office-add-ins (#83)
+# AVA Outlook-tillägget
 
-> **Produktion (2026-11):** tillägget ligger på `https://<AVA-domän>/addin/`,
-> loggar in via Outlook (NAA, ingen PAT) och hämtar mejlet via Microsoft Graph.
-> Uppsättning och utrullning: [docs/outlook-addin.md](../docs/outlook-addin.md).
-> Delar av texten nedan (PAT, sideload, Outlook-REST) beskriver den tidigare
-> modellen.
+Tillägget sparar ett inkommande mejl (`.eml`) och en valfri tidspost på ett
+ärende i AVA, enligt [ADR 0013](../docs/adr/0013-office-add-in-arkitektur.md)
+och [ADR 0036](../docs/adr/0036-graph-behorighetsmodell-delegerad.md). Hur det sätts upp,
+rullas ut och felsöks i drift står i
+[docs/outlook-addin.md](../docs/outlook-addin.md). Den här filen beskriver
+delarna i koden och checklistan för att verifiera tillägget i en riktig
+Outlook-värd.
 
-Grunden för Word- (#84) och Outlook- (#72) add-ins, enligt
-[ADR 0013](../docs/adr/0013-office-add-in-arkitektur.md).
-
-## Arkitektur (kort)
-
-Add-ins är **tunna tRPC-HTTP-klienter**. De äger ingen git-db, kör ingen
-iso-git och rör inget filsystem. De pratar med **server-runtime:ns
-tRPC-over-HTTP-API** (`/api/trpc`, Bearer-PAT, superjson) som äger `firma.git`:
+## Hur det hänger ihop
 
 ```
-Office-add-in (Office.js, valfri webview/OS)
-   │  tRPC httpBatchLink + Authorization: Bearer <PAT>
-   ▼
-nginx-front  →  AVA-server (server-runtime, tRPC-over-HTTP)  →  firma.git
+Outlook (webben, Windows, Mac) — task-panen från https://<AVA-domän>/addin/
+   │  NAA via MSAL: Outlook lämnar ut token tyst
+   ├─► Microsoft Graph  GET /me/messages/{id}/$value   (Mail.Read-token)
+   └─► AVA /api/trpc på samma origin                    (Authorization: Bearer <Entra-token>)
+          oauth2-proxy validerar token → AVA-servern
 ```
 
-Servern är byggd och mergad (steg 1/1b/1c): se
-`src/lib/server/http/` (handler, PAT, working-copy-session, node-http-adapter)
-och `src/bin/server-runtime.ts` (montering + delad Mutex).
+- **Inloggning:** Nested App Authentication (NAA) i
+  `src/lib/client/addin/addin-auth.ts`. Två token från AVA:s Entra-app:
+  `api://<klient-id>/access_as_user` för AVA:s API och `Mail.Read` för Graph.
+- **Mejlet:** `src/lib/client/graph/graph-mail.ts` (`messageMimeUrl`, Graph
+  `$value`) och `src/lib/client/addin/save-incoming-mail.ts`, som skickar
+  `.eml` + tidspost till `mail.saveIncoming`.
+- **AVA:s API:** `src/lib/client/addin/addin-client.ts`, en typad tRPC-klient
+  mot `/api/trpc` med Entra-token som Bearer.
+- **Panelen:** `taskpane/taskpane.html` + `taskpane.ts` (Office.js-glue) ovanpå
+  `src/lib/client/addin/taskpane-controller.ts`.
+- **Manifest och konfiguration:** `office-addin/manifest.ts` genererar
+  `manifest.xml` ur `manifests/outlook-manifest.xml` och `config.js` (klient-id,
+  tenant) per installation.
 
-> **Scope (2026-06-14):** bara **Outlook** behövs — Word-add-in:en (#84) är
-> borttagen. Outlook har två funktioner (ADR 0013): (1) spara inkommande mail →
-> ärende (+ tidspost) — kräver add-in; (2) maila ut ett ärende-dokument —
-> web-app-funktion (triggas i AVA, ej i Outlook).
+Den tidigare modellen med personlig token och Outlooks egna REST-gränssnitt är
+borttagen; se [docs/outlook-addin.md](../docs/outlook-addin.md) ("Varför NAA och
+Graph").
 
-## Vad som finns nu
-
-- **Delad tRPC-klient** — `src/lib/client/addin/addin-client.ts`:
-  `createAddinClient({ baseUrl, token })` ger en fullt typad `AppRouter`-klient,
-  end-to-end-typad mot servern, superjson + Bearer-PAT. Wire-testad
-  (`test/unit/client/addin/addin-client.test.ts`).
-- **Testad klient-logik (CI-verifierad):**
-  - `src/lib/client/graph/graph-mail.ts` — MS Graph-mail-helpers (`fetchMessageEml`
-    för `$value`, `sendMail`/`createDraft`, `buildMessage`, `fileAttachment`).
-  - `src/lib/client/addin/save-incoming-mail.ts` — funktion 1: `$value` → AVA
-    `mail.saveIncoming` (server skriver `.eml` + tidspost i git-db, slice 1).
-  - `src/lib/client/graph/mail-document.ts` — funktion 2: bifoga ärende-dokument
-    + `sendMail`/`createDraft`.
-- **Outlook task-pane-shell (funktion 1)** — `taskpane/taskpane.html` + `taskpane.ts`
-  (tunn Office.js-glue ovanpå ovanstående). Byggs separat (ej i huvud-tsconfig):
-  ```sh
-  bun run office-addin/build.ts   # → office-addin/dist/{taskpane.js,taskpane.html}
-  ```
-- **Manifest** — `manifests/outlook-manifest.xml` (sideload-redo; `SourceLocation`
-  pekar på den HTTPS-serverade bundlen).
-
-## Token-modell
-
-- **AVA-servern:** Bearer-PAT (klistras in i panelen, lagras i Office
-  roaming-settings; ADR 0013 §3 C1).
-- **Funktion 1 (MIME-hämtning):** `getCallbackTokenAsync({ isRest: true })` +
-  mailboxens egen REST-URL (`Office.context.mailbox.restUrl`/v2.0) — funkar vid
-  sideload **utan Azure-app-registrering**. Alternativ: Graph + SSO
-  (`Office.auth.getAccessToken`) + on-behalf-of-utbyte → kräver Azure-app
-  (`WebApplicationInfo` i manifestet) + server-OBO; välj det om ni vill gå via
-  `graph.microsoft.com` (`fetchMessageEml` tar en `baseUrl`).
-- **Funktion 2 (web-appen):** MS Graph-token via Office365-connectorn
-  (`src/lib/client/integrations/office365-connector.ts`) — MSAL implementerad i
-  #1076. Rör inte denna add-in; funktion 2 triggas i web-appen.
-
-## Värdverifiering — checklistan (#1077)
-
-`taskpane-controller.ts` har 19 enhetstester som kör helt utan Office. Det är
-rätt uppdelning, men det betyder att **de riktiga Office-API:erna aldrig bevisas
-bete sig som `OfficeLike` antar**. Motsvarande lucka hos Fortnox innehöll fem
-fel.
-
-Den här checklistan är den låga ambitionsnivån ur #1077: den bevisar samma sak
-som en nattlig OWA-Playwright, men bara när någon kör den. **Kör den före varje
-release som rört add-in:en.** En flakig OWA-smoke som alla ignorerar är sämre än
-en checklista som faktiskt följs.
-
-### Innan du börjar
+## Bygga och köra lokalt
 
 ```sh
-bun run addin:build        # → office-addin/dist/
+bun run addin:build        # → office-addin/dist/ (bas-URL https://localhost:3443)
 bun run addin:serve        # HTTPS på :3443, skapar dev-cert, kontrollerar förtroende
 ```
 
-Servern skriver ut ett `security add-trusted-cert`-kommando om certet inte är
-betrott. **Kör det.** Office visar inga nätverksfel — ett cert browsern inte
-litar på ger en TOM panel, utan förklaring, och då letar man efter buggar i
-controllern i en timme.
+Deployen bygger med `bun office-addin/build.ts --out out/addin` och serverar
+tillägget på `https://<AVA-domän>/addin/`. För utveckling utan Outlook kan
+`config.js` ha fasta token (`staticTokens` i `addin-auth.ts`), som E2E:n gör.
 
-Starta även en AVA-stack och ha en PAT redo:
+## Värdverifiering — checklistan (#1077)
 
-```sh
-bash tooling/scripts/selfhosted-local.sh   # eller din vanliga dev-stack
-```
+`taskpane-controller.ts` har enhetstester som kör helt utan Office, och E2E:n
+kör panelen i Chromium och WebKit (`docs/quality.md`, *Outlook-tillägget i CI*).
+Det som inte täcks är att **Outlooks riktiga Office.js och NAA beter sig som
+koden antar**. Det bevisar bara en genomgång i en riktig Outlook-värd. **Kör
+den före varje release som rört tillägget**, i varje Outlook-variant i
+resultattabellen.
 
-I **Outlook Web** fungerar `https://localhost:3443` — panelen laddas av
-browsern, inte av Microsofts servrar. Ingen publik host behövs (det gäller
-central utrullning, #1078).
+### Innan du börjar
 
-### Sideload
-
-1. Öppna <https://aka.ms/olksideload> (Outlook Web öppnas, dialogen dyker upp
-   efter några sekunder).
-2. **Mina tillägg** → längst ner **Egna tillägg** → **Lägg till ett eget
-   tillägg** → **Lägg till från fil**.
-3. Välj `manifests/outlook-manifest.xml`. Godkänn prompterna.
-   *"Lägg till från URL" finns inte längre* — filvägen är enda vägen.
+- Tillägget är utrullat enligt [docs/outlook-addin.md](../docs/outlook-addin.md)
+  ("Utrullning") och syns i Outlook för ditt konto.
+- Kontrollen efter deploy i samma dokument ("Servern") ger rätt `config.js` och
+  `manifest.xml`.
+- Ditt konto finns som aktiv användare i AVA, och det finns ett ärende att spara på.
 
 ### Kör igenom, och notera VAD varje steg bevisar
 
 | # | Gör | Bevisar |
 |---|---|---|
-| 1 | Öppna ett mail, öppna AVA-panelen | `SourceLocation` + certet håller; `Office.onReady` fyrar |
-| 2 | Ange server-URL + PAT, spara | roaming-settings persisterar (ADR 0013 §3 C1) |
-| 3 | Ladda om panelen | inställningarna kom tillbaka — annars är roaming-settings fel läst |
-| 4 | Sök ärende på fritext | `matter.list` över tRPC-HTTP med Bearer-PAT fungerar från Office-iframen (CORS!) |
-| 5 | Välj ärende, ange minuter, **Spara** | **`getCallbackTokenAsync({ isRest: true })` + `Office.context.mailbox.restUrl`** — de minst standardiserade delarna, och den troligaste felkällan |
-| 6 | Öppna ärendet i AVA | `.eml` ligger som dokument av typen E-post, med rätt ämne |
-| 7 | Ladda ner `.eml` och öppna den | rätt bytes, inte en tom eller trunkerad fil |
-| 8 | Kolla tidsposten | rätt antal minuter, kopplad till ärendet |
+| 1 | Öppna ett mejl, öppna AVA-panelen | panelen laddas från `https://<AVA-domän>/addin/` och `Office.onReady` fyrar |
+| 2 | Vänta på raden överst | *"Inloggad som …"* visas utan inloggningsruta: NAA lämnar ut token tyst |
+| 3 | Sök ett ärende på fritext | AVA:s API tar emot Entra-token (Bearer-vägen genom oauth2-proxy) |
+| 4 | Välj ärende, ange minuter och beskrivning, **Spara** | *"✓ Sparat i …"*: Graph `$value` med `Mail.Read` fungerar i värden |
+| 5 | Öppna ärendet i AVA | `.eml` ligger som dokument av typen E-post med rätt ämne; den nedladdade filen är hel; tidsposten har rätt minuter och är kopplad till ärendet |
+| 6 | Spara samma mejl igen | *"Mejlet fanns redan i …"*: dubblettskyddet |
 
-Steg 5 är det som issuen egentligen handlar om. Steg 6–8 är read-back: att
-panelen sa "sparat" bevisar inte att något rätt hamnade någonstans.
+Steg 5 är read-back: att panelen sa "sparat" bevisar inte att något rätt
+hamnade någonstans. I steg 6 kan panelen redan när ärendet väljs säga *"Mejlet
+finns redan i …"* och låta **Spara** vara gråmarkerad; det är samma skydd.
 
 ### När panelen är tom eller tyst
 
-Office svälter fel. Öppna browserns devtools och välj task-pane-**iframen** i
-frame-väljaren — konsolen i toppdokumentet visar ingenting från panelen.
+Felmeddelandena i panelen och deras orsaker står i
+[docs/outlook-addin.md](../docs/outlook-addin.md) ("Om något inte fungerar").
+För själva genomgången:
 
-| Symptom | Trolig orsak |
-|---|---|
-| Helt tom panel | certet inte betrott, eller `addin:serve` kör inte |
-| Panelen laddar men söket ger inget | CORS eller fel server-URL/PAT |
-| Spara faller på token | `getCallbackTokenAsync` — kontrollera `Permissions` i manifestet (`ReadWriteItem`) |
-| Gammal kod körs | Office cachar; servern sätter `no-store`, men ta bort och sideloada om vid tvivel |
+- Office visar inga nätverksfel. Öppna browserns devtools och välj
+  task-pane-**iframen** i frame-väljaren; konsolen i toppdokumentet visar
+  ingenting från panelen.
+- Office cachar panelen. Servern sätter `no-store`, men vid tvivel: stäng och
+  öppna Outlook, eller ta bort tillägget och lägg till det igen.
+
+### Resultat per Outlook-variant
+
+Fyll i en rad efter varje genomgång (skriv över den gamla).
+
+| Outlook-variant | Datum | AVA-version | Resultat | Anteckning |
+|---|---|---|---|---|
+| Outlook på webben | | | Ej genomgången | |
+| Nya Outlook för Windows | | | Ej genomgången | |
+| Outlook för Mac (nya) | | | Ej genomgången | |
 
 ### Varför inte automatiserat (än)
 
-OWA-inloggning i CI är sköra beroenden: MFA, ändrade selektorer, en
-testanvändare som måste sakna MFA. Issuen (#1077) föreslår att ta den låga
-nivån först och se om den höga bär. Går den här checklistan igenom några gånger
-utan överraskningar är en nattlig Playwright värd att bygga — inte innan.
-
-## Sideload i Outlook Desktop
-
-Samma manifest, men via **Arkiv → Info → Hantera tillägg** (som öppnar samma
-dialog i browsern). Notera att klassisk Outlook för Windows kan behöva **upp
-till 24 timmar** för att visa ett manuellt sideloadat tillägg — cachning. Vill
-du verifiera snabbt: använd Outlook Web.
+Inloggning i Outlook på webben i CI är sköra beroenden: MFA, ändrade
+selektorer, en testanvändare som måste sakna MFA. Issuen (#1077) föreslår att ta
+den låga nivån först och se om den höga bär. Går checklistan igenom några gånger
+utan överraskningar är en nattlig Playwright värd att bygga, inte innan.

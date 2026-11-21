@@ -77,4 +77,5 @@ AVA. Manifestet behöver bara laddas upp igen om det själv ändras.
 
 Se `docs/quality.md` → *Outlook-tillägget i CI*. E2E:n kör den byggda panelen
 med fasta token (`staticTokens` i `config.js`) och en Graph-fejk. NAA mot riktiga
-Outlook verifieras i piloten.
+Outlook verifieras med checklistan i
+[office-addin/README.md](../office-addin/README.md#värdverifiering--checklistan-1077).
