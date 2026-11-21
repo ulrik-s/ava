@@ -27,6 +27,7 @@ import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } fro
 import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
 import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
 import { buildInvoiceSpecification, type InvoiceSpecification } from "@/lib/shared/invoice-specification";
+import { invoiceVatOre } from "@/lib/shared/invoice-vat";
 import { formatDecimalHours } from "@/lib/shared/kr-format";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
@@ -68,7 +69,7 @@ export interface FakturaDocMeta {
 export interface FakturaDocInvoice {
   id: InvoiceId;
   amount: number;
-  /** Momsbelopp (öre) i `amount`, exakt per sats (#782). Saknas → 25 %-split. */
+  /** Momsbelopp (öre) i `amount`, exakt per sats (#782). Tolkas av `invoiceVatOre` (#1806). */
   vatOre?: number | null | undefined;
   invoiceNumber?: string | null | undefined;
   ocrReference?: string | null | undefined;
@@ -359,13 +360,12 @@ function specSplitRows(spec: InvoiceSpecification, fc: Fc): FakturaSplitRow[] {
 /**
  * Uppdelningen klient/betalare — EN lista oavsett källa (#938). Prioritet:
  * itemiserad nedbrytning (#858) → spec-summeringen (#856) → netto/moms ur
- * fakturan. Att vecka ihop grenarna här är det som gör att PDF:en och HTML:en
- * kan dela renderingslogik.
+ * fakturan, med samma moms som verifikatet (`invoiceVatOre`, #1806).
  */
 function splitRowsFor(a: FakturaTemplateArgs, spec: InvoiceSpecification | null, fc: Fc): FakturaSplitRow[] {
   if (a.breakdown) return breakdownSplitRows(a.breakdown, fc);
   if (spec) return specSplitRows(spec, fc);
-  const vatOre = a.invoice.vatOre ?? 0;
+  const vatOre = invoiceVatOre(a.invoice);
   return [
     { label: "Netto (exkl moms)", amount: fc(a.invoice.amount - vatOre), style: "", muted: false },
     { label: "Moms", amount: fc(vatOre), style: "", muted: false },
