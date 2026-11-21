@@ -6,7 +6,7 @@
  * - Övriga mutationer och alla frågor går direkt, som förut.
  * - En köbar procedur körs exklusivt: dess lokala skrivningar ska inte kunna
  *   blandas ihop med en samtidig mutations (de attribueras till anropet).
- *   Övriga mutationer överlappar varandra som förut.
+ *   Alla mutationer körs exklusivt (#1794, se in-process-link-exclusive.test.ts).
  */
 import { describe, expect, it } from "vitest-compat";
 import { inProcessLink, type ProcedureRecorder } from "@/lib/client/demo/in-process-link";
@@ -92,7 +92,7 @@ describe("inProcessLink — köbara procedurer", () => {
     expect(events).toEqual(["första klar", "andra klar"]);
   });
 
-  it("vanliga mutationer blockerar inte varandra (inget dödläge om en väntar på en annan)", async () => {
+  it("vanliga mutationer körs en i taget, och ett fel släpper låset för nästa", async () => {
     const { recorder, calls } = spyRecorder();
     const link = inProcessLink(ctx(), { recordProcedure: recorder });
     const results = await Promise.allSettled([
