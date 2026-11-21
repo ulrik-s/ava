@@ -124,3 +124,15 @@ describe("reports.arSummary — med advokatfilter (attribution)", () => {
     expect(res.bridge.fakturerat).toBe(75_000);
   });
 });
+
+describe("reports.arSummary — den svenska dagen (#1798)", () => {
+  it("en faktura kl. 00:30 svensk tid den första kommer med, en kl. 00:30 dagen efter slutet inte", async () => {
+    mockPrisma.invoice.findMany.mockResolvedValue([
+      inv({ id: "i1", invoiceDate: new Date("2026-05-31T22:30:00Z") }), // 1 juni 00:30 i Stockholm
+      inv({ id: "i2", invoiceDate: new Date("2026-06-30T22:30:00Z") }), // 1 juli 00:30 i Stockholm
+    ]);
+    const res = await makeCaller().arSummary({ ...JUNE });
+    expect(res.rows.map((r) => r.id)).toEqual(["i1"]);
+    expect(res.bridge.fakturerat).toBe(100_000);
+  });
+});

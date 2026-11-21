@@ -145,3 +145,39 @@ describe("reports.perLawyer", () => {
     expect(res!.matters[0]!.paymentMethodNote).toBe("Diarienr X");
   });
 });
+
+describe("reports.perLawyer — den svenska dagen (#1798)", () => {
+  const entry = (id: string, date: Date) => ({
+    id, date, minutes: 60, billable: true, hourlyRate: 1000, description: "", invoiceId: null, matter: matter(),
+  });
+  const JUNE = { from: "2026-06-01", to: "2026-06-30", userId: "u1" };
+
+  beforeEach(() => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRates: { ARBETE: 1000 } });
+  });
+
+  it("perioden går från svensk midnatt den första till svensk midnatt efter den sista", async () => {
+    await makeCaller().perLawyer(JUNE);
+    const where = mockPrisma.timeEntry.findMany.mock.calls[0]?.[0]?.where;
+    expect(where?.date.gte.toISOString()).toBe("2026-05-31T22:00:00.000Z");
+    expect(where?.date.lte.toISOString()).toBe("2026-06-30T21:59:59.999Z");
+  });
+
+  it("en tidspost kl. 00:30 svensk tid en måndag hamnar i måndagens vecka", async () => {
+    // 2026-06-07T22:30Z = måndag 8 juni 00:30 i Stockholm → vecka 24, inte 23.
+    mockPrisma.timeEntry.findMany.mockResolvedValue([entry("t1", new Date("2026-06-07T22:30:00Z"))]);
+    const res = await makeCaller().perLawyer(JUNE);
+    const w23 = res?.weeklyRows.find((w) => w.week === 23);
+    const w24 = res?.weeklyRows.find((w) => w.week === 24);
+    expect(w23?.totalMinutes).toBe(0);
+    expect(w24?.totalMinutes).toBe(60);
+    expect(w24).toMatchObject({ isoYear: 2026, start: "2026-06-08", end: "2026-06-14" });
+  });
+
+  it("en tidspost sparad som rent datum hamnar i samma vecka som i dag", async () => {
+    mockPrisma.timeEntry.findMany.mockResolvedValue([entry("t1", new Date("2026-06-01"))]);
+    const res = await makeCaller().perLawyer(JUNE);
+    expect(res?.weeklyRows[0]).toMatchObject({ isoYear: 2026, week: 23, start: "2026-06-01", totalMinutes: 60 });
+    expect(res?.weeklyRows.at(-1)).toMatchObject({ week: 27, end: "2026-07-05" });
+  });
+});

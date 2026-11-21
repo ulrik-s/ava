@@ -117,3 +117,39 @@ describe("reports.billed", () => {
     expect(res?.writeOffOre).toBe(40_000);
   });
 });
+
+describe("reports.billed — den svenska dagen (#1798)", () => {
+  const invoice = (id: string, invoiceDate: Date, o: Record<string, unknown> = {}) => ({
+    id, amount: 100_000, status: "SENT", invoiceDate, updatedAt: invoiceDate, matter: { matterNumber: id, title: id }, ...o,
+  });
+
+  it("en faktura kl. 00:30 svensk tid den första kommer med, en kl. 00:30 dagen efter slutet inte", async () => {
+    mockPrisma.invoice.findMany.mockResolvedValue([
+      invoice("forsta", new Date("2026-05-31T22:30:00Z")), // 1 juni 00:30 i Stockholm
+      invoice("efter", new Date("2026-06-30T22:30:00Z")), // 1 juli 00:30 i Stockholm
+    ]);
+    mockPrisma.timeEntry.findMany.mockResolvedValue([te({ invoiceId: "forsta" }), te({ invoiceId: "efter" })]);
+    const res = await makeCaller().billed({ ...JUNE, userId: "u1" });
+    expect(res?.invoices.map((i) => i.id)).toEqual(["forsta"]);
+    expect(res?.billedOre).toBe(100_000);
+  });
+
+  it("avdraget för föregående månad följer den svenska dagen", async () => {
+    mockPrisma.invoice.findMany.mockResolvedValue([
+      invoice("maj", new Date("2026-03-01"), { status: "BAD_DEBT", amount: 40_000 }),
+      invoice("juni", new Date("2026-03-02"), { status: "BAD_DEBT", amount: 25_000 }),
+    ]);
+    mockPrisma.timeEntry.findMany.mockResolvedValue([te({ invoiceId: "maj" }), te({ invoiceId: "juni" })]);
+    mockPrisma.writeOff.findMany.mockResolvedValue([
+      { invoiceId: "maj", writtenOffAt: new Date("2026-04-30T22:30:00Z") }, // 1 maj 00:30 i Stockholm
+      { invoiceId: "juni", writtenOffAt: new Date("2026-05-31T22:30:00Z") }, // 1 juni 00:30 i Stockholm
+    ]);
+    const res = await makeCaller().billed({ ...JUNE, userId: "u1" });
+    expect(res?.writeOffOre).toBe(40_000);
+  });
+
+  it("prevPeriod ger föregående månads svenska dagar, även över ett årsskifte", async () => {
+    const res = await makeCaller().billed({ from: "2026-01-01", to: "2026-01-31", userId: "u1" });
+    expect(res?.prevPeriod).toEqual({ from: "2025-12-01", to: "2025-12-31" });
+  });
+});

@@ -7,7 +7,7 @@ import {
 } from "@/lib/shared/billed-per-lawyer";
 import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
-import { stockholmDay } from "@/lib/shared/stockholm-time";
+import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
 import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
 
@@ -27,6 +27,11 @@ import { router, protectedProcedure } from "../trpc";
  */
 
 // ─── ISO-vecka ───────────────────────────────────────────────────────
+
+/** Kalenderdagen "YYYY-MM-DD" som UTC-midnatt: ett rent kalendervärde för veckomatematiken. */
+function calendarDate(day: string): Date {
+  return new Date(`${day}T00:00:00Z`);
+}
 
 function isoWeek(d: Date): { year: number; week: number } {
   const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -134,15 +139,14 @@ function toInvoiceInputs(invoices: RawInvoice[], writtenOff: Map<string, Date>):
   }));
 }
 
-/** Föregående kalendermånad relativt periodstarten. UTC med avsikt: rapportens perioder räknas i UTC-dygn
- *  (slutet = 23:59:59.999Z, vars svenska dag vore NÄSTA dag) — etiketterna tas därför ur UTC-dygnet. */
+/** Föregående kalendermånad relativt periodstarten, på den svenska dagen (#1677): gränserna är
+ *  svensk midnatt den första till sista millisekunden den sista dagen i månaden. */
 function previousCalendarMonth(periodStart: Date): { from: Date; to: Date } {
-  const y = periodStart.getUTCFullYear();
-  const m = periodStart.getUTCMonth();
-  return {
-    from: new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0)),
-    to: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)), // dag 0 i denna månad = sista dagen i föregående
-  };
+  const first = calendarDate(`${stockholmDay(periodStart).slice(0, 7)}-01`);
+  const y = first.getUTCFullYear();
+  const m = first.getUTCMonth();
+  // Dag 0 i denna månad = sista dagen i föregående. UTC-midnatt → samma svenska dag.
+  return stockholmPeriod(stockholmDay(new Date(Date.UTC(y, m - 1, 1))), stockholmDay(new Date(Date.UTC(y, m, 0))));
 }
 
 // ─── Router ──────────────────────────────────────────────────────────
@@ -252,12 +256,12 @@ function buildMatters(timeEntries: ReportTimeEntry[], expenses: ReportExpense[])
 }
 
 /** 2. Timdebitering per vecka (alla veckor i perioden, även tomma). */
-function buildWeeklyRows(timeEntries: ReportTimeEntry[], fromDate: Date, toDate: Date) {
-  const weeks = weeksInRange(fromDate, toDate);
+function buildWeeklyRows(timeEntries: ReportTimeEntry[], fromDay: string, toDay: string) {
+  const weeks = weeksInRange(calendarDate(fromDay), calendarDate(toDay));
   const grid = new Map<string, { totalMinutes: number; billableMinutes: number; workValueOre: number }>();
   for (const w of weeks) grid.set(weekKey(w.isoYear, w.week), { totalMinutes: 0, billableMinutes: 0, workValueOre: 0 });
   for (const te of timeEntries) {
-    const { year, week } = isoWeek(te.date);
+    const { year, week } = isoWeek(calendarDate(stockholmDay(te.date)));
     const cell = grid.get(weekKey(year, week));
     if (!cell) continue;
     cell.totalMinutes += te.minutes;
@@ -413,9 +417,7 @@ export const reportsRouter = router({
       userId: userIdSchema,
     }))
     .query(async ({ ctx, input }) => {
-      const fromDate = new Date(input.from);
-      const toDate = new Date(input.to);
-      toDate.setUTCHours(23, 59, 59, 999);
+      const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
 
       const org = ctx.user.organizationId;
 
@@ -438,7 +440,7 @@ export const reportsRouter = router({
         user: { id: user.id, name: user.name, hourlyRates: user.hourlyRates },
         period: { from: input.from, to: input.to },
         matters,
-        weeklyRows: buildWeeklyRows(timeEntries, fromDate, toDate),
+        weeklyRows: buildWeeklyRows(timeEntries, stockholmDay(fromDate), stockholmDay(toDate)),
         unbilled: buildUnbilled(timeEntries, expenses),
         totals: sumMatterTotals(matters),
       };
@@ -457,9 +459,7 @@ export const reportsRouter = router({
       userId: userIdSchema,
     }))
     .query(async ({ ctx, input }) => {
-      const fromDate = new Date(input.from);
-      const toDate = new Date(input.to);
-      toDate.setUTCHours(23, 59, 59, 999);
+      const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
       const prevPeriod = previousCalendarMonth(fromDate);
       const org = ctx.user.organizationId;
 
@@ -503,7 +503,7 @@ export const reportsRouter = router({
       return {
         user: { id: user.id, name: user.name },
         period: { from: input.from, to: input.to },
-        prevPeriod: { from: prevPeriod.from.toISOString().slice(0, 10), to: prevPeriod.to.toISOString().slice(0, 10) }, // eslint-disable-line no-restricted-syntax -- UTC med avsikt: se previousCalendarMonth
+        prevPeriod: { from: stockholmDay(prevPeriod.from), to: stockholmDay(prevPeriod.to) },
         invoices: rows,
         billedOre: result.billedOre,
         writeOffOre: result.writeOffOre,
@@ -522,9 +522,7 @@ export const reportsRouter = router({
   firmOverview: protectedProcedure
     .input(z.object({ from: z.string(), to: z.string() }))
     .query(async ({ ctx, input }) => {
-      const fromDate = new Date(input.from);
-      const toDate = new Date(input.to);
-      toDate.setUTCHours(23, 59, 59, 999);
+      const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
       const org = ctx.user.organizationId;
 
       const [users, invoices, billingRuns, frozenTime] = await Promise.all([
@@ -576,9 +574,7 @@ export const reportsRouter = router({
   arSummary: protectedProcedure
     .input(z.object({ from: z.string(), to: z.string(), userId: userIdSchema.optional() }))
     .query(async ({ ctx, input }) => {
-      const fromDate = new Date(input.from);
-      const toDate = new Date(input.to);
-      toDate.setUTCHours(23, 59, 59, 999);
+      const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
       const org = ctx.user.organizationId;
       const invoices = await ctx.repos.invoices.listForOrg(asId<"OrganizationId">(org));
       const ids = (invoices as Array<{ id: InvoiceId }>).map((i) => i.id);
