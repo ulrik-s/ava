@@ -11,12 +11,18 @@
  * "Använd biblioteket rakt av": vi wrappar bara namngivningen av köerna + start-
  * sekvensen. Handlers registreras direkt via `boss.work(name, …)` (Fas 2).
  *
+ * Schemalagda jobb (#1802, ADR 0024 "cron via `schedule()`"): lägg en post i
+ * `JOB_SCHEDULES` (kö + cron-uttryck i svensk tid + ev. `missed`) och bygg köns
+ * handler i `buildServerFirstJobHandlers`. `startJobRuntime` registrerar schemat
+ * vid start med `boss.schedule`, bara om kön har en handler, och tar bort
+ * scheman i databasen som inte längre är deklarerade. Inga egna `setInterval`.
+ *
  * Anslutning: connectionString (pg-boss egen pool). `fromDrizzle`-adaptern delar
  * pool men antar `pg`-resultatformen (`.rows`) → krockar med vårt postgres-js +
  * pglite — därför egen connection (samma DB, eget schema).
  */
 
-import { PgBoss } from "pg-boss";
+import { PgBoss, type ScheduleOptions } from "pg-boss";
 
 /** De server-sidiga jobb-köerna (Fas 3 kopplar in handlers). */
 export const JOB_QUEUES = {
@@ -29,6 +35,22 @@ export const JOB_QUEUES = {
 } as const;
 
 export type JobQueueName = (typeof JOB_QUEUES)[keyof typeof JOB_QUEUES];
+
+/** Tidszonen för alla schemalagda jobb: en kalenderdag i AVA är dagen i Stockholm (#1677). */
+export const JOB_SCHEDULE_TZ = "Europe/Stockholm";
+
+/** Ett schemalagt jobb: pg-boss köar ett jobb på `queue` enligt `cron` (svensk tid). */
+export interface JobSchedule {
+  /** Kön jobbet köas på; dess handler i `JobHandlers` kör det. */
+  queue: JobQueueName;
+  /** Cron-uttryck, tolkat i `JOB_SCHEDULE_TZ`. */
+  cron: string;
+  /** Tillfällen som missats under omstart/deploy: `once` (standard) kör ett efteråt, `skip` inget. */
+  missed?: ScheduleOptions["missed"];
+}
+
+/** De schemalagda jobben, registrerade av `startJobRuntime`. Tom tills första användaren. */
+export const JOB_SCHEDULES: readonly JobSchedule[] = [];
 
 const DEFAULT_SCHEMA = "pgboss";
 const DEFAULT_RETRY_LIMIT = 5;
