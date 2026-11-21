@@ -9,11 +9,13 @@
  * Utan FLOW_GUARD_MODE=enforce loggas bara vad som skulle göras.
  */
 import {
-  AUTO_APPROVE_MS, AUTO_LABEL, autoApprovable, autoApproveDue, type Column, type ColumnAction, columnFor, decideColumn, decidePrio, lageFor, rekFor,
+  AUTO_APPROVE_MS, AUTO_LABEL, autoApprovable, autoApproveDue, type Column, type ColumnAction, columnFor, decideColumn, decidePrio,
+  decideWorkOrder, lageFor, rekFor, WORK_ORDER_LAGE, type WorkOrderMove,
 } from "./flow/board";
 import { type BoardApi, type BoardItem, projectBoard } from "./flow/board-github";
 import { type GitHub, gitHub, type OpenItem, runGhWithToken, type WorkOrderProgress, type WorkOrders } from "./flow/github";
-import { loadFlow } from "./flow/load";
+import { loadFlow, stateLabels } from "./flow/load";
+import { closesIssue } from "./flow/watchdog";
 
 /** Projektets namn i GitHub. */
 export const BOARD_TITLE = "AVA – flödet";
@@ -25,12 +27,25 @@ export const BOARD_TITLE = "AVA – flödet";
 export interface SyncDeps {
   board: BoardApi; intake: GitHub; intakeRepo: string; open: readonly OpenItem[]; enforce: boolean; log: (l: string) => void; now: number;
   workOrders?: WorkOrderProgress;
+  /** Kodrepot (#1779): blockerade arbetsordrar blir kort, och Ulriks godkännande följer med till PR:en. */
+  code?: CodeSide;
 }
+
+/** Kodrepot för arbetsordrarnas kort: dess öppna issues och PR:er, och arbetsordrarnas tillståndsetiketter. */
+export interface CodeSide { repo: string; gh: GitHub; open: readonly OpenItem[]; states: readonly string[] }
+
+/** Ulriks godkännande av skyddade sökvägar — på arbetsordern (tavlan) och dess PR (Agentvakten). */
+export const HUMAN_APPROVED = "människa-godkänd";
 
 /** Vad en synk gjorde. */
 export interface SyncResult {
   added: number[]; approved: number[]; declined: number[]; reset: number[]; archived: number[]; vetoed: number[]; autoApproved: number[];
+  /** Arbetsordrarnas kort (#1779) och de PR:er som fick Ulriks godkännande. */
+  workOrders: { added: number[]; approved: number[]; declined: number[]; archived: number[]; prsApproved: number[] };
 }
+
+const APPROVE_WORK_ORDER = `<!-- tavlan -->\nGodkänd av Ulrik på tavlan: \`blockerad\` borttagen och arbetsordern släppt. Dess PR får röra skyddade sökvägar — tavlans synk sätter \`${HUMAN_APPROVED}\` på den.`;
+const DECLINE_WORK_ORDER = "Avböjd av Ulrik på tavlan. Arbetsordern stängs utan att byggas.";
 
 /**
  * Markören först i synkens kommentarer: de är tavlans, inte Ulriks egna ord,
@@ -47,7 +62,7 @@ function addMissing(d: SyncDeps, onBoard: ReadonlySet<number>, result: SyncResul
   for (const i of d.open) {
     if (onBoard.has(i.number) || i.nodeId === undefined) continue;
     result.added.push(i.number);
-    const column = columnFor(i.labels, workOrdersOf(d, i.number));
+    const column = columnFor(i.labels);
     d.log(`#${i.number}: läggs på tavlan i ${column}`);
     if (!d.enforce) continue;
     const itemId = d.board.add(i.nodeId);
@@ -62,7 +77,7 @@ function addMissing(d: SyncDeps, onBoard: ReadonlySet<number>, result: SyncResul
 
 /** Verkställer kortets kolumn. Ger beslutet, så att det automatiska godkännandet vet om Ulrik flyttat kortet. */
 function applyColumn(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): ColumnAction {
-  const action = decideColumn(labels, item.column, workOrdersOf(d, item.number));
+  const action = decideColumn(labels, item.column);
   if (action.kind === "approve") {
     result.approved.push(item.number);
     d.log(`#${item.number}: godkänd på tavlan → verifierad`);
@@ -156,10 +171,96 @@ function applyItem(d: SyncDeps, item: BoardItem, labels: readonly string[], resu
   if (action.kind !== "decline") applyLage(d, item, labelsAfter(labels, action, auto), since);
 }
 
+const blockedWorkOrders = (code: CodeSide): OpenItem[] =>
+  code.open.filter((i) => !i.isPr && i.labels.includes("agent-task") && i.labels.includes("blockerad"));
+
+function addWorkOrderCards(d: SyncDeps, code: CodeSide, onBoard: ReadonlySet<number>, result: SyncResult): void {
+  for (const wo of blockedWorkOrders(code)) {
+    if (onBoard.has(wo.number) || wo.nodeId === undefined) continue;
+    result.workOrders.added.push(wo.number);
+    d.log(`arbetsorder #${wo.number} är blockerad: kort i Svara`);
+    if (!d.enforce) continue;
+    const itemId = d.board.add(wo.nodeId);
+    d.board.setColumn(itemId, "Svara");
+    d.board.setLage(itemId, WORK_ORDER_LAGE);
+  }
+}
+
+/** Ulrik godkände arbetsordern: släpp den, och sätt tillståndet igen så att dess agent startas direkt. */
+function approveWorkOrder(code: CodeSide, wo: OpenItem): void {
+  code.gh.removeLabel(wo.number, "blockerad");
+  code.gh.addLabel(wo.number, HUMAN_APPROVED);
+  code.gh.comment(wo.number, APPROVE_WORK_ORDER);
+  // En borttagen flagga startar inget; en tillståndsetikett gör det (flödesvakten).
+  const state = code.states.find((s) => wo.labels.includes(s));
+  if (state === undefined) return;
+  code.gh.removeLabel(wo.number, state);
+  code.gh.addLabel(wo.number, state);
+}
+
+function declineWorkOrder(code: CodeSide, n: number): void {
+  code.gh.comment(n, DECLINE_WORK_ORDER);
+  code.gh.closeIssue(n, "not_planned");
+}
+
+function archiveWorkOrderCard(d: SyncDeps, card: BoardItem, result: SyncResult): void {
+  result.workOrders.archived.push(card.number);
+  if (d.enforce) d.board.archive(card.itemId);
+}
+
+function recordWorkOrderMove(d: SyncDeps, n: number, move: WorkOrderMove, result: SyncResult): void {
+  if (move !== "approve" && move !== "decline") return;
+  d.log(`arbetsorder #${n}: ${move === "approve" ? "godkänd" : "avböjd"} på tavlan`);
+  (move === "approve" ? result.workOrders.approved : result.workOrders.declined).push(n);
+}
+
+/** Verkställ Ulriks flytt av en arbetsorders kort; en avgjord (eller inte längre blockerad) arkiveras. */
+function applyWorkOrderCard(d: SyncDeps, code: CodeSide, card: BoardItem, wo: OpenItem | undefined, result: SyncResult): void {
+  if (!card.open || wo === undefined) {
+    archiveWorkOrderCard(d, card, result);
+    return;
+  }
+  const move = decideWorkOrder(card.column);
+  recordWorkOrderMove(d, card.number, move, result);
+  if (!d.enforce) return;
+  if (move === "approve") approveWorkOrder(code, wo);
+  else if (move === "decline") declineWorkOrder(code, card.number);
+  else settleWorkOrderCard(d, card, move);
+}
+
+function settleWorkOrderCard(d: SyncDeps, card: BoardItem, move: "none" | "set"): void {
+  if (move === "set") d.board.setColumn(card.itemId, "Svara");
+  if (card.lage !== WORK_ORDER_LAGE) d.board.setLage(card.itemId, WORK_ORDER_LAGE);
+}
+
+/** En agent-PR för en arbetsorder som Ulrik godkänt får `människa-godkänd` med hans token (Agentvakten kräver det). */
+function copyApprovals(d: SyncDeps, code: CodeSide, result: SyncResult): void {
+  const approved = new Set(code.open.filter((i) => !i.isPr && i.labels.includes(HUMAN_APPROVED)).map((i) => i.number));
+  for (const pr of code.open.filter((i) => i.isPr && i.labels.includes("agent-pr") && !i.labels.includes(HUMAN_APPROVED))) {
+    const issue = closesIssue(pr.body);
+    if (issue === null || !approved.has(issue)) continue;
+    result.workOrders.prsApproved.push(pr.number);
+    d.log(`PR #${pr.number}: arbetsorder #${issue} godkänd av Ulrik → ${HUMAN_APPROVED}`);
+    if (d.enforce) code.gh.addLabel(pr.number, HUMAN_APPROVED);
+  }
+}
+
+/** Arbetsordrarnas kort (#1779): blockerade läggs till, Ulriks flyttar verkställs, godkännanden följer med till PR:en. */
+function syncWorkOrders(d: SyncDeps, code: CodeSide, cards: readonly BoardItem[], result: SyncResult): void {
+  addWorkOrderCards(d, code, new Set(cards.map((c) => c.number)), result);
+  const blocked = new Map(blockedWorkOrders(code).map((i) => [i.number, i]));
+  for (const card of cards) applyWorkOrderCard(d, code, card, blocked.get(card.number), result);
+  copyApprovals(d, code, result);
+}
+
 /** En synk: nya kort läggs till, Ulriks flyttar verkställs, resten följer etiketterna, stängda arkiveras. */
 export function syncBoard(d: SyncDeps): SyncResult {
-  const result: SyncResult = { added: [], approved: [], declined: [], reset: [], archived: [], vetoed: [], autoApproved: [] };
-  const items = d.board.items().filter((i) => i.repo === d.intakeRepo);
+  const result: SyncResult = {
+    added: [], approved: [], declined: [], reset: [], archived: [], vetoed: [], autoApproved: [],
+    workOrders: { added: [], approved: [], declined: [], archived: [], prsApproved: [] },
+  };
+  const all = d.board.items();
+  const items = all.filter((i) => i.repo === d.intakeRepo);
   const labelsOf = new Map(d.open.map((i) => [i.number, i.labels]));
   addMissing(d, new Set(items.map((i) => i.number)), result);
   for (const item of items) {
@@ -171,6 +272,8 @@ export function syncBoard(d: SyncDeps): SyncResult {
     }
     applyItem(d, item, labels, result);
   }
+  const code = d.code;
+  if (code) syncWorkOrders(d, code, all.filter((i) => i.repo === code.repo), result);
   return result;
 }
 
@@ -185,11 +288,14 @@ if (import.meta.main) {
     const board = projectBoard(run, flow.ulrik, BOARD_TITLE, console.log);
     const intake = gitHub(intakeRepo, run);
     const open = intake.openItems().filter((i) => !i.isPr && !i.labels.includes("agentstatus"));
-    const codeRepo = flow.machines["code-issue"]?.repo;
-    const workOrders = codeRepo === undefined ? undefined : gitHub(codeRepo, run).workOrders(intakeRepo);
+    const codeMachine = flow.machines["code-issue"];
+    const codeGh = codeMachine ? gitHub(codeMachine.repo, run) : undefined;
+    const code = codeMachine && codeGh ? { repo: codeMachine.repo, gh: codeGh, open: codeGh.openItems(), states: stateLabels(codeMachine) } : undefined;
+    const workOrders = codeGh?.workOrders(intakeRepo);
     const r = syncBoard({
       board, intake, intakeRepo, open, enforce: process.env.FLOW_GUARD_MODE === "enforce", log: console.log, now: Date.now(),
       ...(workOrders === undefined ? {} : { workOrders }),
+      ...(code === undefined ? {} : { code }),
     });
     console.log(`tavlan ${board.url}: ${r.added.length} nya, ${r.approved.length} godkända, ${r.autoApproved.length} automatiskt godkända, `
       + `${r.vetoed.length} veton, ${r.declined.length} avböjda, ${r.reset.length} tillbakalagda, ${r.archived.length} arkiverade`);

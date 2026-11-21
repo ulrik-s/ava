@@ -116,9 +116,16 @@ klara" (ur arbetsordrarnas `Intag:`-rad), "Godkänns automatiskt 21 nov 21:30",
 "Levererad i v0.7.42". Synken skriver det när det ändrats, direkt efter en
 flytt, så att Ulrik ser att flytten tagits emot. När alla arbetsordrar är
 klara står det "Byggd — kommer med nästa release" (automatisk tagg var 6:e
-timme, `release` i flow.yaml). En nedbruten förfrågan vars arbetsorder är
-`blockerad` står i **Svara**, med vilken arbetsorder som väntar ("ava#1764");
-den går inte att avböja därifrån, eftersom den redan byggs (#1776).
+timme, `release` i flow.yaml).
+
+**Blockerade arbetsordrar** (#1779) är egna kort i **Svara** (issuen i ava,
+klickbar): läs senaste kommentaren och svara där, eller flytta kortet till
+**Godkänd** för att släppa den — `blockerad` tas bort, arbetsordern får
+`människa-godkänd` och dess tillstånd sätts igen så att agenten startar
+direkt; när dess PR kommer sätter synken `människa-godkänd` på den med
+Ulriks token, som Agentvakten kräver för skyddade sökvägar. **Avböjd** stänger
+arbetsordern. Förfrågans eget kort står kvar i Byggs och hänvisar dit. När
+arbetsordern inte längre är blockerad arkiveras kortet.
 
 GitHub kan inte starta en workflow när ett kort flyttas, och GitHubs schema
 är för opålitligt (var-5:e-minut-schemat gick två gånger på ett dygn). Därför
