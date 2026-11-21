@@ -58,8 +58,18 @@ const RULES: ReadonlyArray<readonly [Column, readonly string[]]> = [
 export const COLUMN_LABELS: readonly string[] = RULES.flatMap(([, ls]) => ls);
 
 /** Kolumnen som förfrågans etiketter ger (utan tillstånd: Ny). */
-export function columnFor(labels: readonly string[]): Column {
-  return RULES.find(([, ls]) => ls.some((l) => labels.includes(l)))?.[0] ?? "Ny";
+const labelColumn = (labels: readonly string[]): Column => RULES.find(([, ls]) => ls.some((l) => labels.includes(l)))?.[0] ?? "Ny";
+
+/** En nedbruten förfrågan med en arbetsorder som väntar på Ulriks svar (#1776). */
+const workOrderWaits = (labels: readonly string[], ctx: LageContext): boolean =>
+  labels.includes("nedbruten") && (ctx.workOrders?.blocked.length ?? 0) > 0;
+
+/**
+ * Kolumnen för kortet: etiketternas, men en nedbruten förfrågan vars
+ * arbetsorder väntar på Ulrik står i Svara (#1776) — annars syntes det inte.
+ */
+export function columnFor(labels: readonly string[], ctx: LageContext = {}): Column {
+  return workOrderWaits(labels, ctx) ? "Svara" : labelColumn(labels);
 }
 
 /** Vad synken gör med ett korts kolumn. */
@@ -75,14 +85,22 @@ const APPROVABLE: readonly Column[] = ["Ny", "Att besluta", "Godkänns automatis
 /** Ulrik kan avböja det där inget byggs ännu. */
 const DECLINABLE: readonly Column[] = ["Ny", "Att besluta", "Godkänns automatiskt", "Svara", "Väntar på användaren", "Designas"];
 
-/** Beslutet för ett kort: följ etiketterna, eller verkställ Ulriks flytt. */
-export function decideColumn(labels: readonly string[], board: string | null): ColumnAction {
-  const derived = columnFor(labels);
+/**
+ * Beslutet för ett kort: följ etiketterna, eller verkställ Ulriks flytt. Vad
+ * Ulrik får besluta avgörs av etiketterna: en förfrågan som byggs går inte att
+ * avböja, även när den står i Svara för en blockerad arbetsorder.
+ */
+export function decideColumn(labels: readonly string[], board: string | null, ctx: LageContext = {}): ColumnAction {
+  const derived = columnFor(labels, ctx);
   if (board === derived) return { kind: "none" };
-  if (board === "Godkänd" && APPROVABLE.includes(derived)) return { kind: "approve" };
-  if (board === "Avböjd" && DECLINABLE.includes(derived)) return { kind: "decline" };
-  if (board === "Att besluta" && derived === "Godkänns automatiskt") return { kind: "veto" };
-  return { kind: "set", column: derived };
+  return ulrikMove(board, labelColumn(labels)) ?? { kind: "set", column: derived };
+}
+
+/** Ulriks flytt från etikettkolumnen `base`, om den är ett beslut; annars null. */
+function ulrikMove(board: string | null, base: Column): ColumnAction | null {
+  if (board === "Godkänd" && APPROVABLE.includes(base)) return { kind: "approve" };
+  if (board === "Avböjd" && DECLINABLE.includes(base)) return { kind: "decline" };
+  return board === "Att besluta" && base === "Godkänns automatiskt" ? { kind: "veto" } : null;
 }
 
 /** Rekommendationerna (valen i projektets Rekommendation-fält, `rek-<r>` som etikett). */
@@ -98,8 +116,8 @@ export const rekFor = (labels: readonly string[]): Rek | null => REKS.find((r) =
 export interface LageContext {
   /** När `auto-godkänn` sattes (ISO), för kort som godkänns automatiskt. */
   autoSince?: string;
-  /** Arbetsordrarna i kodrepot för förfrågan: hur många som är klara av alla. */
-  workOrders?: { done: number; total: number };
+  /** Arbetsordrarna i kodrepot för förfrågan: klara av alla, och de som väntar på Ulrik (`ava#N`). */
+  workOrders?: { done: number; total: number; blocked: readonly string[] };
 }
 
 const when = (ms: number): string =>
@@ -110,7 +128,9 @@ const releaseOf = (labels: readonly string[]): string | undefined => labels.find
 function builtText(labels: readonly string[], ctx: LageContext): string {
   if (labels.includes("dubblett")) return "Dubblett — följer originalet";
   const wo = ctx.workOrders;
-  return wo && wo.total > 0 ? `Byggs: ${wo.done} av ${wo.total} arbetsorder klara` : "Bryts ner i arbetsorder i kodrepot";
+  if (!wo || wo.total === 0) return "Bryts ner i arbetsorder i kodrepot";
+  // Allt byggt (#1776): det som återstår är nästa release, då blir den levererad.
+  return wo.done === wo.total ? "Byggd — kommer med nästa release" : `Byggs: ${wo.done} av ${wo.total} arbetsorder klara`;
 }
 
 function doneText(labels: readonly string[]): string {
@@ -130,7 +150,9 @@ const LAGE: Readonly<Record<Column, (labels: readonly string[], ctx: LageContext
   "Godkänns automatiskt": (_, ctx) => (ctx.autoSince === undefined
     ? "Godkänns automatiskt efter 24 h om du inte flyttar den"
     : `Godkänns automatiskt ${when(new Date(ctx.autoSince).getTime() + AUTO_APPROVE_MS)} om du inte flyttar den`),
-  "Svara": () => "Blockerad — läs senaste kommentaren och svara i issuen",
+  "Svara": (labels, ctx) => (!labels.includes("blockerad") && workOrderWaits(labels, ctx)
+    ? `Arbetsorder väntar på ditt svar: ${ctx.workOrders?.blocked.join(", ") ?? ""} — läs senaste kommentaren där`
+    : "Blockerad — läs senaste kommentaren och svara i issuen"),
   "Väntar på användaren": () => "Loop 1 har frågat användaren i AVA och väntar på svar",
   "Godkänd": (labels) => (labels.includes("design-godkänd")
     ? "Designen godkänd — loop 2 bryter ner den enligt designen"
@@ -144,7 +166,7 @@ const LAGE: Readonly<Record<Column, (labels: readonly string[], ctx: LageContext
 };
 
 /** Läget på kortet, i klartext, ur etiketterna. */
-export const lageFor = (labels: readonly string[], ctx: LageContext = {}): string => LAGE[columnFor(labels)](labels, ctx);
+export const lageFor = (labels: readonly string[], ctx: LageContext = {}): string => LAGE[columnFor(labels, ctx)](labels, ctx);
 
 /** Vetofönstret: så länge står ett kort i "Godkänns automatiskt" innan det godkänns. */
 export const AUTO_APPROVE_MS = 24 * 3_600_000;

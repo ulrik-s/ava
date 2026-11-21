@@ -80,13 +80,28 @@ describe("tavlans regler", () => {
     expect(lageFor(["väntar-på-användaren"])).toBe("Loop 1 har frågat användaren i AVA och väntar på svar");
     expect(lageFor(["verifierad"])).toBe("Godkänd — loop 2 bryter ner den i arbetsorder");
     expect(lageFor(["nedbruten"])).toBe("Bryts ner i arbetsorder i kodrepot");
-    expect(lageFor(["nedbruten"], { workOrders: { done: 1, total: 3 } })).toBe("Byggs: 1 av 3 arbetsorder klara");
-    expect(lageFor(["nedbruten"], { workOrders: { done: 0, total: 0 } })).toBe("Bryts ner i arbetsorder i kodrepot");
+    expect(lageFor(["nedbruten"], { workOrders: { done: 1, total: 3, blocked: [] } })).toBe("Byggs: 1 av 3 arbetsorder klara");
+    expect(lageFor(["nedbruten"], { workOrders: { done: 0, total: 0, blocked: [] } })).toBe("Bryts ner i arbetsorder i kodrepot");
+    expect(lageFor(["nedbruten"], { workOrders: { done: 2, total: 2, blocked: [] } })).toBe("Byggd — kommer med nästa release");
     expect(lageFor(["dubblett"])).toBe("Dubblett — följer originalet");
     expect(lageFor(["levererad", "release:v0.7.42"])).toBe("Levererad i v0.7.42");
     expect(lageFor(["levererad"])).toBe("Levererad");
     expect(lageFor(["finns-redan"])).toBe("Fanns redan i AVA");
     expect(lageFor(["uppdelad"])).toBe("Uppdelad i egna förfrågningar");
+  });
+
+  it("en nedbruten förfrågan vars arbetsorder väntar på Ulrik står i Svara och säger vilken (#1776)", () => {
+    const ctx = { workOrders: { done: 0, total: 2, blocked: ["ava#1764"] } };
+    expect(columnFor(["nedbruten"], ctx)).toBe("Svara");
+    expect(columnFor(["nedbruten"], { workOrders: { done: 0, total: 2, blocked: [] } })).toBe("Byggs");
+    expect(columnFor(["undersökt"], ctx)).toBe("Att besluta");
+    expect(lageFor(["nedbruten"], ctx)).toBe("Arbetsorder väntar på ditt svar: ava#1764 — läs senaste kommentaren där");
+    expect(lageFor(["nedbruten", "blockerad"], ctx)).toBe("Blockerad — läs senaste kommentaren och svara i issuen");
+    // Den byggs redan: att avböja eller godkänna den från Svara går inte, kortet läggs tillbaka.
+    expect(decideColumn(["nedbruten"], "Svara", ctx)).toEqual({ kind: "none" });
+    expect(decideColumn(["nedbruten"], "Avböjd", ctx)).toEqual({ kind: "set", column: "Svara" });
+    expect(decideColumn(["nedbruten"], "Godkänd", ctx)).toEqual({ kind: "set", column: "Svara" });
+    expect(decideColumn(["nedbruten"], "Svara")).toEqual({ kind: "set", column: "Byggs" });
   });
 
   it("rekommendationen läses ur etiketten", () => {
@@ -256,7 +271,7 @@ describe("synken: rekommendation, veto och automatiskt godkännande", () => {
     ];
     const board = fakeBoard(cards);
     const gh = fakeGh({ 11: [{ label: "auto-godkänn", at: hoursAgo(30) }], 14: [{ label: "auto-godkänn", at: hoursAgo(25) }] });
-    syncBoard({ board, intake: gitHub(FB, gh.run), intakeRepo: FB, open: issues, enforce: true, log: () => {}, now: NOW, workOrders: new Map([[12, { done: 1, total: 2 }]]) });
+    syncBoard({ board, intake: gitHub(FB, gh.run), intakeRepo: FB, open: issues, enforce: true, log: () => {}, now: NOW, workOrders: new Map([[12, { done: 1, total: 2, blocked: [] }]]) });
     expect(board.calls.filter((c) => c.startsWith("lage "))).toEqual([
       "lage PVTI_10 Godkänd — loop 2 bryter ner den i arbetsorder",
       "lage PVTI_11 Väntar på ditt beslut — rekommendation: godkänn",
@@ -267,7 +282,7 @@ describe("synken: rekommendation, veto och automatiskt godkännande", () => {
 
   it("nya kort får Läge direkt", () => {
     const board = fakeBoard([]);
-    syncBoard({ board, intake: gitHub(FB, fakeGh().run), intakeRepo: FB, open: [open(20, ["intern", "nedbruten"])], enforce: true, log: () => {}, now: NOW, workOrders: new Map([[20, { done: 0, total: 1 }]]) });
+    syncBoard({ board, intake: gitHub(FB, fakeGh().run), intakeRepo: FB, open: [open(20, ["intern", "nedbruten"])], enforce: true, log: () => {}, now: NOW, workOrders: new Map([[20, { done: 0, total: 1, blocked: [] }]]) });
     expect(board.calls).toContain("lage item-I_20 Byggs: 0 av 1 arbetsorder klara");
   });
 
@@ -287,17 +302,17 @@ describe("arbetsordrarna per förfrågan", () => {
     expect(intakeRefOf("Intag: annat#34", FB)).toBeNull();
   });
 
-  it("räknar klara (stängda som completed) av alla, med en sökning", () => {
+  it("räknar klara (stängda som completed) av alla, och de öppna som väntar på Ulrik, med en sökning", () => {
     const calls: string[] = [];
     const page = { items: [
-      { body: "Intag: ava-feedback#34", state: "closed", state_reason: "completed" },
-      { body: "Intag: ava-feedback#34", state: "open", state_reason: null },
-      { body: "Intag: ava-feedback#35", state: "closed", state_reason: "not_planned" },
-      { body: null, state: "open" },
+      { number: 1, body: "Intag: ava-feedback#34", state: "closed", state_reason: "completed" },
+      { number: 2, body: "Intag: ava-feedback#34", state: "open", state_reason: null, labels: [{ name: "blockerad" }] },
+      { number: 3, body: "Intag: ava-feedback#35", state: "closed", state_reason: "not_planned", labels: [{ name: "blockerad" }] },
+      { number: 4, body: null, state: "open" },
     ] };
     const run: GhRunner = (args) => { calls.push(args.join(" ")); return JSON.stringify([page]); };
     const wo = gitHub("ulrik-s/ava", run).workOrders(FB);
-    expect([...wo]).toEqual([[34, { done: 1, total: 2 }], [35, { done: 0, total: 1 }]]);
+    expect([...wo]).toEqual([[34, { done: 1, total: 2, blocked: ["ava#2"] }], [35, { done: 0, total: 1, blocked: [] }]]);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain('q=repo:ulrik-s/ava is:issue "Intag: ava-feedback" in:body');
   });
