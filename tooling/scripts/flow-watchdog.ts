@@ -20,7 +20,7 @@ import {
   nudgeLabels, timedLabels, type WatchAction, type WatchItem,
 } from "./flow/watchdog";
 import { runDependencies } from "./flow-deps";
-import type { Log } from "./flow-guard";
+import { type Log, normalize } from "./flow-guard";
 
 function lastAdded(gh: GitHub, n: number): Record<string, string> {
   const out: Record<string, string> = {};
@@ -149,6 +149,8 @@ if (import.meta.main) {
     if (codeIssues) {
       try { runDependencies(gh, prioOrder(flow), { enforce, log: console.log }); } catch (e) { console.log(`beroenden: ${e instanceof Error ? e.message : String(e)}`); }
     }
+    // Saker med två tillstånd (en avbruten vaktkörning, #1781) städas varje timme.
+    normalize(m, gh, enforce, console.log);
     runTimeouts(m, gh, Date.now(), enforce, console.log);
     if (enforce) await runNudges(flow, m, watchItems(m, gh), { now: Date.now(), env: process.env, fetchFn: fetch, log: console.log, started });
     if (m.items === "pulls") closeDuplicatePulls(gh, enforce, console.log);

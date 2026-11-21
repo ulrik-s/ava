@@ -30,8 +30,12 @@ permissions:
   pull-requests: write
   actions: write
 
+# En kö per sak OCH etikett (#1781). GitHub håller bara en väntande körning
+# per grupp och avbryter den äldre: med en grupp per sak avbröt `blockerad`
+# körningen för `granskad` som sattes sekunden före — det gamla tillståndet
+# blev kvar och agenten startades aldrig.
 concurrency:
-  group: flow-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  group: flow-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}-${{ github.event.label.name || github.event.action || 'x' }}
   cancel-in-progress: false
 
 env:
