@@ -70,7 +70,10 @@ Finns ingen: avsluta.
    att det inte går utan något nytt (mönster, beroende, lager): sluta och
    gör som under "Fastnar", med ett ADR-utkast.
 4. Implementera enligt issuens acceptanskriterier och testplan, inget mer.
-   Tester för varje ny rad. Additiva migrationer. Inga skyddade sökvägar.
+   Tester för varje ny rad. Additiva migrationer, med `-- kind: expand` på
+   första raden (förra versionens kod ska klara schemat, så att deployen kan
+   backa servern automatiskt; se docs/deploy-server-first.md, "Migrationer:
+   expand och contract"). Inga skyddade sökvägar.
    **Refaktorisering** (`refaktorisering`): beteendet får inte ändras.
    Befintliga tester ändras inte, utom att de flyttas eller byter namn
    tillsammans med koden. De är kontraktet. Behöver ett test ändras i

@@ -9,7 +9,9 @@
  *     säger det,
  *   - en omkörning efter ett avbrott kör migrationerna ändå (förr gav
  *     `git diff` en tom lista, eftersom koden redan var uppdaterad),
- *   - --dry-run ändrar ingenting, --rollback byter till förra klienten.
+ *   - --dry-run ändrar ingenting, --rollback byter till förra klienten,
+ *   - svarar inte den nya servern backas den automatiskt till förra imagen,
+ *     men bara om alla väntande migrationer är expand (#1770).
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -77,15 +79,29 @@ case "$1" in
         css=".bg-canvas{a:b}.x>span:before{a:b}"
         printf "%s" "\${FAKE_CSS:-\$css}" > out/_next/static/chunks/a.css
         echo "klient $(git rev-parse --short HEAD)" > out/index.html ;;
+      *db-migrate.ts*--plan*) echo "väntande: 0052_x.sql"; echo "plan: \${FAKE_PLAN:-expand}" ;;
       *db-migrate.ts*)
         # "-e AVA_DATABASE_URL" utan värde: docker läser URL:en ur sin miljö.
         [ "\${AVA_DATABASE_URL:-}" != "postgres://ava:\${FAKE_PASSWORD}@postgres:5432/ava" ] || echo "db-url via miljön" >> "$FAKE_LOG"
         [ -z "\${FAKE_MIGRATE_FAIL:-}" ] || exit 1 ;;
     esac ;;
+  inspect)
+    case "$*" in
+      *".Config.Image"*) echo "ava-server-first" ;;
+      *".Config.Env"*) echo "AVA_RELEASE=v0.0.1" ;;
+      *".Image"*) echo "sha256:forra" ;;
+    esac ;;
+  tag) ;;
   compose)
     case "$*" in
-      *"up -d --build"*) echo "release \${AVA_RELEASE:-saknas}" >> "$FAKE_LOG" ;;
-      *"exec -T caddy wget"*) [ -n "\${FAKE_READY_FAIL:-}" ] || echo '{"status":"ok"}' ;;
+      *"ps -q server-first"*) [ -n "\${FAKE_NO_SERVER:-}" ] || echo "c0ffee" ;;
+      *"up -d --build"*) echo "release \${AVA_RELEASE:-saknas}" >> "$FAKE_LOG"; echo ny > "$FAKE_LOG.server" ;;
+      *"up -d --no-build"*) echo "release \${AVA_RELEASE:-saknas}" >> "$FAKE_LOG"; echo gammal > "$FAKE_LOG.server" ;;
+      *"exec -T caddy wget"*)
+        server="$(cat "$FAKE_LOG.server" 2>/dev/null || echo gammal)"
+        if [ "$server" = ny ] && [ -n "\${FAKE_READY_FAIL:-}" ]; then exit 1; fi
+        if [ "$server" = gammal ] && [ -n "\${FAKE_ROLLBACK_FAIL:-}" ]; then exit 1; fi
+        if [ -n "\${FAKE_READY_RELEASE:-}" ]; then printf '{"status":"ok","release":"%s"}\\n' "\${FAKE_READY_RELEASE}"; else echo '{"status":"ok"}'; fi ;;
       *"exec -T caddy cat"*) if [ -n "\${FAKE_CADDYFILE_STALE:-}" ]; then echo gammal; else cat tooling/docker/caddy/Caddyfile; fi ;;
     esac ;;
 esac
@@ -375,16 +391,62 @@ describe("deploy-prod.sh — avbrott lämnar prod orört och säger var", () => 
     expect(link("previous")).toBe(before);
   });
 
-  it("/readyz svarar inte → klienten byts inte, och rapporten säger att servern är omstartad", () => {
+  it("/readyz svarar inte → servern backas automatiskt till förra imagen; klienten byts inte, databasen backas inte (#1770)", () => {
     expect(deploy().status).toBe(0);
     const before = link("current");
     pushCommit();
-    const { status, out } = deploy([], { FAKE_READY_FAIL: "1" });
+    const { status, out, calls } = deploy([], { FAKE_READY_FAIL: "1" });
     expect(status).toBe(1);
     expect(link("current")).toBe(before);
-    expect(out).toContain("omstartad med ny kod");
-    expect(out).toContain("/readyz svarar inte ok");
+    // Planen läses före migreringen.
+    expect(at(calls, "--plan")).toBeLessThan(calls.findIndex((c) => c.includes("db-migrate.ts") && !c.includes("--plan")));
+    expect(calls).toContain("docker tag sha256:forra ava-server-first");
+    const rollback = at(calls, "up -d --no-build server-first");
+    expect(rollback).toBeGreaterThan(at(calls, "up -d --build"));
+    // Den gamla servern får sin gamla versionsstämpel tillbaka.
+    expect(calls[rollback + 1]).toBe("release v0.0.1");
+    expect(out).toContain("automatisk rollback: servern tillbaka till förra versionen");
+    expect(out).toContain("AUTOMATISK ROLLBACK: förra versionen (v0.0.1) kör igen");
     expect(out).toContain("databas:   migrerad");
+  });
+
+  it("med en contract-migration backas servern INTE automatiskt — den gamla koden klarar kanske inte schemat", () => {
+    expect(deploy().status).toBe(0);
+    pushCommit();
+    const { status, out, calls } = deploy([], { FAKE_READY_FAIL: "1", FAKE_PLAN: "contract" });
+    expect(status).toBe(1);
+    expect(out).toContain("väntande migrationer: contract");
+    expect(out).toContain("ingen automatisk rollback: releasen har en contract-migration");
+    expect(out).toContain("omstartad med ny kod");
+    expect(at(calls, "up -d --no-build")).toBe(-1);
+    expect(at(calls, "docker tag")).toBe(-1);
+  });
+
+  it("utan tidigare server (första deployen) finns inget att backa till", () => {
+    pushCommit();
+    const { status, out, calls } = deploy([], { FAKE_READY_FAIL: "1", FAKE_NO_SERVER: "1" });
+    expect(status).toBe(1);
+    expect(out).toContain("ingen automatisk rollback: ingen tidigare server");
+    expect(at(calls, "up -d --no-build")).toBe(-1);
+  });
+
+  it("svarar inte heller den gamla servern efter rollbacken säger rapporten det", () => {
+    expect(deploy().status).toBe(0);
+    pushCommit();
+    const { status, out } = deploy([], { FAKE_READY_FAIL: "1", FAKE_ROLLBACK_FAIL: "1" });
+    expect(status).toBe(1);
+    expect(out).toContain("men /readyz svarar inte heller nu");
+  });
+
+  it("/readyz från en annan version räknas inte som klar", () => {
+    expect(deploy().status).toBe(0);
+    pushCommit();
+    const wrong = deploy([], { FAKE_READY_RELEASE: "v0.0.1" });
+    expect(wrong.status).toBe(1);
+    expect(wrong.out).toContain("väntar på /readyz (version");
+    expect(wrong.out).toContain("AUTOMATISK ROLLBACK");
+    const right = sh("git describe --tags --always", srv);
+    expect(deploy([], { FAKE_READY_RELEASE: right }).status).toBe(0);
   });
 
   it("bygget fäller → out/ och releases orörda för Caddy", () => {

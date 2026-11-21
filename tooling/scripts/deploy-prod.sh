@@ -30,8 +30,13 @@
 #   9. lägg bygget i releases/<tid>-<sha> (inte aktivt än)
 #  10. kör databasmigrationerna — ALLTID: db-migrate kör bara filer som saknas
 #      i schema_migrations, så en omkörning efter ett avbrott tar det som
-#      återstår (förr avgjordes det med git diff, som var tomt vid omkörning)
-#  11. starta om servern och vänta tills /readyz svarar
+#      återstår (förr avgjordes det med git diff, som var tomt vid omkörning).
+#      Först läses planen: är någon väntande migration `contract`?
+#  11. starta om servern och vänta tills /readyz svarar med den nya versionen.
+#      Svarar den inte: AUTOMATISK ROLLBACK av servern till förra imagen —
+#      bara om alla väntande migrationer var `expand` (#1770), så att den
+#      gamla koden klarar schemat. Databasen backas aldrig; användarnas data
+#      ligger kvar. Klienten har inte bytts.
 #  12. byt klient atomärt (releases/current), städa gamla releaser
 #
 # Skriptet går att köra om efter ett avbrott, var det än stannade: varje steg
@@ -115,15 +120,57 @@ if [ "$MODE" = rollback ]; then
   exit 0
 fi
 
+# Svarar /readyz ok? Med en version ($1) måste den också vara den som kör —
+# om svaret har en versionsstämpel (en osäker etikett utelämnas av servern).
+ready_once() {
+  local body
+  body="$(dc exec -T caddy wget -q -O- http://server-first:3001/readyz 2>/dev/null)" || return 1
+  printf '%s' "$body" | grep -q '"status":"ok"' || return 1
+  [ -z "${1:-}" ] || ! printf '%s' "$body" | grep -q '"release":' || printf '%s' "$body" | grep -qF "\"release\":\"$1\""
+}
+
 wait_ready() {
   if [ "$DRY_RUN" = 1 ]; then echo "[dry-run] väntar på /readyz"; return 0; fi
   for _ in $(seq 1 "$READY_TRIES"); do
-    if dc exec -T caddy wget -q -O- http://server-first:3001/readyz 2>/dev/null | grep -q '"status":"ok"'; then
-      return 0
-    fi
+    if ready_once "${1:-}"; then return 0; fi
     sleep "$READY_PAUSE"
   done
   return 1
+}
+
+# Servern som kör nu (image-id, image-namn och version), för en automatisk
+# rollback. Tomt om ingen kör (första deployen). Läser bara.
+PREV_SERVER_IMAGE=""
+SERVER_IMAGE_NAME=""
+PREV_RELEASE=""
+remember_server() {
+  local c
+  c="$(dc ps -q server-first 2>/dev/null | head -1 || true)"
+  [ -n "$c" ] || return 0
+  PREV_SERVER_IMAGE="$(docker inspect --format '{{.Image}}' "$c" 2>/dev/null || true)"
+  SERVER_IMAGE_NAME="$(docker inspect --format '{{.Config.Image}}' "$c" 2>/dev/null || true)"
+  PREV_RELEASE="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$c" 2>/dev/null | sed -n 's/^AVA_RELEASE=//p' | head -1 || true)"
+}
+
+# Den nya servern svarar inte: tillbaka till förra imagen, om det är säkert.
+# Databasen och klienten rörs inte. Ger ≠ 0 om ingen rollback gjordes.
+auto_rollback_server() {
+  if [ "$PLAN" != expand ] && [ "$PLAN" != none ]; then
+    echo "!! ingen automatisk rollback: releasen har en contract-migration (plan: ${PLAN:-okänd}) — den gamla koden klarar kanske inte schemat. Se docs/deploy-server-first.md (Rollback)." >&2
+    return 1
+  fi
+  if [ -z "$PREV_SERVER_IMAGE" ] || [ -z "$SERVER_IMAGE_NAME" ]; then
+    echo "!! ingen automatisk rollback: ingen tidigare server att gå tillbaka till" >&2
+    return 1
+  fi
+  step "automatisk rollback: servern tillbaka till förra versionen (databasen och klienten rörs inte)"
+  run docker tag "$PREV_SERVER_IMAGE" "$SERVER_IMAGE_NAME"
+  AVA_RELEASE="$PREV_RELEASE" run dc up -d --no-build server-first
+  if wait_ready; then
+    STATE_SERVER="AUTOMATISK ROLLBACK: förra versionen (${PREV_RELEASE:-okänd}) kör igen och /readyz svarar — den nya ($sha) svarade inte. Loggar: docker compose -f $COMPOSE logs server-first"
+  else
+    STATE_SERVER="automatisk rollback till ${PREV_RELEASE:-förra versionen} gjord, men /readyz svarar inte heller nu — se: docker compose -f $COMPOSE logs server-first"
+  fi
 }
 
 # Caddyfile är en enskild fil i en bind-mount: git ersätter filen (ny inode),
@@ -239,11 +286,23 @@ step "lägger bygget i releases/$release (inte aktivt än)"
 run release_stage out "$release"
 STATE_CLIENT="oförändrad; ny release releases/$release förberedd men inte aktiv"
 
-step "kör databasmigrationer (db-migrate kör bara filer som saknas i schema_migrations)"
-STATE_DB="migreringen avbröts — körda filer står i schema_migrations (varje fil i egen transaktion)"
 # Lösenordet ALDRIG på kommandoraden: den syns i `ps` och i --dry-run-utskriften.
 # URL:en ligger i skriptets miljö; `-e NAMN` utan värde låter docker läsa den därifrån.
 export AVA_DATABASE_URL="postgres://${POSTGRES_USER:-ava}:$POSTGRES_PASSWORD@postgres:5432/${POSTGRES_DB:-ava}"
+
+step "läser migrationsplanen (expand eller contract — avgör om servern kan backas automatiskt)"
+if [ "$DRY_RUN" = 1 ]; then
+  echo "[dry-run] db-migrate.ts --plan"
+  PLAN=expand
+else
+  PLAN="$(docker run --rm --network ava_default -v "$PWD:/app" -w /app -e AVA_DATABASE_URL \
+    "$BUN_IMAGE" bun tooling/scripts/db-migrate.ts --plan | sed -n 's/^plan: //p' | tail -1 || true)"
+fi
+echo "väntande migrationer: ${PLAN:-okänt (räknas som contract)}"
+[ "$DRY_RUN" = 1 ] || remember_server
+
+step "kör databasmigrationer (db-migrate kör bara filer som saknas i schema_migrations)"
+STATE_DB="migreringen avbröts — körda filer står i schema_migrations (varje fil i egen transaktion)"
 run docker run --rm --network ava_default -v "$PWD:/app" -w /app \
   -e AVA_DATABASE_URL \
   "$BUN_IMAGE" bun tooling/scripts/db-migrate.ts
@@ -257,9 +316,10 @@ STATE_SERVER="omstarten avbröts — kontrollera: docker compose -f $COMPOSE ps"
 export AVA_RELEASE="${AVA_RELEASE:-$(git describe --tags --always)}"
 run dc up -d --build
 
-step "väntar på /readyz"
-if ! wait_ready; then
+step "väntar på /readyz (version $AVA_RELEASE)"
+if ! wait_ready "$AVA_RELEASE"; then
   STATE_SERVER="omstartad med ny kod ($sha) men /readyz svarar inte ok efter $((READY_TRIES * READY_PAUSE)) s — se: docker compose -f $COMPOSE logs server-first"
+  auto_rollback_server || true
   exit 1
 fi
 STATE_SERVER="omstartad med ny kod ($sha), /readyz ok"
