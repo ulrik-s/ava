@@ -12,7 +12,7 @@ import type {
 } from "@/lib/shared/schemas/enums";
 import type { ContactId, MatterContactId, MatterId, OfficeId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { StandardAtgard } from "@/lib/shared/standard-atgard";
-import { baseColumns, boolDefault, hourlyRatesColumn, orgScopedColumns } from "./columns";
+import { baseColumns, boolDefault, conflictHitsColumn, hourlyRatesColumn, orgScopedColumns } from "./columns";
 
 export const organizations = pgTable("organizations", {
   ...baseColumns,
@@ -136,10 +136,12 @@ export const matters = pgTable("matters", {
   rattsskyddBeslutDatum: timestamp("rattsskydd_beslut_datum", { withTimezone: true }),
   /** Rättsskydd (#811): datum då rättsskydd nekades → föreslå rättshjälp. */
   rattsskyddNekadAt: timestamp("rattsskydd_nekad_at", { withTimezone: true }),
-  /** Jävskontrollen (#1246): status, antal träffar och när den kördes. */
+  /** Jävskontrollen (#1246): status, antal träffar, när den kördes, och träffarna (#1818, null = aldrig sparade). */
   conflictCheckStatus: text("conflict_check_status").$type<ConflictCheckStatus>(),
   conflictCheckHits: integer("conflict_check_hits"),
   conflictCheckedAt: timestamp("conflict_checked_at", { withTimezone: true }),
+  conflictCheckResults: conflictHitsColumn("conflict_check_results"),
+  conflictReviewedHits: conflictHitsColumn("conflict_reviewed_hits"),
   /** Bedömningen av träffarna (#1354): vem, när och motiveringen. */
   conflictReviewedById: uuid("conflict_reviewed_by_id").$type<UserId>(),
   conflictReviewedAt: timestamp("conflict_reviewed_at", { withTimezone: true }),

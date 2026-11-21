@@ -101,4 +101,5 @@ export const conflictChecks = pgTable("conflict_checks", {
   searchType: text("search_type").notNull().$type<"name" | "personalNumber" | "both">(),
   results: jsonb("results").notNull().default([]).$type<unknown[]>(),
   checkedById: uuid("checked_by_id").notNull().$type<UserId>(),
-});
+  matterId: uuid("matter_id").$type<MatterId>(), // #1818: ingen främmande nyckel; null = fristående eller äldre rad
+}, (t) => [index("conflict_checks_matter_idx").on(t.matterId)]);

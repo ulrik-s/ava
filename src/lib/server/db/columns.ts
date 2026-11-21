@@ -12,6 +12,7 @@
 
 import { bigint, boolean, integer, jsonb, timestamp, uuid } from "drizzle-orm/pg-core";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
+import type { ConflictHit } from "@/lib/shared/schemas/misc";
 
 export const baseColumns = {
   id: uuid("id").primaryKey(),
@@ -34,3 +35,6 @@ export const ore = (name: string) => bigint(name, { mode: "number" });
 
 /** Timpris per kategori (#1206) — samma jsonb-karta på byrå, jurist och ärende. */
 export const hourlyRatesColumn = () => jsonb("hourly_rates").notNull().default({}).$type<HourlyRates>();
+
+/** Jävskontrollens träffar på ärendet (#1818): nullbar jsonb-lista, null = aldrig sparade. */
+export const conflictHitsColumn = (name: string) => jsonb(name).$type<ConflictHit[]>();
