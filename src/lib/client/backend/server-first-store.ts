@@ -15,6 +15,7 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import { toLinkFetch, type InjectableFetch } from "@/lib/client/link-fetch";
+import { withSyncLock, type SyncLocks } from "@/lib/client/sync/sync-lock";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { InMemoryCursorStore, type CursorStore } from "@/lib/server/data-store/in-memory/cursor-store";
@@ -55,6 +56,11 @@ export interface ServerFirstStoreDeps {
   fetch?: ServerFirstFetch;
   /** Hoppa initial reconcile (pull) — för tester som kontrollerar timing. */
   skipInitialReconcile?: boolean;
+  /**
+   * Synklåset den första synken körs under (#1758), som den löpande. Default:
+   * webbläsarens `navigator.locks`; utan Web Locks körs synken utan lås.
+   */
+  locks?: SyncLocks;
   /** Var avvisade ändringar sparas (#1266). Default: flikens, i IndexedDB. */
   rejected?: { changes: RejectedChanges; persistence: RejectedChangesPersistence };
   /**
@@ -169,7 +175,7 @@ export async function createServerFirstStore(deps: ServerFirstStoreDeps = {}): P
     // köad mutation med ogiltigt id) får ALDRIG ta ned bootstrappen (offline-first,
     // ADR 0016) — annars fastnar appen på "AVA loading". Kön retrias vid nästa reconcile.
     try {
-      await cachingSync.reconcile();
+      await withSyncLock(() => cachingSync.reconcile(), deps.locks);
     } catch (e) {
       console.warn("[server-first] initial reconcile misslyckades (best-effort, storen kommer ändå upp):", e);
     }
