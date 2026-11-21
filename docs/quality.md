@@ -48,6 +48,7 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 | Bundle-size-budget | gzip-summa av klient-chunks + ratchet (körs i `demo-build`) | `tooling/scripts/check-bundle-size.ts` |
 | Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
 | Död kod / oanvända exports | knip | `tooling/config/knip.json` |
+| Moduler som bara tester använder | `knip --production` + ratchet (`bun run knip:production`) | `tooling/scripts/knip-production-ratchet.ts`, `tooling/config/knip-production-baseline.json` |
 | Säkerhet (SAST) | CodeQL (JS/TS). `dependency-review` saknas fortfarande — se noten nedan | `.github/workflows/security.yml` |
 | Sårbara beroenden (CVE) | `bun audit` + ratchet — `low` i båda arbetsytorna | `.github/workflows/security.yml`, `overrides` i båda `package.json` |
 | Beroende-uppdateringar | Dependabot (npm + github-actions) | `.github/dependabot.yml` |
@@ -381,6 +382,26 @@ Rader som skapas i minnesrepot valideras inte med zod, så zod-schemats
 standardvärden gäller inte där. Det standardvärde koden faktiskt använder i
 minnesrepot är reservvärdet vid läsningen (`?? true`). Därför prövar
 Drizzle ↔ zod-grinden också reservvärdena.
+
+### Moduler som bara tester använder (`bun run knip:production`, #1764)
+
+Vanliga `bun run knip` räknar testfilerna som ingångar, så en modul i `src/`
+som bara ett test importerar räknas som använd. Spärren kör knip i
+produktionsläget (`--production`): bara ingångarna märkta med `!` i
+`tooling/config/knip.json` räknas (sidorna, routern, servern i `src/bin/`,
+`ava`-verktygen, Outlook-tillägget och hjälpappen), och bara `src/` granskas.
+`tooling/` omfattas inte.
+
+Spärren är en **ratchet**. Modulerna som flaggades när den infördes står i
+`tooling/config/knip-production-baseline.json`. En ny modul som bara tester
+använder fäller kontrollen: radera den, eller använd den i produktionskoden.
+En modul i baslinjen som inte längre flaggas fäller också, och då skärper
+`bun run knip:production --update` baslinjen. `--update` tar bara bort poster
+och lägger aldrig till någon.
+
+Knips exitkod räknas inte, eftersom knip avslutar med 1 när den hittar filer
+även när rapporten är giltig. Bara den lästa JSON-rapporten avgör. Går den inte
+att läsa fäller kontrollen med knips felutskrift.
 
 ### Lasttest (`bun run load:test`, #1366)
 
