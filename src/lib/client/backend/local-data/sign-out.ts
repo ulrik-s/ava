@@ -22,6 +22,7 @@
  */
 
 import type { SessionProbe } from "@/lib/client/auth/session-probe";
+import { FEEDBACK_DRAFTS_KEY } from "@/lib/client/feedback/feedback-drafts";
 import { forgetSignedInIdentity, type FirmaTier } from "@/lib/client/firma/firma-config";
 import { reportIdbProblem } from "@/lib/server/data-store/in-memory/idb-open";
 import { activeLocalScope, unbindLocalNamespace, userNamespace } from "./local-namespace";
@@ -31,7 +32,7 @@ import { purgeLocalData, type PurgeEnv } from "./purge-local-data";
 export const PENDING_SIGN_OUT_KEY = "ava.pendingSignOut";
 
 /** Nycklar i `localStorage` som hör till sessionen, inte till webbläsaren. */
-export const SESSION_LOCAL_STORAGE_KEYS: readonly string[] = ["ava.calendar.selectedUsers", "ava.outlookToken"];
+export const SESSION_LOCAL_STORAGE_KEYS: readonly string[] = ["ava.calendar.selectedUsers", "ava.outlookToken", FEEDBACK_DRAFTS_KEY];
 
 /** Sidan man landar på efter utloggningen. */
 export function signedOutLandingPath(basePath: string): string {
