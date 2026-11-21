@@ -67,6 +67,29 @@ describe("computeDueReminders — OVERDUE", () => {
   });
 });
 
+describe("computeDueReminders — svensk kalenderdag (#1677)", () => {
+  it("kl. 00:30 svensk tid den första: OVERDUE för föregående månad, inte månaden före den", () => {
+    // 2026-04-01 00:30 i Stockholm (sommartid) = 2026-03-31 22:30 UTC.
+    const out = computeDueReminders([plan()], new Date("2026-03-31T22:30:00Z"), NONE);
+    expect(out[0]).toMatchObject({ type: "OVERDUE", dueMonth: "2026-03" });
+  });
+
+  it("kl. 00:30 svensk tid på förfallodagen ger DUE", () => {
+    // 2026-03-10 00:30 i Stockholm (vintertid) = 2026-03-09 23:30 UTC.
+    const p = plan({ startDate: new Date("2026-03-01T00:00:00Z") });
+    const out = computeDueReminders([p], new Date("2026-03-09T23:30:00Z"), NONE);
+    expect(out[0]).toMatchObject({ type: "DUE", dueMonth: "2026-03" });
+  });
+
+  it("en plan som startar den första (svensk midnatt) räknas från rätt månad", () => {
+    // 2026-03-01 00:00 i Stockholm = 2026-02-28 23:00 UTC → ingen OVERDUE för februari.
+    const p = plan({ startDate: new Date("2026-02-28T23:00:00Z") });
+    const out = computeDueReminders([p], new Date("2026-03-10T09:00:00Z"), NONE);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ type: "DUE", dueMonth: "2026-03" });
+  });
+});
+
 describe("computeDueReminders — grindar", () => {
   it("remaining <= 0 (betald) → ingen påminnelse", () => {
     expect(computeDueReminders([plan({ paidOre: 600000 })], new Date("2026-03-10T09:00:00Z"), NONE)).toHaveLength(0);
