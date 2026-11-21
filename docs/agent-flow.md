@@ -5,7 +5,7 @@ Varje sak har exakt ett tillstånd (en etikett). Flödesvakten
 (`.github/workflows/agent-flow.yml`) stoppar otillåtna övergångar, tar bort det
 gamla tillståndet och sköter timeouterna. Flaggor läggs ovanpå tillståndet.
 CI som hänger mer än 60 minuter avbryts. Står en sak längre än 2h
-i ett tillstånd med en agent startas agenten igen (knuffen, högst en start per rutin och körning), utom med `blockerad` eller `väntar-på-användaren`.
+i ett tillstånd med en agent startas agenten igen (knuffen, högst rutinens `parallel` starter per körning), utom med `blockerad` eller `väntar-på-användaren`.
 Klockan stänger också dubblett-PR:er: två körningar som byggt samma issue (den mergade eller äldsta behålls).
 
 ## intake (`ulrik-s/ava-feedback`, issues)
@@ -244,11 +244,11 @@ gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=refaktorisering'
 
 ## Rutiner
 
-| Id | Rutin | Prompt | Startas av (utöver schemat) |
-|---|---|---|---|
-| L1 | AVA - 1 - Verification - User Feedback | `tooling/agents/1-verifiering.md` | `GitHub: ava-feedback issues.opened`<br>`flödesvakten: användarens svar i AVA` |
-| L2 | AVA - 2 - Breakdown - User Feedback | `tooling/agents/2-nedbrytning.md` | `intake.verifierad`<br>`intake.designas`<br>`intake.design-godkand`<br>`intake.dubblett`<br>`GitHub: ava release.published` |
-| L3 | AVA - 3 - Review - User Feedback | `tooling/agents/3-granskning.md` | `intake.design-granskas`<br>`code-issue.att-granska`<br>`code-issue.behover-andras`<br>`code-pr.att-granska`<br>`code-pr.granskad` |
-| L4 | AVA - 4 - Implementation - User Feedback | `tooling/agents/4-implementation.md` | `code-issue.granskad`<br>`code-pr.behover-andras` |
-| L5 | AVA - 5 - Architecture - Weekly | `tooling/agents/5-arkitektur.md` | — |
-| L6 | AVA - 6 - PR-vakt | `tooling/agents/6-pr-vakt.md` | — |
+| Id | Rutin | Prompt | Startas av (utöver schemat) | Samtidigt |
+|---|---|---|---|---|
+| L1 | AVA - 1 - Verification - User Feedback | `tooling/agents/1-verifiering.md` | `GitHub: ava-feedback issues.opened`<br>`flödesvakten: användarens svar i AVA` | 1 |
+| L2 | AVA - 2 - Breakdown - User Feedback | `tooling/agents/2-nedbrytning.md` | `intake.verifierad`<br>`intake.designas`<br>`intake.design-godkand`<br>`intake.dubblett`<br>`GitHub: ava release.published` | 1 |
+| L3 | AVA - 3 - Review - User Feedback | `tooling/agents/3-granskning.md` | `intake.design-granskas`<br>`code-issue.att-granska`<br>`code-issue.behover-andras`<br>`code-pr.att-granska`<br>`code-pr.granskad` | 1 |
+| L4 | AVA - 4 - Implementation - User Feedback | `tooling/agents/4-implementation.md` | `code-issue.granskad`<br>`code-pr.behover-andras` | 3 |
+| L5 | AVA - 5 - Architecture - Weekly | `tooling/agents/5-arkitektur.md` | — | 1 |
+| L6 | AVA - 6 - PR-vakt | `tooling/agents/6-pr-vakt.md` | — | 1 |

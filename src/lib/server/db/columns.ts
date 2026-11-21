@@ -10,7 +10,7 @@
  * Org-scopade entiteter lägger till `organization_id`.
  */
 
-import { bigint, boolean, customType, integer, jsonb, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, integer, jsonb, timestamp, uuid } from "drizzle-orm/pg-core";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type { ConflictHit } from "@/lib/shared/schemas/misc";
 
@@ -38,6 +38,3 @@ export const hourlyRatesColumn = () => jsonb("hourly_rates").notNull().default({
 
 /** Jävskontrollens träffar på ärendet (#1818): nullbar jsonb-lista, null = aldrig sparade. */
 export const conflictHitsColumn = (name: string) => jsonb(name).$type<ConflictHit[]>();
-
-/** Postgres `tsvector` (fulltext-sökvektor) — läses aldrig som värde, bara i frågor. */
-export const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });

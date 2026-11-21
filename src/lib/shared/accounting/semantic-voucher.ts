@@ -19,7 +19,8 @@
  * (eller annan presentation) sker först i renderaren.
  */
 
-import { splitVat, type VatRate } from "@/lib/shared/vat";
+import { hasVatBreakdown, invoiceVatOre } from "@/lib/shared/invoice-vat";
+import type { VatRate } from "@/lib/shared/vat";
 
 /** Bokföringsroller som faktura-domänen känner till (systemoberoende).
  *  Utgående moms är uppdelad per sats (#790) så SIE/verifikat bokför på rätt
@@ -77,7 +78,7 @@ export interface SemanticVoucher {
 export interface SemanticVoucherInput {
   /** Brutto i öre (negativt = kreditfaktura). */
   amount: number;
-  /** Exakt momsbelopp i öre (per sats, #782). Saknas på äldre fakturor → 25 %-split. */
+  /** Exakt momsbelopp i öre (per sats, #782). Tolkas av `invoiceVatOre` (#1806). */
   vatOre?: number | null;
   /** Moms-uppdelning per sats (#790). Finns → verifikatet bokför moms per
    *  momskonto + delar intäkt i arvode/utlägg. Saknas → enkel rad via vatOre. */
@@ -146,7 +147,7 @@ export function buildSemanticVoucher(
 ): SemanticVoucher {
   // Per-sats-vägen läser tecknet ur RADERNA (#977); enkelrads-vägen har bara
   // `amount` att gå på och behöver därför fortfarande den globala flaggan.
-  const rows = invoice.vatBreakdown && invoice.vatBreakdown.length > 0
+  const rows = hasVatBreakdown(invoice)
     ? buildPerRateRows(invoice.vatBreakdown)
     : buildSingleRateRows(invoice, vatRate, invoice.amount >= 0);
 
@@ -182,9 +183,8 @@ function voucherDescription(invoice: SemanticVoucherInput): string {
  */
 function buildSingleRateRows(invoice: SemanticVoucherInput, vatRate: VatRate, kundfordranDebit: boolean): SemanticVoucherRow[] {
   const bruttoOre = Math.abs(invoice.amount);
-  const momsOre = invoice.vatOre != null
-    ? Math.min(Math.abs(invoice.vatOre), bruttoOre)
-    : bruttoOre - splitVat({ amount: bruttoOre, vatRate, vatIncluded: true }).exclVat;
+  // Samma tolkning som fakturadokumentet (#1806); klippningen är verifikatets egen.
+  const momsOre = Math.min(Math.abs(invoiceVatOre(invoice, vatRate)), bruttoOre);
   const exclVat = bruttoOre - momsOre; // balans-säker rest
   return [
     semanticRow("kundfordran", bruttoOre, kundfordranDebit),

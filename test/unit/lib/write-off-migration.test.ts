@@ -4,7 +4,9 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { synthesizeBadDebtWriteOffs, MIGRATION_RECORDED_BY } from "@/lib/shared/write-off-migration";
+import {
+  estimatedWriteOffDate, MIGRATION_REASON, MIGRATION_RECORDED_BY, MIGRATION_SYSTEM_USER_ID, synthesizeBadDebtWriteOffs,
+} from "@/lib/shared/write-off-migration";
 
 const inv = (over: Record<string, unknown> = {}) => ({
   id: "inv-1", status: "BAD_DEBT", amount: 100_00, invoiceType: "STANDARD",
@@ -56,5 +58,26 @@ describe("synthesizeBadDebtWriteOffs", () => {
   it("fallback-datum när updatedAt saknas → dueDate", () => {
     const out = synthesizeBadDebtWriteOffs([inv({ updatedAt: undefined })], [], []);
     expect(out[0]!.writtenOffAt).toBe("2026-04-01T00:00:00Z");
+  });
+});
+
+describe("estimatedWriteOffDate (#1809)", () => {
+  it("följer samma fältordning som migreringen och ger ett Date", () => {
+    expect(estimatedWriteOffDate(inv())).toEqual(new Date("2026-05-01T00:00:00Z"));
+    expect(estimatedWriteOffDate({ dueAt: "2026-02-01T00:00:00Z", invoiceDate: "2026-01-01T00:00:00Z" }))
+      .toEqual(new Date("2026-02-01T00:00:00Z"));
+    expect(estimatedWriteOffDate({ createdAt: new Date("2025-12-01T00:00:00Z") })).toEqual(new Date("2025-12-01T00:00:00Z"));
+  });
+
+  it("null när inget datumfält finns", () => {
+    expect(estimatedWriteOffDate({})).toBeNull();
+  });
+});
+
+describe("serverns markörer (#1809)", () => {
+  it("orsaken och det nollställda systemid:t", () => {
+    expect(MIGRATION_REASON).toBe("Migrerad från BAD_DEBT-status (ADR 0007)");
+    expect(MIGRATION_SYSTEM_USER_ID).toBe("00000000-0000-0000-0000-000000000000");
+    expect(MIGRATION_RECORDED_BY).toBe("system:bad-debt-migration");
   });
 });

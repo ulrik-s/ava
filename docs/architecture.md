@@ -136,7 +136,11 @@
 - **pg-boss jobb-kö** (#504): durabel server-sidig kö på samma Postgres (eget
   `pgboss`-schema). Claim/lease (FOR UPDATE SKIP LOCKED), retry/backoff,
   dead-letter. Handlers (t.ex. e-postutskick via smtp-sender) registreras i
-  runtimen; `ctx.ports.email` köar durabelt.
+  runtimen; `ctx.ports.email` köar durabelt. **Schemalagda jobb** (#1802):
+  en post i `JOB_SCHEDULES` (kö + cron i svensk tid, `missed` `once` som
+  standard) plus köns handler i `buildServerFirstJobHandlers`; runtimen
+  registrerar den med `boss.schedule` vid start, bara när kön har en handler,
+  och tar bort sparade scheman som inte längre är deklarerade.
 - **Fulltextsökning** (#1215): dokumentjobben (`classify-document`,
   `index-document`) extraherar texten EN gång per jobb, per sida
   (`extractPages`), och skriver den till `document_pages` (genererad
@@ -270,8 +274,9 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
 `timeEntry.create/update/delete`) köas som **anrop**, inte som färdiga rader:
 
 - **Klienten** kör proceduren lokalt som förut (offline fungerar). In-process-
-  länken ger en create ett klient-genererat UUIDv7 och kör anropet exklusivt
-  (`SharedExclusiveLock`), så `CachingSyncDataStore.runQueuedProcedure` kan
+  länken ger en create ett klient-genererat UUIDv7 och kör, som alla
+  mutationer, anropet exklusivt (`MutationLock`, #1794; frågor går förbi
+  låset), så `CachingSyncDataStore.runQueuedProcedure` kan
   fånga dess radskrivningar som `touches` i stället för att köa dem som rader.
   Kastar proceduren rullas skrivningarna tillbaka och ingenting köas.
 - **Servern** (`DrizzleProcedureReplayer`, `sync.replay`) kör samma
