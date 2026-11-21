@@ -59,6 +59,15 @@ export function useReplyFeedback() {
   });
 }
 
+/** En bilaga i en av mina förfrågningar (#1788) — ändras aldrig, så den hämtas en gång. */
+export function useFeedbackAttachment(number: number, path: string) {
+  return useQuery({
+    queryKey: ["server", "feedback.attachment", number, path] as const,
+    queryFn: () => server().feedback.attachment.query({ number, path }),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
 /** Användarinställningen som håller "senast läst" per förfrågan (synkas mellan enheter). */
 export const SEEN_PREF_KEY = "feedback.seen";
 

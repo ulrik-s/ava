@@ -13,7 +13,7 @@ sätter en `v*`-tagg.
 
 ```
  AVA: "Bugg eller förslag"
-        │ (servern, token med bara Issues: write)
+        │ (servern, token med Issues: write och Contents: write för bilagorna)
         ▼
  ulrik-s/ava-feedback  (PRIVAT)        user-request
         ▼
@@ -324,7 +324,11 @@ du frågar efter rapporten ─► väntar-på-användaren ─► svar ─► age
 GitHub → Settings → Developer settings → Fine-grained tokens → *Generate new token*:
 
 - **Repository access:** *Only select repositories* → `ulrik-s/ava-feedback`
-- **Permissions:** *Issues: Read and write* (Metadata: read följer med)
+- **Permissions:** *Issues: Read and write* och *Contents: Read and write* (Metadata: read följer med).
+  Contents behövs för bilagorna i förfrågningarna (#1788) — bilder, PDF och Word- eller
+  Excel-dokument: de sparas som filer under `attachments/` i intag-repot och länkas från
+  issuen. Utan Contents får en användare som bifogar en fil beskedet att bilagorna inte
+  kunde tas emot; texten går att skicka.
 - **Expiration:** ett år, med en kalenderpåminnelse.
 
 Lägg in i `/srv/ava/ava-server.env` på produktionsservern:

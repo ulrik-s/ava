@@ -22,13 +22,16 @@ function fakeSink(existing: FeedbackIssue[] = [], comments: Record<number, Feedb
   const created: Array<{ title: string; body: string; labels: string[] }> = [];
   const posted: Array<{ number: number; body: string }> = [];
   const read: number[] = [];
+  const attached: Array<{ path: string; content: string }> = [];
   const sink: IFeedbackSink = {
     create: (i) => { created.push(i); return Promise.resolve({ number: 41 + created.length }); },
     list: () => Promise.resolve(existing),
     comments: (n) => { read.push(n); return Promise.resolve(comments[n] ?? []); },
     comment: (number, body) => { posted.push({ number, body }); return Promise.resolve(); },
+    attach: (path, content) => { attached.push({ path, content }); return Promise.resolve({ url: `https://github.com/ulrik-s/ava-feedback/blob/main/${path}` }); },
+    file: (path) => Promise.resolve(`base64-av-${path}`),
   };
-  return { sink, created, posted, read };
+  return { sink, created, posted, read, attached };
 }
 
 const issue = (n: number, body: string, labels: string[], open = true, comments = 0): FeedbackIssue =>
@@ -41,7 +44,7 @@ function caller(sink?: IFeedbackSink, user = USER) {
   return feedbackRouter.createCaller({ user, orgId: user.organizationId, requestId: "req-1", ports: sink ? { feedback: sink } : {} } as never);
 }
 
-const INPUT = { kind: "bug" as const, title: "Fakturan @ulrik visas fel", body: "Klient Andersson: summan blir fel\nandra raden", page: "/invoices/7", userAgent: "Firefox" };
+const INPUT = { kind: "bug" as const, title: "Fakturan @ulrik visas fel", body: "Klient Andersson: summan blir fel\nandra raden", page: "/invoices/7", userAgent: "Firefox", attachments: [] };
 
 const logged: LogRecord[] = [];
 beforeEach(() => { resetFeedbackRateLimit(); logged.length = 0; setLogSink((r) => { logged.push(r); }); });
@@ -124,9 +127,9 @@ describe("feedback.mine", () => {
     expect(first?.state).toBe("vantar_pa_dig");
     expect(first?.canReply).toBe(true);
     expect(first?.messages).toEqual([
-      { id: 11, from: "claude", body: "Vilken faktura gäller det?", createdAt: "2026-11-10T08:01:00Z" },
-      { id: 12, from: "du", body: "Faktura 2026-17\nrad två", createdAt: "2026-11-10T09:00:00Z" },
-      { id: 14, from: "ulrik", body: "Tack, jag tittar på det.", createdAt: "2026-11-10T10:00:00Z" },
+      { id: 11, from: "claude", body: "Vilken faktura gäller det?", createdAt: "2026-11-10T08:01:00Z", attachments: [] },
+      { id: 12, from: "du", body: "Faktura 2026-17\nrad två", createdAt: "2026-11-10T09:00:00Z", attachments: [] },
+      { id: 14, from: "ulrik", body: "Tack, jag tittar på det.", createdAt: "2026-11-10T10:00:00Z", attachments: [] },
     ]);
     // Issue 2 saknar kommentarer → ingen läsning.
     expect(read).toEqual([1]);
@@ -173,7 +176,8 @@ describe("feedback.reply", () => {
 describe("olästa meddelanden", () => {
   const item = (number: number, msgs: Array<[ "claude" | "ulrik" | "du", string]>): FeedbackItem => ({
     number, title: "t", kind: "bug", state: "vantar_pa_dig", createdAt: "x", release: null, canReply: true,
-    messages: msgs.map(([from, createdAt], i) => ({ id: i, from, body: "b", createdAt })),
+    messages: msgs.map(([from, createdAt], i) => ({ id: i, from, body: "b", createdAt, attachments: [] })),
+    attachments: [],
   });
 
   it("oläst när det senaste meddelandet till mig är nyare än när jag läste", () => {
@@ -263,5 +267,75 @@ describe("hjälpfunktioner", () => {
   it("releaseFromLabels", () => {
     expect(releaseFromLabels(["x", "release:v1.2.3"])).toBe("v1.2.3");
     expect(releaseFromLabels(["x"])).toBeNull();
+  });
+});
+
+describe("feedback — bilagor (#1788)", () => {
+  const png = (extra = 3): string => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...new Array<number>(extra).fill(1)]).toString("base64");
+  const docx = Buffer.from([0x50, 0x4b, 0x03, 0x04, 1, 2]).toString("base64");
+  const WORD = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
+  const PATH = (ext: string) => new RegExp(`^attachments/\\d{4}-\\d{2}/[0-9a-f-]{36}\\.${ext}$`);
+  const base = "https://github.com/ulrik-s/ava-feedback/blob/main";
+
+  it("en förfrågan med en bild och ett Word-dokument: sparas under slumpade namn och länkas sist i issuen", async () => {
+    const { sink, created, attached } = fakeSink();
+    await caller(sink).submit({ ...INPUT, attachments: [{ type: "image/png", data: png() }, { type: WORD, data: docx }] });
+    expect(attached.map((a) => a.path)).toEqual([expect.stringMatching(PATH("png")), expect.stringMatching(PATH("docx"))]);
+    expect(attached[0]?.content).toBe(png());
+    const body = created[0]?.body ?? "";
+    expect(body).toContain(`**Bilagor:**\n![Bild 1](${base}/${attached[0]?.path ?? ""}?raw=true)\n[Word 2](${base}/${attached[1]?.path ?? ""}?raw=true)`);
+  });
+
+  it("en fil som inte är den typ den säger sig vara avvisas innan något sparas", async () => {
+    const { sink, created, attached } = fakeSink();
+    const fake = Buffer.from("inte en pdf").toString("base64");
+    await expect(caller(sink).submit({ ...INPUT, attachments: [{ type: "application/pdf", data: fake }] }))
+      .rejects.toMatchObject({ code: "BAD_REQUEST", message: "En av filerna är inte den pdf-fil den säger sig vara." });
+    expect(attached).toEqual([]);
+    expect(created).toEqual([]);
+  });
+
+  it("går bilagorna inte att spara (token utan Contents) får användaren ett begripligt besked och inget skapas", async () => {
+    const { sink, created } = fakeSink();
+    const broken: IFeedbackSink = { ...sink, attach: () => Promise.reject(new Error("GitHub svarade 403 på PUT /contents/x")) };
+    await expect(caller(broken).submit({ ...INPUT, attachments: [{ type: "image/png", data: png() }] }))
+      .rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE", message: "Bilagorna kunde inte tas emot just nu. Skicka utan bilagor, eller försök igen senare." });
+    expect(created).toEqual([]);
+    expect(logged.some((r) => r.event === "feedback.attachment_upload_failed" && r.count === 1)).toBe(true);
+  });
+
+  it("ett svar med en bilaga: den länkas efter texten, och i dialogen syns texten och bilagan var för sig", async () => {
+    const open = issue(1, `${ownerMarker("u-1")}\n…`, ["user-request"]);
+    const { sink, posted, attached } = fakeSink([open]);
+    await caller(sink).reply({ number: 1, body: "Så här ska mallen se ut", attachments: [{ type: WORD, data: docx }] });
+    const body = posted[0]?.body ?? "";
+    expect(body.startsWith(replyBody("u-1", "Så här ska mallen se ut"))).toBe(true);
+    const [msg] = messagesFrom([{ id: 5, body, createdAt: "2026-11-10T09:00:00Z", viaApp: null }], "u-1");
+    expect(msg).toEqual({ id: 5, from: "du", body: "Så här ska mallen se ut", createdAt: "2026-11-10T09:00:00Z", attachments: [attached[0]?.path] });
+  });
+
+  it("förfrågans egna bilagor följer med i listan", () => {
+    const path = "attachments/2026-11/0b8f2c6e-1d2a-4c3b-9e8f-1234567890ab.pdf";
+    const body = `${ownerMarker("u-1")}\n…\n\n**Bilagor:**\n[PDF 1](${base}/${path}?raw=true)`;
+    const [item] = mineFrom([issue(1, body, ["user-request"])], "u-1");
+    expect(item?.attachments).toEqual([path]);
+  });
+
+  it("bara bilagor i användarens egen förfrågan eller egna svar lämnas ut", async () => {
+    const own = "attachments/2026-11/0b8f2c6e-1d2a-4c3b-9e8f-1234567890ab.png";
+    const inReply = "attachments/2026-11/1c8f2c6e-1d2a-4c3b-9e8f-1234567890ab.docx";
+    const theirs = "attachments/2026-11/2d8f2c6e-1d2a-4c3b-9e8f-1234567890ab.jpg";
+    const mine = issue(1, `${ownerMarker("u-1")}\n…\n![Bild 1](${base}/${own}?raw=true)`, ["user-request"], true, 2);
+    const other = issue(2, `${ownerMarker("u-2")}\n…\n![Bild 1](${base}/${theirs}?raw=true)`, ["user-request"]);
+    const comments = { 1: [
+      { id: 1, body: `${replyBody("u-1", "svar")}\n\n[Word 1](${base}/${inReply}?raw=true)`, createdAt: "x", viaApp: null },
+      { id: 2, body: `<!-- till-anvandaren -->\n![Bild 1](${base}/${theirs}?raw=true)`, createdAt: "x", viaApp: "claude" },
+    ] };
+    const { sink } = fakeSink([mine, other], comments);
+    expect(await caller(sink).attachment({ number: 1, path: own })).toEqual({ type: "image/png", data: `base64-av-${own}` });
+    expect(await caller(sink).attachment({ number: 1, path: inReply })).toEqual({ type: WORD, data: `base64-av-${inReply}` });
+    await expect(caller(sink).attachment({ number: 1, path: theirs })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(caller(sink).attachment({ number: 2, path: theirs })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(caller(sink).attachment({ number: 1, path: "../hemligt.png" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

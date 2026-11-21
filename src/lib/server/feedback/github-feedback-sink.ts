@@ -52,11 +52,11 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 export class GithubFeedbackSink implements IFeedbackSink {
   constructor(private readonly config: FeedbackConfig, private readonly fetchImpl: FetchLike = fetch) {}
 
-  private async call(path: string, init?: RequestInit): Promise<unknown> {
+  private async fetchOk(path: string, init: RequestInit | undefined, accept: string): Promise<Response> {
     const res = await this.fetchImpl(`${API}/repos/${this.config.repo}${path}`, {
       ...init,
       headers: {
-        Accept: "application/vnd.github+json",
+        Accept: accept,
         Authorization: `Bearer ${this.config.token}`,
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "ava-feedback",
@@ -65,7 +65,11 @@ export class GithubFeedbackSink implements IFeedbackSink {
     });
     // Svaret kan innehålla repo-detaljer men aldrig token; status räcker i felet.
     if (!res.ok) throw new Error(`GitHub svarade ${res.status} på ${init?.method ?? "GET"} ${path}`);
-    return res.json();
+    return res;
+  }
+
+  private async call(path: string, init?: RequestInit): Promise<unknown> {
+    return (await this.fetchOk(path, init, "application/vnd.github+json")).json();
   }
 
   async create(issue: { title: string; body: string; labels: string[] }): Promise<{ number: number }> {
@@ -100,5 +104,18 @@ export class GithubFeedbackSink implements IFeedbackSink {
 
   async comment(number: number, body: string): Promise<void> {
     await this.call(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+  }
+
+  /** En bilaga till en förfrågan (#1788) — kräver `Contents: write` på intag-repot. */
+  async attach(path: string, contentBase64: string): Promise<{ url: string }> {
+    const res = z.object({ content: z.object({ html_url: z.string() }) }).parse(
+      await this.call(`/contents/${path}`, { method: "PUT", body: JSON.stringify({ message: "Bilaga till en förfrågan", content: contentBase64 }) }),
+    );
+    return { url: res.content.html_url };
+  }
+
+  async file(path: string): Promise<string> {
+    const res = await this.fetchOk(`/contents/${path}`, undefined, "application/vnd.github.raw+json");
+    return Buffer.from(await res.arrayBuffer()).toString("base64");
   }
 }

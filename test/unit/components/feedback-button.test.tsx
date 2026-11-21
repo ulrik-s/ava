@@ -4,7 +4,7 @@
  * användarens förfrågningar i en tabell med röd prick för nya meddelanden;
  * öppnar dialogen, markerar den som läst och låter användaren svara.
  */
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import type { FeedbackItem } from "@/lib/shared/feedback";
 
@@ -23,14 +23,20 @@ vi.mock("@/lib/client/backend/server-feedback", () => ({
   useSubmitFeedback: () => ({ mutate: submitMutate, isPending: false, error: submitError }),
   useReplyFeedback: () => ({ mutate: replyMutate, isPending: false, error: null }),
   useFeedbackSeen: () => ({ seen, markSeen }),
+  useFeedbackAttachment: () => ({ data: { type: "image/png", data: "QUJD" } }),
+}));
+vi.mock("@/lib/client/feedback/feedback-attachments", () => ({
+  ACCEPT: "image/png",
+  pickAttachment: () => Promise.resolve({ ok: true, attachment: { type: "image/png", data: "QUJD", preview: "data:image/png;base64,QUJD" } }),
+  toUpload: (items: Array<{ type: string; data: string }>) => items.map(({ type, data }) => ({ type, data })),
 }));
 
 const { FeedbackButton } = await import("@/components/shell/feedback-button");
 
-const QUESTION = { id: 11, from: "claude" as const, body: "Vilken faktura gäller det?", createdAt: "2026-11-10T08:00:00Z" };
+const QUESTION = { id: 11, from: "claude" as const, body: "Vilken faktura gäller det?", createdAt: "2026-11-10T08:00:00Z", attachments: [] };
 const item = (over: Partial<FeedbackItem>): FeedbackItem => ({
   number: 1, title: "Fel summa", kind: "bug", state: "mottagen", createdAt: "2026-11-09T10:00:00Z",
-  release: null, messages: [], canReply: true, ...over,
+  release: null, messages: [], canReply: true, attachments: [], ...over,
 });
 
 beforeEach(() => {
@@ -75,7 +81,7 @@ describe("FeedbackButton — ny förfrågan", () => {
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Jag vill kunna exportera listan." } });
     fireEvent.click(screen.getByRole("button", { name: "Skicka" }));
     expect(submitMutate).toHaveBeenCalledWith(
-      { kind: "feature", title: "Exportera till Excel", body: "Jag vill kunna exportera listan.", page: "/matters/7", userAgent: navigator.userAgent },
+      { kind: "feature", title: "Exportera till Excel", body: "Jag vill kunna exportera listan.", page: "/matters/7", userAgent: navigator.userAgent, attachments: [] },
       expect.anything(),
     );
   });
@@ -144,6 +150,28 @@ describe("FeedbackButton — utkasten finns kvar (#1786)", () => {
   });
 });
 
+describe("FeedbackButton — bilagor (#1788)", () => {
+  it("en vald bilaga skickas med förfrågan, utan förhandsvisningen", async () => {
+    openDialog();
+    fireEvent.change(screen.getByLabelText("Rubrik"), { target: { value: "Gamla systemet" } });
+    fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Så här såg listan ut förut." } });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Bifoga fil/), { target: { files: [new File(["x"], "skärm.png", { type: "image/png" })] } });
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Skicka" }));
+    expect(submitMutate).toHaveBeenCalledWith(expect.objectContaining({ attachments: [{ type: "image/png", data: "QUJD" }] }), expect.anything());
+  });
+
+  it("förfrågans och svarens bilagor syns i tråden", () => {
+    const path = "attachments/2026-11/a.png";
+    items = [item({ attachments: [path], messages: [{ id: 1, from: "du", body: "Se bilden", createdAt: "2026-11-10T09:00:00Z", attachments: [path] }] })];
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: /Fel summa/ }));
+    expect(screen.getAllByRole("img", { name: "Bild 1" })).toHaveLength(2);
+  });
+});
+
 describe("FeedbackButton — tabellen", () => {
   it("tom lista", () => {
     openDialog();
@@ -182,7 +210,7 @@ describe("FeedbackButton — tabellen", () => {
 
 describe("FeedbackButton — dialogen", () => {
   it("öppnar tråden, visar meddelandena och markerar den som läst", () => {
-    items = [item({ state: "vantar_pa_dig", messages: [QUESTION, { id: 12, from: "du", body: "Faktura 17", createdAt: "2026-11-10T09:00:00Z" }] })];
+    items = [item({ state: "vantar_pa_dig", messages: [QUESTION, { id: 12, from: "du", body: "Faktura 17", createdAt: "2026-11-10T09:00:00Z", attachments: [] }] })];
     openDialog();
     fireEvent.click(screen.getByRole("button", { name: /Fel summa/ }));
     expect(screen.getByText("Vilken faktura gäller det?")).toBeInTheDocument();
@@ -197,7 +225,7 @@ describe("FeedbackButton — dialogen", () => {
     fireEvent.click(screen.getByRole("button", { name: /Fel summa/ }));
     fireEvent.change(screen.getByLabelText("Ditt svar"), { target: { value: "Faktura 2026-17" } });
     fireEvent.click(screen.getByRole("button", { name: "Skicka svar" }));
-    expect(replyMutate).toHaveBeenCalledWith({ number: 1, body: "Faktura 2026-17" }, expect.anything());
+    expect(replyMutate).toHaveBeenCalledWith({ number: 1, body: "Faktura 2026-17", attachments: [] }, expect.anything());
   });
 
   it("en avslutad förfrågan går inte att svara på; tillbaka till listan", () => {
@@ -221,7 +249,7 @@ describe("FeedbackButton — Claude arbetar", () => {
   });
 
   it("efter användarens svar visar tråden att Claude tittar på svaret", () => {
-    items = [item({ number: 1, state: "vantar_pa_dig", messages: [QUESTION, { id: 12, from: "du", body: "Faktura 7", createdAt: "2026-11-10T09:00:00Z" }] })];
+    items = [item({ number: 1, state: "vantar_pa_dig", messages: [QUESTION, { id: 12, from: "du", body: "Faktura 7", createdAt: "2026-11-10T09:00:00Z", attachments: [] }] })];
     seen = { "1": "2026-11-10T09:00:00Z" };
     openDialog();
     fireEvent.click(screen.getByRole("button", { name: /Fel summa/ }));

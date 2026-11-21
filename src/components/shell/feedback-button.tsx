@@ -19,6 +19,7 @@ import { Modal } from "@/components/ui/modal";
 import {
   useFeedbackEnabled, useFeedbackSeen, useMyFeedback, useReplyFeedback, useSubmitFeedback,
 } from "@/lib/client/backend/server-feedback";
+import { type PickedAttachment, toUpload } from "@/lib/client/feedback/feedback-attachments";
 import {
   loadNewDraft, loadReplyDraft, type NewFeedbackDraft, saveNewDraft, saveReplyDraft, usePersistedDraft,
 } from "@/lib/client/feedback/feedback-drafts";
@@ -27,6 +28,7 @@ import {
   claudeWorkingText, FEEDBACK_STATE_LABEL, hasUnread, isFinished, lastActivity, sortForList, unreadCount,
   type FeedbackItem, type FeedbackMessage, type MessageAuthor,
 } from "@/lib/shared/feedback";
+import { AttachmentPicker, FeedbackAttachments } from "./feedback-attachments";
 
 const EMPTY: NewFeedbackDraft = { kind: "bug", title: "", body: "" };
 const loadNew = (): NewFeedbackDraft => loadNewDraft() ?? EMPTY;
@@ -93,12 +95,13 @@ function RequestsTable({ items, seen, onOpen }: {
   );
 }
 
-function Message({ m }: { m: FeedbackMessage }) {
+function Message({ m, number }: { m: FeedbackMessage; number: number }) {
   const mine = m.from === "du";
   return (
     <li className={cn("max-w-[85%] rounded-lg px-3 py-2 text-sm", mine ? "ml-auto bg-blue-50" : "bg-gray-100")}>
       <p className="mb-0.5 text-xs text-gray-500">{AUTHOR_LABEL[m.from]} · {shortDate(m.createdAt)}</p>
       <p className="whitespace-pre-wrap">{m.body}</p>
+      <FeedbackAttachments number={number} paths={m.attachments} />
     </li>
   );
 }
@@ -109,16 +112,18 @@ function ReplyForm({ number }: { number: number }) {
   const load = useCallback(() => loadReplyDraft(number), [number]);
   const save = useCallback((t: string | null) => { saveReplyDraft(number, t ?? ""); }, [number]);
   const [text, setText, clearText] = usePersistedDraft(load, save, "");
+  const [attachments, setAttachments] = useState<PickedAttachment[]>([]);
   const id = useId();
   const send = (e: React.SyntheticEvent<HTMLFormElement>): void => {
     e.preventDefault();
-    reply.mutate({ number, body: text }, { onSuccess: clearText });
+    reply.mutate({ number, body: text, attachments: toUpload(attachments) }, { onSuccess: () => { clearText(); setAttachments([]); } });
   };
   return (
     <form onSubmit={send} className="mt-3 space-y-2">
       <label htmlFor={id} className="block text-sm font-medium text-gray-700">Ditt svar</label>
       <textarea id={id} required maxLength={5000} rows={3} value={text} onChange={(e) => setText(e.target.value)}
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+      <AttachmentPicker attachments={attachments} onChange={setAttachments} />
       {reply.error && <p className="text-sm text-red-600" role="alert">{reply.error.message}</p>}
       <button type="submit" disabled={reply.isPending || !text.trim()}
         className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
@@ -141,9 +146,10 @@ function ThreadView({ item, onBack, markSeen }: {
       </button>
       <h4 className="font-semibold text-gray-900">{item.kind === "bug" ? "🐞" : "💡"} {item.title}</h4>
       <p className="mb-3 text-xs text-gray-500">Status: <StatusText item={item} /></p>
+      {item.attachments.length > 0 && <div className="mb-3"><FeedbackAttachments number={item.number} paths={item.attachments} /></div>}
       {item.messages.length === 0
         ? <p className="text-sm text-gray-500 italic">Inga meddelanden ännu. Du får en röd prick här om vi har frågor.</p>
-        : <ul className="flex flex-col gap-2">{item.messages.map((m) => <Message key={m.id} m={m} />)}</ul>}
+        : <ul className="flex flex-col gap-2">{item.messages.map((m) => <Message key={m.id} m={m} number={item.number} />)}</ul>}
       {item.canReply && <ReplyForm number={item.number} />}
     </div>
   );
@@ -154,13 +160,14 @@ function FeedbackForm({ onSent }: { onSent: (n: number) => void }) {
   const submit = useSubmitFeedback();
   // Utkastet sparas medan man skriver (#1786) och tas bort när förfrågan skickats.
   const [form, setForm, clearForm] = usePersistedDraft(loadNew, saveNewDraft, EMPTY);
+  const [attachments, setAttachments] = useState<PickedAttachment[]>([]);
   const titleId = useId();
   const bodyId = useId();
   const send = (e: React.SyntheticEvent<HTMLFormElement>): void => {
     e.preventDefault();
     submit.mutate(
-      { ...form, page: pathname, userAgent: navigator.userAgent },
-      { onSuccess: (r) => { clearForm(); onSent(r.number); } },
+      { ...form, page: pathname, userAgent: navigator.userAgent, attachments: toUpload(attachments) },
+      { onSuccess: (r) => { clearForm(); setAttachments([]); onSent(r.number); } },
     );
   };
   return (
@@ -190,6 +197,7 @@ function FeedbackForm({ onSent }: { onSent: (n: number) => void }) {
           Sidan du står på och AVA-versionen skickas med automatiskt.
         </p>
       </div>
+      <AttachmentPicker attachments={attachments} onChange={setAttachments} />
       {submit.error && <p className="text-sm text-red-600" role="alert">{submit.error.message}</p>}
       <button type="submit" disabled={submit.isPending}
         className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
