@@ -70,6 +70,8 @@ jobs:
       # Gating: fäller på strukturfynd (döda filer, oanvända/olistade deps).
       # Export-/typ-fynd är "warn" i knip.json (rådgivande) tills #3/#4 städat dem.
       - run: bun run knip
+      # Moduler i src/ som bara tester använder (ratchet, knip --production): baslinjen får bara krympa.
+      - run: bun run knip:production
       - run: bun run duplicates
       # Unika migrationsnummer och SQL som matchar Drizzle-schemat (#1251).
       - run: bun run db:check-migrations

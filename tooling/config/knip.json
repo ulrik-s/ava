@@ -1,17 +1,24 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
-    "src/app/**/page.tsx",
-    "src/app/**/layout.tsx",
-    "src/lib/server/routers/_app.ts",
-    "src/lib/client/pwa/sw-entry.ts",
-    "tooling/scripts/*.ts",
-    "tooling/load/run.ts",
+    "src/app/**/page.tsx!",
+    "src/app/**/layout.tsx!",
+    "src/lib/server/routers/_app.ts!",
+    "src/lib/client/pwa/sw-entry.ts!",
+    "tooling/scripts/*.ts!",
+    "tooling/load/run.ts!",
+    "src/bin/*.ts!",
+    "tooling/ava-cli/ava.ts!",
+    "tooling/ava-cli/ava-mcp.ts!",
+    "office-addin/taskpane/taskpane.ts!",
+    "helper-ui/src/engine/main.ts!",
+    "helper-ui/src/status-poller.ts!",
+    "helper-ui/src/tray-status.ts!",
     "test/e2e/*.spec.ts",
     "test/unit/**/*.test.{ts,tsx}",
     "test/integration/**/*.test.{ts,tsx}",
     "test/scripts/*.test.ts",
-    "next.config.{ts,js,mjs}",
+    "next.config.{ts,js,mjs}!",
     "postcss.config.{js,mjs}",
 
     "src/lib/shared/schemas/*.ts",
@@ -25,7 +32,7 @@
     "src/lib/server/trpc-core.ts"
   ],
   "project": [
-    "src/**/*.{ts,tsx}",
+    "src/**/*.{ts,tsx}!",
     "tooling/scripts/**/*.ts",
     "tooling/load/**/*.ts"
   ],
