@@ -79,7 +79,7 @@ function startedAlready(flow: Flow, payload: Payload, target: FireTarget, events
     const m = machineFor(flow, repo, e.isPr ? "pulls" : "issues");
     return m ? dispatchTarget(flow, m, e.label)?.id ?? null : null;
   };
-  const prior = earlierFire(events, { own, routineId: target.id, routineOf, now: Date.now() });
+  const prior = earlierFire(events, { own, routineId: target.id, routineOf, now: Date.now(), parallel: target.routine.parallel });
   if (prior) log(`${target.id}: redan startad av #${prior.number} (${prior.label}) — hoppar över`);
   return prior !== null;
 }

@@ -53,6 +53,19 @@ describe("LocalStore", () => {
     expect(store.currentSource.users).toHaveLength(2);
   });
 
+  it("två transaktioner efter varandra där den första kastar: den andra committar sina egna event (#1794)", async () => {
+    const onMutate = vi.fn();
+    const store = new LocalStore({ users: [] }, onMutate);
+    await expect(store.transaction(async (tx) => {
+      await loose(tx.users).create({ data: { id: "u1", name: "Anna" } });
+      throw new Error("boom");
+    })).rejects.toThrow("boom");
+    await store.transaction(async (tx) => { await loose(tx.users).create({ data: { id: "u2", name: "Bo" } }); });
+    expect(store.currentSource.users).toEqual([expect.objectContaining({ id: "u2" })]);
+    expect(onMutate).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(onMutate.mock.calls[0])).toContain("u2");
+  });
+
   describe("onCommit (#1386) — en gång per ändring, efter dess write-back", () => {
     function tracked() {
       const calls: string[] = [];

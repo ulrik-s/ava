@@ -23,7 +23,9 @@
  * per månad) → `remaining > 0` är grinden, enligt produktbeslut i #23.
  */
 
+import { Temporal } from "@js-temporal/polyfill";
 import type { MatterId, PaymentPlanId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 export type ReminderKind = "DUE" | "OVERDUE";
 
@@ -67,6 +69,15 @@ function monthKey(year: number, monthIndex0: number): string {
   return `${year}-${String(monthIndex0 + 1).padStart(2, "0")}`;
 }
 
+/**
+ * Månadsindex (år × 12 + månad, 0-baserad) och dag i månaden för den svenska
+ * kalenderdagen (#1677), aldrig UTC-dygnet.
+ */
+function stockholmMonthDay(d: Date): { monthIdx: number; day: number } {
+  const { year, month, day } = Temporal.PlainDate.from(stockholmDay(d));
+  return { monthIdx: year * 12 + month - 1, day };
+}
+
 function plannedFor(plan: PlanForScan, dueMonth: string, type: ReminderKind, remainingOre: number): PlannedReminder {
   const eventType = type === "DUE" ? "payment.due" : "payment.overdue";
   return {
@@ -101,9 +112,9 @@ function decideForPlan(plan: PlanForScan, now: Date, logged: Set<string>): Plann
   const remaining = plan.invoiceTotalOre - plan.paidOre;
   if (plan.status !== "ACTIVE" || remaining <= 0) return null;
 
-  const startIdx = plan.startDate.getUTCFullYear() * 12 + plan.startDate.getUTCMonth();
-  const curIdx = now.getUTCFullYear() * 12 + now.getUTCMonth();
-  const curMonth = monthKey(now.getUTCFullYear(), now.getUTCMonth());
+  const startIdx = stockholmMonthDay(plan.startDate).monthIdx;
+  const { monthIdx: curIdx, day: today } = stockholmMonthDay(now);
+  const curMonth = monthKey(Math.floor(curIdx / 12), curIdx % 12);
 
   // OVERDUE: föregående månad (om planen fanns då) — eskalera obetald.
   const prevIdx = curIdx - 1;
@@ -115,7 +126,7 @@ function decideForPlan(plan: PlanForScan, now: Date, logged: Set<string>): Plann
   }
 
   // DUE: innevarande månad när förfallodagen passerat.
-  if (curIdx >= startIdx && now.getUTCDate() >= plan.dayOfMonth
+  if (curIdx >= startIdx && today >= plan.dayOfMonth
       && !logged.has(`${plan.planId}:${curMonth}:DUE`)) {
     return plannedFor(plan, curMonth, "DUE", remaining);
   }

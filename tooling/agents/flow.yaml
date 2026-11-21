@@ -365,6 +365,9 @@ routines:
     prompt: tooling/agents/4-implementation.md
     trigger_id: trig_019KfqBDJkYMiLG43Dr7QMo2
     events: []
+    # Tre körningar samtidigt (#1837): var och en tar en issue med en push, så
+    # två bygger aldrig samma, och klockan stänger dubblett-PR:er.
+    parallel: 3
   L5:
     name: AVA - 5 - Architecture - Weekly
     prompt: tooling/agents/5-arkitektur.md

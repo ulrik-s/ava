@@ -34,6 +34,10 @@ describe("flow.yaml", () => {
     expect(flowErrors(flow)).toEqual([]);
   });
 
+  it("bara byggloopen kör flera samtidigt (#1837)", () => {
+    expect(Object.entries(flow.routines).filter(([, r]) => r.parallel > 1).map(([id, r]) => [id, r.parallel])).toEqual([["L4", 3]]);
+  });
+
   it("labels.json och docs/agent-flow.md är genererade ur den aktuella filen", () => {
     expect(staleFiles(expectedFiles())).toEqual([]);
   });
@@ -375,6 +379,17 @@ describe("händelsestyrningen", () => {
     expect(earlierFire([lev(20, 5, "verifierad")], { own: { number: 9, label: "verifierad", isPr: false }, routineId: "L2", routineOf, now: Date.now() })?.number).toBe(5);
   });
 
+  it("earlierFire med parallel (#1837): upp till så många saker startar, men aldrig samma sak två gånger", () => {
+    const q = (number: number) => ({ own: { number, label: "verifierad", isPr: false }, routineId: "L2", routineOf, now: Date.now(), parallel: 3 });
+    const events = [lev(40, 8, "verifierad"), lev(30, 7, "verifierad"), lev(20, 6, "verifierad"), lev(10, 5, "verifierad")];
+    expect(earlierFire(events, q(5))).toBeNull();
+    expect(earlierFire(events, q(7))).toBeNull();
+    // Tre startade redan (#5, #6, #7) → den fjärde stängs ute av den tredje.
+    expect(earlierFire(events, q(8))).not.toBeNull();
+    // Samma sak tidigare i fönstret → stängs ute även under taket.
+    expect(earlierFire([lev(30, 5, "verifierad"), lev(20, 5, "verifierad")], q(5))?.id).toBe(20);
+  });
+
   it("repots etiketthändelser och öppna PR:er läses från GitHub", () => {
     const gh = fakeGh({
       "issues/events": [
@@ -445,20 +460,20 @@ describe("knuffen", () => {
     const urls: string[] = [];
     const fetchFn: FetchFn = (url) => { urls.push(url); return Promise.resolve({ ok: true, status: 200 }); };
     const lines: string[] = [];
-    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l) => lines.push(l), started: new Set() })).toBe(1);
+    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l) => lines.push(l), started: new Map() })).toBe(1);
     expect(urls[0]).toContain("trig_019KfqBDJkYMiLG43Dr7QMo2/fire");
     expect(lines[0]).toContain("knuff L4");
-    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: {}, fetchFn, log: () => {}, started: new Set() })).toBe(0);
+    expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], { now, env: {}, fetchFn, log: () => {}, started: new Map() })).toBe(0);
   });
 
-  it("startar en rutin högst en gång per klockkörning, även över maskiner (#1681)", async () => {
+  it("startar en rutin högst `parallel` gånger per klockkörning, även över maskiner (#1681, #1837)", async () => {
     const urls: string[] = [];
     const fetchFn: FetchFn = (url) => { urls.push(url); return Promise.resolve({ ok: true, status: 200 }); };
     const lines: string[] = [];
-    const ctx = { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l: string) => lines.push(l), started: new Set<string>() };
-    const two = [item(["behöver-ändras"], 2), { ...item(["behöver-ändras"], 2), number: 4 }];
-    expect(await runNudges(flow, codePr, two, ctx)).toBe(1);
-    expect(urls).toHaveLength(1);
+    const ctx = { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l: string) => lines.push(l), started: new Map<string, number>() };
+    const four = [3, 4, 5, 6].map((number) => ({ ...item(["behöver-ändras"], 2), number }));
+    expect(await runNudges(flow, codePr, four, ctx)).toBe(3);
+    expect(urls).toHaveLength(3);
     expect(lines.filter((l) => l.includes("redan startad"))).toHaveLength(1);
     expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], ctx)).toBe(0);
   });

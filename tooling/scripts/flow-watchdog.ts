@@ -69,24 +69,24 @@ export interface NudgeContext {
   fetchFn: FetchFn;
   log: Log;
   /**
-   * Rutiner som redan startats i den här klockkörningen. En rutin tar alla
-   * saker i sitt tillstånd, så en start räcker; två samtidiga byggde samma
-   * issue (#1681).
+   * Antal starter per rutin i den här klockkörningen. En rutin tar alla saker i
+   * sitt tillstånd, så `parallel` starter räcker (#1681, #1837).
    */
-  started: Set<string>;
+  started: Map<string, number>;
 }
 
-/** Knuffar saker som stått för länge: startar tillståndets agent igen, högst en gång per rutin. Ger antal startade. */
+/** Knuffar saker som stått för länge: startar tillståndets agent igen, högst `parallel` gånger per rutin. Ger antal startade. */
 export async function runNudges(flow: Flow, machine: Machine, items: readonly WatchItem[], ctx: NudgeContext): Promise<number> {
   const { now, env, fetchFn, log, started } = ctx;
   let fired = 0;
   for (const n of dueNudges(machine, flow.nudge, items, now)) {
     const target = dispatchTarget(flow, machine, n.label);
     if (!target) continue;
-    const again = started.has(target.id);
+    const count = started.get(target.id) ?? 0;
+    const again = count >= target.routine.parallel;
     log(`#${n.number}: knuff ${target.id} (${n.label}, ${n.hours} h)${again ? " — redan startad i den här körningen" : ""}`);
     if (again) continue;
-    started.add(target.id);
+    started.set(target.id, count + 1);
     const text = `Flödesvakten: ${machine.repo}#${n.number} har stått i ${n.label} i ${n.hours} h utan att något hänt.`;
     if (await fire(target, text, env[`ROUTINE_TOKEN_${target.id}`], fetchFn, log)) fired++;
   }
@@ -138,7 +138,7 @@ if (import.meta.main) {
   const enforce = process.env.FLOW_GUARD_MODE === "enforce";
   const args = process.argv.slice(2);
   const machines = args.filter((a) => !a.startsWith("--")).map((name) => flow.machines[name]);
-  const started = new Set<string>();
+  const started = new Map<string, number>();
   const intakeRepo = flow.machines.intake?.repo;
   const token = process.env.FLOW_TRANSFER_TOKEN;
   for (const m of machines) {

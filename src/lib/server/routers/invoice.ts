@@ -44,6 +44,7 @@ import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } 
 import { assertAdmin } from "../auth/assert-admin";
 import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
+import { gatherInvoiceLedger } from "../billing/invoice-ledger";
 import { logMatterNote } from "../billing/matter-note";
 import { emit } from "../events/emit";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
@@ -84,23 +85,6 @@ function ensureWritableOff<T extends { status?: string } | null>(inv: T): NonNul
     });
   }
   return inv;
-}
-
-/**
- * Summera fakturans avräkningshinkar (betalt/krediterat/avskrivet) → ledger.
- * Migrerad till repository-sömmen (ADR 0020): typade `sumByInvoice`/
- * `sumCreditNotesFor` i st.f. dynamiska `findMany`-reduce. Den rena matematiken
- * (`computeInvoiceLedger`) + tillståndslogiken bor kvar i routern.
- */
-async function gatherInvoiceLedger(
-  repos: Repositories,
-  orgId: OrganizationId,
-  inv: { id: InvoiceId; amount: number },
-): Promise<{ paid: number; credited: number; writtenOff: number; ledger: ReturnType<typeof computeInvoiceLedger> }> {
-  const paid = await repos.payments.sumByInvoice(inv.id);
-  const credited = await repos.invoices.sumCreditNotesFor(inv.id, orgId);
-  const writtenOff = await repos.writeOffs.sumByInvoice(inv.id);
-  return { paid, credited, writtenOff, ledger: computeInvoiceLedger(inv.amount, paid, credited, writtenOff) };
 }
 
 /** Lös avskrivningsbeloppet mot utestående (default = hela återstoden) + vakt. */
