@@ -104,7 +104,7 @@ function dispatchingStates(flow: Flow, id: string): string[] {
 export function renderDocs(flow: Flow): string {
   const routines = Object.entries(flow.routines).map(([id, r]) => {
     const starts = [...dispatchingStates(flow, id), ...r.events].map((e) => `\`${e}\``).join("<br>") || "—";
-    return `| ${id} | ${r.name} | \`${r.prompt}\` | ${starts} |`;
+    return `| ${id} | ${r.name} | \`${r.prompt}\` | ${starts} | ${r.parallel} |`;
   });
   return [
     "<!-- GENERERAD av `bun run flow:gen` ur tooling/agents/flow.yaml — redigera inte för hand. -->",
@@ -114,7 +114,7 @@ export function renderDocs(flow: Flow): string {
     "(`.github/workflows/agent-flow.yml`) stoppar otillåtna övergångar, tar bort det",
     "gamla tillståndet och sköter timeouterna. Flaggor läggs ovanpå tillståndet.",
     `CI som hänger mer än ${flow.ci.hang_minutes} minuter avbryts. Står en sak längre än ${flow.nudge.after}`,
-    `i ett tillstånd med en agent startas agenten igen (knuffen, högst en start per rutin och körning), utom med ${flow.nudge.skip_flags.map((f) => `\`${f}\``).join(" eller ") || "—"}.`,
+    `i ett tillstånd med en agent startas agenten igen (knuffen, högst rutinens \`parallel\` starter per körning), utom med ${flow.nudge.skip_flags.map((f) => `\`${f}\``).join(" eller ") || "—"}.`,
     "Klockan stänger också dubblett-PR:er: två körningar som byggt samma issue (den mergade eller äldsta behålls).",
     "",
     ...Object.entries(flow.machines).flatMap(([name, m]) => [machineSection(name, m), ""]),
@@ -130,8 +130,8 @@ export function renderDocs(flow: Flow): string {
     "",
     "## Rutiner",
     "",
-    "| Id | Rutin | Prompt | Startas av (utöver schemat) |",
-    "|---|---|---|---|",
+    "| Id | Rutin | Prompt | Startas av (utöver schemat) | Samtidigt |",
+    "|---|---|---|---|---|",
     ...routines,
     "",
   ].join("\n");

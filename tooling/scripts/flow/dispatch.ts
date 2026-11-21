@@ -28,7 +28,7 @@ export function waitsForBlockers(machine: Machine, label: string): boolean {
 }
 
 /**
- * Fönstret där en rutin bara startas EN gång. Varje etikett startade förr en ny
+ * Fönstret där en rutin startas högst `parallel` gånger. Varje etikett startade förr en ny
  * körning, så flera ändringar i följd gav flera samtidiga körningar av samma
  * loop (dubbel nedbrytning, tre granskningar av samma PR, två PR:er för samma
  * issue). Det som kommer under fönstret tar den pågående körningen eller nästa.
@@ -44,19 +44,24 @@ export interface FireQuery {
   routineOf: (e: RepoLabelEvent) => string | null;
   now: number;
   windowMs?: number;
+  /** Rutinens `parallel`: så många starter får fönstret rymma (standard 1). */
+  parallel?: number;
 }
 
 /**
- * En TIDIGARE etiketthändelse i fönstret som redan startade samma rutin, eller
- * null. Händelse-id:n är strikt ordnade, så alla samtidiga vaktjobb ser samma
- * ordning och bara det första startar rutinen — ett lås utan skrivningar.
+ * En TIDIGARE etiketthändelse i fönstret som stänger ute den här: för samma sak,
+ * eller den `parallel`:te för samma rutin. Annars null. Händelse-id:n är strikt
+ * ordnade, så alla samtidiga vaktjobb ser samma ordning och bara de första
+ * startar rutinen — ett lås utan skrivningar.
  */
 export function earlierFire(events: readonly RepoLabelEvent[], q: FireQuery): RepoLabelEvent | null {
   const { own } = q;
   const windowMs = q.windowMs ?? FIRE_WINDOW_MS;
   const mine = events.filter((e) => e.number === own.number && e.label === own.label && e.isPr === own.isPr);
   const ownId = mine.length > 0 ? Math.max(...mine.map((e) => e.id)) : Number.POSITIVE_INFINITY;
-  return events.find((e) => e.id < ownId && q.now - Date.parse(e.at) < windowMs && q.routineOf(e) === q.routineId) ?? null;
+  const earlier = events.filter((e) => e.id < ownId && q.now - Date.parse(e.at) < windowMs && q.routineOf(e) === q.routineId);
+  const same = earlier.find((e) => e.number === own.number && e.isPr === own.isPr);
+  return same ?? earlier[(q.parallel ?? 1) - 1] ?? null;
 }
 
 /** Tillräckligt av `fetch` för att kunna bytas ut i testerna. */
