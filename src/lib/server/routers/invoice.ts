@@ -7,7 +7,7 @@
  *   • recordPayment — registrerar Payment, auto-markerar PAID/COMPLETED
  *   • createPaymentPlan — knyter avbetalningsplan till en SENT faktura
  *   • cancelPaymentPlan — river planen och återställer invoice.status=SENT
- *   • setStatus — manuell statusändring (SENT/CANCELLED/BAD_DEBT)
+ *   • setStatus — manuell statusändring (SENT/CANCELLED); kundförlust via writeOff
  *
  * Invariant: allt är scopat till ctx.orgId via matter-joinen, så en org
  * kan aldrig se/mutera en annan orgs fakturor.
@@ -502,26 +502,23 @@ export const invoiceRouter = router({
     ),
 
   /**
-   * Manuell statusändring för DRAFT→SENT, SENT→CANCELLED, SENT→BAD_DEBT.
-   *
-   * BAD_DEBT via `setStatus` är LEGACY (sätter bara flaggan, ingen daterad post).
-   * ADR 0007:s väg är `writeOff` ovan, som skapar en WriteOff-post + härleder
-   * status. UI-knappen "Kundförlust" byts till `writeOff` separat; tills dess
-   * lever båda vägarna (gamla BAD_DEBT-rader migreras i #139).
+   * Manuell statusändring för DRAFT→SENT och SENT→CANCELLED. Kundförlust
+   * registreras via `writeOff` ovan (ADR 0007), som skapar en daterad
+   * WriteOff-post och härleder statusen ur den.
    */
   setStatus: orgProcedure
     .input(
       z.object({
         invoiceId: invoiceIdSchema,
-        status: invoiceStatusSchema.extract(["SENT", "CANCELLED", "BAD_DEBT"]),
+        status: invoiceStatusSchema.extract(["SENT", "CANCELLED"]),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       // Migrerad till repository-sömmen (ADR 0020). Statemaskinen stannar i routern.
       const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-      // Tillståndsmaskin (#350): blockera omöjliga övergångar (t.ex. DRAFT→BAD_DEBT
-      // utan att ha skickats). Se [ADR 0015].
+      // Tillståndsmaskin (#350): blockera omöjliga övergångar (t.ex. PAID→SENT
+      // för en redan betald faktura). Se [ADR 0015].
       if (!canTransition(inv.status, input.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: transitionErrorMessage(inv.status, input.status) });
       }
