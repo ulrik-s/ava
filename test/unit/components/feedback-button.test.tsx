@@ -89,9 +89,9 @@ describe("FeedbackButton — ny förfrågan", () => {
   });
 
   it("visar serverns fel", () => {
-    submitError = { message: "Högst 5 förfrågningar i timmen" };
+    submitError = { message: "Högst 10 förfrågningar i timmen" };
     openDialog();
-    expect(screen.getByRole("alert")).toHaveTextContent("Högst 5");
+    expect(screen.getByRole("alert")).toHaveTextContent("Högst 10");
   });
 });
 
