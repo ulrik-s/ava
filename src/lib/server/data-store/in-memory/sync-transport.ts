@@ -4,6 +4,7 @@
  * den; tester använder en fejk. Reconcile-motorn känner inte till HTTP/tRPC.
  */
 
+import type { ServerSyncInfo } from "@/lib/shared/sync/protocol";
 import type { QueuedMutation, QueuedProcedureCall } from "./mutation-queue";
 
 /** En kanonisk ändring servern returnerar i en delta-pull (tombstone via `deleted`). */
@@ -34,6 +35,11 @@ export interface PullResult {
    * inte finns i den (utom rader med köade ändringar).
    */
   resync?: true;
+  /**
+   * Serverns synkversion (#1772). Saknas den är servern från före
+   * handskakningen (version 1).
+   */
+  server?: ServerSyncInfo;
 }
 
 /**
