@@ -5,9 +5,10 @@
  *
  * En PR med etiketten `agent-pr` fälls om den:
  *   1. rör en skyddad sökväg (CI, deploy, auth, agentpromptarna …),
- *   2. lägger till en destruktiv migration (DROP/RENAME/TRUNCATE/DELETE/typbyte) —
- *      en tagg-rollback backar koden men aldrig databasen, så migrationer från
- *      agenter måste vara additiva,
+ *   2. lägger till en destruktiv migration (samma regler som db:check-migrations
+ *      och deployens automatiska rollback, lib/migration-kind.ts, #1770) — en
+ *      rollback backar koden men aldrig databasen, så migrationer från agenter
+ *      måste vara additiva (expand),
  *   3. är fler än AGENT_PR_PER_DAY agent-PR:er på 24 timmar,
  *   4. inte är godkänd av granskningsloopen (`granskad`) eller är `blockerad` —
  *      så auto-merge aldrig kan släppa igenom en ogranskad agent-PR.
@@ -20,6 +21,7 @@
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
+import { destructiveStatements } from "./lib/migration-kind";
 
 export const AGENT_PR_PER_DAY = 20;
 
@@ -44,7 +46,6 @@ export const PROTECTED_PATHS: readonly RegExp[] = [
   /^CLAUDE\.md$/,
 ];
 
-const DESTRUCTIVE_SQL = /\b(DROP\s+(TABLE|COLUMN|INDEX|CONSTRAINT|TYPE|SCHEMA)|RENAME\s+(TO|COLUMN)|TRUNCATE|DELETE\s+FROM|ALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE)\b/i;
 
 export interface GuardInput {
   labels: readonly string[];
@@ -112,8 +113,8 @@ export function guardViolations(input: GuardInput): string[] {
   for (const f of input.files.filter((file) => isProtectedChange(file, input))) {
     out.push(`Skyddad sökväg: ${f} (kräver etiketten människa-godkänd).`);
   }
-  for (const line of input.addedMigrationLines.filter((l) => DESTRUCTIVE_SQL.test(l))) {
-    out.push(`Destruktiv migration: "${line.trim()}" — agentmigrationer ska vara additiva (kräver människa-godkänd).`);
+  for (const d of destructiveStatements(input.addedMigrationLines.join("\n"))) {
+    out.push(`Destruktiv migration: ${d} — agentmigrationer ska vara additiva (kräver människa-godkänd).`);
   }
   return out;
 }

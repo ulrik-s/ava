@@ -27,6 +27,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import postgres from "postgres";
 import { z } from "zod";
+import { deployKind, type MigrationKind } from "./lib/migration-kind";
 
 const MIGRATIONS_DIR = "tooling/db/migrations";
 
@@ -117,6 +118,39 @@ export async function applyMigrations(client: MigrationClient, opts: MigrateOpti
   return pending.length;
 }
 
+/** En väntande migration och dess art (`expand`/`contract`, lib/migration-kind.ts). */
+export interface PendingMigration { filename: string; kind: MigrationKind }
+
+/**
+ * De väntande migrationerna med sin art, utan att köra något (#1770):
+ * deploy-prod.sh frågar före migreringen om servern kan backas automatiskt.
+ */
+export async function planMigrations(client: MigrationClient, dir?: string): Promise<PendingMigration[]> {
+  const applied = await appliedFilenames(client);
+  return migrationFiles(dir).filter((m) => !applied.has(m.filename)).map((m) => ({ filename: m.filename, kind: deployKind(m.sql) }));
+}
+
+/** Det deployen läser: contract om någon väntande är det, annars expand — eller none. */
+export function planSummary(pending: readonly PendingMigration[]): MigrationKind | "none" {
+  if (pending.length === 0) return "none";
+  return pending.some((p) => p.kind === "contract") ? "contract" : "expand";
+}
+
+/** Planen som text: en rad per väntande migration och sist `plan: <art>`. */
+export function renderPlan(pending: readonly PendingMigration[]): string {
+  return [...pending.map((p) => `väntande: ${p.filename} (${p.kind})`), `plan: ${planSummary(pending)}`].join("\n");
+}
+
+/** Anslut till `url`, läs planen, stäng. */
+async function plan(url: string): Promise<string> {
+  const client = postgres(url, { max: 1, onnotice: () => {} });
+  try {
+    return renderPlan(await planMigrations(client));
+  } finally {
+    await client.end({ timeout: 5 });
+  }
+}
+
 /** Anslut till `url`, applicera väntande migrationer, stäng. */
 export async function migrate(url: string, opts: MigrateOptions = {}): Promise<number> {
   const client = postgres(url, { max: 1, onnotice: () => {} });
@@ -134,6 +168,10 @@ async function main(): Promise<void> {
   if (!url) {
     process.stderr.write("db:migrate: ange Postgres-URL via AVA_DATABASE_URL eller argument\n");
     process.exitCode = 1;
+    return;
+  }
+  if (args.includes("--plan")) {
+    process.stdout.write(`${await plan(url)}\n`);
     return;
   }
   const n = await migrate(url, { baseline });
