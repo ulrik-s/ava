@@ -13,6 +13,64 @@ import { z } from "zod";
 export const FEEDBACK_KINDS = ["bug", "feature"] as const;
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
 
+/**
+ * Bilagor i en förfrågan eller ett svar (#1788): skärmbilder av hur det gamla
+ * systemet fungerar, eller ett Word-dokument som visar hur en mall ska se ut.
+ * Bilder kodas om i klienten (då försvinner metadata som plats och kamera);
+ * filnamnet skickas aldrig. Servern kontrollerar att innehållet är den typ
+ * det säger sig vara och sparar bilagan i intag-repot under ett slumpat namn.
+ */
+export const FEEDBACK_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export const FEEDBACK_ATTACHMENT_TYPES = [
+  ...FEEDBACK_IMAGE_TYPES,
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+] as const;
+export type FeedbackImageType = (typeof FEEDBACK_IMAGE_TYPES)[number];
+export type FeedbackAttachmentType = (typeof FEEDBACK_ATTACHMENT_TYPES)[number];
+export const MAX_FEEDBACK_ATTACHMENTS = 5;
+export const MAX_FEEDBACK_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+/** Filändelsen för en bilagas typ — sökvägen i repot och namnet när användaren laddar ner. */
+export const ATTACHMENT_EXT: Readonly<Record<FeedbackAttachmentType, string>> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "application/pdf": "pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.ms-excel": "xls",
+};
+
+/** Vad bilagan kallas för användaren och i issuen: Bild, PDF, Word eller Excel. */
+export function attachmentKind(type: FeedbackAttachmentType): string {
+  if (isImageType(type)) return "Bild";
+  if (type === "application/pdf") return "PDF";
+  return type.includes("word") ? "Word" : "Excel";
+}
+
+export const isImageType = (t: string): t is FeedbackImageType => (FEEDBACK_IMAGE_TYPES as readonly string[]).includes(t);
+export const isAttachmentType = (t: string): t is FeedbackAttachmentType => (FEEDBACK_ATTACHMENT_TYPES as readonly string[]).includes(t);
+
+export const feedbackAttachmentSchema = z.object({
+  type: z.enum(FEEDBACK_ATTACHMENT_TYPES),
+  /** Innehållet som base64 (utan `data:`-prefix). */
+  data: z.string().min(1).max(Math.ceil(MAX_FEEDBACK_ATTACHMENT_BYTES / 3) * 4, "En bilaga är större än 10 MB.").regex(/^[A-Za-z0-9+/]+={0,2}$/),
+});
+export type FeedbackAttachment = z.infer<typeof feedbackAttachmentSchema>;
+
+const attachmentsSchema = z.array(feedbackAttachmentSchema).max(MAX_FEEDBACK_ATTACHMENTS, `Högst ${MAX_FEEDBACK_ATTACHMENTS} bilagor.`).default([]);
+
+/** Var en bilaga ligger i intag-repot: `attachments/<år-månad>/<uuid>.<typ>`. */
+export const FEEDBACK_ATTACHMENT_PATH = /^attachments\/\d{4}-\d{2}\/[0-9a-f-]{36}\.(?:png|jpg|webp|pdf|docx|doc|xlsx|xls)$/;
+
+/** En bilaga i en av användarens egna förfrågningar, för miniatyren eller nedladdningen. */
+export const feedbackAttachmentRequestSchema = z.object({ number: z.number().int().positive(), path: z.string().regex(FEEDBACK_ATTACHMENT_PATH) });
+
 /** Vad användaren skickar. Sidan och webbläsaren fylls i av klienten. */
 export const feedbackInputSchema = z.object({
   kind: z.enum(FEEDBACK_KINDS),
@@ -21,6 +79,7 @@ export const feedbackInputSchema = z.object({
   /** Sidan användaren stod på, t.ex. `/matters/123` — bara sökvägen. */
   page: z.string().max(300).default(""),
   userAgent: z.string().max(300).default(""),
+  attachments: attachmentsSchema,
 });
 export type FeedbackInput = z.infer<typeof feedbackInputSchema>;
 
@@ -54,6 +113,8 @@ export const feedbackMessageSchema = z.object({
   from: z.enum(MESSAGE_AUTHORS),
   body: z.string(),
   createdAt: z.string(),
+  /** Användarens bilagor i meddelandet (sökvägar i intag-repot). */
+  attachments: z.array(z.string()).default([]),
 });
 export type FeedbackMessage = z.infer<typeof feedbackMessageSchema>;
 
@@ -69,6 +130,8 @@ export const feedbackItemSchema = z.object({
   messages: z.array(feedbackMessageSchema),
   /** Går det att svara (öppen och inte levererad)? */
   canReply: z.boolean(),
+  /** Bilagorna i själva förfrågan (sökvägar i intag-repot). */
+  attachments: z.array(z.string()).default([]),
 });
 export type FeedbackItem = z.infer<typeof feedbackItemSchema>;
 
@@ -76,6 +139,7 @@ export type FeedbackItem = z.infer<typeof feedbackItemSchema>;
 export const feedbackReplySchema = z.object({
   number: z.number().int().positive(),
   body: z.string().trim().min(1, "Skriv ett svar.").max(5000),
+  attachments: attachmentsSchema,
 });
 export type FeedbackReply = z.infer<typeof feedbackReplySchema>;
 

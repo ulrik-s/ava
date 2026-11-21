@@ -54,7 +54,7 @@ describe("useFeedbackSeen", () => {
 });
 
 describe("feedbackPollInterval", () => {
-  const base = { number: 1, title: "x", kind: "bug" as const, createdAt: "2026-11-09T10:00:00Z", release: null, messages: [], canReply: true };
+  const base = { number: 1, title: "x", kind: "bug" as const, createdAt: "2026-11-09T10:00:00Z", release: null, messages: [], canReply: true, attachments: [] };
 
   it("var 30:e sekund medan Claude arbetar, annars var 5:e minut", () => {
     expect(feedbackPollInterval([{ ...base, state: "mottagen" }])).toBe(FEEDBACK_WORKING_POLL_MS);

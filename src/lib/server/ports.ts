@@ -309,6 +309,10 @@ export interface IFeedbackSink {
   comments(number: number): Promise<FeedbackComment[]>;
   /** Skriv en kommentar på en issue. */
   comment(number: number, body: string): Promise<void>;
+  /** Spara en bilaga (base64) i intag-repot (#1788); ger länken till den. */
+  attach(path: string, contentBase64: string): Promise<{ url: string }>;
+  /** En sparad fil i intag-repot, som base64. */
+  file(path: string): Promise<string>;
 }
 
 export interface IPorts {

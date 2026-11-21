@@ -6,10 +6,10 @@
 import { describe, expect, it } from "vitest-compat";
 import { anyClaudeWorking, claudeWorkingText, type FeedbackItem, sortForList } from "@/lib/shared/feedback";
 
-const msg = (id: number, from: "claude" | "ulrik" | "du", at: string) => ({ id, from, body: "…", createdAt: at });
+const msg = (id: number, from: "claude" | "ulrik" | "du", at: string) => ({ id, from, body: "…", createdAt: at, attachments: [] });
 const item = (over: Partial<FeedbackItem>): FeedbackItem => ({
   number: 1, title: "Fel summa", kind: "bug", state: "mottagen", createdAt: "2026-11-09T10:00:00Z",
-  release: null, messages: [], canReply: true, ...over,
+  release: null, messages: [], canReply: true, attachments: [], ...over,
 });
 
 describe("claudeWorkingText", () => {
