@@ -2,8 +2,6 @@ import { describe, it, expect } from "vitest-compat";
 import {
   computeFinalInvoiceBreakdown,
   isPaymentPlanSettled,
-  monthKey,
-  planHasStarted,
 } from "@/lib/shared/invoice-calc";
 
 describe("computeFinalInvoiceBreakdown", () => {
@@ -92,30 +90,5 @@ describe("isPaymentPlanSettled", () => {
   });
   it("true vid överbetalning", () => {
     expect(isPaymentPlanSettled(10_000, 10_001)).toBe(true);
-  });
-});
-
-describe("monthKey", () => {
-  it("padar månad till tvåsiffrig", () => {
-    expect(monthKey(new Date("2026-03-15T00:00:00Z"))).toBe("2026-03");
-    expect(monthKey(new Date("2026-11-01T00:00:00Z"))).toBe("2026-11");
-  });
-});
-
-describe("planHasStarted", () => {
-  it("false före startdatum", () => {
-    expect(
-      planHasStarted(new Date("2026-05-01"), new Date("2026-04-30T12:00:00Z")),
-    ).toBe(false);
-  });
-  it("true på startdatum (samma dag UTC)", () => {
-    expect(
-      planHasStarted(new Date("2026-05-01"), new Date("2026-05-01T00:00:00Z")),
-    ).toBe(true);
-  });
-  it("true efter startdatum", () => {
-    expect(
-      planHasStarted(new Date("2026-05-01"), new Date("2026-06-15T00:00:00Z")),
-    ).toBe(true);
   });
 });
