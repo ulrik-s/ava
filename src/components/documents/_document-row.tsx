@@ -8,10 +8,10 @@ import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import { DocumentDetailsDialog } from "./_document-details-dialog";
-import { DOCUMENT_RECIPIENT_LABELS } from "./_document-details-input";
-import { DocumentPartsList, documentKindsLabel, type DocumentPartView } from "./_document-parts";
+import { DocumentNameCell } from "./_document-name-cell";
+import type { DocumentPartView } from "./_document-parts";
 import { formatFileSize } from "./_drag-helpers";
-import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
+import type { SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 import { useLeaseAwareOpen } from "./use-lease-aware-open";
 
@@ -59,8 +59,6 @@ interface Props {
   reanalyzePending: boolean;
 }
 
-const ANALYSIS_GRACE_MS = 5 * 60 * 1000;
-
 export function DocumentRow({
   doc,
   depth,
@@ -74,7 +72,7 @@ export function DocumentRow({
   onDelete,
   reanalyzePending,
 }: Props) {
-  // Modal-state ligger på rad-nivå så både DocumentNameButton (primärklick)
+  // Modal-state ligger på rad-nivå så både namncellen (primärklick)
   // och DocumentActions (kebab-meny) kan trigga "Editera externt" mot
   // samma modal.
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
@@ -107,20 +105,8 @@ export function DocumentRow({
       >
         <td className="px-3 sm:px-6 py-2.5 text-sm">
           <div style={{ paddingLeft: `${depth * 16 + 4}px` }} className="min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={!!isUploading}
-                onOpen={() => void openPrimary()} />
-              {isUploading && (
-                <span
-                  className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
-                  title="Sparas lokalt — pushas till git när auto-sync kör"
-                >
-                  <span className="animate-pulse">●</span> Lokal
-                </span>
-              )}
-              <SyncStatusBadge status={syncStatus} />
-            </div>
-            <DocumentPartsList doc={doc} />
+            <DocumentNameCell doc={doc} isAnalyzing={isAnalyzing} isUploading={isUploading} syncStatus={syncStatus}
+              onOpen={() => void openPrimary()} />
           </div>
         </td>
         <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.sizeBytes)}</td>
@@ -140,12 +126,6 @@ export function DocumentRow({
       </tr>
     </Fragment>
   );
-}
-
-function isWithinAnalysisGrace(doc: DocumentRecord): boolean {
-  if (doc.analyzedAt || doc.analysisError) return false;
-   
-  return Date.now() - new Date(doc.createdAt).getTime() < ANALYSIS_GRACE_MS;
 }
 
 /**
@@ -285,89 +265,4 @@ export function DocumentActions({
   );
 }
 
-// readFromFsa flyttad till `@/lib/client/fsa/read-from-fsa` (delas med
-// search-sidan + andra "öppna lokal kopia"-flöden).
-
-interface NameButtonProps {
-  doc: DocumentRecord;
-  isAnalyzing: boolean;
-  disabled?: boolean;
-  /** Primärklick: smart öppning (AVA Helper → FSA → browser-tab) via parent
-   *  (modal-state ligger där). */
-  onOpen: () => void;
-}
-
-/** Riktnings-badge (#880): inkommande (blå) / utgående (grön). Null → inget. */
-function DirectionBadge({ direction }: { direction?: "INKOMMANDE" | "UTGAENDE" | null | undefined }) {
-  if (!direction) return null;
-  const incoming = direction === "INKOMMANDE";
-  return (
-    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0 ${incoming ? "bg-sky-50 text-sky-700" : "bg-emerald-50 text-emerald-700"}`}
-      title={incoming ? "Inkommande dokument" : "Utgående dokument"}>
-      {incoming ? "↓ Ink." : "↑ Utg."}
-    </span>
-  );
-}
-
 export { DOCUMENT_RECIPIENT_LABELS } from "./_document-details-input";
-
-/** Mottagar-badge (#901): "till/från Domstol". Null → inget. */
-function RecipientBadge({ recipient, direction }: { recipient?: DocumentRecord["recipient"]; direction?: DocumentRecord["direction"] }) {
-  if (!recipient) return null;
-  const label = DOCUMENT_RECIPIENT_LABELS[recipient] ?? recipient;
-  const prep = direction === "INKOMMANDE" ? "från" : "till";
-  return (
-    <span className="inline-block rounded-full bg-gray-100 text-gray-600 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0" title={`${prep} ${label}`}>
-      {prep} {label}
-    </span>
-  );
-}
-
-/** Meta-raden under filnamnet (typ-badge, filnamn, analys-status). Utbruten
- *  ur DocumentNameButton — alla villkorade `&&`-render-grenar bor här. */
-function DocumentNameMeta({ doc, isAnalyzing, isWaitingAnalysis }: { doc: DocumentRecord; isAnalyzing: boolean; isWaitingAnalysis: boolean }) {
-  const kinds = documentKindsLabel(doc);
-  return (
-    <span className="flex items-center gap-1.5 text-xs text-gray-500 font-normal min-w-0">
-      <DirectionBadge direction={doc.direction} />
-      <RecipientBadge recipient={doc.recipient} direction={doc.direction} />
-      {kinds && (
-        <span className="inline-block rounded-full bg-purple-50 text-purple-700 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0">
-          {kinds}
-        </span>
-      )}
-      {doc.title && <span className="truncate">{doc.fileName}</span>}
-      {isWaitingAnalysis && <span className="text-amber-600 text-[10px]">⏳ analyseras…</span>}
-      {doc.analysisError && !isAnalyzing && (
-        <span className="text-red-500 text-[10px]" title={doc.analysisError}>
-          ⚠ analys-fel
-        </span>
-      )}
-    </span>
-  );
-}
-
-function DocumentNameButton({ doc, isAnalyzing, disabled, onOpen }: NameButtonProps) {
-  const isWaitingAnalysis = isAnalyzing || isWithinAnalysisGrace(doc);
-
-  return (
-    <button
-      type="button"
-      onClick={() => { if (!disabled) onOpen(); }}
-      disabled={disabled}
-      // `w-full min-w-0`: en `display:flex`-knapp är shrink-to-fit och växer
-      // annars till sitt max-content — 390 px i en 103 px-cell, alltså
-      // horisontell scroll på mobil trots table-fixed. `break-words` på
-      // text-spanen nedan hjälper inte så länge själva flex-containern är för
-      // bred; den måste först få krympa. Mätt i #972.
-      className="flex w-full min-w-0 items-start gap-2 text-blue-600 hover:underline text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
-      title={disabled ? "Laddar upp — vänta tills filen är registrerad" : (doc.summary || "Öppna i extern app (PDFGear för PDF)")}
-    >
-      <span className="text-lg leading-tight flex-shrink-0">📄</span>
-      <span className="flex flex-col min-w-0">
-        <span className="font-medium break-words">{doc.title || doc.fileName}</span>
-        <DocumentNameMeta doc={doc} isAnalyzing={isAnalyzing} isWaitingAnalysis={isWaitingAnalysis} />
-      </span>
-    </button>
-  );
-}

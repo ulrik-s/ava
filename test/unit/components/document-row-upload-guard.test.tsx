@@ -128,7 +128,9 @@ describe("DocumentRow — kebab-meny + isUploading-guard", () => {
 
   it("isUploading=true: filnamn-knappen är disabled", () => {
     renderRow({ isUploading: true });
-    const nameBtn = screen.getByTitle(/Laddar upp — vänta/);
+    const nameBtn = screen.getByRole("button", { name: /stamning\.pdf/ });
     expect(nameBtn).toBeDisabled();
+    expect(nameBtn).toHaveAttribute("title", "Laddar upp — vänta tills filen är registrerad");
+    expect(screen.getByText("Laddar upp")).toBeInTheDocument();
   });
 });
