@@ -50,7 +50,7 @@ ulrik: u
 ci: { hang_minutes: 5 }
 nudge: { after: 2h }
 health: { stuck_after: 6h }
-release: { every: 20h, types: [feat] }
+release: { every: 6h, types: [feat] }
 routines: {}
 machines:
   m:

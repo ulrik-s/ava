@@ -12,7 +12,7 @@ import {
   AUTO_APPROVE_MS, AUTO_LABEL, autoApprovable, autoApproveDue, type Column, type ColumnAction, columnFor, decideColumn, decidePrio, lageFor, rekFor,
 } from "./flow/board";
 import { type BoardApi, type BoardItem, projectBoard } from "./flow/board-github";
-import { type GitHub, gitHub, type OpenItem, runGhWithToken, type WorkOrderProgress } from "./flow/github";
+import { type GitHub, gitHub, type OpenItem, runGhWithToken, type WorkOrderProgress, type WorkOrders } from "./flow/github";
 import { loadFlow } from "./flow/load";
 
 /** Projektets namn i GitHub. */
@@ -47,10 +47,11 @@ function addMissing(d: SyncDeps, onBoard: ReadonlySet<number>, result: SyncResul
   for (const i of d.open) {
     if (onBoard.has(i.number) || i.nodeId === undefined) continue;
     result.added.push(i.number);
-    d.log(`#${i.number}: läggs på tavlan i ${columnFor(i.labels)}`);
+    const column = columnFor(i.labels, workOrdersOf(d, i.number));
+    d.log(`#${i.number}: läggs på tavlan i ${column}`);
     if (!d.enforce) continue;
     const itemId = d.board.add(i.nodeId);
-    d.board.setColumn(itemId, columnFor(i.labels));
+    d.board.setColumn(itemId, column);
     const prio = decidePrio(i.labels, null);
     if (prio.kind === "set-board") d.board.setPrio(itemId, prio.prio);
     const rek = rekFor(i.labels);
@@ -61,7 +62,7 @@ function addMissing(d: SyncDeps, onBoard: ReadonlySet<number>, result: SyncResul
 
 /** Verkställer kortets kolumn. Ger beslutet, så att det automatiska godkännandet vet om Ulrik flyttat kortet. */
 function applyColumn(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): ColumnAction {
-  const action = decideColumn(labels, item.column);
+  const action = decideColumn(labels, item.column, workOrdersOf(d, item.number));
   if (action.kind === "approve") {
     result.approved.push(item.number);
     d.log(`#${item.number}: godkänd på tavlan → verifierad`);
@@ -107,7 +108,7 @@ function autoApprove(d: SyncDeps, item: BoardItem, labels: readonly string[], si
   return true;
 }
 
-const workOrdersOf = (d: SyncDeps, n: number): { workOrders?: { done: number; total: number } } => {
+const workOrdersOf = (d: SyncDeps, n: number): { workOrders?: WorkOrders } => {
   const wo = d.workOrders?.get(n);
   return wo === undefined ? {} : { workOrders: wo };
 };

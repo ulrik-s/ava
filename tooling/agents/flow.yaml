@@ -388,9 +388,11 @@ health:
 
 # Automatisk tagg: högst en per period, när main har ändringar av de här
 # typerna sedan senaste taggen och CI är grön. Stoppas med repovariabeln
-# AUTO_RELEASE=off i ulrik-s/ava.
+# AUTO_RELEASE=off i ulrik-s/ava. Var 6:e timme (#1776): det som är byggt ska
+# inte vänta ett dygn på att nå användarna, och en trasig release backas nu
+# automatiskt (#1770).
 release:
-  every: 20h
+  every: 6h
   types:
     - feat
     - fix
