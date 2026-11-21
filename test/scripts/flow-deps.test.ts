@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest-compat";
 import { type Edge, dependsOn, effectivePrio, isCycleError, missingEdges, ownPrio, prioChange } from "../../tooling/scripts/flow/dependencies";
 import { type FetchFn, waitsForBlockers } from "../../tooling/scripts/flow/dispatch";
-import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
+import { ghFailure, gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
 import { healthReport, type HealthItem, prioOrder } from "../../tooling/scripts/flow/health";
 import { loadFlow } from "../../tooling/scripts/flow/load";
 import { dueNudges } from "../../tooling/scripts/flow/watchdog";
@@ -222,5 +222,14 @@ describe("klockan och statussidan ser blockerade", () => {
     const gh = fakeGh([["ulrik-s/ava/issues?state=open", [[row(11, "", ["granskad"], 1, 2)]]], ["pulls?state=open", [[]]], ["issues?state=open", [[]]], ["events", [[]]]]);
     const items = collectItems(flow, (repo) => gitHub(repo, gh.run));
     expect(items.find((i) => i.number === 11)).toMatchObject({ blockedBy: 1, blocking: 2 });
+  });
+});
+
+describe("felet från gh (#1774)", () => {
+  it("ghs egen text, annars processfelet, annars hur den avslutades", () => {
+    expect(ghFailure({ status: 1, signal: null, stderr: "HTTP 404\n" })).toBe("HTTP 404");
+    expect(ghFailure({ status: null, signal: "SIGTERM", stderr: "", error: new Error("spawnSync gh ENOBUFS") })).toBe("spawnSync gh ENOBUFS");
+    expect(ghFailure({ status: null, signal: "SIGTERM", stderr: "" })).toBe("avslutades med SIGTERM");
+    expect(ghFailure({ status: 2, signal: null, stderr: "  " })).toBe("avslutades med 2");
   });
 });
