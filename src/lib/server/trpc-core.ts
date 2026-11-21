@@ -23,6 +23,7 @@ import { createLogger } from "@/lib/shared/observability/logger";
 import { errorMessage } from "@/lib/shared/observability/redact";
 import { newRequestId } from "@/lib/shared/observability/request-id";
 import { asId } from "@/lib/shared/schemas/ids";
+import { syncRefusalFromCause } from "@/lib/shared/sync/sync-error";
 import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { QueuedProcedureCall } from "./data-store/in-memory/mutation-queue";
@@ -108,8 +109,12 @@ const t = initTRPC.context<Context>().create({
   // i client-bundle:n mot DemoDataStore. tRPC v11 blockar default
   // detta — vi opt:ar in eftersom vi vet vad vi gör.
   allowOutsideOfServer: true,
-  // Skälet till ett 401 (#1351) följer med till klienten som `data.authFailure`.
-  errorFormatter: ({ shape, error }) => ({ ...shape, data: { ...shape.data, authFailure: authFailureFromCause(error.cause) } }),
+  // Skälet till ett 401 (#1351) följer med till klienten som `data.authFailure`,
+  // och varför servern vägrade en köpost (#1772) som `data.syncRefusal`.
+  errorFormatter: ({ shape, error }) => ({
+    ...shape,
+    data: { ...shape.data, authFailure: authFailureFromCause(error.cause), syncRefusal: syncRefusalFromCause(error.cause) },
+  }),
 });
 
 export const router = t.router;

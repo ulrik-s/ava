@@ -38,7 +38,7 @@ export {
 } from "./queue-entry";
 
 /** Klientkodens version — deploy-sha:n när den finns (samma som demo-cachens nyckel). */
-export const SYNC_CODE_VERSION = process.env.NEXT_PUBLIC_DEMO_VERSION || "dev";
+export const SYNC_CODE_VERSION = process.env.NEXT_PUBLIC_DEMO_VERSION || process.env.NEXT_PUBLIC_AVA_VERSION || "dev";
 
 /**
  * Var kön sparas (#1346): en post i taget, inte hela kön. Flera flikar delar

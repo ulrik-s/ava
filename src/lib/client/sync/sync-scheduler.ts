@@ -27,6 +27,8 @@ export interface ReconcileOutcome {
    * försökas igen senare. Synken räknas då inte som lyckad.
    */
   blocked?: { error: unknown } | null;
+  /** Synkversionerna passar inte (#1772): beskedet; inget skickades. */
+  incompatible?: string;
 }
 
 export interface SyncSchedulerDeps {
@@ -91,12 +93,18 @@ export class SyncScheduler {
     try {
       const result = await this.deps.reconcile();
       if (result.pulled + (result.replayed ?? 0) + (result.restored ?? 0) > 0) this.deps.onRemoteChanges?.();
-      if (result.blocked) return await this.failed(result.blocked.error);
-      this.lastSyncedAt = (this.deps.now ?? Date.now)();
-      this.error = null;
+      await this.settle(result);
     } catch (err) {
       await this.failed(err);
     }
+  }
+
+  /** Rundans utfall: lyckad, stoppad vid en post, eller versionerna passar inte (#1772). */
+  private async settle(result: ReconcileOutcome): Promise<void> {
+    if (result.incompatible) { this.error = result.incompatible; return; }
+    if (result.blocked) return this.failed(result.blocked.error);
+    this.lastSyncedAt = (this.deps.now ?? Date.now)();
+    this.error = null;
   }
 
   /** Ändringen ligger kvar i kön (persisterad) — nästa runda försöker igen. */

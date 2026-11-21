@@ -92,8 +92,10 @@ För var och en:
      något som intagets rapport listar under "Inte med": `behöver-ändras`.
    - Tester för varje ny rad (`AGENTS.md`), som faktiskt fäller om logiken går
      sönder? Inga borttagna eller försvagade tester eller ratchets?
-   - Inga skyddade sökvägar, bara additiva migrationer. Agentvakten
-     kontrollerar också, men du ska hitta det först.
+   - Inga skyddade sökvägar, bara additiva migrationer märkta
+     `-- kind: expand`. Klarar förra versionens kod schemat efteråt (ett nytt
+     värde som den gamla koden inte kan läsa är också ett brott)? Agentvakten
+     och `db:check-migrations` kontrollerar också, men du ska hitta det först.
    - Inga personuppgifter, hemligheter, tokens eller testdata med riktiga namn.
    - Säkerhet: behörighet (byrå-scoping via `orgProcedure`/`ctx.orgId`,
      roller), validering med zod, ingen XSS (`dangerouslySetInnerHTML`), inga

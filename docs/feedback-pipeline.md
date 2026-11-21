@@ -114,7 +114,11 @@ granskningen av arbetsordrar och PR:er, CI och Agentvakten gäller som vanligt.
 verifierar", "Godkänd — loop 2 bryter ner den", "Byggs: 1 av 3 arbetsorder
 klara" (ur arbetsordrarnas `Intag:`-rad), "Godkänns automatiskt 21 nov 21:30",
 "Levererad i v0.7.42". Synken skriver det när det ändrats, direkt efter en
-flytt, så att Ulrik ser att flytten tagits emot.
+flytt, så att Ulrik ser att flytten tagits emot. När alla arbetsordrar är
+klara står det "Byggd — kommer med nästa release" (automatisk tagg var 6:e
+timme, `release` i flow.yaml). En nedbruten förfrågan vars arbetsorder är
+`blockerad` står i **Svara**, med vilken arbetsorder som väntar ("ava#1764");
+den går inte att avböja därifrån, eftersom den redan byggs (#1776).
 
 GitHub kan inte starta en workflow när ett kort flyttas, och GitHubs schema
 är för opålitligt (var-5:e-minut-schemat gick två gånger på ett dygn). Därför

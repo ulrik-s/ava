@@ -36,6 +36,7 @@
 import { conflictClassOf, type ConflictClass } from "@/lib/shared/conflict-policy";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { isProcedureOwned } from "@/lib/shared/sync/procedure-owned";
+import { incompatibleMessage, type ServerSyncInfo } from "@/lib/shared/sync/protocol";
 import { classifySyncError, syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import { fetchCanonical, pendingKeysOf, refKey, refsOf, RestorePlan, type ApplyCanonical } from "./canonical-restore";
 import type { CursorStore } from "./cursor-store";
@@ -95,6 +96,8 @@ export interface ReconcileResult {
    * finns inte i den återställda databasen. 0 utan omsynk.
    */
   pruned: number;
+  /** Synkversionerna passar inte (#1772): beskedet — inget skickades, kön ligger kvar. */
+  incompatible?: string;
 }
 
 export interface ReconcileDeps {
@@ -130,6 +133,8 @@ interface PullOutcome {
    * 0. `null` utan omsynk.
    */
   keep: Set<string> | null;
+  /** Serverns synkversion (#1772), om den skickade en. */
+  server?: ServerSyncInfo;
 }
 
 const refOf = (entity: string, row: Record<string, unknown>): RowRef => ({
@@ -161,18 +166,20 @@ export class ReconcileEngine {
     const pull = await this.pullAll(since, await this.deps.cursor.getEpoch(), plan);
     // Först när alla sidor är hämtade vet klienten vad servern har (#1360).
     const pruned = pull.keep ? this.pruneMissing(pull.keep) : 0;
-    const replay = await this.replayQueue(plan);
+    // Passar inte versionerna skickas inget (#1772) — kön ligger kvar.
+    const incompatible = incompatibleMessage(pull.server);
+    const replay = incompatible === null ? await this.replayQueue(plan) : { ...emptyTally(), blocked: null };
     const restore = await plan.run(pendingKeysOf(this.deps.queue.pending()), this.deps.transport, this.deps.apply);
     this.unrestored = [...restore.unrestored, ...this.unrestored.slice(taken)];
     // Stannade kön, eller gick en avvisad rad inte att återställa, flyttas inte
     // cursorn: rader som hoppades hämtas igen nästa gång (idempotent).
-    const held = replay.blocked !== null || restore.unrestored.length > 0;
+    const held = incompatible !== null || replay.blocked !== null || restore.unrestored.length > 0;
     // Efter en omsynk står en ofullständig reconcile kvar på 0 (#1360): den
     // gamla positionen hör till den återställda databasens förra historik.
     const base = pull.keep ? 0 : since;
     const cursor = held ? base : pull.cursor;
     await this.saveCursor(cursor, pull.epoch);
-    return { pulled: pull.pulled, ...replay, restored: restore.restored, cursor, pruned };
+    return { pulled: pull.pulled, ...replay, restored: restore.restored, cursor, pruned, ...(incompatible === null ? {} : { incompatible }) };
   }
 
   /** Spara cursorn, och epoken den hör till när servern skickat en (#1360). */
@@ -255,7 +262,7 @@ export class ReconcileEngine {
    * som ska försökas igen → stanna här.
    */
   private async replayQueue(plan: RestorePlan): Promise<Tally & { blocked: BlockedEntry | null }> {
-    const tally: Tally = { pushed: 0, rebased: 0, replayed: 0, conflicts: [] };
+    const tally = emptyTally();
     for (const m of [...this.deps.queue.pending()]) {
       const before = tally.conflicts.length;
       const blocked = await this.replayEntry(m, tally, plan) ?? await this.saveRejection(m, tally, before);
@@ -301,6 +308,8 @@ export class ReconcileEngine {
   private replayFailed(m: QueueEntry, err: unknown, tally: Tally, plan: RestorePlan): BlockedEntry | null {
     const kind = classifySyncError(err);
     if (kind === "halt") return { mutation: m, error: err, attempts: this.backoff.attempts(m.mutationId) };
+    // Karantän (#1772): servern tar den inte från den här användaren — ett nytt försök senare kan lyckas.
+    if (kind === "quarantine") return this.reject(m, { reason: syncErrorMessage(err), retryable: true }, tally, plan);
     // Deterministiskt: samma post ger samma fel igen — ett nytt försök är meningslöst.
     if (kind === "reject") return this.reject(m, { reason: `Servern avvisade ändringen: ${syncErrorMessage(err)}`, retryable: false }, tally, plan);
     const attempt = this.backoff.fail(m.mutationId, err);
@@ -371,6 +380,7 @@ export class ReconcileEngine {
  */
 function trackPage(out: PullOutcome, page: PullResult): void {
   if (page.epoch !== undefined) out.epoch = page.epoch;
+  if (page.server) out.server = page.server;
   if (page.resync) out.keep = new Set();
   if (!out.keep) return;
   for (const ch of page.changes) if (!ch.deleted) out.keep.add(refKey(refOf(ch.entity, ch.row)));
@@ -378,6 +388,8 @@ function trackPage(out: PullOutcome, page: PullResult): void {
 
 /** Svarade servern med en tombstone (`deleted`, #1397)? */
 const isTombstone = (res: PushResult): boolean => res.status === "accepted" && res.deleted === true;
+
+const emptyTally = (): Tally => ({ pushed: 0, rebased: 0, replayed: 0, conflicts: [] });
 
 interface Tally {
   pushed: number;

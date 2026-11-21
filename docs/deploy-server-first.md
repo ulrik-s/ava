@@ -511,12 +511,30 @@ Avbryts skriptet skriver det ut läget, t.ex.:
 
 ### Rollback
 
+**Automatiskt** (#1770): svarar den nya servern inte på `/readyz` med sin nya
+version, backar `deploy-prod.sh` själv servern till förra imagen och lämnar
+klienten orörd — men bara om alla väntande migrationer var `expand` (se
+nedan). Databasen backas aldrig: det användarna har gjort ligger kvar, och
+data som den nya koden skrev i nya kolumner väntar där tills en rättad
+version går ut. Med en `contract`-migration stannar deployen i stället och
+säger det; då gäller det manuella nedan. Timern försöker inte samma tagg igen
+(`releases/.deploy-failed`): rätta och sätt en ny tagg.
+
 **Klienten** (en UI-regression — det vanliga fallet) byts tillbaka på en
 sekund, utan omstart:
 
 ```bash
 bash tooling/scripts/deploy-prod.sh --rollback   # current ↔ previous; kör igen för att ångra
 ```
+
+**Klienterna** (#1772) märker en rollback av sig själva: varje pull bär
+serverns synkprotokoll (`src/lib/shared/sync/protocol.ts`). Talar servern en
+äldre version än klienten skickar klienten inga ändringar — de ligger kvar i
+kön — och statusen säger "Servern kör en äldre version av AVA …"; är klienten
+för gammal ber den användaren ladda om. Protokollet höjs bara när synkens
+trådformat ändras, så en vanlig rollback påverkar inte klienterna alls. En
+köpost som en annan användare på samma dator köade läggs bland de avvisade
+ändringarna (med "Försök igen") i stället för att stoppa kön.
 
 **Servern** går också att backa, men **migrationer går bara framåt**: backa bara
 till en version vars kod klarar det nuvarande schemat (migrationer som bara
@@ -530,6 +548,33 @@ docker run --rm -v "$PWD:/app" -w /app oven/bun:1.4.4 sh -c \
 docker compose -f tooling/docker/docker-compose.production.yml up -d --build server-first
 git checkout main                                # nästa deploy-prod.sh tar det härifrån
 ```
+
+### Migrationer: expand och contract
+
+En automatisk rollback är bara säker om förra versionens kod klarar schemat
+efter migrationen. Därför är varje migration från 0052 märkt på första raden
+(`tooling/scripts/lib/migration-kind.ts`):
+
+- **`-- kind: expand`**: lägger till — tabeller, nullbara kolumner eller
+  kolumner med default, index, enum-värden — och fyller i data. Den gamla
+  koden märker inget.
+- **`-- kind: contract`**: tar bort, döper om, byter typ eller skärper
+  (NOT NULL, constraints, unika index) på det som redan finns, eller kör
+  procedurkod (DO-block, dynamisk EXECUTE) som inte går att granska.
+  Ingen automatisk rollback.
+
+`db:check-migrations` (CI) fäller en omärkt migration och en expand med
+destruktiv SQL; Agentvakten kräver `människa-godkänd` för samma SQL i en
+agent-PR. `db-migrate.ts --plan` visar vad som väntar.
+
+Så görs en ändring som annars vore contract i två releaser:
+
+| Ändring | Release N (expand) | Release N+1 eller senare (contract) |
+|---|---|---|
+| Döpa om en kolumn | lägg till den nya, skriv till båda, kopiera över | läs den nya; ta bort den gamla |
+| Ta bort en kolumn | koden slutar använda den | ta bort den |
+| NOT NULL | fyll i värden, kräv dem i koden | lägg på constraint |
+| Nytt värde (t.ex. ett betalningssätt) | koden kan läsa och visa det men skriver det inte | koden börjar skriva det |
 
 ### Första deployen med releases/ (en gång, #1369)
 

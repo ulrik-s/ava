@@ -12,6 +12,9 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { releaseLabel } from "@/lib/server/http/health";
+import { serverSyncInfo } from "@/lib/shared/sync/protocol";
+import { FOREIGN_ENTRY_REFUSAL, SyncRefusal } from "@/lib/shared/sync/sync-error";
 import { assertAdmin } from "../auth/assert-admin";
 import { type QueuedMutation, queuedProcedureCallSchema as queuedCallShape } from "../data-store/in-memory/mutation-queue";
 import { rowRefSchema } from "../data-store/in-memory/procedure-touches";
@@ -35,7 +38,9 @@ export const FOREIGN_QUEUE_ENTRY_MESSAGE =
 /** Kasta om posten köades av någon annan än den inloggade (poster före #1347 saknar ägare). */
 function assertOwnEntry(userId: string, owner: z.infer<typeof queueOwnerSchema>): void {
   if (owner && owner.principalId !== userId) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: FOREIGN_QUEUE_ENTRY_MESSAGE });
+    // Inte 401 (#1772): sessionen är giltig, och "logga in igen" hjälper inte —
+    // klienten lägger posten i karantän (de avvisade ändringarna) och synkar vidare.
+    throw new TRPCError({ code: "FORBIDDEN", message: FOREIGN_QUEUE_ENTRY_MESSAGE, cause: new SyncRefusal(FOREIGN_ENTRY_REFUSAL) });
   }
 }
 
@@ -123,10 +128,14 @@ export const syncRouter = router({
    * Delta-pull: kanoniska ändringar med `seq > sinceCursor` för org:en.
    * `epoch` (#1360) är synkepoken klienten fick senast — skiljer den sig från
    * databasens har databasen återställts, och pullen börjar om från 0.
+   * `server` (#1772): serverns synkversion — klienten skickar inget om de inte passar.
    */
   pull: orgProcedure
     .input(z.object({ sinceCursor: z.number().int().nonnegative(), epoch: z.string().uuid().optional() }))
-    .query(({ ctx, input }) => requireSync(ctx.sync).pull(ctx.orgId, input.sinceCursor, input.epoch)),
+    .query(async ({ ctx, input }) => ({
+      ...(await requireSync(ctx.sync).pull(ctx.orgId, input.sinceCursor, input.epoch)),
+      server: serverSyncInfo(releaseLabel(process.env.AVA_RELEASE)),
+    })),
 
   /**
    * Radernas kanoniska läge (#1348): klienten återställer raderna en avvisad

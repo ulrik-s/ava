@@ -11,9 +11,22 @@ import { type CiRun, closesIssue, type MergedPull } from "./watchdog";
 /** Kör `gh` med argumenten och ger stdout. */
 export type GhRunner = (args: readonly string[]) => string;
 
+/**
+ * Utdatagränsen för `gh` (#1774). spawnSync:s standard är 1 MB, men en sida
+ * ur ava:s händelselogg (100 händelser, var och en med issuens text) var
+ * 1,1 MB: gh dödades tyst, felet saknade text, och vakten startade ingen
+ * agent — varannan etikett i ava, så allt väntade på knuffen.
+ */
+const MAX_GH_OUTPUT = 64 * 1024 * 1024;
+
+/** Varför `gh` misslyckades: dess egen text, annars processfelet eller hur den avslutades. */
+export function ghFailure(r: { status: number | null; signal: string | null; stderr: string; error?: Error }): string {
+  return r.stderr.trim() || r.error?.message || `avslutades med ${r.signal ?? String(r.status)}`;
+}
+
 const runner = (env: NodeJS.ProcessEnv): GhRunner => (args) => {
-  const r = spawnSync("gh", [...args], { encoding: "utf8", env });
-  if (r.status !== 0) throw new Error(`gh ${args.join(" ")}: ${r.stderr}`);
+  const r = spawnSync("gh", [...args], { encoding: "utf8", env, maxBuffer: MAX_GH_OUTPUT });
+  if (r.status !== 0) throw new Error(`gh ${args.join(" ")}: ${ghFailure(r)}`);
   return r.stdout;
 };
 
@@ -106,10 +119,25 @@ export function intakeRefOf(body: string, intakeRepo: string): number | null {
 }
 
 /** `gh api --paginate --slurp` på en sökning: en lista med sidor. */
-const searchPagesSchema = z.array(z.object({ items: z.array(z.object({ body: z.string().nullable(), state: z.string(), state_reason: z.string().nullable().optional() })) }));
+const searchPagesSchema = z.array(z.object({ items: z.array(z.object({
+  number: z.number(), body: z.string().nullable(), state: z.string(), state_reason: z.string().nullable().optional(),
+  labels: z.array(z.object({ name: z.string() })).default([]),
+})) }));
 
-/** Arbetsordrarnas framsteg per förfrågan: klara (stängda som completed) av alla. */
-export type WorkOrderProgress = Map<number, { done: number; total: number }>;
+/** En förfrågans arbetsordrar: klara (stängda som completed) av alla, och de som väntar på Ulrik (`ava#N`). */
+export interface WorkOrders { done: number; total: number; blocked: string[] }
+
+/** Arbetsordrarna per förfrågan. */
+export type WorkOrderProgress = Map<number, WorkOrders>;
+
+type SearchRow = z.infer<typeof searchPagesSchema>[number]["items"][number];
+
+/** Lägg en arbetsorder (`r`, i repot `short`) till förfrågans räkning. */
+function countWorkOrder(p: WorkOrders, r: SearchRow, short: string): WorkOrders {
+  const done = r.state === "closed" && r.state_reason === "completed" ? 1 : 0;
+  const waits = r.state === "open" && r.labels.some((l) => l.name === "blockerad");
+  return { done: p.done + done, total: p.total + 1, blocked: waits ? [...p.blocked, `${short}#${r.number}`] : p.blocked };
+}
 
 function openDeps(run: GhRunner, repo: string, n: number, kind: "blocked_by" | "blocking"): DepIssue[] {
   const rows = parseJsonWith(z.array(depSchema), run(["api", `repos/${repo}/issues/${n}/dependencies/${kind}?per_page=100`]));
@@ -176,11 +204,10 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
       const name = intakeRepo.split("/")[1] ?? intakeRepo;
       const rows = parseJsonWith(searchPagesSchema, run(["api", "-X", "GET", "search/issues", "-f", `q=repo:${repo} is:issue "Intag: ${name}" in:body`, "-f", "per_page=100", "--paginate", "--slurp"])).flatMap((pg) => pg.items);
       const out: WorkOrderProgress = new Map();
+      const short = repo.split("/")[1] ?? repo;
       for (const r of rows) {
         const n = intakeRefOf(r.body ?? "", intakeRepo);
-        if (n === null) continue;
-        const p = out.get(n) ?? { done: 0, total: 0 };
-        out.set(n, { done: p.done + (r.state === "closed" && r.state_reason === "completed" ? 1 : 0), total: p.total + 1 });
+        if (n !== null) out.set(n, countWorkOrder(out.get(n) ?? { done: 0, total: 0, blocked: [] }, r, short));
       }
       return out;
     },

@@ -84,6 +84,20 @@ function startedAlready(flow: Flow, payload: Payload, target: FireTarget, events
   return prior !== null;
 }
 
+/**
+ * Repots etiketthändelser för låset. Går de inte att läsa startas rutinen ändå
+ * (#1774): hellre två körningar — L4 tar en issue med en push, och klockan
+ * stänger dubblett-PR:er — än ingen, som förr när varannan läsning föll.
+ */
+function lockEvents(read: () => RepoLabelEvent[], log: Log): RepoLabelEvent[] {
+  try {
+    return read();
+  } catch (e) {
+    log(`låset gick inte att läsa (${e instanceof Error ? e.message : String(e)}) — startar ändå`);
+    return [];
+  }
+}
+
 /** Rutinen etiketten ska starta, saken den gäller och om tillståndet väntar på blockerare — eller null. */
 function dispatchFor(flow: Flow, payload: Payload): { target: FireTarget; number: number; waits: boolean } | null {
   const item = payload.pull_request ?? payload.issue;
@@ -120,7 +134,7 @@ export async function dispatchLabel(
   if (!found) return false;
   const { target } = found;
   if (heldBack(found, io)) return false;
-  if (io.recentEvents && startedAlready(flow, payload, target, io.recentEvents(), io.log)) return false;
+  if (io.recentEvents && startedAlready(flow, payload, target, lockEvents(io.recentEvents, io.log), io.log)) return false;
   const text = `Flödesvakten: ${payload.repository.full_name}#${found.number} gick in i tillståndet ${payload.label.name}.`;
   return fire(target, text, env[`ROUTINE_TOKEN_${target.id}`], io.fetch, io.log);
 }
