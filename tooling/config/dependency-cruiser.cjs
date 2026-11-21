@@ -28,17 +28,13 @@ module.exports = {
           "(^|/)\\.[^/]+\\.(js|cjs|mjs|ts|json)$",
           "\\.d\\.ts$",
           "(^|/)tsconfig\\.json$",
-          "(^|/)(eslint|vitest|playwright|next|tailwind|postcss|prisma)\\.config\\.[a-z]+$",
-          "(^|/)(eslint|vitest|playwright|next|tailwind|postcss|prisma)\\.setup\\.[a-z]+$",
-          "(^|/)tooling/scripts/.+",
-          "(^|/)test/.+",
+          // Registrerar happy-dom globalt (bunfig preload) — importeras aldrig.
+          "^test/setup/happy-dom-register\\.ts$",
           // Webpack-stub (next.config NODE_STUB) — aliasas in i browser-
           // bundle:n via resolve.alias, importeras aldrig direkt. Per design
           // orphan i import-grafen.
           "(^|/)lib/shared/stubs/.+",
           "src/app/.+/(page|layout|loading|error|not-found|route)\\.tsx?$",
-          "src/shared/types/.+\\.d\\.ts$",
-          "src/middleware\\.ts$",
         ],
       },
       to: {},
@@ -67,14 +63,16 @@ module.exports = {
       // ADR 0001: backend-pluggbarhet. Git-backendens cache/sök-internals
       // (in-memory content-cache, in-process search-index, klient-sidig
       // text-extraktion) FINNS INTE i Postgres-läget. Kontrakt-lagret
-      // (IDataStore/IPorts-interfaces, routrar, shared) och en framtida
-      // server/Postgres-backend MÅSTE gå via IPorts.searchIndex-porten och
-      // får ALDRIG importera dessa git-moduler direkt.
+      // (IDataStore/IPorts-interfaces, routrar, shared) och Postgres-
+      // backenden i src/lib/server/repositories/ (ADR 0020) MÅSTE gå via
+      // IPorts.searchIndex-porten och får ALDRIG importera dessa git-moduler
+      // direkt.
       // (GitBackendRuntime/buildGitPorts FÅR — de ÄR git-backendens wiring.)
       name: "no-git-cache-in-contracts",
       severity: "error",
       comment:
-        "Kontrakt-lagret + framtida Postgres-backend får inte importera git-" +
+        "Kontrakt-lagret + Postgres-backenden (src/lib/server/repositories/) " +
+        "får inte importera git-" +
         "backendens cache/sök-internals (document-content-cache, demo-search-" +
         "index, jobs/extract-text). Gå via IPorts.searchIndex-porten (ADR 0001).",
       from: {
@@ -83,7 +81,7 @@ module.exports = {
           "^src/lib/server/ports\\.ts$",
           "^src/lib/server/routers/",
           "^src/lib/shared/",
-          "^src/lib/server/data-store/postgres/",
+          "^src/lib/server/repositories/",
         ],
       },
       to: {
@@ -112,9 +110,10 @@ module.exports = {
     {
       // Lager-gräns: backendens kontrakt-/domänlager (routrar, data-store,
       // events, regler, auth, trpc) får inte bero på UI-lagret (`client`).
-      // Undantag: git-backendens egen wiring (adapters/, local-first/) KÖR
-      // klient-sidigt och får röra client-cachen — den gränsen vaktas i
-      // stället av `no-git-cache-in-contracts` ovan.
+      // Undantag: de två demo-adaptrarna (demo-document-analyzer, demo-search-
+      // index) är git-backendens egen wiring, KÖR klient-sidigt och får röra
+      // client-cachen — den gränsen vaktas i stället av
+      // `no-git-cache-in-contracts` ovan.
       name: "server-contracts-must-not-import-client",
       severity: "error",
       comment:
@@ -122,7 +121,7 @@ module.exports = {
         "domänlogik som servern behöver hör hemma i shared/.",
       from: {
         path: "^src/lib/server/",
-        pathNot: "^src/lib/server/(adapters|local-first)/",
+        pathNot: "^src/lib/server/adapters/demo-(document-analyzer|search-index)\\.ts$",
       },
       to: { path: "^src/lib/client/" },
     },
@@ -137,12 +136,11 @@ module.exports = {
       comment:
         "UI-lagret får bara type-only-importera från server/ (tRPC-kontrakt). " +
         "Värde-importer av server-kod är tillåtna endast i composition-root: " +
-        "lib/client/backend/, in-process-link, active-llm, demo-bootstrap, " +
-        "app/demo/_demo-client.",
+        "lib/client/backend/, in-process-link, demo-bootstrap.",
       from: {
         path: "^src/(app|components)/|^src/lib/client/",
         pathNot:
-          "^src/(lib/client/(backend/|demo/in-process-link\\.ts$|llm/active-llm\\.ts$)|components/shell/demo-bootstrap\\.tsx$|app/demo/_demo-client\\.tsx$)",
+          "^src/(lib/client/(backend/|demo/in-process-link\\.ts$)|components/shell/demo-bootstrap\\.tsx$)",
       },
       to: {
         path: "^src/lib/server/",
@@ -299,10 +297,6 @@ module.exports = {
         // löv-noder så att `shared-must-be-framework-agnostic` kan path-matcha
         // kanten src/lib/shared → ramverk. Övriga paket exkluderas som förr.
         "(^|/)node_modules/(?!(react|react-dom|next|@trpc)(/|$))",
-        "(^|/)reports(/|$)",
-        "(^|/)storage(/|$)",
-        "(^|/)src/shared/generated(/|$)",
-        "(^|/)office-addin/dist(/|$)", // bygg-artefakt (bun-bundlad taskpane.js)
       ],
     },
     tsConfig: { fileName: "tsconfig.json" },
@@ -315,7 +309,7 @@ module.exports = {
       dot: { collapsePattern: "node_modules/(@[^/]+/[^/]+|[^/]+)" },
       archi: {
         collapsePattern:
-          "^src/(app|client/components|client/lib|server/routers|server/data-store|server/local-first|shared/(schemas|types))",
+          "^src/(app|components|lib/client|lib/server/(routers|repositories|data-store)|lib/shared/schemas)",
       },
     },
   },
