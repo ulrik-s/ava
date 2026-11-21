@@ -38,6 +38,9 @@ FortnoxClient.createVoucher(v)    → använder/refreshar token automatiskt
 
 Refresh-token **roterar** (gammal blir ogiltig) — `client.ts` sparar alltid den
 nya via `FortnoxTokenStore.save`. Access-token: 1 h, refresh-token: 45 dygn.
+Token-posten bär `renewedAt` (när refresh-token lämnades ut, se
+`FORTNOX_REFRESH_TOKEN_TTL_MS`), och en förnyelse som Fortnox avvisar med
+`invalid_grant` kastar `FortnoxReconnectRequiredError`: anslutningen måste göras om (#1813).
 
 ## Konto-modell: user-consent (default) vs service-konto (#213)
 
