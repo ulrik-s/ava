@@ -14,18 +14,22 @@
 
 import { ArrowLeft, MessageSquarePlus } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import {
   useFeedbackEnabled, useFeedbackSeen, useMyFeedback, useReplyFeedback, useSubmitFeedback,
 } from "@/lib/client/backend/server-feedback";
+import {
+  loadNewDraft, loadReplyDraft, type NewFeedbackDraft, saveNewDraft, saveReplyDraft, usePersistedDraft,
+} from "@/lib/client/feedback/feedback-drafts";
 import { cn } from "@/lib/client/utils";
 import {
   claudeWorkingText, FEEDBACK_STATE_LABEL, hasUnread, isFinished, lastActivity, sortForList, unreadCount,
-  type FeedbackItem, type FeedbackKind, type FeedbackMessage, type MessageAuthor,
+  type FeedbackItem, type FeedbackMessage, type MessageAuthor,
 } from "@/lib/shared/feedback";
 
-const EMPTY = { kind: "bug" as FeedbackKind, title: "", body: "" };
+const EMPTY: NewFeedbackDraft = { kind: "bug", title: "", body: "" };
+const loadNew = (): NewFeedbackDraft => loadNewDraft() ?? EMPTY;
 
 const AUTHOR_LABEL: Readonly<Record<MessageAuthor, string>> = { claude: "Claude", ulrik: "Ulrik", du: "Du" };
 
@@ -101,11 +105,14 @@ function Message({ m }: { m: FeedbackMessage }) {
 
 function ReplyForm({ number }: { number: number }) {
   const reply = useReplyFeedback();
-  const [text, setText] = useState("");
+  // Svaret sparas per förfrågan (#1786): det finns kvar om man går ut i AVA och kommer tillbaka.
+  const load = useCallback(() => loadReplyDraft(number), [number]);
+  const save = useCallback((t: string | null) => { saveReplyDraft(number, t ?? ""); }, [number]);
+  const [text, setText, clearText] = usePersistedDraft(load, save, "");
   const id = useId();
   const send = (e: React.SyntheticEvent<HTMLFormElement>): void => {
     e.preventDefault();
-    reply.mutate({ number, body: text }, { onSuccess: () => setText("") });
+    reply.mutate({ number, body: text }, { onSuccess: clearText });
   };
   return (
     <form onSubmit={send} className="mt-3 space-y-2">
@@ -145,14 +152,15 @@ function ThreadView({ item, onBack, markSeen }: {
 function FeedbackForm({ onSent }: { onSent: (n: number) => void }) {
   const pathname = usePathname();
   const submit = useSubmitFeedback();
-  const [form, setForm] = useState(EMPTY);
+  // Utkastet sparas medan man skriver (#1786) och tas bort när förfrågan skickats.
+  const [form, setForm, clearForm] = usePersistedDraft(loadNew, saveNewDraft, EMPTY);
   const titleId = useId();
   const bodyId = useId();
   const send = (e: React.SyntheticEvent<HTMLFormElement>): void => {
     e.preventDefault();
     submit.mutate(
       { ...form, page: pathname, userAgent: navigator.userAgent },
-      { onSuccess: (r) => { setForm(EMPTY); onSent(r.number); } },
+      { onSuccess: (r) => { clearForm(); onSent(r.number); } },
     );
   };
   return (

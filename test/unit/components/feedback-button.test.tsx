@@ -34,6 +34,7 @@ const item = (over: Partial<FeedbackItem>): FeedbackItem => ({
 });
 
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   enabled = true;
   items = [];
@@ -92,6 +93,54 @@ describe("FeedbackButton — ny förfrågan", () => {
     submitError = { message: "Högst 5 förfrågningar i timmen" };
     openDialog();
     expect(screen.getByRole("alert")).toHaveTextContent("Högst 5");
+  });
+});
+
+describe("FeedbackButton — utkasten finns kvar (#1786)", () => {
+  it("texten i en ny förfrågan finns kvar när man stänger och öppnar igen", () => {
+    const first = render(<FeedbackButton />);
+    fireEvent.click(screen.getByRole("button", { name: /Bugg eller förslag/ }));
+    fireEvent.click(screen.getByLabelText("Förslag"));
+    fireEvent.change(screen.getByLabelText("Rubrik"), { target: { value: "Exportera" } });
+    fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Halvskriven text" } });
+    first.unmount();
+    openDialog();
+    expect(screen.getByLabelText("Rubrik")).toHaveValue("Exportera");
+    expect(screen.getByLabelText("Beskrivning")).toHaveValue("Halvskriven text");
+    expect(screen.getByLabelText("Förslag")).toBeChecked();
+  });
+
+  it("en skickad förfrågan tar bort utkastet", () => {
+    submitMutate.mockImplementation((_input: unknown, opts: { onSuccess: (r: { number: number }) => void }) => { opts.onSuccess({ number: 12 }); });
+    const first = render(<FeedbackButton />);
+    fireEvent.click(screen.getByRole("button", { name: /Bugg eller förslag/ }));
+    fireEvent.change(screen.getByLabelText("Rubrik"), { target: { value: "Fel summa" } });
+    fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Summan blir fel på fakturan." } });
+    fireEvent.click(screen.getByRole("button", { name: "Skicka" }));
+    first.unmount();
+    items = [];
+    openDialog();
+    expect(screen.getByLabelText("Rubrik")).toHaveValue("");
+  });
+
+  it("ett svar per förfrågan, samtidigt; ett skickat svar tas bort", () => {
+    items = [item({ number: 1, title: "Första" }), item({ number: 2, title: "Andra" })];
+    replyMutate.mockImplementation((_input: unknown, opts: { onSuccess: () => void }) => { opts.onSuccess(); });
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: /Första/ }));
+    fireEvent.change(screen.getByLabelText("Ditt svar"), { target: { value: "Svar på första" } });
+    fireEvent.click(screen.getByRole("button", { name: /Alla förfrågningar/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Andra/ }));
+    expect(screen.getByLabelText("Ditt svar")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("Ditt svar"), { target: { value: "Svar på andra" } });
+    fireEvent.click(screen.getByRole("button", { name: /Alla förfrågningar/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Första/ }));
+    expect(screen.getByLabelText("Ditt svar")).toHaveValue("Svar på första");
+    fireEvent.click(screen.getByRole("button", { name: "Skicka svar" }));
+    expect(screen.getByLabelText("Ditt svar")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: /Alla förfrågningar/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Andra/ }));
+    expect(screen.getByLabelText("Ditt svar")).toHaveValue("Svar på andra");
   });
 });
 
