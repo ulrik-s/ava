@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
 import { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
+import { FortnoxReconnectRequiredError } from "@/lib/server/integrations/fortnox/oauth";
 import type { FortnoxConfig, FortnoxStoredTokens, FortnoxVoucher } from "@/lib/server/integrations/fortnox/schema";
 import { InMemoryFortnoxTokenStore } from "@/lib/server/integrations/fortnox/token-store";
 import { requestBodyText, requestUrl } from "@/lib/shared/request-url";
@@ -93,6 +94,16 @@ describe("FortnoxClient.createVoucher", () => {
     const saved = await store.load();
     expect(saved?.accessToken).toBe("at-new");
     expect(saved?.refreshToken).toBe("rt-new"); // rotation persisterad
+    expect(saved?.renewedAt).toBeGreaterThan(0); // #1813: förnyelsetiden sparas
+  });
+
+  it("avvisad förnyelse (invalid_grant) når anroparen oförändrad (#1813)", async () => {
+    const store = new InMemoryFortnoxTokenStore(expired());
+    const fetchFn = fetchFake(() => Promise.resolve(json(400, { error: "invalid_grant" })));
+    const client = new FortnoxClient(config, store, fetchFn);
+
+    await expect(client.createVoucher(VOUCHER)).rejects.toBeInstanceOf(FortnoxReconnectRequiredError);
+    expect((await store.load())?.refreshToken).toBe("rt-1"); // inget sparat
   });
 
   it("401 trots färsk token → forcerad refresh + omförsök", async () => {

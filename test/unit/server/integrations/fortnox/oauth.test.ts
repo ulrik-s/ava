@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest-compat";
 import {
   buildAuthorizeUrl,
   exchangeCodeForTokens,
+  FortnoxReconnectRequiredError,
   refreshTokens,
 } from "@/lib/server/integrations/fortnox/oauth";
 import type { FortnoxConfig } from "@/lib/server/integrations/fortnox/schema";
@@ -98,12 +99,19 @@ describe("exchangeCodeForTokens", () => {
     expect(tokens.refreshToken).toBe("rt-2");
     // 1_000_000 + (3600 - 30) * 1000
     expect(tokens.accessTokenExpiresAt).toBe(1_000_000 + 3_570_000);
+    expect(tokens.renewedAt).toBe(1_000_000);
   });
 
   it("kastar vid icke-2xx", async () => {
     await expect(
       exchangeCodeForTokens(config, "bad", fakeFetch(400, { error: "invalid_grant" })),
     ).rejects.toThrow(/Fortnox token-fel 400/);
+  });
+
+  it("invalid_grant vid kodväxlingen är ett vanligt fel, inte omanslutning (#1813)", async () => {
+    const err = await exchangeCodeForTokens(config, "bad", fakeFetch(400, { error: "invalid_grant" })).catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(FortnoxReconnectRequiredError);
+    expect(String(err)).toContain("invalid_grant");
   });
 });
 
@@ -119,5 +127,31 @@ describe("refreshTokens", () => {
     expect(tokens.accessToken).toBe("at-new");
     expect(tokens.refreshToken).toBe("rt-rotated"); // gamla rt-old är nu ogiltig
     expect(tokens.accessTokenExpiresAt).toBe(5_000 + 3_570_000);
+    expect(tokens.renewedAt).toBe(5_000);
+  });
+
+  it("invalid_grant ger FortnoxReconnectRequiredError utan tokenvärden (#1813)", async () => {
+    const err = await refreshTokens(config, "rt-hemlig", fakeFetch(400, { error: "invalid_grant", error_description: "x" })).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FortnoxReconnectRequiredError);
+    expect(String(err)).toContain("invalid_grant");
+    expect(String(err)).not.toContain("rt-hemlig");
+  });
+
+  it.each([
+    [400, { error: "invalid_request" }, "invalid_request"],
+    [401, { error: "invalid_client" }, "401"],
+    [500, { error: "server_error" }, "500"],
+  ])("%i (%o) är ett vanligt fel med felkoden", async (status, body, code) => {
+    const err = await refreshTokens(config, "rt", fakeFetch(status, body)).catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(FortnoxReconnectRequiredError);
+    expect(err).toBeInstanceOf(Error);
+    expect(String(err)).toContain(code);
+  });
+
+  it("400 med en kropp som inte är JSON är ett vanligt fel", async () => {
+    const fetchFn = ((_url: string | URL | Request) => Promise.resolve(new Response("Bad Request", { status: 400 }))) as typeof globalThis.fetch;
+    const err = await refreshTokens(config, "rt", fetchFn).catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(FortnoxReconnectRequiredError);
+    expect(String(err)).toContain("Fortnox token-fel 400: Bad Request");
   });
 });
