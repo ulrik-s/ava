@@ -1,10 +1,12 @@
 /**
  * Förtroendegränsen för identiteten (#1256) — bevisad i konfigurationen.
  *
- * I `forwarded`-läget litar servern på `X-Auth-Request-Email`. Det är säkert
- * bara om (1) servern inte kan nås förbi proxyn, och (2) proxyn alltid skriver
- * över headern med det verifierade värdet. Båda villkoren står i filer som är
- * lätta att ändra av misstag — det här testet fäller en sådan ändring.
+ * Prod-stacken kör `verified` som standard (#1880): servern godtar bara en
+ * signerad token, med issuer och audience ur oauth2-proxys obligatoriska
+ * variabler. Reservläget `forwarded` litar på `X-Auth-Request-Email`. Det är
+ * säkert bara om (1) servern inte kan nås förbi proxyn, och (2) proxyn alltid
+ * skriver över headern med det verifierade värdet. Villkoren står i filer som
+ * är lätta att ändra av misstag — det här testet fäller en sådan ändring.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -37,11 +39,19 @@ describe("produktionsstackens förtroendegräns (#1256)", () => {
     expect(api).toMatch(/copy_headers X-Auth-Request-Email Authorization>X-Ava-Identity-Token/);
   });
 
-  it("oauth2-proxy lägger ID-token i auth-svaret; servern kan slå på verified", () => {
-    expect(production.services["oauth2-proxy"]?.environment?.OAUTH2_PROXY_SET_AUTHORIZATION_HEADER).toBe("true");
+  it("oauth2-proxy lägger ID-token i auth-svaret; servern kör verified som standard (#1880)", () => {
+    const proxy = production.services["oauth2-proxy"]?.environment ?? {};
+    expect(proxy.OAUTH2_PROXY_SET_AUTHORIZATION_HEADER).toBe("true");
     const env = production.services["server-first"]?.environment ?? {};
-    expect(env.AVA_IDENTITY).toBe("${AVA_IDENTITY:-forwarded}");
-    expect(env.AVA_IDENTITY_ISSUER).toContain("OIDC_ISSUER_URL");
+    expect(env.AVA_IDENTITY).toBe("${AVA_IDENTITY:-verified}");
+    expect(env.AVA_IDENTITY_ISSUER).toBe("${OIDC_ISSUER_URL:-}");
+    expect(proxy.OAUTH2_PROXY_OIDC_ISSUER_URL?.startsWith("${OIDC_ISSUER_URL:?")).toBe(true);
+    expect(env.AVA_IDENTITY_AUDIENCE).toBe("${AVA_IDENTITY_AUDIENCE:-${OAUTH2_PROXY_CLIENT_ID:-}}");
+    expect(proxy.OAUTH2_PROXY_CLIENT_ID?.startsWith("${OAUTH2_PROXY_CLIENT_ID:?")).toBe(true);
+  });
+
+  it("återställningsövningen kör forwarded — markören skapas utan proxy (#1880)", () => {
+    expect(serverFirstEnv("docker-compose.drill.yml")?.AVA_IDENTITY).toBe("forwarded");
   });
 
   it("nginx (self-hosted-riggen) skriver alltid över X-Auth-Request-Email på /api", () => {

@@ -19,3 +19,8 @@ services:
   server-first:
     ports:
       - "3001:3001"
+    environment:
+      # Övningen skapar markör-ärendet direkt mot servern med
+      # X-Auth-Request-Email (restore-drill.sh), utan proxy och utan IdP.
+      # Prod-stackens standard är verified (#1880); här krävs forwarded.
+      AVA_IDENTITY: forwarded

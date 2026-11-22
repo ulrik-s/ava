@@ -8,7 +8,9 @@
 #
 # `X-Auth-Request-Email` sätts av oauth2-proxy efter verifierad OIDC-session
 # och är det server-first litar på som principal (ADR 0009). Kommer den från
-# klienten är den ett påstående, inte ett bevis.
+# klienten är den ett påstående, inte ett bevis. Prod-stacken kör servern i
+# läget verified (#1880): den litar då bara på ID-token som Caddy kopierar
+# till X-Ava-Identity-Token, och headern är reserv för läget forwarded.
 #
 # Caddys `forward_auth` med `copy_headers` skriver ÖVER klientens värde med
 # det från auth-svaret — det är den raden som gör spoofing omöjlig. Tar man

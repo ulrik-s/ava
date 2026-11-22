@@ -134,25 +134,29 @@ kontakta administratören" (#1391; förut hängde den på "Laddar…").
 ## Identitet: hur servern vet vem som anropar (#1256)
 
 Caddy och oauth2-proxy gör inloggningen. Servern kan få veta vem användaren är
-på två sätt, valt med `AVA_IDENTITY` i `ava-server.env`:
+på två sätt, valt med `AVA_IDENTITY` i `ava-server.env`. Prod-stacken
+(`docker-compose.production.yml`) kör `verified` som standard (#1880); kodens
+egen standard är `forwarded`, som bara gäller när driften väljer det som
+reserv.
 
 | Läge | Servern litar på | Säkert så länge |
 |---|---|---|
-| `forwarded` (default) | `X-Auth-Request-Email` som Caddy sätter | servern inte kan nås förbi Caddy |
-| `verified` | en signerad token den själv verifierar mot IdP:ns nycklar | alltid (en förfalskad header ger ingenting) |
+| `verified` (prod-stackens standard) | en signerad token den själv verifierar mot IdP:ns nycklar | alltid (en förfalskad header ger ingenting) |
+| `forwarded` (reserv) | `X-Auth-Request-Email` som Caddy sätter | servern inte kan nås förbi Caddy |
 
 I `forwarded` bärs säkerheten av konfigurationen: bara Caddy publicerar portar,
 och Caddy skriver över headern med det verifierade värdet.
 `test/unit/tooling/identity-boundary.test.ts` fäller en ändring som bryter det.
 
-**Slå på `verified`** (rekommenderat när inloggningen fungerar):
+**`verified` kräver** (inget av det behöver sättas för hand i prod-stacken):
 
 ```
-AVA_IDENTITY=verified
 # AVA_IDENTITY_ISSUER = OIDC_ISSUER_URL och AVA_IDENTITY_AUDIENCE =
 # OAUTH2_PROXY_CLIENT_ID sätts automatiskt; ange bara om de skiljer sig.
 ```
 
+- issuer och audience (ovan), och att token:en är signerad med RS256,
+- att servern når IdP:ns OIDC-discovery och nycklar,
 - oauth2-proxy lägger sin ID-token i auth-svaret
   (`OAUTH2_PROXY_SET_AUTHORIZATION_HEADER`), och Caddy skickar den till servern
   som `X-Ava-Identity-Token`. Servern hämtar IdP:ns nycklar via OIDC-discovery.
@@ -170,6 +174,15 @@ AVA_IDENTITY=verified
   sätt `OIDC_SCOPE=openid email profile`. Se
   [auth.md](auth.md#sessionen-i-klienten-och-idp-avbrott-1245-1351-adr-0018).
 - Felkonfiguration (verified utan issuer eller audience) stoppar serverns start.
+- Efter första deployen med `verified` som standard loggar alla in igen, så att
+  proxyns session bär en ID-token.
+
+**Gå tillbaka till `forwarded`** (om proxyns token inte godtas och varje
+`/api`-anrop får 401): lägg `AVA_IDENTITY=forwarded` i `ava-server.env` och kör
+
+```bash
+set -a && . ./ava-server.env && set +a && docker compose -f tooling/docker/docker-compose.production.yml up -d server-first
+```
 
 ## Övervakning
 

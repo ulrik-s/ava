@@ -119,6 +119,8 @@
 - `src/bin/server-first.ts` → `buildServerFirstApi`: tRPC-over-HTTP (`appRouter`)
   mot **Postgres** (Drizzle), med server-verifierad principal ur oauth2-proxy:s
   forwarded headers (ADR 0009). Sitter bakom nginx + oauth2-proxy (loopback).
+  Prod-stacken kör `AVA_IDENTITY=verified` (#1880): servern verifierar proxyns
+  ID-token själv i stället för att lita på headern.
 - **Sync** (ADR 0017): varje accepterad skrivning loggas i `change_log`
   (BIGSERIAL per org) → delta-pull; klientens kö replay:as idempotent.
   `seq` delas ut när transaktionen committar och pullen läser bara upp till
@@ -448,7 +450,9 @@ Self-hosted: **OIDC relying party via oauth2-proxy** (ADR 0009) — AVA äger al
 en egen IdP. oauth2-proxy gat:ar åtkomsten och vidarebefordrar identiteten som
 `X-Auth-Request-*`-headers; server-first-runtimen löser principalen ur dem mot
 byråns allowlist (`forwarded-claims` → `server-context`). htpasswd/Basic-auth +
-PAT är legacy från git-peer-eran. Se [`auth.md`](./auth.md).
+PAT är legacy från git-peer-eran. Se [`auth.md`](./auth.md). Prod-stacken kör
+`AVA_IDENTITY=verified` (#1880), där servern bara godtar en signerad token som
+den verifierar mot IdP:n; `forwarded` är reserv.
 
 ## Dokumentklassificering (LLM)
 
