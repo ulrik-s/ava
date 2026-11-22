@@ -768,11 +768,13 @@
     }
   },
   "src/lib/server/routers/billingRun.ts": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 2
-    },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 3
+    }
+  },
+  "src/lib/server/routers/billingRun/kostnadsrakning.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 2
     }
   },
   "src/lib/server/routers/billingRun/read.ts": {
