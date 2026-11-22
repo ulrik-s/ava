@@ -205,6 +205,12 @@ kontrollen. Nu köas alla anrop som skriver kopplingen (`matter.addContact`,
 servern tar inte emot kopplingen som rad, och konfliktklassen är `surface`. En
 kopplingsrad som en äldre version köade avvisas med beskedet och hamnar bland
 de avvisade ändringarna, som för #1242 och #1344.
+Dokumentet stannar på radkön. `document.analyze` köas ändå som anrop, eftersom
+klassningen är en sidoeffekt på servern (#1156): anropet startar bara serverns
+analys, och fälten analysen skriver tas bort ur en radpush
+(`server-owned-fields.ts`, #1280). Det är registrets enda markerade undantag
+(`serverOwnedOnly` i `QUEUED_PROCEDURES`), och grinden för synkregistren godtar
+markeringen bara på en entitet med fält som servern äger.
 
 ## Konsekvenser
 

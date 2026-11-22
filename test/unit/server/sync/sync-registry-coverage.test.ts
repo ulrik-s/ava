@@ -13,7 +13,9 @@
  *   2. registren nämner bara synkade entiteter, och synkens entitetslista
  *      (`SOURCE_KEY_BY_ENTITY`) är densamma som ENTITY_REGISTRY,
  *   3. en köad procedur skriver en procedurägd entitet. Annars skrivs entiteten
- *      på två vägar, och radvägen kringgår procedurens regler,
+ *      på två vägar, och radvägen kringgår procedurens regler. Undantaget är en
+ *      procedur markerad `serverOwnedOnly` på en radpush-entitet med fält som
+ *      servern äger (#1884): den skriver bara de fälten, som radpushen rensar,
  *   4. konfliktklassen följer skrivsättet. En procedurägd entitet är `surface`:
  *      servern kör om reglerna mot aktuellt läge, och klienten klassar redan
  *      procedur-anrop så. En radpush-entitet som bara får läggas till är
@@ -30,7 +32,7 @@ import { withoutServerOwned } from "@/lib/server/sync/server-owned-fields";
 import { conflictClassOf, type ConflictClass } from "@/lib/shared/conflict-policy";
 import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 import { PROCEDURE_OWNED_ENTITIES } from "@/lib/shared/sync/procedure-owned";
-import { QUEUED_PROCEDURES } from "@/lib/shared/sync/queued-procedures";
+import { QUEUED_PROCEDURES, type QueuedProcedureSpec } from "@/lib/shared/sync/queued-procedures";
 import { type KnownDeviation, ratchetDiff } from "../../../../tooling/scripts/ratchet";
 
 const STALE_MATRIX: KnownDeviation = {
@@ -44,10 +46,6 @@ const EDITABLE_APPEND: KnownDeviation = {
 
 /** Kända avvikelser: `entitet: regel`. */
 const KNOWN: Readonly<Record<string, KnownDeviation>> = {
-  "document: skrivs av köade procedurer men är inte procedurägd": {
-    why: "document.analyze köas för att klassningen är en serversidoeffekt (#1156); metadata går via radkön, där server-owned-fields skyddar analysen.",
-    issue: 1697,
-  },
   "timeEntry: procedurägd men konfliktklass append": STALE_MATRIX,
   "expense: procedurägd men konfliktklass append": STALE_MATRIX,
   "payment: procedurägd men konfliktklass append": STALE_MATRIX,
@@ -66,7 +64,7 @@ interface Registers {
   readonly synced: readonly string[];
   readonly procedureOwned: ReadonlySet<string>;
   readonly rowPolicy: Readonly<Record<string, { readonly appendOnly?: true }>>;
-  readonly queuedEntities: readonly string[];
+  readonly queued: readonly QueuedProcedureSpec[];
   readonly sourceKeys: readonly string[];
   readonly conflictClass: (entity: string) => ConflictClass;
   readonly hasServerOwned: (entity: string) => boolean;
@@ -82,7 +80,7 @@ const REGISTERS: Registers = {
   synced: Object.keys(ENTITY_REGISTRY),
   procedureOwned: PROCEDURE_OWNED_ENTITIES,
   rowPolicy: ROW_PUSH_POLICY,
-  queuedEntities: Object.values(QUEUED_PROCEDURES).map((spec) => spec.entity),
+  queued: Object.values(QUEUED_PROCEDURES),
   sourceKeys: Object.keys(SOURCE_KEY_BY_ENTITY),
   conflictClass: conflictClassOf,
   hasServerOwned: hasServerOwnedFields,
@@ -103,7 +101,7 @@ function unknownEntityDeviations(r: Registers): string[] {
   const registers: ReadonlyArray<readonly [string, Iterable<string>]> = [
     ["procedure-owned", r.procedureOwned],
     ["row-push-policy", Object.keys(r.rowPolicy)],
-    ["queued-procedures", r.queuedEntities],
+    ["queued-procedures", r.queued.map((spec) => spec.entity)],
     ["SOURCE_KEY_BY_ENTITY", r.sourceKeys],
   ];
   const unknown = registers.flatMap(([name, entities]) =>
@@ -112,9 +110,14 @@ function unknownEntityDeviations(r: Registers): string[] {
   return [...unknown, ...unsynced];
 }
 
-/** 3. En köad procedur skriver en procedurägd entitet. */
+/** Undantaget i regel 3: markerad, och entiteten har fält som radpushen rensar (som regel 5). */
+const isServerOwnedOnly = (r: Registers, spec: QueuedProcedureSpec): boolean =>
+  spec.serverOwnedOnly === true && isRowPushed(r, spec.entity) && r.hasServerOwned(spec.entity);
+
+/** 3. En köad procedur skriver en procedurägd entitet — utom det markerade undantaget. */
 function dualWriterDeviations(r: Registers): string[] {
-  return [...new Set(r.queuedEntities)].filter((e) => !r.procedureOwned.has(e)).map((e) => `${e}: skrivs av köade procedurer men är inte procedurägd`);
+  const offending = r.queued.filter((spec) => !r.procedureOwned.has(spec.entity) && !isServerOwnedOnly(r, spec));
+  return [...new Set(offending.map((spec) => spec.entity))].map((e) => `${e}: skrivs av köade procedurer men är inte procedurägd`);
 }
 
 function conflictClassDeviation(r: Registers, entity: string): string | null {
@@ -168,12 +171,24 @@ describe("synkregistren täcker varje entitet, en gång (#1678)", () => {
     expect(changed({ rowPolicy: { ...ROW_PUSH_POLICY, invoice: {} } })).toEqual(["invoice: skrivs på 2 sätt"]);
     expect(changed({ procedureOwned: new Set([...PROCEDURE_OWNED_ENTITIES].filter((e) => e !== "accontoDeduction")) }))
       .toEqual(["accontoDeduction: skrivs på 0 sätt"]);
-    expect(changed({ queuedEntities: [...REGISTERS.queuedEntities, "task"] })).toEqual(["task: skrivs av köade procedurer men är inte procedurägd"]);
+    expect(changed({ queued: [...REGISTERS.queued, { entity: "task" }] })).toEqual(["task: skrivs av köade procedurer men är inte procedurägd"]);
     expect(changed({ sourceKeys: [...REGISTERS.sourceKeys, "spöke"] })).toEqual(["spöke: okänd entitet i SOURCE_KEY_BY_ENTITY"]);
     expect(changed({ conflictClass: (e) => (e === "conflictCheck" ? "surface" : conflictClassOf(e)) }))
       .toEqual(["conflictCheck: får bara läggas till men konfliktklass surface"]);
     expect(changed({ conflictClass: (e) => (e === "contact" ? "append" : conflictClassOf(e)) }))
       .toEqual(["contact: får ändras via radkön men konfliktklass append"]);
-    expect(changed({ hasServerOwned: (e) => e === "invoice" })).toEqual(["invoice: server-ägda fält men ingen radpush"]);
+    expect(changed({ hasServerOwned: (e) => e === "invoice" || hasServerOwnedFields(e) })).toEqual(["invoice: server-ägda fält men ingen radpush"]);
+  });
+
+  it("en köad procedur på dokumentet utan serverOwnedOnly fälls (#1884)", () => {
+    const changed = ratchetDiff(allDeviations({ ...REGISTERS, queued: [...REGISTERS.queued, { entity: "document" }] }), Object.keys(KNOWN)).added;
+    expect(changed).toEqual(["document: skrivs av köade procedurer men är inte procedurägd"]);
+  });
+
+  it("serverOwnedOnly godtas bara på en radpush-entitet med fält som servern äger (#1884)", () => {
+    const marked = (entity: string): Registers => ({ ...REGISTERS, queued: [...REGISTERS.queued, { entity, serverOwnedOnly: true }] });
+    expect(dualWriterDeviations(marked("contact"))).toEqual(["contact: skrivs av köade procedurer men är inte procedurägd"]);
+    expect(dualWriterDeviations(marked("document"))).toEqual([]);
+    expect(dualWriterDeviations({ ...marked("document"), rowPolicy: {} })).toEqual(["document: skrivs av köade procedurer men är inte procedurägd"]);
   });
 });

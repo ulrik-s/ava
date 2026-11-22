@@ -34,6 +34,11 @@ describe("isQueuedProcedure", () => {
     expect(isQueuedProcedure("__proto__")).toBe(false);
   });
 
+  it("bara document.analyze är markerad serverOwnedOnly — registrets enda undantag (#1884)", () => {
+    const marked = Object.entries(QUEUED_PROCEDURES).filter(([, spec]) => spec.serverOwnedOnly).map(([path]) => path);
+    expect(marked).toEqual(["document.analyze"]);
+  });
+
   it("registret är fryst — kan inte utökas i körtid", () => {
     expect(Object.isFrozen(QUEUED_PROCEDURES)).toBe(true);
   });
