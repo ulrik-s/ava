@@ -40,9 +40,10 @@ services:
       # Bearer-JWT-väg för helpern/add-insen (ADR 0028 §1). Dual-URL (jfr
       # oauth2-proxy nedan): issuer = PUBLIK hostname (matchar token-`iss` som
       # browsern + helpern på host:en ser), JWKS = INTERN backchannel (server →
-      # keycloak:8080). Ingen audience-kontroll i fixturen (token bär aud=ava
-      # via mappern men vi sätter inte AVA_OIDC_AUDIENCE → signatur+iss+exp räcker).
+      # keycloak:8080). Audience sätts till `ava`: Keycloak-mappern i
+      # realm-ava.json ger token aud=ava, så signatur+iss+aud+exp kontrolleras.
       AVA_OIDC_ISSUER: "${OIDC_KC_HOSTNAME:-http://localhost:8089}/realms/ava"
+      AVA_OIDC_AUDIENCE: "ava"
       AVA_OIDC_JWKS_URI: "http://keycloak:8080/realms/ava/protocol/openid-connect/certs"
       # Fortnox-bokföring (#1172/#1173): tomt = av. Fortnox-UI-E2E:t sätter dem och
       # kopierar in ett valv med tokens (`docker cp`) till AVA_SECRETS_FILE.
