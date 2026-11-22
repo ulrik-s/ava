@@ -51,7 +51,10 @@ services:
       - ../../.e2e-backup/exports:/data/backup-exports:ro
       - ../../.e2e-backup/requests:/data/backup-requests
     ports:
-      - "3001:3001"
+      # Bara loopback (#1882): servern litar på X-Auth-Request-Email från den
+      # som når porten, så på alla gränssnitt kunde vem som helst på nätet bli
+      # vilken användare som helst.
+      - "127.0.0.1:3001:3001"
     depends_on:
       postgres:
         condition: service_healthy

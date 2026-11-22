@@ -64,3 +64,10 @@ describe("Bearer-vägen kräver audience i varje stack (#1800)", () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe("dev-stacken publicerar server-first bara på loopback (#1882)", () => {
+  it("server-first-porten är bunden till 127.0.0.1 — inte till alla gränssnitt", () => {
+    const dev = parseCompose("docker-compose.server-first.yml");
+    expect(dev.services?.["server-first"]?.ports).toEqual(["127.0.0.1:3001:3001"]);
+  });
+});
