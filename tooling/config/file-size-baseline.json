@@ -9,7 +9,7 @@
   "src/components/ui/data-table.tsx": 734,
   "src/lib/client/jobs/job-queue.ts": 418,
   "src/lib/client/kostnadsrakning/faktura-template.ts": 452,
-  "src/lib/server/routers/billingRun.ts": 993,
+  "src/lib/server/routers/billingRun.ts": 658,
   "src/lib/server/routers/invoice.ts": 539,
   "src/lib/server/routers/matter.ts": 425,
   "src/lib/server/routers/reports.ts": 618,

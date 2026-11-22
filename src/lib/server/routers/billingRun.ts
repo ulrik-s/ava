@@ -18,14 +18,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
-import {
-  beslutRegisteredNote, invoiceCreatedNote, insurerPruningNote, kostnadsrakningSubmittedNote,
-  krAppealedNote, krVoidedNote, settledNote,
-} from "@/lib/shared/billing-notes";
+import { invoiceCreatedNote, settledNote } from "@/lib/shared/billing-notes";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import {
   expenseGrossOre,
-  expenseNetOre, invoiceGrossOre, invoiceVatBreakdown, krGrossOre, matterArvodeNet, matterKrArvodeRows,
+  expenseNetOre, invoiceGrossOre, invoiceVatBreakdown, matterArvodeNet,
   settlementArvodeNet, vatOreOf,
   type UnfrozenWork,
 } from "@/lib/shared/billing-work-value";
@@ -34,8 +31,7 @@ import { rattsskyddCoverage } from "@/lib/shared/coverage-billing";
 import { resolveHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import type { SpecDeduction } from "@/lib/shared/invoice-specification";
-import { isKrWorkEntry } from "@/lib/shared/kostnadsrakning";
-import { canVoidKostnadsrakning, krStateOf, type KostnadsrakningAction } from "@/lib/shared/kostnadsrakning-flow";
+import { krStateOf } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { isRadgivningInvoiced } from "@/lib/shared/rattshjalp";
 import { settlementBreakdownSchema, type BillingRun, type Invoice } from "@/lib/shared/schemas/billing";
@@ -59,19 +55,18 @@ import {
 import { allocateSettlement, settlementAmounts, type SettlementAllocation } from "@/lib/shared/settlement-allocation";
 import {
   buildClientArvodeLines, buildCreditView, buildSettlementViews, creditPayload, radgivningOre,
-  type SettlementBreakdown, type SettlementRowKind, type SettlementView,
+  type SettlementBreakdown, type SettlementView,
 } from "@/lib/shared/settlement-view";
-import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
-import { CURRENT_ROUNDING, roundingOf, roundToKronor, splitGross } from "@/lib/shared/whole-kronor";
-import { valueKrRun } from "../billing/kr-run-valuation";
+import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/whole-kronor";
 import { logMatterNote } from "../billing/matter-note";
-import { removeVoidedKrDocuments } from "../billing/void-kr-documents";
 import { emit, type EmitCtx } from "../events/emit";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
-import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
+import type { BillingRunListRow } from "../repositories/billing-run-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
+import { kostnadsrakningProcedures } from "./billingRun/kostnadsrakning";
+import { pruningProcedures } from "./billingRun/pruning";
 import { readProcedures } from "./billingRun/read";
 import {
   applyKrTransition, assertFlowAction, fetchDeductedAccontoRuns, fetchUnfrozenWork, fetchWorkByRun,
@@ -87,15 +82,6 @@ import {
 
 
 
-
-/** Som `fetchUnfrozenWork`, med hela raderna — kostnadsräkningens värdering läser datum och beskrivning (#1024). */
-async function fetchUnfrozenKrWork(repos: Repositories, matterId: MatterId) {
-  const te = await repos.timeEntries.listUnfrozenForMatter(matterId);
-  const ex = await repos.expenses.listUnfrozenForMatter(matterId);
-  // Förhandlingsposter värderas inte som arbete — tiden är huvudförhandlingens
-  // (samma regel som dokumentet). De fryses ändå med körningen (freezeWork).
-  return { timeEntries: te.filter(isKrWorkEntry), expenses: ex.filter((e) => e.kind !== "PRUTNING") };
-}
 
 /**
  * Underlag för slutreglering (#806): väntar en kostnadsräkning på dom använder
@@ -384,14 +370,6 @@ async function freezeSelectedWork(
 }
 
 
-/** Hämta en KOSTNADSRAKNING-körning org-scopat; kastar om saknad/fel typ. */
-async function assertKostnadsrakning(repos: Repositories, billingRunId: BillingRunId, orgId: OrganizationId): Promise<BillingRunDetailRow> {
-  const run = await repos.billingRuns.getByIdInOrg(billingRunId, orgId);
-  if (!run) throw new TRPCError({ code: "NOT_FOUND", message: "Kostnadsräkningen finns inte." });
-  if (run.type !== "KOSTNADSRAKNING") throw new TRPCError({ code: "BAD_REQUEST", message: "Åtgärden gäller bara kostnadsräkningar." });
-  return run;
-}
-
 
 /**
  * Valfritt klient-id + datum (paritet med legacy `invoice.createFinal` så demo-
@@ -409,17 +387,10 @@ function invoiceMeta(
   });
 }
 
-/** Domstolens namn ur ärendets DOMSTOL-kontakt (till anteckningen, #1221), eller null. */
-async function courtNameOf(repos: Repositories, orgId: OrganizationId, matterId: MatterId): Promise<string | null> {
-  const detail = await repos.matters.getByIdWithContacts(matterId, orgId);
-  // In-memory-lagret bakar bara in kontakt-joinen när seeden gjort det (demo-
-  // prebake) — rå rader ger inga `contacts`. Saknas de: "domstolen" i texten.
-  const contacts: ReadonlyArray<{ role: string; contact?: { name: string } | undefined }> = detail?.contacts ?? [];
-  return contacts.find((c) => c.role === "DOMSTOL")?.contact?.name ?? null;
-}
-
 export const billingRunRouter = router({
   ...readProcedures,
+  ...kostnadsrakningProcedures,
+  ...pruningProcedures,
   createAcconto: orgProcedure
     .input(z.object({
       matterId: matterIdSchema,
@@ -535,126 +506,6 @@ export const billingRunRouter = router({
       });
     }),
 
-  createKostnadsrakning: orgProcedure
-    .input(z.object({
-      matterId: matterIdSchema, notes: z.string().nullish(),
-      // Dialogens huvudförhandling + nivå (#1024) — brottmålstaxan räknas på dem.
-      hufStart: z.string().datetime().optional(),
-      hufEnd: z.string().datetime().optional(),
-      taxaLevel: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
-      isTaxeArende: z.boolean().optional(),
-      hasFTax: z.boolean().optional(),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.repos.transaction(async (tx) => {
-        await assertFlowAction(tx, ctx.orgId, input.matterId, "KOSTNADSRAKNING");
-        const work = await fetchUnfrozenKrWork(tx, input.matterId);
-        const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
-        if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-        // Domstolen ersätter enligt Domstolsverkets normer — rättshjälp (#839)
-        // och offentligt uppdrag (#1003) värderas per kategori-norm på yrkande-
-        // dagen (retroaktiv norm, #891), inte på posternas egna á-priser.
-        // TAXA-ÄRENDEN (#1024): brottmålstaxan + tidsspillan utöver timmen +
-        // beredskapen, räknat med SAMMA funktion som dokumentet.
-        // Avrundat per rad till hela kronor som kostnadsräkningens dokument (#1218).
-        const now = callTime(ctx);
-        const valuation = valueKrRun(matter, work, input, now);
-        if (Object.keys(valuation.matterPatch).length > 0) await tx.matters.update(input.matterId, valuation.matterPatch);
-        const grossValue = valuation.kind !== "norm"
-          ? valuation.grossOre
-          : krGrossOre(work, matterKrArvodeRows({ ...matter, ...valuation.matterPatch }, work, now));
-        const run = await tx.billingRuns.create({
-          id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
-          matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
-          status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,
-          reference: await tx.billingRuns.nextKrReference(ctx.orgId, stockholmYear(now)),
-          proposedAmountOre: grossValue, amountOre: grossValue,
-          invoiceId: null, deductedBillingRunIds: [],
-          periodTo: now, notes: input.notes,
-        });
-        // Kostnadsräkningen ÄR inskicket — frys arbetet direkt (#806) så det
-        // lämnar "Upparbetat ofakturerat". Dom/slutreglering läser raderna via
-        // körningen (fetchWorkByRun), inte som ofryst.
-        await freezeWork(tx, input.matterId, run.id, now);
-        await logMatterNote(tx, ctx, input.matterId, kostnadsrakningSubmittedNote(run.reference, await courtNameOf(tx, ctx.orgId, input.matterId), grossValue));
-        return { run };
-      });
-    }),
-
-  /**
-   * Ångra en kostnadsräkning (#1121) — t.ex. skapad av misstag eller innan allt
-   * arbete registrerats. Bara före domstolens beslut (`canVoidKostnadsrakning`).
-   * Låser upp EXAKT de poster körningen frös, och annullerar körningen (VOIDED)
-   * så ärendet lämnar "väntar på dom" och en ny kostnadsräkning kan skapas.
-   * Kostnadsräkningens dokument tas bort i samma transaktion (#1230).
-   */
-  voidKostnadsrakning: orgProcedure
-    .input(z.object({ billingRunId: billingRunIdSchema }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.repos.transaction(async (tx) => {
-        const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
-        if (!canVoidKostnadsrakning(run)) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "Kostnadsräkningen kan bara ångras innan domstolen har beslutat och ingen faktura skapats.",
-          });
-        }
-        await tx.timeEntries.unfreezeByBillingRun(run.id);
-        await tx.expenses.unfreezeByBillingRun(run.id);
-        const updated = await tx.billingRuns.update(run.id, { status: "VOIDED" });
-        // Dokumentet presenterade det inskickade — ångrat inskick, borttaget dokument (#1230).
-        const doc = await removeVoidedKrDocuments(tx, ctx.ports.searchIndex, ctx.orgId, run);
-        await logMatterNote(tx, ctx, run.matterId, krVoidedNote(run.reference, doc));
-        return { run: updated };
-      });
-    }),
-
-  /**
-   * Registrera domstolens beslut PÅ kostnadsräkningen (#828): dömt belopp +
-   * ev. prutning. INSKICKAD → BESLUTAD (tingsrätten); ÖVERKLAGAD → BESLUTAD
-   * slutgiltigt (hovrätten). Skapar INGEN faktura — det är ett separat steg.
-   */
-  recordKostnadsrakningBeslut: orgProcedure
-    .input(z.object({
-      billingRunId: billingRunIdSchema,
-      awardedOre: z.number().int().nonnegative(),
-      prutningOre: z.number().int().nonpositive().optional(),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.repos.transaction(async (tx) => {
-        const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
-        const state = krStateOf(run);
-        const action: KostnadsrakningAction = state.status === "OVERKLAGAD" ? "REGISTRERA_HOVRATT_BESLUT" : "REGISTRERA_BESLUT";
-        const next = applyKrTransition(state, action);
-        const updated = await tx.billingRuns.update(run.id, {
-          kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt,
-          awardedOre: input.awardedOre, prutningOre: input.prutningOre ?? null,
-        });
-        await logMatterNote(tx, ctx, run.matterId, beslutRegisteredNote({
-          hovratt: action === "REGISTRERA_HOVRATT_BESLUT", awardedOre: input.awardedOre,
-          claimedOre: run.workValueOreAtRun, prutningOre: input.prutningOre,
-        }));
-        return { run: updated };
-      });
-    }),
-
-  /**
-   * Överklaga prutningen på en kostnadsräkning (#828): BESLUTAD → ÖVERKLAGAD.
-   * Inlagan (Word) bifogas som dokument (steg 4). Ingen ny KR — hovrättens beslut
-   * registreras sedan på SAMMA körning via recordKostnadsrakningBeslut.
-   */
-  appealKostnadsrakning: orgProcedure
-    .input(z.object({ billingRunId: billingRunIdSchema }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.repos.transaction(async (tx) => {
-        const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
-        const next = applyKrTransition(krStateOf(run), "OVERKLAGA");
-        const updated = await tx.billingRuns.update(run.id, { kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt });
-        await logMatterNote(tx, ctx, run.matterId, krAppealedNote(run.reference));
-        return { run: updated };
-      });
-    }),
-
   /**
    * Prutnings-/självrisk-fördelning (#800): värderar om arbetet på DET DÅ
    * GÄLLANDE timarvodet (rättshjälp = timkostnadsnorm; rättsskydd = ansvariga
@@ -699,58 +550,6 @@ export const billingRunRouter = router({
         firmLossGrossOre: arvodeInclVatOre(totalOre) + expensesGrossOre - allocation.totalGrossOre,
         totalOre, expensesNetOre, expensesGrossOre, currentRateOre, billableMinutes,
       };
-    }),
-
-  setVerdict: orgProcedure
-    .input(z.object({ billingRunId: billingRunIdSchema }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.repos.transaction(async (tx) => {
-        const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
-        // Faktura skapas EFTER beslutet (#828): KR:n måste vara BESLUTAD; prutningen
-        // läses från KR:ns registrerade beslut, inte som input.
-        if (run.kostnadsrakningStatus !== "BESLUTAD") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Registrera domstolens beslut innan du skapar fakturan." });
-        }
-        const prutningOre = run.prutningOre ?? 0;
-        const finalAmount = Math.max(0, run.workValueOreAtRun + prutningOre);
-        let prutningExpenseId: ExpenseId | undefined;
-        if (prutningOre < 0) {
-          const prutning = await tx.expenses.create({
-            id: asId<"ExpenseId">(newRowId(ctx, "prutning")),
-            matterId: run.matterId, userId: ctx.user.id, date: callTime(ctx),
-            amount: prutningOre, description: "Prutning enligt dom",
-            billable: true, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
-          });
-          prutningExpenseId = prutning.id;
-        }
-        // Posterna frystes redan vid kostnadsräkningens inskick (#806) → läs dem
-        // via körningen. PRUTNING (nyss skapad) länkas separat nedan.
-        const work = await fetchWorkByRun(tx, run.id);
-        const invoiceDate = callTime(ctx);
-        const invoice = await tx.invoices.create({
-          id: asId<"InvoiceId">(newRowId(ctx, "invoice")),
-          // Yrkandet är i hela kronor (#1218); domstolens prutning tas som den är.
-          // Momsen följer med så verifikatet bokför samma tal som fakturan (#1438).
-          matterId: run.matterId, amount: finalAmount, vatOre: splitGross(finalAmount, DEFAULT_VAT_RATE).vatOre, amountRounding: CURRENT_ROUNDING,
-          invoiceType: "FINAL", status: "DRAFT",
-          // DOMSTOL → F-nummer (samma format som övriga, #889) men ingen OCR.
-          ...(await invoiceNumbering(tx, ctx.orgId, "DOMSTOL", invoiceDate)),
-          invoiceDate,
-        });
-        const next = applyKrTransition(krStateOf(run), "SKAPA_FAKTURA");
-        await tx.billingRuns.update(run.id, {
-          status: "SENT", invoiceId: invoice.id, amountOre: finalAmount,
-          kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt,
-        });
-        await freezeWork(tx, run.matterId, run.id, invoiceDate);
-        // Länka poster + PRUTNING-utlägget → kostnadsräknings-vyn visar uppdelning
-        // och totalen (arvode + utlägg − prutning) reconciler mot beloppet (#732).
-        await linkFinalInvoice(tx, invoice.id, work, [], ctx);
-        if (prutningExpenseId) await tx.expenses.flagBilled([prutningExpenseId], invoice.id);
-        await logMatterNote(tx, ctx, run.matterId, invoiceCreatedNote(invoice.invoiceNumber, "FINAL", invoice.amount, "kostnadsräkning till domstol"));
-        await emit.invoiceCreated(ctx, invoice);
-        return { run, invoice };
-      });
     }),
 
   /**
@@ -850,141 +649,7 @@ export const billingRunRouter = router({
         return { split, clientInvoice, payerInvoice, creditInvoice, clientRun, payerRun, breakdown };
       });
     }),
-
-  /**
-   * Registrera försäkringsbolagets PRUTNING efter slutregleringen (#905/#952,
-   * rättsskydd, flöde B): bolaget ersätter mindre än fakturerat. Prutningen bärs
-   * av KLIENTEN — byrån blir hel.
-   *
-   * INGEN kreditfaktura till försäkringsbolaget. I rättsskydd GÅR fakturan till
-   * bolaget men är STÄLLD TILL KLIENTEN: det gick aldrig ut någon faktura *till*
-   * bolaget, och därmed finns inget att kreditera dem. Klienten har två fakturor
-   * efter slutregleringen — självrisk-fakturan och den som försäkringen betalar —
-   * och prutningen ändrar bara FÖRDELNINGEN mellan dem:
-   *
-   *   försäkringsfakturan  −prutningen (inkl moms)
-   *   klientfakturan       +prutningen (inkl moms)
-   *
-   * Totalen är oförändrad och inga nya fakturor uppstår. Kräver en befintlig
-   * FORSAKRING-slutregleringsfaktura + klientens slutregleringsfaktura.
-   */
-  recordInsurerPruning: orgProcedure
-    .input(z.object({
-      matterId: matterIdSchema,
-      /** Prutat arvode NETTO (öre) — den del försäkringen inte ersätter. */
-      prunedNetOre: z.number().int().positive(),
-      /** Bokföringsdatum för omfördelningen (demo/fixtures) — annars idag. */
-      invoiceDate: isoDateOrDateTimeInput.optional(),
-      notes: z.string().nullish(),
-    }))
-    .mutation(({ ctx, input }) =>
-      ctx.repos.transaction(async (tx) => {
-        const t = await resolvePruningTargets(tx, ctx.orgId, input.matterId);
-        // Bolagets prutning tas som den är; momsen på den avrundas som fakturans rader (#1438).
-        const prunedGross = arvodeInclVatOre(input.prunedNetOre, roundingOf(t.payerInvoice));
-        const prunedVat = prunedGross - input.prunedNetOre;
-        if (prunedGross > t.payerInvoice.amount) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `Prutningen (${prunedGross / 100} kr inkl moms) är större än försäkringsfakturan (${t.payerInvoice.amount / 100} kr).`,
-          });
-        }
-        const when = dateOrCallTime(ctx, input.invoiceDate);
-        const payerInvoice = await tx.invoices.update(t.payerInvoice.id, shiftInvoiceAmount(t.payerInvoice, -input.prunedNetOre, -prunedVat, {
-          label: "Avgår försäkringens prutning — faktureras klienten (exkl moms)", kind: "deduct",
-        }));
-        const clientInvoice = await tx.invoices.update(t.clientInvoice.id, shiftInvoiceAmount(t.clientInvoice, input.prunedNetOre, prunedVat, {
-          label: "Försäkringens prutning — bärs av klienten (exkl moms)", kind: "add",
-        }));
-        // Körningarna följer sina fakturor så rapporter/AR summerar rätt, och
-        // prutningen märks på betalar-körningen (`prutningOre`) → UI:t vet att den
-        // är registrerad utan att det finns någon CREDIT att leta efter.
-        await tx.billingRuns.update(t.payerRun.id, {
-          amountOre: payerInvoice.amount, prutningOre: -input.prunedNetOre,
-          notes: input.notes ?? `Försäkringens prutning ${input.prunedNetOre / 100} kr (exkl moms) — omfördelad till klientfakturan ${clientInvoice.invoiceNumber ?? ""}`.trim(),
-        });
-        await tx.billingRuns.update(t.clientRun.id, { amountOre: clientInvoice.amount });
-        await logMatterNote(tx, ctx, input.matterId, insurerPruningNote(input.prunedNetOre, clientInvoice.invoiceNumber), when);
-        await emit.invoiceAdjusted(ctx, payerInvoice, "insurer_pruning");
-        await emit.invoiceAdjusted(ctx, clientInvoice, "insurer_pruning");
-        return { payerInvoice, clientInvoice, prunedGross, adjustedAt: when };
-      }),
-    ),
 });
-
-/** Slutregleringens två fakturor i ett rättsskyddsärende — båda ställda till klienten. */
-interface PruningTargets {
-  payerRun: BillingRunListRow;
-  payerInvoice: Invoice;
-  clientRun: BillingRunListRow;
-  clientInvoice: Invoice;
-}
-
-/**
- * Hitta de två fakturorna prutningen omfördelas mellan (#952). Båda måste finnas:
- * utan försäkringsfakturan finns inget att pruta på, och utan klientfakturan finns
- * ingen att flytta beloppet till (då vore prutningen en ren förlust, vilket den inte
- * är i rättsskydd). Senaste körningen per mottagare vinner om flera finns.
- */
-async function resolvePruningTargets(tx: Repositories, orgId: OrganizationId, matterId: MatterId): Promise<PruningTargets> {
-  const runs = await tx.billingRuns.listForOrg(orgId, matterId);
-  const finals = runs.filter((r) => r.type === "FINAL" && r.invoiceId);
-  const payerRun = finals.find((r) => r.recipient === "FORSAKRING");
-  if (!payerRun?.invoiceId) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Ingen försäkringsfaktura att pruta på — slutreglera mot försäkringen först." });
-  }
-  const clientRun = finals.find((r) => r.recipient === "KLIENT");
-  if (!clientRun?.invoiceId) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Ingen klientfaktura att omfördela prutningen till — slutreglera ärendet först." });
-  }
-  const [payerInvoice, clientInvoice] = await Promise.all([
-    tx.invoices.getByIdInOrg(payerRun.invoiceId, orgId),
-    tx.invoices.getByIdInOrg(clientRun.invoiceId, orgId),
-  ]);
-  if (!payerInvoice || !clientInvoice) throw new TRPCError({ code: "NOT_FOUND", message: "Slutregleringens fakturor kunde inte läsas." });
-  return { payerRun, payerInvoice, clientRun, clientInvoice };
-}
-
-/**
- * Flytta ett arvode-belopp till/från en faktura (#952): `amount`, `vatOre`,
- * moms-uppdelningen (arvodets 25 %-rad) och nedbrytningsvyn justeras tillsammans,
- * så fakturan aldrig visar en moms som inte hör till dess belopp. `deltaNet` är
- * signerat (negativt = avgår).
- */
-function shiftInvoiceAmount(
-  invoice: Invoice, deltaNet: number, deltaVat: number, row: { label: string; kind: SettlementRowKind },
-): Partial<Invoice> {
-  return {
-    amount: invoice.amount + deltaNet + deltaVat,
-    vatOre: (invoice.vatOre ?? 0) + deltaVat,
-    vatBreakdown: shiftArvodeVatLine(invoice.vatBreakdown ?? [], deltaNet, deltaVat),
-    settlementBreakdown: appendBreakdownRow(invoice.settlementBreakdown, row.label, Math.abs(deltaNet), row.kind, deltaNet + deltaVat),
-  };
-}
-
-/** Justera arvodets 25 %-rad i moms-uppdelningen; saknas den läggs den till. */
-function shiftArvodeVatLine(lines: readonly VatBreakdownLine[], deltaNet: number, deltaVat: number): VatBreakdownLine[] {
-  const idx = lines.findIndex((l) => l.kind === "arvode" && l.vatRate === DEFAULT_VAT_RATE);
-  if (idx < 0) return [...lines, { kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: deltaNet, vatOre: deltaVat }];
-  return lines.map((l, i) => (i === idx ? { ...l, netOre: l.netOre + deltaNet, vatOre: l.vatOre + deltaVat } : l));
-}
-
-/**
- * Lägg en förklarande rad sist i nedbrytningsvyn och flytta totalen (#952), så
- * fakturadokumentet visar VARFÖR beloppet ändrades. Momsraden får en egen rad
- * eftersom trappan redovisar netto och moms separat.
- */
-function appendBreakdownRow(
-  view: SettlementView | null | undefined, label: string, netOre: number, kind: SettlementRowKind, deltaGross: number,
-): SettlementView {
-  const base: SettlementView = view ?? { timeLines: [], rows: [], totalLabel: "Att betala (inkl moms)", totalOre: 0 };
-  const vatOre = Math.abs(deltaGross) - netOre;
-  return {
-    ...base,
-    rows: [...base.rows, { label, amountOre: netOre, kind }, { label: "Moms 25 % på omfördelningen", amountOre: vatOre, kind }],
-    totalOre: base.totalOre + deltaGross,
-  };
-}
 
 /** Acconto-fakturornas id ur avdragna körningar (för acconto_deductions-raderna). */
 function accontoInvoiceIds(runs: ReadonlyArray<BillingRun>): InvoiceId[] {
