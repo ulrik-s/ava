@@ -138,13 +138,15 @@ services:
       AVA_ORGANIZATION_ID: "${AVA_ORGANIZATION_ID:?AVA_ORGANIZATION_ID krävs}"
       AVA_HTTP_HOST: 0.0.0.0
       AVA_HTTP_PORT: "3001"
-      # Identitet (#1256): "verified" = servern godtar bara en signerad token
-      # (proxyns ID-token eller helperns Bearer), verifierad mot IdP:ns nycklar
-      # via OIDC-discovery — en förfalskad header ger ingenting. "forwarded"
-      # (default) litar på X-Auth-Request-Email, vilket bara är säkert så länge
-      # servern inte kan nås förbi Caddy (ingen publicerad port, se nedan).
-      # Se docs/deploy-server-first.md innan du slår på verified.
-      AVA_IDENTITY: "${AVA_IDENTITY:-forwarded}"
+      # Identitet (#1256, #1880): prod-stacken kör "verified" som standard —
+      # servern godtar bara en signerad token (proxyns ID-token eller helperns
+      # Bearer), verifierad mot IdP:ns nycklar via OIDC-discovery, så en
+      # förfalskad header ger ingenting. Kräver issuer och audience (nedan, ur
+      # oauth2-proxys obligatoriska variabler) och att servern når IdP:n.
+      # "forwarded" (kodens standard) litar på X-Auth-Request-Email och gäller
+      # bara med AVA_IDENTITY=forwarded i ava-server.env, som reserv.
+      # Se docs/deploy-server-first.md, "Identitet".
+      AVA_IDENTITY: "${AVA_IDENTITY:-verified}"
       # Remote-MCP för Claude (#1026) — av när AVA_MCP_RESOURCE är tom.
       # Se docs/mcp-remote.md (Entra-appen, scopes, Claude-kopplingen).
       AVA_MCP_RESOURCE: "${AVA_MCP_RESOURCE:-}"
