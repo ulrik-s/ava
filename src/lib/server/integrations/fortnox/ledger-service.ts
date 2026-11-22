@@ -10,21 +10,47 @@
  *   Refresh-token:en roterar vid varje användning och måste överleva omstart.
  * - **Serialiserat**: två samtidiga refreshar med samma refresh-token dödar
  *   anslutningen (den andra använder en redan ogiltigförklarad token).
+ * - **Avvisad förnyelse** (#1814): `invalid_grant` markeras i token-posten
+ *   (`reconnectRequiredAt`) i samma låsta körning som förnyelsen, så att en
+ *   anslutning som en administratör gör samtidigt inte kan markeras som död.
+ *   `completeConnect` skriver en ny post utan markering.
  */
 
 import { randomBytes } from "node:crypto";
 import type { LedgerAccountMap } from "@/lib/shared/accounting/account-map";
-import type { ILedgerService, LedgerStatus } from "../../ports";
+import type { ILedgerService, LedgerKeepAliveOutcome, LedgerStatus } from "../../ports";
 import { createVaultFromEnv, type SecretsVault } from "../../secrets/vault";
 import type { LedgerConnector } from "../ledger/port";
 import { FortnoxClient } from "./client";
 import { FortnoxLedgerConnector } from "./connector";
-import { buildAuthorizeUrl, exchangeCodeForTokens, type FetchFn } from "./oauth";
-import { fortnoxConfigSchema, fortnoxMappingFromLedgerMap, type FortnoxConfig } from "./schema";
-import { VaultFortnoxTokenStore } from "./token-store";
+import { buildAuthorizeUrl, exchangeCodeForTokens, FortnoxReconnectRequiredError, type FetchFn } from "./oauth";
+import {
+  FORTNOX_REFRESH_TOKEN_TTL_MS,
+  fortnoxConfigSchema,
+  fortnoxMappingFromLedgerMap,
+  type FortnoxConfig,
+  type FortnoxStoredTokens,
+} from "./schema";
+import { VaultFortnoxTokenStore, type FortnoxTokenStore } from "./token-store";
 
 /** Hur länge en utdelad `state` gäller — en consent-runda tar sekunder, inte timmar. */
 const STATE_TTL_MS = 10 * 60_000;
+
+/** Felet en bokning får när Fortnox har avvisat förnyelsen. */
+const RECONNECT_MESSAGE = "Fortnox avvisade anslutningen: den måste anslutas igen av en administratör i Inställningar.";
+
+/** Senaste förnyelsen ur token-posten, eller `null` när den inte är känd (äldre post). */
+function renewedAtOf(tokens: FortnoxStoredTokens | null): Date | null {
+  return tokens?.renewedAt === undefined ? null : new Date(tokens.renewedAt);
+}
+
+/** Statusen ur byråns token-post (#1814). */
+function ledgerStatusOf(tokens: FortnoxStoredTokens | null): LedgerStatus {
+  const reconnectRequired = tokens?.reconnectRequiredAt !== undefined;
+  const renewedAt = renewedAtOf(tokens);
+  const expiresAt = renewedAt && !reconnectRequired ? new Date(renewedAt.getTime() + FORTNOX_REFRESH_TOKEN_TTL_MS) : null;
+  return { configured: true, connected: tokens !== null && !reconnectRequired, reconnectRequired, renewedAt, expiresAt };
+}
 
 export class FortnoxLedgerService implements ILedgerService {
   private readonly states = new Map<string, { orgId: string; expiresAt: number }>();
@@ -49,7 +75,31 @@ export class FortnoxLedgerService implements ILedgerService {
   }
 
   async status(orgId: string): Promise<LedgerStatus> {
-    return { configured: true, connected: (await this.store(orgId).load()) !== null };
+    return ledgerStatusOf(await this.store(orgId).load());
+  }
+
+  /** Markera posten när förnyelsen avvisats (anropas inne i den låsta körningen). */
+  private async markIfRejected(store: FortnoxTokenStore, e: unknown): Promise<boolean> {
+    if (!(e instanceof FortnoxReconnectRequiredError)) return false;
+    const tokens = await store.load();
+    if (tokens) await store.save({ ...tokens, reconnectRequiredAt: this.now() });
+    return true;
+  }
+
+  keepAlive(orgId: string): Promise<LedgerKeepAliveOutcome> {
+    return this.serialized(async () => {
+      const store = this.store(orgId);
+      const tokens = await store.load();
+      if (!tokens) return "not-connected";
+      if (tokens.reconnectRequiredAt !== undefined) return "reconnect-required";
+      try {
+        await new FortnoxClient(this.config, store, this.fetchFn).checkConnection();
+        return "alive";
+      } catch (e) {
+        if (await this.markIfRejected(store, e)) return "reconnect-required";
+        throw e;
+      }
+    });
   }
 
   async authorizeUrl(orgId: string): Promise<string> {
@@ -71,11 +121,14 @@ export class FortnoxLedgerService implements ILedgerService {
   connector(orgId: string, map: LedgerAccountMap): Pick<LedgerConnector, "pushVoucher" | "capabilities"> {
     const mapping = fortnoxMappingFromLedgerMap(map);
     if (!mapping) throw new Error("Kontomappning saknas.");
-    const client = new FortnoxClient(this.config, this.store(orgId), this.fetchFn);
+    const store = this.store(orgId);
+    const client = new FortnoxClient(this.config, store, this.fetchFn);
     const inner = new FortnoxLedgerConnector({ client, mapping });
     return {
       capabilities: () => inner.capabilities(),
-      pushVoucher: (voucher, ctx) => this.serialized(() => inner.pushVoucher(voucher, ctx)),
+      pushVoucher: (voucher, ctx) => this.serialized(() => inner.pushVoucher(voucher, ctx).catch(async (e: unknown) => {
+        throw (await this.markIfRejected(store, e)) ? new Error(RECONNECT_MESSAGE) : e;
+      })),
     };
   }
 }

@@ -12,12 +12,75 @@ import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-sto
 import { isProcedureCall, queueEntrySchema } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { MAX_PROCEDURE_TOUCHES } from "@/lib/server/data-store/in-memory/procedure-touches";
 import { uuidv7 } from "@/lib/shared/uuid";
+import { captureReportedErrors, FullableQueuePersistence } from "../../../helpers/full-queue-persistence";
 
 const entry = (id: string) => ({ id, matterId: uuidv7(), userId: uuidv7(), date: new Date(), minutes: 30, description: "Samtal", hourlyRate: 1500 });
 
 async function store() {
   return CachingSyncDataStore.create({ transport: noSyncTransport });
 }
+
+const FULL = /kunde inte sparas i webbläsarens lagring/;
+
+/** En store med persisterat snapshot och en kö-lagring som är full (#1817). */
+async function fullStore() {
+  const persistence = new InMemoryPersistence();
+  let saves = 0;
+  const save = persistence.save.bind(persistence);
+  persistence.save = async (source) => { saves++; await save(source); };
+  const queuePersistence = new FullableQueuePersistence();
+  const ds = await CachingSyncDataStore.create({ transport: noSyncTransport, persistence, queuePersistence });
+  queuePersistence.full = true;
+  return { ds, saves: () => saves, queuePersistence };
+}
+
+/** Kör en köbar procedur som skapar tidsposten `id`; ger felet den kastar. */
+async function createEntryCall(ds: CachingSyncDataStore, id: string): Promise<unknown> {
+  let thrown: unknown;
+  await captureReportedErrors(async () => {
+    await ds.runQueuedProcedure({ path: "timeEntry.create", input: { id } }, async () => {
+      await ds.store.timeEntries.create({ data: entry(id) as never });
+    }).catch((e: unknown) => { thrown = e; });
+  });
+  return thrown;
+}
+
+describe("runQueuedProcedure — köandet kastar (full lagring, #1817)", () => {
+  it("proceduren avvisas med felet, dess lokala skrivningar rullas tillbaka och inget snapshot skrivs", async () => {
+    const { ds, saves } = await fullStore();
+    let signals = 0;
+    ds.onLocalChange(() => { signals++; });
+    const id = uuidv7();
+    expect(String(await createEntryCall(ds, id))).toMatch(FULL);
+    expect(await ds.store.timeEntries.findUnique({ where: { id } })).toBeNull();
+    expect(ds.pendingCount()).toBe(0);
+    expect(saves()).toBe(0);
+    expect(signals).toBe(0);
+  });
+
+  it("efter reconcile återställs inget: ingen tombstone, inga konflikter", async () => {
+    const { ds } = await fullStore();
+    const id = uuidv7();
+    await createEntryCall(ds, id);
+    const res = await ds.reconcile();
+    expect(res.conflicts).toEqual([]);
+    expect(ds.pendingCount()).toBe(0);
+    expect(await ds.store.timeEntries.findUnique({ where: { id } })).toBeNull();
+  });
+
+  it("en procedur utan lokala skrivningar köas efter transaktionen, och ett köfel når anroparen", async () => {
+    const { ds, queuePersistence } = await fullStore();
+    const noWrites = (): Promise<string> => Promise.resolve("ok");
+    let thrown: unknown;
+    await captureReportedErrors(async () => {
+      await ds.runQueuedProcedure({ path: "timeEntry.create", input: {} }, noWrites).catch((e: unknown) => { thrown = e; });
+    });
+    expect(String(thrown)).toMatch(FULL);
+    queuePersistence.full = false;
+    expect(await ds.runQueuedProcedure({ path: "timeEntry.create", input: {} }, noWrites)).toBe("ok");
+    expect(ds.pendingEntries()).toMatchObject([{ path: "timeEntry.create", touches: [] }]);
+  });
+});
 
 describe("runQueuedProcedure", () => {
   it("köar ETT anrop med berörda rader — inga radposter", async () => {
@@ -64,6 +127,17 @@ describe("runQueuedProcedure", () => {
     })).rejects.toThrow("PRECONDITION_FAILED");
     expect(ds.pendingCount()).toBe(0);
     expect(await ds.store.timeEntries.findUnique({ where: { id } })).toBeNull();
+  });
+
+  it("en procedur med lokala skrivningar köas en gång, i transaktionens commit (#1817)", async () => {
+    const ds = await store();
+    const [a, b] = [uuidv7(), uuidv7()];
+    await ds.store.timeEntries.create({ data: entry(a) as never });
+    await ds.runQueuedProcedure({ path: "timeEntry.create", input: { id: b } }, async () => {
+      await ds.store.timeEntries.create({ data: entry(b) as never });
+    });
+    await ds.store.timeEntries.update({ where: { id: a }, data: { minutes: 45 } });
+    expect(ds.pendingEntries().map((e) => (isProcedureCall(e) ? e.path : e.kind))).toEqual(["create", "timeEntry.create", "update"]);
   });
 
   it("fler rörda rader än servern tar emot → rullas tillbaka lokalt och köas inte (#1674)", async () => {

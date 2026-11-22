@@ -19,7 +19,8 @@ import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { HelperDocumentRef, HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
-import { saveConflictCopyViaTrpc, uploadTargetKey, uploadViaTrpc } from "./document-source.ts";
+import type { ServerAuth } from "./allowed-origins.ts";
+import { saveConflictCopyViaTrpc, serverUrlOf, uploadTargetKey, uploadViaTrpc } from "./document-source.ts";
 import { log } from "./log.ts";
 import type { ConflictCopy, UploadDocResult } from "./trpc-client.ts";
 
@@ -135,7 +136,7 @@ function buildEntry(
 export class UploadQueue {
   private readonly dir: string;
   private readonly deps: QueueDeps;
-  private readonly tokenProvider: (() => Promise<string | undefined>) | undefined;
+  private readonly tokenProvider: ServerAuth | undefined;
   private readonly entries = new Map<string, QueueEntry>();
   /**
    * Framskrivande basversion per dokument (ADR 0033 §1). Seedas med den version
@@ -151,9 +152,10 @@ export class UploadQueue {
    * `tokenProvider` (ADR 0028 §2): ger en FÄRSK `Authorization`-header vid varje
    * upload-försök när posten inte bär en egen (helpern auktoriserar autonomt med
    * sin OIDC-token). Hämtas vid drain-tid — aldrig lagrad — så en utgången token
-   * inte fryses in i en köad post som väntat dagar offline.
+   * inte fryses in i en köad post som väntat dagar offline. Providern får postens
+   * mål, så att token bara följer med till godkända AVA-servrar (#1838).
    */
-  constructor(dir: string, deps: QueueDeps = defaultQueueDeps, tokenProvider?: () => Promise<string | undefined>) {
+  constructor(dir: string, deps: QueueDeps = defaultQueueDeps, tokenProvider?: ServerAuth) {
     this.dir = dir;
     this.deps = deps;
     this.tokenProvider = tokenProvider;
@@ -252,7 +254,7 @@ export class UploadQueue {
 
   /** Egen authHeader (från browsern) först; annars helperns färska OIDC-token. */
   private async resolveAuth(entry: QueueEntry): Promise<string | undefined> {
-    return entry.authHeader ?? (this.tokenProvider ? await this.tokenProvider() : undefined);
+    return entry.authHeader ?? (this.tokenProvider ? await this.tokenProvider(serverUrlOf(entry)) : undefined);
   }
 
   private async attempt(entry: QueueEntry, res: DrainResult): Promise<void> {

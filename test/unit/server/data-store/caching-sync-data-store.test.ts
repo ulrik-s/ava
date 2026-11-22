@@ -18,6 +18,7 @@ import type { DemoSource } from "@/lib/shared/demo-source";
 import { asId } from "@/lib/shared/schemas/ids";
 import { isUuid, uuidv7 } from "@/lib/shared/uuid";
 import { changeChannelHub, settle } from "../../../helpers/change-channel-hub";
+import { captureReportedErrors, FullableQueuePersistence } from "../../../helpers/full-queue-persistence";
 
 class FakeTransport implements SyncTransport {
   pullResult: PullResult = { changes: [], cursor: 0 };
@@ -378,6 +379,22 @@ describe("CachingSyncDataStore — en sparad ändring överlever en omladdning (
     });
     expect(busy).toEqual([true, false]);
     expect(p.saved).toHaveLength(1);
+  });
+
+  it("en radtransaktion vars köande kastar (full lagring) rullas tillbaka, och raden finns inte i kön (#1817)", async () => {
+    const p = heldPersistence();
+    const queuePersistence = new FullableQueuePersistence();
+    const ds = await CachingSyncDataStore.create({ transport: new FakeTransport(), persistence: p.persistence, queuePersistence });
+    queuePersistence.full = true;
+    const id = uuidv7();
+    await captureReportedErrors(async () => {
+      await expect(ds.store.transaction(async (t) => { await t.matters.create({ data: matter(id) as never }); }))
+        .rejects.toThrow(/kunde inte sparas i webbläsarens lagring/);
+    });
+    expect(await ds.store.matters.findUnique({ where: { id } })).toBeNull();
+    expect(ds.pendingCount()).toBe(0);
+    expect(await queuePersistence.load()).toEqual([]);
+    expect(p.saved).toHaveLength(0);
   });
 });
 

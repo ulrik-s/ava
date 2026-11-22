@@ -19,10 +19,10 @@ import { mkdirSync, copyFileSync, chmodSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
+import { HELPER_HTTPS_PORT, HELPER_PORT, type HelperDocumentRef } from "@/lib/shared/helper/protocol";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 
-import { OriginGate, type ConfirmOrigin } from "./allowed-origins.ts";
+import { OriginGate, tokenOnlyToApprovedServers, type ConfirmOrigin, type ServerAuth } from "./allowed-origins.ts";
 import { buildAuthHeaderProvider } from "./auth/auth-provider.ts";
 import { defaultLoginDeps, loginConfigFromEnv, runLogin, type LoginConfig } from "./auth/login.ts";
 import { selectTokenStore, type TokenStore } from "./auth/token-store.ts";
@@ -34,6 +34,7 @@ import {
   fetchSourceBytes,
   releaseLeaseViaTrpc,
   renewLeaseViaTrpc,
+  serverUrlOf,
   sourceCacheKey,
   type FetchSourceDeps,
 } from "./document-source.ts";
@@ -184,13 +185,14 @@ const UPDATE_LOOP: LoopConfig = { checkIntervalMs: 24 * 60 * 60_000, initialDela
 /** Färsk `Authorization`-header från helperns OIDC-token, eller undefined. */
 type AuthHeaderProvider = () => Promise<string | undefined>;
 
-export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, authHeader?: AuthHeaderProvider): (req: Request) => Promise<Response> {
-  // Browserns authHeader först; annars helperns egen OIDC-token (autonom, ADR 0028 §2).
-  const fallback = async (browserAuth: string | undefined): Promise<string | undefined> =>
-    browserAuth ?? (authHeader ? await authHeader() : undefined);
+export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, authHeader?: ServerAuth): (req: Request) => Promise<Response> {
+  // Browserns authHeader först; annars helperns egen OIDC-token (autonom, ADR 0028 §2),
+  // och den bara till en godkänd AVA-server (#1838).
+  const fallback = async (browserAuth: string | undefined, target: string): Promise<string | undefined> =>
+    browserAuth ?? (authHeader ? await authHeader(target) : undefined);
   // Lease-anrop måste bära samma färska token som download/upload (autonom).
-  const leaseDeps = async (browserAuth: string | undefined): Promise<FetchSourceDeps> => {
-    const auth = await fallback(browserAuth);
+  const leaseDeps = async (browserAuth: string | undefined, document: HelperDocumentRef): Promise<FetchSourceDeps> => {
+    const auth = await fallback(browserAuth, document.trpcUrl);
     return auth !== undefined ? { authHeader: auth } : {};
   };
   const deps: OpenDeps = {
@@ -198,7 +200,7 @@ export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, aut
     // Local-first (ADR 0032): osynkad lokal ändring i kön slår serverns version.
     pendingBytes: (ref) => queue.peekByKey(sourceCacheKey(ref) ?? ""),
     download: async (ref, browserAuth) => {
-      const auth = await fallback(browserAuth);
+      const auth = await fallback(browserAuth, serverUrlOf(ref));
       return fetchSourceBytes(ref, auth !== undefined ? { authHeader: auth } : {});
     },
     startWatch: (path, target, authHeaderArg, timeoutMs) =>
@@ -209,12 +211,12 @@ export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, aut
     persist: (cacheKey, bytes, fileName) => persistDownloaded(content, cacheKey, bytes, fileName),
     restore: (cacheKey, path) => restoreCached(content, cacheKey, path),
     // Lease (ADR 0033 §2/§4): ta vid öppning, förnya/släpp med färsk token.
-    acquireLease: async (document, browserAuth) => acquireLeaseViaTrpc(document, await leaseDeps(browserAuth)),
+    acquireLease: async (document, browserAuth) => acquireLeaseViaTrpc(document, await leaseDeps(browserAuth, document)),
     startLeaseHeartbeat: (document, browserAuth, timeoutMs) =>
       startLeaseHeartbeat(
         {
-          renew: async () => renewLeaseViaTrpc(document, await leaseDeps(browserAuth)),
-          release: async () => releaseLeaseViaTrpc(document, await leaseDeps(browserAuth)),
+          renew: async () => renewLeaseViaTrpc(document, await leaseDeps(browserAuth, document)),
+          release: async () => releaseLeaseViaTrpc(document, await leaseDeps(browserAuth, document)),
           ...defaultLeaseTimers,
         },
         timeoutMs,
@@ -249,7 +251,7 @@ export function reloadableAuth(
   return { provider: async () => (current ? current() : undefined), reload };
 }
 
-function startStores(dir: string | null, signal: AbortSignal, authHeader?: AuthHeaderProvider): Stores | undefined {
+function startStores(dir: string | null, signal: AbortSignal, authHeader?: ServerAuth): Stores | undefined {
   if (dir === null) {
     log("ingen data-dir → durabla lager inaktiverade (direkt-upload, ingen offline-cache)");
     return undefined;
@@ -313,14 +315,16 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
   // Byggs om när webbappen pushar ny config (#1149) — förr krävdes omstart.
   const tokenStore = selectTokenStore(currentPlatform(), dir, { tokenFile: process.env.AVA_HELPER_TOKEN_FILE });
   const auth = reloadableAuth(() => loginConfigFromEnv(helperEnvFor(dir)), tokenStore);
-  const authHeader = auth.provider;
   const origins = new OriginGate(dir, opts.confirmOrigin);
+  // EN lista för både anropsgrinden och vart helperns token får skickas (#1838).
+  const extra = extraOrigins();
+  const allowedOrigins = (): string[] => [...extra, ...origins.list()];
+  const authHeader = tokenOnlyToApprovedServers(auth.provider, allowedOrigins);
 
   const stores = startStores(dir, abort.signal, authHeader);
   const handler = createHandler({
     version: VERSION,
-    extraOrigins: extraOrigins(),
-    approvedOrigins: () => origins.list(),
+    approvedOrigins: allowedOrigins,
     onUnknownOrigin: (origin) => origins.onUnknown(origin),
     onCheckUpdate: () => { void updates.check(); },
     updateAvailable: () => updates.status().notice !== null,
@@ -341,7 +345,7 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
               pending: (cacheKey) => stores.queue.peekByKey(cacheKey),
               load: (cacheKey) => stores.content.load(cacheKey),
               fetchAndCache: async (ref, cacheKey, auth, fileName) =>
-                fetchAndCacheContent(stores.content, ref, cacheKey, auth ?? (authHeader ? await authHeader() : undefined), fileName),
+                fetchAndCacheContent(stores.content, ref, cacheKey, auth ?? (await authHeader(serverUrlOf(ref))), fileName),
             }),
         }
       : {}),

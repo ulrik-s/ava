@@ -33,3 +33,13 @@ export function recordTouch(touches: ProcedureTouch[], event: MutationEvent<Reco
     throw new Error(`Ändringen rör ${touches.length} rader; högst ${MAX_PROCEDURE_TOUCHES} kan sparas i ett anrop.`);
   }
 }
+
+/**
+ * Fångstläget under en köbar procedur (#1265): lokala radskrivningar samlas som
+ * `touches` i stället för att köas som rader, och `commit` köar anropet i den
+ * lokala transaktionens commit (#1817). Båda `null` utanför en procedur.
+ */
+export interface ProcedureCapture {
+  touches: ProcedureTouch[] | null;
+  commit: (() => Promise<void>) | null;
+}

@@ -10,9 +10,11 @@ import {
   MutationQueue,
   InMemoryMutationQueuePersistence,
   IndexedDbMutationQueuePersistence,
+  QUEUE_WRITE_FAILED_MESSAGE,
 } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 import { QUEUE_FORMAT_VERSION } from "@/lib/shared/sync/queue-format";
+import { captureReportedErrors, FullableQueuePersistence } from "../../../helpers/full-queue-persistence";
 
 const ev = (o: Partial<MutationEvent<Record<string, unknown>>> = {}): MutationEvent<Record<string, unknown>> => ({
   entity: "invoice", kind: "create", row: { id: "inv-1", amount: 100 }, ...o,
@@ -100,5 +102,68 @@ describe("MutationQueue — persistens", () => {
     const q2 = await MutationQueue.hydrate(new IndexedDbMutationQueuePersistence(factory, "q-test"));
     expect(q2.size()).toBe(2);
     expect(q2.pending().map((m) => m.mutationId)).toEqual(["m1", "m2"]);
+  });
+});
+
+describe("MutationQueue — lagringen först (#1817)", () => {
+  /** En kö med en lyckad post "m1", och lagringen full därefter. */
+  async function fullQueue(): Promise<{ q: MutationQueue; p: FullableQueuePersistence }> {
+    const p = new FullableQueuePersistence();
+    const q = await MutationQueue.hydrate(p);
+    await q.enqueue(ev(), { mutationId: "m1" });
+    p.full = true;
+    return { q, p };
+  }
+
+  it("en add som kastar ger det läsbara felet med originalfelet som cause, och rapporterar originalfelet", async () => {
+    const { q } = await fullQueue();
+    let thrown: unknown;
+    const reported = await captureReportedErrors(async () => {
+      await q.enqueue(ev(), { mutationId: "m2" }).catch((e: unknown) => { thrown = e; });
+    });
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe(QUEUE_WRITE_FAILED_MESSAGE);
+    expect(QUEUE_WRITE_FAILED_MESSAGE).toMatch(/kunde inte sparas i webbläsarens lagring.*Ändringen sparades inte\./);
+    expect((thrown as Error).cause).toMatchObject({ name: "QuotaExceededError" });
+    expect(reported).toEqual([(thrown as Error).cause]);
+  });
+
+  it("kön är oförändrad: pending, size och holds; och refresh ser inget kvitterat av en annan flik", async () => {
+    const { q } = await fullQueue();
+    await captureReportedErrors(() => q.enqueueProcedure({ path: "timeEntry.create", input: {}, touches: [{ entity: "timeEntry", id: "t1" }] }, { mutationId: "m2" }).catch(() => undefined));
+    expect(q.pending().map((m) => m.mutationId)).toEqual(["m1"]);
+    expect(q.size()).toBe(1);
+    expect(q.holds("m2")).toBe(false);
+    expect(q.holds("m1")).toBe(true);
+    await q.refresh();
+    expect(q.takeSettledElsewhere()).toEqual([]);
+  });
+
+  it("requeue med en add som kastar lämnar kön orörd", async () => {
+    const { q } = await fullQueue();
+    const entry = { mutationId: "r1", entity: "task", kind: "update" as const, row: { id: "i1" }, enqueuedAt: 1, format: 1 };
+    await captureReportedErrors(async () => { await expect(q.requeue(entry)).rejects.toThrow(QUEUE_WRITE_FAILED_MESSAGE); });
+    expect(q.pending().map((m) => m.mutationId)).toEqual(["m1"]);
+  });
+
+  it("ett originalfel som inte är ett Error rapporteras som ett Error", async () => {
+    const p = new InMemoryMutationQueuePersistence();
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- originalfelet ska INTE vara ett Error här
+    p.add = () => Promise.reject("full");
+    const q = await MutationQueue.hydrate(p);
+    let thrown: unknown;
+    const reported = await captureReportedErrors(async () => { await q.enqueue(ev()).catch((e: unknown) => { thrown = e; }); });
+    expect((thrown as Error).cause).toBe("full");
+    expect(reported).toEqual([new Error("full")]);
+  });
+
+  it("en lyckad add ger samma ordning i kön och i lagringen som förut", async () => {
+    const p = new FullableQueuePersistence();
+    const q = await MutationQueue.hydrate(p);
+    await q.enqueue(ev(), { mutationId: "a" });
+    await q.enqueueProcedure({ path: "p", input: {}, touches: [] }, { mutationId: "b" });
+    await q.requeue({ mutationId: "c", entity: "task", kind: "update", row: { id: "i" }, enqueuedAt: 1, format: 1 });
+    expect(q.pending().map((m) => m.mutationId)).toEqual(["a", "b", "c"]);
+    expect((await p.load()).map((m) => m.mutationId)).toEqual(["a", "b", "c"]);
   });
 });

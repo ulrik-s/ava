@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest-compat";
 import { Mutex } from "@/lib/server/concurrency/mutex";
-import type { ILedgerService } from "@/lib/server/ports";
+import type { ILedgerService, LedgerKeepAliveOutcome } from "@/lib/server/ports";
 import { ledgerRouter } from "@/lib/server/routers/ledger";
 import { DEFAULT_LEDGER_ACCOUNT_MAP } from "@/lib/shared/accounting/account-map";
 
@@ -49,10 +49,11 @@ function setup(o: Opts = {}) {
   const push = vi.fn(async () => { await new Promise((r) => setTimeout(r, 5)); return { externalId: `A/${++n}` }; });
   const updatePayment = vi.fn(async (_id: string, patch: Record<string, unknown>) => patch);
   const ledger: ILedgerService = {
-    status: async () => ({ configured: true, connected: true }),
+    status: async () => ({ ...STATUS }),
     authorizeUrl: async () => "https://fortnox.test/auth?state=s",
     completeConnect: vi.fn(async () => undefined),
     connector: () => ({ capabilities: () => ({ pushVoucher: true, pushInvoice: false, pullPayments: false, exportSie: false }), pushVoucher: push }),
+    keepAlive: () => Promise.resolve<LedgerKeepAliveOutcome>("alive"),
     ...o.ledger,
   };
   const repos = {
@@ -70,9 +71,15 @@ function setup(o: Opts = {}) {
   return { caller: ledgerRouter.createCaller(ctx as any), update, updatePayment, push, ledger, locks };
 }
 
+/** Portens status med förnyelsen (#1814); `Date` går över nätet med superjson. */
+const STATUS = {
+  configured: true, connected: true, reconnectRequired: false,
+  renewedAt: new Date("2026-11-01T00:00:00Z"), expiresAt: new Date("2026-12-16T00:00:00Z"),
+};
+
 describe("ledger.status / anslutning", () => {
   it("status kommer från porten", async () => {
-    expect(await setup().caller.status()).toEqual({ configured: true, connected: true });
+    expect(await setup().caller.status()).toEqual(STATUS);
   });
 
   it("connectUrl kräver admin", async () => {

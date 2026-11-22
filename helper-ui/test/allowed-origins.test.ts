@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { isApprovableOrigin, loadAllowedOrigins, OriginGate, type OriginFileDeps } from "../src/engine/allowed-origins.ts";
+import {
+  isApprovableOrigin, isApprovedServerUrl, loadAllowedOrigins, OriginGate, tokenOnlyToApprovedServers, type OriginFileDeps,
+} from "../src/engine/allowed-origins.ts";
 
 /** In-memory "filsystem" för allowed-origins.json. */
 function memFs(initial?: string): { deps: OriginFileDeps; files: Map<string, string> } {
@@ -86,5 +88,54 @@ describe("OriginGate (trust-on-first-use)", () => {
     await flush();
     expect(gate.list()).toEqual(["https://ava-crm.io"]);
     expect(files.size).toBe(0);
+  });
+});
+
+describe("isApprovedServerUrl (#1838)", () => {
+  const approved = ["https://ava.example"];
+
+  test("localhost-porten och en godkänd https-server godtas", () => {
+    expect(isApprovedServerUrl("http://localhost:8080/api/trpc", approved)).toBe(true);
+    expect(isApprovedServerUrl("https://ava.example/api/trpc", approved)).toBe(true);
+  });
+
+  test("en annan värd, ett värdsuffix, användarnamn i URL:en, en annan port och en ogiltig URL godtas inte", () => {
+    expect(isApprovedServerUrl("https://annan.example/api/trpc", approved)).toBe(false);
+    expect(isApprovedServerUrl("https://ava.example.annan.example/", approved)).toBe(false);
+    expect(isApprovedServerUrl("http://localhost:8080@annan.example/", approved)).toBe(false);
+    expect(isApprovedServerUrl("https://ava.example:8443/api/trpc", approved)).toBe(false);
+    expect(isApprovedServerUrl("inte en url", approved)).toBe(false);
+    expect(isApprovedServerUrl("", approved)).toBe(false);
+  });
+});
+
+describe("tokenOnlyToApprovedServers (#1838)", () => {
+  function counting(): { token: () => Promise<string | undefined>; calls: () => number } {
+    let n = 0;
+    return { token: () => { n += 1; return Promise.resolve("Bearer TOK"); }, calls: () => n };
+  }
+
+  test("godkänd värd → token", async () => {
+    const src = counting();
+    const auth = tokenOnlyToApprovedServers(src.token, () => []);
+    expect(await auth("http://localhost:8080/api/trpc")).toBe("Bearer TOK");
+    expect(src.calls()).toBe(1);
+  });
+
+  test("annan värd → undefined, och token-källan anropas inte", async () => {
+    const src = counting();
+    const auth = tokenOnlyToApprovedServers(src.token, () => []);
+    expect(await auth("https://annan.example/api/trpc")).toBeUndefined();
+    expect(await auth("inte en url")).toBeUndefined();
+    expect(src.calls()).toBe(0);
+  });
+
+  test("en origin som godkänns efteråt får token direkt (listan läses vid varje anrop)", async () => {
+    const src = counting();
+    const list: string[] = [];
+    const auth = tokenOnlyToApprovedServers(src.token, () => list);
+    expect(await auth("https://ava-crm.io/api/trpc")).toBeUndefined();
+    list.push("https://ava-crm.io");
+    expect(await auth("https://ava-crm.io/api/trpc")).toBe("Bearer TOK");
   });
 });

@@ -321,3 +321,123 @@ describe("checkMatterConflicts", () => {
     expect(await loggedChecks(ctx)).toHaveLength(1);
   });
 });
+
+/** Träffarna kontrollen ger i fixturen: klienten Bo är motpart i OLD, Dag är klient där. */
+const HIT_BO = { contactId: KLIENT, matterId: OLD, role: "MOTPART" as const };
+const HIT_DAG = { contactId: RETURNING, matterId: OLD, role: "KLIENT" as const };
+const SAVED_BO = { ...HIT_BO, contactName: "Bo Berg", matterNumber: "2026-0001", matterTitle: "Tvist" };
+const SAVED_DAG = { ...HIT_DAG, contactName: "Dag Dahl", matterNumber: "2026-0001", matterTitle: "Tvist" };
+
+/** Ett nytt ärende med Bo som klient (träff) och Dag som motpart (träff), bedömt med båda. */
+async function reviewedWithTwoHits(caller: ReturnType<typeof setup>["caller"]) {
+  await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+  const link = await caller.matter.addContact({ matterId: NEW, contactId: RETURNING, role: "MOTPART" });
+  const reviewed = await caller.matter.markConflictsReviewed({ id: NEW, note: "Bedömt.", hits: [HIT_BO, HIT_DAG] });
+  return { link, reviewed };
+}
+
+describe("träfflistan på ärendet (#1819)", () => {
+  it("kontrollen sparar träffarna på ärendet, utan personnummer och klientnamn", async () => {
+    const { caller } = setup();
+    const matter = await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+    expect(matter.conflictCheckResults).toEqual([SAVED_BO]);
+  });
+
+  it("inga träffar → en tom lista", async () => {
+    const { caller } = setup();
+    expect((await caller.matter.create({ id: NEW, title: "Nytt", klientId: OTHER })).conflictCheckResults).toEqual([]);
+  });
+
+  it("loggraderna bär ärendets id", async () => {
+    const { caller, ctx } = setup();
+    await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+    expect((await loggedChecks(ctx)).map((c) => c.matterId)).toEqual([NEW]);
+  });
+
+  it("klientens optimistiska körning väntar och sparar ingen träfflista", async () => {
+    const { ctx } = setup();
+    const offline = appRouter.createCaller({ ...ctx, queued: QUEUED, provisional: true });
+    expect(await offline.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT })).toMatchObject({ conflictCheckStatus: "PENDING", conflictCheckResults: null });
+  });
+});
+
+describe("bedömningen sparar de bedömda träffarna (#1819)", () => {
+  it("med hits: bedömningen sparas och gäller ärendets aktuella träffar", async () => {
+    const { caller } = setup();
+    const { reviewed } = await reviewedWithTwoHits(caller);
+    expect(reviewed).toMatchObject({ conflictCheckStatus: "REVIEWED", conflictReviewedHits: [SAVED_BO, SAVED_DAG] });
+  });
+
+  it("utan hits (köat av äldre kod): ärendets aktuella träffar sparas utan kontroll", async () => {
+    const { caller } = setup();
+    await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+    expect(await caller.matter.markConflictsReviewed({ id: NEW, note: "Ok." })).toMatchObject({ conflictReviewedHits: [SAVED_BO] });
+  });
+
+  it("en ny träff som saknas i hits → PRECONDITION_FAILED, och inget sparas", async () => {
+    const { caller, ctx } = setup();
+    await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+    await caller.matter.addContact({ matterId: NEW, contactId: RETURNING, role: "MOTPART" });
+    await expect(caller.matter.markConflictsReviewed({ id: NEW, note: "Ok.", hits: [HIT_BO] }))
+      .rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: "Kontrollen har gett nya träffar sedan du öppnade den. Bedöm igen." });
+    const after = await caller.matter.getById({ id: NEW });
+    expect({ status: after.conflictCheckStatus, hits: after.conflictReviewedHits ?? null, note: after.conflictReviewNote ?? null })
+      .toEqual({ status: "HITS", hits: null, note: null });
+    expect(await ctx.repos.serviceNotes.listByMatter(NEW, ORG_ID)).toHaveLength(0);
+  });
+
+  it("ärendet saknar sparad träfflista → bedömningen sparas, med conflictReviewedHits null", async () => {
+    const { caller, ctx } = setup();
+    await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+    await ctx.repos.matters.update(NEW, { conflictCheckResults: null });
+    expect(await caller.matter.markConflictsReviewed({ id: NEW, note: "Ok.", hits: [HIT_BO] }))
+      .toMatchObject({ conflictCheckStatus: "REVIEWED", conflictReviewedHits: null });
+  });
+
+  it("fler än 5 000 träffar avvisas; 5 000 går igenom", async () => {
+    const { caller } = setup();
+    await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+    const filler = (n: number) => Array.from({ length: n }, (_, i) => ({ ...HIT_BO, contactId: asId<"ContactId">(`fyll-${i}`) }));
+    await expect(caller.matter.markConflictsReviewed({ id: NEW, note: "Ok.", hits: [HIT_BO, ...filler(5000)] })).rejects.toThrow();
+    expect(await caller.matter.markConflictsReviewed({ id: NEW, note: "Ok.", hits: [...filler(4999), HIT_BO] }))
+      .toMatchObject({ conflictCheckStatus: "REVIEWED" });
+  });
+});
+
+describe("omkontrollen behåller en bedömning utan nya träffar (#1819)", () => {
+  it("samma träffar → REVIEWED, och granskare, tid och motivering lämnas orörda", async () => {
+    const { caller } = setup();
+    const { reviewed } = await reviewedWithTwoHits(caller);
+    const again = await caller.matter.checkConflicts({ id: NEW });
+    expect(again).toMatchObject({ conflictCheckStatus: "REVIEWED", conflictCheckHits: 2, conflictReviewNote: "Bedömt.", conflictReviewedById: "u-1" });
+    expect(again.conflictReviewedAt).toEqual(reviewed.conflictReviewedAt);
+  });
+
+  it("färre träffar → REVIEWED", async () => {
+    const { caller, ctx } = setup();
+    const { link } = await reviewedWithTwoHits(caller);
+    await ctx.repos.matterContacts.hardDelete(link.id);
+    expect(await caller.matter.checkConflicts({ id: NEW })).toMatchObject({ conflictCheckStatus: "REVIEWED", conflictCheckHits: 1 });
+  });
+
+  it("en ny träff → HITS att bedöma igen", async () => {
+    const { caller } = setup();
+    await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+    await caller.matter.markConflictsReviewed({ id: NEW, note: "Bedömt.", hits: [HIT_BO] });
+    await caller.matter.addContact({ matterId: NEW, contactId: RETURNING, role: "MOTPART" });
+    expect(await caller.matter.getById({ id: NEW })).toMatchObject({ conflictCheckStatus: "HITS", conflictCheckHits: 2 });
+  });
+
+  it("en äldre bedömning (REVIEWED utan sparade träffar) → HITS vid första omkontrollen, också med samma träffar", async () => {
+    const { caller, ctx } = setup();
+    await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT });
+    await caller.matter.markConflictsReviewed({ id: NEW, note: "Bedömt." });
+    await ctx.repos.matters.update(NEW, { conflictReviewedHits: null });
+    expect(await caller.matter.checkConflicts({ id: NEW })).toMatchObject({ conflictCheckStatus: "HITS" });
+  });
+
+  it("matter.create skickar ingen bedömning: ett nytt ärende med träffar får HITS", async () => {
+    const { caller } = setup();
+    expect(await caller.matter.create({ id: NEW, title: "Nytt", klientId: KLIENT })).toMatchObject({ conflictCheckStatus: "HITS" });
+  });
+});

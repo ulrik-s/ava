@@ -20,14 +20,20 @@ import { isCheckedRole, isConflictingRole } from "@/lib/shared/conflict-roles";
 import type { Contact } from "@/lib/shared/schemas/contact";
 import type { ConflictCheckStatus, MatterRole } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
+import type { ConflictHit } from "@/lib/shared/schemas/misc";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
-import { type ConflictCtx, type ConflictResult, pushUnique, searchConflicts, toLoggedResult } from "./conflict-search";
+import {
+  type ConflictCtx, type ConflictHitIdentity, type ConflictResult, conflictStatusFor, pushUnique, searchConflicts,
+  toConflictHit, toLoggedResult,
+} from "./conflict-search";
 
 /** Fälten ärendet får av kontrollen. */
 export type MatterConflictPatch = {
   conflictCheckStatus: ConflictCheckStatus;
   conflictCheckHits: number | null;
   conflictCheckedAt: Date | null;
+  /** Träffarna i kontrollen (#1819). Null = kontrollen väntar. */
+  conflictCheckResults: ConflictHit[] | null;
 };
 
 /** En part i ärendet: kontakten och dess roll. */
@@ -41,7 +47,9 @@ type CheckCtx = ConflictCtx & QueuedCallScope & { provisional?: true | undefined
 /** En part som ska kontrolleras, med kontaktens uppgifter. */
 type ResolvedParty = { role: MatterRole; contact: Pick<Contact, "id" | "name" | "personalNumber" | "orgNumber"> };
 
-const PENDING: MatterConflictPatch = { conflictCheckStatus: "PENDING", conflictCheckHits: null, conflictCheckedAt: null };
+const PENDING: MatterConflictPatch = {
+  conflictCheckStatus: "PENDING", conflictCheckHits: null, conflictCheckedAt: null, conflictCheckResults: null,
+};
 
 /** Söktermen: partens namn och nummer — sökningen matchar på vilket som helst. */
 function termFor(party: Pick<Contact, "name" | "personalNumber" | "orgNumber">): string {
@@ -80,15 +88,20 @@ async function checkParty(ctx: CheckCtx, matterId: MatterId, party: ResolvedPart
   await ctx.repos.conflictChecks.create({
     id: asId<"ConflictCheckId">(newRowId(ctx, `conflictCheck:${party.contact.id}:${party.role}`)),
     searchTerm: term, searchType: "both", results: results.map(toLoggedResult), checkedById: asId<"UserId">(ctx.user.id),
+    matterId,
   });
   return results;
 }
 
 /**
  * Kör kontrollen för ärendets parter och logga den (en loggrad per part).
- * Returnerar ärendets nya fält. Utan klient väntar kontrollen.
+ * Returnerar ärendets nya fält, med träfflistan. Utan klient väntar kontrollen.
+ * Är varje träff redan bedömd (`reviewed`, bedömningens träffar) blir statusen
+ * `REVIEWED`, och bedömningen (granskare, tid, motivering) lämnas orörd.
  */
-export async function checkMatterConflicts(ctx: CheckCtx, matterId: MatterId, parties: readonly MatterParty[]): Promise<MatterConflictPatch> {
+export async function checkMatterConflicts(
+  ctx: CheckCtx, matterId: MatterId, parties: readonly MatterParty[], reviewed?: readonly ConflictHitIdentity[] | null,
+): Promise<MatterConflictPatch> {
   if (ctx.provisional) return PENDING;
   const resolved = await resolveParties(ctx, checkedParties(parties));
   if (!resolved.some((p) => p.role === "KLIENT")) return PENDING;
@@ -96,8 +109,9 @@ export async function checkMatterConflicts(ctx: CheckCtx, matterId: MatterId, pa
   // En i taget: loggradernas ordning ska vara densamma i varje körning.
   for (const party of resolved) pushUnique(hits, await checkParty(ctx, matterId, party));
   return {
-    conflictCheckStatus: hits.length > 0 ? "HITS" : "CLEAR",
+    conflictCheckStatus: conflictStatusFor(hits, reviewed),
     conflictCheckHits: hits.length,
     conflictCheckedAt: callTime(ctx),
+    conflictCheckResults: hits.map(toConflictHit),
   };
 }

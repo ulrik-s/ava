@@ -97,7 +97,6 @@ export function FolderRow({
             )}
           </div>
         </td>
-        <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-400">&mdash;</td>
         <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
           {new Date(folder.createdAt).toLocaleDateString("sv-SE")}
         </td>

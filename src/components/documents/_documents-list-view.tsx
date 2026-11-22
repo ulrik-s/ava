@@ -15,7 +15,6 @@ import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
 import { DocumentNameCell } from "./_document-name-cell";
 import { documentKindsLabel } from "./_document-parts";
 import { DocumentActions, type DocumentRecord } from "./_document-row";
-import { formatFileSize } from "./_drag-helpers";
 import type { FolderRecord } from "./_folder-row";
 import type { SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
@@ -89,9 +88,6 @@ export function DocumentsListView({
     { key: "createdAt", label: "Datum", sortable: true, hideBelow: "sm",
       sortValue: (d) => new Date(d.createdAt),
       render: (d) => <span className="text-sm text-gray-500">{new Date(d.createdAt).toLocaleDateString("sv-SE")}</span> },
-    { key: "sizeBytes", label: "Storlek", sortable: true, align: "right", hideBelow: "md",
-      sortValue: (d) => d.sizeBytes,
-      render: (d) => <span className="text-sm font-mono text-gray-500">{formatFileSize(d.sizeBytes)}</span> },
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
       // Samma meny som träd-vyn (#983) — se `DocumentActions`.
       render: (d) => (
