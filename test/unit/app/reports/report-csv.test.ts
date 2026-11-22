@@ -14,12 +14,13 @@ const downloadTextFile = vi.fn();
 vi.mock("@/lib/client/download-text", () => ({ downloadTextFile }));
 
 const report: Report = {
-  user: { id: asId<"UserId">("u1"), name: "Anna" },
+  user: { id: asId<"UserId">("u1"), name: "Anna", hourlyRates: {} },
+  period: { from: "2026-01-01", to: "2026-01-11" },
   totals: { totalMinutes: 690, billableMinutes: 480, workValueOre: 1_200_000, expenseOre: 25_000 },
   matters: [
-    { matterId: asId<"MatterId">("m1"), matterNumber: "2026-0001", title: "Bodelning", client: "Klient A", paymentMethod: "RATTSHJALP",
+    { matterId: asId<"MatterId">("m1"), matterNumber: "2026-0001", title: "Bodelning", client: "Klient A", paymentMethod: "RATTSHJALP", paymentMethodNote: null, paymentMethodDecidedAt: null,
       totalMinutes: 300, billableMinutes: 240, workValueOre: 600_000, expenseOre: 25_000 },
-    { matterId: asId<"MatterId">("m3"), matterNumber: "2026-0003", title: "=Formel", client: null, paymentMethod: "PRIVAT",
+    { matterId: asId<"MatterId">("m3"), matterNumber: "2026-0003", title: "=Formel", client: null, paymentMethod: "PRIVAT", paymentMethodNote: null, paymentMethodDecidedAt: null,
       totalMinutes: 390, billableMinutes: 240, workValueOre: 600_005, expenseOre: 0 },
   ],
   weeklyRows: [
