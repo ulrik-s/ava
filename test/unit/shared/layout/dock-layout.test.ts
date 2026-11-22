@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest-compat";
 import {
   groupShares, hiddenChoices, hiddenPanelsPrefKey, parseHiddenPanels, visiblePanels, withoutMaximized,
-  LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, screenClassFor, type SerializedLayout,
+  LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, type SerializedLayout,
+  LAPTOP_MEDIA_QUERY, LARGE_MEDIA_QUERY, LAPTOP_MAX_WIDTH, PHONE_MAX_WIDTH, screenClassOf,
 } from "@/lib/shared/layout/dock-layout";
 
 const leaf = (id: string, views: string[], activeView?: string) => ({ type: "leaf" as const, data: { id, views, ...(activeView ? { activeView } : {}) }, size: 100 });
@@ -17,12 +18,36 @@ const LAYOUT: SerializedLayout = {
 };
 
 describe("skärmklass", () => {
+  /** Utvärderar en `(min-width: Npx)`-fråga mot en bredd, som webbläsaren. */
+  const matchesAt = (query: string, width: number): boolean => {
+    const min = /^\(min-width: (\d+)px\)$/.exec(query)?.[1];
+    if (min === undefined) throw new Error(`okänd fråga: ${query}`);
+    return width >= Number(min);
+  };
+  const screenAt = (width: number) =>
+    screenClassOf(matchesAt(LAPTOP_MEDIA_QUERY, width), matchesAt(LARGE_MEDIA_QUERY, width));
+
+  it("media-frågorna byggs ur brytpunkterna", () => {
+    expect(LAPTOP_MEDIA_QUERY).toBe("(min-width: 768px)");
+    expect(LARGE_MEDIA_QUERY).toBe("(min-width: 1800px)");
+    expect(LAPTOP_MEDIA_QUERY).toBe(`(min-width: ${PHONE_MAX_WIDTH + 1}px)`);
+    expect(LARGE_MEDIA_QUERY).toBe(`(min-width: ${LAPTOP_MAX_WIDTH + 1}px)`);
+  });
+
   it("telefon ≤ 767, laptop ≤ 1799 (13\" Air ≈ 1470), annars stor skärm", () => {
-    expect(screenClassFor(390)).toBe("phone");
-    expect(screenClassFor(767)).toBe("phone");
-    expect(screenClassFor(768)).toBe("laptop");
-    expect(screenClassFor(1470)).toBe("laptop");
-    expect(screenClassFor(1800)).toBe("large");
+    expect(screenAt(390)).toBe("phone");
+    expect(screenAt(767)).toBe("phone");
+    expect(screenAt(768)).toBe("laptop");
+    expect(screenAt(1470)).toBe("laptop");
+    expect(screenAt(1799)).toBe("laptop");
+    expect(screenAt(1800)).toBe("large");
+  });
+
+  it("screenClassOf: stor skärm vinner, annars laptop eller telefon", () => {
+    expect(screenClassOf(true, true)).toBe("large");
+    expect(screenClassOf(false, true)).toBe("large");
+    expect(screenClassOf(true, false)).toBe("laptop");
+    expect(screenClassOf(false, false)).toBe("phone");
   });
 
   it("nyckel per sidtyp och skärmklass", () => {
