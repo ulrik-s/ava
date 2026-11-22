@@ -42,7 +42,7 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 | Lint + komplexitet | ESLint + `complexity` / `max-depth` / `max-params` | `tooling/config/eslint.config.mjs` |
 | Enhetstester | `bun test` (2 pass, `run-tests.ts`) | `bunfig.toml`, `test/unit/`, `test/integration/`, `test/scripts/` |
 | Komponenttester (DOM) | `bun test` + happy-dom + Testing Library | `test/setup/happy-dom-register.ts`, `test/setup/preload.ts` |
-| E2E-tester | Playwright (Chromium) — OIDC-login, demo-smoke, keep-both-konflikt | `tooling/config/playwright*.config.ts`, `test/e2e/` |
+| E2E-tester | Playwright (Chromium) — OIDC-login, demo-smoke, keep-both-konflikt; demo-E2E kör också WebKit med iPhone och iPad (`demo-touch-devices`) | `tooling/config/playwright*.config.ts`, `test/e2e/` |
 | Kodtäckning | `bun test --coverage` (lcov) + ratchet-skript | `tooling/scripts/run-tests.ts` (`--coverage`) |
 | Duplikatdetektering (DRY) | jscpd | `tooling/config/jscpd.json` |
 | Bundle-size-budget | gzip-summa av klient-chunks + ratchet (körs i `demo-build`) | `tooling/scripts/check-bundle-size.ts` |
