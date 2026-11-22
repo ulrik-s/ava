@@ -16,11 +16,18 @@
 import { uuidv7 } from "@/lib/shared/uuid";
 
 /** En köbar procedur. */
-interface QueuedProcedureSpec {
+export interface QueuedProcedureSpec {
   /** Entiteten vars rader proceduren skriver (för att läsa tillbaka serverns läge). */
   readonly entity: string;
   /** Fältet i input som bär radens klient-genererade id (bara för create). */
   readonly idField?: string;
+  /**
+   * Proceduren skriver bara fält som servern äger, på en entitet som annars
+   * går via radkön (#1884, ADR 0037). Registrets dokumenterade undantag från
+   * regeln att en köad procedur skriver en procedurägd entitet: radpushen
+   * rensar de fälten (`server-owned-fields.ts`), så skrivvägarna krockar inte.
+   */
+  readonly serverOwnedOnly?: true;
 }
 
 /** Registret — fryst, så att det inte kan utökas i körtid. */
@@ -89,8 +96,9 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "document.acceptSuggestion": Object.freeze({ entity: "matterContact" }),
   "document.acceptSuggestionGroup": Object.freeze({ entity: "matterContact" }),
   // Omklassning (#1156): klassificeringen är en SERVER-sidoeffekt (jobb-kön,
-  // server-LLM). Klienten kör den inte själv — servern kör om anropet.
-  "document.analyze": Object.freeze({ entity: "document" }),
+  // server-LLM). Klienten kör den inte själv — servern kör om anropet. Dokumentet
+  // går annars via radkön; anropet skriver bara analysfälten servern äger (#1884).
+  "document.analyze": Object.freeze({ entity: "document", serverOwnedOnly: true }),
   // Administrationen (#1344): användare, byråinställningar, kontor, byråns
   // standardvyer och mallar. Rollen läses ur användarraden, så de tas inte
   // emot som rader — servern kör om routern, där admin-kraven gäller.
