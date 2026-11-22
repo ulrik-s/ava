@@ -42,6 +42,9 @@ export type Prio = (typeof PRIOS)[number];
 /** Loop 1:s flagga för det som godkänns automatiskt efter vetofönstret. */
 export const AUTO_LABEL = "auto-godkänn";
 
+/** Flaggor som stoppar det automatiska godkännandet: någon väntar på svar. */
+const HOLD = ["blockerad", "väntar-på-användaren"];
+
 /** Etiketterna som ger en kolumn, i företrädesordning: det som väntar på någon går först. */
 const RULES: ReadonlyArray<readonly [Column, readonly string[]]> = [
   ["Svara", ["blockerad"]],
@@ -57,8 +60,18 @@ const RULES: ReadonlyArray<readonly [Column, readonly string[]]> = [
 /** Etiketterna kolumnerna bygger på (för testet mot flow.yaml). */
 export const COLUMN_LABELS: readonly string[] = RULES.flatMap(([, ls]) => ls);
 
+/**
+ * En agents fråga till Ulrik med förslag (#1872): `auto-godkänn` på något som
+ * inte väntar på intagsbeslutet (`undersökt`). Förslaget gäller efter
+ * vetofönstret om Ulrik inte svarar eller flyttar kortet.
+ */
+export function isProposal(labels: readonly string[]): boolean {
+  return labels.includes(AUTO_LABEL) && !labels.includes("undersökt");
+}
+
 /** Kolumnen som förfrågans etiketter ger (utan tillstånd: Ny). */
 export function columnFor(labels: readonly string[]): Column {
+  if (isProposal(labels) && !HOLD.some((l) => labels.includes(l))) return "Godkänns automatiskt";
   return RULES.find(([, ls]) => ls.some((l) => labels.includes(l)))?.[0] ?? "Ny";
 }
 
@@ -104,7 +117,8 @@ export const WORK_ORDER_LAGE =
 function ulrikMove(board: string | null, base: Column): ColumnAction | null {
   if (board === "Godkänd" && APPROVABLE.includes(base)) return { kind: "approve" };
   if (board === "Avböjd" && DECLINABLE.includes(base)) return { kind: "decline" };
-  return board === "Att besluta" && base === "Godkänns automatiskt" ? { kind: "veto" } : null;
+  const vetoTo = board === "Att besluta" || board === "Svara";
+  return vetoTo && base === "Godkänns automatiskt" ? { kind: "veto" } : null;
 }
 
 /** Rekommendationerna (valen i projektets Rekommendation-fält, `rek-<r>` som etikett). */
@@ -153,9 +167,12 @@ const LAGE: Readonly<Record<Column, (labels: readonly string[], ctx: LageContext
     const rek = rekFor(labels);
     return rek === null ? "Väntar på ditt beslut" : `Väntar på ditt beslut — rekommendation: ${rek}`;
   },
-  "Godkänns automatiskt": (_, ctx) => (ctx.autoSince === undefined
-    ? "Godkänns automatiskt efter 24 h om du inte flyttar den"
-    : `Godkänns automatiskt ${when(new Date(ctx.autoSince).getTime() + AUTO_APPROVE_MS)} om du inte flyttar den`),
+  "Godkänns automatiskt": (labels, ctx) => {
+    const at = ctx.autoSince === undefined ? "efter 24 h" : when(new Date(ctx.autoSince).getTime() + AUTO_APPROVE_MS);
+    return isProposal(labels)
+      ? `Agentens förslag gäller ${at} — svara i issuen eller flytta kortet till Svara för att säga emot`
+      : `Godkänns automatiskt ${at} om du inte flyttar den`;
+  },
   "Svara": () => "Blockerad — läs senaste kommentaren och svara i issuen",
   "Väntar på användaren": () => "Loop 1 har frågat användaren i AVA och väntar på svar",
   "Godkänd": (labels) => (labels.includes("design-godkänd")
@@ -175,8 +192,6 @@ export const lageFor = (labels: readonly string[], ctx: LageContext = {}): strin
 /** Vetofönstret: så länge står ett kort i "Godkänns automatiskt" innan det godkänns. */
 export const AUTO_APPROVE_MS = 24 * 3_600_000;
 
-/** Flaggor som stoppar det automatiska godkännandet: någon väntar på svar. */
-const HOLD = ["blockerad", "väntar-på-användaren"];
 
 /**
  * Får förfrågan godkännas automatiskt? Loop 1 har bedömt den (`auto-godkänn`
@@ -191,8 +206,15 @@ export function autoApprovable(labels: readonly string[]): boolean {
 
 /** Har förfrågan stått vetofönstret ut sedan `auto-godkänn` sattes (`since`, ISO)? */
 export function autoApproveDue(labels: readonly string[], since: string | undefined, now: number): boolean {
-  return since !== undefined && autoApprovable(labels) && now - new Date(since).getTime() >= AUTO_APPROVE_MS;
+  return since !== undefined && autoApprovable(labels) && windowOver(since, now);
 }
+
+/** Har ett agentförslag stått vetofönstret ut utan att någon väntar på svar? */
+export function proposalDue(labels: readonly string[], since: string | undefined, now: number): boolean {
+  return since !== undefined && isProposal(labels) && !HOLD.some((l) => labels.includes(l)) && windowOver(since, now);
+}
+
+const windowOver = (since: string, now: number): boolean => now - new Date(since).getTime() >= AUTO_APPROVE_MS;
 
 /** Vad synken gör med ett korts prioritet. */
 export type PrioAction =

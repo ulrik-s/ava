@@ -63,11 +63,15 @@ alla andra, med de här skillnaderna:
 
 - Det finns ingen användare att fråga. Skriv aldrig `<!-- till-anvandaren -->`
   och sätt aldrig `väntar-på-användaren`. Är det oklart vad som ska byggas:
-  skriv frågan till Ulrik i en kommentar och sätt `blockerad`.
+  skriv frågan till Ulrik i en kommentar, med förslag enligt regel 2d
+  (`auto-godkänn`); `blockerad` bara utan förslag.
 - **Finns redan:** skriv rapporten med belägg och sätt `finns-redan` direkt.
   Det finns ingen användare att visa vägen.
-- **Flera orelaterade saker:** dela inte själv. Föreslå delarna i rapporten
-  och sätt `blockerad`, så delar Ulrik.
+- **Flera orelaterade saker:** dela upp den själv enligt "Flera saker i en
+  förfrågan" (#1872), men utan meddelandet till användaren. Varje del blir en
+  ny förfrågan med `intern` och rätt typ. En del som kräver ett nytt mönster
+  eller en ADR blir en egen del med ADR-utkastet i texten; den frågar du inte
+  om nu.
 - **En bugg** återskapas mot `main`, inte mot en användares release.
 - I rapporten är **Dialog med användaren** "Ingen (internt arbete)."
 
