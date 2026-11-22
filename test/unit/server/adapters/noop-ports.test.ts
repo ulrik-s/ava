@@ -69,7 +69,8 @@ describe("noop-ports", () => {
 
   it("noopLedger: ej konfigurerad, allt annat säger ifrån", async () => {
     expect(noopPorts.ledger).toBe(noopLedger);
-    expect(await noopLedger.status("o")).toEqual({ configured: false, connected: false });
+    expect(await noopLedger.status("o")).toEqual({ configured: false, connected: false, reconnectRequired: false, renewedAt: null, expiresAt: null });
+    expect(await noopLedger.keepAlive("o")).toBe("not-connected");
     await expect(noopLedger.authorizeUrl("o")).rejects.toThrow(/konfigurerad/);
     await expect(noopLedger.completeConnect("o", "c", "s")).rejects.toThrow(/konfigurerad/);
     expect(() => noopLedger.connector("o", DEFAULT_LEDGER_ACCOUNT_MAP)).toThrow(/konfigurerad/);
