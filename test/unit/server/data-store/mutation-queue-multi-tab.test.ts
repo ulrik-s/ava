@@ -12,10 +12,11 @@ import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest-compat";
 import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
 import {
-  InMemoryMutationQueuePersistence, IndexedDbMutationQueuePersistence, MutationQueue, type QueuedMutation,
+  InMemoryMutationQueuePersistence, IndexedDbMutationQueuePersistence, MutationQueue, QUEUE_WRITE_FAILED_MESSAGE, type QueuedMutation,
 } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 import { changeChannelHub, settle } from "../../../helpers/change-channel-hub";
+import { captureReportedErrors } from "../../../helpers/full-queue-persistence";
 
 const ev = (id: string): MutationEvent<Record<string, unknown>> => ({ entity: "matter", kind: "update", row: { id } });
 
@@ -132,7 +133,11 @@ describe("MutationQueue — en misslyckad skrivning", () => {
       await add(entry);
     };
     const q = await MutationQueue.hydrate(persistence);
-    await expect(q.enqueue(ev("x"), { mutationId: "X" })).rejects.toThrow("lagringen full");
+    let thrown: unknown;
+    await captureReportedErrors(async () => { await q.enqueue(ev("x"), { mutationId: "X" }).catch((e: unknown) => { thrown = e; }); });
+    // Läsbart besked, med lagringens fel som orsak (#1817); kön är oförändrad.
+    expect(thrown).toMatchObject({ message: QUEUE_WRITE_FAILED_MESSAGE, cause: new Error("lagringen full") });
+    expect(q.has("X")).toBe(false);
     fail = false;
     await q.enqueue(ev("y"), { mutationId: "Y" });
     expect((await persistence.load()).map((e) => e.mutationId)).toEqual(["Y"]);
