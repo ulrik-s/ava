@@ -100,6 +100,19 @@ export function baselineDiffTightens(diff: string): boolean {
   return [...baselineEntries(lines, "+")].every(([path, n]) => (removed.get(path) ?? -1) >= n);
 }
 
+const DAY_MS = 24 * 3_600_000;
+
+/**
+ * PR:ens nummer i dygnstaket (#1954): agent-PR:er skapade de senaste 24
+ * timmarna räknat från NU, till och med den här. Räknat från när PR:en
+ * skapades föll en PR över taket vid varje omkörning, för alltid; nu går den
+ * igenom när dygnet gått.
+ */
+export function rankInLast24h(createdAts: readonly string[], created: number, now: number): number {
+  const since = now - DAY_MS;
+  return createdAts.map((c) => new Date(c).getTime()).filter((t) => t >= since && t <= created).length;
+}
+
 /** Vad som bryter mot reglerna — tom lista = godkänd. */
 export function guardViolations(input: GuardInput): string[] {
   if (!input.labels.includes("agent-pr")) return [];
@@ -179,7 +192,8 @@ export function trustedLabels(labels: readonly string[], events: () => readonly 
 function main(pr: string): number {
   const view = parseJsonWith(prViewSchema, gh(["pr", "view", pr, "--json", "labels,files,createdAt"]));
   const created = new Date(view.createdAt).getTime();
-  const since = new Date(created - 24 * 3_600_000).toISOString();
+  const now = Date.now();
+  const since = new Date(now - DAY_MS).toISOString();
   const recent = parseJsonWith(prListSchema, gh(["pr", "list", "--state", "all", "--label", "agent-pr", "--limit", "100", "--search", `created:>=${since}`, "--json", "number,createdAt"]));
   const diff = gh(["pr", "diff", pr]);
   const violations = guardViolations({
@@ -187,7 +201,7 @@ function main(pr: string): number {
     files: view.files.map((f) => f.path),
     addedMigrationLines: addedMigrationLines(diff),
     baselineOnlyTightens: baselineDiffTightens(diff),
-    agentPrsLast24h: recent.filter((p) => new Date(p.createdAt).getTime() <= created).length,
+    agentPrsLast24h: rankInLast24h(recent.map((p) => p.createdAt), created, now),
   });
   for (const v of violations) console.error(`✗ ${v}`);
   if (violations.length === 0) console.log("✓ agentvakten: inget att invända");
