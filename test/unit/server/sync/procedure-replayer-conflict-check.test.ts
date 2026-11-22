@@ -93,6 +93,33 @@ describe("jävskontrollen körs av servern när det köade anropet når den (#12
     expect(await repos.matters.getByIdInOrg(id, ORG)).toMatchObject({ conflictCheckStatus: "HITS", conflictCheckHits: 1 });
   });
 
+  // #1819: träfflistan sparas som jsonb, loggraderna bär ärendet, och bedömningen gäller sina träffar.
+  it("träfflistan sparas och läses tillbaka, loggraderna får ärendets id, och en omkontroll med samma träffar ger REVIEWED", async () => {
+    const id = asId<"MatterId">(uuidv7());
+    await replayer.replay(call("matter.create", { id, title: "Femte uppdraget", klientId: KLIENT }), ctx);
+    const created = await repos.matters.getByIdInOrg(id, ORG);
+    const hit = { contactId: KLIENT, matterId: created?.conflictCheckResults?.[0]?.matterId, role: "MOTPART" };
+    expect(created?.conflictCheckResults).toEqual([{ ...hit, contactName: "Bo Berg", matterNumber: "2026-0001", matterTitle: "Tvist" }]);
+    const { checks } = await repos.conflictChecks.listHistory(ORG, 1, 500);
+    expect(checks.filter((x) => x.matterId === id)).toHaveLength(1);
+
+    expect(await replayer.replay(call("matter.markConflictsReviewed", { id, note: "Bedömt.", hits: [hit] }), ctx)).toMatchObject({ status: "accepted" });
+    expect(await replayer.replay(call("matter.checkConflicts", { id }), ctx)).toMatchObject({ status: "accepted" });
+    expect(await repos.matters.getByIdInOrg(id, ORG)).toMatchObject({
+      conflictCheckStatus: "REVIEWED", conflictReviewNote: "Bedömt.", conflictReviewedHits: created?.conflictCheckResults,
+    });
+  });
+
+  it("en köad bedömning avvisas när servern kör om den och en ny träff har tillkommit", async () => {
+    const id = asId<"MatterId">(uuidv7());
+    await replayer.replay(call("matter.create", { id, title: "Sjätte uppdraget", klientId: KLIENT }), ctx);
+    const seen = (await repos.matters.getByIdInOrg(id, ORG))?.conflictCheckResults ?? [];
+    const review = call("matter.markConflictsReviewed", { id, note: "Bedömt offline.", hits: seen.map(({ contactId, matterId, role }) => ({ contactId, matterId, role })) });
+    await replayer.replay(call("matter.addContact", { id: uuidv7(), matterId: id, contactId: RETURNING, role: "MOTPART" }), ctx);
+    expect(await replayer.replay(review, ctx)).toMatchObject({ status: "rejected", code: "PRECONDITION_FAILED" });
+    expect(await repos.matters.getByIdInOrg(id, ORG)).toMatchObject({ conflictCheckStatus: "HITS", conflictCheckHits: 2 });
+  });
+
   // #1383: ett accepterat dokumentförslag kopplar också en part — samma kontroll.
   it("ett accepterat dokumentförslag: servern kör om kopplingen och kontrollen", async () => {
     expect(isQueuedProcedure("document.acceptSuggestion") && isQueuedProcedure("document.acceptSuggestionGroup")).toBe(true);

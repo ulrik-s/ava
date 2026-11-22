@@ -4,8 +4,9 @@
  */
 
 import { conflictScore, parseConflictQuery, type ConflictSearchType } from "@/lib/shared/conflict-match";
-import type { MatterRole, MatterStatus } from "@/lib/shared/schemas/enums";
+import type { ConflictCheckStatus, MatterRole, MatterStatus } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
+import type { ConflictHit } from "@/lib/shared/schemas/misc";
 import type { ConflictContactRow } from "../repositories/matter-contact-repository";
 import type { Repositories } from "../repositories/repositories";
 
@@ -74,10 +75,52 @@ export function toLoggedResult(result: ConflictResult): LoggedConflictResult {
   return logged;
 }
 
-/** Lägg till nya träffar, deduplicerat på (kontakt, ärende, roll). */
+/**
+ * Det som identifierar en träff (#1819): kontakten, ärendet och rollen. Gäller
+ * `ConflictResult`, den sparade `ConflictHit` och bedömningens träffar.
+ */
+export type ConflictHitIdentity = Pick<ConflictHit, "contactId" | "matterId" | "role">;
+
+/** Träffens nyckel: (kontakt, ärende, roll). Dedupliceringen, omkontrollen och bedömningen använder den. */
+export function conflictHitKey(hit: ConflictHitIdentity): string {
+  return `${hit.contactId}:${hit.matterId}:${hit.role}`;
+}
+
+/**
+ * Träffen som sparas på ärendet (#1819): utan personnummer, organisationsnummer
+ * och klientnamn.
+ */
+export function toConflictHit(result: ConflictResult): ConflictHit {
+  const { contactId, contactName, role, matterId, matterNumber, matterTitle } = result;
+  return { contactId, contactName, role, matterId, matterNumber, matterTitle };
+}
+
+/**
+ * Är varje träff i `hits` redan bedömd? Färre träffar än vid bedömningen räknas
+ * som bedömda. Utan sparad bedömning (`null`) är inget bedömt.
+ */
+export function allReviewed(hits: readonly ConflictHitIdentity[], reviewed: readonly ConflictHitIdentity[] | null | undefined): boolean {
+  if (!reviewed) return false;
+  const keys = new Set(reviewed.map(conflictHitKey));
+  return hits.every((hit) => keys.has(conflictHitKey(hit)));
+}
+
+/** Kontrollens status: inga träffar, bara redan bedömda träffar, eller nya träffar att bedöma. */
+export function conflictStatusFor(
+  hits: readonly ConflictHitIdentity[],
+  reviewed: readonly ConflictHitIdentity[] | null | undefined,
+): Exclude<ConflictCheckStatus, "PENDING"> {
+  if (hits.length === 0) return "CLEAR";
+  return allReviewed(hits, reviewed) ? "REVIEWED" : "HITS";
+}
+
+/** Lägg till nya träffar, deduplicerat på `conflictHitKey`. */
 export function pushUnique(into: ConflictResult[], more: ConflictResult[]): void {
+  const seen = new Set(into.map(conflictHitKey));
   for (const r of more) {
-    const dup = into.some((x) => x.contactId === r.contactId && x.matterId === r.matterId && x.role === r.role);
-    if (!dup) into.push(r);
+    const key = conflictHitKey(r);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    into.push(r);
   }
 }
