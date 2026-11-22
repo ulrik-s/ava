@@ -16,7 +16,7 @@
 
 import type { JWTVerifyGetKey } from "jose";
 import { createRemoteJWKSet } from "jose";
-import { remoteJwksForIssuer, type BearerVerifyConfig } from "./bearer-claims";
+import { parseAudience, remoteJwksForIssuer, type BearerVerifyConfig } from "./bearer-claims";
 
 /** Headern proxyn lägger ID-token i (`Bearer <jwt>`). */
 export const IDENTITY_TOKEN_HEADER = "x-ava-identity-token";
@@ -30,13 +30,6 @@ type Fetch = (url: string) => Promise<{ ok: boolean; json: () => Promise<unknown
 
 function envValue(env: Env, key: string): string | undefined {
   return env[key]?.trim() || undefined;
-}
-
-/** `a,b` → `["a","b"]`; en enda → strängen. */
-export function parseAudience(raw: string | undefined): string | string[] | undefined {
-  const list = (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (list.length === 0) return undefined;
-  return list.length === 1 ? list[0] : list;
 }
 
 /**

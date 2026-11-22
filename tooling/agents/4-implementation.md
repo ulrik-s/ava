@@ -116,8 +116,8 @@ Finns ingen: avsluta.
 
 ## Fastnar
 
-Är issuen oklar, kräver den en skyddad sökväg eller destruktiv migration,
-eller går CI inte att få grön? Kommentera på issuen vad du försökt och vad
+Är issuen oklar, kräver den en destruktiv migration, eller går CI inte att
+få grön? (En skyddad sökväg som arbetsordern beskriver bygger du: regel 4.) Kommentera på issuen vad du försökt och vad
 som behövs, ta bort `pågår` och sätt `blockerad`. Pusha inte det
 halvfärdiga: branchen ska bara ha commiten som tog issuen.
 
