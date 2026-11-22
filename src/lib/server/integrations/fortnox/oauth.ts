@@ -12,6 +12,8 @@
  * (testbar utan riktig Fortnox).
  */
 
+import { z } from "zod";
+import { safeParseJsonWith } from "@/lib/shared/parse-json";
 import {
   fortnoxTokenResponseSchema,
   type FortnoxConfig,
@@ -23,6 +25,36 @@ export type FetchFn = typeof globalThis.fetch;
 
 const AUTH_PATH = "/oauth-v1/auth";
 const TOKEN_PATH = "/oauth-v1/token";
+
+/**
+ * Fortnox avvisade förnyelsen med `invalid_grant` (OAuth 2.0, RFC 6749 §5.2):
+ * refresh-token är använd eller utgången, och anslutningen måste göras om
+ * (#1813). Skiljer sig från tillfälliga fel (nät, 5xx), som kastas som vanliga
+ * `Error`. Anroparen känner igen den med `instanceof`. Bär inga tokenvärden.
+ */
+export class FortnoxReconnectRequiredError extends Error {
+  constructor() {
+    super("Fortnox avvisade förnyelsen (invalid_grant): anslutningen måste göras om.");
+    this.name = "FortnoxReconnectRequiredError";
+  }
+}
+
+/** Felkroppen från token-endpointen (RFC 6749 §5.2); bara felkoden behövs. */
+const oauthErrorBodySchema = z.object({ error: z.string() });
+
+/** OAuth-felkoden ur en felkropp, eller null om kroppen inte är ett OAuth-fel. */
+function oauthErrorCode(detail: string): string | null {
+  const parsed = safeParseJsonWith(oauthErrorBodySchema, detail);
+  return parsed.success ? parsed.data.error : null;
+}
+
+/** Felet för ett token-svar som inte är 2xx. Bara en avvisad förnyelse blir typad. */
+async function tokenError(res: Response, grantType: string | undefined): Promise<Error> {
+  const detail = await res.text().catch(() => "");
+  const rejectedRefresh = grantType === "refresh_token" && res.status === 400;
+  if (rejectedRefresh && oauthErrorCode(detail) === "invalid_grant") return new FortnoxReconnectRequiredError();
+  return new Error(`Fortnox token-fel ${res.status}: ${detail.slice(0, 300)}`);
+}
 
 /**
  * Bygg authorize-URL:n användaren skickas till. `state` ska vara slumpad (CSRF).
@@ -57,7 +89,11 @@ function basicAuthHeader(config: FortnoxConfig): string {
   return `Basic ${Buffer.from(raw, "utf8").toString("base64")}`;
 }
 
-/** Gemensam token-POST + strikt parsning. Kastar vid icke-2xx. */
+/**
+ * Gemensam token-POST + strikt parsning. Kastar vid icke-2xx:
+ * `FortnoxReconnectRequiredError` när en förnyelse avvisas med `invalid_grant`,
+ * annars ett vanligt fel med Fortnox felkod.
+ */
 async function postToken(
   config: FortnoxConfig,
   body: Record<string, string>,
@@ -71,19 +107,20 @@ async function postToken(
     },
     body: new URLSearchParams(body).toString(),
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Fortnox token-fel ${res.status}: ${detail.slice(0, 300)}`);
-  }
+  if (!res.ok) throw await tokenError(res, body.grant_type);
   return fortnoxTokenResponseSchema.parse(await res.json());
 }
 
-/** Räkna ut persisterad token-shape (med ~30 s säkerhetsmarginal på utgång). */
+/**
+ * Räkna ut persisterad token-shape (med ~30 s säkerhetsmarginal på utgång).
+ * `renewedAt` = när refresh-token lämnades ut (#1813), för dess 45 dygn.
+ */
 function toStoredTokens(resp: FortnoxTokenResponse, nowMs: number): FortnoxStoredTokens {
   return {
     accessToken: resp.access_token,
     refreshToken: resp.refresh_token,
     accessTokenExpiresAt: nowMs + (resp.expires_in - 30) * 1000,
+    renewedAt: nowMs,
   };
 }
 
@@ -102,7 +139,10 @@ export async function exchangeCodeForTokens(
   return toStoredTokens(resp, nowMs);
 }
 
-/** Steg 3: förnya access-token. Returnerar NYA tokens (refresh roterar!). */
+/**
+ * Steg 3: förnya access-token. Returnerar NYA tokens (refresh roterar!).
+ * Kastar `FortnoxReconnectRequiredError` när Fortnox avvisar refresh-token.
+ */
 export async function refreshTokens(
   config: FortnoxConfig,
   refreshToken: string,

@@ -53,14 +53,26 @@ export const fortnoxTokenResponseSchema = z.object({
 export type FortnoxTokenResponse = z.infer<typeof fortnoxTokenResponseSchema>;
 
 /**
+ * Hur länge en refresh-token gäller hos Fortnox: 45 dygn från att den lämnades
+ * ut (#1813). Den roterar vid varje förnyelse, så klockan börjar om då.
+ * Se https://www.fortnox.se/developer/authorization
+ */
+export const FORTNOX_REFRESH_TOKEN_TTL_MS = 45 * 24 * 60 * 60 * 1000;
+
+/**
  * Persisterade tokens. Refresh-token ROTERAR vid varje refresh (gamla blir
  * ogiltig) → `refreshToken` MÅSTE skrivas tillbaka efter varje refresh.
- * `accessTokenExpiresAt` = epoch ms.
+ * Alla tider = epoch ms. De valfria fälten (#1813) saknas i äldre poster, och
+ * `z.object` tar bort okända fält, så en äldre release läser den nya posten.
  */
 export const fortnoxStoredTokensSchema = z.object({
   accessToken: z.string().min(1),
   refreshToken: z.string().min(1),
   accessTokenExpiresAt: z.number().int(),
+  /** När Fortnox lämnade ut den refresh-token som ligger i valvet. */
+  renewedAt: z.number().int().optional(),
+  /** När Fortnox avvisade en förnyelse med `invalid_grant` (anslutningen måste göras om). */
+  reconnectRequiredAt: z.number().int().optional(),
 });
 export type FortnoxStoredTokens = z.infer<typeof fortnoxStoredTokensSchema>;
 
