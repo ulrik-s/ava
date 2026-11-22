@@ -13,7 +13,7 @@ import { appRouter } from "@/lib/server/routers/_app";
 import { TAXA_MAX_MINUTES, type TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { STOCKHOLM_TZ } from "@/lib/shared/stockholm-time";
-import type { Rng } from "../../../helpers/seeded-rng";
+import { rng, type Rng } from "../../../helpers/seeded-rng";
 
 /** Betalningssätten egenskaperna gäller. */
 export type ScenarioMethod = "OFFENTLIGT_UPPDRAG" | "RATTSHJALP" | "RATTSSKYDD" | "PRIVAT";
@@ -150,4 +150,40 @@ export function worldFor(s: Scenario): BillingWorld {
     expenses: s.expenses,
   }, async () => { /* skrivbart lager */ });
   return { matterId: MATTER, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL })) };
+}
+
+/**
+ * Slumpkällan för delvis bifall (#1811): en egen ström per seed, så att de
+ * befintliga ärendena (fullt bifall) är desamma som före #1811.
+ */
+export function partialRngFor(seed: number): Rng {
+  return rng(seed + 1_000_000);
+}
+
+/** Avrundat nedåt till hela kronor. */
+const floorKr = (ore: number): number => Math.floor(ore / 100) * 100;
+
+/**
+ * Offentligt uppdrag: domstolens prutning i hela kronor, 0 < prutning ≤ yrkat,
+ * med `share` i [0, 1) som andel av yrkandet.
+ */
+export function partialPruningOre(claimedOre: number, share: number): number {
+  if (claimedOre < 100) throw new Error(`yrkandet ${claimedOre} öre räcker inte till en prutning i hela kronor`);
+  return Math.min(floorKr(claimedOre), Math.max(100, floorKr(claimedOre * share)));
+}
+
+/**
+ * Rättshjälp: beviljat i hela kronor i [0, kr(0,95 × yrkat)], med `share` i
+ * [0, 1). Taket 95 % håller nedsättningen större än arvodesradens avrundning
+ * (se #1811).
+ */
+export function partialAwardOre(claimedOre: number, share: number): number {
+  const cap = Math.floor((claimedOre * 0.95 + 50) / 100) * 100;
+  return floorKr(cap * share);
+}
+
+/** Ett ärende med delvis bifall: ärendet och andelen (`share` i [0, 1)) ur `rp`. */
+export function partialCaseFor(rp: Rng, method: "OFFENTLIGT_UPPDRAG" | "RATTSHJALP", now: Date): { s: Scenario; share: number } {
+  const s = scenarioFor(rp, method, now);
+  return { s, share: rp.next() };
 }

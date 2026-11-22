@@ -11,6 +11,11 @@
  * - körningens lagrade belopp (`workValueOreAtRun`);
  * - den slutliga fakturan när domstolen beviljar det yrkade.
  *
+ * Varje seed provar också delvis bifall (#1811), i ett eget ärende ur en egen
+ * slumpström (`partialRngFor`): offentligt uppdrag med domstolens prutning
+ * (fakturan = beviljat, med en PRUTNING-post på −prutning), och rättshjälp där
+ * mindre än det yrkade beviljas (fakturerat = beviljat, och byrån förlorar).
+ *
  * Varje seed får ett eget "nu" (`nowFor`), och klockan fryses på det, så att
  * ett fel återskapas — även ett annat år — med `AVA_BILLING_SEED=<seed>`.
  */
@@ -18,7 +23,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { kostnadsrakningClaimInclVat, type KrClaimInput } from "@/lib/shared/kostnadsrakning";
 import { rng, type Rng } from "../../../helpers/seeded-rng";
-import { type BillingWorld, nowFor, type Scenario, scenarioFor, worldFor } from "./billing-world";
+import {
+  type BillingWorld, nowFor, partialAwardOre, partialCaseFor, partialPruningOre, partialRngFor, type Scenario, scenarioFor,
+  worldFor,
+} from "./billing-world";
 
 const SEEDS: number[] = process.env.AVA_BILLING_SEED
   ? [Number(process.env.AVA_BILLING_SEED)]
@@ -62,9 +70,17 @@ async function submitKr(world: BillingWorld, s: Scenario, now: Date): Promise<{ 
   return { claimed: run.workValueOreAtRun ?? -1, documented, runId: run.id };
 }
 
+/**
+ * Fakturan en post är länkad till. `flagBilled` länkar PRUTNING-posten med
+ * `invoiceId` (deprecated för nya flöden), och läses här via en egen strukturell
+ * typ, som i billingRun.test.ts.
+ */
+const linkedInvoiceOf = (post: { amount: number; invoiceId?: string | null | undefined }) => ({ amount: post.amount, invoiceId: post.invoiceId });
+
 describe.each(SEEDS)("seed %i", (seed) => {
   const r: Rng = rng(seed);
   const now = nowFor(r);
+  const rp: Rng = partialRngFor(seed);
   beforeEach(() => { vi.setSystemTime(now); });
   afterEach(() => { vi.setSystemTime(); });
 
@@ -87,6 +103,30 @@ describe.each(SEEDS)("seed %i", (seed) => {
     const { clientInvoice, payerInvoice, split } = await world.caller.billingRun.settleCoverage({ matterId: world.matterId, payerRecipient: "DOMSTOL" });
     expect({ seed, invoiced: clientInvoice.amount + payerInvoice.amount, loss: split.firmLossOre })
       .toEqual({ seed, invoiced: claimed, loss: 0 });
+  });
+
+  it("offentligt uppdrag, delvis bifall: fakturan = beviljat, och PRUTNING-posten är länkad", async () => {
+    const { s, share } = partialCaseFor(rp, "OFFENTLIGT_UPPDRAG", now);
+    const world = worldFor(s);
+    const { claimed, runId } = await submitKr(world, s, now);
+    const pruning = partialPruningOre(claimed, share);
+    await world.caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: runId, awardedOre: claimed - pruning, prutningOre: -pruning });
+    const { invoice } = await world.caller.billingRun.setVerdict({ billingRunId: runId });
+    const { expenses } = await world.caller.expense.list({ matterId: world.matterId, pageSize: 100 });
+    const post = expenses.find((x) => x.kind === "PRUTNING");
+    expect({ seed, invoiced: invoice.amount, post: post && linkedInvoiceOf(post) })
+      .toEqual({ seed, invoiced: claimed - pruning, post: { amount: -pruning, invoiceId: invoice.id } });
+  });
+
+  it("rättshjälp, delvis bifall: fakturerat = beviljat, och byrån förlorar", async () => {
+    const { s, share } = partialCaseFor(rp, "RATTSHJALP", now);
+    const world = worldFor(s);
+    const { claimed, runId } = await submitKr(world, s, now);
+    const awarded = partialAwardOre(claimed, share);
+    await world.caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: runId, awardedOre: awarded });
+    const { clientInvoice, payerInvoice, split } = await world.caller.billingRun.settleCoverage({ matterId: world.matterId, payerRecipient: "DOMSTOL" });
+    expect({ seed, invoiced: clientInvoice.amount + payerInvoice.amount, loss: split.firmLossOre > 0 })
+      .toEqual({ seed, invoiced: awarded, loss: true });
   });
 
   it("privat: slutfakturans belopp = summan av dess momsrader = upparbetat", async () => {

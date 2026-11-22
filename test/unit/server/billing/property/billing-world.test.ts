@@ -1,14 +1,17 @@
 /**
  * Generatorn för egenskapstesterna (#1810): seed 1–40 ska täcka de fall som
  * annars inte prövas (tidsspillan annan tid, helgförhandling, förhandling som
- * inte börjar kl. 09), så att generatorn inte tyst smalnar av; och samma seed
+ * inte börjar kl. 09, delvis bifall #1811), så att generatorn inte tyst
+ * smalnar av; och samma seed
  * ska ge samma "nu" och samma ärende.
  */
 
 import { describe, expect, it } from "vitest-compat";
 import { STOCKHOLM_TZ, stockholmTime } from "@/lib/shared/stockholm-time";
 import { rng } from "../../../helpers/seeded-rng";
-import { nowFor, type Scenario, scenarioFor } from "./billing-world";
+import {
+  nowFor, partialAwardOre, partialCaseFor, partialPruningOre, partialRngFor, type Scenario, scenarioFor,
+} from "./billing-world";
 
 const SEEDS = Array.from({ length: 40 }, (_, i) => i + 1);
 const WEEKDAY = new Intl.DateTimeFormat("en-US", { timeZone: STOCKHOLM_TZ, weekday: "short" });
@@ -104,5 +107,60 @@ describe("billing-world: reproduktion", () => {
 
   it("olika seeds ger olika nu", () => {
     expect(firstScenario(1).now).not.toEqual(firstScenario(2).now);
+  });
+});
+
+/** Andelarna för delvis bifall per seed, dragna som i egenskapstesterna. */
+function partialShares(seed: number): { pruning: number; award: number } {
+  const now = nowFor(rng(seed));
+  const rp = partialRngFor(seed);
+  const pruning = partialCaseFor(rp, "OFFENTLIGT_UPPDRAG", now).share;
+  return { pruning, award: partialCaseFor(rp, "RATTSHJALP", now).share };
+}
+
+/** Yrkanden (öre) att pröva andelarna mot: små, typiska och stora. */
+const CLAIMS = [100, 12_345, 1_234_550, 98_765_400];
+
+describe("billing-world: delvis bifall, seed 1–40 (#1811)", () => {
+  const shares = SEEDS.map(partialShares);
+
+  it("offentligt uppdrag: prutningen är hela kronor och 0 < prutning ≤ yrkat", () => {
+    for (const claim of CLAIMS) {
+      for (const { pruning } of shares) {
+        const p = partialPruningOre(claim, pruning);
+        expect(p % 100).toBe(0);
+        expect(p).toBeGreaterThan(0);
+        expect(p).toBeLessThanOrEqual(claim);
+      }
+    }
+  });
+
+  it("offentligt uppdrag: minst en seed ger delvis bifall (något beviljas och något prutas)", () => {
+    const claim = 1_234_550;
+    expect(shares.some(({ pruning }) => partialPruningOre(claim, pruning) < claim - 100)).toBe(true);
+  });
+
+  it("rättshjälp: beviljat är hela kronor i [0, kr(0,95 × yrkat)], och minst en seed beviljar något", () => {
+    for (const claim of CLAIMS) {
+      const cap = Math.floor((claim * 0.95 + 50) / 100) * 100;
+      for (const { award } of shares) {
+        const a = partialAwardOre(claim, award);
+        expect(a % 100).toBe(0);
+        expect(a).toBeGreaterThanOrEqual(0);
+        expect(a).toBeLessThanOrEqual(cap);
+      }
+    }
+    expect(shares.some(({ award }) => partialAwardOre(1_234_550, award) > 0)).toBe(true);
+  });
+
+  it("gränserna: andel 0 ger minsta prutning och inget beviljat, nära 1 hela yrkandet respektive strax under 95 %", () => {
+    expect(partialPruningOre(1_234_550, 0)).toBe(100);
+    expect(partialPruningOre(1_234_550, 0.999_999_9)).toBe(1_234_500);
+    expect(partialAwardOre(1_234_550, 0)).toBe(0);
+    expect(partialAwardOre(1_234_550, 0.999_999_99)).toBe(1_172_700); // taket kr(0,95 × yrkat) = 1 172 800
+  });
+
+  it("ett yrkande under en krona kan inte prutas i hela kronor", () => {
+    expect(() => partialPruningOre(99, 0.5)).toThrow(/räcker inte/);
   });
 });
