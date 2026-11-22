@@ -21,12 +21,15 @@ import { checkMatterConflicts } from "./matter-conflict-check";
 /** Det omkontrollen behöver ur en tRPC-context. */
 export type ConflictRecheckCtx = Parameters<typeof checkMatterConflicts>[0] & { repos: Repositories; orgId: OrganizationId };
 
-/** Kör kontrollen för ärendets alla parter igen och spara resultatet på ärendet. */
+/**
+ * Kör kontrollen för ärendets alla parter igen och spara resultatet på ärendet.
+ * Har inga nya träffar tillkommit sedan bedömningen står den kvar (#1819).
+ */
 export async function recheckMatterConflicts(ctx: ConflictRecheckCtx, matterId: MatterId): Promise<Matter> {
   const matter = await ctx.repos.matters.getByIdWithContacts(matterId, ctx.orgId);
   if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
   const parties = matter.contacts.map((c) => ({ contactId: asId<"ContactId">(c.contactId), role: c.role }));
-  return ctx.repos.matters.update(matterId, await checkMatterConflicts(ctx, matterId, parties));
+  return ctx.repos.matters.update(matterId, await checkMatterConflicts(ctx, matterId, parties, matter.conflictReviewedHits));
 }
 
 /** Någon av de nya rollerna på klient- eller motsidan → kontrollera ärendet igen. */
