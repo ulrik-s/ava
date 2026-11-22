@@ -39,7 +39,7 @@ import {
   type QueueOwner,
 } from "./mutation-queue";
 import { PendingWrites, type PendingWritesView } from "./pending-writes";
-import { recordTouch } from "./procedure-touches";
+import { type ProcedureCapture, recordTouch } from "./procedure-touches";
 import { ReconcileEngine, type ConflictRecord, type ReconcileResult } from "./reconcile-engine";
 import { QueueSnapshotTab } from "./snapshot-tab";
 import type { SyncTransport } from "./sync-transport";
@@ -137,11 +137,8 @@ export class CachingSyncDataStore {
       /** Lyssnare på lokala ändringar (köad + persisterad) — driver synk-efter-spara. */
       localChangeListeners: Set<() => void>;
       afterReconcile: (() => Promise<unknown>) | undefined;
-      /**
-       * Aktiv under `runQueuedProcedure` (#1265): lokala radskrivningar samlas
-       * här som `touches` i stället för att köas som rader. `null` = ingen.
-       */
-      capture: { touches: ProcedureTouch[] | null };
+      /** Fångstläget under `runQueuedProcedure` (#1265, #1817). */
+      capture: ProcedureCapture;
       /** Pågående lokala skrivningar (kö + snapshot) — se {@link pendingWrites}. */
       writes: PendingWrites;
     },
@@ -157,8 +154,9 @@ export class CachingSyncDataStore {
 
   /**
    * Kör en köbar procedur lokalt (#1265, ADR 0037) och köa ANROPET, inte
-   * raderna den skrev. `run` körs i en lokal transaktion: kastar den rullas
-   * dess skrivningar tillbaka och ingenting köas. In-process-länken kör alla
+   * raderna den skrev. `run` körs i en lokal transaktion: kastar den, eller
+   * kastar köandet av anropet (#1817, t.ex. full lagring), rullas dess
+   * skrivningar tillbaka och ingenting köas. In-process-länken kör alla
    * mutationer exklusivt (`MutationLock`, #1794), så ingen samtidig mutations
    * skrivningar hamnar i fångsten.
    */
@@ -172,14 +170,22 @@ export class CachingSyncDataStore {
     const at = Date.now();
     const identity: QueuedCallIdentity = { mutationId: uuidv7(at), at };
     const touches: ProcedureTouch[] = [];
+    // Köandet körs i transaktionens commit (#1817): ett köfel rullar tillbaka.
+    // Utan lokala skrivningar anropas commit inte, och anropet köas efteråt
+    // (idempotent på mutationId: redan köat → ingenting händer).
+    const enqueue = async (): Promise<void> => {
+      await this.queue.enqueueProcedure({ path: call.path, input: call.input, touches }, { mutationId: identity.mutationId, now: identity.at });
+    };
     this.hooks.capture.touches = touches;
+    this.hooks.capture.commit = enqueue;
     let result: T;
     try {
       result = await this.store.transaction(() => run(identity));
     } finally {
       this.hooks.capture.touches = null;
+      this.hooks.capture.commit = null;
     }
-    await this.queue.enqueueProcedure({ path: call.path, input: call.input, touches }, { mutationId: identity.mutationId, now: identity.at });
+    await enqueue();
     await this.persistSnapshot();
     for (const listener of this.hooks.localChangeListeners) listener();
     return result;
@@ -283,7 +289,7 @@ export class CachingSyncDataStore {
       writes.track(() => deps.persistence ? deps.persistence.save(store.currentSource) : Promise.resolve());
 
     const localChangeListeners = new Set<() => void>();
-    const capture: { touches: ProcedureTouch[] | null } = { touches: null };
+    const capture: ProcedureCapture = { touches: null, commit: null };
     // Varje rad köas (eller fångas som ett anrops touch) när den skrivs …
     const onLocalMutation = (event: MutationEvent<Record<string, unknown>>): Promise<void> => writes.track(async () => {
       if (capture.touches) {
@@ -310,7 +316,10 @@ export class CachingSyncDataStore {
     // mutationen svarade först när alla skrivits. Ett procedur-anrop persisterar
     // själv, efter att anropet köats (`runQueuedProcedure`).
     const onCommit = async (): Promise<void> => {
-      if (capture.touches) return;
+      if (capture.touches) {
+        await capture.commit?.();
+        return;
+      }
       await persistSnapshot();
       for (const listener of localChangeListeners) listener();
     };

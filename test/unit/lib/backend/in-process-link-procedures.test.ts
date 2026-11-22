@@ -8,15 +8,18 @@
  *   blandas ihop med en samtidig mutations (de attribueras till anropet).
  *   Alla mutationer körs exklusivt (#1794, se in-process-link-exclusive.test.ts).
  */
+import { TRPCClientError } from "@trpc/client";
 import { describe, expect, it } from "vitest-compat";
 import { inProcessLink, type ProcedureRecorder } from "@/lib/client/demo/in-process-link";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import { MutationQueue, QUEUE_WRITE_FAILED_MESSAGE } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { asId } from "@/lib/shared/schemas/ids";
 import { derivedId } from "@/lib/shared/sync/derived-id";
 import { isUuid } from "@/lib/shared/uuid";
+import { captureReportedErrors, FullableQueuePersistence } from "../../../helpers/full-queue-persistence";
 
 function ctx() {
   const ds = new DemoDataStore({});
@@ -60,6 +63,25 @@ describe("inProcessLink — köbara procedurer", () => {
     await invoke(link, { type: "mutation", path: "timeEntry.delete", input: { id: "0190a1b2-0000-7000-8000-000000000001" } })
       .catch(() => undefined);
     expect(executedWith).toEqual({ id: "0190a1b2-0000-7000-8000-000000000001" });
+  });
+
+  it("ett anrop som inte kunde köas (full lagring) når anroparen som TRPCClientError med beskedet (#1817)", async () => {
+    const persistence = new FullableQueuePersistence();
+    const queue = await MutationQueue.hydrate(persistence);
+    persistence.full = true;
+    // Köandet kastar här före körningen; ordningen i storen prövas i caching-sync-procedures.test.ts.
+    const recorder: ProcedureRecorder = async (call, exec) => {
+      await queue.enqueueProcedure({ ...call, touches: [] });
+      return exec(Q);
+    };
+    const link = inProcessLink(ctx(), { recordProcedure: recorder });
+    let thrown: unknown;
+    await captureReportedErrors(async () => {
+      await invoke(link, { type: "mutation", path: "timeEntry.delete", input: { id: "0190a1b2-0000-7000-8000-000000000002" } })
+        .catch((e: unknown) => { thrown = e; });
+    });
+    expect(thrown).toBeInstanceOf(TRPCClientError);
+    expect((thrown as Error).message).toBe(QUEUE_WRITE_FAILED_MESSAGE);
   });
 
   it("icke-köbar mutation och frågor går förbi inspelaren", async () => {

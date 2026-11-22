@@ -37,6 +37,16 @@ export {
   type QueuedMutation, type QueuedProcedureCall, type QueueEntry, type QueueOwner,
 } from "./queue-entry";
 
+/** Beskedet när en köpost inte kunde skrivas till lagringen (#1817). */
+export const QUEUE_WRITE_FAILED_MESSAGE =
+  "Ändringen kunde inte sparas i webbläsarens lagring (den kan vara full). Ändringen sparades inte.";
+
+/** Rapportera originalfelet och ge ett läsbart fel med det som `cause`. */
+function queueWriteError(cause: unknown): Error {
+  reportIdbProblem(cause instanceof Error ? cause : new Error(String(cause)));
+  return new Error(QUEUE_WRITE_FAILED_MESSAGE, { cause });
+}
+
 /** Klientkodens version — deploy-sha:n när den finns (samma som demo-cachens nyckel). */
 export const SYNC_CODE_VERSION = process.env.NEXT_PUBLIC_DEMO_VERSION || process.env.NEXT_PUBLIC_AVA_VERSION || "dev";
 
@@ -323,10 +333,19 @@ export class MutationQueue {
     });
   }
 
+  /**
+   * Lagringen först (#1817): kastar `add` (t.ex. full lagring) är kön oförändrad,
+   * så att en post som bara finns i minnet aldrig tolkas som kvitterad av en
+   * annan flik vid nästa `refresh()`.
+   */
   private async append(item: QueueEntry): Promise<void> {
+    try {
+      await this.persistence?.add(item);
+    } catch (cause) {
+      throw queueWriteError(cause);
+    }
     this.items.push(item);
     this.local.add(item.mutationId);
-    await this.persistence?.add(item);
   }
 
   /** Kör `fn` efter flikens tidigare köoperationer (en omläsning blandas aldrig med en skrivning). */
