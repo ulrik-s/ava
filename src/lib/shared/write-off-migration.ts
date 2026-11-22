@@ -16,13 +16,34 @@
  */
 
 import { primitiveText } from "./primitive-text";
+import { dateLike } from "./schemas/common";
+import { userIdSchema, type UserId } from "./schemas/ids";
 import { computeInvoiceLedger } from "./write-off-calc";
 
 type Row = Record<string, unknown>;
 
+/** Fakturans datumfält som avskrivningstidpunkten uppskattas ur (mest specifikt först). */
+interface WriteOffDateFields {
+  updatedAt?: unknown;
+  dueDate?: unknown;
+  dueAt?: unknown;
+  invoiceDate?: unknown;
+  issuedAt?: unknown;
+  createdAt?: unknown;
+}
+
 /** Stabil markör så migrerade poster går att känna igen (och filtrera bort). */
 export const MIGRATION_RECORDED_BY = "system:bad-debt-migration";
-const MIGRATION_REASON = "Migrerad från BAD_DEBT-status (ADR 0007)";
+/** Orsaken på en migrerad post, både i demon och i serverns startjobb (#1809). */
+export const MIGRATION_REASON = "Migrerad från BAD_DEBT-status (ADR 0007)";
+
+/**
+ * Systemmarkören för `recordedById` när servern skapar posten (#1809): ett
+ * nollställt id, eftersom kolumnen är `uuid NOT NULL` (utan främmande nyckel)
+ * och ingen användare gjorde avskrivningen. Demons markör
+ * (`MIGRATION_RECORDED_BY`) är ingen uuid och ändras inte.
+ */
+export const MIGRATION_SYSTEM_USER_ID: UserId = userIdSchema.parse("00000000-0000-0000-0000-000000000000");
 
 /** Summera `amount` per `invoiceId` över en rad-uppsättning (payments). */
 function paidByInvoiceId(payments: readonly Row[]): Map<string, number> {
@@ -46,8 +67,18 @@ function creditedByInvoiceId(invoices: readonly Row[]): Map<string, number> {
 }
 
 /** Uppskatta avskrivnings-tidpunkt ur fakturans datum-fält (mest specifikt först). */
-function estimateWrittenOffAt(inv: Row): unknown {
+function estimateWrittenOffAt(inv: WriteOffDateFields): unknown {
   return inv.updatedAt ?? inv.dueDate ?? inv.dueAt ?? inv.invoiceDate ?? inv.issuedAt ?? inv.createdAt ?? null;
+}
+
+/**
+ * Den uppskattade avskrivningstidpunkten som `Date` (samma fältordning som
+ * migrate-on-read), eller `null` när inget datumfält finns. Används av serverns
+ * startjobb, där `writtenOffAt` måste vara ett datum (#1809).
+ */
+export function estimatedWriteOffDate(inv: WriteOffDateFields): Date | null {
+  const parsed = dateLike.safeParse(estimateWrittenOffAt(inv));
+  return parsed.success ? parsed.data : null;
 }
 
 /** Bygg den syntetiska WriteOff-raden för en BAD_DEBT-faktura, eller null om inget återstår. */

@@ -56,12 +56,38 @@ intaget är verifierat, i nedbrytning, granskning eller implementation, ska
 du fråga användaren direkt i AVA. Blockera inte för Ulrik. Exempel: vad som
 ska visas, i vilket fall, vilket av två rimliga beteenden.
 
-Till **Ulrik** (`blockerad`) går i stället:
-- skyddade sökvägar och migrationer,
+Till **Ulrik** går i stället:
+- destruktiva migrationer,
 - arkitektur och ADR:er,
 - säkerhet och sekretess,
 - om något ska byggas alls,
 - allt som skulle göra omfånget större än det Ulrik verifierat.
+
+Skyddade sökvägar är ingen fråga i förväg: Ulrik godkänner dem på PR:en
+(regel 4).
+
+### 2d. Fråga Ulrik med förslag: det gäller efter 24 timmar (#1872)
+
+Ulrik ska bara behöva svara när det verkligen krävs. Har du en
+**rekommendation**, och kräver den inget som bara Ulrik kan göra själv
+(ett konto, en inställning i GitHub eller hos en leverantör, ett avtal, en
+uppgift bara han vet):
+1. Skriv frågan som vanligt, med numrerade alternativ, och avsluta med
+   `**Förslag:** <alternativ> — gäller om Ulrik inte svarar inom 24 timmar.`
+2. Sätt `auto-godkänn` i intaget, **inte** `blockerad`. Kortet står då i
+   "Godkänns automatiskt" på tavlan.
+3. Rör inte saken under tiden, som om den vore blockerad.
+
+Efter 24 timmar utan veto skriver tavlan (`<!-- tavlan -->`, Ulriks token)
+**Förslaget gäller** och tar bort `auto-godkänn`, och flödesvakten startar
+din loop: gå på ditt förslag. Svarar Ulrik själv under tiden startas din loop
+direkt: hans svar går alltid före förslaget, också om tavlan senare skriver
+att förslaget gäller. Flyttar han kortet till Svara blir saken `blockerad`:
+vänta på hans svar.
+
+`blockerad` använder du bara när du **saknar** förslag, eller när Ulrik måste
+göra något själv. Säg då exakt vad. I kodrepot (arbetsordrar och PR:er) finns
+ingen `auto-godkänn`: där gäller `blockerad` som förut.
 
 **Att fråga:** skriv i intag-issuen (`Intag: ava-feedback#N`) enligt
 `tooling/agents/1-verifiering.md`, "Att fråga":
@@ -101,11 +127,17 @@ sätt `blockerad` så att Ulrik ser det.
 
 ## 4. Gränser som CI också kontrollerar (Agentvakt)
 
-- Rör inte skyddade sökvägar: `.github/`, `tooling/config/`, `tooling/docker/`,
+- Skyddade sökvägar: `.github/`, `tooling/config/`, `tooling/docker/`,
   `tooling/systemd/`, `tooling/agents/`, deploy-/backup-/release-skript,
   `.claude/`, `src/lib/server/auth/`, serverns HTTP-förtroendegräns, feedback-koden,
-  `package.json`, `bun.lock`, `AGENTS.md`. Behövs det: sätt `blockerad` och
-  förklara. Ulrik sätter `människa-godkänd` om han håller med.
+  `package.json`, `bun.lock`, `AGENTS.md`. Rör dem bara när det Ulrik verifierat
+  kräver det, och bara så mycket som behövs. **Fråga inte i förväg** (#1872):
+  bryt ner och bygg som vanligt, och skriv i arbetsordern och PR:en vilka
+  skyddade sökvägar som ändras och varför. Ulriks enda godkännande är
+  `människa-godkänd` på PR:en; Agentvakten är röd tills dess. När PR:en i
+  övrigt är godkänd sätter loop 3 `blockerad` på arbetsordern med
+  `PR #N väntar på din människa-godkänd (skyddad sökväg: …)`; Ulrik flyttar
+  kortet till Godkänd på tavlan, och synken sätter etiketten på PR:en.
   **Undantag:** att skärpa `tooling/config/file-size-baseline.json` med
   `bun run file-size --update` är tillåtet. Agentvakten släpper igenom just
   det. Blockera aldrig för det. Domaren är Agentvaktens logg: säger den bara

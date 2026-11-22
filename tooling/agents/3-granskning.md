@@ -38,8 +38,9 @@ För var och en (äldst först):
      `behöver-ändras` och skriv vilken issue den ska bero på (`Beror på #N`)
      eller vilken kod den ska använda. Två sätt att göra samma sak är
      designskuld.
-   - **Kräver den skyddade sökvägar** eller en destruktiv migration? Sätt då
-     `blockerad` med en förklaring.
+   - **Kräver den en destruktiv migration?** Sätt då `blockerad` med en
+     förklaring. Skyddade sökvägar stoppar inte arbetsordern (regel 4): kolla
+     bara att den säger vilka och varför, och att de behövs.
 3. Utfall:
    - Bra (eller bra efter små förtydliganden du själv gör i issuen): sätt
      `granskad` (flödesvakten tar bort `att-granska`), kommentera kort vad du
@@ -92,7 +93,12 @@ För var och en:
      något som intagets rapport listar under "Inte med": `behöver-ändras`.
    - Tester för varje ny rad (`AGENTS.md`), som faktiskt fäller om logiken går
      sönder? Inga borttagna eller försvagade tester eller ratchets?
-   - Inga skyddade sökvägar, bara additiva migrationer märkta
+   - Skyddade sökvägar bara där arbetsordern säger det (regel 4). Är PR:en
+     i övrigt godkänd och väntar bara på `människa-godkänd`: sätt `granskad`
+     på PR:en och `blockerad` på arbetsordern med
+     `PR #N väntar på din människa-godkänd (skyddad sökväg: …)`, så att Ulrik
+     ser kortet i Svara.
+   - Bara additiva migrationer märkta
      `-- kind: expand`. Klarar förra versionens kod schemat efteråt (ett nytt
      värde som den gamla koden inte kan läsa är också ett brott)? Agentvakten
      och `db:check-migrations` kontrollerar också, men du ska hitta det först.

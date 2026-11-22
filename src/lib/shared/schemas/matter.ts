@@ -3,6 +3,7 @@ import { orgScopedFields, optionalDateLike } from "./common";
 import { conflictCheckStatusSchema, matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enums";
 import { hourlyRatesSchema } from "./hourly-rates";
 import { matterIdSchema, matterContactIdSchema, contactIdSchema, userIdSchema } from "./ids";
+import { conflictHitSchema } from "./misc";
 
 /**
  * Matter (Ärende) — lagras i `matters/active/<id>.json`. Vi har inte längre
@@ -140,6 +141,10 @@ export const matterSchema = z.object({
   conflictCheckHits: z.number().int().nonnegative().nullish(),
   /** När kontrollen senast kördes mot byråns alla ärenden. */
   conflictCheckedAt: optionalDateLike,
+  /** Träffarna i senaste kontrollen (#1818). Null = aldrig sparade. */
+  conflictCheckResults: z.array(conflictHitSchema).nullish(),
+  /** Träffarna som den senaste bedömningen gällde (#1818). Null = ingen bedömning sparad. */
+  conflictReviewedHits: z.array(conflictHitSchema).nullish(),
   /**
    * Den dokumenterade bedömningen av träffarna (#1354): vem (advokat eller
    * admin), när och varför uppdraget ändå togs. Ligger kvar som senaste

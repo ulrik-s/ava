@@ -528,19 +528,14 @@ describe("invoice.setStatus", () => {
     expect(res.status).toBe("SENT");
   });
 
-  it("SENT → BAD_DEBT", async () => {
+  it("BAD_DEBT avvisas av indatavalideringen — kundförlust går bara via writeOff (ADR 0007)", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", status: "SENT" });
-    mockPrisma.invoice.update.mockResolvedValue({ id: "inv-1", status: "BAD_DEBT" });
 
-    await makeCaller().setStatus({ invoiceId: "inv-1", status: "BAD_DEBT" });
-
-    // Repo.update bumpar version + updatedAt (ADR 0019) → matcha löst på status.
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "inv-1" },
-        data: expect.objectContaining({ status: "BAD_DEBT" }),
-      }),
-    );
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      makeCaller().setStatus({ invoiceId: "inv-1", status: "BAD_DEBT" as any }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
   });
 
   it("zod tillåter inte godtyckliga statusar (t.ex. PAID)", async () => {
@@ -558,11 +553,11 @@ describe("invoice.setStatus", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("blockerar omöjlig övergång DRAFT → BAD_DEBT (#350)", async () => {
-    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", status: "DRAFT" });
+  it("blockerar omöjlig övergång PAID → SENT (#350)", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", status: "PAID" });
 
     await expect(
-      makeCaller().setStatus({ invoiceId: "inv-1", status: "BAD_DEBT" }),
+      makeCaller().setStatus({ invoiceId: "inv-1", status: "SENT" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
   });
