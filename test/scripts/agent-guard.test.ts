@@ -2,6 +2,8 @@
  * Agentvakten: agent-PR:er stoppas vid skyddade sökvägar, destruktiva
  * migrationer och fler än tio per dygn — vanliga PR:er påverkas aldrig.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
 import {
   AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, guardViolations, type GuardInput, humanApproved, rankInLast24h, trustedLabels,
@@ -58,6 +60,68 @@ describe("guardViolations", () => {
   it(`tak: nr ${AGENT_PR_PER_DAY} passerar, nr ${AGENT_PR_PER_DAY + 1} stoppas`, () => {
     expect(guardViolations({ ...BASE, agentPrsLast24h: AGENT_PR_PER_DAY })).toEqual([]);
     expect(guardViolations({ ...BASE, agentPrsLast24h: AGENT_PR_PER_DAY + 1 })).toEqual([expect.stringContaining("Taket")]);
+  });
+});
+
+/** Pengalogik, delade scheman och migrationer (#1873): en fil per ny post i PROTECTED_PATHS. */
+const MONEY_FILES = [
+  "src/lib/shared/schemas/invoice.ts",
+  "tooling/db/migrations/0042_x.sql",
+  "tooling/db/migrations/meta/_journal.json",
+  "src/lib/server/billing/x.ts",
+  "src/lib/shared/billing-flow.ts",
+  "src/lib/shared/kostnadsrakning.ts",
+  "src/lib/shared/kostnadsrakning-flow.ts",
+  "src/lib/shared/coverage-billing.ts",
+  "src/lib/shared/invoice-calc.ts",
+  "src/lib/server/routers/invoice.ts",
+  "src/lib/server/routers/billingRun.ts",
+  "src/lib/server/routers/billingRun/x.ts",
+  "src/lib/shared/vat.ts",
+  "src/lib/shared/invoice-vat.ts",
+  "src/lib/shared/expense-vat.ts",
+  "src/lib/shared/acconto-vat.ts",
+  "src/lib/shared/brottmalstaxa.ts",
+  "src/lib/shared/forordnandetaxa.ts",
+  "src/lib/shared/accounting/voucher.ts",
+];
+
+describe("pengalogik, delade scheman och migrationer (#1873)", () => {
+  it.each(MONEY_FILES)("%s stoppas utan människa-godkänd och passerar med den", (file) => {
+    expect(guardViolations({ ...BASE, files: [file] })).toEqual([expect.stringContaining(`Skyddad sökväg: ${file} `)]);
+    expect(guardViolations({ ...BASE, labels: [...BASE.labels, "människa-godkänd"], files: [file] })).toEqual([]);
+  });
+
+  it("en migrationsfil med bara en additiv rad stoppas utan människa-godkänd", () => {
+    const input = { ...BASE, files: ["tooling/db/migrations/0099_x.sql"], addedMigrationLines: ["ALTER TABLE x ADD COLUMN IF NOT EXISTS y text;"] };
+    expect(guardViolations(input)).toEqual([expect.stringContaining("Skyddad sökväg: tooling/db/migrations/0099_x.sql ")]);
+  });
+
+  it.each([
+    "src/lib/server/routers/invoiceDispatch.ts",
+    "src/lib/server/routers/billingRunX.ts",
+    "src/lib/shared/vat-rates.ts",
+    "src/lib/shared/invoice-vat-view.tsx",
+    "src/lib/shared/billing/x.ts",
+    "src/lib/server/billing.ts",
+  ])("närliggande fil %s passerar", (file) => {
+    expect(guardViolations({ ...BASE, files: [file] })).toEqual([]);
+  });
+
+  it("CODEOWNERS listar samma sökvägar med @ulrik-s", () => {
+    const owners = readFileSync(join(process.cwd(), ".github/CODEOWNERS"), "utf8");
+    const entries = [
+      "/src/lib/shared/schemas/", "/tooling/db/migrations/", "/src/lib/server/billing/",
+      "/src/lib/shared/billing-*.ts", "/src/lib/shared/kostnadsrakning*.ts", "/src/lib/shared/coverage-billing.ts",
+      "/src/lib/shared/invoice-calc.ts", "/src/lib/server/routers/invoice.ts", "/src/lib/server/routers/billingRun.ts",
+      "/src/lib/server/routers/billingRun/", "/src/lib/shared/vat.ts", "/src/lib/shared/invoice-vat.ts",
+      "/src/lib/shared/expense-vat.ts", "/src/lib/shared/acconto-vat.ts", "/src/lib/shared/brottmalstaxa.ts",
+      "/src/lib/shared/forordnandetaxa.ts", "/src/lib/shared/accounting/",
+    ];
+    const rows = owners.split("\n").map((line) => line.trim().split(/\s+/));
+    for (const entry of entries) {
+      expect(rows).toContainEqual([entry, "@ulrik-s"]);
+    }
   });
 });
 

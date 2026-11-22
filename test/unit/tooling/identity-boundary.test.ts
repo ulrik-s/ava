@@ -13,7 +13,12 @@ import { describe, expect, it } from "vitest-compat";
 const DOCKER = join(process.cwd(), "tooling/docker");
 const read = (f: string): string => readFileSync(join(DOCKER, f), "utf8");
 
-interface ComposeService { ports?: unknown[]; environment?: Record<string, string> }
+interface ComposeService {
+  ports?: unknown[];
+  environment?: Record<string, string>;
+  networks?: string[] | Record<string, unknown>;
+  network_mode?: string;
+}
 const parseCompose = (f: string): { services?: Record<string, ComposeService> } =>
   Bun.YAML.parse(read(f)) as { services?: Record<string, ComposeService> };
 const production = parseCompose("docker-compose.production.yml") as { services: Record<string, ComposeService> };
@@ -46,6 +51,46 @@ describe("produktionsstackens förtroendegräns (#1256)", () => {
   });
 });
 
+/** Tjänstens nät som en sorterad lista; `network_mode: none` blir `["none"]`. */
+const networksOf = (s: ComposeService): string[] => {
+  if (s.network_mode !== undefined) return [s.network_mode];
+  const nets = s.networks ?? [];
+  return (Array.isArray(nets) ? [...nets] : Object.keys(nets)).sort();
+};
+
+describe("produktionsstackens nät (#1879)", () => {
+  it("varje tjänst har sina nät uttryckligen eller network_mode: none", () => {
+    const implicit = Object.entries(production.services)
+      .filter(([, s]) => s.network_mode !== "none" && networksOf(s).length === 0)
+      .map(([name]) => name);
+    expect(implicit).toEqual([]);
+  });
+
+  it("kartan tjänst → nät är exakt den beslutade", () => {
+    const map = Object.fromEntries(Object.entries(production.services).map(([name, s]) => [name, networksOf(s)]));
+    expect(map).toEqual({
+      caddy: ["edge"],
+      "oauth2-proxy": ["edge"],
+      postgres: ["default"],
+      "server-first": ["default", "edge", "llm"],
+      autoheal: ["none"],
+      ollama: ["llm"],
+    });
+  });
+
+  it("toppnivån har edge och llm, och inget nät är internal", () => {
+    const { networks } = Bun.YAML.parse(read("docker-compose.production.yml")) as {
+      networks?: Record<string, { internal?: boolean } | null>;
+    };
+    expect(Object.keys(networks ?? {}).sort()).toEqual(["edge", "llm"]);
+    expect(Object.values(networks ?? {}).filter((n) => n?.internal === true)).toEqual([]);
+  });
+
+  it("networksOf läser nät som karta (aliases) lika väl som lista", () => {
+    expect(networksOf({ networks: { default: { aliases: ["x"] }, edge: null } })).toEqual(["default", "edge"]);
+  });
+});
+
 describe("Bearer-vägen kräver audience i varje stack (#1800)", () => {
   it("prod-composen: tomt AVA_HELPER_OIDC_AUDIENCE betyder helperns klient-id", () => {
     expect(serverFirstEnv("docker-compose.production.yml")?.AVA_OIDC_AUDIENCE).toBe(
@@ -62,5 +107,12 @@ describe("Bearer-vägen kräver audience i varje stack (#1800)", () => {
     expect(withIssuer.length).toBeGreaterThan(0);
     const missing = withIssuer.filter((f) => !serverFirstEnv(f)?.AVA_OIDC_AUDIENCE);
     expect(missing).toEqual([]);
+  });
+});
+
+describe("dev-stacken publicerar server-first bara på loopback (#1882)", () => {
+  it("server-first-porten är bunden till 127.0.0.1 — inte till alla gränssnitt", () => {
+    const dev = parseCompose("docker-compose.server-first.yml");
+    expect(dev.services?.["server-first"]?.ports).toEqual(["127.0.0.1:3001:3001"]);
   });
 });

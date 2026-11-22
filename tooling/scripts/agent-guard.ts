@@ -4,7 +4,8 @@
  * bara instruktioner i en prompt (docs/feedback-pipeline.md).
  *
  * En PR med etiketten `agent-pr` fälls om den:
- *   1. rör en skyddad sökväg (CI, deploy, auth, agentpromptarna …),
+ *   1. rör en skyddad sökväg (CI, deploy, auth, agentpromptarna, pengalogik,
+ *      delade scheman, migrationer …),
  *   2. lägger till en destruktiv migration (samma regler som db:check-migrations
  *      och deployens automatiska rollback, lib/migration-kind.ts, #1770) — en
  *      rollback backar koden men aldrig databasen, så migrationer från agenter
@@ -44,6 +45,17 @@ export const PROTECTED_PATHS: readonly RegExp[] = [
   /^bun\.lock$/,
   /^AGENTS\.md$/,
   /^CLAUDE\.md$/,
+  // Pengalogik, delade scheman och migrationer (#1873): ett fel här når byråns
+  // fakturor och bokföring direkt, och en migration går inte att backa.
+  /^src\/lib\/shared\/schemas\//,
+  /^tooling\/db\/migrations\//,
+  /^src\/lib\/server\/billing\//,
+  /^src\/lib\/shared\/(billing-[^/]*|kostnadsrakning[^/]*|coverage-billing|invoice-calc)\.ts$/,
+  /^src\/lib\/server\/routers\/(invoice|billingRun)\.ts$/,
+  /^src\/lib\/server\/routers\/billingRun\//,
+  /^src\/lib\/shared\/(vat|invoice-vat|expense-vat|acconto-vat)\.ts$/,
+  /^src\/lib\/shared\/(brottmalstaxa|forordnandetaxa)\.ts$/,
+  /^src\/lib\/shared\/accounting\//,
 ];
 
 
