@@ -5,10 +5,11 @@
  * headless (utan Electron/display), vilket är hela poängen med konsolideringen.
  */
 
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "bun:test";
+import superjson from "superjson";
 
 import { startEngine, type EngineHandle, type EngineOpts } from "../src/engine/main.ts";
 
@@ -123,5 +124,76 @@ describe("startEngine (in-process, headless)", () => {
     e.stop();
     await new Promise((r) => setTimeout(r, 50));
     await expect(fetch(`${base}/ping`, { signal: AbortSignal.timeout(500) })).rejects.toThrow();
+  });
+});
+
+/**
+ * Acceptans (#1838): helperns token följer bara med till godkända AVA-servrar,
+ * genom den riktiga kopplingen i `startEngine` (kö, `/open` och `/content`
+ * delar samma grindade token).
+ */
+describe("startEngine — helperns token bara till godkända servrar (#1838)", () => {
+  /** Motorn med en issuer i helper-config.json och en giltig token-fil. */
+  async function bootLoggedIn(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), "ava-engine-tok-"));
+    dirs.push(dir);
+    await writeFile(join(dir, "helper-config.json"), JSON.stringify({ oidcIssuer: "http://localhost:8089/realms/ava" }));
+    const tokenFile = join(dir, "token.json");
+    await writeFile(tokenFile, JSON.stringify({ accessToken: "TOK", expiresAt: Date.now() + 3_600_000 }));
+    const port = 49000 + Math.floor((dirs.length * 7) % 500);
+    const before = process.env.AVA_HELPER_TOKEN_FILE;
+    process.env.AVA_HELPER_TOKEN_FILE = tokenFile;
+    try {
+      engines.push(startEngine({ port, httpsPort: port + 1, dataDir: dir, logDir: null }));
+    } finally {
+      if (before === undefined) delete process.env.AVA_HELPER_TOKEN_FILE;
+      else process.env.AVA_HELPER_TOKEN_FILE = before;
+    }
+    await new Promise((r) => setTimeout(r, 150));
+    return `http://127.0.0.1:${port}`;
+  }
+
+  /** Kör `fn` med en fetch-stubb: anrop till motorn går igenom, allt annat spelas in. */
+  async function withStub(base: string, fn: () => Promise<void>): Promise<Map<string, string | null>> {
+    const seen = new Map<string, string | null>();
+    const real = globalThis.fetch;
+    const stub = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.startsWith(base)) return real(input, init);
+      seen.set(new URL(url).origin, new Headers(init?.headers).get("authorization"));
+      const data = { contentBase64: Buffer.from("PDF").toString("base64"), mimeType: "application/pdf", fileName: "x.pdf", version: 1 };
+      return new Response(JSON.stringify([{ result: { data: superjson.serialize(data) } }]), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    };
+    globalThis.fetch = Object.assign(stub, { preconnect: real.preconnect });
+    try {
+      await fn();
+    } finally {
+      globalThis.fetch = real;
+    }
+    return seen;
+  }
+
+  const content = (base: string, body: unknown): Promise<Response> =>
+    fetch(`${base}/content`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://localhost:3000" },
+      body: JSON.stringify(body),
+    });
+
+  test("trpcUrl på en annan värd och en downloadUrl där får ingen token; localhost får Bearer", async () => {
+    const base = await bootLoggedIn();
+    const seen = await withStub(base, async () => {
+      expect((await content(base, { document: { id: "d-annan", trpcUrl: "https://annan.example/api/trpc" } })).status).toBe(200);
+      expect((await content(base, { document: { id: "d-lokal", trpcUrl: "http://localhost:8080/api/trpc" } })).status).toBe(200);
+    });
+    expect(seen.get("https://annan.example")).toBeNull();
+    expect(seen.get("http://localhost:8080")).toBe("Bearer TOK");
+
+    const seenUrl = await withStub(base, async () => {
+      expect((await content(base, { downloadUrl: "https://annan.example/fil.pdf" })).status).toBe(200);
+    });
+    expect(seenUrl.get("https://annan.example")).toBeNull();
   });
 });

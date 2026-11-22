@@ -46,11 +46,6 @@
       "count": 1
     }
   },
-  "helper-ui/src/engine/main.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
   "helper-ui/src/engine/queue.ts": {
     "@typescript-eslint/use-unknown-in-catch-callback-variable": {
       "count": 1
@@ -2045,11 +2040,6 @@
   "test/unit/lib/backend/in-process-link.test.ts": {
     "no-restricted-syntax": {
       "count": 4
-    }
-  },
-  "test/unit/lib/backend/shared-exclusive-lock.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 7
     }
   },
   "test/unit/lib/backend/static-content-store.test.ts": {

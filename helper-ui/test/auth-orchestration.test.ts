@@ -11,6 +11,7 @@ import { describe, expect, test } from "bun:test";
 
 import { asId } from "@/lib/shared/schemas/ids";
 
+import { tokenOnlyToApprovedServers } from "../src/engine/allowed-origins.ts";
 import { buildAuthHeaderProvider } from "../src/engine/auth/auth-provider.ts";
 import { parseCallback, waitForCallback } from "../src/engine/auth/callback-server.ts";
 import { loginConfigFromEnv, runLogin, type LoginConfig, type LoginDeps } from "../src/engine/auth/login.ts";
@@ -199,6 +200,46 @@ describe("UploadQueue tokenProvider (autonom Bearer vid drain)", () => {
     await q.enqueue({ uploadUrl: "http://s/u/2", fileName: "a", bytes: new TextEncoder().encode("x"), authHeader: "Bearer BROWSER" });
     await q.drainOnce();
     expect(puts[0]).toBe("Bearer BROWSER");
+    await cleanup();
+  });
+
+  /** Kö med inspelade auth-headers för både PUT (demo) och uploadContent (tRPC). */
+  async function recordingQueue(provider: (target: string) => Promise<string | undefined>): Promise<{ q: UploadQueue; sent: Array<string | undefined> }> {
+    const sent: Array<string | undefined> = [];
+    let n = 0;
+    const deps = {
+      now: () => 1000, newId: () => `id-${++n}`,
+      put: (_u: string, _b: Uint8Array, auth?: string) => { sent.push(auth); return Promise.resolve(200); },
+      uploadDoc: (_d: unknown, _b: Uint8Array, auth?: string) => { sent.push(auth); return Promise.resolve({ status: "ok" as const, version: 1 }); },
+      saveConflictCopy: () => Promise.resolve({ id: asId<"DocumentId">("c"), fileName: "k" }),
+    };
+    return { q: new UploadQueue(await qdir(), deps, provider), sent };
+  }
+  const bytes = new TextEncoder().encode("x");
+
+  test("providern får postens mål: trpcUrl för ett dokument, uploadUrl för en PUT (#1838)", async () => {
+    const targets: string[] = [];
+    const { q } = await recordingQueue((t) => { targets.push(t); return Promise.resolve("Bearer T"); });
+    await q.enqueue({ document: { id: asId<"DocumentId">("d1"), trpcUrl: "http://localhost:8080/api/trpc" }, fileName: "a", bytes });
+    await q.enqueue({ uploadUrl: "http://localhost:8080/u/1", fileName: "b", bytes });
+    await q.drainOnce();
+    expect(targets.sort()).toEqual(["http://localhost:8080/api/trpc", "http://localhost:8080/u/1"]);
+    await cleanup();
+  });
+
+  test("grindad token: en annan värd får ingen token, localhost får den (#1838)", async () => {
+    const gated = tokenOnlyToApprovedServers(() => Promise.resolve("Bearer T"), () => []);
+    const other = await recordingQueue(gated);
+    await other.q.enqueue({ uploadUrl: "https://annan.example/u/1", fileName: "a", bytes });
+    await other.q.enqueue({ document: { id: asId<"DocumentId">("d2"), trpcUrl: "https://annan.example/api/trpc" }, fileName: "b", bytes });
+    await other.q.drainOnce();
+    expect(other.sent).toEqual([undefined, undefined]);
+
+    const local = await recordingQueue(gated);
+    await local.q.enqueue({ uploadUrl: "http://localhost:8080/u/1", fileName: "a", bytes });
+    await local.q.enqueue({ document: { id: asId<"DocumentId">("d3"), trpcUrl: "http://localhost:8080/api/trpc" }, fileName: "b", bytes });
+    await local.q.drainOnce();
+    expect(local.sent).toEqual(["Bearer T", "Bearer T"]);
     await cleanup();
   });
 });
