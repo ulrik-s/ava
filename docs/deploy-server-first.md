@@ -25,6 +25,21 @@ automatiskt TLS.
                     └────────────────────────────────────────┘
 ```
 
+**Nät (#1879).** Tjänsterna ligger på egna docker-nät, så att bara det som
+behöver nå varandra kan det:
+
+| Nät | Tjänster | Varför |
+|---|---|---|
+| `default` (`ava_default`) | `postgres`, `server-first` | bara servern når databasen |
+| `edge` | `caddy`, `oauth2-proxy`, `server-first` | proxyvägen in till servern |
+| `llm` | `server-first`, `ollama` | klassificeringen (profilen `llm`) |
+| inget (`network_mode: none`) | `autoheal` | har docker-socketen och behöver inget nät |
+
+`default` behålls under sitt gamla namn: `deploy-prod.sh` kör migreringen med
+`docker run --network ava_default` innan `up`, och `avarun` nedan går på samma
+nät. Inget nät är `internal`, eftersom Caddy hämtar cert, oauth2-proxy och
+servern når IdP:n, servern når Fortnox och ollama hämtar modellen.
+
 Ingen inbyggd IdP: `oauth2-proxy` gör OIDC-discovery mot byråns egen. Har
 byrån Microsoft 365 loggar advokaterna in med sina vanliga konton — se
 [`self-hosted-entra.md`](./self-hosted-entra.md).
