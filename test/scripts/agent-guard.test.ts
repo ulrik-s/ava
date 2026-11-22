@@ -101,8 +101,9 @@ describe("pengalogik, delade scheman och migrationer (#1873)", () => {
       "/src/lib/shared/expense-vat.ts", "/src/lib/shared/acconto-vat.ts", "/src/lib/shared/brottmalstaxa.ts",
       "/src/lib/shared/forordnandetaxa.ts", "/src/lib/shared/accounting/",
     ];
+    const rows = owners.split("\n").map((line) => line.trim().split(/\s+/));
     for (const entry of entries) {
-      expect(owners).toMatch(new RegExp(`^${entry.replace(/[.*/]/g, "\\$&")}\\s+@ulrik-s$`, "m"));
+      expect(rows).toContainEqual([entry, "@ulrik-s"]);
     }
   });
 });
