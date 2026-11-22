@@ -259,7 +259,7 @@ export function DocumentActions({
 
   return (
     <>
-      <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" />
+      <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" title={uploadingTitle} />
       <DocumentDetailsDialog docId={doc.id} doc={doc} open={editing} onClose={() => setEditing(false)} />
     </>
   );

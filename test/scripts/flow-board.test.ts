@@ -6,7 +6,8 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import {
-  AUTO_APPROVE_MS, autoApprovable, autoApproveDue, COLUMN_LABELS, COLUMNS, columnFor, decideColumn, decidePrio, decideWorkOrder, lageFor, rekFor, WORK_ORDER_LAGE,
+  AUTO_APPROVE_MS, autoApprovable, autoApproveDue, COLUMN_LABELS, COLUMNS, columnFor, decideColumn, decidePrio, decideWorkOrder, isProposal, lageFor,
+  proposalDue, rekFor, WORK_ORDER_LAGE,
 } from "../../tooling/scripts/flow/board";
 import { type BoardApi, type BoardItem, projectBoard } from "../../tooling/scripts/flow/board-github";
 import { gitHub, type GhRunner, intakeRefOf, type OpenItem } from "../../tooling/scripts/flow/github";
@@ -61,6 +62,24 @@ describe("tavlans regler", () => {
     expect(decideColumn(["undersökt", "blockerad"], "Avböjd")).toEqual({ kind: "decline" });
     expect(decideColumn(["väntar-på-användaren"], "Avböjd")).toEqual({ kind: "decline" });
     expect(decideColumn(["verifierad"], "Avböjd")).toEqual({ kind: "set", column: "Godkänd" });
+  });
+
+  it("en agents förslag (#1872): auto-godkänn utan undersökt står i Godkänns automatiskt tills vetofönstret gått ut", () => {
+    expect(isProposal(["designas", "auto-godkänn"])).toBe(true);
+    expect(isProposal(["undersökt", "auto-godkänn"])).toBe(false);
+    expect(isProposal(["designas"])).toBe(false);
+    expect(columnFor(["verifierad", "auto-godkänn"])).toBe("Godkänns automatiskt");
+    expect(columnFor(["intern", "auto-godkänn"])).toBe("Godkänns automatiskt");
+    expect(columnFor(["designas", "auto-godkänn", "blockerad"])).toBe("Svara");
+    const proposal = ["designas", "auto-godkänn"];
+    expect(decideColumn(proposal, "Svara")).toEqual({ kind: "veto" });
+    expect(decideColumn(proposal, "Godkänd")).toEqual({ kind: "approve" });
+    expect(lageFor(proposal)).toBe("Agentens förslag gäller efter 24 h — svara i issuen eller flytta kortet till Svara för att säga emot");
+    expect(proposalDue(proposal, hoursAgo(25), NOW)).toBe(true);
+    expect(proposalDue(proposal, hoursAgo(2), NOW)).toBe(false);
+    expect(proposalDue(proposal, undefined, NOW)).toBe(false);
+    expect(proposalDue([...proposal, "blockerad"], hoursAgo(25), NOW)).toBe(false);
+    expect(proposalDue(["undersökt", "auto-godkänn", "intern"], hoursAgo(25), NOW)).toBe(false);
   });
 
   it("Godkänns automatiskt: till Att besluta är ett veto, till Godkänd eller Avböjd ett beslut", () => {
@@ -249,6 +268,35 @@ describe("synken: rekommendation, veto och automatiskt godkännande", () => {
     expect(writes).toHaveLength(2);
     expect(writes[0]).toContain(`issues/4/comments -f body=${BOARD_MARKER}\nGodkänd automatiskt: 24 timmar`);
     expect(writes[1]).toBe(`api repos/${FB}/issues/4/labels -f labels[]=verifierad`);
+  });
+
+  const proposal = (n: number): OpenItem => open(n, ["intern", "designas", "auto-godkänn"]);
+
+  it("agentens förslag efter 24 h: tavlans kommentar först (startar agenten), sedan bort med flaggan; före 24 h inget (#1872)", () => {
+    const { gh } = sync([proposal(20), proposal(21)], [card(20, "Godkänns automatiskt"), card(21, "Godkänns automatiskt")],
+      { 20: [{ label: "auto-godkänn", at: hoursAgo(25) }], 21: [{ label: "auto-godkänn", at: hoursAgo(2) }] });
+    const writes = gh.calls.filter((c) => !c.includes("/events"));
+    expect(writes).toHaveLength(2);
+    expect(writes[0]).toContain(`issues/20/comments -f body=${BOARD_MARKER}\nFörslaget gäller: 24 timmar utan veto`);
+    expect(writes[1]).toBe(`api -X DELETE repos/${FB}/issues/20/labels/auto-godk%C3%A4nn`);
+  });
+
+  it("agentens förslag: till Godkänd gäller det direkt (ingen verifierad); till Svara blir det blockerat (#1872)", () => {
+    const now = sync([proposal(22)], [card(22, "Godkänd")], { 22: [{ label: "auto-godkänn", at: hoursAgo(1) }] });
+    expect(now.r.approved).toEqual([22]);
+    expect(now.gh.calls.filter((c) => !c.includes("/events"))).toEqual([
+      `api repos/${FB}/issues/22/comments -f body=${BOARD_MARKER}\nFörslaget gäller: Ulrik godkände det på tavlan. Gå på agentens förslag i den senaste frågan ovan.`,
+      `api -X DELETE repos/${FB}/issues/22/labels/auto-godk%C3%A4nn`,
+    ]);
+    const vetoed = sync([proposal(23)], [card(23, "Svara")], { 23: [{ label: "auto-godkänn", at: hoursAgo(30) }] });
+    expect(vetoed.r.vetoed).toEqual([23]);
+    expect(vetoed.gh.calls.filter((c) => !c.includes("/events"))).toEqual([
+      `api -X DELETE repos/${FB}/issues/23/labels/auto-godk%C3%A4nn`,
+      `api repos/${FB}/issues/23/labels -f labels[]=blockerad`,
+      `api repos/${FB}/issues/23/comments -f body=${BOARD_MARKER}\nVeto på tavlan: agentens förslag gäller inte. Vänta på Ulriks svar i issuen.`,
+    ]);
+    const dry = sync([proposal(24)], [card(24, "Godkänns automatiskt")], { 24: [{ label: "auto-godkänn", at: hoursAgo(30) }] }, false);
+    expect(dry.gh.calls.filter((c) => !c.includes("/events"))).toEqual([]);
   });
 
   it("veto: Ulrik flyttade kortet till Att besluta → flaggan bort, inget godkännande", () => {

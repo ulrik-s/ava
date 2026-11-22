@@ -26,6 +26,14 @@ describe("commentTarget", () => {
     expect(commentTarget(flow, codePr, { body: "Kör på alternativ 2.", byUlrik: true, labels: ["agent-pr", "behöver-ändras", "blockerad"] })).toBe("L4");
   });
 
+  it("Ulriks svar (eller tavlans 'Förslaget gäller') på en agents förslag startar tillståndets agent (#1872)", () => {
+    expect(commentTarget(flow, intake, { body: "Svar: 2.", byUlrik: true, labels: ["designas", "auto-godkänn"] })).toBe("L2");
+    expect(commentTarget(flow, intake, { body: "Svar: 2.", byUlrik: true, labels: ["intern", "auto-godkänn"] })).toBe("L1");
+    // Intagsbeslutet (undersökt + auto-godkänn) har ingen agent att starta.
+    expect(commentTarget(flow, intake, { body: "Bra.", byUlrik: true, labels: ["undersökt", "auto-godkänn"] })).toBeNull();
+    expect(commentTarget(flow, intake, { body: "Svar: 2.", byUlrik: false, labels: ["designas", "auto-godkänn"] })).toBeNull();
+  });
+
   it("i det publika kodrepot räknas inte markören — vem som helst kan skriva den", () => {
     expect(commentTarget(flow, codePr, { body: REPLY, byUlrik: false, labels: ["att-granska"] })).toBeNull();
   });

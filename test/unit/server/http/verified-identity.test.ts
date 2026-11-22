@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { users } from "@/lib/server/db/schema";
 import { createServerContext } from "@/lib/server/http/server-context";
-import { discoveredJwks, identityConfigFromEnv, IDENTITY_TOKEN_HEADER, parseAudience } from "@/lib/server/http/verified-identity";
+import { discoveredJwks, identityConfigFromEnv, IDENTITY_TOKEN_HEADER } from "@/lib/server/http/verified-identity";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -57,12 +57,6 @@ describe("identityConfigFromEnv", () => {
     expect(() => identityConfigFromEnv({ AVA_IDENTITY: "trust-me" })).toThrow(/"forwarded" eller "verified"/);
   });
 
-  it("parseAudience: tom → ingen, en → sträng, flera → lista", () => {
-    expect(parseAudience(undefined)).toBeUndefined();
-    expect(parseAudience(" , ")).toBeUndefined();
-    expect(parseAudience("x")).toBe("x");
-    expect(parseAudience("x,y")).toEqual(["x", "y"]);
-  });
 });
 
 describe("discoveredJwks", () => {
@@ -140,6 +134,12 @@ describe("createServerContext i verified-läget (#1256)", () => {
     const helperDeps = { ...verified(), bearer: { issuer: ISSUER, audience: "helper", jwks } };
     const ctx = await createServerContext(req({ authorization: `Bearer ${await idToken({ email: "anna@byra.se" }, { audience: "helper" })}` }), helperDeps);
     expect(ctx.user).toMatchObject({ id: ANNA });
+  });
+
+  it("klientens egen Bearer utfärdad till en annan app → ingen principal (#1801)", async () => {
+    const helperDeps = { ...verified(), bearer: { issuer: ISSUER, audience: "helper", jwks } };
+    const otherApp = `Bearer ${await idToken({ email: "anna@byra.se" }, { audience: "annan-app" })}`;
+    expect((await createServerContext(req({ authorization: otherApp }), helperDeps)).user).toBeNull();
   });
 
   // #1351: utgången token skiljs från spärrat konto — klienten ber om ny inloggning.

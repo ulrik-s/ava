@@ -46,6 +46,7 @@ import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/se
 import { emailStatusLine } from "@/lib/server/integrations/email/disabled-email-sender";
 import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-service";
 import { DEFAULT_INTEGRITY_INTERVAL_MS, runContentIntegrityCheck, scheduleContentIntegrity } from "@/lib/server/integrity/content-integrity";
+import { backfillBadDebtWriteOffs } from "@/lib/server/jobs/bad-debt-write-off-backfill";
 import { backfillDocumentKinds } from "@/lib/server/jobs/document-kinds-backfill";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
 import { backfillPublicAssignmentTypes } from "@/lib/server/jobs/public-assignment-backfill";
@@ -200,6 +201,11 @@ function main(): void {
   // Ändrar inga ärenden — det görs när admin sparar ärendetyperna. Best effort.
   void backfillPublicAssignmentTypes(api.repos, [asId<"OrganizationId">(config.organizationId)], (m) => log(`offentligt uppdrag: ${m}`))
     .then((r) => log(`offentligt uppdrag: ${r.organizations} byråer uppdaterade, ${r.failed} fel`));
+
+  // #1809: äldre BAD_DEBT-fakturor utan WriteOff-post får en (ADR 0007), som
+  // demons migrate-on-read. Bara INSERT, rör inte bokföringen. Best effort.
+  void backfillBadDebtWriteOffs(api.repos, [asId<"OrganizationId">(config.organizationId)], (m) => log(`kundförlust: ${m}`))
+    .then((r) => log(`kundförlust: ${r.writeOffs} avskrivningsposter skapade, ${r.failed} fel`));
 
   // Integritetskontroll (#1145): dokument med metadata men utan innehåll loggas
   // som `content.integrity.missing` (level error) vid start och sedan dagligen.

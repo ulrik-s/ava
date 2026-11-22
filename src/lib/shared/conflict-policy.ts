@@ -21,7 +21,7 @@ const APPEND: ReadonlySet<string> = new Set([
 ]);
 
 const LWW: ReadonlySet<string> = new Set([
-  "matter", "contact", "matterContact", "documentFolder", "documentPart", "task",
+  "matter", "contact", "documentFolder", "documentPart", "task",
   "serviceNote", "userPreference", "orgPreference",
 ]);
 

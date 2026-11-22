@@ -3,9 +3,26 @@
  * migrationer och fler än tio per dygn — vanliga PR:er påverkas aldrig.
  */
 import { describe, expect, it } from "vitest-compat";
-import { AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, guardViolations, type GuardInput, humanApproved, trustedLabels } from "../../tooling/scripts/agent-guard";
+import {
+  AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, guardViolations, type GuardInput, humanApproved, rankInLast24h, trustedLabels,
+} from "../../tooling/scripts/agent-guard";
 
 const BASE: GuardInput = { labels: ["agent-pr", "granskad"], files: ["src/app/matters/page.tsx"], addedMigrationLines: [], agentPrsLast24h: 1 };
+
+describe("rankInLast24h (#1954)", () => {
+  const now = Date.parse("2026-11-22T12:00:00Z");
+  const h = (hoursAgo: number): string => new Date(now - hoursAgo * 3_600_000).toISOString();
+
+  it("räknar PR:er de senaste 24 h från nu, till och med den här", () => {
+    const created = Date.parse(h(2));
+    expect(rankInLast24h([h(30), h(20), h(5), h(2), h(1)], created, now)).toBe(3);
+  });
+
+  it("en PR som var över taket går igenom när dygnet gått", () => {
+    const old = Array.from({ length: 25 }, (_, i) => h(30 + i / 10));
+    expect(rankInLast24h(old, Date.parse(h(30)), now)).toBe(0);
+  });
+});
 
 describe("guardViolations", () => {
   it("vanlig PR (utan agent-pr) passerar alltid", () => {

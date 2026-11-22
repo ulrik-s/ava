@@ -136,7 +136,11 @@
 - **pg-boss jobb-kö** (#504): durabel server-sidig kö på samma Postgres (eget
   `pgboss`-schema). Claim/lease (FOR UPDATE SKIP LOCKED), retry/backoff,
   dead-letter. Handlers (t.ex. e-postutskick via smtp-sender) registreras i
-  runtimen; `ctx.ports.email` köar durabelt.
+  runtimen; `ctx.ports.email` köar durabelt. **Schemalagda jobb** (#1802):
+  en post i `JOB_SCHEDULES` (kö + cron i svensk tid, `missed` `once` som
+  standard) plus köns handler i `buildServerFirstJobHandlers`; runtimen
+  registrerar den med `boss.schedule` vid start, bara när kön har en handler,
+  och tar bort sparade scheman som inte längre är deklarerade.
 - **Fulltextsökning** (#1215): dokumentjobben (`classify-document`,
   `index-document`) extraherar texten EN gång per jobb, per sida
   (`extractPages`), och skriver den till `document_pages` (genererad
@@ -323,7 +327,8 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
 - **Procedurägda entiteter** (#1242, `src/lib/shared/sync/procedure-owned.ts`):
   ärenden, tid, utlägg och all fakturering skrivs bara av procedurkön — liksom
   administrationen (#1344): användare, byrån, kontor, byråns standardvyer och
-  dokumentmallar, eftersom rollen läses ur användarraden. Servern tar inte
+  dokumentmallar, eftersom rollen läses ur användarraden — och ärendets
+  parter (#1883), eftersom en ny part jävskontrolleras på servern. Servern tar inte
   emot färdiga rader för dem — en sådan radpush avvisas med ett besked (en
   manipulerad klient, eller en post som en äldre version köade). Bankgiro,
   organisationsnummer och kontoplan ändras bara av admin.

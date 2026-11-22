@@ -14,7 +14,7 @@ describe("conflictClassOf", () => {
   });
 
   it("beskrivande entiteter → lww", () => {
-    for (const e of ["matter", "contact", "matterContact", "task", "serviceNote", "userPreference"]) {
+    for (const e of ["matter", "contact", "task", "serviceNote", "userPreference"]) {
       expect(conflictClassOf(e)).toBe("lww");
     }
   });
@@ -22,6 +22,8 @@ describe("conflictClassOf", () => {
   it("pengar/tillstånd → surface", () => {
     expect(conflictClassOf("invoice")).toBe("surface");
     expect(conflictClassOf("paymentPlan")).toBe("surface");
+    // Ärendets parter är procedurägda (#1883): en procedurägd entitet är surface.
+    expect(conflictClassOf("matterContact")).toBe("surface");
   });
 
   it("oklassad entitet defaultar till surface (säkrast)", () => {

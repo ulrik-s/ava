@@ -693,7 +693,7 @@ loggar in mot byråns IdP själv och skickar sin access-token som
 | `AVA_HELPER_OIDC_CLIENT_ID` | samma som `OAUTH2_PROXY_CLIENT_ID` | klient-id helpern loggar in med |
 | `AVA_HELPER_OIDC_SCOPE` | `api://<klient-id>/access_as_user openid email profile offline_access` | scopet helpern ber om — utan byråns API-scope får token Graph som audience och avvisas |
 | `AVA_HELPER_OIDC_JWKS_URI` | `https://login.microsoftonline.com/<tenant>/discovery/v2.0/keys` | Entras nycklar (default-vägen är Keycloaks) |
-| `AVA_HELPER_OIDC_AUDIENCE` | tomt | lämna tomt — oauth2-proxy kontrollerar `aud` |
+| `AVA_HELPER_OIDC_AUDIENCE` | tomt | tomt = `AVA_HELPER_OIDC_CLIENT_ID`; servern kräver en audience och startar inte utan |
 
 Entra-appen måste först exponera ett API och lägga `email` i access-token,
 annars saknar helperns token det oauth2-proxy verifierar mot — se
