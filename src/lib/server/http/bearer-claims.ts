@@ -7,7 +7,7 @@
  *
  * **IdP-agnostiskt (BYO-IdP):** issuer + JWKS-URL kommer ur konfiguration/OIDC-
  * discovery (Keycloak-fixturen i dev; Entra/Google/Okta i produktion). AVA kör
- * aldrig egen IdP. `jose.jwtVerify` validerar signatur + issuer + (ev.) audience
+ * aldrig egen IdP. `jose.jwtVerify` validerar signatur + issuer + audience
  * + exp/nbf kryptografiskt — en token utan giltig signatur ger `null` (anonym),
  * precis som en saknad cookie. Inget Keycloak-beroende i koden.
  *
@@ -22,8 +22,11 @@ import { parseBearerToken } from "./pat";
 export interface BearerVerifyConfig {
   /** Förväntad issuer (`iss`) — IdP:ns issuer-URL. */
   issuer: string;
-  /** Förväntad audience (`aud`), en eller flera. Utelämnad → ingen aud-kontroll. */
-  audience?: string | string[];
+  /**
+   * Förväntad audience (`aud`), en eller flera. Obligatorisk (#1801): utan den
+   * godtas en token som samma IdP utfärdat till en annan app.
+   */
+  audience: string | string[];
   /** Nyckelkälla (JWKS). Injicerbar för test (`createLocalJWKSet`). */
   jwks: JWTVerifyGetKey;
 }
@@ -73,7 +76,7 @@ export async function verifyBearerToken(value: string | null, config: BearerVeri
       issuer: config.issuer,
       algorithms: [...ACCEPTED_ALGORITHMS],
       clockTolerance: CLOCK_TOLERANCE_S,
-      ...(config.audience !== undefined ? { audience: config.audience } : {}),
+      audience: config.audience,
     });
     const claims = claimsFromPayload(payload);
     return claims ? { kind: "verified", claims } : { kind: "invalid" };
@@ -114,16 +117,16 @@ export function remoteJwksForIssuer(issuer: string, jwksUri?: string): JWTVerify
   return createRemoteJWKSet(new URL(uri));
 }
 
-/**
- * Bygg `BearerVerifyConfig` ur miljön, eller `null` om Bearer-vägen inte är
- * konfigurerad (då är beteendet oförändrat — bara oauth2-proxy-cookien gäller).
- *   - `AVA_OIDC_ISSUER`   (krävs) — IdP:ns issuer-URL.
- *   - `AVA_OIDC_JWKS_URI` (valfri) — explicit JWKS-URL (annars Keycloak-vägen).
- *   - `AVA_OIDC_AUDIENCE` (valfri) — förväntad `aud`.
- */
 /** Trimmat env-värde; tomt räknas som osatt (compose sätter `""` för av). */
 function envValue(env: Record<string, string | undefined>, key: string): string | undefined {
   return env[key]?.trim() || undefined;
+}
+
+/** `a,b` → `["a","b"]`; en enda → strängen. */
+export function parseAudience(raw: string | undefined): string | string[] | undefined {
+  const list = (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (list.length === 0) return undefined;
+  return list.length === 1 ? list[0] : list;
 }
 
 /**
@@ -146,14 +149,19 @@ export function helperOidcConfig(env: Record<string, string | undefined> = proce
   };
 }
 
+/**
+ * Bygg `BearerVerifyConfig` ur miljön, eller `null` om Bearer-vägen inte är
+ * konfigurerad (då är beteendet oförändrat — bara oauth2-proxy-cookien gäller).
+ * Anropas vid start: en issuer utan audience stoppar starten (#1801), som
+ * `identityConfigFromEnv` och MCP-configen.
+ *   - `AVA_OIDC_ISSUER`   — IdP:ns issuer-URL; osatt → ingen Bearer-väg.
+ *   - `AVA_OIDC_AUDIENCE` (krävs med issuer) — förväntad `aud`, kommaseparerad för flera.
+ *   - `AVA_OIDC_JWKS_URI` (valfri) — explicit JWKS-URL (annars Keycloak-vägen).
+ */
 export function bearerConfigFromEnv(env: Record<string, string | undefined> = process.env): BearerVerifyConfig | null {
-  const issuer = env.AVA_OIDC_ISSUER?.trim();
+  const issuer = envValue(env, "AVA_OIDC_ISSUER");
   if (!issuer) return null;
-  const jwksUri = env.AVA_OIDC_JWKS_URI?.trim();
-  const audience = env.AVA_OIDC_AUDIENCE?.trim();
-  return {
-    issuer,
-    ...(audience ? { audience } : {}),
-    jwks: remoteJwksForIssuer(issuer, jwksUri || undefined),
-  };
+  const audience = parseAudience(envValue(env, "AVA_OIDC_AUDIENCE"));
+  if (!audience) throw new Error("AVA_OIDC_ISSUER kräver AVA_OIDC_AUDIENCE.");
+  return { issuer, audience, jwks: remoteJwksForIssuer(issuer, envValue(env, "AVA_OIDC_JWKS_URI")) };
 }
