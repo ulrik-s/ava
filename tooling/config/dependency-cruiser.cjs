@@ -233,6 +233,7 @@ module.exports = {
         path: [
           "^src/lib/shared/",
           "^src/lib/server/routers/(invoice|billingRun|reports|ledger)\\.ts$",
+          "^src/lib/server/routers/billingRun/",
         ],
       },
       to: {
@@ -279,6 +280,19 @@ module.exports = {
         "document/) får importera dem; andra moduler går via documentRouter/_app.",
       from: { pathNot: "^src/lib/server/routers/document(/|\\.ts$)" },
       to: { path: "^src/lib/server/routers/document/" },
+    },
+    {
+      // Samma gräns som `router-internals-private`, för billingRun-routerns
+      // undermapp (#1766): `billingRun.ts` komponerar procedurgrupperna i
+      // `routers/billingRun/`, som bara den och syskonen får importera.
+      name: "billingRun-router-internals-private",
+      severity: "error",
+      comment:
+        "Djup cross-module-import förbjuden: routers/billingRun/ är billingRun-" +
+        "routerns privata procedurgrupper. Bara billingRun.ts (+ syskon i " +
+        "billingRun/) får importera dem; andra moduler går via billingRunRouter/_app.",
+      from: { pathNot: "^src/lib/server/routers/billingRun(/|\\.ts$)" },
+      to: { path: "^src/lib/server/routers/billingRun/" },
     },
   ],
   options: {
