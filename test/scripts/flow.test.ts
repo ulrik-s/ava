@@ -34,8 +34,8 @@ describe("flow.yaml", () => {
     expect(flowErrors(flow)).toEqual([]);
   });
 
-  it("bara byggloopen kör flera samtidigt (#1837)", () => {
-    expect(Object.entries(flow.routines).filter(([, r]) => r.parallel > 1).map(([id, r]) => [id, r.parallel])).toEqual([["L4", 3]]);
+  it("alla loopar kör en i taget (#1837: tre L4 samtidigt drog för mycket användning)", () => {
+    expect(Object.entries(flow.routines).filter(([, r]) => r.parallel > 1)).toEqual([]);
   });
 
   it("labels.json och docs/agent-flow.md är genererade ur den aktuella filen", () => {
@@ -472,9 +472,9 @@ describe("knuffen", () => {
     const lines: string[] = [];
     const ctx = { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l: string) => lines.push(l), started: new Map<string, number>() };
     const four = [3, 4, 5, 6].map((number) => ({ ...item(["behöver-ändras"], 2), number }));
-    expect(await runNudges(flow, codePr, four, ctx)).toBe(3);
-    expect(urls).toHaveLength(3);
-    expect(lines.filter((l) => l.includes("redan startad"))).toHaveLength(1);
+    expect(await runNudges(flow, codePr, four, ctx)).toBe(1);
+    expect(urls).toHaveLength(1);
+    expect(lines.filter((l) => l.includes("redan startad"))).toHaveLength(3);
     expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], ctx)).toBe(0);
   });
 });
