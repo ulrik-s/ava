@@ -7,11 +7,12 @@ import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import { chargedVatOre, expenseNetOre } from "@/lib/shared/expense-vat";
+import { netOreOf, vatOreOf } from "@/lib/shared/billing-work-value";
+import { chargedExpenseLines, expenseNetOre } from "@/lib/shared/expense-vat";
 import { toIsoDate } from "@/lib/shared/iso-date";
 import type { MileageExpensePayload } from "@/lib/shared/mileage-rate";
 import type { ExpenseId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
-import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
+import { VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
 import { MileageForm } from "./_mileage-form";
 import { VatPreview } from "./_vat-preview";
 
@@ -59,7 +60,7 @@ function initialForm(): ExpenseForm {
 
 function toForm(e: Expense): ExpenseForm {
   // Visa beloppet EXKL. moms i formuläret oavsett hur det lagrats.
-  const exclOre = splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).exclVat;
+  const exclOre = expenseNetOre(e);
   return {
     date: toIsoDate(e.date),
     amount: exclOre / 100,
@@ -92,25 +93,21 @@ function payloadOf(f: ExpenseForm): {
   };
 }
 
-function computeTotals(expenses: Expense[]): { exclVat: number; vat: number; inclVat: number } {
-  return expenses.reduce(
-    (acc, e) => {
-      const r = vatOf(e);
-      return { exclVat: acc.exclVat + r.exclVat, vat: acc.vat + r.vat, inclVat: acc.inclVat + r.inclVat };
-    },
-    { exclVat: 0, vat: 0, inclVat: 0 },
-  );
+/**
+ * Vad utläggen DEBITERAS med (#975), med fakturans regler (#1826): varje rad i
+ * hela kronor och 25 % moms på summan av raderna (`chargedExpenseLines`), så att
+ * listan går ihop med fakturans utläggsrader. Äkta utlägg bär ingen moms.
+ */
+function chargedTotals(expenses: readonly Expense[]): { exclVat: number; vat: number; inclVat: number } {
+  const lines = chargedExpenseLines(expenses);
+  const exclVat = netOreOf(lines);
+  const vat = vatOreOf(lines);
+  return { exclVat, vat, inclVat: exclVat + vat };
 }
 
-/**
- * Vad utlägget DEBITERAS med (#975) — inte vad byrån betalade. Listan visade förr
- * byråns egen sats, vilket gjorde att summan i tabellen inte gick ihop med
- * fakturan. Äkta utlägg vidarefaktureras utan moms.
- */
+/** En rad i listan — som `specExpenseLines`, en rad per utlägg. */
 function vatOf(e: Expense): { exclVat: number; vat: number; inclVat: number } {
-  const exclVat = expenseNetOre({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true, passThrough: e.passThrough ?? false });
-  const vat = e.passThrough ? 0 : chargedVatOre(exclVat);
-  return { exclVat, vat, inclVat: exclVat + vat };
+  return chargedTotals([e]);
 }
 function invoiceLabel(e: Expense): string {
   return e.invoice?.invoiceNumber ?? (e.invoiceId ? "(faktura)" : "Ej fakturerad");
@@ -167,7 +164,7 @@ function expenseColumns({ onEdit, onDelete }: { onEdit: (e: Expense) => void; on
 
 /** Summa-rad (footer) för utläggstabellen. */
 function expenseFooter(rows: Expense[]): Partial<Record<string, React.ReactNode>> {
-  const t = computeTotals(rows);
+  const t = chargedTotals(rows);
   return {
     description: <span className="text-gray-700">Summa</span>,
     exclVat: <span className="font-mono text-gray-900">{formatCurrency(t.exclVat)}</span>,

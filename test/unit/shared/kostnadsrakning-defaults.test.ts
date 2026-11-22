@@ -1,11 +1,14 @@
 /**
- * Kostnadsräkningens standardvärden: utan uppgift gäller F-skatt, taxeärende
- * och "moms ingår". Mutationstestningen visade att varje `?? true` kunde bytas
- * mot false utan att något test fällde — samma klass av fel som F-skatt-
- * standardvärdet i databasen (#1675). Här jämförs utelämnat värde med `true`.
+ * Kostnadsräkningens standardvärden: utan uppgift gäller F-skatt och taxeärende,
+ * och ett utlägg är netto (#782, #1826) som i databasen och zod.
+ * Mutationstestningen visade att varje `?? true` kunde bytas mot false utan att
+ * något test fällde — samma klass av fel som F-skatt-standardvärdet i databasen
+ * (#1675). Här jämförs utelämnat värde med standardvärdet.
  */
 import { describe, expect, it } from "vitest-compat";
+import { expenseBreakdownLines } from "@/lib/shared/billing-work-value";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const base = {
   matter: { matterNumber: "2026-0016", title: "Brottmål — rattfylleri", clientName: "Falk" },
@@ -45,11 +48,13 @@ describe("kostnadsräkningens standardvärden", () => {
     expect(r.timeLines).toEqual(taxe.timeLines);
   });
 
-  it("ett utlägg utan vatIncluded räknas som inklusive moms", () => {
+  it("ett utlägg utan vatIncluded räknas som netto, som yrkandet (#1826)", () => {
     const r = buildKostnadsrakningContext({ ...base, hasFTax: true, expenses: [train] });
     const incl = buildKostnadsrakningContext({ ...base, hasFTax: true, expenses: [{ ...train, vatIncluded: true }] });
     const excl = buildKostnadsrakningContext({ ...base, hasFTax: true, expenses: [{ ...train, vatIncluded: false }] });
-    expect(r.expenseLines).toEqual(incl.expenseLines);
-    expect(r.expenseLines).not.toEqual(excl.expenseLines);
+    expect(r.expenseLines).toEqual(excl.expenseLines);
+    expect(r.expenseLines).not.toEqual(incl.expenseLines);
+    const [line] = expenseBreakdownLines({ timeEntries: [], expenses: [{ ...train, id: asId<"ExpenseId">(train.id) }] });
+    expect(r.expenseSummary.exclVat).toBe(line?.netOre);
   });
 });

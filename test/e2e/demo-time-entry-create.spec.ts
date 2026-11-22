@@ -110,9 +110,9 @@ test("en milersättning läggs in i ärendet och syns i utläggslistan med moms"
 
   const row = utlagg.getByRole("row").filter({ hasText: "Milersättning E2E-start – E2E-mål, 3,5 mil à 25 kr" });
   await expect(row).toBeVisible();
-  await expect(row).toContainText(/87,50/);
-  await expect(row).toContainText(/21,88/);
-  await expect(row).toContainText(/109,38/);
+  await expect(row).toContainText(/88,00/);
+  await expect(row).toContainText(/22,00/);
+  await expect(row).toContainText(/110,00/);
 });
 
 /*

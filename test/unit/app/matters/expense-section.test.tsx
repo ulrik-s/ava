@@ -4,25 +4,24 @@
  * och "Nytt utlägg"-modalen.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest-compat";
+import { render, screen, fireEvent, within } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest-compat";
 import { ExpenseSection } from "@/app/matters/[id]/_expense-section";
+import { expenseBreakdownLines, grossOreOf, netOreOf, vatOreOf } from "@/lib/shared/billing-work-value";
 import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/demo/entity-link", () => ({
   EntityLink: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
 }));
 
-const expenseQuery = {
-  data: {
+const defaultData: unknown = {
     expenses: [
       { id: "e1", date: "2026-03-01", amount: 12500, description: "Tågbiljett", billable: true, user: { name: "Anna" }, vatRate: 2500, vatIncluded: true, invoiceId: null },
       { id: "e2", date: "2026-03-02", amount: 50000, description: "Domstolsavgift", billable: true, user: { name: "Anna" }, vatRate: 2500, vatIncluded: true, invoiceId: "inv9", invoice: { id: "inv9", invoiceNumber: "F-2026-0001" } },
     ],
     totalAmount: 62500,
-  } as unknown,
-  isLoading: false,
 };
+const expenseQuery: { data: unknown; isLoading: boolean } = { data: defaultData, isLoading: false };
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
 const deleteMutate = vi.fn();
@@ -146,5 +145,58 @@ describe("ExpenseSection", () => {
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     fireEvent.click(screen.getByText("Avbryt"));
     expect(screen.queryByText("Nytt utlägg")).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * #1826: listan räknar som fakturan — varje rad i hela kronor och 25 % moms på
+ * summan av raderna (`chargedExpenseLines`). Öresavrundningen gav 615,03 /
+ * 131,26 / 746,29 kr, som inte gick ihop med fakturans utläggsrader.
+ */
+describe("ExpenseSection — summorna som på fakturan (#1826)", () => {
+  const expenses = [
+    { id: asId<"ExpenseId">("x1"), date: "2026-03-01", amount: 10050, description: "Porto", billable: true, vatRate: 2500, vatIncluded: false, passThrough: false, invoiceId: null },
+    { id: asId<"ExpenseId">("x2"), date: "2026-03-02", amount: 45000, description: "Tåg", billable: true, vatRate: 600, passThrough: false, invoiceId: null },
+    { id: asId<"ExpenseId">("x3"), date: "2026-03-03", amount: 9000, description: "Ansökningsavgift", billable: true, vatRate: 2500, vatIncluded: false, passThrough: true, invoiceId: null },
+  ];
+
+  beforeEach(() => { expenseQuery.data = { expenses, totalAmount: 64050 }; });
+  afterEach(() => { expenseQuery.data = defaultData; });
+
+  const rowOf = (text: string): HTMLElement => {
+    const row = screen.getByText(text).closest("tr");
+    if (!row) throw new Error(`ingen rad för ${text}`);
+    return row;
+  };
+
+  it("summaraden är fakturans utläggsrader: 641,00 / 138,00 / 779,00 kr", () => {
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+    const footer = within(rowOf("Summa"));
+    const lines = expenseBreakdownLines({ timeEntries: [], expenses });
+    expect([netOreOf(lines), vatOreOf(lines), grossOreOf(lines)]).toEqual([64_100, 13_800, 77_900]);
+    expect(footer.getByText(/641,00/)).toBeInTheDocument();
+    expect(footer.getByText(/138,00/)).toBeInTheDocument();
+    expect(footer.getByText(/779,00/)).toBeInTheDocument();
+  });
+
+  it("varje rad i hela kronor: 100,50 kr blir 101,00 / 25,00 / 126,00 kr", () => {
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+    const row = within(rowOf("Porto"));
+    expect(row.getByText(/101,00/)).toBeInTheDocument();
+    expect(row.getByText(/25,00/)).toBeInTheDocument();
+    expect(row.getByText(/126,00/)).toBeInTheDocument();
+  });
+
+  it("ett utlägg utan vatIncluded är netto, och ett äkta utlägg bär ingen moms", () => {
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+    expect(within(rowOf("Tåg")).getByText(/450,00/)).toBeInTheDocument();
+    expect(within(rowOf("Ansökningsavgift")).getByText(/^0,00/)).toBeInTheDocument();
+    expect(within(rowOf("Ansökningsavgift")).getAllByText(/90,00/)).toHaveLength(2);
+  });
+
+  it("Ändra fyller i nettot ur expenseNetOre (utan vatIncluded: netto)", () => {
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+    fireEvent.click(within(rowOf("Tåg")).getByText("Ändra"));
+    expect(screen.getByDisplayValue("450")).toBeInTheDocument();
   });
 });

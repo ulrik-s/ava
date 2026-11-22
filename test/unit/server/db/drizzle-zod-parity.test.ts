@@ -192,14 +192,6 @@ const noGoneEnumDrift: [GoneEnumDrift] extends [never] ? true : GoneEnumDrift = 
 
 /** Kända reservvärden som motsäger databasen: `fil: fält ?? värde (antal)`. */
 const KNOWN_FALLBACKS: Readonly<Record<string, KnownDeviation>> = {
-  "src/app/matters/[id]/_expense-section.tsx: vatIncluded ?? true (2)": {
-    why: "Utläggslistan läser ett utlägg utan fältet som brutto; databasen och zod säger netto.",
-    issue: 1455,
-  },
-  "src/lib/shared/kostnadsrakning.ts: vatIncluded ?? true (1)": {
-    why: "Kostnadsräkningens dokument läser ett utlägg utan fältet som brutto; yrkandet räknar netto.",
-    issue: 1455,
-  },
   "src/lib/shared/kostnadsrakning.ts: isTaxeArende ?? true (4)": {
     why: "Kostnadsräkningen antar taxa när uppgiften saknas; ärendets standardvärde är false.",
     issue: 1695,
