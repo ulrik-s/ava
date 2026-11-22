@@ -40,6 +40,10 @@ services:
       - ../../releases:/srv/releases:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Nät (#1879): bara `edge` — Caddy når oauth2-proxy och server-first, men
+    # inte databasen.
+    networks:
+      - edge
     depends_on:
       oauth2-proxy:
         condition: service_started
@@ -92,6 +96,8 @@ services:
       # väg förbi Caddy. OPT-IN: kräver Entra-konfigen i docs/self-hosted-entra.md
       # (exponerat API + email i access-token). Av som default.
       OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS: "${AVA_HELPER_ENABLED:-false}"
+    networks:
+      - edge
 
   # ─── Postgres: byråns akter ───────────────────────────────────────────
   postgres:
@@ -105,8 +111,15 @@ services:
     # flit; här ÄR den byråns akter.
     volumes:
       - pgdata:/var/lib/postgresql/data
-    # Ingen host-port: databasen nås bara inifrån nätet. Backup går via
+    # Ingen host-port, och bara nätet `default` (#1879): databasen nås av
+    # server-first, inte av Caddy, oauth2-proxy eller ollama. Backup går via
     # `docker compose exec`, se tooling/scripts/backup-db.sh.
+    #
+    # `default` (= `ava_default`) behålls med flit: deploy-prod.sh kör
+    # migreringen med `docker run --network ava_default` innan `dc up`, och
+    # `avarun` i installationen (docs/deploy-server-first.md) går på samma nät.
+    networks:
+      - default
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ava} -d ${POSTGRES_DB:-ava}"]
       interval: 10s
@@ -197,6 +210,12 @@ services:
       # De krypterade exporterna (backup-export.sh), READ-ONLY: läget och
       # nedladdningen. Servern har bara den publika nyckeln — den kan inte läsa dem.
       - ${AVA_BACKUP_EXPORT_HOST_DIR:-/srv/backup-chroot/ava}:/data/backup-exports:ro
+    # Nät (#1879): `default` mot postgres, `edge` mot Caddy och `llm` mot ollama.
+    # Servern är den enda tjänsten som når alla tre.
+    networks:
+      - default
+      - edge
+      - llm
     # /readyz rör DATABASEN (#1079). En attrapp som bara säger att processen
     # startat hade rapporterat frisk medan poolen var död — och då hade
     # autoheal nedan aldrig gjort något.
@@ -217,6 +236,9 @@ services:
   #
   # Därför måste healthchecken ovan vara ärlig: autoheal kan bara agera på
   # det den får veta.
+  #
+  # Inget nät alls (#1879): autoheal har docker-socketen och pratar bara med
+  # den. På ett nät hade den som tar sig in här kunnat nå servern direkt.
   autoheal:
     image: willfarrell/autoheal:latest
     restart: unless-stopped
@@ -227,10 +249,13 @@ services:
       AUTOHEAL_INTERVAL: "15"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    network_mode: none
 
   # ─── Lokal LLM för dokumentklassificering (#1156) ─────────────────────
   # OPT-IN: COMPOSE_PROFILES=llm i ava-server.env. Ingen dokumenttext lämnar
-  # servern. Ingen host-port — bara server-first når den, på det interna nätet.
+  # servern. Ingen host-port, och bara nätet `llm` (#1879): server-first når
+  # den, men den når varken databasen eller Caddy. Nätet är inte internal,
+  # eftersom modellen laddas ner från nätet.
   # Laddar ner AVA_LLM_MODEL vid start (en gång; ligger sedan i volymen).
   # Liten modell med flit: servern har 2 vCPU och ingen GPU — qwen2.5:1.5b
   # klassificerade 6/7 testdokument på ~11 s (qwen2.5:3b: 6/7 på ~24 s).
@@ -250,6 +275,16 @@ services:
       - ollama_models:/root/.ollama
     # Tak så en klassificering aldrig kan svälta databasen/appen på minne.
     mem_limit: 3g
+    networks:
+      - llm
+
+# Egna nät (#1879), så att bara det som behöver nå varandra kan det. Inget är
+# `internal: true`: Caddy hämtar cert, oauth2-proxy och servern når IdP:n,
+# servern når Fortnox m.fl., och ollama hämtar modellen. `default` står inte
+# här — det är compose-projektets eget nät (`ava_default`).
+networks:
+  edge:
+  llm:
 
 volumes:
   ollama_models:
