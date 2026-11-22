@@ -372,3 +372,91 @@ describe("buildKostnadsrakningContext — taxans årgång (#1004)", () => {
     expect(r2026.totalInclVat).toBeGreaterThan(r2025.totalInclVat);
   });
 });
+
+/*
+ * #1840: mallens textfält. Ett fält som saknas blir "" — aldrig undefined, som
+ * Handlebars annars skriver ut som tom text eller "undefined" beroende på mall.
+ */
+describe("templateContext — byråns och försvararens textfält (#1840)", () => {
+  const full = buildKostnadsrakningContext({
+    ...baseInput,
+    matter: { ...baseInput.matter, clientName: "Falk" },
+    defender: { name: "Anna Advokat", email: "anna@firma.local", title: "Advokat" },
+    organization: {
+      name: "Firma AB", orgNumber: "556999-9999", address: "Storgatan 1",
+      phone: "08-123 45 67", email: "info@firma.local", bankgiro: "123-4567",
+    },
+  }).templateContext;
+  const empty = buildKostnadsrakningContext({
+    ...baseInput,
+    matter: { matterNumber: "2026-0016", title: "Brottmål — rattfylleri" },
+    defender: { name: "Anna Advokat" },
+    organization: {},
+  }).templateContext;
+  const { organization: _omitted, ...withoutOrg } = baseInput;
+  const noOrg = buildKostnadsrakningContext(withoutOrg).templateContext;
+
+  const orgFields = [
+    ["organizationName", "Firma AB"],
+    ["organizationOrgNumber", "556999-9999"],
+    ["organizationAddress", "Storgatan 1"],
+    ["organizationPhone", "08-123 45 67"],
+    ["organizationEmail", "info@firma.local"],
+    ["organizationBankgiro", "123-4567"],
+  ] as const;
+
+  it("byråns fält bär de ifyllda värdena", () => {
+    for (const [key, value] of orgFields) expect([key, full[key]]).toEqual([key, value]);
+  });
+
+  it("byråns fält är \"\" när de saknas", () => {
+    for (const [key] of orgFields) expect([key, empty[key]]).toEqual([key, ""]);
+  });
+
+  it("byråns fält är \"\" när organisationen saknas helt", () => {
+    for (const [key] of orgFields) expect([key, noOrg[key]]).toEqual([key, ""]);
+  });
+
+  it("försvararens titel och e-post samt klientens namn bär de ifyllda värdena", () => {
+    expect([full.defenderTitle, full.defenderEmail, full.clientName]).toEqual(["Advokat", "anna@firma.local", "Falk"]);
+  });
+
+  it("försvararens titel och e-post samt klientens namn är \"\" när de saknas", () => {
+    expect([empty.defenderTitle, empty.defenderEmail, empty.clientName]).toEqual(["", "", ""]);
+  });
+});
+
+/*
+ * #1840: tidsradernas á-pris och belopp i mallen. Facit ur timkostnadsnormen
+ * 2026 med F-skatt (Domstolsverkets föreskrifter): 1 626 kr/h.
+ *   120 min × 1 626 kr/h = 2 h × 1 626 = 3 252 kr
+ *    30 min × 1 626 kr/h = 0,5 h × 1 626 = 813 kr
+ * I taxeärende täcker taxan arbetet: raden visar bara tiden.
+ */
+describe("templateContext — tidsradernas á-pris och belopp (#1840)", () => {
+  type Row = { id: string; rateFormatted: string; amountFormatted: string };
+  const rowsOf = (isTaxeArende: boolean): Row[] =>
+    buildKostnadsrakningContext({
+      ...baseInput,
+      isTaxeArende,
+      timeEntries: [
+        { id: "t1", date: "2026-05-20", description: "Genomgång förundersökning", minutes: 120, billable: true },
+        { id: "t2", date: "2026-05-22", description: "Klientmöte", minutes: 30, billable: true },
+      ],
+    }).templateContext.timeLines as Row[];
+  const byId = (rows: Row[], id: string): Row | undefined => rows.find((r) => r.id === id);
+
+  it("löpande räkning: á-pris och belopp formaterade per rad", () => {
+    const rows = rowsOf(false);
+    expect(byId(rows, "t1")?.rateFormatted).toMatch(/^1\s626,00\s+kr\/h$/);
+    expect(byId(rows, "t1")?.amountFormatted).toMatch(/^3\s252,00\s+kr$/);
+    expect(byId(rows, "t2")?.rateFormatted).toMatch(/^1\s626,00\s+kr\/h$/);
+    expect(byId(rows, "t2")?.amountFormatted).toMatch(/^813,00\s+kr$/);
+  });
+
+  it("taxeärende: á-pris och belopp är tomma för arbetsraderna", () => {
+    const rows = rowsOf(true);
+    expect(rows).toHaveLength(2);
+    for (const r of rows) expect([r.id, r.rateFormatted, r.amountFormatted]).toEqual([r.id, "", ""]);
+  });
+});
