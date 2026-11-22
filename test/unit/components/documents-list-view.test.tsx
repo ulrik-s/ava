@@ -3,9 +3,12 @@
  */
 
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest-compat";
+import { afterEach, describe, it, expect, vi } from "vitest-compat";
 import { DocumentsListView } from "@/components/documents/_documents-list-view";
 import { asId } from "@/lib/shared/schemas/ids";
+
+/** Sparade kolumninställningar (DataTable läser dem via `prefs.get`). */
+const persisted = { data: undefined as undefined | { user: unknown; org: unknown } };
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -16,7 +19,7 @@ vi.mock("@/lib/client/trpc", () => ({
       setPartKind: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     prefs: {
-      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      get: { useQuery: () => ({ data: persisted.data, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -226,9 +229,46 @@ describe("DocumentsListView — kolumner på små skärmar (#983)", () => {
 
     // Filnamnet är det enda som alltid måste synas — det får inte döljas.
     expect(headerFor("Filnamn").className).not.toContain("hidden");
-    for (const label of ["Typ", "Datum", "Storlek", "Mapp", "Uppladdad av"]) {
+    for (const label of ["Typ", "Datum", "Mapp", "Uppladdad av"]) {
       expect(headerFor(label).className, `${label} ska döljas på små skärmar`).toContain("hidden");
     }
+  });
+});
+
+/**
+ * #1803: kolumnen Storlek finns inte i listvyn, inte heller i menyn Kolumner,
+ * och en sparad inställning som nämner `sizeBytes` fäller inte listan.
+ */
+describe("DocumentsListView — ingen kolumn Storlek (#1803)", () => {
+  afterEach(() => { persisted.data = undefined; });
+
+  function renderList(): void {
+    render(
+      <DocumentsListView
+        matterId={asId<"MatterId">("m1")} documents={[baseDoc({ sizeBytes: 5_000_000 })]} folders={[]}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
+      />,
+    );
+  }
+
+  it("ingen kolumnrubrik Storlek och inget val Storlek i menyn Kolumner", () => {
+    renderList();
+    expect(screen.queryByRole("columnheader", { name: /Storlek/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/4\.8 MB/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Kolumner/ }));
+    const menu = screen.getByRole("group", { name: "Kolumner" });
+    expect(menu).toHaveTextContent("Datum");
+    expect(menu).not.toHaveTextContent("Storlek");
+  });
+
+  it("en sparad sortering på sizeBytes fäller inte listan", () => {
+    persisted.data = {
+      user: { sortBy: "sizeBytes", sortDir: "desc", columns: [{ key: "sizeBytes", hidden: false }] },
+      org: null,
+    };
+    renderList();
+    expect(screen.getByText("stamning.pdf")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /Storlek/ })).not.toBeInTheDocument();
   });
 });
 

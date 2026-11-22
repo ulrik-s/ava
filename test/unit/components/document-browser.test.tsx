@@ -603,7 +603,7 @@ describe("DocumentBrowser", () => {
     }
   });
 
-  it("formaterar filstorlek korrekt (KB, MB)", () => {
+  it("trädvyn har ingen kolumn Storlek och visar ingen filstorlek (#1803)", () => {
     treeQuery.data = {
       folders: [],
       documents: [
@@ -613,9 +613,10 @@ describe("DocumentBrowser", () => {
       ],
     };
     render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
-    expect(screen.getByText(/5 KB/)).toBeInTheDocument();
-    expect(screen.getByText(/4\.8 MB/)).toBeInTheDocument();
-    expect(screen.getByText(/500 B/)).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /Storlek/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/5 KB/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/4\.8 MB/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/500 B/)).not.toBeInTheDocument();
   });
 });
 

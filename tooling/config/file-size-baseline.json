@@ -4,7 +4,7 @@
   "src/app/matters/[id]/_billing-panel.tsx": 683,
   "src/app/matters/[id]/_kostnadsrakning-modal.tsx": 566,
   "src/app/settings/page.tsx": 508,
-  "src/components/documents/document-browser.tsx": 535,
+  "src/components/documents/document-browser.tsx": 534,
   "src/components/shell/demo-bootstrap.tsx": 576,
   "src/components/ui/data-table.tsx": 734,
   "src/lib/client/jobs/job-queue.ts": 418,
