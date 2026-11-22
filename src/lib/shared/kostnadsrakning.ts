@@ -43,7 +43,7 @@ export interface ExpenseInput {
   amount: number;
   /** Default 2500 (25 %). */
   vatRate?: number;
-  /** Default true. */
+  /** Default false — netto (#782). */
   vatIncluded?: boolean;
   billable?: boolean;
   /** Antal (t.ex. 16 mil) — visas i arbetsredogörelsen tillsammans med á-pris (#1218). */
@@ -481,7 +481,7 @@ function resolveBasis(original: BuildInput, billable: readonly TimeEntryInput[],
  */
 function expenseLinesOf(expenses: readonly ExpenseInput[]): ExpenseLine[] {
   return expenses.filter((e) => e.billable !== false).map((e) => {
-    const exclVat = roundToKronor(chargedExpenseNetOre({ ...e, vatIncluded: e.vatIncluded ?? true }));
+    const exclVat = roundToKronor(chargedExpenseNetOre(e));
     const vat = e.passThrough === true ? 0 : vatOnRow(exclVat, CHARGED_EXPENSE_VAT_RATE);
     return {
       id: e.id, date: toIsoDate(e.date), description: e.description,
