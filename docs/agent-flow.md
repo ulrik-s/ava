@@ -249,6 +249,6 @@ gh api repos/ulrik-s/ava/issues/N/labels -f 'labels[]=refaktorisering'
 | L1 | AVA - 1 - Verification - User Feedback | `tooling/agents/1-verifiering.md` | `GitHub: ava-feedback issues.opened`<br>`flödesvakten: användarens svar i AVA` | 1 |
 | L2 | AVA - 2 - Breakdown - User Feedback | `tooling/agents/2-nedbrytning.md` | `intake.verifierad`<br>`intake.designas`<br>`intake.design-godkand`<br>`intake.dubblett`<br>`GitHub: ava release.published` | 1 |
 | L3 | AVA - 3 - Review - User Feedback | `tooling/agents/3-granskning.md` | `intake.design-granskas`<br>`code-issue.att-granska`<br>`code-issue.behover-andras`<br>`code-pr.att-granska`<br>`code-pr.granskad` | 1 |
-| L4 | AVA - 4 - Implementation - User Feedback | `tooling/agents/4-implementation.md` | `code-issue.granskad`<br>`code-pr.behover-andras` | 3 |
+| L4 | AVA - 4 - Implementation - User Feedback | `tooling/agents/4-implementation.md` | `code-issue.granskad`<br>`code-pr.behover-andras` | 1 |
 | L5 | AVA - 5 - Architecture - Weekly | `tooling/agents/5-arkitektur.md` | — | 1 |
 | L6 | AVA - 6 - PR-vakt | `tooling/agents/6-pr-vakt.md` | — | 1 |
