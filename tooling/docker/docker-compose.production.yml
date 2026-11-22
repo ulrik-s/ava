@@ -165,7 +165,8 @@ services:
       # Sätts i ava-server.env när Entra är konfigurerat, se docs/self-hosted-entra.md.
       AVA_OIDC_ISSUER: "${AVA_HELPER_OIDC_ISSUER:-}"
       AVA_OIDC_CLIENT_ID: "${AVA_HELPER_OIDC_CLIENT_ID:-}"
-      AVA_OIDC_AUDIENCE: "${AVA_HELPER_OIDC_AUDIENCE:-}"
+      # Tomt AVA_HELPER_OIDC_AUDIENCE = helperns klient-id (Bearer-vägen kräver aud).
+      AVA_OIDC_AUDIENCE: "${AVA_HELPER_OIDC_AUDIENCE:-${AVA_HELPER_OIDC_CLIENT_ID:-}}"
       # Entra: "api://<klient-id>/access_as_user openid email profile offline_access".
       AVA_OIDC_SCOPE: "${AVA_HELPER_OIDC_SCOPE:-}"
       # Entras JWKS ligger inte på Keycloak-vägen som är default (bearer-claims.ts).
