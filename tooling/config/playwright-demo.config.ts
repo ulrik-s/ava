@@ -25,6 +25,8 @@ import { demoPort, PROJECT_ROOT as projectRoot } from "./demo-e2e-port";
 const DEMO_PORT = demoPort();
 const LOCAL_BASE_URL = `http://localhost:${DEMO_PORT}/ava`;
 const baseURL = process.env.AVA_DEMO_BASE_URL ?? LOCAL_BASE_URL;
+/** Enhetsspecen för iPhone och iPad (#1877) — körs bara i WebKit-projekten. */
+const TOUCH_SPEC = /demo-touch-devices\.spec\.ts$/;
 
 export default defineConfig({
   testDir: path.join(projectRoot, "test/e2e"),
@@ -71,5 +73,13 @@ export default defineConfig({
       stderr: "pipe" as const,
     },
   }),
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // WebKit med pekskärm och mobil-emulering (#1877): användarna har Safari på
+  // iPhone och iPad. WebKit-projekten kör bara enhetsspecen, Chromium allt annat.
+  // Playwright har ingen enhet som är 820 px bred → iPad (gen 7) med egen viewport.
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: TOUCH_SPEC },
+    { name: "webkit-iphone-390", use: { ...devices["iPhone 13"] }, testMatch: TOUCH_SPEC },
+    { name: "webkit-ipad-768", use: { ...devices["iPad Mini"] }, testMatch: TOUCH_SPEC },
+    { name: "webkit-ipad-820", use: { ...devices["iPad (gen 7)"], viewport: { width: 820, height: 1180 } }, testMatch: TOUCH_SPEC },
+  ],
 });

@@ -394,7 +394,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bun-setup
       - run: bun run build:demo
-      - run: bun run e2e:install
+      # Chromium + WebKit (iPhone/iPad, #1877), som Outlook-jobbet.
+      - run: npx playwright install --with-deps chromium webkit
       - name: Demo render-smoke mot lokalt serverad out/
         # Ingen `AVA_DEMO_BASE_URL` och ingen egen server-start längre (#932):
         # playwright-demo.config.ts defaultar till localhost och startar
@@ -415,6 +416,10 @@ jobs:
         # utanför CI som de kunde ruttna i tysthet. Det TYNGRE faktura-flödet
         # (demo-invoice-document) hålls fortfarande utanför; det körs i
         # `test:all` lokalt.
+        #
+        # `demo-touch-devices` (#1877) körs bara i WebKit-projekten: iPhone
+        # (390 px), iPad (768 px) och iPad (820 px), med pekskärm och
+        # mobil-emulering — dockytan, menyn, ingen sidscroll och offline.
         run: >
           npx playwright test
           test/e2e/demo-login.spec.ts
@@ -422,6 +427,7 @@ jobs:
           test/e2e/kebab-verify.spec.ts
           test/e2e/demo-offline.spec.ts
           test/e2e/demo-hydration.spec.ts
+          test/e2e/demo-touch-devices.spec.ts
           --config tooling/config/playwright-demo.config.ts
       - name: Upload Playwright report
         if: always()
