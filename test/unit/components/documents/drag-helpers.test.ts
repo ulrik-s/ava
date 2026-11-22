@@ -1,6 +1,6 @@
 /** Släpp i dokumentvyn (#1615): AVA-rad, filer utifrån eller varken eller. */
 import { describe, expect, it } from "vitest-compat";
-import { classifyDrop, isExternalDrag } from "@/components/documents/_drag-helpers";
+import { classifyDrop, formatFileSize, isExternalDrag } from "@/components/documents/_drag-helpers";
 
 const pdf = new File(["%PDF"], "a.pdf", { type: "application/pdf" });
 
@@ -27,5 +27,13 @@ describe("isExternalDrag", () => {
   it("en kolumndragning eller inget alls gör det inte", () => {
     expect(isExternalDrag({ types: ["text/x-col"] })).toBe(false);
     expect(isExternalDrag({ types: [] })).toBe(false);
+  });
+});
+
+describe("formatFileSize", () => {
+  it("byte, kilobyte och megabyte", () => {
+    expect(formatFileSize(500)).toBe("500 B");
+    expect(formatFileSize(5000)).toBe("5 KB");
+    expect(formatFileSize(5_000_000)).toBe("4.8 MB");
   });
 });

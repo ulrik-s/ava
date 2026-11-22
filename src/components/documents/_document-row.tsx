@@ -10,7 +10,6 @@ import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/share
 import { DocumentDetailsDialog } from "./_document-details-dialog";
 import { DocumentNameCell } from "./_document-name-cell";
 import type { DocumentPartView } from "./_document-parts";
-import { formatFileSize } from "./_drag-helpers";
 import type { SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 import { useLeaseAwareOpen } from "./use-lease-aware-open";
@@ -109,7 +108,6 @@ export function DocumentRow({
               onOpen={() => void openPrimary()} />
           </div>
         </td>
-        <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.sizeBytes)}</td>
         <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
           {new Date(doc.createdAt).toLocaleDateString("sv-SE")}
         </td>

@@ -3,7 +3,7 @@
  *
  * Bakgrund: rad-actions låg inline → raden blev för bred → horisontell
  * scroll på små skärmar. Nu samlas alla actions i en touch-vänlig
- * overflow-meny, och sekundära kolumner (Storlek/Datum) döljs < sm.
+ * overflow-meny, och sekundära kolumner (Datum) döljs < sm.
  *
  * Fångar två buggar jsdom-testerna missar:
  *   1. Menyn stängdes direkt vid klick eftersom scroll-lyssnaren använde
@@ -118,7 +118,7 @@ test("listvyns dolda kolumner kommer tillbaka på desktop", async ({ page }) => 
   await useViewMode(page, "list");
   await page.setViewportSize({ width: 1440, height: 900 });
   await gotoMatter(page);
-  for (const label of ["Typ", "Mapp", "Uppladdad av", "Datum", "Storlek"]) {
+  for (const label of ["Typ", "Mapp", "Uppladdad av", "Datum"]) {
     await expect(page.getByRole("columnheader", { name: new RegExp(label) }).first()).toBeVisible();
   }
 });
