@@ -46,6 +46,9 @@ const baseDoc = (overrides: any = {}) => ({
   ...overrides,
 });
 
+/** Inget laddas upp, ingen analys pågår. */
+const idle = { uploadingIds: new Set<string>(), analyzingIds: new Set<string>(), reanalyzePending: false };
+
 const baseFolder = (id: string, name: string, parentId: string | null = null) =>
   ({
     id: asId<"DocumentFolderId">(id),
@@ -67,11 +70,12 @@ describe("DocumentsListView", () => {
             { id: "p2", kind: "FUP", fromPage: 2, toPage: 40, source: "AUTO" },
           ] }),
         ]}
-        onDelete={() => {}} onReanalyze={() => {}}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
       />,
     );
-    expect(screen.getByText("Stämning")).toBeInTheDocument();
-    expect(screen.getByText("Kallelse + FUP")).toBeInTheDocument();
+    // Typen syns både i namncellens märke och i kolumnen Typ.
+    expect(screen.getAllByText("Stämning")).toHaveLength(2);
+    expect(screen.getAllByText("Kallelse + FUP")).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: /2 delar/ }));
     expect(screen.getByText("s. 2–40")).toBeInTheDocument();
   });
@@ -80,7 +84,7 @@ describe("DocumentsListView", () => {
     render(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[]} folders={[]}
-        onDelete={() => {}} onReanalyze={() => {}}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
       />,
     );
     expect(screen.getByText(/Inga dokument/)).toBeInTheDocument();
@@ -92,11 +96,11 @@ describe("DocumentsListView", () => {
     render(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[folder]}
-        onDelete={() => {}} onReanalyze={() => {}}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
       />,
     );
     expect(screen.getByText("stamning.pdf")).toBeInTheDocument();
-    expect(screen.getByText("Stämning")).toBeInTheDocument();
+    expect(screen.getAllByText("Stämning")).toHaveLength(2);
     expect(screen.getByText("/Underlag")).toBeInTheDocument();
   });
 
@@ -107,7 +111,7 @@ describe("DocumentsListView", () => {
     render(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[f1, f2]}
-        onDelete={() => {}} onReanalyze={() => {}}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
       />,
     );
     expect(screen.getByText("/Parent/Child")).toBeInTheDocument();
@@ -119,7 +123,7 @@ describe("DocumentsListView", () => {
     render(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[]}
-        onDelete={() => {}} onReanalyze={() => {}}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
       />,
     );
     // Filen renderas (alltså föll inte koden in i error-boundary)
@@ -131,10 +135,10 @@ describe("DocumentsListView", () => {
     render(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[]}
-        onDelete={() => {}} onReanalyze={() => {}}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
       />,
     );
-    expect(screen.getByRole("button", { name: "stamning.pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /stamning\.pdf/ })).toBeEnabled();
   });
 
   // Keep-both end-state i UIt (#742, ADR 0033 §4): efter en konflikt finns
@@ -149,12 +153,12 @@ describe("DocumentsListView", () => {
     render(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[original, sibling]} folders={[]}
-        onDelete={() => {}} onReanalyze={() => {}}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
       />,
     );
-    expect(screen.getByRole("button", { name: "minnesanteckning.txt" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^📄 minnesanteckning\.txt/ })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "minnesanteckning (din ändring 2027-03-14 09:15).txt" }),
+      screen.getByRole("button", { name: /^📄 minnesanteckning \(din ändring 2027-03-14 09:15\)\.txt/ }),
     ).toBeInTheDocument();
   });
 });
@@ -170,7 +174,7 @@ describe("DocumentsListView — kebab-menyn (#983)", () => {
     render(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
-        onDelete={() => {}} onReanalyze={() => {}}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
       />,
     );
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
@@ -191,7 +195,7 @@ describe("DocumentsListView — kebab-menyn (#983)", () => {
       render(
         <DocumentsListView
           matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
-          onDelete={onDelete} onReanalyze={() => {}}
+          onDelete={onDelete} onReanalyze={() => {}} {...idle}
         />,
       );
       fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
@@ -214,7 +218,7 @@ describe("DocumentsListView — kolumner på små skärmar (#983)", () => {
     render(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
-        onDelete={() => {}} onReanalyze={() => {}}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle}
       />,
     );
     const headerFor = (label: string): HTMLElement =>
@@ -225,5 +229,76 @@ describe("DocumentsListView — kolumner på små skärmar (#983)", () => {
     for (const label of ["Typ", "Datum", "Storlek", "Mapp", "Uppladdad av"]) {
       expect(headerFor(label).className, `${label} ska döljas på små skärmar`).toContain("hidden");
     }
+  });
+});
+
+/**
+ * #1796: listvyn (standardvyn) använder samma namncell som träd-vyn och får
+ * samma data: pågående uppladdningar, titel, analysstatus och analysspärren.
+ */
+describe("DocumentsListView — namncellen och statusen (#1796)", () => {
+  function renderList(docs: ReturnType<typeof baseDoc>[], props: Partial<typeof idle> = {}) {
+    render(
+      <DocumentsListView
+        matterId={asId<"MatterId">("m1")} documents={docs} folders={[]}
+        onDelete={() => {}} onReanalyze={() => {}} {...idle} {...props}
+      />,
+    );
+  }
+  function openMenu() {
+    fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+    return screen.getByRole("menu", { name: "Dokumentåtgärder" });
+  }
+
+  it("en pågående uppladdning: gråtonad, ej klickbar namncell och spärrad meny", () => {
+    renderList([baseDoc({ id: "pending-1", fileName: "skiss.pdf" })], { uploadingIds: new Set(["pending-1"]) });
+    const button = screen.getByRole("button", { name: /skiss\.pdf/ });
+    expect(button).toBeDisabled();
+    expect(button.closest(".opacity-60")).not.toBeNull();
+    expect(button.parentElement?.textContent).toContain("Laddar upp");
+    const menuButton = screen.getByLabelText("Dokumentåtgärder");
+    expect(menuButton).toBeDisabled();
+    expect(menuButton.getAttribute("title")).toBe("Vänta tills uppladdningen är klar");
+  });
+
+  it("ett färdigt dokument är inte gråtonat", () => {
+    renderList([baseDoc()]);
+    expect(screen.getByRole("button", { name: /stamning\.pdf/ }).closest(".opacity-60")).toBeNull();
+    expect(screen.getByLabelText("Dokumentåtgärder").getAttribute("title")).toBe("Dokumentåtgärder");
+  });
+
+  it("visar titeln, och filnamnet under den", () => {
+    renderList([baseDoc({ title: "Stämningsansökan", analyzedAt: new Date("2026-05-02") })]);
+    expect(screen.getByText("Stämningsansökan")).toBeInTheDocument();
+    expect(screen.getByText("stamning.pdf")).toBeInTheDocument();
+  });
+
+  it("visar \"⏳ analyseras…\" medan analysen pågår", () => {
+    renderList([baseDoc()], { analyzingIds: new Set(["d1"]) });
+    expect(screen.getByText("⏳ analyseras…")).toBeInTheDocument();
+  });
+
+  it("visar \"⚠ analys-fel\" när analysen fallerat", () => {
+    renderList([baseDoc({ analysisError: "timeout" })]);
+    expect(screen.getByText("⚠ analys-fel")).toBeInTheDocument();
+  });
+
+  it("\"Analysera (AI)\" är spärrad när reanalyzePending", () => {
+    renderList([baseDoc()], { reanalyzePending: true });
+    openMenu();
+    expect(screen.getByRole("menuitem", { name: /Analysera \(AI\)/ })).toBeDisabled();
+  });
+
+  it("\"Analysera (AI)\" går att välja när ingen analys pågår", () => {
+    const onReanalyze = vi.fn();
+    render(
+      <DocumentsListView
+        matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
+        onDelete={() => {}} onReanalyze={onReanalyze} {...idle}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+    fireEvent.click(screen.getByText("Analysera (AI)"));
+    expect(onReanalyze).toHaveBeenCalledWith("d1");
   });
 });

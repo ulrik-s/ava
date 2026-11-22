@@ -4,19 +4,20 @@
  * `DocumentsListView` — platt sorterbar lista av alla dokument i ett ärende.
  * Alternativ vy till träd-vyn när användaren vill sortera på datum, typ, mm.
  *
- * Klick på filnamnet: PDF/Office → "Editera externt" (öppnar i PDF Gear,
- * Word etc. när FSA finns). Andra filtyper → browser-tab.
+ * Filnamnet är samma `DocumentNameCell` som träd-vyn (titel, analysstatus,
+ * uppladdning). Klick: lease-medveten öppning (ADR 0033 §2).
  */
 
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
 import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
-import { DocumentPartsList, documentKindsLabel } from "./_document-parts";
+import { DocumentNameCell } from "./_document-name-cell";
+import { documentKindsLabel } from "./_document-parts";
 import { DocumentActions, type DocumentRecord } from "./_document-row";
 import { formatFileSize } from "./_drag-helpers";
 import type { FolderRecord } from "./_folder-row";
-import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
+import type { SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 import { useLeaseAwareOpen } from "./use-lease-aware-open";
 
@@ -30,6 +31,12 @@ interface Props {
   onReanalyze: (id: string) => void;
   /** Filer utifrån dras över listan; de hamnar i roten (#1615). */
   isDropTarget?: boolean;
+  /** Dokument som laddas upp just nu: gråtonade, ej klickbara, spärrad meny. */
+  uploadingIds: ReadonlySet<string>;
+  /** Dokument vars AI-analys pågår ("⏳ analyseras…"). */
+  analyzingIds: ReadonlySet<string>;
+  /** Sant medan en analys körs: "Analysera (AI)" är spärrad, som i träd-vyn. */
+  reanalyzePending: boolean;
 }
 
 const NO_SYNC: Map<string, SyncStatus> = new Map();
@@ -46,29 +53,24 @@ function folderPath(folderId: DocumentFolderId | null, folders: FolderRecord[]):
   return "/" + parts.join("/");
 }
 
-export function DocumentsListView({ matterId, documents, folders, docSync = NO_SYNC, onDelete, onReanalyze, isDropTarget = false }: Props) {
+export function DocumentsListView({
+  matterId, documents, folders, docSync = NO_SYNC, onDelete, onReanalyze, isDropTarget = false,
+  uploadingIds, analyzingIds, reanalyzePending,
+}: Props) {
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   // Lease-medveten öppning (ADR 0033 §2) — delad med träd-vyn.
   const { openDocument, leaseModal } = useLeaseAwareOpen();
 
   const columns: Column<DocumentRecord>[] = [
     // `wrap`: filnamnet är det enda som ALLTID visas, så det måste få bryta
-    // rader i stället för att tvinga fram horisontell scroll. `min-w-0` på både
-    // flex-containern och knappen — en flex-container är shrink-to-fit och
-    // växer annars till sitt max-content, vilket `break-words` inte hjälper mot.
+    // rader i stället för att tvinga fram horisontell scroll. `min-w-0` låter
+    // cellens flex-innehåll krympa (se `DocumentNameCell`).
     { key: "fileName", label: "Filnamn", sortable: true, wrap: true, sortValue: (d) => d.fileName,
       render: (d) => (
-        <span className="flex flex-col min-w-0">
-          <span className="flex items-center gap-2 min-w-0">
-            <button type="button" onClick={() => void openDocument(d, setModal)}
-              className="min-w-0 break-words text-sm font-medium text-blue-600 hover:underline text-left"
-              title="PDF/Word/Excel → öppnas i extern editor om du har valt en lokal mapp">
-              {d.fileName}
-            </button>
-            <SyncStatusBadge status={docSync.get(d.id)} />
-          </span>
-          <DocumentPartsList doc={d} />
-        </span>
+        <div className={`min-w-0 ${uploadingIds.has(d.id) ? "opacity-60" : ""}`}>
+          <DocumentNameCell doc={d} isAnalyzing={analyzingIds.has(d.id)} isUploading={uploadingIds.has(d.id)}
+            syncStatus={docSync.get(d.id)} onOpen={() => void openDocument(d, setModal)} />
+        </div>
       ),
     },
     // `hideBelow` (#983): listvyn visade sex kolumner även på 390 px och
@@ -91,16 +93,15 @@ export function DocumentsListView({ matterId, documents, folders, docSync = NO_S
       sortValue: (d) => d.sizeBytes,
       render: (d) => <span className="text-sm font-mono text-gray-500">{formatFileSize(d.sizeBytes)}</span> },
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
-      // Samma meny som träd-vyn (#983) — se `DocumentActions`. `reanalyzePending`
-      // är false här: listvyn har ingen egen mutation-status att spegla, och en
-      // felaktigt disabled rad vore värre än en knapp som kan tryckas två gånger.
+      // Samma meny som träd-vyn (#983) — se `DocumentActions`.
       render: (d) => (
         <DocumentActions
           doc={d}
+          disabled={uploadingIds.has(d.id)}
           onExternalEdit={() => openDocument(d, setModal)}
           onReanalyze={() => onReanalyze(d.id)}
           onDelete={() => { if (confirm(`Ta bort "${d.fileName}"?`)) onDelete(d.id); }}
-          reanalyzePending={false}
+          reanalyzePending={reanalyzePending}
         />
       ),
     },

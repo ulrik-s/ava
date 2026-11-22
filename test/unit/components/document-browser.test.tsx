@@ -663,6 +663,77 @@ describe("DocumentBrowser — flera filer på en gång", () => {
   });
 });
 
+/**
+ * #1796: listvyn (standardvyn) visar pågående uppladdningar som träd-vyn gör,
+ * även med ett filter aktivt, och raden byts mot den riktiga när den är klar.
+ */
+describe("DocumentBrowser — listvyn visar pågående uppladdningar (#1796)", () => {
+  const pdf = (name: string) => new File(["%PDF"], name, { type: "application/pdf" });
+  function pick(files: File[]): void {
+    const input = document.querySelector("input[type=file]");
+    if (!input) throw new Error("filväljaren saknas");
+    Object.defineProperty(input, "files", { value: files, configurable: true });
+    fireEvent.change(input);
+  }
+  /** register hänger tills testet släpper det, så uppladdningen syns som pågående. */
+  function holdRegister(): () => void {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    mutationStubs.register.mutateAsync = vi.fn(async () => { await gate; return {}; });
+    return () => release();
+  }
+  const nameButton = (name: string): HTMLElement => screen.getByRole("button", { name: new RegExp(name.replace(".", "\\.")) });
+
+  beforeEach(() => { window.localStorage.setItem("ava.documents.viewMode", "list"); });
+  afterEach(() => { mutationStubs.register.mutateAsync = vi.fn().mockResolvedValue({}); });
+
+  it("en pågående uppladdning syns i listvyn, gråtonad och ej klickbar, även med ett filter aktivt", async () => {
+    const release = holdRegister();
+    treeQuery.data = { folders: [], documents: [baseDoc({ direction: "UTGAENDE" })] };
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    fireEvent.change(screen.getByLabelText("Riktning"), { target: { value: "INKOMMANDE" } });
+    expect(screen.queryByText("test.pdf")).not.toBeInTheDocument();
+    pick([pdf("skiss.pdf")]);
+    await waitFor(() => expect(nameButton("skiss.pdf")).toBeDisabled());
+    expect(nameButton("skiss.pdf").closest(".opacity-60")).not.toBeNull();
+    release();
+    await waitFor(() => expect(screen.queryByText("skiss.pdf")).not.toBeInTheDocument());
+  });
+
+  it("raden byts mot den riktiga när uppladdningen är klar", async () => {
+    const release = holdRegister();
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    pick([pdf("skiss.pdf")]);
+    await waitFor(() => expect(nameButton("skiss.pdf")).toBeDisabled());
+    treeQuery.data = { folders: [], documents: [baseDoc({ id: "d-skiss", fileName: "skiss.pdf" })] };
+    release();
+    await waitFor(() => expect(nameButton("skiss.pdf")).toBeEnabled());
+    expect(screen.getAllByText("skiss.pdf")).toHaveLength(1);
+    expect(nameButton("skiss.pdf").closest(".opacity-60")).toBeNull();
+  });
+
+  it("\"Analysera (AI)\" i listvyn är spärrad medan analysen pågår", () => {
+    mutationStubs.analyze.isPending = true;
+    try {
+      treeQuery.data = { folders: [], documents: [baseDoc()] };
+      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+      expect(screen.getByRole("menuitem", { name: /Analysera \(AI\)/ })).toBeDisabled();
+    } finally {
+      mutationStubs.analyze.isPending = false;
+    }
+  });
+
+  it("listvyn visar \"⏳ analyseras…\" när Analysera körs", () => {
+    treeQuery.data = { folders: [], documents: [baseDoc({ analyzedAt: new Date("2026-04-16") })] };
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    expect(screen.queryByText("⏳ analyseras…")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+    fireEvent.click(screen.getByText("Analysera (AI)"));
+    expect(screen.getByText("⏳ analyseras…")).toBeInTheDocument();
+  });
+});
+
 // #1615: filer som släpps utifrån (från datorn eller ett mejlprogram).
 describe("DocumentBrowser — släpp filer utifrån", () => {
   const pdf = (name: string) => new File(["%PDF"], name, { type: "application/pdf" });

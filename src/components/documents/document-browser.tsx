@@ -80,11 +80,9 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const drag = useDragHandlers(mutations, { onFiles: nameQueue.enqueue, onUnreadable: () => upload.setUploadError(UNREADABLE_DROP) });
 
   const foldersByParent = useMemo(() => groupBy(folders, (f) => f.parentId ?? null), [folders]);
-  // Optimistiska rader läggs i sin målmapp (roten för + Ladda upp).
-  const docsByFolder = useMemo(
-    () => groupBy([...visibleDocuments, ...upload.pendingUploads], (d) => d.folderId ?? null),
-    [visibleDocuments, upload.pendingUploads]
-  );
+  // Pågående uppladdningar syns i båda vyerna, även med filter; i trädet i sin målmapp.
+  const shownDocuments = useMemo(() => [...visibleDocuments, ...upload.pendingUploads], [visibleDocuments, upload.pendingUploads]);
+  const docsByFolder = useMemo(() => groupBy(shownDocuments, (d) => d.folderId ?? null), [shownDocuments]);
 
   const toggleFolder = useCallback((folderId: DocumentFolderId) => {
     setCollapsedFolders((prev) => {
@@ -137,8 +135,10 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
       ) : (
         <DocumentsListView
           matterId={matterId}
-          documents={visibleDocuments}
+          documents={shownDocuments}
           folders={folders}
+          uploadingIds={upload.uploadingIds} analyzingIds={analyzingIds}
+          reanalyzePending={mutations.reanalyze.isPending}
           docSync={docSync}
           onDelete={(id) => mutations.deleteDocument.mutate({ id })}
           onReanalyze={(id) => mutations.reanalyze.mutate({ documentId: id })}
