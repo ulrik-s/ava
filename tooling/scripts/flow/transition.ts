@@ -14,7 +14,15 @@ export interface LabelEvent {
   actor: string;
   /** Satt via en GitHub-app (t.ex. Claude) — alltså en agent, inte Ulrik själv. */
   viaApp: boolean;
+  /** När (ISO). Saknas den räknas en borttagning aldrig som vaktens nej. */
+  at?: string;
 }
+
+/** Flödesvaktens egen aktör (workflowens `github.token`). */
+export const GUARD_ACTOR = "github-actions[bot]";
+
+/** Vakten nekar inom sekunder; klockans timeouter kommer efter timmar. */
+const REJECT_WINDOW_MS = 10 * 60_000;
 
 /** Vad vakten ska göra. */
 export type Decision =
@@ -43,10 +51,25 @@ export const isUlrik = (e: LabelEvent, ulrik: string): boolean => e.actor === ul
  * granskad"), och en borttagning får inte göra en övergång till ett hopp från
  * start — eller öppna en väg runt en regel ("ta bort undersökt, sätt
  * verifierad"). Inget satt tidigare = starttillståndet (null).
+ *
+ * Undantag (ava-feedback#132): en etikett som vakten själv nekade gick saken
+ * aldrig in i. Annars låser ett enda nekat försök nästa riktiga övergång.
  */
 export function previousStateLabel(events: readonly LabelEvent[], beforeId: number, machine: Machine): string | null {
   const states = new Set(stateLabels(machine));
-  return events.filter((e) => e.id < beforeId && e.added && states.has(e.label)).at(-1)?.label ?? null;
+  const before = events.filter((e) => e.id < beforeId && states.has(e.label));
+  return before.filter((e, i) => e.added && !rejectedByGuard(e, before[i + 1])).at(-1)?.label ?? null;
+}
+
+/**
+ * Nekade vakten att `added` sattes? Nästa tillståndshändelse är då att vakten
+ * tar bort samma etikett, strax efter. En godkänd övergång har det nya
+ * tillståndet emellan; klockans timeout kommer timmar senare.
+ */
+function rejectedByGuard(added: LabelEvent, next: LabelEvent | undefined): boolean {
+  if (next === undefined || next.added || next.label !== added.label || next.actor !== GUARD_ACTOR) return false;
+  if (added.at === undefined || next.at === undefined) return false;
+  return Date.parse(next.at) - Date.parse(added.at) < REJECT_WINDOW_MS;
 }
 
 function flagDecision(machine: Machine, change: LabelChange): Decision {
