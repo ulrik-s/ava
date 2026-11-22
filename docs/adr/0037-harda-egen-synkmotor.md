@@ -152,8 +152,9 @@ gjordes; standardmapparna och klientkopplingen får id härledda ur anropet.
 ändring: bara fälten användaren ändrade skrivs, så två ändringar av olika fält
 (titel på en enhet, status på en annan) går inte förlorade, vilket radkönens
 hela-raden-LWW inte kunde lova. Skriver ett anrop flera anteckningar får de var
-sitt härlett id i skrivordning (`serviceNote`, `serviceNote:2`, …). Ärendets
-parter (`matterContact`) och kontakterna är ren data och går via radkön.
+sitt härlett id i skrivordning (`serviceNote`, `serviceNote:2`, …).
+Kontakterna är ren data och går via radkön. Ärendets parter blev procedurägda
+senare (se nedan).
 
 **Genomfört (#1345):** omkörningen litar inte på fält som servern annars
 bestämmer. Skapa-procedurerna (`timeEntry.create`, `expense.create`,
@@ -195,6 +196,15 @@ standardåtgärder). En medlem får skicka hela formuläret så länge de fälte
 oförändrade. Kontor (`addOffice/updateOffice/deleteOffice`), dokumentmallar
 (`documentTemplate.create/update/delete`) och uppläggning av en byrå
 (`organization.create`) kräver admin, direkt och i kön.
+
+**Genomfört (#1883):** ärendets parter (`matterContact`) är procedurägda. En ny
+part ska kontrolleras mot byråns alla ärenden, och det kan bara servern göra
+(#1354). Radkön tog ändå emot kopplingen som färdig rad, och då kringgicks
+kontrollen. Nu köas alla anrop som skriver kopplingen (`matter.addContact`,
+`addNewContact`, `removeContact` och `document.acceptSuggestion[Group]`),
+servern tar inte emot kopplingen som rad, och konfliktklassen är `surface`. En
+kopplingsrad som en äldre version köade avvisas med beskedet och hamnar bland
+de avvisade ändringarna, som för #1242 och #1344.
 
 ## Konsekvenser
 

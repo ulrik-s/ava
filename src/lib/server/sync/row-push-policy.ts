@@ -54,7 +54,6 @@ const DOCUMENT = "document";
 /** Entiteterna radkön tar emot. Allt annat avvisas (neka som standard). */
 export const ROW_PUSH_POLICY: Readonly<Record<string, RowPolicy>> = Object.freeze({
   contact: { refs: { parentId: "contact" } },
-  matterContact: { refs: { matterId: MATTER, contactId: "contact" } },
   task: { refs: { userId: USER, matterId: MATTER } },
   calendarEvent: { refs: { userId: USER, matterId: MATTER } },
   document: {

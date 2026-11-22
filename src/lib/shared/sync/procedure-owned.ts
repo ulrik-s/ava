@@ -17,13 +17,17 @@
  * Servern kör om routrarna (`user.*`, `organization.*`, `documentTemplate.*`,
  * `prefs.setOrgDefault/clearOrgDefault`), där rollen och fälten prövas.
  *
- * Övriga entiteter är ren data (kontakter, ärendets parter, uppgifter,
- * kalender, dokumentens metadata …) och går som förut via radkön.
+ * Ärendets parter (`matterContact`, #1883) är procedurägda: en ny part
+ * kontrolleras mot byråns alla ärenden (jävskontrollen, #1354), och det kan
+ * bara servern. En färdig kopplingsrad från radkön kringgick kontrollen.
+ *
+ * Övriga entiteter är ren data (kontakter, uppgifter, kalender, dokumentens
+ * metadata …) och går som förut via radkön.
  */
 
 /** Entiteterna vars rader bara skrivs av köade procedurer. */
 export const PROCEDURE_OWNED_ENTITIES: ReadonlySet<string> = new Set([
-  "matter", "timeEntry", "expense",
+  "matter", "matterContact", "timeEntry", "expense",
   "invoice", "billingRun", "accontoDeduction", "invoiceDispatch",
   "payment", "writeOff", "paymentPlan", "paymentPlanReminder", "expectedReceivable",
   "user", "organization", "office", "orgPreference", "documentTemplate",
@@ -36,4 +40,4 @@ export function isProcedureOwned(entity: string): boolean {
 
 /** Beskedet när en rad för en procedurägd entitet kommer via radkön. */
 export const PROCEDURE_OWNED_REASON =
-  "Ändringen skickades på ett sätt som servern inte längre tar emot för ärenden, tid, utlägg, fakturering, användare och byråinställningar. Gör om den i appen.";
+  "Ändringen skickades på ett sätt som servern inte längre tar emot för ärenden, ärendets parter, tid, utlägg, fakturering, användare och byråinställningar. Gör om den i appen.";

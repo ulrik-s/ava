@@ -327,7 +327,8 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
 - **Procedurägda entiteter** (#1242, `src/lib/shared/sync/procedure-owned.ts`):
   ärenden, tid, utlägg och all fakturering skrivs bara av procedurkön — liksom
   administrationen (#1344): användare, byrån, kontor, byråns standardvyer och
-  dokumentmallar, eftersom rollen läses ur användarraden. Servern tar inte
+  dokumentmallar, eftersom rollen läses ur användarraden — och ärendets
+  parter (#1883), eftersom en ny part jävskontrolleras på servern. Servern tar inte
   emot färdiga rader för dem — en sådan radpush avvisas med ett besked (en
   manipulerad klient, eller en post som en äldre version köade). Bankgiro,
   organisationsnummer och kontoplan ändras bara av admin.

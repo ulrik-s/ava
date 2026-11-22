@@ -10,11 +10,11 @@ import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 import { isProcedureOwned, PROCEDURE_OWNED_ENTITIES, PROCEDURE_OWNED_REASON } from "@/lib/shared/sync/procedure-owned";
 
 describe("procedurägda entiteter", () => {
-  it("ärenden, tid, utlägg och faktureringen är procedurägda; ren data är det inte", () => {
-    for (const e of ["matter", "timeEntry", "expense", "invoice", "billingRun", "payment", "paymentPlanReminder", "invoiceDispatch"]) {
+  it("ärenden, ärendets parter, tid, utlägg och faktureringen är procedurägda; ren data är det inte", () => {
+    for (const e of ["matter", "matterContact", "timeEntry", "expense", "invoice", "billingRun", "payment", "paymentPlanReminder", "invoiceDispatch"]) {
       expect(isProcedureOwned(e)).toBe(true);
     }
-    for (const e of ["contact", "matterContact", "task", "calendarEvent", "document", "documentFolder"]) expect(isProcedureOwned(e)).toBe(false);
+    for (const e of ["contact", "task", "calendarEvent", "document", "documentFolder"]) expect(isProcedureOwned(e)).toBe(false);
   });
 
   it("varje procedurägd entitet finns i ENTITY_REGISTRY", () => {
@@ -24,5 +24,6 @@ describe("procedurägda entiteter", () => {
 
   it("beskedet säger vad användaren ska göra", () => {
     expect(PROCEDURE_OWNED_REASON).toMatch(/Gör om den i appen/);
+    expect(PROCEDURE_OWNED_REASON).toMatch(/ärendets parter/);
   });
 });

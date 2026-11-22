@@ -15,7 +15,6 @@ import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 
 /** Mutationer i en procedurägd entitets router som medvetet inte köas — och varför. */
 const NOT_QUEUED: Readonly<Record<string, string>> = {
-  "matter.removeContact": "tar bort matterContact (ren data, radkön)",
   "organization.create": "skapar byrån vid uppstart — server-only, aldrig från en klient i kön",
 };
 

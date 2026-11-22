@@ -13,6 +13,7 @@ const PROCEDURES: Readonly<Record<string, string>> = {
   "matter.markConflictsReviewed": "Bedömning av jävsträffar",
   "matter.addContact": "Ny part i ärende",
   "matter.addNewContact": "Ny part i ärende",
+  "matter.removeContact": "Borttagning av part i ärende",
   "document.acceptSuggestion": "Ny part i ärende (dokumentförslag)",
   "document.acceptSuggestionGroup": "Ny part i ärende (dokumentförslag)",
   "timeEntry.create": "Ny tidspost",
