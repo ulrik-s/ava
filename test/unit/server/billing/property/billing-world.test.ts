@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest-compat";
 import { STOCKHOLM_TZ, stockholmTime } from "@/lib/shared/stockholm-time";
 import { rng } from "../../../helpers/seeded-rng";
-import { nowFor, type Scenario, scenarioFor } from "./billing-world";
+import { nowFor, type Scenario, scenarioFor, taxeScenarioFor } from "./billing-world";
 
 const SEEDS = Array.from({ length: 40 }, (_, i) => i + 1);
 const WEEKDAY = new Intl.DateTimeFormat("en-US", { timeZone: STOCKHOLM_TZ, weekday: "short" });
@@ -104,5 +104,23 @@ describe("billing-world: reproduktion", () => {
 
   it("olika seeds ger olika nu", () => {
     expect(firstScenario(1).now).not.toEqual(firstScenario(2).now);
+  });
+});
+
+describe("billing-world: taxe-ärendet utan utlägg och beredskap (#1812)", () => {
+  const taxe = SEEDS.map((seed) => { const r = rng(seed); const now = nowFor(r); return { now, s: taxeScenarioFor(r, now) }; });
+
+  it("är ett taxe-ärende i offentligt uppdrag, utan utlägg och utan beredskap", () => {
+    for (const { s } of taxe) {
+      expect({ method: s.method, isTaxe: s.isTaxe, expenses: s.expenses.length, share: s.clientShareBips })
+        .toEqual({ method: "OFFENTLIGT_UPPDRAG", isTaxe: true, expenses: 0, share: 0 });
+      expect(s.entries.some((e) => e.kind === "ADVOKATBEREDSKAP")).toBe(false);
+    }
+  });
+
+  it("seed 1–40 ger båda slagen tidsspillan, och förhandlingen och posterna före nu", () => {
+    const kinds = new Set(taxe.flatMap(({ s }) => s.entries.map((e) => e.kind)));
+    expect(kinds.has("TIDSSPILLAN") && kinds.has("TIDSSPILLAN_OVRIG_TID")).toBe(true);
+    for (const { now, s } of taxe) expectBeforeNowSameYear(s, now);
   });
 });

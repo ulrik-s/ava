@@ -77,8 +77,8 @@ function kindsFor(method: ScenarioMethod): readonly Kind[] {
   return method === "OFFENTLIGT_UPPDRAG" ? [...KINDS, "ADVOKATBEREDSKAP"] : KINDS;
 }
 
-function entry(r: Rng, method: ScenarioMethod, now: Date, i: number): ScenarioEntry {
-  const kind = r.pick(kindsFor(method)) ?? "ARBETE";
+function entry(r: Rng, kinds: readonly Kind[], now: Date, i: number): ScenarioEntry {
+  const kind = r.pick(kinds) ?? "ARBETE";
   return {
     id: `te-${i}`, organizationId: ORG, userId: USER, matterId: MATTER, date: dateThisYear(r, now),
     // Beredskap räknas per dygn, inte per minut.
@@ -120,7 +120,7 @@ function hufFor(r: Rng, now: Date): { hufStart: string; hufEnd: string } {
 
 /** Slumpa ett ärende för betalningssättet, med seedens `now` (se `nowFor`). */
 export function scenarioFor(r: Rng, method: ScenarioMethod, now: Date): Scenario {
-  const entries = Array.from({ length: r.int(1, 6) }, (_, i) => entry(r, method, now, i));
+  const entries = Array.from({ length: r.int(1, 6) }, (_, i) => entry(r, kindsFor(method), now, i));
   const expenses = Array.from({ length: r.int(0, 3) }, (_, i) => expense(r, now, i));
   return {
     method, entries, expenses,
@@ -128,6 +128,20 @@ export function scenarioFor(r: Rng, method: ScenarioMethod, now: Date): Scenario
     taxaLevel: (r.pick([1, 2, 3, 4] as const) ?? 1),
     huf: hufFor(r, now),
     clientShareBips: method === "RATTSHJALP" || method === "RATTSSKYDD" ? 100 * r.int(2, 40) : 0,
+  };
+}
+
+/**
+ * Taxe-ärende i offentligt uppdrag utan utlägg och beredskap (#1812): bara
+ * taxan och tidsspillan, så att yrkandet kan räknas för hand ur posterna.
+ */
+export function taxeScenarioFor(r: Rng, now: Date): Scenario {
+  const entries = Array.from({ length: r.int(1, 6) }, (_, i) => entry(r, KINDS, now, i));
+  return {
+    method: "OFFENTLIGT_UPPDRAG", entries, expenses: [], isTaxe: true,
+    taxaLevel: (r.pick([1, 2, 3, 4] as const) ?? 1),
+    huf: hufFor(r, now),
+    clientShareBips: 0,
   };
 }
 
