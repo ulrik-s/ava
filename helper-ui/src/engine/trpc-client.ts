@@ -59,7 +59,7 @@ export function createDocumentClient(opts: DocumentClientOptions): TRPCClient<Ap
       httpBatchLink({
         url: opts.trpcUrl,
         transformer: superjson,
-        headers: () => ({ authorization: `Bearer ${opts.token}` }),
+        headers: (): Record<string, string> => (opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
         ...(opts.fetch ? { fetch: toLinkFetch(opts.fetch) } : {}),
       }),
     ],

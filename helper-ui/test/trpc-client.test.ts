@@ -75,6 +75,26 @@ describe("createDocumentClient + downloadDocumentBytes", () => {
   });
 });
 
+describe("createDocumentClient — authorization bara med token (#1838)", () => {
+  async function authSent(token: string): Promise<string | null> {
+    let auth: string | null = "unset";
+    const fetchImpl: FetchLike = (_input, init) => {
+      auth = new Headers(init?.headers).get("authorization");
+      return Promise.resolve(batchOk({ contentBase64: "", mimeType: "application/pdf", fileName: "x.pdf", version: 1 }));
+    };
+    await downloadDocumentBytes(createDocumentClient({ trpcUrl: "http://h:8080/api/trpc", token, fetch: fetchImpl }), "doc-1");
+    return auth;
+  }
+
+  test("utan token → ingen authorization-header (förr skickades en tom Bearer)", async () => {
+    expect(await authSent("")).toBeNull();
+  });
+
+  test("med token → Bearer <token>", async () => {
+    expect(await authSent("tok-1")).toBe("Bearer tok-1");
+  });
+});
+
 describe("uploadDocumentBytes (ADR 0033 §1 — optimistisk version)", () => {
   function clientWith(fetchImpl: FetchLike): ReturnType<typeof createDocumentClient> {
     return createDocumentClient({ trpcUrl: "http://h:8080/api/trpc", token: "t", fetch: fetchImpl });

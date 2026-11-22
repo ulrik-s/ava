@@ -11,10 +11,14 @@
  * Egen fil (`allowed-origins.json`), skild från `helper-config.json` som
  * webbappen skriver via `POST /config` — en webbplats ska aldrig kunna ge sig
  * själv tillgång.
+ *
+ * Samma lista styr också vart helperns egen token får skickas (#1838): bara
+ * till en godkänd AVA-server, aldrig till en värd som ett anrop pekar ut.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { isAllowedOrigin } from "@/lib/shared/helper/protocol";
 import { log } from "./log.ts";
 
 const FILE = "allowed-origins.json";
@@ -27,6 +31,46 @@ export function isApprovableOrigin(origin: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Helperns token för ett visst mål (#1838): `Authorization`-headern om målets
+ * origin är en godkänd AVA-server, annars `undefined`.
+ */
+export type ServerAuth = (targetUrl: string) => Promise<string | undefined>;
+
+/** Är URL:ens origin en godkänd AVA-server? `false` för en ogiltig URL. */
+export function isApprovedServerUrl(url: string, approved: readonly string[]): boolean {
+  try {
+    return isAllowedOrigin(new URL(url).origin, approved);
+  } catch {
+    return false;
+  }
+}
+
+/** Målets origin för loggen (aldrig hela URL:en); råtexten om den inte går att tolka. */
+function originForLog(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "ogiltig URL";
+  }
+}
+
+/**
+ * Linda helperns token-källa så att token bara följer med till godkända
+ * AVA-servrar. Listan läses vid varje anrop, så en origin som godkänns medan
+ * helpern kör får token direkt. Mot andra mål anropas inte källan alls.
+ */
+export function tokenOnlyToApprovedServers(
+  token: () => Promise<string | undefined>,
+  approved: () => readonly string[],
+): ServerAuth {
+  return async (targetUrl) => {
+    if (isApprovedServerUrl(targetUrl, approved())) return token();
+    log(`skickar inte helperns token till ${originForLog(targetUrl)}: inte en godkänd AVA-server`);
+    return undefined;
+  };
 }
 
 export interface OriginFileDeps {

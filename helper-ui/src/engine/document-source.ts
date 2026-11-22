@@ -48,6 +48,14 @@ export function sourceCacheKey(ref: SourceRef): string | null {
   return ref.downloadUrl ?? null;
 }
 
+/**
+ * Servern ett anrop går till (#1838): `document.trpcUrl` före `downloadUrl` före
+ * `uploadUrl` — samma företräde som `fetchSourceBytes` och kön. Tom sträng utan källa.
+ */
+export function serverUrlOf(x: { document?: HelperDocumentRef; downloadUrl?: string; uploadUrl?: string }): string {
+  return x.document?.trpcUrl ?? x.downloadUrl ?? x.uploadUrl ?? "";
+}
+
 export interface FetchSourceDeps {
   /** Helperns `Authorization: Bearer …` (tRPC-token härleds, statisk-header sätts). */
   authHeader?: string;
