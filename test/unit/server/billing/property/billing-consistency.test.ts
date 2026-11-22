@@ -11,13 +11,14 @@
  * - körningens lagrade belopp (`workValueOreAtRun`);
  * - den slutliga fakturan när domstolen beviljar det yrkade.
  *
- * Ett fel återskapas med `AVA_BILLING_SEED=<seed>`.
+ * Varje seed får ett eget "nu" (`nowFor`), och klockan fryses på det, så att
+ * ett fel återskapas — även ett annat år — med `AVA_BILLING_SEED=<seed>`.
  */
 
-import { describe, expect, it } from "vitest-compat";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { kostnadsrakningClaimInclVat, type KrClaimInput } from "@/lib/shared/kostnadsrakning";
 import { rng, type Rng } from "../../../helpers/seeded-rng";
-import { type BillingWorld, type Scenario, scenarioFor, worldFor } from "./billing-world";
+import { type BillingWorld, nowFor, type Scenario, scenarioFor, worldFor } from "./billing-world";
 
 const SEEDS: number[] = process.env.AVA_BILLING_SEED
   ? [Number(process.env.AVA_BILLING_SEED)]
@@ -54,8 +55,7 @@ async function documentClaim(world: BillingWorld, s: Scenario, now: Date): Promi
   return kostnadsrakningClaimInclVat(input);
 }
 
-async function submitKr(world: BillingWorld, s: Scenario): Promise<{ claimed: number; documented: number; runId: string }> {
-  const now = new Date();
+async function submitKr(world: BillingWorld, s: Scenario, now: Date): Promise<{ claimed: number; documented: number; runId: string }> {
   const documented = await documentClaim(world, s, now);
   const dialog = s.method === "RATTSHJALP" ? {} : { ...s.huf, taxaLevel: s.taxaLevel, isTaxeArende: s.isTaxe, hasFTax: true };
   const { run } = await world.caller.billingRun.createKostnadsrakning({ matterId: world.matterId, ...dialog });
@@ -64,11 +64,14 @@ async function submitKr(world: BillingWorld, s: Scenario): Promise<{ claimed: nu
 
 describe.each(SEEDS)("seed %i", (seed) => {
   const r: Rng = rng(seed);
+  const now = nowFor(r);
+  beforeEach(() => { vi.setSystemTime(now); });
+  afterEach(() => { vi.setSystemTime(); });
 
   it("offentligt uppdrag: dokument = körning = faktura vid fullt beviljat", async () => {
-    const s = scenarioFor(r, "OFFENTLIGT_UPPDRAG");
+    const s = scenarioFor(r, "OFFENTLIGT_UPPDRAG", now);
     const world = worldFor(s);
-    const { claimed, documented, runId } = await submitKr(world, s);
+    const { claimed, documented, runId } = await submitKr(world, s, now);
     expect({ seed, claimed }).toEqual({ seed, claimed: documented });
     await world.caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: runId, awardedOre: claimed });
     const { invoice } = await world.caller.billingRun.setVerdict({ billingRunId: runId });
@@ -76,9 +79,9 @@ describe.each(SEEDS)("seed %i", (seed) => {
   });
 
   it("rättshjälp: dokument = körning = fakturerat vid fullt beviljat, ingen förlust", async () => {
-    const s = scenarioFor(r, "RATTSHJALP");
+    const s = scenarioFor(r, "RATTSHJALP", now);
     const world = worldFor(s);
-    const { claimed, documented, runId } = await submitKr(world, s);
+    const { claimed, documented, runId } = await submitKr(world, s, now);
     expect({ seed, claimed }).toEqual({ seed, claimed: documented });
     await world.caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: runId, awardedOre: claimed });
     const { clientInvoice, payerInvoice, split } = await world.caller.billingRun.settleCoverage({ matterId: world.matterId, payerRecipient: "DOMSTOL" });
@@ -87,7 +90,7 @@ describe.each(SEEDS)("seed %i", (seed) => {
   });
 
   it("privat: slutfakturans belopp = summan av dess momsrader = upparbetat", async () => {
-    const s = scenarioFor(r, "PRIVAT");
+    const s = scenarioFor(r, "PRIVAT", now);
     const world = worldFor(s);
     const { invoice } = await world.caller.billingRun.createFinal({ matterId: world.matterId, recipient: "KLIENT" });
     const lines = invoice.vatBreakdown ?? [];
