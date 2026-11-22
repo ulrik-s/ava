@@ -44,10 +44,6 @@ const EDITABLE_APPEND: KnownDeviation = {
 
 /** Kända avvikelser: `entitet: regel`. */
 const KNOWN: Readonly<Record<string, KnownDeviation>> = {
-  "matterContact: skrivs av köade procedurer men är inte procedurägd": {
-    why: "matter.addContact m.fl. köas för att jävskontrollen bara görs på servern (#1354), men radkön tar också emot kopplingen och kringgår då kontrollen.",
-    issue: 1697,
-  },
   "document: skrivs av köade procedurer men är inte procedurägd": {
     why: "document.analyze köas för att klassningen är en serversidoeffekt (#1156); metadata går via radkön, där server-owned-fields skyddar analysen.",
     issue: 1697,

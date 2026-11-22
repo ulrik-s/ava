@@ -9,6 +9,8 @@
  *   - administrationen tas inte emot som rader, av någon roll (servern kör om
  *     routrarna i procedurkön, där rollen prövas);
  *   - jävskontrollens logg hör till byrån via den som körde kontrollen;
+ *   - ärendets parter tas inte emot som rader (#1883): en ny part ska
+ *     jävskontrolleras, och det gör servern bara när anropet körs om;
  *   - referenser får inte peka på en annan byrås rader, och vem som skapade en
  *     rad går inte att förfalska.
  */
@@ -33,7 +35,9 @@ const MEMBER_A = uuidv7();
 const USER_B = uuidv7();
 const MATTER_A = uuidv7();
 const MATTER_B = uuidv7();
+const CONTACT_A = uuidv7();
 const CONTACT_B = uuidv7();
+const LINK_A = uuidv7();
 const DOC_B = uuidv7();
 const FOLDER_B = uuidv7();
 
@@ -62,7 +66,9 @@ describe("radvägens behörighet (#1344)", () => {
     await repos.users.create({ id: USER_B, organizationId: ORG_B, email: "b@b.se", name: "B", role: "ADMIN", active: true } as never);
     await repos.matters.create({ id: MATTER_A, organizationId: ORG_A, title: "A", status: "ACTIVE", matterNumber: "2026-0001" } as never);
     await repos.matters.create({ id: MATTER_B, organizationId: ORG_B, title: "B", status: "ACTIVE", matterNumber: "2026-0001" } as never);
+    await repos.contacts.create({ id: CONTACT_A, organizationId: ORG_A, name: "A:s klient" } as never);
     await repos.contacts.create({ id: CONTACT_B, organizationId: ORG_B, name: "B:s klient" } as never);
+    await repos.matterContacts.linkContact({ id: asId<"MatterContactId">(LINK_A), matterId: asId<"MatterId">(MATTER_A), contactId: asId<"ContactId">(CONTACT_A), role: "KLIENT" });
     await repos.documentFolders.create({ id: FOLDER_B, matterId: MATTER_B, name: "B:s mapp", parentId: null } as never);
     await repos.documents.create({ id: DOC_B, matterId: MATTER_B, fileName: "b.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "documents/content/b", uploadedById: USER_B } as never);
   });
@@ -102,6 +108,31 @@ describe("radvägens behörighet (#1344)", () => {
 
     it("en annan byrås användare: byrån prövas först", async () => {
       expect(await sync.push(member, mut("user", "update", { id: USER_B, role: "LAWYER" }))).toEqual({ status: "conflict", reason: "annan byrå" });
+    });
+  });
+
+  describe("ärendets parter tas inte emot som rader (#1883)", () => {
+    it("en ny koppling → avvisad, även när den kopplar en annan byrås kontakt; skapas inte", async () => {
+      for (const contactId of [CONTACT_A, CONTACT_B]) {
+        const id = uuidv7();
+        expect(await sync.push(member, mut("matterContact", "create", { id, matterId: MATTER_A, contactId, role: "MOTPART" })))
+          .toEqual({ status: "conflict", reason: PROCEDURE_OWNED_REASON });
+        expect(await repos.matterContacts.getByIdInOrg(asId<"MatterContactId">(id), asId<"OrganizationId">(ORG_A))).toBeNull();
+      }
+    });
+
+    it("ändring och borttagning av en befintlig koppling → avvisade med serverns rad, kopplingen orörd", async () => {
+      expect(await sync.push(member, mut("matterContact", "update", { id: LINK_A, role: "MOTPART" })))
+        .toMatchObject({ status: "conflict", reason: PROCEDURE_OWNED_REASON, current: { id: LINK_A, role: "KLIENT" } });
+      expect(await sync.push(member, mut("matterContact", "delete", { id: LINK_A })))
+        .toMatchObject({ status: "conflict", reason: PROCEDURE_OWNED_REASON, current: { id: LINK_A } });
+      expect(await repos.matterContacts.getByIdInOrg(asId<"MatterContactId">(LINK_A), asId<"OrganizationId">(ORG_A)))
+        .toMatchObject({ role: "KLIENT", contactId: CONTACT_A });
+    });
+
+    it("en koppling i en annan byrås ärende: byrån prövas först", async () => {
+      expect(await sync.push(member, mut("matterContact", "create", { id: uuidv7(), matterId: MATTER_B, contactId: CONTACT_B, role: "MOTPART" })))
+        .toEqual({ status: "conflict", reason: "annan byrå" });
     });
   });
 
@@ -150,7 +181,6 @@ describe("radvägens behörighet (#1344)", () => {
       ["calendarEvent i B:s ärende", { id: uuidv7(), organizationId: ORG_A, userId: MEMBER_A, matterId: MATTER_B, title: "e", startAt: new Date() }],
       ["serviceNote i B:s ärende", { id: uuidv7(), organizationId: ORG_A, matterId: MATTER_B, authorId: MEMBER_A, date: "2026-10-01", time: "10:00", text: "x" }],
       ["contact med B:s kontakt som förälder", { id: uuidv7(), organizationId: ORG_A, name: "Dotterbolag", parentId: CONTACT_B }],
-      ["matterContact som kopplar B:s kontakt", { id: uuidv7(), matterId: MATTER_A, contactId: CONTACT_B, role: "MOTPART" }],
       ["document i B:s mapp", { id: uuidv7(), matterId: MATTER_A, folderId: FOLDER_B, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: SHA_PATH, uploadedById: MEMBER_A }],
       ["documentFolder under B:s mapp", { id: uuidv7(), matterId: MATTER_A, name: "Mapp", parentId: FOLDER_B }],
       ["documentPart av B:s dokument", { id: uuidv7(), matterId: MATTER_A, documentId: DOC_B, ordinal: 0, kind: "OVRIGT", fromPage: 1, toPage: 1, source: "MANUAL" }],

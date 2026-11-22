@@ -8,7 +8,9 @@
  *   - ärendenumret tilldelas i serverns serie, för året då anropet gjordes,
  *   - en ändring skriver bara de fält den bär: två ändringar av olika fält
  *     går inte förlorade,
- *   - en ändring som skriver två anteckningar får två (inte en krock).
+ *   - en ändring som skriver två anteckningar får två (inte en krock),
+ *   - en borttagen part (#1883) tas bort när servern kör om anropet, men
+ *     bara i den egna byrån.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
@@ -111,5 +113,30 @@ describe("ärendena i procedur-kön (#1242, steg 3)", () => {
     const foreign = uuidv7();
     await repos.matters.create({ id: foreign, organizationId: uuidv7(), title: "Annan byrå", status: "ACTIVE", matterNumber: "2025-9999" } as never);
     expect(await replayer.replay(call("matter.update", { id: foreign, title: "Kapad" }), ctx)).toMatchObject({ status: "rejected", code: "NOT_FOUND" });
+  });
+
+  it("removeContact köas och tar bort kopplingen när anropet körs om (#1883)", async () => {
+    expect(isQueuedProcedure("matter.removeContact")).toBe(true);
+    const contactId = uuidv7();
+    await repos.contacts.create({ id: contactId, organizationId: ORG, name: "Motparten", contactType: "PERSON" } as never);
+    const { id } = await createMatter();
+    const link = await repos.matterContacts.linkContact({
+      id: asId<"MatterContactId">(uuidv7()), matterId: asId<"MatterId">(id), contactId: asId<"ContactId">(contactId), role: "MOTPART",
+    });
+    await accepted(call("matter.removeContact", { matterContactId: link.id }));
+    expect(await repos.matterContacts.getByIdInOrg(link.id, asId<"OrganizationId">(ORG))).toBeNull();
+  });
+
+  it("removeContact på en annan byrås koppling: NOT_FOUND, kopplingen finns kvar", async () => {
+    const foreignOrg = uuidv7();
+    const matterId = uuidv7();
+    const contactId = uuidv7();
+    await repos.matters.create({ id: matterId, organizationId: foreignOrg, title: "Annan byrå", status: "ACTIVE", matterNumber: "2025-9998" } as never);
+    await repos.contacts.create({ id: contactId, organizationId: foreignOrg, name: "Annans klient", contactType: "PERSON" } as never);
+    const link = await repos.matterContacts.linkContact({
+      id: asId<"MatterContactId">(uuidv7()), matterId: asId<"MatterId">(matterId), contactId: asId<"ContactId">(contactId), role: "KLIENT",
+    });
+    expect(await replayer.replay(call("matter.removeContact", { matterContactId: link.id }), ctx)).toMatchObject({ status: "rejected", code: "NOT_FOUND" });
+    expect(await repos.matterContacts.getByIdInOrg(link.id, asId<"OrganizationId">(foreignOrg))).toMatchObject({ id: link.id });
   });
 });

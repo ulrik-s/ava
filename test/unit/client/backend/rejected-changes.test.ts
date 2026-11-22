@@ -176,6 +176,7 @@ describe("canRetry (#1348)", () => {
 describe("describeQueueEntry", () => {
   it("köbara procedurer med egna namn; okända med sökvägen", () => {
     expect(describeQueueEntry({ ...call, path: "timeEntry.create" })).toBe("Ny tidspost");
+    expect(describeQueueEntry({ ...call, path: "matter.removeContact" })).toBe("Borttagning av part i ärende");
     expect(describeQueueEntry({ ...call, path: "okänd.proc" })).toBe("Ändring (okänd.proc)");
   });
 

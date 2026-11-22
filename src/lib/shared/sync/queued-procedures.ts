@@ -82,6 +82,8 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   // servern. Kopplingen och kontrollen körs därför om där, som anrop.
   "matter.addContact": Object.freeze({ entity: "matterContact", idField: "id" }),
   "matter.addNewContact": Object.freeze({ entity: "matterContact" }),
+  // Ärendets parter är procedurägda (#1883): även borttagningen körs om.
+  "matter.removeContact": Object.freeze({ entity: "matterContact" }),
   // Ett accepterat dokumentförslag kopplar också en part till ärendet (#1383):
   // samma omkontroll, så även den körs om på servern.
   "document.acceptSuggestion": Object.freeze({ entity: "matterContact" }),
