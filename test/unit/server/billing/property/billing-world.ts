@@ -51,6 +51,7 @@ const PRINCIPAL: Principal = {
 };
 
 const DAY_MS = 86_400_000;
+const QUARTER_MS = 15 * 60_000;
 /** Spannet för seedens "nu": båda åren har kända normer, och årsskiftet ingår. */
 const NOW_FROM = Date.UTC(2025, 0, 15);
 const NOW_TO = Date.UTC(2026, 11, 31);
@@ -95,14 +96,25 @@ function expense(r: Rng, now: Date, i: number): ScenarioExpense {
 }
 
 /**
- * Huvudförhandlingen: valfri veckodag i `now`:s år (före idag), start i hela
+ * Håller starten i `now`:s år och före `now`: på årets första dygn kan den
+ * slumpade kvarten annars hamna efter `now`, och kl. 00 svensk tid den 1 januari
+ * ligger i förra årets UTC. Hela kvartar i UTC är hela kvartar i svensk tid.
+ */
+function startBeforeNow(start: number, now: Date): number {
+  const yearStart = Date.UTC(now.getUTCFullYear(), 0, 1);
+  const lastQuarter = Math.floor((now.getTime() - 1) / QUARTER_MS) * QUARTER_MS;
+  return Math.max(yearStart, Math.min(start, lastQuarter));
+}
+
+/**
+ * Huvudförhandlingen: valfri veckodag i `now`:s år (före `now`), start i hela
  * kvartar över dygnet i svensk tid, och längd 0 till `TAXA_MAX_MINUTES`.
  */
 function hufFor(r: Rng, now: Date): { hufStart: string; hufEnd: string } {
   const day = Temporal.Instant.fromEpochMilliseconds(dateThisYear(r, now).getTime()).toZonedDateTimeISO("UTC").toPlainDate();
   const quarter = r.int(0, 95);
   const plainTime = new Temporal.PlainTime(Math.floor(quarter / 4), (quarter % 4) * 15);
-  const start = day.toZonedDateTime({ timeZone: STOCKHOLM_TZ, plainTime }).epochMilliseconds;
+  const start = startBeforeNow(day.toZonedDateTime({ timeZone: STOCKHOLM_TZ, plainTime }).epochMilliseconds, now);
   return { hufStart: new Date(start).toISOString(), hufEnd: new Date(start + r.int(0, TAXA_MAX_MINUTES) * 60_000).toISOString() };
 }
 
