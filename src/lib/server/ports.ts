@@ -215,9 +215,29 @@ export interface ILeaseStore {
 export interface LedgerStatus {
   /** Servern har klient-id/secret + valv → byrån KAN ansluta. */
   configured: boolean;
-  /** Byrån har genomfört OAuth-anslutningen (tokens finns i valvet). */
+  /**
+   * Går att bokföra: tokens finns i valvet och bokföringssystemet har inte
+   * avvisat förnyelsen (#1814).
+   */
   connected: boolean;
+  /** Bokföringssystemet avvisade förnyelsen: en administratör måste ansluta igen. */
+  reconnectRequired: boolean;
+  /** Senaste förnyelsen av anslutningen; `null` när den inte är känd. */
+  renewedAt: Date | null;
+  /**
+   * Ungefär när anslutningen går ut om den inte förnyas; `null` när förnyelsen
+   * inte är känd eller anslutningen måste göras om.
+   */
+  expiresAt: Date | null;
 }
+
+/**
+ * Utfallet av `ILedgerService.keepAlive` (#1814):
+ * - `"alive"`: anslutningen svarade (och förnyades vid behov),
+ * - `"not-connected"`: byrån har aldrig anslutit, inget att hålla vid liv,
+ * - `"reconnect-required"`: bokföringssystemet har avvisat förnyelsen.
+ */
+export type LedgerKeepAliveOutcome = "alive" | "not-connected" | "reconnect-required";
 
 /**
  * Byråns koppling till bokföringssystemet (Fortnox först, ADR 0011). Routrar
@@ -231,6 +251,11 @@ export interface ILedgerService {
   completeConnect(orgId: string, code: string, state: string): Promise<void>;
   /** Push-verifikat mot byråns konton. Anropen serialiseras (roterande token). */
   connector(orgId: string, map: LedgerAccountMap): Pick<LedgerConnector, "pushVoucher" | "capabilities">;
+  /**
+   * Håll anslutningen vid liv (schemalagt jobb, #1814). Kastar bara vid
+   * tillfälliga fel (nät, 5xx), så att jobbkön kan försöka igen.
+   */
+  keepAlive(orgId: string): Promise<LedgerKeepAliveOutcome>;
 }
 
 // ─── Aggregat ──────────────────────────────────────────────────────
