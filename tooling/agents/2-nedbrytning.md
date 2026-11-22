@@ -181,11 +181,13 @@ För varje godkänd:
 
 Är det oklart hur något ska bete sig för användaren: fråga användaren enligt
 regel 2c och skapa inga issues förrän svaret har kommit. En förfrågan med
-`intern` har ingen användare: fråga Ulrik i stället och sätt `blockerad`. Gäller oklarheten
-något annat, kräver förfrågan en skyddad sökväg, eller är den något som
-inte borde byggas (säkerhetsrisk, bryter mot advokatsekretess, orimligt
-stor)? Skriv då en konkret fråga till Ulrik i en kommentar, sätt `blockerad`
-och skapa inga issues.
+`intern` har ingen användare: fråga Ulrik i stället, med förslag enligt regel 2d. Gäller
+oklarheten något annat, eller är förfrågan något som inte borde byggas
+(säkerhetsrisk, bryter mot advokatsekretess, orimligt stor)? Skriv då en
+konkret fråga till Ulrik i en kommentar, med förslag och `auto-godkänn`
+enligt regel 2d (`blockerad` bara utan förslag), och skapa inga issues än.
+En skyddad sökväg är ingen fråga: bryt ner som vanligt och skriv i
+arbetsordern vilka skyddade sökvägar den rör (regel 4).
 
 ## C. Design av större förfrågningar
 
@@ -232,10 +234,11 @@ bort etiketten och väg in svaret.
      användare: frågan går till Ulrik.
    - **(Ulrik):** kräver en ny eller ändrad ADR, eller ett val mellan
      produktvägar som användaren inte kan avgöra. Skriv frågan konkret, med
-     alternativen och din rekommendation, och sätt `blockerad`.
+     alternativen och din rekommendation, och sätt `auto-godkänn` (regel 2d).
 5. **Högst två rundor.** Har runda 2 fortfarande öppna frågor: fråga inte
    användaren igen. Samla ALLA kvarvarande frågor i EN kommentar till Ulrik,
-   med alternativ och din rekommendation för varje, och sätt `blockerad`.
+   med alternativ och din rekommendation för varje, och sätt `auto-godkänn`
+   (regel 2d; `blockerad` bara om någon fråga saknar förslag).
    När han svarat skriver du nästa runda med hans svar; frågor som återstår
    efter det går också direkt till Ulrik.
 6. **Inga öppna frågor:** sätt `design-granskas`. Loop 3 granskar designen,

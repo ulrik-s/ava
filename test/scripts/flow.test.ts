@@ -10,7 +10,7 @@ import { renderMermaid } from "../../tooling/scripts/flow/generate";
 import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
 import { flowErrors, loadFlow, parseFlow } from "../../tooling/scripts/flow/load";
 import type { Flow, Machine } from "../../tooling/scripts/flow/schema";
-import { decide, type LabelEvent, normalizeRemovals, previousStateLabel } from "../../tooling/scripts/flow/transition";
+import { decide, GUARD_ACTOR, type LabelEvent, normalizeRemovals, previousStateLabel } from "../../tooling/scripts/flow/transition";
 import { closesIssue, dueNudges, dueTimeouts, duplicatePulls, hungRuns, parseDuration } from "../../tooling/scripts/flow/watchdog";
 import { expectedFiles, staleFiles } from "../../tooling/scripts/flow-gen";
 import { dispatchLabel, handleLabel, machineFor, normalize } from "../../tooling/scripts/flow-guard";
@@ -34,8 +34,8 @@ describe("flow.yaml", () => {
     expect(flowErrors(flow)).toEqual([]);
   });
 
-  it("bara byggloopen kör flera samtidigt (#1837)", () => {
-    expect(Object.entries(flow.routines).filter(([, r]) => r.parallel > 1).map(([id, r]) => [id, r.parallel])).toEqual([["L4", 3]]);
+  it("alla loopar kör en i taget (#1837: tre L4 samtidigt drog för mycket användning)", () => {
+    expect(Object.entries(flow.routines).filter(([, r]) => r.parallel > 1)).toEqual([]);
   });
 
   it("labels.json och docs/agent-flow.md är genererade ur den aktuella filen", () => {
@@ -182,6 +182,22 @@ describe("övergångar", () => {
     expect(previousStateLabel([ev(1, "att-granska"), ev(2, "att-granska", false)], 3, codeIssue)).toBe("att-granska");
     expect(previousStateLabel([], 3, codeIssue)).toBeNull();
     expect(previousStateLabel([ev(1, "undersökt"), ev(2, "verifierad")], 3, intake)).toBe("verifierad");
+  });
+
+  it("en etikett som vakten själv nekade räknas inte som föregående tillstånd (ava-feedback#132)", () => {
+    const at = (min: number): string => new Date(Date.parse("2026-11-21T00:00:00Z") + min * 60_000).toISOString();
+    const timed = (id: number, label: string, min: number, added = true, actor = "ulrik-s"): LabelEvent =>
+      ({ id, label, added, actor, viaApp: actor === "ulrik-s", at: at(min) });
+    // Som på #105: design-godkänd → design-granskas nekas, sedan sätts nedbruten.
+    const events = [
+      timed(1, "design-granskas", 0), timed(2, "design-godkänd", 2), timed(3, "design-granskas", 3, false, GUARD_ACTOR),
+      timed(4, "design-granskas", 5), timed(5, "design-granskas", 5.3, false, GUARD_ACTOR),
+    ];
+    expect(previousStateLabel(events, 6, intake)).toBe("design-godkänd");
+    // Klockans timeout (borttagen av vakten timmar senare) räknas som ett tillstånd som gällt.
+    expect(previousStateLabel([timed(1, "pågår", 0), timed(2, "pågår", 4 * 60, false, GUARD_ACTOR)], 3, codeIssue)).toBe("pågår");
+    // Utan tid: som förut.
+    expect(previousStateLabel([ev(1, "pågår"), { ...ev(2, "pågår", false), actor: GUARD_ACTOR }], 3, codeIssue)).toBe("pågår");
   });
 
   it("städning behåller tillståndet som kommit längst", () => {
@@ -472,9 +488,9 @@ describe("knuffen", () => {
     const lines: string[] = [];
     const ctx = { now, env: { ROUTINE_TOKEN_L4: "t" }, fetchFn, log: (l: string) => lines.push(l), started: new Map<string, number>() };
     const four = [3, 4, 5, 6].map((number) => ({ ...item(["behöver-ändras"], 2), number }));
-    expect(await runNudges(flow, codePr, four, ctx)).toBe(3);
-    expect(urls).toHaveLength(3);
-    expect(lines.filter((l) => l.includes("redan startad"))).toHaveLength(1);
+    expect(await runNudges(flow, codePr, four, ctx)).toBe(1);
+    expect(urls).toHaveLength(1);
+    expect(lines.filter((l) => l.includes("redan startad"))).toHaveLength(3);
     expect(await runNudges(flow, codePr, [item(["behöver-ändras"], 2)], ctx)).toBe(0);
   });
 });

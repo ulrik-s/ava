@@ -6,7 +6,7 @@
 
 import { SignJWT, exportJWK, generateKeyPair, createLocalJWKSet, type JWTVerifyGetKey } from "jose";
 import { describe, it, expect, beforeAll } from "vitest-compat";
-import { bearerClaims, bearerConfigFromEnv, CLOCK_TOLERANCE_S, helperOidcConfig, verifyBearerToken } from "@/lib/server/http/bearer-claims";
+import { bearerClaims, bearerConfigFromEnv, CLOCK_TOLERANCE_S, helperOidcConfig, parseAudience, verifyBearerToken } from "@/lib/server/http/bearer-claims";
 
 const ISSUER = "https://idp.example/realms/ava";
 const AUDIENCE = "ava";
@@ -89,9 +89,10 @@ describe("bearerClaims", () => {
     expect(await bearerClaims(authHeaders(await token({})), cfg())).toBeNull();
   });
 
-  it("utan audience-konfig hoppas aud-kontrollen över", async () => {
-    const claims = await bearerClaims(authHeaders(await token({ audience: "vad-som-helst", email: "a@b.se" })), { issuer: ISSUER, jwks });
-    expect(claims?.email).toBe("a@b.se");
+  it("samma token: fel aud → invalid, rätt aud → godtas (#1801)", async () => {
+    const jwt = `Bearer ${await token({ audience: "annan-app", email: "a@b.se" })}`;
+    expect(await verifyBearerToken(jwt, cfg())).toEqual({ kind: "invalid" });
+    expect(await verifyBearerToken(jwt, { issuer: ISSUER, audience: ["annan-app"], jwks })).toMatchObject({ kind: "verified" });
   });
 });
 
@@ -132,9 +133,22 @@ describe("bearerConfigFromEnv", () => {
     expect(c?.jwks).toBeTypeOf("function");
   });
 
-  it("utan audience → ingen aud i config", () => {
-    const c = bearerConfigFromEnv({ AVA_OIDC_ISSUER: ISSUER });
-    expect(c?.audience).toBeUndefined();
+  it("issuer utan audience → fel vid start (#1801)", () => {
+    expect(() => bearerConfigFromEnv({ AVA_OIDC_ISSUER: ISSUER })).toThrow("AVA_OIDC_ISSUER kräver AVA_OIDC_AUDIENCE.");
+    expect(() => bearerConfigFromEnv({ AVA_OIDC_ISSUER: ISSUER, AVA_OIDC_AUDIENCE: " , " })).toThrow(/AVA_OIDC_AUDIENCE/);
+  });
+
+  it("kommaseparerad AVA_OIDC_AUDIENCE blir en lista", () => {
+    expect(bearerConfigFromEnv({ AVA_OIDC_ISSUER: ISSUER, AVA_OIDC_AUDIENCE: "a, b" })?.audience).toEqual(["a", "b"]);
+  });
+});
+
+describe("parseAudience", () => {
+  it("tom → ingen, en → sträng, flera → lista", () => {
+    expect(parseAudience(undefined)).toBeUndefined();
+    expect(parseAudience(" , ")).toBeUndefined();
+    expect(parseAudience("x")).toBe("x");
+    expect(parseAudience("x,y")).toEqual(["x", "y"]);
   });
 });
 

@@ -10,7 +10,7 @@
  */
 import {
   AUTO_APPROVE_MS, AUTO_LABEL, autoApprovable, autoApproveDue, type Column, type ColumnAction, columnFor, decideColumn, decidePrio,
-  decideWorkOrder, lageFor, rekFor, WORK_ORDER_LAGE, type WorkOrderMove,
+  decideWorkOrder, isProposal, lageFor, proposalDue, rekFor, WORK_ORDER_LAGE, type WorkOrderMove,
 } from "./flow/board";
 import { type BoardApi, type BoardItem, projectBoard } from "./flow/board-github";
 import { type GitHub, gitHub, type OpenItem, runGhWithToken, type WorkOrderProgress, type WorkOrders } from "./flow/github";
@@ -57,6 +57,14 @@ const AUTO_COMMENT = `${BOARD_MARKER}\nGodkänd automatiskt: ${AUTO_APPROVE_MS /
   "Loop 1 bedömde den som en liten bekräftad bugg eller ett internt verktyg, inom ADR:erna och utan risk (pengar, inloggning, migration, klientdata). " +
   "Var det fel: ta bort `verifierad` innan loop 2 hunnit bryta ner den, eller stäng den.";
 const VETO_COMMENT = `${BOARD_MARKER}\nVeto på tavlan: godkänns inte automatiskt. Ulrik beslutar själv (Att besluta).`;
+/*
+ * Agentens förslag (#1872). Kommentaren skrivs medan `auto-godkänn` sitter kvar,
+ * så att flödesvakten startar tillståndets agent (Ulriks token, regel 7).
+ */
+const PROPOSAL_COMMENT = `${BOARD_MARKER}\nFörslaget gäller: ${AUTO_APPROVE_MS / 3_600_000} timmar utan veto från Ulrik. ` +
+  "Gå på agentens förslag i den senaste frågan ovan, om inte Ulrik själv svarat annat där.";
+const PROPOSAL_NOW_COMMENT = `${BOARD_MARKER}\nFörslaget gäller: Ulrik godkände det på tavlan. Gå på agentens förslag i den senaste frågan ovan.`;
+const PROPOSAL_VETO_COMMENT = `${BOARD_MARKER}\nVeto på tavlan: agentens förslag gäller inte. Vänta på Ulriks svar i issuen.`;
 
 function addMissing(d: SyncDeps, onBoard: ReadonlySet<number>, result: SyncResult): void {
   for (const i of d.open) {
@@ -79,9 +87,7 @@ function addMissing(d: SyncDeps, onBoard: ReadonlySet<number>, result: SyncResul
 function applyColumn(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): ColumnAction {
   const action = decideColumn(labels, item.column);
   if (action.kind === "approve") {
-    result.approved.push(item.number);
-    d.log(`#${item.number}: godkänd på tavlan → verifierad`);
-    if (d.enforce) d.intake.addLabel(item.number, "verifierad");
+    approve(d, item, labels, result);
   } else if (action.kind === "decline") {
     result.declined.push(item.number);
     d.log(`#${item.number}: avböjd på tavlan → stängs`);
@@ -90,19 +96,45 @@ function applyColumn(d: SyncDeps, item: BoardItem, labels: readonly string[], re
       d.intake.closeIssue(item.number, "not_planned");
     }
   } else if (action.kind === "veto") {
-    veto(d, item, result);
+    veto(d, item, labels, result);
   } else if (action.kind === "set") {
     setColumn(d, item, action.column, result);
   }
   return action;
 }
 
-function veto(d: SyncDeps, item: BoardItem, result: SyncResult): void {
+/** Godkänt på tavlan: ett agentförslag gäller direkt, annars blir förfrågan verifierad. */
+function approve(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): void {
+  result.approved.push(item.number);
+  if (isProposal(labels)) { acceptProposal(d, item.number, PROPOSAL_NOW_COMMENT); return; }
+  d.log(`#${item.number}: godkänd på tavlan → verifierad`);
+  if (d.enforce) d.intake.addLabel(item.number, "verifierad");
+}
+
+/** Agentens förslag gäller: kommentaren först (den startar agenten), sedan bort med flaggan. */
+function acceptProposal(d: SyncDeps, n: number, text: string): void {
+  d.log(`#${n}: agentens förslag gäller`);
+  if (!d.enforce) return;
+  d.intake.comment(n, text);
+  d.intake.removeLabel(n, AUTO_LABEL);
+}
+
+function veto(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): void {
   result.vetoed.push(item.number);
-  d.log(`#${item.number}: veto på tavlan → godkänns inte automatiskt`);
+  const proposal = isProposal(labels);
+  d.log(`#${item.number}: veto på tavlan → ${proposal ? "agentens förslag gäller inte" : "godkänns inte automatiskt"}`);
   if (!d.enforce) return;
   d.intake.removeLabel(item.number, AUTO_LABEL);
-  d.intake.comment(item.number, VETO_COMMENT);
+  // Ett förslag som inte gäller är en fråga Ulrik ska svara på: Svara.
+  if (proposal) d.intake.addLabel(item.number, "blockerad");
+  d.intake.comment(item.number, proposal ? PROPOSAL_VETO_COMMENT : VETO_COMMENT);
+}
+
+/** Agentens förslag när vetofönstret gått ut. Ger true om det gällde. */
+function expireProposal(d: SyncDeps, item: BoardItem, labels: readonly string[], since: string | undefined): boolean {
+  if (!proposalDue(labels, since, d.now)) return false;
+  acceptProposal(d, item.number, PROPOSAL_COMMENT);
+  return true;
 }
 
 /** När `auto-godkänn` senast sattes (ISO), ur händelseloggen. */
@@ -128,10 +160,12 @@ const workOrdersOf = (d: SyncDeps, n: number): { workOrders?: WorkOrders } => {
   return wo === undefined ? {} : { workOrders: wo };
 };
 
-/** Etiketterna efter det synken just gjorde (godkänt eller veto), för Läge-texten. */
+/** Etiketterna efter det synken just gjorde (godkänt, veto eller förslag som gäller), för Läge-texten. */
 function labelsAfter(labels: readonly string[], action: ColumnAction, autoApproved: boolean): readonly string[] {
-  if (action.kind === "approve" || autoApproved) return [...labels, "verifierad"];
-  return action.kind === "veto" ? labels.filter((l) => l !== AUTO_LABEL) : labels;
+  const without = labels.filter((l) => l !== AUTO_LABEL);
+  if (action.kind === "veto") return isProposal(labels) ? [...without, "blockerad"] : without;
+  if (action.kind !== "approve" && !autoApproved) return labels;
+  return isProposal(labels) ? without : [...labels, "verifierad"];
 }
 
 /** Sätter Läge-texten när den ändrats, så att Ulrik ser att något händer. */
@@ -162,12 +196,13 @@ function applyRek(d: SyncDeps, item: BoardItem, labels: readonly string[]): void
 
 /** Ett kort på tavlan: kolumn, prio, rekommendation och automatiskt godkännande. */
 function applyItem(d: SyncDeps, item: BoardItem, labels: readonly string[], result: SyncResult): void {
-  const since = autoApprovable(labels) ? autoSince(d, item.number) : undefined;
+  const since = autoApprovable(labels) || isProposal(labels) ? autoSince(d, item.number) : undefined;
   const action = applyColumn(d, item, labels, result);
   applyPrio(d, item, labels);
   applyRek(d, item, labels);
   // Bara om Ulrik inte flyttat kortet själv (godkänt, avböjt eller lagt in veto).
-  const auto = (action.kind === "none" || action.kind === "set") && autoApprove(d, item, labels, since, result);
+  const auto = (action.kind === "none" || action.kind === "set") &&
+    (autoApprove(d, item, labels, since, result) || expireProposal(d, item, labels, since));
   if (action.kind !== "decline") applyLage(d, item, labelsAfter(labels, action, auto), since);
 }
 

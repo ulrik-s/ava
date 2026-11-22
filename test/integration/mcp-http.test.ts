@@ -31,7 +31,7 @@ const CONFIG: McpHttpConfig = {
   authorizationServers: ["https://ava.example"],
   upstream: () => Promise.resolve({ authorizationEndpoint: "https://login.example/authorize", tokenEndpoint: "https://login.example/token" }),
   scopes: ["api://ava/mcp"],
-  verify: { issuer: "https://login.example/tenant/v2.0", jwks: () => Promise.reject(new Error("används inte")) },
+  verify: { issuer: "https://login.example/tenant/v2.0", audience: "api://ava", jwks: () => Promise.reject(new Error("används inte")) },
 };
 
 const GOOD = "good-token";
