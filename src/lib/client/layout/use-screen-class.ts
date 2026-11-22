@@ -1,14 +1,16 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { screenClassFor, type ScreenClass } from "@/lib/shared/layout/dock-layout";
+import { useMediaQuery } from "@/lib/client/use-media-query";
+import {
+  LAPTOP_MEDIA_QUERY, LARGE_MEDIA_QUERY, screenClassOf, type ScreenClass,
+} from "@/lib/shared/layout/dock-layout";
 
-function subscribe(onChange: () => void): () => void {
-  window.addEventListener("resize", onChange);
-  return () => window.removeEventListener("resize", onChange);
-}
-
-/** Aktuell skärmklass; följer fönstrets bredd (t.ex. laptop ↔ stor skärm). */
+/**
+ * Aktuell skärmklass, läst med `matchMedia` (samma brytpunkter som CSS:en).
+ * Vid serverrendering, och utan `matchMedia`, blir den `laptop`.
+ */
 export function useScreenClass(): ScreenClass {
-  return useSyncExternalStore(subscribe, () => screenClassFor(window.innerWidth), () => "laptop");
+  const atLeastLaptop = useMediaQuery(LAPTOP_MEDIA_QUERY, true);
+  const atLeastLarge = useMediaQuery(LARGE_MEDIA_QUERY, false);
+  return screenClassOf(atLeastLaptop, atLeastLarge);
 }

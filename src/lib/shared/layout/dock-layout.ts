@@ -18,9 +18,18 @@ export type ScreenClass = "phone" | "laptop" | "large";
 export const PHONE_MAX_WIDTH = 767;
 export const LAPTOP_MAX_WIDTH = 1799;
 
-export function screenClassFor(width: number): ScreenClass {
-  if (width <= PHONE_MAX_WIDTH) return "phone";
-  return width <= LAPTOP_MAX_WIDTH ? "laptop" : "large";
+/**
+ * Media-frågorna för skärmklassen, byggda ur brytpunkterna. `min-width` har
+ * samma form och gräns som Tailwinds `md:`, så att JS och CSS är överens
+ * även vid bredder med decimaler (zoom i Safari).
+ */
+export const LAPTOP_MEDIA_QUERY = `(min-width: ${PHONE_MAX_WIDTH + 1}px)`;
+export const LARGE_MEDIA_QUERY = `(min-width: ${LAPTOP_MAX_WIDTH + 1}px)`;
+
+/** Skärmklassen ur svaren på `LAPTOP_MEDIA_QUERY` och `LARGE_MEDIA_QUERY`. */
+export function screenClassOf(atLeastLaptop: boolean, atLeastLarge: boolean): ScreenClass {
+  if (atLeastLarge) return "large";
+  return atLeastLaptop ? "laptop" : "phone";
 }
 
 /** Preferens-nyckeln för en sidtyps layout på en skärmklass. */
