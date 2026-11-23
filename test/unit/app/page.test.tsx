@@ -61,10 +61,24 @@ describe("Dashboard", () => {
 
   it("visar dagsväxlare och växlar valt datum", () => {
     render(<Dashboard />);
+    const group = screen.getByRole("group", { name: "Dag" });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Idag" })).toHaveAttribute("aria-pressed", "true");
     const igår = screen.getByRole("button", { name: "Igår" });
     fireEvent.click(igår);
-    // "Igår" är nu fokuserad-knapp; verifiera via aktiv klass
-    expect(igår.className).toContain("bg-blue-50");
+    expect(igår).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Idag" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("dagsväxlaren: ett annat datum i fältet ger inget valt alternativ (#1805)", () => {
+    const { container } = render(<Dashboard />);
+    const dateInput = container.querySelector('input[type="date"]');
+    if (!(dateInput instanceof HTMLInputElement)) throw new Error("datumfältet saknas");
+    fireEvent.change(dateInput, { target: { value: "2001-01-01" } });
+    expect(dateInput.value).toBe("2001-01-01");
+    for (const name of ["Igår", "Idag", "Imorgon"]) {
+      expect(screen.getByRole("button", { name })).toHaveAttribute("aria-pressed", "false");
+    }
   });
 
   it("Frister: rutan heter Frister och tidsfrist kan bockas av direkt på startsidan", () => {
