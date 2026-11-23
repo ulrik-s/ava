@@ -51,6 +51,12 @@ export function unlockedMatch(): Readonly<Record<string, null>> {
   return Object.fromEntries([...BILLING_LOCK_FIELDS, "deletedAt"].map((field) => [field, null]));
 }
 
+/**
+ * Tooltipen på en låst post i tidslistorna (#1863), med samma lydelse som
+ * serverns avvisning av ändring och borttagning.
+ */
+export const LOCKED_ENTRY_HINT = "Ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort.";
+
 /** Knuten till en faktura (`invoiceId` satt), oavsett frysning. */
 export function hasInvoice(t: Pick<LockableEntry, "invoiceId">): boolean {
   return t.invoiceId != null;
