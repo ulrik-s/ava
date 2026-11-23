@@ -4,25 +4,11 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import {
-  hasSjalvriskAconto, insurerPruningPending, isActiveKr, krCanCreateInvoice, sjalvriskAccontoDue, type TodoRun,
+  hasSjalvriskAconto, insurerPruningPending, krCanCreateInvoice, sjalvriskAccontoDue, type TodoRun,
 } from "@/lib/shared/billing-todo";
 
 const kr = (kostnadsrakningStatus: TodoRun["kostnadsrakningStatus"], extra: Partial<TodoRun> = {}): TodoRun => ({
   type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", recipient: "DOMSTOL", kostnadsrakningStatus, ...extra,
-});
-
-describe("isActiveKr", () => {
-  it("inskickad, överklagad och beslutad KR är aktiv", () => {
-    expect(isActiveKr(kr("INSKICKAD"))).toBe(true);
-    expect(isActiveKr(kr("OVERKLAGAD"))).toBe(true);
-    expect(isActiveKr(kr("BESLUTAD"))).toBe(true);
-  });
-
-  it("ångrad, fakturerad eller statuslös KR är inte aktiv", () => {
-    expect(isActiveKr(kr("INSKICKAD", { status: "VOIDED" }))).toBe(false);
-    expect(isActiveKr(kr("FAKTURERAD"))).toBe(false);
-    expect(isActiveKr(kr(null))).toBe(false);
-  });
 });
 
 describe("krCanCreateInvoice (#1225)", () => {

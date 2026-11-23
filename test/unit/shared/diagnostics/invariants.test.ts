@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest-compat";
-import { detectMatterInvariants, type MatterInvariantInput } from "@/lib/shared/diagnostics/invariants";
+import { detectMatterInvariants, type BillingRunView, type MatterInvariantInput } from "@/lib/shared/diagnostics/invariants";
 import { asId } from "@/lib/shared/schemas/ids";
 
 function input(over: Partial<MatterInvariantInput> = {}): MatterInvariantInput {
@@ -12,7 +12,7 @@ function input(over: Partial<MatterInvariantInput> = {}): MatterInvariantInput {
   };
 }
 
-const pendingKr = { id: asId<"BillingRunId">("br-1"), type: "KOSTNADSRAKNING", status: "PENDING_VERDICT" };
+const pendingKr: BillingRunView = { id: asId<"BillingRunId">("br-1"), type: "KOSTNADSRAKNING", status: "PENDING_VERDICT" };
 
 describe("detectMatterInvariants — KR_PENDING_NO_DOC", () => {
   it("flaggar pending kostnadsräkning utan KR-dokument", () => {
@@ -68,6 +68,18 @@ describe("detectMatterInvariants — KR_PENDING_NO_DOC", () => {
     const v = detectMatterInvariants({ matterId: asId<"MatterId">("m-x"), billingRuns: [pendingKr], documents: [] });
     expect(v[0]!.message).toContain("m-x");
     expect(v[0]!.context.matterNumber).toBeUndefined();
+  });
+
+  it("flaggar en beslutad KR och en äldre KR utan status när dokument saknas (#1859)", () => {
+    const v = detectMatterInvariants(input({
+      billingRuns: [
+        { ...pendingKr, id: asId<"BillingRunId">("br-b"), kostnadsrakningStatus: "BESLUTAD" },
+        { ...pendingKr, id: asId<"BillingRunId">("br-n"), kostnadsrakningStatus: null },
+        { ...pendingKr, id: asId<"BillingRunId">("br-f"), kostnadsrakningStatus: null, invoiceId: "inv-1" },
+      ],
+      documents: [],
+    }));
+    expect(v.map((x) => x.context.billingRunId).sort()).toEqual(["br-b", "br-n"]);
   });
 
   it("returnerar tomt för ett ärende utan billing-runs", () => {

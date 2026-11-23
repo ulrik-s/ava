@@ -26,6 +26,19 @@ describe("currentPhase — härledning", () => {
     expect(currentPhase({ paymentMethod: "OFFENTLIGT_UPPDRAG" }, [pendingKr])).toBe("VANTAR_DOM");
   });
 
+  it("VANTAR_DOM för inskickad, beslutad, överklagad och äldre KR utan status och faktura (#1859)", () => {
+    for (const kostnadsrakningStatus of ["INSKICKAD", "BESLUTAD", "OVERKLAGAD", null] as const) {
+      expect(currentPhase({ paymentMethod: "RATTSHJALP" }, [{ ...pendingKr, kostnadsrakningStatus }])).toBe("VANTAR_DOM");
+    }
+  });
+
+  it("inte VANTAR_DOM för fakturerad eller ångrad KR (#1859)", () => {
+    const fakturerad: FlowRun = { type: "KOSTNADSRAKNING", status: "SENT", kostnadsrakningStatus: "FAKTURERAD", invoiceId: "inv-1" };
+    expect(currentPhase({ paymentMethod: "RATTSHJALP" }, [fakturerad])).toBe("SLUTREGLERAD");
+    expect(currentPhase({ paymentMethod: "RATTSHJALP" }, [{ ...pendingKr, status: "VOIDED", kostnadsrakningStatus: "INSKICKAD" }])).toBe("ARBETE");
+    expect(currentPhase({ paymentMethod: "RATTSHJALP" }, [{ ...pendingKr, kostnadsrakningStatus: null, invoiceId: "inv-1" }])).toBe("ARBETE");
+  });
+
   it("utställd slutfaktura utan väntande → SLUTREGLERAD", () => {
     expect(currentPhase({ paymentMethod: "RATTSSKYDD" }, [sentFinal])).toBe("SLUTREGLERAD");
   });

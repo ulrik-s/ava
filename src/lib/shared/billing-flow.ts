@@ -22,6 +22,7 @@
  * listor men finns som nycklar så flödet "äger" fasen.
  */
 
+import { isActiveKr, type KostnadsrakningStatus } from "./kostnadsrakning-flow";
 import type { BillingRunRecipient, BillingRunStatus, BillingRunType, PaymentMethod } from "./schemas/enums";
 
 /** Ärendets faktureringsfas (härledd, ej lagrad). */
@@ -119,6 +120,9 @@ export const BILLING_FLOWS: Record<PaymentMethod, BillingFlow> = {
 export interface FlowRun {
   type: BillingRunType;
   status: BillingRunStatus;
+  /** Kostnadsräkningens livscykel (#828) — läses av `isActiveKr` (#1859). */
+  kostnadsrakningStatus?: KostnadsrakningStatus | null | undefined;
+  invoiceId?: string | null | undefined;
 }
 
 /** Minimal vy av ärendet för fas-härledningen. */
@@ -132,7 +136,7 @@ function flowHasPhase(flow: BillingFlow, phase: BillingPhase): boolean {
 }
 
 function hasPendingVerdict(runs: ReadonlyArray<FlowRun>): boolean {
-  return runs.some((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
+  return runs.some(isActiveKr);
 }
 
 /** Slutreglerat = en utställd slutfaktura/kostnadsräkning finns (aconto räknas ej). */

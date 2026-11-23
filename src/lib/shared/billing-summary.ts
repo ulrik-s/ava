@@ -16,7 +16,8 @@
  */
 
 import { creditedInvoiceIds } from "./ar-summary";
-import { isActiveKr, type TodoRun } from "./billing-todo";
+import type { TodoRun } from "./billing-todo";
+import { isActiveKr } from "./kostnadsrakning-flow";
 import type { InvoiceStatus, InvoiceType } from "./schemas/enums";
 import type { InvoiceId } from "./schemas/ids";
 
