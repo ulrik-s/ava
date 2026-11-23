@@ -767,7 +767,7 @@
       "count": 2
     }
   },
-  "src/lib/server/routers/billingRun.ts": {
+  "src/lib/server/routers/billingRun/invoices.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     }
