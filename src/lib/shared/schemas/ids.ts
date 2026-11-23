@@ -89,6 +89,10 @@ export type InvoiceDispatchId = z.infer<typeof invoiceDispatchIdSchema>;
 export const expectedReceivableIdSchema = brandedId<"ExpectedReceivableId">();
 export type ExpectedReceivableId = z.infer<typeof expectedReceivableIdSchema>;
 
+/** Ett förhör i ett förordnandemål (#1855). */
+export const interrogationIdSchema = brandedId<"InterrogationId">();
+export type InterrogationId = z.infer<typeof interrogationIdSchema>;
+
 export const documentTemplateIdSchema = brandedId<"DocumentTemplateId">();
 export type DocumentTemplateId = z.infer<typeof documentTemplateIdSchema>;
 

@@ -17,6 +17,7 @@ import type { DocumentSuggestionRepository } from "./document-suggestion-reposit
 import type { DocumentTemplateRepository } from "./document-template-repository";
 import type { ExpectedReceivableRepository } from "./expected-receivable-repository";
 import type { ExpenseRepository } from "./expense-repository";
+import type { InterrogationRepository } from "./interrogation-repository";
 import type { InvoiceDispatchRepository } from "./invoice-dispatch-repository";
 import type { InvoiceRepository } from "./invoice-repository";
 import type { MatterContactRepository } from "./matter-contact-repository";
@@ -60,6 +61,7 @@ export interface Repositories {
   documentAnalysisSuggestions: DocumentSuggestionRepository;
   documentTemplates: DocumentTemplateRepository;
   expectedReceivables: ExpectedReceivableRepository;
+  interrogations: InterrogationRepository;
   invoiceDispatches: InvoiceDispatchRepository;
   organizations: OrganizationRepository;
   offices: OfficeRepository;

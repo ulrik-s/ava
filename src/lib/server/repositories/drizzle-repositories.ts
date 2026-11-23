@@ -27,6 +27,7 @@ import { DrizzleDocumentSuggestionRepository } from "./drizzle-document-suggesti
 import { DrizzleDocumentTemplateRepository } from "./drizzle-document-template-repository";
 import { DrizzleExpectedReceivableRepository } from "./drizzle-expected-receivable-repository";
 import { DrizzleExpenseRepository } from "./drizzle-expense-repository";
+import { DrizzleInterrogationRepository } from "./drizzle-interrogation-repository";
 import { DrizzleInvoiceDispatchRepository } from "./drizzle-invoice-dispatch-repository";
 import { DrizzleInvoiceRepository } from "./drizzle-invoice-repository";
 import { DrizzleMatterContactRepository } from "./drizzle-matter-contact-repository";
@@ -73,6 +74,7 @@ function entityRepos(db: AppDb): Omit<Repositories, "transaction"> {
     documentAnalysisSuggestions: new DrizzleDocumentSuggestionRepository(db),
     documentTemplates: new DrizzleDocumentTemplateRepository(db),
     expectedReceivables: new DrizzleExpectedReceivableRepository(db),
+    interrogations: new DrizzleInterrogationRepository(db),
     invoiceDispatches: new DrizzleInvoiceDispatchRepository(db),
     organizations: new DrizzleOrganizationRepository(db),
     offices: new DrizzleOfficeRepository(db),

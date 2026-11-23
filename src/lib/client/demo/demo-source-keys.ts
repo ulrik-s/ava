@@ -55,6 +55,7 @@ const MATCHERS: Matcher[] = [
   { key: "billingRuns", owns: (p) => p.startsWith("billing-runs/") },
   { key: "accontoDeductions", owns: (p) => p.startsWith("acconto-deductions/") },
   { key: "expectedReceivables", owns: (p) => p.startsWith("expected-receivables/") },
+  { key: "interrogations", owns: (p) => p.startsWith("interrogations/") },
   { key: "tasks", owns: (p) => p.startsWith("tasks/") },
   { key: "serviceNotes", owns: (p) => p.startsWith("service-notes/") },
   { key: "conflictChecks", owns: (p) => p.startsWith("conflict-checks/") },

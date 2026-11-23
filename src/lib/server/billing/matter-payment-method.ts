@@ -9,9 +9,9 @@
  * faktureringsflödena följer av betalningssättet som förut (ADR 0034).
  */
 
-import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
+import { forundersokningAvslutNote, paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
 import { lockedPaymentMethod, type PublicAssignmentSettings } from "@/lib/shared/public-assignment";
-import type { PaymentMethod } from "@/lib/shared/schemas/enums";
+import type { ForundersokningAvslut, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import type { Repositories } from "../repositories/repositories";
@@ -70,11 +70,19 @@ export async function applyPaymentMethodOnUpdate<T extends PaymentMethodInput>(
 interface BillingChangeInput {
   paymentMethod?: PaymentMethod | undefined;
   rattsskyddNekadAt?: string | null | undefined;
+  /** Förordnandemål (#1855): förundersökningens avslut; null rensar markeringen. */
+  forundersokningAvslut?: ForundersokningAvslut | null | undefined;
+}
+
+/** Ett nytt avslut som skiljer sig från ärendets — `null`/oförändrat ger inget. */
+function newAvslut(before: Matter, input: BillingChangeInput): ForundersokningAvslut | undefined {
+  const next = input.forundersokningAvslut;
+  return next && next !== before.forundersokningAvslut ? next : undefined;
 }
 
 /**
  * Faktureringsrelevanta ärendeändringar som tjänsteanteckning (#1221): nytt
- * betalningssätt och avslaget rättsskydd. Bara när värdet faktiskt ÄNDRAS —
+ * betalningssätt, avslaget rättsskydd och förundersökningens avslut (#1855). Bara när värdet faktiskt ÄNDRAS —
  * ett formulär som sparar samma betalningssätt igen ska inte logga något.
  */
 export async function logBillingChanges(
@@ -86,6 +94,8 @@ export async function logBillingChanges(
   if (input.rattsskyddNekadAt && !before.rattsskyddNekadAt) {
     await logMatterNote(repos, ctx, before.id, rattsskyddNekadNote(input.rattsskyddNekadAt.slice(0, 10)));
   }
+  const avslut = newAvslut(before, input);
+  if (avslut) await logMatterNote(repos, ctx, before.id, forundersokningAvslutNote(avslut));
 }
 
 /** Sortering på id (kodpunktsordning, oberoende av locale). */

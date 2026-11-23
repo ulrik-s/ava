@@ -9,6 +9,7 @@ import { documentTemplateRouter } from "./documentTemplate";
 import { expectedReceivableRouter } from "./expectedReceivable";
 import { expenseRouter } from "./expense";
 import { feedbackRouter } from "./feedback";
+import { interrogationRouter } from "./interrogation";
 import { invoiceRouter } from "./invoice";
 import { invoiceDispatchRouter } from "./invoiceDispatch";
 import { kostnadsrakningRouter } from "./kostnadsrakning";
@@ -43,6 +44,7 @@ export const appRouter = router({
   invoice: invoiceRouter,
   invoiceDispatch: invoiceDispatchRouter,
   expectedReceivable: expectedReceivableRouter,
+  interrogation: interrogationRouter,
   billingRun: billingRunRouter,
   paymentPlan: paymentPlanRouter,
   kostnadsrakning: kostnadsrakningRouter,

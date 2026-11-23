@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { orgScopedFields, optionalDateLike } from "./common";
-import { conflictCheckStatusSchema, matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enums";
+import { conflictCheckStatusSchema, forundersokningAvslutSchema, matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enums";
 import { hourlyRatesSchema } from "./hourly-rates";
 import { matterIdSchema, matterContactIdSchema, contactIdSchema, userIdSchema } from "./ids";
 import { conflictHitSchema } from "./misc";
@@ -137,6 +137,8 @@ export const matterSchema = z.object({
    * körs om. Null = äldre ärende från före uppföljningen.
    */
   conflictCheckStatus: conflictCheckStatusSchema.nullish(),
+  /** Hur förundersökningen avslutades i ett förordnandemål (#1855). Null = inte markerat. */
+  forundersokningAvslut: forundersokningAvslutSchema.nullish(),
   /** Antal träffar i senaste kontrollen. */
   conflictCheckHits: z.number().int().nonnegative().nullish(),
   /** När kontrollen senast kördes mot byråns alla ärenden. */

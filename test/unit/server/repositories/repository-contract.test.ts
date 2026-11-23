@@ -85,6 +85,10 @@ const FIXTURES: Readonly<Record<RepoKey, Fixture>> = {
     row: (p) => ({ organizationId: p.org, matterId: p.matter, description: "Domstolen", expectedAmount: 50_000, recordedById: p.user, status: "PENDING" }),
     patch: { expectedAmount: 45_000 }, orgColumn: true,
   },
+  interrogations: {
+    row: (p) => ({ organizationId: p.org, matterId: p.matter, start: at, end: new Date("2026-09-30T09:00:00.000Z"), pauses: [] }),
+    patch: { pauses: [{ start: "2026-09-30T08:20:00.000Z", end: "2026-09-30T08:40:00.000Z" }] }, orgColumn: true,
+  },
   documentFolders: { row: (p) => ({ matterId: p.matter, name: "Inlagor", parentId: null }), patch: { name: "Inlagor 2" } },
   documents: {
     row: (p) => ({ matterId: p.matter, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "documents/content/a", uploadedById: p.user }),

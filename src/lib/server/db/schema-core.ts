@@ -8,7 +8,7 @@ import { sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { OrgImage } from "@/lib/shared/org-image";
 import type {
-  ContactType, ConflictCheckStatus, MatterRole, MatterStatus, PaymentMethod, UserRole, VehicleType,
+  ContactType, ConflictCheckStatus, ForundersokningAvslut, MatterRole, MatterStatus, PaymentMethod, UserRole, VehicleType,
 } from "@/lib/shared/schemas/enums";
 import type { ContactId, MatterContactId, MatterId, OfficeId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { StandardAtgard } from "@/lib/shared/standard-atgard";
@@ -138,6 +138,8 @@ export const matters = pgTable("matters", {
   rattsskyddNekadAt: timestamp("rattsskydd_nekad_at", { withTimezone: true }),
   /** Jävskontrollen (#1246): status, antal träffar, när den kördes, och träffarna (#1818, null = aldrig sparade). */
   conflictCheckStatus: text("conflict_check_status").$type<ConflictCheckStatus>(),
+  /** Förundersökningens avslut i förordnandemål (#1855); null = inte markerat. */
+  forundersokningAvslut: text("forundersokning_avslut").$type<ForundersokningAvslut>(),
   conflictCheckHits: integer("conflict_check_hits"),
   conflictCheckedAt: timestamp("conflict_checked_at", { withTimezone: true }),
   conflictCheckResults: conflictHitsColumn("conflict_check_results"),

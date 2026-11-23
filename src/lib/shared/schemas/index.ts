@@ -35,6 +35,7 @@ import {
   documentAnalysisSuggestionSchema,
   matterEventSuggestionSchema,
 } from "./document";
+import { interrogationSchema } from "./interrogation";
 import { matterSchema, matterContactSchema } from "./matter";
 import { documentTemplateSchema, conflictCheckSchema } from "./misc";
 import { organizationSchema, officeSchema } from "./organization";
@@ -54,6 +55,7 @@ export * from "./billing";
 export * from "./misc";
 export * from "./calendar";
 export * from "./service-note";
+export * from "./interrogation";
 
 /**
  * Pathfunktion för en entitet. Andra argumentet är raden själv — vissa
@@ -213,6 +215,12 @@ export const ENTITY_REGISTRY: Record<string, EntityEntry> = {
     gitPrefix: "expected-receivables",
     sourceKey: "expectedReceivables",
   },
+  interrogation: {
+    schema: interrogationSchema,
+    gitPath: p((id) => `interrogations/${id}.json`),
+    gitPrefix: "interrogations",
+    sourceKey: "interrogations",
+  },
   documentTemplate: {
     schema: documentTemplateSchema,
     gitPath: p((id) => `.ava/templates/${id}.json`),
@@ -265,7 +273,7 @@ export type EntityName =
   | "document" | "documentFolder" | "documentPart" | "documentAnalysisSuggestion" | "matterEventSuggestion"
   | "timeEntry" | "expense" | "invoice" | "payment" | "paymentPlan"
   | "paymentPlanReminder" | "accontoDeduction" | "billingRun" | "writeOff"
-  | "invoiceDispatch" | "expectedReceivable"
+  | "invoiceDispatch" | "expectedReceivable" | "interrogation"
   | "documentTemplate" | "conflictCheck"
   | "calendarEvent" | "task" | "serviceNote"
   | "userPreference" | "orgPreference";

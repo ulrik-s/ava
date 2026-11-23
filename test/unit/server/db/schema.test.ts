@@ -25,7 +25,7 @@ function getTableColumnsSafe(t: unknown): Record<string, unknown> {
   }
 }
 
-const ORG_SCOPED = ["offices", "users", "contacts", "matters", "expectedReceivables",
+const ORG_SCOPED = ["offices", "users", "contacts", "matters", "expectedReceivables", "interrogations",
   "calendarEvents", "tasks", "serviceNotes", "orgPreferences", "documentTemplates"];
 
 describe("Drizzle-schema — bas-konventioner (alla entiteter)", () => {

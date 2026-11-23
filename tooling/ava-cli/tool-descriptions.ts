@@ -122,6 +122,10 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "expectedReceivable.settle": "Pricka av en fordran med det faktiskt utbetalda beloppet. Idempotent på betalningsreferensen — samma betalning bokförs aldrig två gånger.",
   "expectedReceivable.update": "Ändra begärt belopp eller beskrivning medan fordran är öppen.",
   "expectedReceivable.cancel": "Avbryt en fordran, t.ex. felregistrerad eller helt avslagen av domstolen.",
+  "interrogation.list": "Ärendets förhör under förundersökningen (förordnandemål), äldst först.",
+  "interrogation.create": "Registrera ett förhör i ett förordnandemål: början, slut och uppehåll. Slutet ska vara efter början och uppehållen inom förhöret utan överlapp.",
+  "interrogation.update": "Ändra ett förhörs början, slut eller uppehåll. Samma regler som när förhöret registrerades.",
+  "interrogation.delete": "Ta bort ett förhör.",
 
   // ── Utlägg ───────────────────────────────────────────────────────
   "expense.list": "Lista utlägg, valfritt filtrerat på ärende.",

@@ -15,6 +15,7 @@ import type {
   AccontoDeductionId, BillingRunId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterId, PaymentId, PaymentPlanId,
   PaymentPlanReminderId, TimeEntryId, UserId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
+import type { InterrogationPause } from "@/lib/shared/schemas/interrogation";
 import type { SettlementView } from "@/lib/shared/settlement-view";
 import { baseColumns, boolDefault, ore, orgScopedColumns } from "./columns";
 import { matters } from "./schema-core";
@@ -219,3 +220,15 @@ export const expectedReceivables = pgTable("expected_receivables", {
   paymentReference: text("payment_reference"),
   recordedById: uuid("recorded_by_id").notNull(),
 }, (t) => [index("expected_receivables_matter_idx").on(t.matterId)]);
+
+/**
+ * Förhör i förordnandemål (#1855, DVFS 2025:5): början, slut och uppehåll.
+ * Fälten heter som domänens `Forhor`; kolumnerna `start_at`/`end_at`.
+ */
+export const interrogations = pgTable("interrogations", {
+  ...orgScopedColumns,
+  matterId: uuid("matter_id").notNull().$type<MatterId>().references(() => matters.id),
+  start: timestamp("start_at", { withTimezone: true }).notNull(),
+  end: timestamp("end_at", { withTimezone: true }).notNull(),
+  pauses: jsonb("pauses").notNull().default([]).$type<InterrogationPause[]>(),
+}, (t) => [index("interrogations_matter_idx").on(t.matterId)]);

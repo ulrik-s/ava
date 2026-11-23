@@ -64,6 +64,20 @@ export const CONFLICT_CHECK_STATUS_LABELS = {
 export const conflictCheckStatusSchema = enumFromLabels(CONFLICT_CHECK_STATUS_LABELS);
 export type ConflictCheckStatus = z.infer<typeof conflictCheckStatusSchema>;
 
+// ─── Förundersökningens avslut i förordnandemål (#1855) ───────────────────
+
+/**
+ * Hur förundersökningen avslutades i ett förordnandemål (DVFS 2025:5). Null på
+ * ärendet = inte markerat.
+ */
+export const FORUNDERSOKNING_AVSLUT_LABELS = {
+  NEDLAGD: "Förundersökningen nedlagd",
+  STRAFFORELAGGANDE: "Strafföreläggande",
+  INGET_ATAL: "Inget åtal",
+} as const satisfies Record<string, string>;
+export const forundersokningAvslutSchema = enumFromLabels(FORUNDERSOKNING_AVSLUT_LABELS);
+export type ForundersokningAvslut = z.infer<typeof forundersokningAvslutSchema>;
+
 // ─── Payment method (per matter) ──────────────────────────────────────────
 
 export const PAYMENT_METHOD_LABELS = {

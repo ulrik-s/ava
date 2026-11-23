@@ -12,7 +12,10 @@
  */
 
 import { formatKr } from "./format-kr";
-import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, PAYMENT_METHOD_LABELS, type InvoiceStatus, type InvoiceType, type PaymentMethod } from "./schemas/enums";
+import {
+  FORUNDERSOKNING_AVSLUT_LABELS, INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, PAYMENT_METHOD_LABELS,
+  type ForundersokningAvslut, type InvoiceStatus, type InvoiceType, type PaymentMethod,
+} from "./schemas/enums";
 import { stockholmDay, stockholmTime } from "./stockholm-time";
 
 /** Anteckningens datum + klockslag i byråns tidszon ("YYYY-MM-DD", "HH:mm"). */
@@ -125,4 +128,9 @@ export function paymentMethodNote(method: PaymentMethod): string {
 
 export function rattsskyddNekadNote(day: string): string {
   return `Rättsskydd nekat (${day})`;
+}
+
+/** Förordnandemål (#1855): hur förundersökningen avslutades. */
+export function forundersokningAvslutNote(avslut: ForundersokningAvslut): string {
+  return `Förundersökningens avslut: ${FORUNDERSOKNING_AVSLUT_LABELS[avslut]}`;
 }

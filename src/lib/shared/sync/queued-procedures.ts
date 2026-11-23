@@ -54,6 +54,10 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "expectedReceivable.settle": Object.freeze({ entity: "expectedReceivable" }),
   "expectedReceivable.cancel": Object.freeze({ entity: "expectedReceivable" }),
   "expectedReceivable.update": Object.freeze({ entity: "expectedReceivable" }),
+  // Förhören i förordnandemål (#1855) styr arvodet: servern prövar tiderna.
+  "interrogation.create": Object.freeze({ entity: "interrogation" }),
+  "interrogation.update": Object.freeze({ entity: "interrogation" }),
+  "interrogation.delete": Object.freeze({ entity: "interrogation" }),
   // Steg 2c (#1276): fakturorna. Frysningen av posterna loggas nu i change_log
   // (#1319), och fakturanumret tilldelas i serverns körning (#1243).
   "billingRun.createAcconto": Object.freeze({ entity: "invoice", idField: "id" }),

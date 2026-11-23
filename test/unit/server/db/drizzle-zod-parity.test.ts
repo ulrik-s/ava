@@ -32,7 +32,7 @@ import * as db from "@/lib/server/db/schema";
 import {
   accontoDeductionSchema, billingRunSchema, calendarEventSchema, conflictCheckSchema, contactSchema,
   documentAnalysisSuggestionSchema, documentFolderSchema, documentPartSchema, documentSchema,
-  documentTemplateSchema, ENTITY_REGISTRY, expectedReceivableSchema, expenseSchema, invoiceDispatchSchema,
+  documentTemplateSchema, ENTITY_REGISTRY, expectedReceivableSchema, expenseSchema, interrogationSchema, invoiceDispatchSchema,
   invoiceSchema, matterContactSchema, matterEventSuggestionSchema, matterSchema, officeSchema,
   organizationSchema, paymentPlanReminderSchema, paymentPlanSchema, paymentSchema, serviceNoteSchema,
   taskSchema, timeEntrySchema, userSchema, writeOffSchema,
@@ -67,6 +67,7 @@ const PAIRS = {
   writeOffs: { table: db.writeOffs, schema: writeOffSchema },
   invoiceDispatches: { table: db.invoiceDispatches, schema: invoiceDispatchSchema },
   expectedReceivables: { table: db.expectedReceivables, schema: expectedReceivableSchema },
+  interrogations: { table: db.interrogations, schema: interrogationSchema },
   documentTemplates: { table: db.documentTemplates, schema: documentTemplateSchema },
   conflictChecks: { table: db.conflictChecks, schema: conflictCheckSchema },
   calendarEvents: { table: db.calendarEvents, schema: calendarEventSchema },

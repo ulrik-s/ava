@@ -18,6 +18,7 @@ import type {
   Invoice, TimeEntry, Expense, User, Organization, Office, ConflictCheck,
   Payment, PaymentPlan, AccontoDeduction, BillingRun, WriteOff, InvoiceDispatch,
   ExpectedReceivable,
+  Interrogation,
   CalendarEvent, Task, ServiceNote,
 } from "@/lib/shared/schemas";
 import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
@@ -162,6 +163,7 @@ export type PaymentDelegate = Delegate<Payment>;
 export type WriteOffDelegate = Delegate<WriteOff>;
 export type InvoiceDispatchDelegate = Delegate<InvoiceDispatch>;
 export type ExpectedReceivableDelegate = Delegate<ExpectedReceivable>;
+export type InterrogationDelegate = Delegate<Interrogation>;
 export type PaymentPlanDelegate = Delegate<PaymentPlan>;
 export type AccontoDeductionDelegate = Delegate<AccontoDeduction>;
 export type BillingRunDelegate = Delegate<BillingRun>;
@@ -197,6 +199,7 @@ export interface DataStoreTx {
   writeOffs: WriteOffDelegate;
   invoiceDispatches: InvoiceDispatchDelegate;
   expectedReceivables: ExpectedReceivableDelegate;
+  interrogations: InterrogationDelegate;
   paymentPlans: PaymentPlanDelegate;
   paymentPlanReminders: Delegate;
   accontoDeductions: AccontoDeductionDelegate;
@@ -235,6 +238,7 @@ export interface IDataStore {
   readonly writeOffs: WriteOffDelegate;
   readonly invoiceDispatches: InvoiceDispatchDelegate;
   readonly expectedReceivables: ExpectedReceivableDelegate;
+  readonly interrogations: InterrogationDelegate;
   readonly paymentPlans: PaymentPlanDelegate;
   readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;

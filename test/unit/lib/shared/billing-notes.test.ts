@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest-compat";
 import {
   beslutRegisteredNote, creditCreatedNote, invoiceCreatedNote, invoiceQueuedNote, invoiceSentNote, invoiceStatusNote,
   insurerPruningNote, kostnadsrakningSubmittedNote, krAppealedNote, krVoidedNote, noteTimestamp,
-  paymentMethodNote, radgivningInvoicedNote, rattsskyddNekadNote, settledNote,
+  forundersokningAvslutNote, paymentMethodNote, radgivningInvoicedNote, rattsskyddNekadNote, settledNote,
 } from "@/lib/shared/billing-notes";
 import { formatKr } from "@/lib/shared/format-kr";
 
@@ -92,5 +92,11 @@ describe("anteckningstexter", () => {
   it("betalningssätt och nekat rättsskydd", () => {
     expect(paymentMethodNote("RATTSHJALP")).toBe("Betalningssätt: Rättshjälp");
     expect(rattsskyddNekadNote("2026-02-01")).toBe("Rättsskydd nekat (2026-02-01)");
+  });
+
+  it("förundersökningens avslut (#1855)", () => {
+    expect(forundersokningAvslutNote("NEDLAGD")).toBe("Förundersökningens avslut: Förundersökningen nedlagd");
+    expect(forundersokningAvslutNote("STRAFFORELAGGANDE")).toBe("Förundersökningens avslut: Strafföreläggande");
+    expect(forundersokningAvslutNote("INGET_ATAL")).toBe("Förundersökningens avslut: Inget åtal");
   });
 });

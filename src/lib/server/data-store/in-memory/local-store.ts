@@ -15,7 +15,7 @@
 import type { DemoSource } from "@/lib/shared/demo-source";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type {
-  AccontoDeduction, BillingRun, CalendarEvent, ConflictCheck, Contact, Document, DocumentAnalysisSuggestion, DocumentFolder, DocumentPart, DocumentTemplate, ExpectedReceivable, Expense, Invoice, InvoiceDispatch, Matter, MatterContact, MatterEventSuggestion, Office, Organization, Payment, PaymentPlan, ServiceNote, Task, TimeEntry, User, WriteOff,
+  AccontoDeduction, BillingRun, CalendarEvent, ConflictCheck, Contact, Document, DocumentAnalysisSuggestion, DocumentFolder, DocumentPart, DocumentTemplate, ExpectedReceivable, Expense, Interrogation, Invoice, InvoiceDispatch, Matter, MatterContact, MatterEventSuggestion, Office, Organization, Payment, PaymentPlan, ServiceNote, Task, TimeEntry, User, WriteOff,
 } from "@/lib/shared/schemas";
 import type { AvaEvent, EmitInput, EventFilter } from "../../events/schema";
 import type {
@@ -43,6 +43,7 @@ import type {
   WriteOffDelegate,
   InvoiceDispatchDelegate,
   ExpectedReceivableDelegate,
+  InterrogationDelegate,
   PaymentPlanDelegate,
   AccontoDeductionDelegate,
   BillingRunDelegate,
@@ -76,6 +77,7 @@ export class LocalStore implements IDataStore {
   readonly writeOffs: WriteOffDelegate;
   readonly invoiceDispatches: InvoiceDispatchDelegate;
   readonly expectedReceivables: ExpectedReceivableDelegate;
+  readonly interrogations: InterrogationDelegate;
   readonly paymentPlans: PaymentPlanDelegate;
   readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;
@@ -134,6 +136,7 @@ export class LocalStore implements IDataStore {
     this.writeOffs = this.makeDelegate<WriteOff>("writeOffs");
     this.invoiceDispatches = this.makeDelegate<InvoiceDispatch>("invoiceDispatches", relations.invoiceDispatches);
     this.expectedReceivables = this.makeDelegate<ExpectedReceivable>("expectedReceivables");
+    this.interrogations = this.makeDelegate<Interrogation>("interrogations");
     this.paymentPlans = this.makeDelegate<PaymentPlan>("paymentPlans", relations.paymentPlans);
     this.paymentPlanReminders = this.makeDelegate("paymentPlanReminders");
     this.accontoDeductions = this.makeDelegate<AccontoDeduction>("accontoDeductions");
@@ -280,6 +283,7 @@ export class LocalStore implements IDataStore {
       writeOffs: this.writeOffs,
       invoiceDispatches: this.invoiceDispatches,
       expectedReceivables: this.expectedReceivables,
+      interrogations: this.interrogations,
       paymentPlans: this.paymentPlans,
       paymentPlanReminders: this.paymentPlanReminders,
       accontoDeductions: this.accontoDeductions,

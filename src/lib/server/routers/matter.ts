@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { DEFAULT_MATTER_FOLDERS } from "@/lib/shared/default-matter-folders";
-import { MATTER_NUMBER_RE } from "@/lib/shared/matter-number-display";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { previousCourtCaseNumberAfterChange } from "@/lib/shared/previous-court-case-number";
 import {
   matterRoleSchema,
   contactTypeSchema,
+  forundersokningAvslutSchema,
   matterStatusSchema,
   paymentMethodSchema,
 } from "@/lib/shared/schemas/enums";
@@ -32,7 +32,7 @@ import { recheckIfParty, recheckMatterConflicts } from "../conflict/matter-confl
 import { conflictReviewInput, reviewMatterConflicts } from "../conflict/matter-conflict-review";
 import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
 import { emit } from "../events/emit";
-import { formatSeriesNumber } from "../number-series";
+import { formatSeriesNumber, maxSeq } from "../number-series";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { MatterListFilter } from "../repositories/matter-repository";
 import type { Repositories } from "../repositories/repositories";
@@ -78,18 +78,6 @@ const matterCreateInput = z.object({
   klientId: contactIdSchema.optional(),
 });
 type MatterCreateInput = z.infer<typeof matterCreateInput>;
-
-/** Löpnumret i ett ärendenummer OM det avser `year`, annars 0. */
-function seqForYear(matterNumber: string, year: number): number {
-  const m = MATTER_NUMBER_RE.exec(matterNumber);
-  if (!m || Number(m[2]) !== year) return 0;
-  return parseInt(m[3] ?? "0", 10);
-}
-
-/** Högsta löpnumret för `year` bland en uppsättning ärenden. */
-function maxSeq(matters: ReadonlyArray<{ matterNumber: string }>, year: number): number {
-  return matters.reduce((mx, m) => Math.max(mx, seqForYear(m.matterNumber, year)), 0);
-}
 
 /** Den ansvariga juristens prefix (tom om okänd/ej i org:en/ingen prefix satt). */
 async function lawyerPrefix(ctx: MatterCtx, userId: UserId): Promise<string> {
@@ -301,6 +289,8 @@ export const matterRouter = router({
         rattsskyddBeslutDatum: z.string().nullable().optional(),
         /** Rättsskydd (#811): datum då rättsskydd nekades. */
         rattsskyddNekadAt: z.string().nullable().optional(),
+        /** Förordnandemål (#1855): hur förundersökningen avslutades; null rensar. */
+        forundersokningAvslut: forundersokningAvslutSchema.nullable().optional(),
         isTaxeArende: z.boolean().optional(),
         taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
         taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),

@@ -153,4 +153,17 @@ describe("faktureringshändelser blir tjänsteanteckningar (#1221)", () => {
     // Samma minut → listans ordning är odefinierad; jämför som mängd.
     expect((await noteTexts(c)).sort()).toEqual(["Betalningssätt: Rättsskydd", "Rättsskydd nekat (2026-02-01)"]);
   });
+
+  it("förundersökningens avslut loggas när ett avslut sätts; null och oförändrat värde loggar inget (#1855)", async () => {
+    const c = makeCaller({ paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    await c.matter.update({ id: M, forundersokningAvslut: null });
+    expect(await noteTexts(c)).toEqual([]);
+    const updated = await c.matter.update({ id: M, forundersokningAvslut: "NEDLAGD" });
+    expect(updated.forundersokningAvslut).toBe("NEDLAGD");
+    await c.matter.update({ id: M, forundersokningAvslut: "NEDLAGD" });
+    expect(await noteTexts(c)).toEqual(["Förundersökningens avslut: Förundersökningen nedlagd"]);
+    const cleared = await c.matter.update({ id: M, forundersokningAvslut: null });
+    expect(cleared.forundersokningAvslut).toBeNull();
+    expect(await noteTexts(c)).toHaveLength(1);
+  });
 });

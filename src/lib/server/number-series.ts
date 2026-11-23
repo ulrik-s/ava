@@ -8,6 +8,8 @@
  * nummer fram igen — krock på primärnyckeln och omförsök i all evighet.
  */
 
+import { MATTER_NUMBER_RE } from "@/lib/shared/matter-number-display";
+
 /** Minsta antal siffror i löpnumret. */
 const MIN_DIGITS = 4;
 
@@ -32,4 +34,16 @@ export function nextSeriesNumber(prefix: string, values: ReadonlyArray<string | 
 /** Reguljärt uttryck (Postgres `~`) för exakt ett nummer i serien: prefixet och bara siffror. */
 export function seriesPattern(prefix: string): string {
   return `^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[0-9]+$`;
+}
+
+/** Löpnumret i ett ärendenummer OM det avser `year`, annars 0. */
+export function seqForYear(matterNumber: string, year: number): number {
+  const m = MATTER_NUMBER_RE.exec(matterNumber);
+  if (!m || Number(m[2]) !== year) return 0;
+  return parseInt(m[3] ?? "0", 10);
+}
+
+/** Högsta löpnumret för `year` bland en uppsättning ärenden. */
+export function maxSeq(matters: ReadonlyArray<{ matterNumber: string }>, year: number): number {
+  return matters.reduce((mx, m) => Math.max(mx, seqForYear(m.matterNumber, year)), 0);
 }

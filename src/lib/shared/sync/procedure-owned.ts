@@ -29,7 +29,7 @@
 export const PROCEDURE_OWNED_ENTITIES: ReadonlySet<string> = new Set([
   "matter", "matterContact", "timeEntry", "expense",
   "invoice", "billingRun", "accontoDeduction", "invoiceDispatch",
-  "payment", "writeOff", "paymentPlan", "paymentPlanReminder", "expectedReceivable",
+  "payment", "writeOff", "paymentPlan", "paymentPlanReminder", "expectedReceivable", "interrogation",
   "user", "organization", "office", "orgPreference", "documentTemplate",
 ]);
 

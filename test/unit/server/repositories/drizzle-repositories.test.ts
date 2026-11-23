@@ -16,7 +16,7 @@ const ORG_KEYS = [
   "timeEntries", "expenses", "accontoDeductions", "billingRuns", "contacts", "matterContacts",
   "conflictChecks", "users", "tasks", "calendarEvents", "serviceNotes", "documents",
   "documentFolders", "documentParts", "matterEventSuggestions", "documentAnalysisSuggestions", "documentTemplates",
-  "expectedReceivables", "invoiceDispatches", "organizations", "offices", "userPreferences", "orgPreferences",
+  "expectedReceivables", "interrogations", "invoiceDispatches", "organizations", "offices", "userPreferences", "orgPreferences",
 ] as const;
 
 const org = (id: string, name = "X") => ({ id, name }) as unknown as Partial<Organization>;
