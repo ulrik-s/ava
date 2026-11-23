@@ -10,6 +10,8 @@ import { AppShell } from "@/components/shell/app-shell";
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
 }));
+// "Nytt i AVA" (#2010) hämtar från servern; den har egna tester.
+vi.mock("@/components/shell/release-notes", () => ({ ReleaseNotesLink: () => null, ReleaseNotesOnUpdate: () => null }));
 
 const currentQuery = { data: undefined as { name?: string } | undefined };
 vi.mock("@/lib/client/trpc", () => ({

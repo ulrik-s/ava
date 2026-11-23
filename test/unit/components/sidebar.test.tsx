@@ -13,6 +13,8 @@ const pathnameMock = vi.fn(() => "/");
 vi.mock("next/navigation", () => ({
   usePathname: () => pathnameMock(),
 }));
+// "Nytt i AVA" (#2010) hämtar från servern; den har egna tester.
+vi.mock("@/components/shell/release-notes", () => ({ ReleaseNotesLink: () => null, ReleaseNotesOnUpdate: () => null }));
 
 // Utloggningen (#1347) navigerar med window.location.assign: demon till
 // /login, self-hosted till oauth2-proxys /oauth2/sign_out.

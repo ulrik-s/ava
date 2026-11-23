@@ -103,6 +103,12 @@ Finns ingen: avsluta.
    - titel = commit-rubriken,
    - body: vad som ändrats, vilken förebild du följt, hur det testats, och
      `Closes #<nr>`,
+   - och en egen rad `**För användarna:** <en mening>` ("Nytt i AVA", #2010).
+     Meningen visas för juristerna i AVA när releasen kommer: vardaglig
+     svenska, vad de märker ("Dokumentlistan visar inte längre kolumnen
+     Storlek."), ingen kod, inga filnamn och inget ur förfrågningarna
+     (regel 3). Märker användarna ingenting (tester, intern städning, CI):
+     skriv `**För användarna:** —`.
    - sätt sedan etiketterna `agent-pr` + `att-granska` på PR:en, plus
      `refaktorisering` om issuen har den
      (`gh api repos/ulrik-s/ava/issues/<pr-nr>/labels …`).

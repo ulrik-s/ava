@@ -52,7 +52,8 @@ export function serverCapabilities(): Capabilities {
   const backup = backupDirsFromEnv() !== null;
   // Förfrågningar till intag-repot: bara med token + repo.
   const feedback = feedbackConfigFromEnv() !== null;
-  return { sync: true, jobs: true, oidc: true, ledger: true, mailSync: true, llm, backup, feedback };
+  // "Nytt i AVA" (#2010): kodrepots releaser är publika, så servern kan alltid läsa dem.
+  return { sync: true, jobs: true, oidc: true, ledger: true, mailSync: true, llm, backup, feedback, releaseNotes: true };
 }
 
 /**

@@ -12,12 +12,13 @@ describe("capabilitiesForTier (ADR 0027)", () => {
     expect(Object.values(DEMO_CAPABILITIES).every((v) => v === false)).toBe(true);
   });
 
-  it("self-hosted → förmågorna på, utom backup och förfrågningar som bara servern vet om", () => {
+  it("self-hosted → förmågorna på, utom backup, förfrågningar och nyheter som bara servern vet om", () => {
     expect(capabilitiesForTier("self-hosted")).toEqual(SELF_HOSTED_CAPABILITIES);
-    const { backup, feedback, ...rest } = SELF_HOSTED_CAPABILITIES;
+    const { backup, feedback, releaseNotes, ...rest } = SELF_HOSTED_CAPABILITIES;
     expect(Object.values(rest).every((v) => v)).toBe(true);
     expect(backup).toBe(false);
     expect(feedback).toBe(false);
+    expect(releaseNotes).toBe(false);
   });
 
   it("llm-flaggan styr den enda demo-dolda affordansen i slice 1", () => {

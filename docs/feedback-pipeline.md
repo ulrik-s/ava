@@ -538,6 +538,20 @@ du inte godkänner stängs efter fyra veckor.
    (se deploy-server-first.md → Rollback). Databasen backas inte, och därför
    kräver Agentvakten additiva migrationer.
 
+### Nytt i AVA (#2010)
+
+Varje agent-PR har raden `**För användarna:** <en mening>` (eller `—` när
+inget syns). L4 skriver den, L3 granskar den: vardaglig svenska, ingen kod,
+inget ur förfrågningarna. När taggen sätts samlar `release.yml`
+(`tooling/scripts/release-user-notes.ts`) raderna från releasens PR:er under
+`## Nytt i AVA` i GitHub-releasen, direkt, utan godkännande. Servern läser
+avsnittet ur kodrepots publika releaser (`releaseNotes.list`, cache 10 min),
+och AVA visar "Nytt i AVA" första gången man öppnar appen efter en
+uppdatering, med användarens egna levererade förfrågningar i versionen.
+Länken "Nytt i AVA" under versionen i sidofältet öppnar den igen. Vill du
+ändra en text i efterhand: redigera avsnittet i GitHub-releasen; AVA läser
+om den inom 10 minuter.
+
 ## Filer
 
 | Vad | Var |

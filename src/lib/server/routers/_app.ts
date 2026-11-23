@@ -18,6 +18,7 @@ import { matterRouter } from "./matter";
 import { organizationRouter } from "./organization";
 import { paymentPlanRouter } from "./paymentPlan";
 import { preferenceRouter } from "./preference";
+import { releaseNotesRouter } from "./release-notes";
 import { reportsRouter } from "./reports";
 import { serviceNoteRouter } from "./serviceNote";
 import { syncRouter } from "./sync";
@@ -52,6 +53,7 @@ export const appRouter = router({
   todo: todoRouter,
   watchlist: watchlistRouter,
   feedback: feedbackRouter,
+  releaseNotes: releaseNotesRouter,
   prefs: preferenceRouter,
   mail: mailRouter,
   sync: syncRouter,

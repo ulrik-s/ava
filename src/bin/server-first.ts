@@ -57,6 +57,7 @@ import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { startErrorReporting } from "@/lib/server/observability/posthog-sink";
 import type { IBackupStore, IFeedbackSink, ILedgerService } from "@/lib/server/ports";
+import { GithubReleaseNotes } from "@/lib/server/release-notes/github-release-notes";
 import { appRouter } from "@/lib/server/routers/_app";
 import { organizationKinds } from "@/lib/shared/document-kinds";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
@@ -150,6 +151,8 @@ function main(): void {
     ...ledgerPort(),
     ...backupPort(),
     ...feedbackPort(),
+    // "Nytt i AVA" (#2010): kodrepots releaser är publika, så alltid på.
+    releaseNotes: new GithubReleaseNotes(),
   };
 
   const api = buildServerFirstApi({
