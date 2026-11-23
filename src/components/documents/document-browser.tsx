@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useMemo } from "react";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
 import { enqueueTextExtraction } from "@/lib/client/jobs/enqueue-text-extraction";
 import { trpc } from "@/lib/client/trpc";
@@ -19,6 +20,12 @@ import { useDragHandlers } from "./_use-drag-handlers";
 import { useFileUpload, type RegisterInput } from "./_use-file-upload";
 
 type ViewMode = "tree" | "list";
+
+/** Vyvalet; värdet "tree" sparas som förut, bara texten heter Mapp-vy (#1804). */
+const VIEW_MODE_OPTIONS = [
+  { value: "list", label: "Lista" },
+  { value: "tree", label: "Mapp-vy" },
+] as const satisfies readonly { value: ViewMode; label: string }[];
 const VIEW_MODE_KEY = "ava.documents.viewMode";
 /** Beskedet när något utan filer släpps i vyn (#1615). */
 export const UNREADABLE_DROP = "Det gick inte att läsa in det du släppte. Spara filen på datorn och använd + Ladda upp.";
@@ -384,16 +391,7 @@ function BrowserHeader({
     <div className={sectionHeaderClass("purple", "flex flex-wrap items-center justify-between gap-2")}>
       <h2 className="font-semibold text-gray-900">Dokument</h2>
       <div className="flex items-center gap-3">
-        <div className="inline-flex rounded-md border border-gray-200 text-xs">
-          <button type="button" onClick={() => onChangeViewMode("list")}
-            className={`px-2 py-1 ${viewMode === "list" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>
-            Lista
-          </button>
-          <button type="button" onClick={() => onChangeViewMode("tree")}
-            className={`px-2 py-1 ${viewMode === "tree" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>
-            Träd
-          </button>
-        </div>
+        <SegmentedControl options={VIEW_MODE_OPTIONS} value={viewMode} onChange={onChangeViewMode} ariaLabel="Dokumentvy" />
         {viewMode === "tree" && (
           <button onClick={showNewFolder} className="text-sm text-blue-700 hover:underline">
             + Ny mapp

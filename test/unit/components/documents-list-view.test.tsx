@@ -62,6 +62,17 @@ const baseFolder = (id: string, name: string, parentId: string | null = null) =>
   });
 
 describe("DocumentsListView", () => {
+  it("tipset säger Mapp-vy när ärendet har mappar (#1804)", () => {
+    render(
+      <DocumentsListView
+        matterId={asId<"MatterId">("m1")} folders={[baseFolder("f1", "Inlagor")]}
+        documents={[]} onDelete={() => {}} onReanalyze={() => {}} {...idle}
+      />,
+    );
+    expect(screen.getByText("Mapp-vy")).toBeInTheDocument();
+    expect(screen.getByText(/för att hantera mappar och drag-and-drop/)).toBeInTheDocument();
+  });
+
   it("#1220: Typ-kolumnen visar etiketter (inte koder) och delarna i sammansatta dokument", () => {
     render(
       <DocumentsListView
