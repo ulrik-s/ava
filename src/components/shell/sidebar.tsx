@@ -10,6 +10,7 @@ import { cn } from "@/lib/client/utils";
 import { AppVersion } from "./app-version";
 import { FeedbackButton } from "./feedback-button";
 import { HomeButton } from "./home-button";
+import { ReleaseNotesLink } from "./release-notes";
 import { useSignOutFlow } from "./sign-out-flow";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -107,6 +108,7 @@ function UserInfo({ userName, nameMargin, showVersion }: { userName?: string | n
       {userName && <p className="text-sm font-medium text-gray-900 truncate">{userName}</p>}
       <span className="text-xs text-gray-500">Advokat CRM</span>
       {showVersion && <AppVersion className="truncate" />}
+      {showVersion && <ReleaseNotesLink />}
     </div>
   );
 }

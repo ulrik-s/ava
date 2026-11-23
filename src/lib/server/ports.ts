@@ -7,6 +7,7 @@
 import type { Buffer } from "node:buffer";
 import type { LedgerAccountMap } from "@/lib/shared/accounting/account-map";
 import type { BackupExport, BackupFileName } from "@/lib/shared/backup";
+import type { ReleaseNote } from "@/lib/shared/release-notes";
 import type { DocumentId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import type { LedgerConnector } from "./integrations/ledger/port";
 
@@ -340,6 +341,11 @@ export interface IFeedbackSink {
   file(path: string): Promise<string>;
 }
 
+/** "Nytt i AVA" (#2010): nyheterna i de senaste releaserna, nyast först. */
+export interface IReleaseNotesSource {
+  list(): Promise<ReleaseNote[]>;
+}
+
 export interface IPorts {
   email: IEmailSender;
   documentAnalyzer: IDocumentAnalyzer;
@@ -352,6 +358,8 @@ export interface IPorts {
   backup?: IBackupStore;
   /** Förfrågningar från användarna — bara server-first med GitHub-token. */
   feedback?: IFeedbackSink;
+  /** "Nytt i AVA" ur kodrepots releaser — bara server-first. */
+  releaseNotes?: IReleaseNotesSource;
 }
 
 // Buffer-typen exporteras så impl:erna kan importera utan Node:

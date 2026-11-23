@@ -63,7 +63,34 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # skapa release + ladda upp artefakter
+      pull-requests: read # PR:ernas rad "För användarna" (Nytt i AVA, #2010)
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # taggarna och historiken mellan dem, för Nytt i AVA
+      - uses: ./.github/actions/bun-setup
+      # Releasens text: den fasta beskrivningen och sist "## Nytt i AVA" (#2010),
+      # som AVA visar för juristerna. Sist, så att GitHubs "## What's Changed"
+      # avslutar avsnittet. Går nyheterna inte att samla släpps releasen ändå.
+      - name: Releasens text med Nytt i AVA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat > body.md <<'EOF'
+          AVA TAGG — hela paketet.
+
+          - **Web** — statisk demo-export (`ava-web-demo_*.zip`); live-demo deployas
+            löpande via deploy-demo.yml.
+
+          Helper-appen (Electron, ADR 0030) släpps separat med electron-builder
+          när signeringscert finns (#110). Office-add-ins läggs till när #83/#84
+          finns. Artefakter är osignerade i denna version.
+
+          EOF
+          sed -i "s/^AVA TAGG/AVA ${TAG}/" body.md
+          bun tooling/scripts/release-user-notes.ts "$TAG" >> body.md || echo "::warning::Nytt i AVA kunde inte samlas"
+          cat body.md
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: web-demo
@@ -78,12 +105,4 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             artifacts/web-demo/*
-          body: |
-            AVA ${{ github.ref_name }} — hela paketet.
-
-            - **Web** — statisk demo-export (`ava-web-demo_*.zip`); live-demo deployas
-              löpande via deploy-demo.yml.
-
-            Helper-appen (Electron, ADR 0030) släpps separat med electron-builder
-            när signeringscert finns (#110). Office-add-ins läggs till när #83/#84
-            finns. Artefakter är osignerade i denna version.
+          body_path: body.md

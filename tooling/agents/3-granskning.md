@@ -103,6 +103,11 @@ För var och en:
      värde som den gamla koden inte kan läsa är också ett brott)? Agentvakten
      och `db:check-migrations` kontrollerar också, men du ska hitta det först.
    - Inga personuppgifter, hemligheter, tokens eller testdata med riktiga namn.
+   - Raden `**För användarna:**` finns ("Nytt i AVA", #2010): en mening på
+     vardaglig svenska om vad juristerna märker, utan kod, filnamn eller
+     något ur förfrågningarna, eller `—` när inget syns. Den visas i AVA
+     när releasen kommer. Saknas den, eller är den teknisk eller avslöjar
+     något ur en förfrågan: `behöver-ändras`.
    - Säkerhet: behörighet (byrå-scoping via `orgProcedure`/`ctx.orgId`,
      roller), validering med zod, ingen XSS (`dangerouslySetInnerHTML`), inga
      nya externa anrop.

@@ -14,6 +14,7 @@ import { ExternalEditIndicator } from "@/components/documents/external-edit-indi
 import { ExternalEditRegistrar } from "@/components/documents/external-edit-registrar";
 import { trpc } from "@/lib/client/trpc";
 import { DemoModeBanner } from "./demo-mode-banner";
+import { ReleaseNotesOnUpdate } from "./release-notes";
 import { Sidebar } from "./sidebar";
 
 /**
@@ -35,6 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <ExternalEditRegistrar />
       <DemoModeBanner />
       <ExternalEditIndicator />
+      <ReleaseNotesOnUpdate />
       {/* Telefon: toppremsan (i flödet) staplas ovanför main (#1297). Från 768 px
           står menyn — ikonmenyn eller hela sidomenyn — till vänster (#1301). */}
       <div className="flex flex-1 min-h-0 flex-col md:flex-row">
