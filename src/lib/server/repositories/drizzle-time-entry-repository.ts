@@ -1,6 +1,6 @@
 /**
  * Drizzle `TimeEntryRepository` (ADR 0020) — server-impl. Ärver bas-CRUD;
- * `listUnbilled` hämtar valda ofakturerade poster, `flagBilled` bulk-sätter invoiceId.
+ * `listUnbilled` hämtar valda olåsta poster (`unlockedWhere`, #1862), `flagBilled` bulk-sätter invoiceId.
  *
  * `timeEntries`-kolumnerna är brandade (#562) → `select({ te: timeEntries })` bär
  * branded id:n och projektionernas \`...r.te\`-spread är typad (ingen \`as object\`).
@@ -14,21 +14,13 @@ import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import { asId, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type TimeEntryId, type UserId } from "@/lib/shared/schemas/ids";
 import { matters, timeEntries, users } from "../db/schema";
 import type { AppDb } from "../db/types";
+import { unlockedWhere } from "./billing-lock-sql";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import { matterOrg } from "./matter-org";
 import type {
   LawyerReportTimeEntry, TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow,
   TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository,
 } from "./time-entry-repository";
-
-/**
- * Ej låst (#1205): varken fryst av en körning ELLER låst direkt mot en faktura
- * (`frozenAt` utan körning — rättshjälpens rådgivningstimme). Samma regel som
- * `isLockedEntry` i `@/lib/shared/time-entry-lock`.
- */
-function isUnlocked() {
-  return and(isNull(timeEntries.frozenByBillingRunId), isNull(timeEntries.frozenAt));
-}
 
 /** Räknas mot täckningstaket (#1210): allt utom rådgivningstimmen (låst direkt
  *  mot en faktura, utan körning). Samma regel som `isInvoicedOutsideCoverage`. */
@@ -127,7 +119,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     if (!ids.length) return [];
     return await this.db
       .select().from(timeEntries)
-      .where(and(inArray(timeEntries.id, ids), eq(timeEntries.matterId, matterId), isNull(timeEntries.invoiceId)));
+      .where(and(inArray(timeEntries.id, ids), eq(timeEntries.matterId, matterId), unlockedWhere(timeEntries)));
   }
 
   async flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void> {
@@ -138,7 +130,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
   async listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]> {
     const rows = await this.db
       .select().from(timeEntries)
-      .where(and(eq(timeEntries.matterId, matterId), isUnlocked(), isNull(timeEntries.deletedAt)))
+      .where(and(eq(timeEntries.matterId, matterId), unlockedWhere(timeEntries)))
       .orderBy(asc(timeEntries.date));
     return rows;
   }
@@ -225,7 +217,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
   }
 
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
-    await this.updateWhere(and(eq(timeEntries.matterId, matterId), isUnlocked()), { frozenAt: now, frozenByBillingRunId: billingRunId });
+    await this.updateWhere(and(eq(timeEntries.matterId, matterId), unlockedWhere(timeEntries)), { frozenAt: now, frozenByBillingRunId: billingRunId });
   }
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
@@ -240,6 +232,6 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
 
   async freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (ids.length === 0) return;
-    await this.updateWhere(and(inArray(timeEntries.id, ids), isUnlocked()), { frozenAt: now, frozenByBillingRunId: billingRunId });
+    await this.updateWhere(and(inArray(timeEntries.id, ids), unlockedWhere(timeEntries)), { frozenAt: now, frozenByBillingRunId: billingRunId });
   }
 }

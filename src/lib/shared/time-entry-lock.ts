@@ -1,19 +1,32 @@
 /**
- * Låsta tidsposter (#1205) — EN regel för vad som redan är redovisat eller
- * fakturerat och därför aldrig får räknas in i en ny kostnadsräkning,
- * slutreglering eller ett aconto-förslag.
+ * Låsta tidsposter och utlägg (#1205, #1862) — EN regel för vad som redan är
+ * redovisat eller fakturerat och därför aldrig får räknas in i en ny
+ * kostnadsräkning, slutreglering, slutfaktura eller ett aconto-förslag.
  *
- * En post är låst när den antingen frysts av en fakturerings-körning
- * (`frozenByBillingRunId`: slutfaktura/kostnadsräkning) eller låsts direkt mot
- * en faktura (`frozenAt` utan körning: rättshjälpens rådgivningstimme, som
- * faktureras klienten direkt efter mötet). Servern speglar samma regel i
- * `listUnfrozenForMatter`/`freezeForMatter`.
+ * En post är låst när något av de tre fälten i `BILLING_LOCK_FIELDS` är satt:
+ * - `invoiceId`: posten är fakturerad på en faktura,
+ * - `frozenAt`: posten är fryst — av en körning, eller direkt mot en faktura
+ *   utan körning (rättshjälpens rådgivningstimme, som faktureras klienten
+ *   direkt efter mötet),
+ * - `frozenByBillingRunId`: körningen (slutfaktura/kostnadsräkning) som frös den.
+ * Repona (Drizzle och minne, ADR 0020) väljer ur samma fältlista.
  */
 
 import type { BillingRunId } from "./schemas/ids";
 
+/**
+ * Fälten som låser en post (#1862). Predikatet `isLockedEntry`, minnesrepots
+ * urval (`unlockedMatch`) och Drizzle-villkoret (`unlockedWhere`) byggs alla ur
+ * listan, så att ett nytt låsfält inte kan läggas till på bara ett ställe.
+ */
+export const BILLING_LOCK_FIELDS = ["invoiceId", "frozenAt", "frozenByBillingRunId"] as const;
+
+/** Ett av fälten i `BILLING_LOCK_FIELDS`. */
+export type BillingLockField = (typeof BILLING_LOCK_FIELDS)[number];
+
 /** Det en post behöver bära för att låsregeln ska kunna avgöras. */
 export interface LockableEntry {
+  invoiceId?: string | null | undefined;
   frozenAt?: Date | string | null | undefined;
   frozenByBillingRunId?: BillingRunId | null | undefined;
 }
@@ -26,7 +39,21 @@ export interface LockableEntry {
  */
 export function isLockedEntry(t: LockableEntry, ownRunId?: BillingRunId): boolean {
   if (ownRunId !== undefined && t.frozenByBillingRunId === ownRunId) return false;
-  return t.frozenAt != null || t.frozenByBillingRunId != null;
+  return BILLING_LOCK_FIELDS.some((field) => t[field] != null);
+}
+
+/**
+ * Urvalet "ej låst och ej raderad" för minnesrepona: alla låsfält och
+ * `deletedAt` null (Prisma-semantik, där null och ett saknat fält likställs).
+ * Samma regel som `isLockedEntry` och Drizzles `unlockedWhere`.
+ */
+export function unlockedMatch(): Readonly<Record<string, null>> {
+  return Object.fromEntries([...BILLING_LOCK_FIELDS, "deletedAt"].map((field) => [field, null]));
+}
+
+/** Knuten till en faktura (`invoiceId` satt), oavsett frysning. */
+export function hasInvoice(t: Pick<LockableEntry, "invoiceId">): boolean {
+  return t.invoiceId != null;
 }
 
 /**
@@ -37,13 +64,4 @@ export function isLockedEntry(t: LockableEntry, ownRunId?: BillingRunId): boolea
  */
 export function isInvoicedOutsideCoverage(t: LockableEntry): boolean {
   return t.frozenAt != null && t.frozenByBillingRunId == null;
-}
-
-/**
- * Redovisad i ett underlag eller fakturerad (#1242, #1276): låst ELLER knuten
- * till en faktura. En sådan post eller ett sådant utlägg får inte ändras i sak
- * eller raderas — varken i routern eller via synk.
- */
-export function isBilledEntry(t: LockableEntry & { invoiceId?: string | null | undefined }): boolean {
-  return t.invoiceId != null || isLockedEntry(t);
 }

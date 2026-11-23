@@ -11,6 +11,7 @@ import type { Expense } from "@/lib/shared/schemas/billing";
 import { asId, type BillingRunId, type ExpenseId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
 import { expenses, invoices, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
+import { unlockedWhere } from "./billing-lock-sql";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
@@ -74,7 +75,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
     if (!ids.length) return [];
     const rows = await this.db
       .select().from(expenses)
-      .where(and(inArray(expenses.id, ids), eq(expenses.matterId, matterId), isNull(expenses.invoiceId)));
+      .where(and(inArray(expenses.id, ids), eq(expenses.matterId, matterId), unlockedWhere(expenses)));
     return rows;
   }
 
@@ -86,7 +87,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
   async listUnfrozenForMatter(matterId: MatterId): Promise<Expense[]> {
     const rows = await this.db
       .select().from(expenses)
-      .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId), isNull(expenses.deletedAt)))
+      .where(and(eq(expenses.matterId, matterId), unlockedWhere(expenses)))
       .orderBy(asc(expenses.date));
     return rows;
   }
@@ -106,7 +107,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
   }
 
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
-    await this.updateWhere(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId)), { frozenAt: now, frozenByBillingRunId: billingRunId });
+    await this.updateWhere(and(eq(expenses.matterId, matterId), unlockedWhere(expenses)), { frozenAt: now, frozenByBillingRunId: billingRunId });
   }
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
@@ -115,7 +116,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
 
   async freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (ids.length === 0) return;
-    await this.updateWhere(and(inArray(expenses.id, ids), isNull(expenses.frozenByBillingRunId)), { frozenAt: now, frozenByBillingRunId: billingRunId });
+    await this.updateWhere(and(inArray(expenses.id, ids), unlockedWhere(expenses)), { frozenAt: now, frozenByBillingRunId: billingRunId });
   }
 
   async listForLawyerInPeriod(

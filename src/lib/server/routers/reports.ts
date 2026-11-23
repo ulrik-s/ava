@@ -8,6 +8,7 @@ import {
 import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
+import { hasInvoice } from "@/lib/shared/time-entry-lock";
 import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
 
@@ -220,8 +221,7 @@ function workValueOre(minutes: number, hourlyRate: number): number {
 const clientName = (m: ReportMatterRef): string | null => m.contacts?.[0]?.contact?.name ?? null;
 
 /** Debiterbar och ännu inte knuten till en faktura. */
-const isOpenBillable = (x: { billable: boolean; invoiceId?: string | null | undefined }): boolean =>
-  x.billable && !x.invoiceId;
+const isOpenBillable = (x: { billable: boolean; invoiceId?: string | null | undefined }): boolean => x.billable && !hasInvoice(x);
 
 /** 1. Ärenden advokaten jobbat i under perioden. */
 function buildMatters(timeEntries: ReportTimeEntry[], expenses: ReportExpense[]): MatterAgg[] {
