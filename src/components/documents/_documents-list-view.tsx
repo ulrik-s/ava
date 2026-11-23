@@ -107,7 +107,7 @@ export function DocumentsListView({
   void trpc;
 
   return (
-    <div className={`p-4 ${isDropTarget ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" : ""}`}>
+    <div className={`p-2 ${isDropTarget ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" : ""}`}>
       <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
       {leaseModal}
       <DataTable

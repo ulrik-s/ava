@@ -39,14 +39,14 @@ export function EventsPanel({ matterId }: EventsPanelProps) {
   if (events.isLoading) return null;
   const list = events.data ?? [];
   // Panel-UI (#1213): en tom flik ska förklara sig, inte vara blank.
-  if (list.length === 0) return <p className="text-sm text-gray-500">Inga tidpunkter hittade ännu. AVA läser ut datum — förhandlingar, frister — ur dokument som laddas upp.</p>;
+  if (list.length === 0) return <p className="p-2 text-sm text-gray-500">Inga tidpunkter hittade ännu. AVA läser ut datum — förhandlingar, frister — ur dokument som laddas upp.</p>;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   return (
-    <div className="bg-indigo-50 border border-indigo-200 rounded-lg lg:col-span-2">
-      <div className="px-6 py-4 border-b border-indigo-200">
+    <div className="bg-indigo-50">
+      <div className="px-3 py-2 border-b border-indigo-200">
         <h2 className="font-semibold text-indigo-900 flex items-center gap-2">
           🗓 Viktiga tidpunkter
           <span className="text-xs font-normal text-indigo-700">({list.length})</span>
@@ -106,7 +106,7 @@ interface EventRowProps {
 /** En extraherad tidpunkt: titel + badges + datum/plats/beskrivning + actions. */
 function EventRow({ ev, past, onAccepted, onReject, rejecting }: EventRowProps) {
   return (
-    <div className={`px-6 py-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3 ${past ? "opacity-60" : ""}`}>
+    <div className={`px-2 py-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3 ${past ? "opacity-60" : ""}`}>
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-gray-900">{ev.title}</span>

@@ -12,12 +12,30 @@ const ADVERSE = [{ role: "MOTPART", contact: { contactType: "INSURANCE_COMPANY" 
 const EMPTY = { courtCaseNumber: "", previousCourtCaseNumber: "", insuranceReference: "", contacts: [] };
 
 describe("MatterHeaderDetails", () => {
-  it("visar ansvarig advokat/jurist, med streck när ärendet saknar en", () => {
-    const { unmount } = render(<MatterHeaderDetails {...EMPTY} responsibleLawyerName="Ulrik Sjölin" />);
-    expect(screen.getByTestId("matter-responsible-lawyer").textContent).toBe("Ansvarig: Ulrik Sjölin");
-    unmount();
-    render(<MatterHeaderDetails {...EMPTY} />);
-    expect(screen.getByTestId("matter-responsible-lawyer").textContent).toBe(`Ansvarig: ${MISSING_VALUE}`);
+  it("visar inte Ansvarig; uppgifterna står i ordning med avgränsaren före var och en (#1848)", () => {
+    const { container } = render(
+      <MatterHeaderDetails courtCaseNumber="T 2-26" previousCourtCaseNumber="T 1-26" insuranceReference="SK-1"
+        description="En bodelning" contacts={INSURER} />,
+    );
+    expect(screen.queryByText(/Ansvarig/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("matter-responsible-lawyer")).not.toBeInTheDocument();
+    expect(container.textContent).toBe(
+      " · Målnummer: T 2-26 · Tidigare målnr T 1-26 · Försäkringsreferens: SK-1 · Beskrivning: En bodelning",
+    );
+    // Avgränsaren står utanför test-id:t, så uppgiftens egen text är oförändrad.
+    expect(screen.getByTestId("matter-court-case-number").textContent).toBe("Målnummer: T 2-26");
+  });
+
+  it("Beskrivning kortas med truncate och visar hela texten i title", () => {
+    render(<MatterHeaderDetails {...EMPTY} description="En lång beskrivning" />);
+    const cell = screen.getByTitle("En lång beskrivning");
+    expect(cell).toHaveClass("truncate", "flex-1");
+    expect(cell).toContainElement(screen.getByTestId("matter-description"));
+  });
+
+  it("Beskrivning utan text har ingen title", () => {
+    render(<MatterHeaderDetails {...EMPTY} description={null} />);
+    expect(screen.getByTestId("matter-description").parentElement).not.toHaveAttribute("title");
   });
 
   it("visar målnummer, tidigare målnr och beskrivning som text", () => {

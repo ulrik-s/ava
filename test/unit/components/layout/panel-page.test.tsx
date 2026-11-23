@@ -23,4 +23,11 @@ describe("PanelPage", () => {
     render(<PanelPage page="x" header={null} panels={[]} defaultLayout={() => undefined} activePanel="billing" />);
     expect((await screen.findByTestId("dock")).getAttribute("data-active")).toBe("billing");
   });
+
+  it("märker <html> med data-panel-page medan sidan visas, och tar bort märket efteråt (#1845)", () => {
+    const { unmount } = render(<PanelPage page="x" header={<h1>Rubrik</h1>} panels={[]} defaultLayout={() => undefined} />);
+    expect(document.documentElement.hasAttribute("data-panel-page")).toBe(true);
+    unmount();
+    expect(document.documentElement.hasAttribute("data-panel-page")).toBe(false);
+  });
 });

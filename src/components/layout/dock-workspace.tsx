@@ -83,7 +83,8 @@ const PanelDefs = createContext<ReadonlyMap<string, PanelDef>>(new Map());
  */
 function PanelHost({ params }: IDockviewPanelProps<{ id: string }>) {
   const def = useContext(PanelDefs).get(params.id);
-  return <div className="relative h-full overflow-y-auto p-3">{def?.render()}</div>;
+  const pad = def?.fill ? "" : " p-2 space-y-2";
+  return <div className={`relative h-full overflow-y-auto${pad}`}>{def?.render()}</div>;
 }
 const COMPONENTS = { panel: PanelHost };
 
@@ -215,9 +216,9 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen, choices, active
   // En ny begäran på en sida som redan visas (#1851); vid start sköter onReady det.
   const requested = useRef(activePanel);
   useEffect(() => {
-    if (requested.current === activePanel || !apiRef.current) return;
+    if (requested.current === activePanel) return;
     requested.current = activePanel;
-    activatePanel(apiRef.current, activePanel);
+    if (apiRef.current) activatePanel(apiRef.current, activePanel);
   }, [activePanel]);
 
   if (prefs.isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;

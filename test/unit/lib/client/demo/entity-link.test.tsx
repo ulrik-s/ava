@@ -45,4 +45,24 @@ describe("EntityLink", () => {
     rerender(<EntityLink route="matters" id={undefined}>Y</EntityLink>);
     expect(screen.queryByRole("link")).toBeNull();
   });
+
+  it("query hamnar efter id i href", () => {
+    render(<EntityLink route="matters" id="m-1" query={{ open: "billing" }}>Q</EntityLink>);
+    const href = screen.getByRole("link", { name: "Q" }).getAttribute("href") ?? "";
+    expect(href).toContain("/matters/__shell__");
+    expect(href).toMatch(/\?id=m-1&open=billing$/);
+  });
+
+  it("utan query är href som i dag", () => {
+    render(<EntityLink route="matters" id="m-1">U</EntityLink>);
+    const href = screen.getByRole("link", { name: "U" }).getAttribute("href") ?? "";
+    expect(href).toContain("/matters/__shell__");
+    expect(href).toMatch(/\?id=m-1$/);
+  });
+
+  it("tomt id med query ger fortfarande en span", () => {
+    render(<EntityLink route="matters" id="" query={{ open: "1" }}>S</EntityLink>);
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText("S").tagName).toBe("SPAN");
+  });
 });

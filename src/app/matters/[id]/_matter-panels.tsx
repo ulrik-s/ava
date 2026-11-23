@@ -26,7 +26,7 @@ const TITLES: Record<MatterPanelId, string> = {
 
 /** Panelregistret för ett ärende: innehållet kommer från sidan. */
 export function matterPanels(content: Record<MatterPanelId, () => ReactNode>): PanelDef[] {
-  return MATTER_PANEL_IDS.map((id) => ({ id, title: TITLES[id], render: content[id] }));
+  return MATTER_PANEL_IDS.map((id) => ({ id, title: TITLES[id], render: content[id], fill: true }));
 }
 
 /**

@@ -182,8 +182,6 @@ function MatterHeaderActions({ m, isPending, onClose, onReopen, onGenerate }: {
 
 function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderProps) {
   const utils = trpc.useUtils();
-  const users = trpc.user.list.useQuery().data?.users;
-  const responsibleLawyerName = users?.find((u) => u.id === m.responsibleLawyerId)?.name;
   const updateStatus = trpc.matter.update.useMutation({
     onSuccess: () => utils.matter.getById.invalidate({ id: m.id }),
   });
@@ -200,7 +198,7 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
     // Kompakt (#1185): panelerna ska få höjden, inte huvudet.
     <div data-testid="matter-header" className="bg-white rounded-lg border border-gray-200 px-4 py-2 mb-2 shrink-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-lg font-bold text-gray-900 truncate">
             <span className="mr-2 font-mono text-sm font-normal text-gray-500">{m.matterNumber}</span>{m.title}
           </h1>
@@ -209,6 +207,8 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
             {/* Ärendetypen (eller "Ärendetyp: –") står alltid före (#1566). */}
             <MatterPaymentLine paymentMethod={m.paymentMethod} clientShareBips={m.clientShareBips}
               contacts={contacts} separated />
+            <MatterHeaderDetails courtCaseNumber={referenceOf(m)} previousCourtCaseNumber={referenceOf(m, "previousCourtCaseNumber")}
+              insuranceReference={referenceOf(m, "insuranceReference")} description={m.description} contacts={contacts} />
             <MatterHeaderEdit matterId={asId<"MatterId">(m.id)} contacts={contacts}
               matter={{ ...m, courtCaseNumber: referenceOf(m), insuranceReference: referenceOf(m, "insuranceReference") }} />
           </div>
@@ -221,9 +221,6 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
           onGenerate={onOpenGenerate}
         />
       </div>
-      <MatterHeaderDetails courtCaseNumber={referenceOf(m)} previousCourtCaseNumber={referenceOf(m, "previousCourtCaseNumber")}
-        insuranceReference={referenceOf(m, "insuranceReference")} description={m.description} contacts={contacts}
-        responsibleLawyerName={responsibleLawyerName} />
       {/* Takvarningen för både rättshjälp och rättsskydd, oavsett öppen panel (#1520, #1732). */}
       <CoverageCapWarning matterId={asId<"MatterId">(m.id)} paymentMethod={m.paymentMethod}
         rattsskyddMaxOre={m.rattsskyddMaxOre ?? null} rattshjalpMaxTimmar={m.rattshjalpMaxTimmar ?? null} layout="compact" />

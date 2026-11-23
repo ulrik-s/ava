@@ -59,7 +59,7 @@ export function StandardAtgardSuggestions({ matterId, paymentMethod, matterStatu
   if (suggestions.length === 0) return null;
 
   return (
-    <div className="mx-4 mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+    <div className="mx-2 mb-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
       <div className="mb-1.5">
         Byråns <strong>standardåtgärder</strong> som inte är registrerade i ärendet:
       </div>

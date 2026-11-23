@@ -20,6 +20,11 @@ describe("PhonePanels flikar (#1672)", () => {
       expect(tab.className.split(/\s+/)).toEqual(expect.arrayContaining(["font-semibold", "dark:font-normal"]));
     }
   });
+
+  it("panelytan ger 8 px mellan avdelningarna (#1844)", () => {
+    render(<PhonePanels panels={panels} />);
+    expect(screen.getByRole("tabpanel").className.split(/\s+/)).toContain("space-y-2");
+  });
 });
 
 // #1851: sidan kan begära en flik; användaren byter sedan själv.
@@ -44,6 +49,14 @@ describe("PhonePanels activePanel (#1851)", () => {
     rerender(<PhonePanels panels={panels} activePanel={null} />);
     expect(selected()).toBe("Första");
     rerender(<PhonePanels panels={panels} activePanel="b" />);
+    expect(selected()).toBe("Andra");
+  });
+
+  it("null återställer inte till första fliken; användarens val står kvar", () => {
+    const { rerender } = render(<PhonePanels panels={panels} activePanel="a" />);
+    fireEvent.click(screen.getByRole("tab", { name: "Andra" }));
+    expect(selected()).toBe("Andra");
+    rerender(<PhonePanels panels={panels} activePanel={null} />);
     expect(selected()).toBe("Andra");
   });
 

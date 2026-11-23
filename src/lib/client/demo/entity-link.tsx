@@ -20,7 +20,7 @@
 
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
-import { shellPath } from "./entity-href";
+import { shellPath, type ShellQuery } from "./entity-href";
 
 type LinkProps = Omit<ComponentProps<typeof Link>, "href" | "id">;
 
@@ -31,16 +31,18 @@ interface EntityLinkProps extends LinkProps {
   id: string | null | undefined;
   /** Valfritt svans-segment för nästlade routes, t.ex. "edit" (templates). */
   sub?: string;
+  /** Valfria extra query-parametrar efter `?id=` (se `shellPath`). */
+  query?: ShellQuery;
   children: ReactNode;
 }
 
-export function EntityLink({ route, id, sub, children, ...rest }: EntityLinkProps) {
+export function EntityLink({ route, id, sub, query, children, ...rest }: EntityLinkProps) {
   if (!id) {
     const { className } = rest as { className?: string };
     return <span className={className}>{children}</span>;
   }
   return (
-    <Link href={shellPath(route, id, sub)} {...rest}>
+    <Link href={shellPath(route, id, sub, query)} {...rest}>
       {children}
     </Link>
   );

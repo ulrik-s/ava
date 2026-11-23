@@ -17,8 +17,8 @@ const completeMutate = vi.fn();
 // Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
 // alla paneler efter varandra, synkront, så testerna kan granska innehållet.
 vi.mock("@/components/layout/panel-page", () => ({
-  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
-    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode; fill?: boolean }> }) => (
+    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id} data-fill={String(p.fill)}>{p.render()}</div>)}</>
   ),
 }));
 
@@ -51,6 +51,12 @@ describe("Dashboard", () => {
     expect(screen.getByText(/Senaste ärenden/i)).toBeInTheDocument();
     expect(screen.getByText("Inga frister just nu.")).toBeInTheDocument();
     expect(screen.queryByText(/Att bevaka/)).not.toBeInTheDocument();
+  });
+
+  it("varje ruta är en avdelning ut till kanten (fill, #1844)", () => {
+    const { container } = render(<Dashboard />);
+    const fills = [...container.querySelectorAll("[data-panel]")].map((el) => el.getAttribute("data-fill"));
+    expect(fills).toEqual(["true", "true", "true"]);
   });
 
   it("har ingen Kalender-ruta (#1623)", () => {

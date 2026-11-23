@@ -18,7 +18,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
-import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { invalidateBillingSideEffects, invalidateDocumentLists } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 import { useMatterDocuments } from "@/lib/client/documents/use-matter-documents";
@@ -104,7 +104,7 @@ function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, o
   const utils = trpc.useUtils();
   const state = krStateOf(run);
   return (
-    <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+    <div className="mx-2 my-2 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div className="text-sm text-amber-900 space-y-1">
         {/* Status, dömt belopp och övriga händelser står i ärendets Anteckningar
             (#1221) — kortet bär bara dokumentet och nästa steg. */}
@@ -198,7 +198,7 @@ function angraHandler(run: BillingRunRow, voidKr: (id: BillingRunId) => void): (
 
 /** Serverns felmeddelande under panelen (t.ex. "kan inte ångras efter beslut"). */
 function MutationErrorLine({ error }: { error: { message: string } | null }) {
-  return error ? <p role="alert" className="mx-6 text-sm text-red-700">{error.message}</p> : null;
+  return error ? <p role="alert" className="mx-2 text-sm text-red-700">{error.message}</p> : null;
 }
 
 function findPendingVerdict(rows: BillingRunRow[]): BillingRunRow | undefined {
@@ -405,7 +405,7 @@ export function BillingPanel({ matterId, matter }: Props) {
     else setDialog(a.type as DialogState);
   };
   return (
-    <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
+    <div className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("green")}>
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
         <BillingActions actions={actions} onPick={onPick} />
@@ -480,7 +480,7 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
   // fakturan i listan nedan (#853). Bara ett misslyckande kräver något av juristen.
   if (!create.error) return null;
   return (
-    <p role="alert" className="mx-6 mb-4 text-xs text-red-700">
+    <p role="alert" className="mx-2 mb-2 text-xs text-red-700">
       Rådgivningsfakturan kunde inte skapas: {create.error.message}
     </p>
   );
@@ -499,7 +499,7 @@ function SjalvriskAccontoHint({ matterId, matter, rows }: { matterId: MatterId; 
   const threshold = orgThreshold ?? SJALVRISK_ACCONTO_THRESHOLD_ORE;
   if (!split || !sjalvriskAccontoDue({ method: matter.paymentMethod, clientOre: split.clientOre, thresholdOre: threshold, runs: rows })) return null;
   return (
-    <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+    <div className="mx-2 mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
       Klientens självrisk har nått{" "}
       <span className="font-mono font-semibold">{formatCurrency(split.clientOre)}</span>{" "}
       (tröskel {formatCurrency(threshold)}) — dags att skicka ett självrisk-aconto via
@@ -525,7 +525,7 @@ function InsurerPruningBanner({ matterId, matter, rows, onRecorded }: { matterId
   const netOre = Math.round(Number.parseFloat(krStr.replace(",", ".")) * 100);
   const valid = Number.isFinite(netOre) && netOre > 0;
   return (
-    <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+    <div className="mx-2 mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
       <div className="mb-1.5">Har försäkringsbolaget <strong>prutat</strong> på fakturan? Registrera det prutade arvodet (exkl moms) — beloppet flyttas från försäkringsfakturan till klientens faktura. Totalen är oförändrad och ingen kreditfaktura skickas till bolaget (fakturan är ställd till klienten).</div>
       <div className="flex items-center gap-2">
         <input type="number" min={0} step={100} value={krStr} placeholder="Prutat belopp (kr, exkl moms)"
@@ -656,7 +656,7 @@ function RattshjalpRateSchedule({ matter, rows }: { matter: MatterContext; rows:
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   if (accontos.length === 0) return null;
   return (
-    <div className="px-6 py-3 border-t border-gray-100">
+    <div className="px-2 py-3 border-t border-gray-100">
       <h3 className="text-sm font-semibold text-gray-900 mb-2">Rättshjälpsavgift över tid</h3>
       <table className="min-w-full text-sm">
         <thead className="text-xs text-gray-500"><tr><th className="text-left py-1">Från</th><th className="text-left">Till</th><th className="text-right">Avgift</th></tr></thead>

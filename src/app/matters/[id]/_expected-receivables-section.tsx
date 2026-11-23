@@ -10,7 +10,7 @@
 
 import { useId, useState } from "react";
 import { Money } from "@/components/ui/money";
-import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
@@ -40,7 +40,7 @@ function AddReceivableForm({ matterId, onAdded }: { matterId: MatterId; onAdded:
   const submit = () =>
     create.mutate({ matterId, description: desc, expectedAmount: Math.round(Number(kr) * 100) });
   return (
-    <div className="border-t pt-3 mt-3 space-y-2">
+    <div className="border-t pt-2 mt-2 space-y-2">
       <input value={desc} onChange={(e) => setDesc(e.target.value)} aria-labelledby={descId}
         placeholder="Kostnadsräkning t.ex. Svea HovR mål B 1234-26"
         className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
@@ -107,12 +107,12 @@ export function ExpectedReceivablesSection({ matterId, isCourtMatter }: { matter
   const rows = (list.data ?? []) as Receivable[];
   if (!isCourtMatter && rows.length === 0) return null;
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("green")}>
         <h2 className="font-semibold text-gray-900">Domstolsbetalningar (utan faktura)</h2>
       </div>
-      <div className="p-6">
-      <p className="text-xs text-gray-500 mb-3">
+      <div className="p-2">
+      <p className="text-xs text-gray-500 mb-2">
         Kostnadsräkningar som domstolen betalar. Begärt belopp är ett memo — det
         domstolen faktiskt betalar bokas vid avprickning.
       </p>

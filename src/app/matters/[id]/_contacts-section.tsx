@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ClientPickerDialog } from "@/components/contacts/client-picker-dialog";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForMatterRole, matterRoleOptions } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
@@ -58,7 +58,7 @@ export function ContactsSection({ matterId, contacts, matterTitle }: Props) {
   });
 
   return (
-    <section aria-label="Parter" className="bg-white rounded-lg border border-gray-200">
+    <section aria-label="Parter" className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("blue")}>
         <h2 className="font-semibold text-gray-900">Parter ({contacts.length})</h2>
         <button onClick={() => setPicking(true)} className="text-sm text-blue-700 hover:underline">
@@ -83,7 +83,7 @@ export function ContactsSection({ matterId, contacts, matterTitle }: Props) {
 /** Kontaktens roll i ärendet — väljs i dialogen innan man väljer/skapar kontakten. */
 function RoleSelect({ role, onChange }: { role: MatterRole; onChange: (r: MatterRole) => void }) {
   return (
-    <div className="mb-3">
+    <div className="mb-2">
       <label htmlFor="matter-contact-role" className="block text-xs font-medium text-gray-500 mb-1">Roll i ärendet</label>
       <select id="matter-contact-role" value={role} onChange={(e) => onChange(matterRoleSchema.parse(e.target.value))}
         className="rounded border border-gray-300 px-3 py-1.5 text-sm">
@@ -126,7 +126,7 @@ function ContactsList({
     },
   ];
   return (
-    <div className="p-4">
+    <div className="p-2">
       <DataTable
         prefKey={`list.matter-contacts.${matterId}`}
         columns={columns}

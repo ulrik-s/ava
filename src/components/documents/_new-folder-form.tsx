@@ -17,7 +17,7 @@ export function NewFolderForm({ isPending, onSubmit, onCancel }: Props) {
         e.preventDefault();
         if (name.trim()) onSubmit(name.trim());
       }}
-      className="px-6 py-3 border-b border-gray-100 flex items-center gap-2"
+      className="px-2 py-3 border-b border-gray-100 flex items-center gap-2"
     >
       <span className="text-lg">📁</span>
       <input

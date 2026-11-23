@@ -50,7 +50,7 @@ export function useMarkRadgivning(matterId: MatterId, paymentMethod: PaymentMeth
 export function RadgivningEntryWarning({ matterId, paymentMethod }: { matterId: MatterId; paymentMethod: PaymentMethod | null | undefined }) {
   if (!useNeedsRadgivningEntry(matterId, paymentMethod)) return null;
   return (
-    <div role="status" className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+    <div role="status" className="mx-2 mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
       Rådgivningsfakturan saknar låst rådgivningspost. Om mötet är registrerat som tid — markera det som rådgivning
       i tidslistan, annars yrkas timmen i kostnadsräkningen.
     </div>

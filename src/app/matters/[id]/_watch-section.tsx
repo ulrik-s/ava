@@ -10,7 +10,7 @@
 
 import { useId, useState } from "react";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
-import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { trpc } from "@/lib/client/trpc";
 import { isDeadlineDue } from "@/lib/shared/deadline";
@@ -41,7 +41,7 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
     ((users.data?.users ?? []) as Array<{ id: string; name: string | null }>).find((u) => u.id === id)?.name ?? "kollega";
 
   return (
-    <section aria-label="Frister" className="bg-white rounded-lg border border-gray-200 mb-6">
+    <section aria-label="Frister" className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("amber")}>
         <h2 className="font-semibold text-gray-900">Frister ({open.length})</h2>
         {done.length > 0 && (
@@ -51,7 +51,7 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
         )}
       </div>
       <AddTaskForm matterId={matterId} />
-      {open.length === 0 && <p className="px-6 py-3 text-sm text-gray-500">Inga öppna frister i ärendet.</p>}
+      {open.length === 0 && <p className="px-2 py-3 text-sm text-gray-500">Inga öppna frister i ärendet.</p>}
       <ul className="divide-y divide-gray-100">
         {[...open, ...(showDone ? done : [])].map((t) => (
           <TaskRow key={t.id} task={t} matterId={matterId} ownerName={t.userId === me.data?.id ? null : nameOf(t.userId)} />
@@ -72,7 +72,7 @@ function MatterSignals({ matterId }: { matterId: MatterId }) {
   const items = (q.data?.items ?? []).filter((i) => i.kind === "unbilled");
   if (items.length === 0) return null;
   return (
-    <div className="px-6 py-3 border-t border-gray-100">
+    <div className="px-2 py-3 border-t border-gray-100">
       <WatchlistList items={items} emptyText="" />
     </div>
   );
@@ -102,7 +102,7 @@ function AddTaskForm({ matterId }: { matterId: MatterId }) {
     create.mutate({ title: title.trim(), matterId, dueAt: new Date(`${date}T00:00:00`) });
   };
   return (
-    <form onSubmit={submit} className="px-6 py-3 flex flex-wrap items-end gap-2 border-b border-gray-100">
+    <form onSubmit={submit} className="px-2 py-3 flex flex-wrap items-end gap-2 border-b border-gray-100">
       <div className="flex-1 min-w-[12rem]">
         <label htmlFor={titleId} className="block text-xs font-medium text-gray-500 mb-1">Frist</label>
         <input id={titleId} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="t.ex. Överklagandefrist löper ut"
@@ -142,7 +142,7 @@ function TaskRow({ task, matterId, ownerName }: { task: MatterTask; matterId: Ma
     if (confirm(`Radera fristen "${task.title}"?`)) remove.mutate({ id });
   };
   return (
-    <li className={`px-6 py-3 flex flex-wrap items-center gap-3 ${due ? "bg-red-50 border-l-4 border-red-600" : ""}`}>
+    <li className={`px-2 py-3 flex flex-wrap items-center gap-3 ${due ? "bg-red-50 border-l-4 border-red-600" : ""}`}>
       <input type="checkbox" checked={done} onChange={toggle}
         aria-label={`${done ? "Återöppna" : "Markera klar"}: ${task.title}`} />
       <span className={due ? "text-lg font-extrabold text-red-800" : `text-sm ${done ? "line-through text-gray-400" : "text-gray-900"}`}>
