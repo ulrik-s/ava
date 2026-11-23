@@ -188,6 +188,53 @@ describe("buildSemanticVoucher", () => {
       expect((r.debit > 0 ? 1 : 0) + (r.credit > 0 ? 1 : 0)).toBe(1);
     }
   });
+
+  // #1841: en TOM uppdelning (`vatBreakdown: []`) är ingen uppdelning. Den ska
+  // ge enkelradsverifikatet, inte per-sats-vägen (som utan rader blir tom).
+  // Facit räknat för hand, oberoende av koden:
+  //   12 500 brutto @ 25 % → netto 12 500 / 1,25 = 10 000, moms 2 500.
+  //   10 600 brutto med exakt moms 600 → intäkt 10 600 − 600 = 10 000.
+  //   Kredit −12 500 → samma belopp, sidorna vända.
+  describe("tom momsuppdelning ger enkelradsverifikatet (#1841)", () => {
+    const base = { invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0070" };
+    const cases = [
+      {
+        name: "utan vatOre",
+        input: { ...base, amount: 12_500 },
+        rows: [
+          { role: "kundfordran", debit: 12_500, credit: 0 },
+          { role: "intaktArvode", debit: 0, credit: 10_000 },
+          { role: "momsUtgaende", debit: 0, credit: 2_500 },
+        ],
+      },
+      {
+        name: "med vatOre",
+        input: { ...base, amount: 10_600, vatOre: 600 },
+        rows: [
+          { role: "kundfordran", debit: 10_600, credit: 0 },
+          { role: "intaktArvode", debit: 0, credit: 10_000 },
+          { role: "momsUtgaende", debit: 0, credit: 600 },
+        ],
+      },
+      {
+        name: "som kredit",
+        input: { ...base, amount: -12_500 },
+        rows: [
+          { role: "kundfordran", debit: 0, credit: 12_500 },
+          { role: "intaktArvode", debit: 10_000, credit: 0 },
+          { role: "momsUtgaende", debit: 2_500, credit: 0 },
+        ],
+      },
+    ] as const;
+
+    for (const c of cases) {
+      it(`${c.name}: samma rader som utan uppdelning`, () => {
+        const empty = buildSemanticVoucher({ ...c.input, vatBreakdown: [] });
+        expect(empty.rows).toEqual(c.rows);
+        expect(empty.rows).toEqual(buildSemanticVoucher(c.input).rows);
+      });
+    }
+  });
 });
 
 describe("buildPaymentVoucher (#1173)", () => {
