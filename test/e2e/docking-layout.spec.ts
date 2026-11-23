@@ -30,6 +30,19 @@ for (const [name, width, height] of [["13\" laptop", 1470, 956], ["stor skärm",
   });
 }
 
+test("ärendehuvudet: målnumret på klientraden och ingen Ansvarig (#1848)", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  const header = page.getByTestId("matter-header");
+  const middle = async (testId: string): Promise<number> => {
+    const box = await header.getByTestId(testId).boundingBox();
+    if (!box) throw new Error(`${testId} syns inte`);
+    return box.y + box.height / 2;
+  };
+  expect(Math.abs(await middle("matter-court-case-number") - await middle("matter-payment-line"))).toBeLessThan(4);
+  await expect(header).not.toContainText("Ansvarig");
+});
+
 /** Varje panelsida: en panel som ska finnas, och hur man tar sig dit. */
 const PANEL_PAGES = [
   { name: "startsidan", path: () => "/", tab: "Senaste ärenden" },
