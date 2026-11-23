@@ -45,6 +45,30 @@ describe("när taxan gäller (3 §)", () => {
     expect(isWithinTaxaHours(forhor("07", "10:00", "11:00"))).toBe(false); // lördag
   });
 
+  it("måndag till fredag gäller, också torsdag och fredag; söndag gör det inte", () => {
+    // Mars 2026: 5 = torsdag, 6 = fredag, 8 = söndag.
+    expect(isWithinTaxaHours(forhor("05", "10:00", "11:00"))).toBe(true);
+    expect(isWithinTaxaHours(forhor("06", "10:00", "11:00"))).toBe(true);
+    expect(isWithinTaxaHours(forhor("08", "10:00", "11:00"))).toBe(false);
+  });
+
+  it("ett förhör som slutar en annan dag är inte inom taxans tid (dag, år)", () => {
+    // Mån 2 mars 09.00 → tis 3 mars 10.00: samma månad och år, annan dag.
+    expect(isWithinTaxaHours({ start: t("02", "09:00"), end: t("03", "10:00") })).toBe(false);
+    // Mån 2 mars 2026 → tis 2 mars 2027: samma dag och månad, annat år.
+    expect(isWithinTaxaHours({ start: t("02", "09:00"), end: "2027-03-02T10:00:00+01:00" })).toBe(false);
+  });
+
+  it("ett förhör som slutar samma datum nästa månad är inte inom taxans tid", () => {
+    // Mån 2 mars 09.00 → tors 2 april 10.00: samma dagnummer, men inte samma dag.
+    const overMonth: Forhor = { start: t("02", "09:00"), end: "2026-04-02T10:00:00+02:00" };
+    expect(isWithinTaxaHours(overMonth)).toBe(false);
+    const res = computeForordnandeErsattning({
+      forhor: [overMonth], tidsspillan: { vardagMinutes: 0, ovrigMinutes: 0 }, yrkandeDate: Y2026,
+    });
+    expect(res).toMatchObject({ kind: "utanfor-taxan", reason: "utanfor-tid" });
+  });
+
   it("ett förhör utanför tiden → taxan tillämpas inte (löpande räkning)", () => {
     const res = computeForordnandeErsattning({
       forhor: [FORHOR_1, forhor("05", "18:30", "19:00")],
@@ -118,6 +142,15 @@ describe("det rapporterade fallet: FU nedlagd efter två förhör", () => {
     });
     expect(over.kind === "taxa" && over.gransvardeOverskrids).toBe(true);
     expect(res.kind === "taxa" && res.gransvardeOverskrids).toBe(false);
+  });
+
+  it("skälig ersättning lika med gränsvärdet (7 662 kr) överskrider det inte; en öre till gör det", () => {
+    // Gränsvärdet för 75-89 min, nivå 1, DVFS 2025:5 = 7 662 kr = 766 200 öre.
+    const at = (skaligErsattningOre: number) => computeForordnandeErsattning({
+      forhor: [FORHOR_1, FORHOR_2], tidsspillan: { vardagMinutes: 0, ovrigMinutes: 0 }, yrkandeDate: Y2026, skaligErsattningOre,
+    });
+    expect(at(766_200)).toMatchObject({ kind: "taxa", gransvardeOverskrids: false });
+    expect(at(766_201)).toMatchObject({ kind: "taxa", gransvardeOverskrids: true });
   });
 
   it("yrkande före 2026 → föregående årgång (DVFS 2024:16): 4 979 kr", () => {
