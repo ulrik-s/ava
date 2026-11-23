@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { LedgerBooking } from "@/app/invoices/[id]/_ledger-booking";
 
-const status: { data: { configured: boolean; connected: boolean } | undefined } = { data: undefined };
+const status: { data: { configured: boolean; connected: boolean; reconnectRequired?: boolean } | undefined } = { data: undefined };
 const book = { mutate: vi.fn(), isPending: false, error: null as { message: string } | null };
 const invalidate = vi.fn();
 let onSettled: (() => void) | undefined;
@@ -34,6 +34,12 @@ describe("LedgerBooking", () => {
     status.data = { configured: true, connected: false };
     const { container } = render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId={null} payments={[]} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("anslutningen måste göras om: ingen bokför-knapp (#1816)", () => {
+    status.data = { configured: true, connected: false, reconnectRequired: true };
+    render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId={null} payments={[]} />);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("utkast kan inte bokföras", () => {

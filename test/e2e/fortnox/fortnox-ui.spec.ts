@@ -44,6 +44,8 @@ async function login(page: Page): Promise<void> {
 async function configureLedger(page: Page): Promise<void> {
   await page.goto("/ava/settings/");
   await expect(page.getByText("ansluten ✓")).toBeVisible({ timeout: 30_000 });
+  // Förnyelsen syns under statusen (#1816): harnessen har nyss förnyat anslutningen.
+  await expect(page.getByText(/Senast förnyad \d{4}-\d{2}-\d{2} · går ut ca \d{4}-\d{2}-\d{2}/)).toBeVisible();
   await page.getByLabel("Verifikatserie").fill(state.voucherSeries);
   const accounts: Array<[RegExp, string]> = [
     [/^Kundfordran.*kontonummer/, state.accounts.kundfordran],

@@ -12,6 +12,8 @@ vi.mock("next/navigation", () => ({
 }));
 // "Nytt i AVA" (#2010) hämtar från servern; den har egna tester.
 vi.mock("@/components/shell/release-notes", () => ({ ReleaseNotesLink: () => null, ReleaseNotesOnUpdate: () => null }));
+// Bannern läser serverns bokföringsstatus; den har egna tester (#1816).
+vi.mock("@/components/shell/ledger-reconnect-banner", () => ({ LedgerReconnectBanner: () => <div data-testid="ledger-reconnect-banner-stub" /> }));
 
 const currentQuery = { data: undefined as { name?: string } | undefined };
 vi.mock("@/lib/client/trpc", () => ({
@@ -60,6 +62,12 @@ describe("AppShell", () => {
     expect(screen.queryByRole("link", { name: /Att bevaka/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Kalender/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Att göra/i })).not.toBeInTheDocument();
+  });
+
+  it("renderar bannern för Fortnox-anslutningen på alla sidor (#1816)", () => {
+    currentQuery.data = undefined;
+    render(<AppShell>x</AppShell>);
+    expect(screen.getByTestId("ledger-reconnect-banner-stub")).toBeInTheDocument();
   });
 
   it("tål null/undefined user.current utan att krascha", () => {
