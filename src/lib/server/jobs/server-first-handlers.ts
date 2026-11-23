@@ -4,7 +4,8 @@
  * BARA när dess integration är konfigurerad (annars körs kön men konsumeras ej).
  *
  * Idag: e-postutskick (smtp-sender) när AVA_SMTP_* är satt; dokument-
- * klassificering + sidindexering (#518, #1215). Fortnox-sync +
+ * klassificering + sidindexering (#518, #1215); bokföringens keepalive när
+ * Fortnox är konfigurerat (#1815). Fortnox-sync +
  * regelmotor-handlers slotas in här i takt med att deras config/triggers byggs.
  */
 
@@ -19,6 +20,7 @@ import { createClassifyDocumentHandler, type ClassifyDocumentDeps } from "./hand
 import type { ClassifiableDoc, PageDeps } from "./handlers/document-text";
 import { createEmailDispatchHandler } from "./handlers/email-dispatch-handler";
 import { createIndexDocumentHandler } from "./handlers/index-document-handler";
+import { createLedgerKeepAliveHandler, type LedgerKeepAliveDeps } from "./handlers/ledger-keepalive-handler";
 import { JOB_QUEUES } from "./job-queue";
 import type { JobHandlers } from "./job-worker-runtime";
 
@@ -45,6 +47,9 @@ export interface JobHandlerConfig {
   /** Serverns sidindex (#1215). Satt + content → jobben indexerar sidtexten
    *  och `index-document`-kön får en worker (backfill). */
   pageIndex?: IDocumentPageIndex;
+  /** Bokföringsporten + byråns id (#1815), satta båda eller ingen. Satt →
+   *  `ledger-keepalive` får en worker (och schemaläggs); saknas → inget jobb. */
+  ledger?: { service: LedgerKeepAliveDeps["ledger"]; orgId: string };
 }
 
 /**
@@ -124,6 +129,9 @@ export function buildServerFirstJobHandlers(cfg: JobHandlerConfig): JobHandlers 
     handlers[JOB_QUEUES.emailDispatch] = createEmailDispatchHandler(createSmtpSender(cfg.smtp));
   }
   if (cfg.documents) registerDocumentHandlers(handlers, { ...cfg, documents: cfg.documents });
+  if (cfg.ledger) {
+    handlers[JOB_QUEUES.ledgerKeepAlive] = createLedgerKeepAliveHandler({ ledger: cfg.ledger.service, orgId: cfg.ledger.orgId });
+  }
   return handlers;
 }
 

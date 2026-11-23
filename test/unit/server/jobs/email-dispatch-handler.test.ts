@@ -11,6 +11,7 @@ import type { EmailSender } from "@/lib/server/integrations/email/email-sender";
 import { createEmailDispatchHandler } from "@/lib/server/jobs/handlers/email-dispatch-handler";
 import { JOB_QUEUES } from "@/lib/server/jobs/job-queue";
 import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server/jobs/server-first-handlers";
+import type { LedgerKeepAliveOutcome } from "@/lib/server/ports";
 
 const job = (data: unknown): Job => ({ id: "j1", name: "email-dispatch", data } as unknown as Job);
 
@@ -46,6 +47,15 @@ describe("buildServerFirstJobHandlers", () => {
 
   it("ingen email-handler utan SMTP", () => {
     expect(buildServerFirstJobHandlers({})).toEqual({});
+  });
+
+  it("registrerar keepalive-handlern för bokföringen när den är konfigurerad (#1815)", () => {
+    const ledger = { service: { keepAlive: vi.fn(() => Promise.resolve<LedgerKeepAliveOutcome>("alive")) }, orgId: "org-1" };
+    expect(typeof buildServerFirstJobHandlers({ ledger })[JOB_QUEUES.ledgerKeepAlive]).toBe("function");
+  });
+
+  it("ingen keepalive-handler utan bokföring (#1815)", () => {
+    expect(buildServerFirstJobHandlers({})[JOB_QUEUES.ledgerKeepAlive]).toBeUndefined();
   });
 });
 

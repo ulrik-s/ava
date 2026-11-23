@@ -42,8 +42,9 @@ const noop = (): Promise<void> => Promise.resolve();
 const handlers: JobHandlers = { [JOB_QUEUES.rulesTick]: noop, [JOB_QUEUES.fortnoxSync]: noop };
 
 describe("JOB_SCHEDULES", () => {
-  it("levereras tom", () => {
-    expect(JOB_SCHEDULES).toEqual([]);
+  it("schemalägger bokföringens keepalive måndag 03:00 (#1815)", () => {
+    expect(JOB_SCHEDULES).toEqual([{ queue: "ledger-keepalive", cron: "0 3 * * 1" }]);
+    expect(Object.values(JOB_QUEUES)).toContain("ledger-keepalive");
   });
 });
 

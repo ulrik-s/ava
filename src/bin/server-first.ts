@@ -52,7 +52,7 @@ import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-r
 import { backfillPublicAssignmentTypes } from "@/lib/server/jobs/public-assignment-backfill";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { makeEmailPort } from "@/lib/server/jobs/queue-backed-email-sender";
-import { buildServerFirstJobHandlers, loadActiveSmtpConfig } from "@/lib/server/jobs/server-first-handlers";
+import { buildServerFirstJobHandlers, type JobHandlerConfig, loadActiveSmtpConfig } from "@/lib/server/jobs/server-first-handlers";
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { startErrorReporting } from "@/lib/server/observability/posthog-sink";
@@ -90,11 +90,15 @@ function startLogging(): void {
   }
 }
 
-/** Fortnox-bokföring (#1172): kräver AVA_FORTNOX_* + valvet (AVA_SECRETS_*). Annars noop. */
-function ledgerPort(): { ledger?: ILedgerService } {
+/**
+ * Fortnox-bokföring (#1172): kräver AVA_FORTNOX_* + valvet (AVA_SECRETS_*). Annars noop.
+ * Byggs EN gång (#1815): porten och keepalive-jobbet delar instansen, så
+ * låset gäller båda och ingen förnyar samtidigt med samma refresh-token.
+ */
+function ledgerWiring(orgId: string): { port: { ledger?: ILedgerService }; jobs: Pick<JobHandlerConfig, "ledger"> } {
   const ledger = fortnoxLedgerFromEnv();
   log(ledger ? "fortnox: konfigurerad" : "fortnox: av (AVA_FORTNOX_* / AVA_SECRETS_* saknas)");
-  return ledger ? { ledger } : {};
+  return ledger ? { port: { ledger }, jobs: { ledger: { service: ledger, orgId } } } : { port: {}, jobs: {} };
 }
 
 /** Förfrågningar → intag-repot: kräver token + repo. Annars av. */
@@ -138,6 +142,7 @@ function main(): void {
   // (klassificering, #518) kan läsa innehållet OCH en annan server kan `git pull`
   // för backup. Saknas dir:t → no-op (ingen server-side-lagring), som tidigare.
   const contentStore = makeContentStore(loadContentDirFromEnv());
+  const ledger = ledgerWiring(config.organizationId);
   const ports = {
     ...noopPorts,
     email: makeEmailPort(() => jobRuntime?.boss ?? null),
@@ -148,7 +153,7 @@ function main(): void {
     // Mjuk lease (ADR 0033 §2): in-memory process-singleton — efemär koordinering,
     // en omstart löper ut alla leases (korrekt). Ett enda objekt delas av alla requests.
     lease: new InMemoryLeaseStore(),
-    ...ledgerPort(),
+    ...ledger.port,
     ...backupPort(),
     ...feedbackPort(),
     // "Nytt i AVA" (#2010): kodrepots releaser är publika, så alltid på.
@@ -190,6 +195,8 @@ function main(): void {
     vocabulary: async () => organizationKinds(await api.repos.organizations.getById(asId<"OrganizationId">(config.organizationId))),
     // #1215: jobben indexerar sidtexten för fulltextsökningen (document.search).
     pageIndex: api.pageIndex,
+    // #1815: veckojobbet håller bokföringsanslutningen vid liv (samma instans som porten).
+    ...ledger.jobs,
   });
   void startJobRuntime({ connectionString: config.databaseUrl, handlers })
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })

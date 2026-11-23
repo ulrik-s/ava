@@ -32,6 +32,8 @@ export const JOB_QUEUES = {
   indexDocument: "index-document",
   fortnoxSync: "fortnox-sync",
   rulesTick: "rules-tick",
+  /** Håll bokföringsanslutningen vid liv, veckovis (#1815). */
+  ledgerKeepAlive: "ledger-keepalive",
 } as const;
 
 export type JobQueueName = (typeof JOB_QUEUES)[keyof typeof JOB_QUEUES];
@@ -49,8 +51,11 @@ export interface JobSchedule {
   missed?: ScheduleOptions["missed"];
 }
 
-/** De schemalagda jobben, registrerade av `startJobRuntime`. Tom tills första användaren. */
-export const JOB_SCHEDULES: readonly JobSchedule[] = [];
+/** De schemalagda jobben, registrerade av `startJobRuntime`. */
+export const JOB_SCHEDULES: readonly JobSchedule[] = [
+  // Måndag 03:00: sex tillfällen inom refresh-tokenets 45 dygn (#1815).
+  { queue: JOB_QUEUES.ledgerKeepAlive, cron: "0 3 * * 1" },
+];
 
 const DEFAULT_SCHEMA = "pgboss";
 const DEFAULT_RETRY_LIMIT = 5;

@@ -143,6 +143,9 @@
   standard) plus köns handler i `buildServerFirstJobHandlers`; runtimen
   registrerar den med `boss.schedule` vid start, bara när kön har en handler,
   och tar bort sparade scheman som inte längre är deklarerade.
+  `ledger-keepalive` (#1815, måndag 03:00) håller bokföringsanslutningen vid
+  liv via `ILedgerService.keepAlive`, bara när Fortnox är konfigurerat;
+  `reconnect-required` loggas på `error` varje vecka tills någon ansluter.
 - **Fulltextsökning** (#1215): dokumentjobben (`classify-document`,
   `index-document`) extraherar texten EN gång per jobb, per sida
   (`extractPages`), och skriver den till `document_pages` (genererad
