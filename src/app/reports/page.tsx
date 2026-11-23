@@ -1,6 +1,5 @@
 "use client";
 
-import type { inferRouterOutputs } from "@trpc/server";
 import { useId, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -8,13 +7,13 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, type UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { ArSummarySection } from "./_ar-summary";
+import { COLUMN_LABELS as L, exportReportCsv, matterLabel, type Report, SECTION_TITLES, sumOf, weekLabel } from "./_report-csv";
 import { reportsLayout } from "./_reports-layout";
 
 const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
@@ -60,20 +59,6 @@ function reportStatusText(report: { isLoading: boolean; error: { message: string
   return "Välj jurist och period.";
 }
 
-/** Hämta Excel-exporten och trigga en nedladdning i browsern. */
-async function exportExcel(from: string, to: string, userId: UserId): Promise<void> {
-  const params = new URLSearchParams({ from, to });
-  if (userId) params.set("userIds", userId);
-  const res = await fetch(`/api/reports/excel?${params}`);
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `tidsrapport_${from}_${to}.xlsx`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 interface FilterBarProps {
   from: string;
   to: string;
@@ -113,7 +98,7 @@ function ReportsFilterBar({ from, to, userId, users, canExport, onFrom, onTo, on
             ))}
           </select>
         </div>
-        <button onClick={onExport} disabled={!canExport}
+        <button onClick={onExport} disabled={!canExport} title="Laddar ner rapporten som en CSV-fil som öppnas i Excel"
           className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50">
           Exportera Excel
         </button>
@@ -163,17 +148,13 @@ export default function ReportsPage() {
             from={from} to={to} userId={userId} users={users.data}
             canExport={!!userId && !!report.data}
             onFrom={setFrom} onTo={setTo} onUser={setExplicitUserId}
-            onExport={() => void exportExcel(from, to, userId)}
+            onExport={() => exportReportCsv(r, from, to)}
           />
         </div>
       )}
     />
   );
 }
-
-// ─── Typer ───────────────────────────────────────────────────────────
-
-type Report = NonNullable<inferRouterOutputs<AppRouter>["reports"]["perLawyer"]>;
 
 // ─── Toppkort: sammanfattning ────────────────────────────────────────
 
@@ -212,24 +193,24 @@ function SummaryCard({ report }: { report: Report }) {
 type MatterRow = Report["matters"][number];
 
 const mattersTableColumns: Column<MatterRow>[] = [
-  { key: "matter", label: "Ärende", sortable: true, sortValue: (m) => m.matterNumber,
-    render: (m) => <EntityLink route="matters" id={m.matterId} className="text-blue-600 hover:underline">{m.matterNumber} — {m.title}</EntityLink> },
-  { key: "client", label: "Klient", sortable: true, sortValue: (m) => m.client ?? "",
+  { key: "matter", label: L.matter, sortable: true, sortValue: (m) => m.matterNumber,
+    render: (m) => <EntityLink route="matters" id={m.matterId} className="text-blue-600 hover:underline">{matterLabel(m)}</EntityLink> },
+  { key: "client", label: L.client, sortable: true, sortValue: (m) => m.client ?? "",
     render: (m) => <span className="text-gray-600">{m.client ?? "—"}</span> },
-  { key: "payment", label: "Betalning", sortable: true, sortValue: (m) => labelForPaymentMethod(m.paymentMethod),
+  { key: "payment", label: L.payment, sortable: true, sortValue: (m) => labelForPaymentMethod(m.paymentMethod),
     render: (m) => <PaymentBadge method={m.paymentMethod} /> },
-  { key: "totalMinutes", label: "Tid (h)", sortable: true, align: "right", sortValue: (m) => m.totalMinutes,
-    summary: (rs) => <span className="font-mono">{formatDecimalHours(rs.reduce((s, r) => s + r.totalMinutes, 0))}</span>,
+  { key: "totalMinutes", label: L.totalMinutes, sortable: true, align: "right", sortValue: (m) => m.totalMinutes,
+    summary: (rs) => <span className="font-mono">{formatDecimalHours(sumOf(rs, (r) => r.totalMinutes))}</span>,
     render: (m) => <span className="font-mono">{formatDecimalHours(m.totalMinutes)}</span> },
-  { key: "billableMinutes", label: "Deb. tid (h)", sortable: true, align: "right", sortValue: (m) => m.billableMinutes,
-    summary: (rs) => <strong className="font-mono">{formatDecimalHours(rs.reduce((s, r) => s + r.billableMinutes, 0))}</strong>,
+  { key: "billableMinutes", label: L.billableMinutes, sortable: true, align: "right", sortValue: (m) => m.billableMinutes,
+    summary: (rs) => <strong className="font-mono">{formatDecimalHours(sumOf(rs, (r) => r.billableMinutes))}</strong>,
     render: (m) => <strong className="font-mono">{formatDecimalHours(m.billableMinutes)}</strong> },
-  { key: "workValueOre", label: "Arbetsvärde", sortable: true, align: "right", sortValue: (m) => m.workValueOre,
-    summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.workValueOre, 0))}</span>,
+  { key: "workValueOre", label: L.workValueOre, sortable: true, align: "right", sortValue: (m) => m.workValueOre,
+    summary: (rs) => <span className="font-mono">{formatCurrency(sumOf(rs, (r) => r.workValueOre))}</span>,
     render: (m) => <span className="font-mono">{formatCurrency(m.workValueOre)}</span> },
-  { key: "expenseOre", label: "Utlägg", sortable: true, align: "right", sortValue: (m) => m.expenseOre,
+  { key: "expenseOre", label: L.expenseOre, sortable: true, align: "right", sortValue: (m) => m.expenseOre,
     summary: (rs) => {
-      const t = rs.reduce((s, r) => s + r.expenseOre, 0);
+      const t = sumOf(rs, (r) => r.expenseOre);
       return <span className="font-mono">{t > 0 ? formatCurrency(t) : "—"}</span>;
     },
     render: (m) => <span className="font-mono">{m.expenseOre > 0 ? formatCurrency(m.expenseOre) : "—"}</span> },
@@ -238,7 +219,7 @@ const mattersTableColumns: Column<MatterRow>[] = [
 function MattersTable({ report }: { report: Report }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-      <h2 className="font-semibold text-gray-900 mb-1">Ärenden under perioden</h2>
+      <h2 className="font-semibold text-gray-900 mb-1">{SECTION_TITLES.matters}</h2>
       <p className="text-sm text-gray-500 mb-4">
         Ärenden där {report.user.name} har registrerat tid eller utlägg.
       </p>
@@ -263,18 +244,18 @@ function MattersTable({ report }: { report: Report }) {
 type WeekRow = Report["weeklyRows"][number];
 
 const weeklyColumns: Column<WeekRow>[] = [
-  { key: "week", label: "Vecka", sortable: true, sortValue: (r) => `${r.isoYear}-${String(r.week).padStart(2, "0")}`,
-    render: (r) => <span className="font-mono">{r.isoYear}-v{String(r.week).padStart(2, "0")}</span> },
-  { key: "period", label: "Period", sortable: true, sortValue: (r) => r.start,
+  { key: "week", label: L.week, sortable: true, sortValue: (r) => `${r.isoYear}-${String(r.week).padStart(2, "0")}`,
+    render: (r) => <span className="font-mono">{weekLabel(r)}</span> },
+  { key: "period", label: L.period, sortable: true, sortValue: (r) => r.start,
     render: (r) => <span className="text-xs text-gray-500 whitespace-nowrap">{r.start.slice(5)} – {r.end.slice(5)}</span> },
-  { key: "totalMinutes", label: "Tid (h)", sortable: true, align: "right", sortValue: (r) => r.totalMinutes,
-    summary: (rs) => <span className="font-mono">{formatDecimalHours(rs.reduce((s, r) => s + r.totalMinutes, 0))}</span>,
+  { key: "totalMinutes", label: L.totalMinutes, sortable: true, align: "right", sortValue: (r) => r.totalMinutes,
+    summary: (rs) => <span className="font-mono">{formatDecimalHours(sumOf(rs, (r) => r.totalMinutes))}</span>,
     render: (r) => <span className="font-mono">{r.totalMinutes > 0 ? formatDecimalHours(r.totalMinutes) : "—"}</span> },
-  { key: "billableMinutes", label: "Deb. tid (h)", sortable: true, align: "right", sortValue: (r) => r.billableMinutes,
-    summary: (rs) => <strong className="font-mono">{formatDecimalHours(rs.reduce((s, r) => s + r.billableMinutes, 0))}</strong>,
+  { key: "billableMinutes", label: L.billableMinutes, sortable: true, align: "right", sortValue: (r) => r.billableMinutes,
+    summary: (rs) => <strong className="font-mono">{formatDecimalHours(sumOf(rs, (r) => r.billableMinutes))}</strong>,
     render: (r) => <span className="font-mono">{r.billableMinutes > 0 ? <strong>{formatDecimalHours(r.billableMinutes)}</strong> : "—"}</span> },
-  { key: "workValueOre", label: "Arbetsvärde", sortable: true, align: "right", sortValue: (r) => r.workValueOre,
-    summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.workValueOre, 0))}</span>,
+  { key: "workValueOre", label: L.workValueOre, sortable: true, align: "right", sortValue: (r) => r.workValueOre,
+    summary: (rs) => <span className="font-mono">{formatCurrency(sumOf(rs, (r) => r.workValueOre))}</span>,
     render: (r) => <span className="font-mono">{r.workValueOre > 0 ? formatCurrency(r.workValueOre) : "—"}</span> },
 ];
 
@@ -283,7 +264,7 @@ function WeeklyTable({ report }: { report: Report }) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-      <h2 className="font-semibold text-gray-900 mb-1">Timdebitering per vecka</h2>
+      <h2 className="font-semibold text-gray-900 mb-1">{SECTION_TITLES.weekly}</h2>
       <p className="text-sm text-gray-500 mb-4">
         ISO-veckor som överlappar perioden. Debiterbar tid i fetstil.
       </p>
@@ -308,20 +289,20 @@ function WeeklyTable({ report }: { report: Report }) {
 type UnbilledRow = Report["unbilled"]["rows"][number];
 
 const unbilledColumns: Column<UnbilledRow>[] = [
-  { key: "matter", label: "Ärende", sortable: true, sortValue: (r) => r.matterNumber,
-    render: (r) => <EntityLink route="matters" id={r.matterId} className="text-blue-600 hover:underline">{r.matterNumber} — {r.title}</EntityLink> },
-  { key: "client", label: "Klient", sortable: true, sortValue: (r) => r.client ?? "",
+  { key: "matter", label: L.matter, sortable: true, sortValue: (r) => r.matterNumber,
+    render: (r) => <EntityLink route="matters" id={r.matterId} className="text-blue-600 hover:underline">{matterLabel(r)}</EntityLink> },
+  { key: "client", label: L.client, sortable: true, sortValue: (r) => r.client ?? "",
     render: (r) => <span className="text-gray-600">{r.client ?? "—"}</span> },
-  { key: "payment", label: "Betalning", sortable: true, sortValue: (r) => labelForPaymentMethod(r.paymentMethod),
+  { key: "payment", label: L.payment, sortable: true, sortValue: (r) => labelForPaymentMethod(r.paymentMethod),
     render: (r) => <PaymentBadge method={r.paymentMethod} /> },
-  { key: "timeOre", label: "Tid", sortable: true, align: "right", sortValue: (r) => r.timeOre,
-    summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.timeOre, 0))}</span>,
+  { key: "timeOre", label: L.timeOre, sortable: true, align: "right", sortValue: (r) => r.timeOre,
+    summary: (rs) => <span className="font-mono">{formatCurrency(sumOf(rs, (r) => r.timeOre))}</span>,
     render: (r) => <span className="font-mono">{r.timeOre > 0 ? formatCurrency(r.timeOre) : "—"}</span> },
-  { key: "expenseOre", label: "Utlägg", sortable: true, align: "right", sortValue: (r) => r.expenseOre,
-    summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.expenseOre, 0))}</span>,
+  { key: "expenseOre", label: L.expenseOre, sortable: true, align: "right", sortValue: (r) => r.expenseOre,
+    summary: (rs) => <span className="font-mono">{formatCurrency(sumOf(rs, (r) => r.expenseOre))}</span>,
     render: (r) => <span className="font-mono">{r.expenseOre > 0 ? formatCurrency(r.expenseOre) : "—"}</span> },
-  { key: "total", label: "Summa", sortable: true, align: "right", sortValue: (r) => r.total,
-    summary: (rs) => <span className="font-mono font-medium">{formatCurrency(rs.reduce((s, r) => s + r.total, 0))}</span>,
+  { key: "total", label: L.total, sortable: true, align: "right", sortValue: (r) => r.total,
+    summary: (rs) => <span className="font-mono font-medium">{formatCurrency(sumOf(rs, (r) => r.total))}</span>,
     render: (r) => <span className="font-mono font-medium">{formatCurrency(r.total)}</span> },
 ];
 
@@ -336,7 +317,7 @@ function UnbilledTable({ report }: { report: Report }) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-      <h2 className="font-semibold text-gray-900 mb-1">Upparbetat, icke fakturerat</h2>
+      <h2 className="font-semibold text-gray-900 mb-1">{SECTION_TITLES.unbilled}</h2>
       <p className="text-sm text-gray-500 mb-4">
         Debiterbar tid och utlägg för {report.user.name} inom perioden som
         ännu inte är knutna till en faktura.

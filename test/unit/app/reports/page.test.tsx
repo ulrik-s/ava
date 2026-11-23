@@ -214,27 +214,36 @@ describe("ReportsPage", () => {
     expect(btn).toBeDisabled();
   });
 
-  it("Exportera Excel-knapp aktiveras när data finns och kan klickas", async () => {
+  it("Exportera Excel laddar ner rapporten som CSV byggd i klienten, utan nätverksanrop (#1793)", async () => {
     reportQuery.data = sampleReport;
-    const fetchMock = vi.fn().mockResolvedValue({
-      blob: () => Promise.resolve(new Blob(["x"])),
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock; // fetch får aldrig anropas
+    const blobs: Blob[] = [];
+    global.URL.createObjectURL = vi.fn((b: Blob) => { blobs.push(b); return "blob:url"; });
+    global.URL.revokeObjectURL = vi.fn();
+    const downloads: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push(this.download);
     });
-    global.fetch = fetchMock;
-    const createObjectURL = vi.fn().mockReturnValue("blob:url");
-    const revokeObjectURL = vi.fn();
-    global.URL.createObjectURL = createObjectURL;
-    global.URL.revokeObjectURL = revokeObjectURL;
 
-    render(<ReportsPage />);
+    const { container } = render(<ReportsPage />);
+    const from = (container.querySelector('input[type="date"]') as HTMLInputElement).value;
     const btn = screen.getByRole("button", { name: /Exportera Excel/i });
     expect(btn).not.toBeDisabled();
+    expect(btn.getAttribute("title")).toMatch(/CSV-fil som öppnas i Excel/);
     fireEvent.click(btn);
-    // Vänta på att fetch anropas
-    await new Promise((r) => setTimeout(r, 0));
-    expect(fetchMock).toHaveBeenCalled();
-    const url = fetchMock.mock.calls[0]![0] as string;
-    expect(url).toContain("/api/reports/excel?");
-    expect(url).toContain("userIds=u1");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0]).toMatch(new RegExp(`^tidsrapport_${from}_\\d{4}-\\d{2}-\\d{2}\\.csv$`));
+    expect(blobs[0]?.type).toBe("text/csv;charset=utf-8");
+    const csv = await blobs[0]!.text();
+    const lines = csv.replace(/^\uFEFF/, "").split("\r\n");
+    expect(lines.indexOf("Ärenden under perioden")).toBe(0);
+    expect(lines).toContain("Timdebitering per vecka");
+    expect(lines).toContain("Upparbetat, icke fakturerat");
+    expect(lines).toContain("2026-0001 — Bodelning;Klient A;Rättshjälp;5,00;4,00;6000,00;250,00");
+    click.mockRestore();
   });
 
 });
