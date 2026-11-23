@@ -251,5 +251,42 @@ describe("jävskontrollen under Parter (#1733)", () => {
     expect(within(note).getByText(/Jävskontrollen bedömd/)).toBeInTheDocument();
     expect(within(note).getByText("Annan person, ingen konflikt.")).toBeInTheDocument();
   });
+
+  const HIT = { contactId: "c9", contactName: "Bertil Exempel", role: "MOTPART", matterId: "m-other", matterNumber: "2026-0042", matterTitle: "Tvist om staket" };
+  /** Följer `b` efter `a` i dokumentet? */
+  const follows = (a: Element, b: Element): boolean => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+  it("träffar att bedöma: listan står i gruppen, under statusen och ovanför åtgärderna (#1821)", () => {
+    matterData = { ...MATTER, conflictCheckStatus: "HITS", conflictCheckHits: 2, conflictCheckResults: [HIT, { ...HIT, contactId: "c8" }] };
+    renderSection();
+    const group = screen.getByRole("group", { name: "Jävskontroll" });
+    const heading = within(group).getByText("Träffar i senaste kontrollen");
+    expect(follows(within(group).getByText("Jävskontroll: 2 träffar att bedöma"), heading)).toBe(true);
+    expect(follows(heading, within(group).getByRole("button", { name: "Kör jävskontrollen igen" }))).toBe(true);
+    expect(follows(heading, within(group).getByRole("button", { name: "Bedöm träffarna" }))).toBe(true);
+    expect(screen.getAllByText("Träffar i senaste kontrollen")).toHaveLength(1);
+  });
+
+  it("bedömd: listan står direkt ovanför den senaste bedömningen (#1821)", () => {
+    matterData = {
+      ...MATTER, conflictCheckStatus: "REVIEWED", conflictCheckResults: [HIT], conflictReviewedById: "u1",
+      conflictReviewedAt: "2026-10-01T12:05:00Z", conflictReviewNote: "Annan person.",
+    };
+    renderSection();
+    expect(screen.queryByRole("group", { name: "Jävskontroll" })).not.toBeInTheDocument();
+    const heading = screen.getByText("Träffar i senaste kontrollen");
+    expect(follows(heading, screen.getByRole("note", { name: "Jävskontrollens bedömning" }))).toBe(true);
+    expect(screen.getByText(/Bertil Exempel/)).toBeInTheDocument();
+  });
+
+  it("stängt ärende med träffar: listan står ovanför den senaste bedömningen (#1821)", () => {
+    matterData = {
+      ...MATTER, status: "CLOSED", conflictCheckStatus: "HITS", conflictCheckResults: [HIT], conflictReviewedById: "u1",
+      conflictReviewedAt: "2026-10-01T12:05:00Z", conflictReviewNote: "Annan person.",
+    };
+    renderSection();
+    expect(screen.queryByRole("group", { name: "Jävskontroll" })).not.toBeInTheDocument();
+    expect(follows(screen.getByText("Träffar i senaste kontrollen"), screen.getByRole("note"))).toBe(true);
+  });
 });
 });
