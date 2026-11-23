@@ -1,9 +1,8 @@
 /**
  * Trigga en browser-nedladdning (Blob + `<a download>`).
  *
- * Samma mönster som rapport-exporten (xlsx) men för data vi genererat i
- * klienten (t.ex. SIE-fil, #244). Ingen server inblandad → fungerar i alla
- * tiers.
+ * För filer som byggs i klienten (t.ex. SIE-filen, #244, och rapportens
+ * CSV, #1793). Ingen server inblandad → fungerar i alla tiers.
  */
 function triggerDownload(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);

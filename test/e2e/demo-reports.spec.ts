@@ -5,6 +5,7 @@
  * kraschade då (`getUTCFullYear is not a function`), och panelerna visade
  * "Välj jurist och period." fast både advokat och period var valda.
  */
+import { readFile } from "node:fs/promises";
 import { DEMO_BASE_URL as BASE, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 test("förvald advokat och period → Sammanfattning och Veckor visar rapporten", async ({ page }) => {
@@ -50,4 +51,20 @@ test("Kundfordringar: bryggans förfallna belopp stämmer med åldersanalysen (#
   const buckets = [...agingText.matchAll(/(?:dagar)\s+(−?[\d\s]+,\d{2}\s?kr)/g)].map((m) => ore(m[1] ?? "0"));
   const agingTotal = buckets.reduce((s, b) => s + b, 0);
   expect(forfallet).toBe(agingTotal);
+});
+
+test("Exportera Excel laddar ner rapporten som CSV med de tre avsnitten (#1793)", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/reports/`);
+  const button = page.getByRole("button", { name: "Exportera Excel" });
+  await expect(button).toBeEnabled({ timeout: 30_000 });
+
+  const [download] = await Promise.all([page.waitForEvent("download"), button.click()]);
+  expect(download.suggestedFilename()).toMatch(/^tidsrapport_\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}\.csv$/);
+  const path = await download.path();
+  const lines = (await readFile(path, "utf8")).replace(/^﻿/, "").split("\r\n");
+  expect(lines[0]).toBe("Ärenden under perioden");
+  expect(lines).toContain("Timdebitering per vecka");
+  expect(lines).toContain("Upparbetat, icke fakturerat");
 });
