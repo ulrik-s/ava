@@ -44,7 +44,7 @@ export function ConflictCheckSection({ matterId }: { matterId: MatterId }) {
   return (
     <>
       {item && (
-        <div aria-label="Jävskontroll" role="group" className="px-6 py-3 border-t border-gray-100">
+        <div aria-label="Jävskontroll" role="group" className="px-2 py-3 border-t border-gray-100">
           <WatchlistList items={[item]} emptyText="" />
           {hasHits && <ConflictHitList matterId={matterId} />}
           <ConflictCheckActions matterId={matterId} hasHits={hasHits} />

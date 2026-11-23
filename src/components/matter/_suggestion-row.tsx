@@ -25,7 +25,7 @@ interface Props {
 
 export function SuggestionRow({ group: g, isBusy, onAccept, onReject }: Props) {
   return (
-    <div className="px-6 py-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+    <div className="px-2 py-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-gray-900">{g.name}</span>

@@ -44,7 +44,7 @@ export function PhonePanels({ panels, closable, onClose, choices }: Props) {
         </div>
         {reveal && <AddPanelMenu choices={reveal} />}
       </div>
-      <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto pt-3">{active?.render()}</div>
+      <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto pt-3 space-y-2">{active?.render()}</div>
     </div>
   );
 }

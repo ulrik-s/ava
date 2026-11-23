@@ -89,6 +89,21 @@ test("dra en flik till en annan grupp och återställ", async ({ page, baseURL }
   await expect(groupOf(page, "Frister").getByRole("tab", { name: /^Parter/ })).toHaveCount(1, { timeout: 15_000 });
 });
 
+// #1844: avdelningen går ut till rutans kant och rubrikraden är tät.
+test("ärendets Tid: rubrikraden börjar vid panelens överkant och är lägre än 45 px", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  const tid = page.getByRole("region", { name: "Tid" }).last();
+  const heading = tid.getByRole("heading", { name: /^Tidregistrering/ });
+  await expect(heading).toBeVisible({ timeout: 30_000 });
+  // Rubrikrad → avdelningen → panelkroppen (PanelHost), under dockviews flikrad.
+  const header = await heading.locator("xpath=..").boundingBox();
+  const panel = await heading.locator("xpath=../../..").boundingBox();
+  expect(panel && header).toBeTruthy();
+  expect(Math.abs((header?.y ?? 0) - (panel?.y ?? 100))).toBeLessThanOrEqual(1);
+  expect(header?.height ?? 100).toBeLessThan(45);
+});
+
 test("maximera Dokument-panelen och återställ den (#1263)", async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1470, height: 956 });
   await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));

@@ -78,7 +78,8 @@ const PanelDefs = createContext<ReadonlyMap<string, PanelDef>>(new Map());
  */
 function PanelHost({ params }: IDockviewPanelProps<{ id: string }>) {
   const def = useContext(PanelDefs).get(params.id);
-  return <div className="relative h-full overflow-y-auto p-3">{def?.render()}</div>;
+  const pad = def?.fill ? "" : " p-2 space-y-2";
+  return <div className={`relative h-full overflow-y-auto${pad}`}>{def?.render()}</div>;
 }
 const COMPONENTS = { panel: PanelHost };
 

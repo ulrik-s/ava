@@ -19,6 +19,12 @@ describe("ärendesidans paneler (#1185)", () => {
     expect(panels.find((p) => p.id === "watch")?.render()).toBe("watch");
   });
 
+  it("alla tio paneler går ut till rutans kant (fill, #1844)", () => {
+    const panels = matterPanels(Object.fromEntries(MATTER_PANEL_IDS.map((id) => [id, () => id])) as Parameters<typeof matterPanels>[0]);
+    expect(panels).toHaveLength(10);
+    expect(panels.every((p) => p.fill === true)).toBe(true);
+  });
+
   it.each(["laptop", "large"] as const)("standardlayouten (%s) innehåller varje panel exakt en gång", (screen) => {
     const ids = record(screen).map((c) => c.id);
     expect([...ids].sort()).toEqual([...MATTER_PANEL_IDS].sort());

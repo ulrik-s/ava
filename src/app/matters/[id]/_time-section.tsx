@@ -6,7 +6,7 @@ import {
 } from "@/components/time/time-entry-form";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
-import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
@@ -174,7 +174,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   ];
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
+    <div className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("indigo")}>
         <h2 className="font-semibold text-gray-900">
           Tidregistrering
@@ -195,7 +195,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
         onPick={pickStandardAtgard}
       />
 
-      <div className="p-4">
+      <div className="p-2">
         <RattshjalpCapWarning matterId={matterId} paymentMethod={paymentMethod} rattshjalpMaxTimmar={rattshjalpMaxTimmar} />
         <DataTable
           prefKey={`list.matter-time.${matterId}`}
