@@ -40,9 +40,11 @@ export function useCompleteLedgerConnect() {
 
 /**
  * Bokför fakturan + dess betalningar. Synkar först (servern bokför det den
- * har) och efteråt (verifikaten skrivs på servern och ska synas här).
+ * har) och efteråt (verifikaten skrivs på servern och ska synas här). Statusen
+ * hämtas om efteråt: en bokning kan visa att anslutningen måste göras om (#1816).
  */
 export function useBookInvoice(invoiceId: InvoiceId, onDone: () => void) {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       await flushServerSync();
@@ -50,6 +52,7 @@ export function useBookInvoice(invoiceId: InvoiceId, onDone: () => void) {
     },
     onSettled: async () => {
       await flushServerSync().catch(() => undefined);
+      void qc.invalidateQueries({ queryKey: STATUS_KEY });
       onDone();
     },
   });

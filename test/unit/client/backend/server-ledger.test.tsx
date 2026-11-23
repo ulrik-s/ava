@@ -75,6 +75,16 @@ describe("server-ledger", () => {
     expect(calls).toEqual(["flush", "book", "flush"]);
   });
 
+  it("efter en bokning hämtas statusen om (#1816)", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const own = ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => ({ status: useLedgerStatus(), book: useBookInvoice(asId<"InvoiceId">("i1"), () => undefined) }), { wrapper: own });
+    await waitFor(() => expect(result.current.status.data).toBeDefined());
+    calls.length = 0;
+    await act(() => result.current.book.mutateAsync());
+    await waitFor(() => expect(calls).toEqual(["flush", "book", "flush", "status"]));
+  });
+
   it("osynkade ändringar → ingen bokföring, felet syns, klar ändå", async () => {
     flushError = new Error("inte nått servern");
     const onDone = vi.fn();
