@@ -185,6 +185,8 @@ ingen #418.**
    (`shellPath()` i `entity-href.ts`). SOFT-nav, ingen reload. För row-click-
    handlers: `router.push(shellPath(...))`. **Använd ALDRIG `<Link>`/`router.push`
    direkt mot `/<route>/<id>`** — det är den enda vägen till #418.
+   `EntityLink`/`shellPath` kan bära extra query-parametrar efter `id`
+   (`query={{ … }}`); det är det sätt en länk ber detaljsidan att öppna något.
 2. **`useRouteId`** (`src/lib/client/demo/use-route-id.ts`) läser id:t **reaktivt**
    via `useSearchParams().get("id")` — så även shell→shell-övergångar (samma
    pathname, ny `?id`) uppdaterar utan omladdning.
