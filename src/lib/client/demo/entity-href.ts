@@ -35,6 +35,12 @@ export function entityHref(route: string, id: string, sub?: string): string {
 }
 
 /**
+ * Extra query-parametrar som en länk till en detaljsida bär efter `?id=`.
+ * Nyckel och värde URL-kodas; ordningen följer nycklarnas ordning.
+ */
+export type ShellQuery = Readonly<Record<string, string>>;
+
+/**
  * `shellPath` — route-relativ SOFT-NAV-path till den pre-renderade
  * `__shell__`-routen, med id:t som query-param. Används av `<EntityLink>` och
  * `router.push` för att navigera UTAN sidomladdning (inget blink): eftersom
@@ -44,9 +50,26 @@ export function entityHref(route: string, id: string, sub?: string): string {
  * Ingen base-path här — Next:s `<Link>`/router lägger på den själv (till
  * skillnad från `entityHref` som används för rå `<a>`/shim-vägar).
  * `entityHref('templates', id, 'edit')` → `/templates/__shell__/edit/?id=…`.
+ *
+ * `query` bär valfria extra parametrar efter `id` (t.ex. en avsikt som ber
+ * detaljsidan öppna något direkt, som `?new=1` på listsidorna):
+ * `shellPath('matters', id, undefined, { open: 'x' })` →
+ * `/matters/__shell__/?id=…&open=x`. `useRouteId` läser fortfarande bara `id`.
  */
-export function shellPath(route: string, id: string, sub?: string): string {
+export function shellPath(
+  route: string,
+  id: string,
+  sub?: string,
+  query?: ShellQuery,
+): string {
   const cleanRoute = route.replace(/^\/+|\/+$/g, "");
   const tail = sub ? `${sub.replace(/^\/+|\/+$/g, "")}/` : "";
-  return `/${cleanRoute}/__shell__/${tail}?id=${encodeURIComponent(id)}`;
+  return `/${cleanRoute}/__shell__/${tail}?id=${encodeURIComponent(id)}${queryTail(query)}`;
+}
+
+/** `&<nyckel>=<värde>` per parameter, i nycklarnas ordning; tomt utan parametrar. */
+function queryTail(query: ShellQuery | undefined): string {
+  return Object.entries(query ?? {})
+    .map(([key, value]) => `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("");
 }
