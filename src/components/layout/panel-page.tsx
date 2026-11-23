@@ -15,7 +15,7 @@ const DockWorkspace = dynamic(() => import("./dock-workspace").then((m) => m.Doc
   loading: () => <p className="text-sm text-gray-500">Laddar…</p>,
 });
 
-export function PanelPage({ page, header, panels, defaultLayout, closable }: {
+export function PanelPage({ page, header, panels, defaultLayout, closable, activePanel }: {
   /** Sidtyp — nyckeln layouten sparas under. Byt aldrig namn. */
   page: string;
   header: ReactNode;
@@ -23,12 +23,14 @@ export function PanelPage({ page, header, panels, defaultLayout, closable }: {
   defaultLayout: DefaultLayout;
   /** Panel-id:n som användaren får ta bort med × (#1611). Utan: en fast uppsättning. */
   closable?: readonly string[] | undefined;
+  /** Panelen som ska vara aktiv, vid start och när värdet ändras (#1851). */
+  activePanel?: string | null | undefined;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0">{header}</div>
       <div className="min-h-0 flex-1">
-        <DockWorkspace page={page} panels={panels} defaultLayout={defaultLayout} closable={closable} />
+        <DockWorkspace page={page} panels={panels} defaultLayout={defaultLayout} closable={closable} activePanel={activePanel} />
       </div>
     </div>
   );

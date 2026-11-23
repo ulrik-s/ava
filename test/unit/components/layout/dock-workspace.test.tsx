@@ -18,9 +18,11 @@ interface FakeApi {
   maximizeListeners: Array<(e: { isMaximized: boolean }) => void>;
   /** Paneler som användaren stängt med ×. */
   closed: string[];
+  /** Paneler som blivit aktiva via `setActive`, i ordning (#1851). */
+  active: string[];
 }
 const fake: FakeApi = {
-  added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListeners: [], closed: [],
+  added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListeners: [], closed: [], active: [],
 };
 /** Flikar som attrappen ritar med sidans flikkomponent (#1611). */
 const TAB_IDS = ["a", "b", "c"];
@@ -55,7 +57,9 @@ vi.mock("dockview-react", () => ({
         if (ref !== undefined && !panels.has(ref)) throw new Error(`no panel ${ref}`);
         panels.add(o.id); fake.added.push(o);
       },
-      getPanel: (id: string) => (panels.has(id) ? { api: { setTitle: (t: string) => { fake.titles[id] = t; } } } : undefined),
+      getPanel: (id: string) => (panels.has(id)
+        ? { api: { setTitle: (t: string) => { fake.titles[id] = t; }, setActive: () => { fake.active.push(id); } } }
+        : undefined),
       fromJSON: (j: { panels: Record<string, unknown> }) => {
         if (fake.failLoad) throw new Error("trasig");
         fake.loaded.push(j);
@@ -114,7 +118,7 @@ vi.mock("@/lib/client/trpc", () => ({
 const screenClass = { value: "laptop" as "laptop" | "large" | "phone" };
 vi.mock("@/lib/client/layout/use-screen-class", () => ({ useScreenClass: () => screenClass.value }));
 
-const { DockWorkspace, PanelTab, activatePanelFromHash, addGroup } = await import("@/components/layout/dock-workspace");
+const { DockWorkspace, PanelTab, activatePanel, addGroup } = await import("@/components/layout/dock-workspace");
 
 const PANELS = [
   { id: "a", title: "Alfa", render: () => <p>alfa-innehåll</p> },
@@ -135,7 +139,7 @@ const renderWs = () => render(<DockWorkspace page="matter" panels={PANELS} defau
 beforeEach(() => {
   vi.clearAllMocks();
   fake.added = []; fake.loaded = []; fake.titles = {}; fake.failLoad = false; fake.layoutListener = null;
-  fake.maximized = false; fake.maximizeListeners = []; fake.closed = [];
+  fake.maximized = false; fake.maximizeListeners = []; fake.closed = []; fake.active = [];
   hiddenPrefs.user = null; hiddenPrefs.org = null; hiddenPrefs.loading = false;
   tablistKeys.length = 0;
   readyCount = 0;
@@ -493,14 +497,61 @@ describe("DockWorkspace — firmastandard under maximering (#1356)", () => {
   });
 });
 
-describe("activatePanelFromHash", () => {
-  it("#external aktiverar den panelen; tom hash eller okänd panel gör inget", () => {
+describe("activatePanel", () => {
+  it("känt id aktiverar den panelen; okänt, tomt eller saknat id gör inget", () => {
     const setActive = vi.fn();
     const getPanel = vi.fn((id: string) => (id === "external" ? { api: { setActive } } : undefined));
-    activatePanelFromHash({ getPanel }, "#external");
-    activatePanelFromHash({ getPanel }, "#saknas");
-    activatePanelFromHash({ getPanel }, "");
+    activatePanel({ getPanel }, "external");
+    activatePanel({ getPanel }, "saknas");
+    activatePanel({ getPanel }, "");
+    activatePanel({ getPanel }, null);
+    activatePanel({ getPanel }, undefined);
     expect(setActive).toHaveBeenCalledTimes(1);
     expect(getPanel).toHaveBeenCalledTimes(2);
+  });
+});
+
+// #1851: sidan kan begära en aktiv panel, vid start och när begäran ändras.
+describe("DockWorkspace — activePanel", () => {
+  const renderActive = (activePanel?: string | null) =>
+    <DockWorkspace page="matter" panels={PANELS} defaultLayout={defaultLayout} activePanel={activePanel} />;
+  const withHash = (hash: string, run: () => void): void => {
+    const before = window.location.hash;
+    window.location.hash = hash;
+    try { run(); } finally { window.location.hash = before; }
+  };
+
+  it("dator: propen aktiverar panelen vid start och när den ändras", () => {
+    const { rerender } = render(renderActive("b"));
+    expect(fake.active).toEqual(["b"]);
+    rerender(renderActive("c"));
+    expect(fake.active).toEqual(["b", "c"]);
+  });
+
+  it("dator: null ändrar inget, och samma värde aktiverar inte igen", () => {
+    const { rerender } = render(renderActive(null));
+    expect(fake.active).toEqual([]);
+    rerender(renderActive(null));
+    rerender(renderActive("a"));
+    rerender(renderActive("a"));
+    expect(fake.active).toEqual(["a"]);
+  });
+
+  it("dator: utan prop gäller adressens hash vid start", () => {
+    withHash("#c", () => { render(renderActive()); });
+    expect(fake.active).toEqual(["c"]);
+  });
+
+  it("dator: propen går före hashen", () => {
+    withHash("#c", () => { render(renderActive("b")); });
+    expect(fake.active).toEqual(["b"]);
+  });
+
+  it("telefon: propen väljer fliken", () => {
+    screenClass.value = "phone";
+    const { rerender } = render(renderActive("b"));
+    expect(screen.getByRole("tab", { name: "Beta" }).getAttribute("aria-selected")).toBe("true");
+    rerender(renderActive("c"));
+    expect(screen.getByRole("tab", { name: "Gamma" }).getAttribute("aria-selected")).toBe("true");
   });
 });

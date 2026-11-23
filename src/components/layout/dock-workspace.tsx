@@ -60,6 +60,11 @@ interface Props {
   defaultLayout: DefaultLayout;
   /** Panel-id:n som användaren får ta bort med ×. Utan: inga flikar kan stängas. */
   closable?: readonly string[] | undefined;
+  /**
+   * Panelen som ska vara aktiv (#1851): vid start och varje gång värdet ändras.
+   * `null`/utan ändrar inget; då gäller adressens hash vid start (`/settings#external`).
+   */
+  activePanel?: string | null | undefined;
 }
 
 const NO_CLOSABLE: readonly string[] = [];
@@ -136,16 +141,20 @@ function applyLayout(api: DockviewApi, stored: SerializedLayout | null, defs: Re
   for (const def of defs.values()) api.getPanel(def.id)?.api.setTitle(def.title);
 }
 
-/** `/settings#external` → den panelen blir aktiv (länkar från andra sidor). */
-export function activatePanelFromHash(
+/** Panelen med id:t blir aktiv; okänt eller tomt id gör ingenting (#1851). */
+export function activatePanel(
   api: { getPanel: (id: string) => { api: { setActive: () => void } } | undefined },
-  hash: string,
+  id: string | null | undefined,
 ): void {
-  const id = hash.replace(/^#/, "");
   if (id) api.getPanel(id)?.api.setActive();
 }
 
-export function DockWorkspace({ page, panels, defaultLayout, closable = NO_CLOSABLE }: Props) {
+/** Panelen vid start: sidans begäran, annars adressens hash (`/settings#external`). */
+function initialPanel(activePanel: string | null | undefined): string {
+  return activePanel ?? window.location.hash.replace(/^#/, "");
+}
+
+export function DockWorkspace({ page, panels, defaultLayout, closable = NO_CLOSABLE, activePanel }: Props) {
   const screen = useScreenClass();
   const hidden = useHiddenPanels(page, closable);
   const visible = useMemo(() => visiblePanels(panels, closable, hidden.hidden), [panels, closable, hidden.hidden]);
@@ -158,14 +167,17 @@ export function DockWorkspace({ page, panels, defaultLayout, closable = NO_CLOSA
   return (
     <TabCloseContext.Provider value={tabClose}>
       {screen === "phone"
-        ? <PhoneWorkspace page={page} panels={visible} choices={choices} />
-        : <DesktopWorkspace key={screen} page={page} panels={visible} defaultLayout={defaultLayout} screen={screen} choices={choices} />}
+        ? <PhoneWorkspace page={page} panels={visible} choices={choices} activePanel={activePanel} />
+        : <DesktopWorkspace key={screen} page={page} panels={visible} defaultLayout={defaultLayout} screen={screen} choices={choices}
+          activePanel={activePanel} />}
     </TabCloseContext.Provider>
   );
 }
 
 /** Telefon: panelerna i laptop-layoutens ordning (personlig → firma → registrets). */
-function PhoneWorkspace({ page, panels, choices }: { page: string; panels: readonly PanelDef[]; choices: PanelChoices | null }) {
+function PhoneWorkspace({ page, panels, choices, activePanel }: {
+  page: string; panels: readonly PanelDef[]; choices: PanelChoices | null; activePanel: string | null | undefined;
+}) {
   const close = useContext(TabCloseContext);
   const prefs = trpc.prefs.get.useQuery({ key: layoutPrefKey(page, "laptop") });
   const ordered = useMemo(() => {
@@ -175,10 +187,10 @@ function PhoneWorkspace({ page, panels, choices }: { page: string; panels: reado
     const rank = (id: string): number => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
     return [...panels].sort((a, b) => rank(a.id) - rank(b.id));
   }, [prefs.data, panels]);
-  return <PhonePanels panels={ordered} closable={close?.closable} onClose={close?.hide} choices={choices} />;
+  return <PhonePanels panels={ordered} closable={close?.closable} onClose={close?.hide} choices={choices} activePanel={activePanel} />;
 }
 
-function DesktopWorkspace({ page, panels, defaultLayout, screen, choices }: Props & { screen: "laptop" | "large"; choices: PanelChoices | null }) {
+function DesktopWorkspace({ page, panels, defaultLayout, screen, choices, activePanel }: Props & { screen: "laptop" | "large"; choices: PanelChoices | null }) {
   const key = layoutPrefKey(page, screen);
   const [generation, setGeneration] = useState(0);
   const prefs = trpc.prefs.get.useQuery({ key });
@@ -200,6 +212,13 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen, choices }: Prop
     revealed.current = null;
   }, [defs]);
   const reveal = choices && { ...choices, show: (id: string) => { revealed.current = id; choices.show(id); } };
+  // En ny begäran på en sida som redan visas (#1851); vid start sköter onReady det.
+  const requested = useRef(activePanel);
+  useEffect(() => {
+    if (requested.current === activePanel || !apiRef.current) return;
+    requested.current = activePanel;
+    activatePanel(apiRef.current, activePanel);
+  }, [activePanel]);
 
   if (prefs.isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;
   const stored = parseStoredLayout(prefs.data?.user) ?? parseStoredLayout(prefs.data?.org);
@@ -223,7 +242,7 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen, choices }: Prop
             apiRef.current = api;
             applyLayout(api, stored, defs, () => defaultLayout(adder(api, defs), screen));
             keepProportionsAcrossMaximize(api);
-            activatePanelFromHash(api, window.location.hash);
+            activatePanel(api, initialPanel(activePanel));
             api.onDidMaximizedGroupChange(() => setMaximized(api.hasMaximizedGroup()));
             // Under maximering serialiserar dockview de dolda gruppernas gamla
             // pixlar; sparas först när gruppen återställts (#1291).

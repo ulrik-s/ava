@@ -19,10 +19,26 @@ interface Props {
   onClose?: ((id: string) => void) | undefined;
   /** Dolda valbara paneler; `null`/utan = sidan har inga. */
   choices?: PanelChoices | null | undefined;
+  /** Fliken som ska vara vald vid start och när värdet ändras (#1851); `null`/utan ändrar inget. */
+  activePanel?: string | null | undefined;
 }
 
-export function PhonePanels({ panels, closable, onClose, choices }: Props) {
-  const [activeId, setActiveId] = useState(panels[0]?.id);
+/**
+ * Vald flik (#1851): sidans begäran vid start och när den ändras, annars den
+ * första. Däremellan väljer användaren själv; propen tar inte tillbaka fliken.
+ */
+function useActiveTab(firstId: string | undefined, activePanel: string | null | undefined) {
+  const [activeId, setActiveId] = useState(activePanel ?? firstId);
+  const [requested, setRequested] = useState(activePanel);
+  if (activePanel !== requested) {
+    setRequested(activePanel);
+    if (activePanel) setActiveId(activePanel);
+  }
+  return [activeId, setActiveId] as const;
+}
+
+export function PhonePanels({ panels, closable, onClose, choices, activePanel }: Props) {
+  const [activeId, setActiveId] = useActiveTab(panels[0]?.id, activePanel);
   const active = panels.find((p) => p.id === activeId) ?? panels[0];
   const reveal = choices && { ...choices, show: (id: string) => { setActiveId(id); choices.show(id); } };
   return (
