@@ -17,6 +17,7 @@
  */
 
 import { z } from "zod";
+import type { BillingRunStatus, BillingRunType } from "./schemas/enums";
 
 /** KR-statusarna som zod-enum (en sanningskälla, används av billing-schemat). */
 export const kostnadsrakningStatusSchema = z.enum(["INSKICKAD", "BESLUTAD", "OVERKLAGAD", "FAKTURERAD"]);
@@ -73,15 +74,51 @@ export function applyKrAction(state: KostnadsrakningState, action: Kostnadsrakni
 // tillstånd ur en persisterad rad och applicerar en övergång. Ren avbildning —
 // de låg i routern bara för att det var där raden hämtades.
 
-/** KR-tillstånd ur en körning (#828); saknad status → INSKICKAD (äldre KR). */
-export function krStateOf(run: { kostnadsrakningStatus?: KostnadsrakningStatus | null | undefined; beslutSlutgiltigt?: boolean | null | undefined }): KostnadsrakningState {
-  return { status: run.kostnadsrakningStatus ?? "INSKICKAD", slutgiltigt: run.beslutSlutgiltigt ?? false };
+/** Det livscykeln läser ur en lagrad körning (alla anropare skickar hela rader). */
+export interface KrStateSource {
+  kostnadsrakningStatus?: KostnadsrakningStatus | null | undefined;
+  beslutSlutgiltigt?: boolean | null | undefined;
+  /** Körningens allmänna status — läses bara när `kostnadsrakningStatus` saknas. */
+  status?: BillingRunStatus | null | undefined;
+  /** Fakturan på kostnadsräkningen — läses bara när `kostnadsrakningStatus` saknas. */
+  invoiceId?: string | null | undefined;
+}
+
+/**
+ * Livsstatusen ur en körning (#828, #1859). Ett satt `kostnadsrakningStatus`
+ * vinner alltid. En äldre kostnadsräkning utan värde (före migrering 0012) tolkas
+ * här och ingen annanstans: har den en faktura eller är den skickad (`SENT`) är
+ * den FAKTURERAD, annars INSKICKAD.
+ */
+function krStatusOf(run: KrStateSource): KostnadsrakningStatus {
+  if (run.kostnadsrakningStatus) return run.kostnadsrakningStatus;
+  return run.invoiceId != null || run.status === "SENT" ? "FAKTURERAD" : "INSKICKAD";
+}
+
+/** KR-tillstånd ur en körning (#828); saknad status tolkas av `krStatusOf`. */
+export function krStateOf(run: KrStateSource): KostnadsrakningState {
+  return { status: krStatusOf(run), slutgiltigt: run.beslutSlutgiltigt ?? false };
+}
+
+/** Det `isActiveKr` läser ur en körning (panelens rader och repo-raderna passar båda). */
+export interface ActiveKrSource extends KrStateSource {
+  type: BillingRunType;
+  status: BillingRunStatus;
+}
+
+/**
+ * Aktiv kostnadsräkning (#828, #1859): livscykeln är inte klar och den är inte
+ * ångrad (#1121). Den enda läsaren av "väntar kostnadsräkningen på domstolen" —
+ * fasen, KR-kortet, summeringen och diagnostiken går alla hit.
+ */
+export function isActiveKr(r: ActiveKrSource): boolean {
+  return r.type === "KOSTNADSRAKNING" && r.status !== "VOIDED" && krStateOf(r).status !== "FAKTURERAD";
 }
 
 /** Det `canVoidKostnadsrakning` behöver ur en lagrad körning. */
 export interface VoidableKostnadsrakning {
-  status?: string | null | undefined;
-  kostnadsrakningStatus?: string | null | undefined;
+  status?: BillingRunStatus | null | undefined;
+  kostnadsrakningStatus?: KostnadsrakningStatus | null | undefined;
   awardedOre?: number | null | undefined;
   invoiceId?: string | null | undefined;
 }
@@ -93,7 +130,7 @@ export interface VoidableKostnadsrakning {
  */
 export function canVoidKostnadsrakning(run: VoidableKostnadsrakning): boolean {
   return run.status !== "VOIDED"
-    && run.kostnadsrakningStatus === "INSKICKAD"
+    && krStateOf(run).status === "INSKICKAD"
     && run.awardedOre == null
     && run.invoiceId == null;
 }

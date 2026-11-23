@@ -29,9 +29,9 @@ import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
-import { insurerPruningPending, isActiveKr, krCanCreateInvoice, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
+import { insurerPruningPending, krCanCreateInvoice, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
 import type { KrDocumentFields } from "@/lib/shared/kostnadsrakning";
-import { availableKrActions, canVoidKostnadsrakning, krStateOf, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
+import { availableKrActions, canVoidKostnadsrakning, isActiveKr, krStateOf, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
@@ -201,10 +201,6 @@ function MutationErrorLine({ error }: { error: { message: string } | null }) {
   return error ? <p role="alert" className="mx-6 text-sm text-red-700">{error.message}</p> : null;
 }
 
-function findPendingVerdict(rows: BillingRunRow[]): BillingRunRow | undefined {
-  return rows.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
-}
-
 function clientOf(matter: MatterContext): string {
   return matter.contacts?.find((c) => c.role === "KLIENT")?.contact?.name ?? "";
 }
@@ -238,7 +234,7 @@ function verdictAmounts(pending: BillingRunRow | undefined): { workValueOre: num
 }
 
 function BillingDialogs({ matterId, matter, rows, dialog, setDialog, verdictRunId, setVerdictRunId, onRefetch }: DialogsProps) {
-  const pending = findPendingVerdict(rows);
+  const pending = rows.find(isActiveKr);
   const amounts = verdictAmounts(pending);
   const meta = useBillingMeta(matter);
   return (

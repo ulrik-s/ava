@@ -19,13 +19,9 @@ export interface TodoRun {
   prutningOre?: number | null | undefined;
   /** Domstolens dömda belopp (brutto, öre) när beslutet är registrerat. */
   awardedOre?: number | null | undefined;
+  /** Fakturan på körningen — livscykeln läser den för en äldre kostnadsräkning (#1859). */
+  invoiceId?: string | null | undefined;
   invoice?: { status?: InvoiceStatus | null | undefined } | null | undefined;
-}
-
-/** Aktiv kostnadsräkning (#828): livscykeln är inte klar och den är inte ångrad (#1121). */
-export function isActiveKr(r: TodoRun): boolean {
-  return r.type === "KOSTNADSRAKNING" && r.status !== "VOIDED"
-    && !!r.kostnadsrakningStatus && r.kostnadsrakningStatus !== "FAKTURERAD";
 }
 
 /**

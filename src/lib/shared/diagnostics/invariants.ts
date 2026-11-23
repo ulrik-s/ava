@@ -13,6 +13,8 @@
  */
 
 import { hasKind, type KindsCarrier } from "@/lib/shared/document-kinds";
+import { isActiveKr, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
+import type { BillingRunStatus, BillingRunType } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 
 /** Maskinläsbar kod per invariant — stabil, används för dedup + filtrering. */
@@ -31,8 +33,11 @@ export interface InvariantViolation {
 /** Minimal vy av en BillingRun som invarianten behöver. */
 export interface BillingRunView {
   id: BillingRunId;
-  type: string;
-  status: string;
+  type: BillingRunType;
+  status: BillingRunStatus;
+  /** Kostnadsräkningens livscykel (#828) — läses av `isActiveKr` (#1859). */
+  kostnadsrakningStatus?: KostnadsrakningStatus | null | undefined;
+  invoiceId?: string | null | undefined;
 }
 
 /** Minimal vy av ett dokument som invarianten behöver. */
@@ -49,8 +54,6 @@ export interface MatterInvariantInput {
   documents: ReadonlyArray<DocumentView>;
 }
 
-const KR_TYPE = "KOSTNADSRAKNING";
-const PENDING_VERDICT = "PENDING_VERDICT";
 
 /**
  * Invariant: en kostnadsräkning som väntar på dom MÅSTE ha ett motsvarande
@@ -64,9 +67,7 @@ const PENDING_VERDICT = "PENDING_VERDICT";
  * felet att larma på.
  */
 function checkKostnadsrakningHasDocument(input: MatterInvariantInput): InvariantViolation[] {
-  const pendingRuns = input.billingRuns.filter(
-    (r) => r.type === KR_TYPE && r.status === PENDING_VERDICT,
-  );
+  const pendingRuns = input.billingRuns.filter(isActiveKr);
   if (pendingRuns.length === 0) return [];
 
   const hasKrDoc = input.documents.some(

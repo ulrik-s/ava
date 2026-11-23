@@ -8,8 +8,8 @@ import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import type { BillingRunStatus } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 
-const kr = (kostnadsrakningStatus: KostnadsrakningStatus | null, amountOre: number, status: BillingRunStatus = "PENDING_VERDICT"): SummaryRun =>
-  ({ type: "KOSTNADSRAKNING", status, recipient: "DOMSTOL", kostnadsrakningStatus, amountOre });
+const kr = (kostnadsrakningStatus: KostnadsrakningStatus | null, amountOre: number, status: BillingRunStatus = "PENDING_VERDICT", invoiceId?: string): SummaryRun =>
+  ({ type: "KOSTNADSRAKNING", status, recipient: "DOMSTOL", kostnadsrakningStatus, amountOre, invoiceId });
 
 const inv = (id: string, amount: number, status: SummaryInvoice["status"], extra: Partial<SummaryInvoice> = {}): SummaryInvoice =>
   ({ id: asId<"InvoiceId">(id), amount, status, ...extra });
@@ -19,9 +19,15 @@ describe("krClaimedOre", () => {
     expect(krClaimedOre([kr("INSKICKAD", 100), kr("BESLUTAD", 20), kr("OVERKLAGAD", 3)])).toBe(123);
   });
 
-  it("fakturerad, ångrad eller status-lös KR och andra körningar räknas inte", () => {
+  it("fakturerad eller ångrad KR och andra körningar räknas inte", () => {
     const acconto: SummaryRun = { type: "ACCONTO", status: "SENT", recipient: "KLIENT", amountOre: 7 };
-    expect(krClaimedOre([kr("FAKTURERAD", 100, "SENT"), kr("INSKICKAD", 50, "VOIDED"), kr(null, 9), acconto])).toBe(0);
+    expect(krClaimedOre([kr("FAKTURERAD", 100, "SENT"), kr("INSKICKAD", 50, "VOIDED"), acconto])).toBe(0);
+  });
+
+  it("äldre KR utan status (#1859): räknas utan faktura, inte när den är skickad eller fakturerad", () => {
+    expect(krClaimedOre([kr(null, 9)])).toBe(9);
+    expect(krClaimedOre([kr(null, 9, "SENT")])).toBe(0);
+    expect(krClaimedOre([kr(null, 9, "PENDING_VERDICT", "inv-1")])).toBe(0);
   });
 });
 

@@ -3,8 +3,8 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import {
-  availableKrActions, canKrAction, applyKrAction,
-  type KostnadsrakningState,
+  availableKrActions, canKrAction, applyKrAction, isActiveKr, krStateOf,
+  type ActiveKrSource, type KostnadsrakningState,
 } from "@/lib/shared/kostnadsrakning-flow";
 
 const inskickad: KostnadsrakningState = { status: "INSKICKAD", slutgiltigt: false };
@@ -56,5 +56,60 @@ describe("applyKrAction — övergångar", () => {
 
   it("kastar vid dubbel överklagan (slutgiltigt beslut)", () => {
     expect(() => applyKrAction({ status: "BESLUTAD", slutgiltigt: true }, "OVERKLAGA")).toThrow(/inte tillåten/);
+  });
+});
+
+// ─── Livscykeln ur en lagrad körning (#1859) ────────────────────────────────
+
+/** En kostnadsräkning som väntar på domstolen; `extra` ersätter fälten. */
+const krRun = (extra: Partial<ActiveKrSource> = {}): ActiveKrSource => ({
+  type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", kostnadsrakningStatus: null, ...extra,
+});
+
+describe("krStateOf — en tolkning av en äldre kostnadsräkning utan status", () => {
+  it("null + PENDING_VERDICT → INSKICKAD", () => {
+    expect(krStateOf(krRun()).status).toBe("INSKICKAD");
+  });
+
+  it("null + faktura → FAKTURERAD", () => {
+    expect(krStateOf(krRun({ invoiceId: "inv-1" })).status).toBe("FAKTURERAD");
+  });
+
+  it("null + SENT utan faktura → FAKTURERAD", () => {
+    expect(krStateOf(krRun({ status: "SENT" })).status).toBe("FAKTURERAD");
+  });
+
+  it("ett satt värde vinner över status och faktura", () => {
+    expect(krStateOf(krRun({ kostnadsrakningStatus: "BESLUTAD", status: "SENT", invoiceId: "inv-1" })).status).toBe("BESLUTAD");
+    expect(krStateOf(krRun({ kostnadsrakningStatus: "FAKTURERAD" })).status).toBe("FAKTURERAD");
+  });
+
+  it("slutgiltigt följer beslutSlutgiltigt, annars false", () => {
+    expect(krStateOf(krRun({ kostnadsrakningStatus: "BESLUTAD", beslutSlutgiltigt: true })).slutgiltigt).toBe(true);
+    expect(krStateOf(krRun()).slutgiltigt).toBe(false);
+  });
+});
+
+describe("isActiveKr", () => {
+  it("inskickad, överklagad och beslutad KR är aktiv", () => {
+    expect(isActiveKr(krRun({ kostnadsrakningStatus: "INSKICKAD" }))).toBe(true);
+    expect(isActiveKr(krRun({ kostnadsrakningStatus: "OVERKLAGAD" }))).toBe(true);
+    expect(isActiveKr(krRun({ kostnadsrakningStatus: "BESLUTAD" }))).toBe(true);
+  });
+
+  it("ångrad eller fakturerad KR är inte aktiv", () => {
+    expect(isActiveKr(krRun({ kostnadsrakningStatus: "INSKICKAD", status: "VOIDED" }))).toBe(false);
+    expect(isActiveKr(krRun({ kostnadsrakningStatus: "FAKTURERAD", status: "SENT" }))).toBe(false);
+  });
+
+  it("äldre KR utan status: aktiv utan faktura, inte aktiv med faktura eller skickad", () => {
+    expect(isActiveKr(krRun())).toBe(true);
+    expect(isActiveKr(krRun({ invoiceId: "inv-1" }))).toBe(false);
+    expect(isActiveKr(krRun({ status: "SENT" }))).toBe(false);
+    expect(isActiveKr(krRun({ status: "VOIDED" }))).toBe(false);
+  });
+
+  it("andra körningstyper är aldrig en aktiv KR", () => {
+    expect(isActiveKr({ type: "FINAL", status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD" })).toBe(false);
   });
 });
