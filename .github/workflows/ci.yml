@@ -389,14 +389,16 @@ jobs:
     name: Demo E2E (browser-smoke)
     runs-on: ubuntu-24.04 # pinnad (#1471): Playwright 1.60 saknar chromium för ubuntu 26.04
     if: github.event_name == 'pull_request'
-    timeout-minutes: 15
+    # Hela demosviten med en worker (#2013) — bygge + installation + ~10 min test.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bun-setup
       - run: bun run build:demo
       # Chromium + WebKit (iPhone/iPad, #1877), som Outlook-jobbet.
       - run: npx playwright install --with-deps chromium webkit
-      - name: Demo render-smoke mot lokalt serverad out/
+      # Namnet står kvar: "Demo E2E (browser-smoke)" är en krävd check.
+      - name: Demo-sviten mot lokalt serverad out/
         # Ingen `AVA_DEMO_BASE_URL` och ingen egen server-start längre (#932):
         # playwright-demo.config.ts defaultar till localhost och startar
         # `serve-demo-static.ts` själv (`webServer`), så den lokala körningen och
@@ -410,25 +412,15 @@ jobs:
         # `demo-hydration` (#1131) fäller på varje React #418 i ljust och
         # mörkt färgschema, och kräver att första klicket gäller.
         #
-        # `demo-smoke` + `kebab-verify` kom till i #972. De är billiga
-        # render-smokes (~1 min tillsammans) och slår upp sina fixtures ur
-        # seeden i stället för att hårdkoda id:n — det var just för att de låg
-        # utanför CI som de kunde ruttna i tysthet. Det TYNGRE faktura-flödet
-        # (demo-invoice-document) hålls fortfarande utanför; det körs i
-        # `test:all` lokalt.
+        # HELA sviten (#2013), alla specar i `playwright-demo.config.ts`. Förr
+        # kördes bara sex render-smokes här, och de övriga ruttnade i tysthet
+        # (taxe-dialogen efter #1494, ärendetyperna efter #1656) — samma
+        # lärdom som #972. Repot är publikt, så minuterna kostar inget.
         #
         # `demo-touch-devices` (#1877) körs bara i WebKit-projekten: iPhone
         # (390 px), iPad (768 px) och iPad (820 px), med pekskärm och
         # mobil-emulering — dockytan, menyn, ingen sidscroll och offline.
-        run: >
-          npx playwright test
-          test/e2e/demo-login.spec.ts
-          test/e2e/demo-smoke.spec.ts
-          test/e2e/kebab-verify.spec.ts
-          test/e2e/demo-offline.spec.ts
-          test/e2e/demo-hydration.spec.ts
-          test/e2e/demo-touch-devices.spec.ts
-          --config tooling/config/playwright-demo.config.ts
+        run: npx playwright test --config tooling/config/playwright-demo.config.ts
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

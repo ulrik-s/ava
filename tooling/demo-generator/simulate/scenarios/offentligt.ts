@@ -72,7 +72,9 @@ export function buildOffentligtScenario(parties: Parties, opts: OffentligtOpts =
     { kind: "expense", dayOffset: 6, amountOre: 38_000, description: "Reskostnad häktesbesök" },
     { kind: "doc", dayOffset: 4, template: "brevTillOmbud" },
     { kind: "time", dayOffset: 12, minutes: 180, description: "Klientmöte + förberedelse inför huvudförhandling" },
-    { kind: "time", dayOffset: 20, minutes: 120, description: "Huvudförhandling i tingsrätten" },
+    // "Deltagit i förhandling" (#1494, #2013): förhandlingstiden räknas på klockan,
+    // inte som arbete — och utan posten visar kostnadsräkningen varken klocka eller taxa.
+    { kind: "time", dayOffset: 20, minutes: 120, description: "Deltagit i huvudförhandling i tingsrätten", entryKind: "FORHANDLING" },
     // Advokatberedskap (#950, DVFS 2025:9): två beredskapsdygn, varav det ena
     // "förbrukas" av en häktningsförhandling — då utgår arbetet i stället för
     // garantin (§ 2). Demon visar båda utfallen på samma ärende; annars syns
