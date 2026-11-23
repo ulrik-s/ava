@@ -296,6 +296,10 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       ],
       // Etiketterna dokument kan taggas med (Inställningar → Dokument-etiketter).
       documentKinds: [...DOCUMENT_KINDS],
+      // Ärendetyperna (#1656): de som demons ärenden redan har, så att valet
+      // och Inställningar → Ärendetyper inte står tomma. Ingen markeras som
+      // offentligt uppdrag — det styr faktureringen och ändras inte här.
+      matterTypes: [...new Set(MATTERS.map((m) => m.matterType))],
       createdAt: isoDate(-365), updatedAt: isoDate(-30),
     }],
     // Kontoren som står i dokumentens sidfot (Inställningar → Kontor).
@@ -524,7 +528,31 @@ function buildTimeEntries(orgId: string, users: UserSeed[]): SeedDataset["timeEn
   });
   appendVardnad2TimeEntries(out, orgId, users);
   appendVaryingRattshjalpTimeEntries(out, orgId, users);
+  appendHearingEntries(out, orgId, users);
   return out;
+}
+
+/**
+ * En "Deltagit i förhandling"-post (`kind: FORHANDLING`) i varje ärende med en
+ * kostnadsräkning: en räkning till domstol förutsätter en förhandling, och utan
+ * posten visar dialogen varken förhandlingsklockan eller brottmålstaxan
+ * (#1494). Posten räknas inte som arbete (`isKrWorkEntry`).
+ */
+function appendHearingEntries(out: SeedDataset["timeEntries"], orgId: string, users: UserSeed[]): void {
+  const lawyer = users.find((u) => u.role === "LAWYER") ?? users[0];
+  if (!lawyer) return;
+  for (const run of BILLING_RUN_SEEDS) {
+    const date = isoDate(-(run.daysAgo + 7), 9);
+    out.push({
+      id: `te-forhandling-${run.id}`,
+      organizationId: orgId,
+      userId: lawyer.id, matterId: run.matterId, date,
+      minutes: 95, kind: "FORHANDLING",
+      description: "Deltagit i förhandling (huvudförhandling)",
+      hourlyRate: lawyer.hourlyRate, billable: true,
+      invoiceId: null, createdAt: date, updatedAt: date,
+    });
+  }
 }
 
 /**

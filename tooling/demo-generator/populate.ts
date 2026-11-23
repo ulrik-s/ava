@@ -102,7 +102,8 @@ async function createMatterContacts(c: AnyCaller, rows: Row[]): Promise<void> {
 async function createTimeEntries(c: AnyCaller, rows: Row[]): Promise<void> {
   for (const te of rows) {
     await c.timeEntry.create(
-      defined({ id: te.id, userId: te.userId, matterId: te.matterId, date: isoOrUndef(te.date), minutes: te.minutes, description: te.description, billable: te.billable, hourlyRate: te.hourlyRate, invoiceId: te.invoiceId, createdAt: isoOrUndef(te.createdAt) }),
+      // `kind` (#2013): en "Deltagit i förhandling"-post (FORHANDLING) styr kostnadsräkningens taxa.
+      defined({ id: te.id, userId: te.userId, matterId: te.matterId, date: isoOrUndef(te.date), minutes: te.minutes, description: te.description, billable: te.billable, hourlyRate: te.hourlyRate, invoiceId: te.invoiceId, kind: te.kind, createdAt: isoOrUndef(te.createdAt) }),
     );
   }
 }
@@ -148,12 +149,14 @@ async function createOffices(c: AnyCaller, rows: Row[]): Promise<void> {
   }
 }
 
-/** Byråns egna dokumenttyper — en inställning på organisationen, ingen egen rad. */
+/** Byråns egna dokument- och ärendetyper — inställningar på organisationen, inga egna rader. */
 async function applyDocumentKinds(c: AnyCaller, orgs: Row[]): Promise<void> {
   for (const o of orgs) {
-    // Byråns egna dokumenttyper (ADR 0038).
+    // Byråns egna dokumenttyper (ADR 0038) och ärendetyper (#1656, #2013).
     const kinds = Array.isArray(o.documentKinds) ? o.documentKinds : [];
     if (kinds.length > 0) await c.organization.updateSettings({ documentKinds: kinds });
+    const matterTypes = Array.isArray(o.matterTypes) ? o.matterTypes : [];
+    if (matterTypes.length > 0) await c.organization.updateSettings({ matterTypes });
   }
 }
 
