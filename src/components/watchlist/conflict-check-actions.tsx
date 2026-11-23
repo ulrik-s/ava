@@ -8,12 +8,12 @@
  * alla ärenden.
  */
 
-import Link from "next/link";
 import { useId, useState } from "react";
 import { trpc } from "@/lib/client/trpc";
 import { mayReviewConflicts } from "@/lib/shared/conflict-roles";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
+import { useVisibleConflictHits } from "./conflict-hit-list";
 
 const SECONDARY = "px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50";
 const PRIMARY = "px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50";
@@ -33,14 +33,9 @@ export function ConflictCheckActions({ matterId, hasHits }: { matterId: MatterId
   const recheck = trpc.matter.checkConflicts.useMutation({ onSuccess: refresh });
   return (
     <div className="mt-2 space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={recheck.isPending} onClick={() => recheck.mutate({ id: matterId })} className={SECONDARY}>
-          Kör jävskontrollen igen
-        </button>
-        {hasHits && (
-          <Link href="/matters" className="text-sm text-blue-600 hover:underline">Se träffarna i jävskontrollens historik</Link>
-        )}
-      </div>
+      <button type="button" disabled={recheck.isPending} onClick={() => recheck.mutate({ id: matterId })} className={SECONDARY}>
+        Kör jävskontrollen igen
+      </button>
       {hasHits && <ReviewHits matterId={matterId} onDone={refresh} />}
     </div>
   );
@@ -61,14 +56,20 @@ function ReviewHits({ matterId, onDone }: { matterId: MatterId; onDone: () => vo
   return <ReviewForm matterId={matterId} onDone={onDone} onCancel={() => setOpen(false)} />;
 }
 
-/** Motiveringen krävs — den sparas med vem och när. */
+/**
+ * Motiveringen krävs — den sparas med vem och när, tillsammans med träffarna
+ * listan visar (#1821). Nekar servern (t.ex. nya träffar sedan listan hämtades)
+ * visas beskedet och ärendet hämtas om, så att listan visar de nya träffarna.
+ */
 function ReviewForm({ matterId, onDone, onCancel }: { matterId: MatterId; onDone: () => void; onCancel: () => void }) {
   const noteId = useId();
   const [note, setNote] = useState("");
-  const reviewed = trpc.matter.markConflictsReviewed.useMutation({ onSuccess: onDone });
+  const hits = useVisibleConflictHits(matterId);
+  const reviewed = trpc.matter.markConflictsReviewed.useMutation({ onSuccess: onDone, onError: onDone });
   const submit = (e: React.FormEvent): void => {
     e.preventDefault();
-    reviewed.mutate({ id: matterId, note: note.trim() });
+    const seen = hits.map(({ contactId, matterId: hitMatterId, role }) => ({ contactId, matterId: hitMatterId, role }));
+    reviewed.mutate({ id: matterId, note: note.trim(), hits: seen });
   };
   return (
     <form onSubmit={submit} className="space-y-2">

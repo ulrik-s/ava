@@ -6,9 +6,12 @@
  * läses från ärendet självt med samma regel och texter som Att bevaka
  * (`conflictCheckItems`), åtgärderna och senaste bedömningen är samma
  * komponenter som förut. En klar kontroll utan träffar visar ingen status.
+ * Träffarna (#1821) står ovanför Bedöm träffarna när de väntar på bedömning,
+ * och annars direkt ovanför den senaste bedömningen.
  */
 
 import { ConflictCheckActions } from "@/components/watchlist/conflict-check-actions";
+import { ConflictHitList } from "@/components/watchlist/conflict-hit-list";
 import { ConflictReviewInfo } from "@/components/watchlist/conflict-review-info";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { trpc } from "@/lib/client/trpc";
@@ -36,15 +39,18 @@ function conflictItemOf(m: MatterConflictFields | undefined): WatchlistItem | un
 export function ConflictCheckSection({ matterId }: { matterId: MatterId }) {
   const matter = trpc.matter.getById.useQuery({ id: matterId });
   const item = conflictItemOf(matter.data);
+  /* Träffar = passerad; en kontroll som väntar = annalkande (#1246). */
+  const hasHits = item?.severity === "passed";
   return (
     <>
       {item && (
         <div aria-label="Jävskontroll" role="group" className="px-6 py-3 border-t border-gray-100">
           <WatchlistList items={[item]} emptyText="" />
-          {/* Träffar = passerad; en kontroll som väntar = annalkande (#1246). */}
-          <ConflictCheckActions matterId={matterId} hasHits={item.severity === "passed"} />
+          {hasHits && <ConflictHitList matterId={matterId} />}
+          <ConflictCheckActions matterId={matterId} hasHits={hasHits} />
         </div>
       )}
+      {!hasHits && <ConflictHitList matterId={matterId} className="px-6 pt-3 border-t border-gray-100" />}
       <ConflictReviewInfo matterId={matterId} />
     </>
   );

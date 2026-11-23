@@ -8,7 +8,9 @@
  *      i ett eget ärende — det ser juristens flik inte,
  *   3. juristen lägger upp ett ärende för klienten offline,
  *   4. online igen: servern kör kontrollen och hittar kollegans ärende →
- *      "Jävskontroll: 1 träffar att bedöma" i juristens Att åtgärda (#1735).
+ *      "Jävskontroll: 1 träffar att bedöma" i juristens Att åtgärda (#1735),
+ *   5. träffen står i juristens flik Parter, och länken öppnar kollegans
+ *      ärende, som skapades efter bygget (#1821).
  */
 import { asId } from "../../../src/lib/shared/schemas/ids";
 import { clientFor, mintToken } from "../../../tooling/scripts/selfhosted-trpc-client";
@@ -46,4 +48,16 @@ test("ärende skapat offline: servern kör jävskontrollen och hittar det jurist
 
   await page.goto("/ava/action-items/");
   await expect(page.getByText("Jävskontroll: 1 träffar att bedöma").first()).toBeVisible({ timeout: 30_000 });
+
+  // Träffen i juristens flik Parter, med kollegans ärende som länk (#1821).
+  const mine = matters[0];
+  if (!mine) throw new Error("juristens ärende saknas");
+  await page.goto(`/ava/matters/${mine.id}/`);
+  await page.getByRole("tab", { name: /^Parter/ }).first().click({ timeout: 30_000 });
+  const group = page.getByRole("group", { name: "Jävskontroll" }).last();
+  await expect(group.getByText("Träffar i senaste kontrollen")).toBeVisible({ timeout: 30_000 });
+  const hit = group.getByRole("link", { name: `${colleagues.matterNumber} — Kollegans ärende ${stamp}` });
+  await expect(hit).toBeVisible();
+  await hit.click();
+  await expect(page.getByRole("heading", { name: `Kollegans ärende ${stamp}` })).toBeVisible({ timeout: 30_000 });
 });
