@@ -14,6 +14,14 @@
 #   docker compose -f tooling/docker/docker-compose.production.yml up -d
 #
 # Kräver en ifylld `ava-server.env` (se docs/deploy-server-first.md).
+#
+# Images låsta till digest (#1881): varje `image:` (och server-first-
+# Dockerfilens `FROM` och `# syntax=`) har formen `namn:tagg@sha256:…`, där
+# digesten är manifestlistans, så amd64 och arm64 båda fungerar. Taggen är bara
+# en läsbar etikett: docker hämtar det digesten säger. En digest byts med en
+# vanlig PR (`docker buildx imagetools inspect namn:tagg`, raden `Digest:`), och
+# nästa deploy hämtar den nya imagen. Postgres byter aldrig major med bara en
+# ny tagg: se Uppgradering i docs/deploy-server-first.md.
 
 name: ava
 
@@ -23,7 +31,7 @@ services:
   # Encrypt-cert själv. En byrå ska inte behöva sköta certbot-cron för att
   # köra sitt ärendesystem, och ett utgånget cert är ett driftstopp.
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
     restart: unless-stopped
     ports:
       - "80:80"
@@ -54,7 +62,7 @@ services:
   # Ingen inbyggd IdP. Entra, Google eller vad byrån redan har — samma
   # mönster som docker-compose.oidc-byoidp.yml, se docs/self-hosted-entra.md.
   oauth2-proxy:
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0@sha256:dcb6ff8dd21bf3058f6a22c6fa385fa5b897a9cd3914c88a2cc2bb0a85f8065d
     restart: unless-stopped
     environment:
       OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
@@ -101,7 +109,7 @@ services:
 
   # ─── Postgres: byråns akter ───────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:f2f98726820d0342055351c6e9d36e705f5bfffb3dd53ff556325114b08afb6d
     restart: unless-stopped
     environment:
       POSTGRES_USER: "${POSTGRES_USER:-ava}"
@@ -241,8 +249,11 @@ services:
   #
   # Inget nät alls (#1879): autoheal har docker-socketen och pratar bara med
   # den. På ett nät hade den som tar sig in här kunnat nå servern direkt.
+  #
+  # `latest` med digest (#1881): autoheal har ingen versionstagg nyare än
+  # 1.2.0 (2021), så taggen säger ingen version, men digesten låser imagen.
   autoheal:
-    image: willfarrell/autoheal:latest
+    image: willfarrell/autoheal:latest@sha256:aa7e65eef42543fa00770e1d36d1b44dd8869f160038c3ce423358dd7ac6d5f0
     restart: unless-stopped
     environment:
       AUTOHEAL_CONTAINER_LABEL: all
@@ -263,7 +274,7 @@ services:
   # klassificerade 6/7 testdokument på ~11 s (qwen2.5:3b: 6/7 på ~24 s).
   ollama:
     profiles: ["llm"]
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.17@sha256:ccc42bcd3d5fcf7ab0d532b300382154e1a4da56fc666bdb313b78ebdd912754
     restart: unless-stopped
     entrypoint: ["/bin/sh", "-c"]
     command:

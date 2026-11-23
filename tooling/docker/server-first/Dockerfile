@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:572cebbc2b15e6f84c077742952674889cb63cd5e9b80abdffcbe587b6f19183
 #
 # AVA server-first-runtime (#410, ADR 0016) — den Postgres-backade tRPC-over-HTTP-
 # servern (server-verifierad principal ur oauth2-proxy-headers). Ersätter på sikt
@@ -13,7 +13,7 @@
 #
 # Bygg (från repo-roten, så dist/ ligger i build-contexten):
 #   docker build -f tooling/docker/server-first/Dockerfile -t ava-server-first .
-FROM debian:stable-slim
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
 # git krävs av GitContentStore (#518): dokument-bytes lagras innehålls-adresserat
 # i ett git-repo (AVA_CONTENT_DIR) där varje skrivning committas. Utan binären
