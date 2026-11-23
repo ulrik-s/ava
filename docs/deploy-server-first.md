@@ -467,6 +467,25 @@ releaser.
 Byggcachen töms med flit varje gång (#1166): en gång gav den gammal CSS i prod
 — nya regler saknades trots rätt källkod och nya JS-chunkar, och inget larmade.
 
+### Images låsta till digest (#1881)
+
+Prod-stacken drar inga rörliga taggar. Varje `image:` i
+`docker-compose.production.yml`, och `FROM` och `# syntax=` i
+`server-first/Dockerfile`, har formen `namn:tagg@sha256:<digest>`. Digesten är
+manifestlistans (index), så både linux/amd64 och linux/arm64 fungerar. Taggen
+står kvar som läsbar etikett; docker hämtar det digesten säger, så en kapad eller
+flyttad tagg upstream tas aldrig in.
+
+- **Byta en digest:** en vanlig PR. Slå upp den nya med
+  `docker buildx imagetools inspect namn:tagg` (raden `Digest:`, och listan ska
+  visa båda plattformarna). Nästa deploy hämtar den nya imagen, eftersom compose
+  hämtar en image som saknas lokalt.
+- **Postgres byter aldrig major med bara en ny tagg.** En ny 16.x-digest går
+  bra (samma dataformat, deployen tar backup först), men `postgres:17` kräver en
+  dump och återläsning; en ny tagg ensam startar inte på den gamla volymen.
+- Testet `test/unit/tooling/image-digest.test.ts` fäller en referens utan
+  digest, och `latest` utom för autoheal (som saknar en färsk versionstagg).
+
 ### Deploy via tagg (utan hand)
 
 Servern hämtar själv: `ava-deploy.timer` kör `deploy-latest-tag.sh` var femte
