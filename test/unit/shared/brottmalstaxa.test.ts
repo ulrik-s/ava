@@ -18,6 +18,11 @@ import {
   TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H,
   applyNoFTaxFactor,
   brottmalstaxaTableForDate,
+  advokatberedskapFtaxForDate,
+  arbeteObekvamFtaxForDate,
+  coverageEntryValueOre,
+  tidsspillanFtaxForDate,
+  tidsspillanOvrigFtaxForDate,
 } from "@/lib/shared/brottmalstaxa";
 
 describe("computeBrottmalstaxa — spot checks från DVFS 2025:6", () => {
@@ -144,6 +149,24 @@ describe("buildNotes-grenar", () => {
     expect(r.notes.join(" ")).not.toMatch(/övre gräns/i);
   });
 
+  it("gränsen är toMin − 5: 9 min (= 14 − 5) ger ingen not, 10 min ger den", () => {
+    const vid = computeBrottmalstaxa({ huvudforhandlingMinutes: 9, level: 1 });
+    expect(vid.notes).toEqual(["Belopp exkl moms. För advokat med F-skatt lägger Domstolsverket 25 % moms ovanpå."]);
+    const over = computeBrottmalstaxa({ huvudforhandlingMinutes: 10, level: 1 });
+    expect(over.notes).toEqual([
+      "Belopp exkl moms. För advokat med F-skatt lägger Domstolsverket 25 % moms ovanpå.",
+      "Nära intervallets övre gräns — verifiera faktiskt avslutsklockslag.",
+    ]);
+  });
+
+  it("utan F-skatt och utan yrkandedatum: kvoten 1237/1626 står först bland noterna", () => {
+    const r = computeBrottmalstaxa({ huvudforhandlingMinutes: 2, level: 1, hasFTax: false });
+    expect(r.notes).toEqual([
+      "Justerat för advokat utan F-skatt (× 1237/1626).",
+      "Belopp exkl moms. För advokat med F-skatt lägger Domstolsverket 25 % moms ovanpå.",
+    ]);
+  });
+
   it("gränsvärdet F-skatt-justeras också utan F-skatt", () => {
     const withoutFTax = computeBrottmalstaxa({ huvudforhandlingMinutes: 0, level: 1, hasFTax: false });
     expect(withoutFTax.gransvardeExclVat).toBe(applyNoFTaxFactor(421900));
@@ -164,6 +187,91 @@ describe("Validering", () => {
 
   it("NaN HUF → invalid-input", () => {
     expect(computeBrottmalstaxa({ huvudforhandlingMinutes: NaN, level: 1 }).kind).toBe("invalid-input");
+  });
+
+  it("ogiltigt input ger nivå 1, nollbelopp och valideringstexten", () => {
+    const expected = {
+      kind: "invalid-input", intervalLabel: "", level: 1, ersattningExclVat: 0, gransvardeExclVat: 0,
+      notes: ["Ogiltigt input. HUF-minuter måste vara ≥ 0 och nivå 1-4."],
+    };
+    expect(computeBrottmalstaxa({ huvudforhandlingMinutes: -1, level: 3 })).toEqual(expected);
+    expect(computeBrottmalstaxa({ huvudforhandlingMinutes: Infinity, level: 1 })).toEqual(expected);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(computeBrottmalstaxa({ huvudforhandlingMinutes: 60, level: 0 as any })).toEqual(expected);
+  });
+
+  it("nivå 1–4 är giltiga (varje nivå i isLevel)", () => {
+    for (const level of [1, 2, 3, 4] as const) {
+      expect(computeBrottmalstaxa({ huvudforhandlingMinutes: 60, level }).kind).toBe("taxa-applies");
+    }
+  });
+
+  it("över maxgränsen behåller nivån, nollbelopp och båda förklaringarna", () => {
+    expect(computeBrottmalstaxa({ huvudforhandlingMinutes: 226, level: 3 })).toEqual({
+      kind: "exceeds-max", intervalLabel: "", level: 3, ersattningExclVat: 0, gransvardeExclVat: 0,
+      notes: [
+        "Förhandlingstiden överstiger taxans maxgräns (225 min = 3 tim 45 min).",
+        "Taxan tillämpas inte — ersättning beräknas enligt timkostnadsnorm × faktisk tid.",
+      ],
+    });
+  });
+
+  it("bråkminuter mellan två intervall (14,5 min) → invalid-input med nivån och uppslagets not", () => {
+    // 14,5 ligger efter 0-14 (toMin 14) men före 15-29 (fromMin 15): ingen rad matchar.
+    expect(computeBrottmalstaxa({ huvudforhandlingMinutes: 14.5, level: 2 })).toEqual({
+      kind: "invalid-input", intervalLabel: "", level: 2, ersattningExclVat: 0, gransvardeExclVat: 0,
+      notes: ["Hittade inget matchande intervall i tabellen."],
+    });
+  });
+
+  it("bråkminuter inne i ett intervall (14,25 är inte, 0,5 är) — båda gränserna kontrolleras", () => {
+    // 0,5 ≥ 0 och ≤ 14 → första raden, 2 809 kr (DVFS 2025:6, 0-14 min, nivå 1).
+    expect(computeBrottmalstaxa({ huvudforhandlingMinutes: 0.5, level: 1 }).ersattningExclVat).toBe(280_900);
+    // 29,5 > toMin 29 och < fromMin 30 → ingen rad.
+    expect(computeBrottmalstaxa({ huvudforhandlingMinutes: 29.5, level: 1 }).kind).toBe("invalid-input");
+  });
+});
+
+/**
+ * Årsnormerna (#891/#950). Facit ur föreskrifterna, i öre per timme resp. dag:
+ *   tidsspillan dagtid   2025: 1 450 kr (DVFS 2024:15 § 4), 2026: 1 487 kr (DVFS 2025:4 § 4)
+ *   tidsspillan annan tid 2025:   951 kr (DVFS 2024:15 § 4), 2026:   975 kr (DVFS 2025:4 § 4)
+ *   arbete obekväm tid   2025: 3 175 kr (DVFS 2024:18–19),  2026: 3 256 kr (DVFS 2025:7–8)
+ *   advokatberedskap/dag 2025: 2 487 kr (DVFS 2024:20 § 1), 2026: 2 550 kr (DVFS 2025:9 § 1)
+ * Ett år bortom tabellen (2027) och ett ogiltigt datum ger den senaste årgången (2026).
+ */
+describe("årsnormerna per datum", () => {
+  const cases = [
+    ["tidsspillan dagtid", tidsspillanFtaxForDate, 145_000, 148_700],
+    ["tidsspillan annan tid", tidsspillanOvrigFtaxForDate, 95_100, 97_500],
+    ["arbete obekväm tid", arbeteObekvamFtaxForDate, 317_500, 325_600],
+    ["advokatberedskap per dag", advokatberedskapFtaxForDate, 248_700, 255_000],
+  ] as const;
+
+  it.each(cases)("%s: 2025, 2026, 2027 och ogiltigt datum", (_namn, fn, y2025, y2026) => {
+    expect(fn("2025-06-01")).toBe(y2025);
+    expect(fn("2026-06-01")).toBe(y2026);
+    expect(fn("2027-03-01")).toBe(y2026);
+    expect(fn("inte-ett-datum")).toBe(y2026);
+  });
+});
+
+describe("coverageEntryValueOre — värdet av en post", () => {
+  it("advokatberedskap ersätts per dag, oberoende av minuterna", () => {
+    // 2025: 2 487 kr/dag (DVFS 2024:20 § 1), 2026: 2 550 kr/dag (DVFS 2025:9 § 1).
+    expect(coverageEntryValueOre({ date: "2026-02-01", minutes: 1440, kind: "ADVOKATBEREDSKAP" }, "2025-12-31")).toBe(248_700);
+    expect(coverageEntryValueOre({ date: "2026-02-01", minutes: 60, kind: "ADVOKATBEREDSKAP" }, "2026-02-01")).toBe(255_000);
+  });
+
+  it("timposter: minuter / 60 × årets norm, avrundat till hela ören", () => {
+    // 90 min timarvode 2026: 1,5 × 1 626 kr = 2 439 kr.
+    expect(coverageEntryValueOre({ date: "2026-02-01", minutes: 90, kind: "ARBETE" }, "2026-02-01")).toBe(243_900);
+    // 1 min tidsspillan 2026: 148 700 / 60 = 2 478,33 → 2 478 öre.
+    expect(coverageEntryValueOre({ date: "2026-02-01", minutes: 1, kind: "TIDSSPILLAN" }, "2026-02-01")).toBe(2_478);
+    // 30 min obekväm tid 2025: 317 500 / 2 = 158 750 öre.
+    expect(coverageEntryValueOre({ date: "2025-02-01", minutes: 30, kind: "ARBETE_OBEKVAM_TID" }, "2025-02-01")).toBe(158_750);
+    // Utan kategori: timkostnadsnormen, 60 min 2025 = 1 586 kr.
+    expect(coverageEntryValueOre({ date: "2025-02-01", minutes: 60 }, "2025-02-01")).toBe(158_600);
   });
 });
 

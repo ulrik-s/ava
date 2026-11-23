@@ -20,13 +20,16 @@ interface FakeApi {
   closed: string[];
   /** Paneler som blivit aktiva via `setActive`, i ordning (#1851). */
   active: string[];
+  /** Rita panelkroppen (`components.panel`) för de här id:na (#1844). */
+  hosts: string[];
 }
 const fake: FakeApi = {
-  added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListeners: [], closed: [], active: [],
+  added: [], loaded: [], titles: {}, failLoad: false, layoutListener: null, maximized: false, maximizeListeners: [], closed: [], active: [], hosts: [],
 };
 /** Flikar som attrappen ritar med sidans flikkomponent (#1611). */
 const TAB_IDS = ["a", "b", "c"];
 type TabComponent = (p: { api: { id: string; close: () => void } }) => React.ReactNode;
+type PanelComponent = (p: { params: { id: string } }) => React.ReactNode;
 let readyCount = 0;
 
 const dockProps: { defaultTabComponent: unknown; disableFloatingGroups: unknown } = { defaultTabComponent: null, disableFloatingGroups: undefined };
@@ -44,8 +47,9 @@ vi.mock("dockview-react", () => ({
       {!hideClose && <button type="button" aria-label={`Stäng ${api?.id ?? ""}`} onClick={closeActionOverride}>×</button>}
     </span>
   ),
-  DockviewReact: ({ onReady, defaultTabComponent, disableFloatingGroups }: {
+  DockviewReact: ({ onReady, defaultTabComponent, disableFloatingGroups, components }: {
     onReady: (e: { api: unknown }) => void; defaultTabComponent?: unknown; disableFloatingGroups?: boolean;
+    components: { panel: PanelComponent };
   }) => {
     dockProps.defaultTabComponent = defaultTabComponent;
     dockProps.disableFloatingGroups = disableFloatingGroups;
@@ -76,9 +80,11 @@ vi.mock("dockview-react", () => ({
     // En gång per montering, som dockview.
     if (readyCount++ === 0 || !fake.layoutListener) onReady({ api });
     const Tab = defaultTabComponent as TabComponent;
+    const Panel = components.panel;
     return (
       <div data-testid="dock">
         {TAB_IDS.map((id) => <Tab key={id} api={{ id, close: () => { fake.closed.push(id); } }} />)}
+        {fake.hosts.map((id) => <div key={id} data-testid={`host-${id}`}><Panel params={{ id }} /></div>)}
         <div role="tablist" aria-label="flikrad" ref={recordTablistKeys}>
           <div className="dv-tab" data-testid="dv-tab" tabIndex={0} />
         </div>
@@ -139,7 +145,7 @@ const renderWs = () => render(<DockWorkspace page="matter" panels={PANELS} defau
 beforeEach(() => {
   vi.clearAllMocks();
   fake.added = []; fake.loaded = []; fake.titles = {}; fake.failLoad = false; fake.layoutListener = null;
-  fake.maximized = false; fake.maximizeListeners = []; fake.closed = []; fake.active = [];
+  fake.maximized = false; fake.maximizeListeners = []; fake.closed = []; fake.active = []; fake.hosts = [];
   hiddenPrefs.user = null; hiddenPrefs.org = null; hiddenPrefs.loading = false;
   tablistKeys.length = 0;
   readyCount = 0;
@@ -284,6 +290,28 @@ describe("DockWorkspace — flikar", () => {
     const tabs = screen.getAllByTestId("default-tab");
     expect(tabs.map((t) => t.getAttribute("data-hide-close"))).toEqual(["true", "true", "true"]);
     expect(screen.queryByRole("button", { name: /^Stäng/ })).not.toBeInTheDocument();
+  });
+});
+
+// #1844: rutans innehåll — en avdelning ut till kanten (fill) eller 8 px luft.
+describe("DockWorkspace — panelkroppen", () => {
+  const classesOf = (id: string): string[] => screen.getByTestId(`host-${id}`).firstElementChild?.className.split(" ") ?? [];
+
+  it("utan fill: 8 px runt och mellan avdelningarna", () => {
+    fake.hosts = ["a"];
+    renderWs();
+    expect(classesOf("a")).toEqual(expect.arrayContaining(["p-2", "space-y-2", "overflow-y-auto"]));
+    expect(screen.getByTestId("host-a")).toHaveTextContent("alfa-innehåll");
+  });
+
+  it("med fill: ingen luft, avdelningen går ut till kanten", () => {
+    fake.hosts = ["a"];
+    const filled = [{ id: "a", title: "Alfa", render: () => <p>alfa-innehåll</p>, fill: true }];
+    render(<DockWorkspace page="matter" panels={filled} defaultLayout={defaultLayout} />);
+    const classes = classesOf("a");
+    expect(classes).toContain("overflow-y-auto");
+    expect(classes).not.toContain("p-2");
+    expect(classes).not.toContain("space-y-2");
   });
 });
 

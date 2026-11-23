@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
-import { sectionHeaderClass, type SectionTone } from "@/components/ui/section-tone";
+import { SECTION_FILL_CLASS, sectionHeaderClass, type SectionTone } from "@/components/ui/section-tone";
 
 const TONES: readonly SectionTone[] = ["red", "amber", "blue", "purple", "green", "indigo", "orange", "gray"];
 
@@ -43,8 +43,23 @@ describe("sectionHeaderClass", () => {
     expect(classes).not.toContain("bg-gray-100");
   });
 
+  it("rubrikraden har tät luft (px-3 py-2) och inga rundade hörn (#1844)", () => {
+    for (const t of TONES) {
+      const classes = sectionHeaderClass(t).split(" ");
+      expect(classes).toEqual(expect.arrayContaining(["px-3", "py-2"]));
+      for (const old of ["px-6", "py-4", "rounded-t-lg"]) expect(classes).not.toContain(old);
+    }
+  });
+
   it("varje ton bär sin mörka-läget-klass", () => {
     for (const t of TONES) expect(sectionHeaderClass(t).split(" ")).toContain(`section-tone-${t}`);
+  });
+});
+
+describe("SECTION_FILL_CLASS (#1844)", () => {
+  it("vit yta utan egen ram och rundning", () => {
+    expect(SECTION_FILL_CLASS).toBe("bg-white");
+    expect(SECTION_FILL_CLASS).not.toMatch(/border|rounded/);
   });
 });
 

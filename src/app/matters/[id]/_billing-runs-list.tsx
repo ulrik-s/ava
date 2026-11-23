@@ -185,10 +185,10 @@ export function RunsList({ matterId, rows, standalone, loading }: { matterId: Ma
     ...standalone.map(standaloneListRow),
   ].sort((a, b) => dateMs(a.date) - dateMs(b.date));
   const { rows: shown, toggle } = useHiddenRows(items, (r) => r.hidden);
-  if (loading) return <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>;
-  if (items.length === 0) return <p className="px-6 py-3 text-sm text-gray-500">Inga fakturor ännu.</p>;
+  if (loading) return <p className="px-2 py-3 text-sm text-gray-500">Laddar…</p>;
+  if (items.length === 0) return <p className="px-2 py-3 text-sm text-gray-500">Inga fakturor ännu.</p>;
   return (
-    <div className="px-6 py-2">
+    <div className="px-2 py-2">
       <div className="mb-2 flex justify-end"><ShowHiddenToggle {...toggle} /></div>
       <DataTable prefKey="list.matter-billing" columns={BILLING_LIST_COLUMNS} data={shown} rowKey={(r) => r.key} />
     </div>

@@ -31,7 +31,7 @@ export function BillingSummary({ matterId, runs }: { matterId: MatterId; runs: r
   const list = invoices.data?.items ?? [];
   const { invoicedOre, draftOre } = invoicedTotals(list);
   return (
-    <div className="@container px-6 py-4">
+    <div className="@container p-2">
       <div data-testid="billing-summary-grid" className="grid grid-cols-2 @2xl:grid-cols-4 gap-3">
         <Card label="Upparbetat ofakturerat" value={unbilledOre} basis="net" />
         <Card label="Yrkat i kostnadsräkning" value={krClaimedOre(runs)} />

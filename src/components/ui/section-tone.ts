@@ -25,7 +25,13 @@ const TONES: Readonly<Record<SectionTone, string>> = {
   gray: "section-tone-gray bg-gray-200 border-gray-300 border-l-gray-500",
 };
 
+/**
+ * Ytan för en avdelning som är hela rutans innehåll (#1844, `PanelDef.fill`):
+ * vit, utan egen ram och rundning, så att avdelningen går ut till rutans kant.
+ */
+export const SECTION_FILL_CLASS = "bg-white";
+
 /** Klasser för en avdelnings rubrikrad. `layout` = flex-uppställningen (default: titel vänster, åtgärder höger). */
 export function sectionHeaderClass(tone: SectionTone, layout = "flex items-center justify-between"): string {
-  return `px-6 py-4 border-b border-l-4 rounded-t-lg ${TONES[tone]} ${layout}`;
+  return `px-3 py-2 border-b border-l-4 ${TONES[tone]} ${layout}`;
 }

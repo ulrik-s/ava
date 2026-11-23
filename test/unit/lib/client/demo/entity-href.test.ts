@@ -62,4 +62,33 @@ describe("shellPath (soft-nav till __shell__ med ?id)", () => {
   it("pekar ALDRIG direkt på /<route>/<id> (soft-nav dit → React #418)", () => {
     expect(shellPath("invoices", "inv-1")).not.toMatch(/\/invoices\/inv-1(\/|\?|$)/);
   });
+
+  it("utan query, eller med tomt objekt, är adressen oförändrad", () => {
+    expect(shellPath("invoices", "inv-1", undefined, {})).toBe("/invoices/__shell__/?id=inv-1");
+    expect(shellPath("templates", "t-1", "edit", {})).toBe("/templates/__shell__/edit/?id=t-1");
+  });
+
+  it("lägger en query-parameter efter id", () => {
+    expect(shellPath("matters", "m-1", undefined, { open: "billing" })).toBe(
+      "/matters/__shell__/?id=m-1&open=billing",
+    );
+  });
+
+  it("lägger flera parametrar i nycklarnas ordning", () => {
+    expect(shellPath("matters", "m-1", undefined, { b: "2", a: "1" })).toBe(
+      "/matters/__shell__/?id=m-1&b=2&a=1",
+    );
+  });
+
+  it("URL-kodar &, = och mellanslag i både nyckel och värde", () => {
+    expect(shellPath("matters", "m-1", undefined, { "a&b=c d": "x&y=z w" })).toBe(
+      "/matters/__shell__/?id=m-1&a%26b%3Dc%20d=x%26y%3Dz%20w",
+    );
+  });
+
+  it("fungerar tillsammans med sub", () => {
+    expect(shellPath("templates", "t-1", "edit", { open: "1" })).toBe(
+      "/templates/__shell__/edit/?id=t-1&open=1",
+    );
+  });
 });
