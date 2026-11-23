@@ -175,6 +175,24 @@ const baseFolder = (overrides: Partial<Folder> = {}): Folder => ({
 });
 
 describe("DocumentBrowser", () => {
+  it("vyvalet visar Lista och Mapp-vy (ingen knapp Träd) med aria-pressed på den valda (#1804)", () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    expect(screen.getByRole("group", { name: "Dokumentvy" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mapp-vy" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Lista" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: "Träd" })).not.toBeInTheDocument();
+  });
+
+  it("klick på Mapp-vy från listvyn byter till mappvyn och sparar \"tree\" (#1804)", () => {
+    window.localStorage.setItem("ava.documents.viewMode", "list");
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    expect(screen.getByRole("button", { name: "Lista" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Mapp-vy" }));
+    expect(screen.getByRole("button", { name: "Mapp-vy" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Ny mapp/ })).toBeInTheDocument();
+    expect(window.localStorage.getItem("ava.documents.viewMode")).toBe("tree");
+  });
+
   it("visar tomtillstånd när inga mappar/dokument finns", () => {
     render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/Inga dokument eller mappar/i)).toBeInTheDocument();

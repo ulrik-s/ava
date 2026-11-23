@@ -37,7 +37,7 @@ test.describe("släpp filer utifrån i dokumentvyn (#1615)", () => {
     const seed = await fetchDemoSeed(page, BASE);
     await page.goto(`${BASE}/matters/${matterWithKrStatus(seed, "INSKICKAD")}/`);
     await showPanel(page, "Dokument");
-    await page.getByRole("button", { name: "Träd", exact: true }).click();
+    await page.getByRole("button", { name: "Mapp-vy", exact: true }).click();
     await expect(page.getByText("Rot", { exact: true })).toBeVisible({ timeout: 30_000 });
   });
 
@@ -81,7 +81,7 @@ test("dokumentträdet: cellerna i mapp- och dokumentrader börjar längst upp", 
   const seed = await fetchDemoSeed(page, BASE);
   await page.goto(`${BASE}/matters/${matterWithKrStatus(seed, "INSKICKAD")}/`);
   await showPanel(page, "Dokument");
-  await page.getByRole("button", { name: "Träd", exact: true }).click();
+  await page.getByRole("button", { name: "Mapp-vy", exact: true }).click();
   await expect(page.getByText("Rot", { exact: true })).toBeVisible({ timeout: 30_000 });
 
   const folderRow = page.locator("tr").filter({ has: page.getByText("Domstol", { exact: true }) }).first();

@@ -119,7 +119,7 @@ export function DocumentsListView({
       />
       {folders.length > 0 && (
         <p className="mt-2 text-xs text-gray-400">
-          Tips: byt till <strong>Träd</strong>-vy för att hantera mappar och drag-and-drop.
+          Tips: byt till <strong>Mapp-vy</strong> för att hantera mappar och drag-and-drop.
         </p>
       )}
     </div>
