@@ -264,6 +264,18 @@ describe("MatterDetailPage", () => {
     expect(within(header).queryByRole("button", { name: /^Spara/ })).not.toBeInTheDocument();
   });
 
+  it("huvudets andra rad: betalningssätt och målnummer på samma rad, Ändra sist, ingen Ansvarig (#1848)", async () => {
+    matterQuery.data = { ...M, courtCaseNumber: "T 2-26" };
+    renderPage();
+    const header = await waitFor(() => screen.getByTestId("matter-header"));
+    const row = within(header).getByTestId("matter-payment-line").parentElement;
+    if (!row) throw new Error("klientraden saknas");
+    expect(within(row).getByTestId("matter-court-case-number")).toHaveTextContent("Målnummer: T 2-26");
+    expect(within(row).getByTestId("matter-description")).toHaveTextContent("Beskrivning: En bodelning");
+    expect(row.lastElementChild).toBe(within(row).getByRole("button", { name: "Ändra ärende" }));
+    expect(within(header).queryByText(/Ansvarig/)).not.toBeInTheDocument();
+  });
+
   it("tidigare målnummer visas i ärendehuvudet när det finns (#1510)", async () => {
     matterQuery.data = { ...M, courtCaseNumber: "T 2-26", previousCourtCaseNumber: "T 1-26" };
     renderPage();
