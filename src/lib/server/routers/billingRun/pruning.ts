@@ -10,6 +10,7 @@ import { z } from "zod";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { insurerPruningNote } from "@/lib/shared/billing-notes";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { hasVatBreakdown, invoiceVatOre } from "@/lib/shared/invoice-vat";
 import type { Invoice } from "@/lib/shared/schemas/billing";
 import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
 import { matterIdSchema, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
@@ -123,16 +124,29 @@ async function resolvePruningTargets(tx: Repositories, orgId: OrganizationId, ma
  * moms-uppdelningen (arvodets 25 %-rad) och nedbrytningsvyn justeras tillsammans,
  * så fakturan aldrig visar en moms som inte hör till dess belopp. `deltaNet` är
  * signerat (negativt = avgår).
+ *
+ * Momsen utgår från fakturans moms (`invoiceVatOre`, #1807), inte från 0, så en
+ * äldre faktura utan `vatOre` får rätt moms efter flytten.
  */
 function shiftInvoiceAmount(
   invoice: Invoice, deltaNet: number, deltaVat: number, row: { label: string; kind: SettlementRowKind },
 ): Partial<Invoice> {
   return {
     amount: invoice.amount + deltaNet + deltaVat,
-    vatOre: (invoice.vatOre ?? 0) + deltaVat,
-    vatBreakdown: shiftArvodeVatLine(invoice.vatBreakdown ?? [], deltaNet, deltaVat),
+    vatOre: invoiceVatOre(invoice) + deltaVat,
+    ...shiftVatBreakdown(invoice, deltaNet, deltaVat),
     settlementBreakdown: appendBreakdownRow(invoice.settlementBreakdown, row.label, Math.abs(deltaNet), row.kind, deltaNet + deltaVat),
   };
+}
+
+/**
+ * Uppdelningen justeras bara när fakturan har en (#1807). Saknas den lämnas
+ * `vatBreakdown` orörd och `vatOre` bär momsen: en uppdelning med bara deltat
+ * skulle få verifikatet att bokföra deltat i stället för fakturans moms.
+ */
+function shiftVatBreakdown(invoice: Invoice, deltaNet: number, deltaVat: number): Pick<Partial<Invoice>, "vatBreakdown"> {
+  if (!hasVatBreakdown(invoice)) return {};
+  return { vatBreakdown: shiftArvodeVatLine(invoice.vatBreakdown, deltaNet, deltaVat) };
 }
 
 /** Justera arvodets 25 %-rad i moms-uppdelningen; saknas den läggs den till. */
