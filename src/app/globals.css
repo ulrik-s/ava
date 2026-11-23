@@ -249,3 +249,11 @@ body {
 @media (max-width: 767.98px) {
   html[data-mobile-topbar] [data-theme-toggle="floating"] { display: none; }
 }
+
+/* Sidor med rutor (dockytan, `PanelPage`) får 8 px sidkant från 768 px bredd
+   (#1845), så att rutorna får platsen. `PanelPage` sätter `data-panel-page` på
+   <html> medan sidan visas (inte `:has()`, se ovan). Regeln står utanför
+   Tailwinds lager och vinner därför över `lg:p-8` på <main>. */
+@media (min-width: 768px) {
+  html[data-panel-page] main { padding: 0.5rem; }
+}

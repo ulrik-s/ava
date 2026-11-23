@@ -42,8 +42,15 @@ const PANEL_PAGES = [
   { name: "betalfilsimporten", path: () => "/payments/import/", tab: "Matchning" },
 ] as const;
 
+/**
+ * Sidkanten runt <main> (#1845): 8 px på sidor med rutor från 768 px, annars
+ * som förut (16 px på telefon, 32 px på listsidorna). Märket sätts först efter
+ * hydreringen, därför väntar `toHaveCSS` i stället för att läsa en gång.
+ */
+const PANEL_EDGE: Record<number, string> = { 1470: "8px", 390: "16px" };
+
 for (const p of PANEL_PAGES) {
-  test(`${p.name}: paneler och ingen sidscroll (13" och telefon)`, async ({ page, baseURL }) => {
+  test(`${p.name}: paneler, sidkant och ingen sidscroll (13" och telefon)`, async ({ page, baseURL }) => {
     const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
     await seedDemoLogin(page, base);
     const seed = await fetchDemoSeed(page, base);
@@ -51,10 +58,20 @@ for (const p of PANEL_PAGES) {
       await page.setViewportSize({ width, height });
       await page.goto(`${base}${p.path(seed)}`, { waitUntil: "load" });
       await showPanel(page, p.tab);
+      await expect(page.locator("main")).toHaveCSS("padding-left", PANEL_EDGE[width] ?? "");
       expect(await pageScroll(page)).toEqual({ doc: 0, main: 0 });
     }
   });
 }
+
+test("ärendet: sidkanten är 8 px på 13\" och 16 px på telefon (#1845)", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await openMatter(page, (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, ""));
+  const main = page.locator("main");
+  for (const side of ["top", "right", "bottom", "left"]) await expect(main).toHaveCSS(`padding-${side}`, "8px");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(main).toHaveCSS("padding-left", "16px");
+});
 
 /** Listsidor: huvudet står still, listan scrollar inuti — sidan aldrig. */
 const LIST_PAGES = ["/matters/", "/contacts/", "/invoices/", "/time/", "/payment-plans/", "/users/", "/templates/", "/search/", "/watchlist/"];
@@ -67,6 +84,7 @@ for (const path of LIST_PAGES) {
       await page.setViewportSize({ width, height });
       await page.goto(`${base}${path}`, { waitUntil: "load" });
       await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 30_000 });
+      if (width === 1470) await expect(page.locator("main")).toHaveCSS("padding-left", "32px"); // #1845: listsidor behåller kanten
       expect(await pageScroll(page)).toEqual({ doc: 0, main: 0 });
     }
   });
