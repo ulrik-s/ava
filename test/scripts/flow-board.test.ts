@@ -404,6 +404,19 @@ describe("blockerade arbetsordrar som egna kort (#1779)", () => {
     expect(gh.calls).toEqual([`api repos/${AVA}/issues/20/labels -f labels[]=${HUMAN_APPROVED}`]);
   });
 
+  it("godkännandet tar också bort PR:ens blockerad, även när etiketten redan finns (#2027)", () => {
+    const { r, gh } = sync([
+      wo(10, ["agent-task", "pågår", HUMAN_APPROVED]),
+      pr(20, 10, ["agent-pr", "blockerad"]), pr(22, 10, ["agent-pr", HUMAN_APPROVED, "blockerad"]),
+    ], []);
+    expect(r.workOrders.prsApproved).toEqual([20, 22]);
+    expect(gh.calls).toEqual([
+      `api repos/${AVA}/issues/20/labels -f labels[]=${HUMAN_APPROVED}`,
+      `api -X DELETE repos/${AVA}/issues/20/labels/blockerad`,
+      `api -X DELETE repos/${AVA}/issues/22/labels/blockerad`,
+    ]);
+  });
+
   it("i rapportläge skrivs inget", () => {
     const { r, board, gh } = sync([wo(1, ["agent-task", "granskad", "blockerad"]), wo(2, ["agent-task", "granskad", "blockerad"])], [woCard(2, "Godkänd")], false);
     expect(r.workOrders).toMatchObject({ added: [1], approved: [2] });

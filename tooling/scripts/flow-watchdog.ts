@@ -9,6 +9,7 @@
  *
  * FLOW_GUARD_MODE=enforce gör ändringarna; annars (report) loggas de bara.
  */
+import { AGENT_PR_PER_DAY, rankInLast24h } from "./agent-guard";
 import { dispatchTarget, type FetchFn, fire } from "./flow/dispatch";
 import { type GitHub, gitHub, runGhWithToken } from "./flow/github";
 import { prioOrder } from "./flow/health";
@@ -133,6 +134,34 @@ export function cancelHung(gh: GitHub, now: number, minutes: number, enforce: bo
   return ids;
 }
 
+const DAY_MS = 24 * 3_600_000;
+
+/**
+ * Var PR:en över dygnstaket när den skapades, men är under det nu? Agentvakten
+ * räknar taket vid varje körning (#1955), men ingenting kör den igen när
+ * fönstret har passerat (#2027) — det gör klockan.
+ */
+export function capReleased(created: number, createdAts: readonly string[], now: number): boolean {
+  return rankInLast24h(createdAts, created, created) > AGENT_PR_PER_DAY && rankInLast24h(createdAts, created, now) <= AGENT_PR_PER_DAY;
+}
+
+/** Kör om Agentvakten på granskade agent-PR:er som taket släppt. Ger PR-numren. */
+export function rerunReleasedFromCap(gh: GitHub, now: number, enforce: boolean, log: Log): number[] {
+  const createdAts = gh.agentPullsCreatedSince(new Date(now - 2 * DAY_MS).toISOString());
+  const released = gh.openPulls().filter((p) =>
+    p.labels.includes(AGENT_PR) && p.labels.includes("granskad") && !p.labels.includes("blockerad")
+    && capReleased(Date.parse(p.createdAt ?? ""), createdAts, now));
+  const rerun: number[] = [];
+  for (const p of released) {
+    // ponytail: en PR som också faller av ett annat skäl körs om varje timme tills taket inte längre gäller den (efter 24 h).
+    if (!enforce) { log(`PR #${p.number}: under dygnstaket nu (bara rapport)`); continue; }
+    try {
+      if (gh.rerunFailedCheck(p.number, "Agentvakt")) { rerun.push(p.number); log(`PR #${p.number}: under dygnstaket nu — Agentvakten körs om`); }
+    } catch (e) { log(`PR #${p.number}: Agentvakten kunde inte köras om: ${e instanceof Error ? e.message : String(e)}`); }
+  }
+  return rerun;
+}
+
 if (import.meta.main) {
   const flow = loadFlow();
   const enforce = process.env.FLOW_GUARD_MODE === "enforce";
@@ -161,5 +190,8 @@ if (import.meta.main) {
     }
   }
   const ciRepo = machines[0]?.repo;
-  if (args.includes("--ci") && ciRepo) cancelHung(gitHub(ciRepo), Date.now(), flow.ci.hang_minutes, enforce, console.log);
+  if (args.includes("--ci") && ciRepo) {
+    cancelHung(gitHub(ciRepo), Date.now(), flow.ci.hang_minutes, enforce, console.log);
+    try { rerunReleasedFromCap(gitHub(ciRepo), Date.now(), enforce, console.log); } catch (e) { console.log(`dygnstaket: ${e instanceof Error ? e.message : String(e)}`); }
+  }
 }

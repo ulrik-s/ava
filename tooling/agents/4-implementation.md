@@ -98,8 +98,14 @@ Finns ingen: avsluta.
      generös. Kör då `bun run file-size --update`, som bara kan skärpa, och ta
      med ändringen i PR:en. Agentvakten tillåter just den ändringen.
 6. Commit (Conventional Commits, svenska, body-rader ≤ 100 tecken; en
-   refaktorisering är `refactor(...)`), push, och skapa PR mot `main` via
-   `gh api` (regel 5):
+   refaktorisering är `refactor(...)`). Rubriken efter `typ(scope): ` börjar
+   med **gemen** ("fix(reports): exportera …", inte "Exportera") och är högst
+   100 tecken. **Kontrollera varje commit innan du pushar** (#2027), för git-
+   hooken som gör det lokalt finns inte i molnet:
+   `git log --format=%B -n 1 <sha> | bunx commitlint --config tooling/config/commitlint.config.mjs`.
+   Rött: skriv om meddelandet med `git commit --amend` innan push. Efter push
+   går det inte (force-push är förbjudet) och PR:en fastnar på CI-kontrollen
+   "Commit messages". Push sedan, och skapa PR mot `main` via `gh api` (regel 5):
    - titel = commit-rubriken,
    - body: vad som ändrats, vilken förebild du följt, hur det testats, och
      `Closes #<nr>`,

@@ -271,13 +271,27 @@ function settleWorkOrderCard(d: SyncDeps, card: BoardItem, move: "none" | "set")
 /** En agent-PR för en arbetsorder som Ulrik godkänt får `människa-godkänd` med hans token (Agentvakten kräver det). */
 function copyApprovals(d: SyncDeps, code: CodeSide, result: SyncResult): void {
   const approved = new Set(code.open.filter((i) => !i.isPr && i.labels.includes(HUMAN_APPROVED)).map((i) => i.number));
-  for (const pr of code.open.filter((i) => i.isPr && i.labels.includes("agent-pr") && !i.labels.includes(HUMAN_APPROVED))) {
+  for (const pr of code.open.filter((i) => i.isPr && i.labels.includes("agent-pr"))) {
     const issue = closesIssue(pr.body);
     if (issue === null || !approved.has(issue)) continue;
-    result.workOrders.prsApproved.push(pr.number);
-    d.log(`PR #${pr.number}: arbetsorder #${issue} godkänd av Ulrik → ${HUMAN_APPROVED}`);
-    if (d.enforce) code.gh.addLabel(pr.number, HUMAN_APPROVED);
+    approvePr(d, code, pr, issue, result);
   }
+}
+
+/**
+ * Ulriks godkännande följer med till PR:en, och PR:ens `blockerad` (satt
+ * medan den väntade på honom) tas bort — annars är Agentvakten röd fast
+ * beslutet är fattat (#2027).
+ */
+function approvePr(d: SyncDeps, code: CodeSide, pr: OpenItem, issue: number, result: SyncResult): void {
+  const needsLabel = !pr.labels.includes(HUMAN_APPROVED);
+  const blocked = pr.labels.includes("blockerad");
+  if (!needsLabel && !blocked) return;
+  result.workOrders.prsApproved.push(pr.number);
+  d.log(`PR #${pr.number}: arbetsorder #${issue} godkänd av Ulrik → ${HUMAN_APPROVED}${blocked ? ", blockerad bort" : ""}`);
+  if (!d.enforce) return;
+  if (needsLabel) code.gh.addLabel(pr.number, HUMAN_APPROVED);
+  if (blocked) code.gh.removeLabel(pr.number, "blockerad");
 }
 
 /** Arbetsordrarnas kort (#1779): blockerade läggs till, Ulriks flyttar verkställs, godkännanden följer med till PR:en. */

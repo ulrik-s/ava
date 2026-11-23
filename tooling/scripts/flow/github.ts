@@ -75,6 +75,12 @@ const runsSchema = z.object({
   workflow_runs: z.array(z.object({ id: z.number(), status: z.string(), run_started_at: z.string() })),
 });
 
+const createdSearchSchema = z.object({ items: z.array(z.object({ created_at: z.string() })) });
+const headSchema = z.object({ head: z.object({ sha: z.string() }) });
+const checkRunsSchema = z.object({
+  check_runs: z.array(z.object({ conclusion: z.string().nullable(), started_at: z.string().nullable(), details_url: z.string().nullable() })),
+});
+
 /** En etiketthändelse med tidpunkt. */
 export interface TimedLabelEvent extends LabelEvent { at: string }
 
@@ -255,6 +261,21 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
     },
     comment(n: number, body: string): void { run(["api", `repos/${repo}/issues/${n}/comments`, "-f", `body=${body}`]); },
     cancelRun(id: number): void { run(["api", "-X", "POST", `repos/${repo}/actions/runs/${id}/cancel`]); },
+    /** När agent-PR:erna (öppna och stängda) skapats sedan `since` (ISO) — dygnstakets underlag. */
+    agentPullsCreatedSince(since: string): string[] {
+      const r = parseJsonWith(createdSearchSchema, run(["api", "-X", "GET", "search/issues", "-f", `q=repo:${repo} is:pr label:agent-pr created:>=${since}`, "-f", "per_page=100"]));
+      return r.items.map((i) => i.created_at);
+    },
+    /** Kör om PR:ens senaste check `name` om den föll (#2027). Ger true om den startades om. */
+    rerunFailedCheck(pr: number, name: string): boolean {
+      const sha = parseJsonWith(headSchema, run(["api", `repos/${repo}/pulls/${pr}`])).head.sha;
+      const runs = parseJsonWith(checkRunsSchema, run(["api", `repos/${repo}/commits/${sha}/check-runs?check_name=${encodeURIComponent(name)}`])).check_runs;
+      const last = runs.sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""))[0];
+      const job = last?.conclusion === "failure" ? /\/job\/(\d+)/.exec(last.details_url ?? "")?.[1] : undefined;
+      if (job === undefined) return false;
+      run(["api", "-X", "POST", `repos/${repo}/actions/jobs/${job}/rerun`]);
+      return true;
+    },
   };
 }
 
