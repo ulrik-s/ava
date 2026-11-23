@@ -18,7 +18,7 @@ import { Plus, Clock } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
-import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
@@ -54,9 +54,9 @@ function dayLabel(ymd: string): string {
 export default function Dashboard() {
   const [ymd, setYmd] = useState<string>(todayYmd());
   const panels = [
-    { id: "watch", title: "Frister", render: () => <WatchlistCard /> },
-    { id: "time", title: "Tidrapportering", render: () => <TimeCard ymd={ymd} /> },
-    { id: "recent", title: "Senaste ärenden", render: () => <RecentMattersCard /> },
+    { id: "watch", title: "Frister", render: () => <WatchlistCard />, fill: true },
+    { id: "time", title: "Tidrapportering", render: () => <TimeCard ymd={ymd} />, fill: true },
+    { id: "recent", title: "Senaste ärenden", render: () => <RecentMattersCard />, fill: true },
   ];
 
   return (
@@ -92,11 +92,11 @@ function WatchlistCard() {
   const complete = useCompleteWatch();
   const items = q.data?.items ?? [];
   // En panel ska inte stå tom och tyst — säg att det är lugnt (#1184).
-  if (items.length === 0) return <p className="p-4 text-sm text-gray-500">Inga frister just nu.</p>;
+  if (items.length === 0) return <p className="p-2 text-sm text-gray-500">Inga frister just nu.</p>;
 
   const passed = items.filter((i) => i.severity === "passed").length;
   return (
-    <div className="bg-white rounded-lg border border-gray-200 mb-6">
+    <div className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("amber")}>
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           🔔 Frister
@@ -108,7 +108,7 @@ function WatchlistCard() {
           Visa alla →
         </Link>
       </div>
-      <div className="p-4">
+      <div className="p-2">
         <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" onComplete={complete} />
       </div>
     </div>
@@ -142,7 +142,7 @@ function TimeCard({ ymd }: { ymd: string }) {
   ) as TimeQueryLike;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("indigo")}>
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           <Clock size={16} className="text-gray-500" /> Tidrapportering
@@ -163,13 +163,13 @@ function TimeCard({ ymd }: { ymd: string }) {
 function TimeList({ entries, ymd }: { entries: TimeQueryLike; ymd: string }) {
   return (
     <div className="divide-y divide-gray-100">
-      {entries.isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}
+      {entries.isLoading && <p className="px-2 py-3 text-sm text-gray-500">Laddar…</p>}
       {entries.data && entries.data.entries.length === 0 && (
-        <p className="px-6 py-4 text-sm text-gray-500">Ingen tid registrerad {ymd === todayYmd() ? "idag" : "denna dag"} — <Link href="/time" className="text-blue-600 hover:underline">registrera tid</Link></p>
+        <p className="px-2 py-4 text-sm text-gray-500">Ingen tid registrerad {ymd === todayYmd() ? "idag" : "denna dag"} — <Link href="/time" className="text-blue-600 hover:underline">registrera tid</Link></p>
       )}
       {entries.data?.entries.map((e) => (
         <EntityLink key={e.id} route="matters" id={e.matter.id}
-          className="block px-6 py-3 hover:bg-gray-50 flex items-center gap-3">
+          className="block px-2 py-3 hover:bg-gray-50 flex items-center gap-3">
           <span className="text-sm font-mono text-gray-700 w-16 text-right">{formatDecimalHoursWithUnit(e.minutes)}</span>
           <div className="flex-1 min-w-0">
             <p className="text-sm text-gray-900 truncate">{e.description}</p>
@@ -202,18 +202,18 @@ function RecentMattersCard() {
   }, [entries.data]);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("gray")}>
         <h2 className="font-semibold text-gray-900">Senaste ärenden du jobbat i</h2>
         <Link href="/matters" className="text-sm text-blue-700 hover:underline">Alla ärenden →</Link>
       </div>
       <div className="divide-y divide-gray-100">
-        {entries.isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}
+        {entries.isLoading && <p className="px-2 py-3 text-sm text-gray-500">Laddar…</p>}
         {entries.data && recent.length === 0 && (
-          <p className="px-6 py-4 text-sm text-gray-500">Du har inte registrerat tid på något ärende ännu.</p>
+          <p className="px-2 py-4 text-sm text-gray-500">Du har inte registrerat tid på något ärende ännu.</p>
         )}
         {recent.map((m) => (
-          <EntityLink key={m.id} route="matters" id={m.id} className="block px-6 py-3 hover:bg-gray-50 flex items-center justify-between gap-3">
+          <EntityLink key={m.id} route="matters" id={m.id} className="block px-2 py-3 hover:bg-gray-50 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-gray-900">{m.matterNumber} — {m.title}</p>
               <p className="text-xs text-gray-500">Senast: {m.lastDate.toLocaleDateString("sv-SE")}</p>

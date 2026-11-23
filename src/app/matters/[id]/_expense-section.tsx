@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
-import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
@@ -209,7 +209,7 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
   const columns = expenseColumns({ onEdit: startEdit, onDelete: (id) => deleteExpense.mutate({ id }) });
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
+    <div className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("orange")}>
         <h2 className="font-semibold text-gray-900">
           Utlägg
@@ -223,7 +223,7 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
         </span>
       </div>
 
-      <div className="p-4">
+      <div className="p-2">
         <DataTable
           prefKey={`list.matter-expenses.${matterId}`}
           columns={columns}

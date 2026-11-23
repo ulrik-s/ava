@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useMemo } from "react";
-import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
 import { enqueueTextExtraction } from "@/lib/client/jobs/enqueue-text-extraction";
@@ -101,7 +101,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   }, []);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200" {...drag.rootZone}>
+    <div className={SECTION_FILL_CLASS} {...drag.rootZone}>
       <BrowserHeader
         showNewFolder={() => setShowNewFolder(true)}
         uploading={upload.uploading}
@@ -305,7 +305,7 @@ function DocumentTree({
 /** Felbanner när en uppladdning misslyckas. */
 function UploadErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   return (
-    <div className="mx-6 mt-3 p-3 rounded-md border border-red-200 bg-red-50 text-sm text-red-800 flex items-start justify-between gap-3">
+    <div className="mx-2 mt-2 p-3 rounded-md border border-red-200 bg-red-50 text-sm text-red-800 flex items-start justify-between gap-3">
       <span className="whitespace-pre-line"><strong>Uppladdning misslyckades:</strong> {message}</span>
       <button
         type="button"

@@ -28,7 +28,7 @@ test("ärendenas anteckningar visar dag och klockslag, aldrig en rå ISO-tidpunk
   for (const id of matterIds) {
     await page.goto(`${BASE}/matters/${id}/`);
     await showPanel(page, "Anteckningar");
-    const notes = page.getByRole("heading", { name: "Tjänsteanteckningar" }).locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]");
+    const notes = page.getByRole("region", { name: "Anteckningar" }).last();
     await expect(notes.getByRole("row").nth(1)).toBeVisible({ timeout: 30_000 });
     expect(await notes.innerText(), id).not.toMatch(ISO_TIMESTAMP);
   }
