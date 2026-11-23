@@ -95,6 +95,10 @@ describe("entryMarkBlocker", () => {
     expect(entryMarkBlocker({ billable: true, frozenAt: new Date() })).toContain("redan låst");
     expect(entryMarkBlocker({ billable: false, frozenAt: new Date() })).toContain("redan låst");
   });
+  it("debiterbar tid med bara en faktura avvisas — den är redan fakturerad (#1862)", () => {
+    expect(entryMarkBlocker({ billable: true, invoiceId: INV })).toContain("redan låst");
+    expect(entryMarkBlocker({ billable: false, invoiceId: INV })).toBeNull();
+  });
   it("beredskap avvisas", () => {
     expect(entryMarkBlocker({ billable: true, kind: "ADVOKATBEREDSKAP" })).toContain("beredskap");
   });

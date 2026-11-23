@@ -6,7 +6,7 @@
 
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
-import { isInvoicedOutsideCoverage } from "@/lib/shared/time-entry-lock";
+import { isInvoicedOutsideCoverage, unlockedMatch } from "@/lib/shared/time-entry-lock";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository, withDateObject } from "./in-memory-repository";
 import type {
@@ -90,7 +90,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
   async listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<TimeEntry[]> {
     if (!ids.length) return [];
     return (await this.delegate.findMany({
-      where: { id: { in: ids }, matterId, invoiceId: null },
+      where: { id: { in: ids }, matterId, ...unlockedMatch() },
     })) as TimeEntry[];
   }
 
@@ -101,7 +101,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
 
   async listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]> {
     return (await this.delegate.findMany({
-      where: { matterId, frozenByBillingRunId: null, frozenAt: null }, orderBy: { date: "asc" },
+      where: { matterId, ...unlockedMatch() }, orderBy: { date: "asc" },
     })) as TimeEntry[];
   }
 
@@ -146,7 +146,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
 
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.delegate.updateMany({
-      where: { matterId, frozenByBillingRunId: null, frozenAt: null },
+      where: { matterId, ...unlockedMatch() },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId },
     });
   }
@@ -167,7 +167,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
   async freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (!ids.length) return;
     await this.delegate.updateMany({
-      where: { id: { in: ids }, frozenByBillingRunId: null, frozenAt: null },
+      where: { id: { in: ids }, ...unlockedMatch() },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId },
     });
   }

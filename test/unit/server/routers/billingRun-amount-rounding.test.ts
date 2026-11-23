@@ -20,7 +20,8 @@ const PRINCIPAL: Principal = {
 /** 7 min à 1 000 kr/h = 116,666… kr — en rad som skiljer öre från kronor. */
 const ENTRY = { minutes: 7, hourlyRate: 100_000 };
 
-function world(invoice: Record<string, unknown>, matter: Record<string, unknown> = {}) {
+/** `billedTo` = fakturan posterna redan bär; null = ofakturerade (låsta poster når ingen körning, #1862). */
+function world(invoice: Record<string, unknown>, matter: Record<string, unknown> = {}, billedTo: string | null = "inv-1") {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "X" }],
     users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN" }],
@@ -29,8 +30,8 @@ function world(invoice: Record<string, unknown>, matter: Record<string, unknown>
       id: "inv-1", matterId: "m-1", invoiceNumber: "F-2026-0001", invoiceType: "FINAL", status: "SENT",
       invoiceDate: new Date("2026-09-01"), ...invoice,
     }],
-    timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-08-01"), description: "Brev", billable: true, invoiceId: "inv-1", ...ENTRY }],
-    expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-08-02"), amount: 4_999, description: "Porto", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE", invoiceId: "inv-1" }],
+    timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-08-01"), description: "Brev", billable: true, invoiceId: billedTo, ...ENTRY }],
+    expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-08-02"), amount: 4_999, description: "Porto", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE", invoiceId: billedTo }],
   }, async () => {});
   return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
 }
@@ -77,7 +78,7 @@ describe("kreditering speglar originalets avrundning", () => {
 
 describe("domstolens och försäkringens belopp tas som de är", () => {
   it("faktura efter dom: yrkandet + domens prutning med ören, momsen följer med", async () => {
-    const c = world({ amount: 0 }, { paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const c = world({ amount: 0 }, { paymentMethod: "OFFENTLIGT_UPPDRAG" }, null);
     const { run } = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
     // Domstolen prutar 123,45 kr — beloppet tas som det är.
     await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: run.id, awardedOre: (run.workValueOreAtRun ?? 0) - 12_345, prutningOre: -12_345 });

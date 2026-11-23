@@ -5,6 +5,7 @@
 
 import type { Expense } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, ExpenseId, InvoiceId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
+import { unlockedMatch } from "@/lib/shared/time-entry-lock";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
   ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
@@ -51,7 +52,7 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
   async listUnbilled(matterId: MatterId, ids: ExpenseId[]): Promise<Expense[]> {
     if (!ids.length) return [];
     return (await this.delegate.findMany({
-      where: { id: { in: ids }, matterId, invoiceId: null },
+      where: { id: { in: ids }, matterId, ...unlockedMatch() },
     })) as Expense[];
   }
 
@@ -62,7 +63,7 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
 
   async listUnfrozenForMatter(matterId: MatterId): Promise<Expense[]> {
     return (await this.delegate.findMany({
-      where: { matterId, frozenByBillingRunId: null }, orderBy: { date: "asc" },
+      where: { matterId, ...unlockedMatch() }, orderBy: { date: "asc" },
     })) as Expense[];
   }
 
@@ -80,7 +81,7 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
 
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.delegate.updateMany({
-      where: { matterId, frozenByBillingRunId: null },
+      where: { matterId, ...unlockedMatch() },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId },
     });
   }
@@ -95,7 +96,7 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
   async freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (!ids.length) return;
     await this.delegate.updateMany({
-      where: { id: { in: ids }, frozenByBillingRunId: null },
+      where: { id: { in: ids }, ...unlockedMatch() },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId },
     });
   }

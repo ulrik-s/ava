@@ -280,5 +280,35 @@ for (const backend of BACKENDS) {
       expect((await repos.timeEntries.listUnfrozenForMatter(matter)).map((t) => t.id)).toContain(te);
       expect((await repos.expenses.listUnfrozenForMatter(matter)).map((e) => e.id)).toContain(ex);
     });
+
+    // Låsregeln (#1862): samma urval ur BILLING_LOCK_FIELDS i båda repona, för tid och utlägg.
+    for (const kind of ["timeEntries", "expenses"] as const) {
+      it(`${kind}: en post med bara invoiceId är låst — varken olåst, ofryst eller fryst`, async () => {
+        const r = repos[kind];
+        const matter = asId<"MatterId">(parents.matter);
+        const id = uuidv7();
+        await repo(repos, kind).create({ id, ...FIXTURES[kind].row(parents), invoiceId: parents.invoice });
+        const run = asId<"BillingRunId">(uuidv7());
+        expect(await r.listUnbilled(matter, [asId(id)])).toEqual([]);
+        expect((await r.listUnfrozenForMatter(matter)).map((t) => t.id)).not.toContain(id);
+        await r.freezeByIds([asId(id)], run, at);
+        await r.freezeForMatter(matter, run, at);
+        const row = await repo(repos, kind).getById(id);
+        expect(row?.frozenByBillingRunId ?? null).toBeNull();
+        expect(row?.frozenAt ?? null).toBeNull();
+      });
+
+      it(`${kind}: listUnbilled tar en olåst post men aldrig en raderad`, async () => {
+        const r = repos[kind];
+        const matter = asId<"MatterId">(parents.matter);
+        const open = uuidv7();
+        const deleted = uuidv7();
+        await repo(repos, kind).create({ id: open, ...FIXTURES[kind].row(parents) });
+        await repo(repos, kind).create({ id: deleted, ...FIXTURES[kind].row(parents) });
+        await repo(repos, kind).softDelete(deleted);
+        expect((await r.listUnbilled(matter, [asId(open), asId(deleted)])).map((t) => t.id)).toEqual([open]);
+        expect((await r.listUnfrozenForMatter(matter)).map((t) => t.id)).not.toContain(deleted);
+      });
+    }
   });
 }

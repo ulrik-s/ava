@@ -49,9 +49,8 @@ export const timeEntrySchema = z.object({
   /** Byråns standardåtgärd posten registrerades ur (#956). Null = fritext-post. */
   standardAtgardId: z.string().nullish(),
   billable: z.boolean().default(true),
-  /** @deprecated Använd `frozenByBillingRunId`. invoiceId behålls för
-   *  bakåt­kompatibilitet med befintlig demo/billing — nya flöden ska
-   *  använda BillingRun-modellen. */
+  /** Fakturan posten fakturerades på. Låser posten (`isLockedEntry`) och läses
+   *  av fakturaspecifikationen (`listByInvoice`), rapporterna och rådgivningen. */
   invoiceId: invoiceIdSchema.nullish(),
   /** När raden frystes som del av en slutfaktura. Null = upparbetad och
    *  fortfarande redigerbar. Aconto fryser INTE — bara FINAL +
@@ -86,7 +85,7 @@ export const expenseSchema = z.object({
   amount: z.number().int(),
   description: z.string(),
   billable: z.boolean().default(true),
-  /** @deprecated Se motsvarande not på timeEntry.invoiceId. */
+  /** Fakturan utlägget fakturerades på; se `timeEntry.invoiceId`. */
   invoiceId: invoiceIdSchema.nullish(),
   /** Momssatsen BYRÅN BETALADE, i basis points (0/600/1200/2500). Default 25 %.
    *  Styr hur mycket ingående moms som räknas av innan utlägget debiteras vidare

@@ -7,7 +7,7 @@ import {
   expenseIdSchema,
   invoiceIdSchema,
 } from "@/lib/shared/schemas/ids";
-import { isBilledEntry } from "@/lib/shared/time-entry-lock";
+import { isLockedEntry } from "@/lib/shared/time-entry-lock";
 import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
@@ -17,7 +17,7 @@ import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
  * raderas inte (#1276): samma regel som tidsposterna och synk-pushen.
  */
 function assertEditable(expense: Expense): void {
-  if (isBilledEntry(expense)) {
+  if (isLockedEntry(expense)) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "Utlägget ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort.",
