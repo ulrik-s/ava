@@ -58,9 +58,10 @@ En körning med `conclusion` `failure`, `cancelled` eller `timed_out`:
 **Undantag, Agentvakt:** säger dess logg att `granskad` saknas, eller att
 PR:en är `blockerad`, är det inget CI-fel. Det är granskningens tillstånd.
 Agentvakten körs om av sig själv när etiketten ändras. Gör ingenting med den.
-Kör inte om den och rätta ingenting. Är Agentvakt röd av något annat skäl,
-t.ex. skyddad sökväg eller taket på 20 PR:er: sätt `blockerad` och
-kommentera.
+Kör inte om den och rätta ingenting. **Taket på 20 PR:er** är inte heller
+något att blockera för (#2027): det släpper av sig självt, och klockan kör
+om Agentvakten när PR:en hamnat under taket. Gör ingenting. Är Agentvakt röd
+av något annat skäl, t.ex. skyddad sökväg: sätt `blockerad` och kommentera.
 
 1. **Kör om de fallerade jobben** när `run_attempt` är 1, eller när
    `conclusion` är `cancelled` eller `timed_out` och `run_attempt` är högst 3.
