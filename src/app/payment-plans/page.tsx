@@ -11,6 +11,7 @@ import { useState } from "react";
 import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control";
 import { shellPath } from "@/lib/client/demo/entity-href";
 import { trpc } from "@/lib/client/trpc";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
@@ -23,6 +24,12 @@ const STATUS_LABEL: Record<Status, string> = {
   COMPLETED: "Slutförda",
   CANCELLED: "Avbrutna",
 };
+/** Filterknapparnas alternativ, i samma ordning som {@link STATUS_LABEL}. */
+const STATUS_OPTIONS = [
+  { value: "ACTIVE", label: STATUS_LABEL.ACTIVE },
+  { value: "COMPLETED", label: STATUS_LABEL.COMPLETED },
+  { value: "CANCELLED", label: STATUS_LABEL.CANCELLED },
+] as const satisfies readonly SegmentedOption<Status>[];
 /** En plans status på raden (singular) — förr filterknappens "AKTIVA" (#1309). */
 const ROW_STATUS_LABEL: Record<Status, string> = {
   ACTIVE: "Aktiv",
@@ -175,19 +182,7 @@ export default function PaymentPlansPage() {
       </div>
 
       <div className="flex items-center justify-between mb-3 gap-3">
-        <div className="inline-flex rounded-md border border-gray-200 bg-white text-xs">
-          {(Object.keys(STATUS_LABEL) as Status[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatus(s)}
-              aria-pressed={status === s}
-              className={`px-3 py-1.5 ${status === s ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}
-            >
-              {STATUS_LABEL[s]}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl options={STATUS_OPTIONS} value={status} onChange={setStatus} ariaLabel="Status" />
         <div className="relative">
           <Search className="absolute left-2.5 top-2 text-gray-400" size={14} />
           <input

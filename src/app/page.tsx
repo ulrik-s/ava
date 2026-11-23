@@ -19,6 +19,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -115,20 +116,14 @@ function WatchlistCard() {
 }
 
 function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => void }) {
+  const options = [
+    { value: offsetDayYmd(1), label: "Igår" },
+    { value: todayYmd(), label: "Idag" },
+    { value: offsetDayYmd(-1), label: "Imorgon" },
+  ];
   return (
     <div className="flex items-center gap-2">
-      <div className="inline-flex rounded-md border border-gray-200 bg-white text-xs">
-        {[
-          { label: "Igår", v: offsetDayYmd(1) },
-          { label: "Idag", v: todayYmd() },
-          { label: "Imorgon", v: offsetDayYmd(-1) },
-        ].map((b) => (
-          <button key={b.v} type="button" onClick={() => onChange(b.v)}
-            className={`px-3 py-1.5 ${ymd === b.v ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>
-            {b.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl options={options} value={ymd} onChange={onChange} ariaLabel="Dag" />
       <input type="date" value={ymd} onChange={(e) => onChange(e.target.value)}
         className="rounded-md border border-gray-200 px-2 py-1 text-xs" />
     </div>

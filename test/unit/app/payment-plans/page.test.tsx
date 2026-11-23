@@ -136,6 +136,13 @@ describe("PaymentPlansPage — filter, sök, rad-klick", () => {
     expect(completed).toHaveAttribute("aria-pressed", "false");
   });
 
+  it("status-filtret är en knappgrupp med namnet Status (#1805)", () => {
+    render(<PaymentPlansPage />);
+    const group = screen.getByRole("group", { name: "Status" });
+    expect(group).toHaveTextContent("AktivaSlutfördaAvbrutna");
+    expect(screen.getByRole("button", { name: "Aktiva" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("sökfältet uppdaterar värdet", () => {
     render(<PaymentPlansPage />);
     const search = screen.getByPlaceholderText<HTMLInputElement>(/Sök på klient/);
