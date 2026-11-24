@@ -11,7 +11,7 @@ import {
 const roleLabel = (r: string): string => ({ MOTPART: "Motpart", KLIENT: "Klient", VITTNE: "Vittne" } as Record<string, string>)[r] ?? r;
 
 const matter = (id: string, over: Partial<MergeableMatter> = {}): MergeableMatter => ({
-  id, matterNumber: `2026-000${id}`, title: `Ärende ${id}`, contacts: [], ...over,
+  id, matterNumber: `2026-000${id}`, title: `Ärende ${id}`, parties: [], ...over,
 });
 
 const hit = (matterId: string, over: Partial<MergeConflictHit> = {}): MergeConflictHit => ({
@@ -22,18 +22,38 @@ describe("ownFieldHits", () => {
   it("anger vilka av ärendets egna fält som innehåller termen, skiftlägesokänsligt", () => {
     const m = matter("1", {
       matterNumber: "AA2026-0001", title: "Bodelning Andersson", courtCaseNumber: "T 123-26",
-      previousCourtCaseNumber: "T 99-25", insuranceReference: "FÖRS-123", contacts: [{ contact: { name: "Bo Klient" } }],
+      previousCourtCaseNumber: "T 99-25", insuranceReference: "FÖRS-123",
     });
-    expect(ownFieldHits(m, "andersson")).toEqual(["Titel"]);
-    expect(ownFieldHits(m, "aa2026")).toEqual(["Ärendenr"]);
-    expect(ownFieldHits(m, "123")).toEqual(["Målnummer", "Försäkringsreferens"]);
-    expect(ownFieldHits(m, "t 99")).toEqual(["Tidigare målnummer"]);
-    expect(ownFieldHits(m, " KLIENT ")).toEqual(["Klient"]);
+    expect(ownFieldHits(m, "andersson", roleLabel)).toEqual(["Titel"]);
+    expect(ownFieldHits(m, "aa2026", roleLabel)).toEqual(["Ärendenr"]);
+    expect(ownFieldHits(m, "123", roleLabel)).toEqual(["Målnummer", "Försäkringsreferens"]);
+    expect(ownFieldHits(m, "t 99", roleLabel)).toEqual(["Tidigare målnummer"]);
   });
 
   it("tom term eller ingen träff ger inga texter", () => {
-    expect(ownFieldHits(matter("1"), "   ")).toEqual([]);
-    expect(ownFieldHits(matter("1"), "finns inte")).toEqual([]);
+    const m = matter("1", { parties: [{ role: "KLIENT", name: "Bo Klient" }] });
+    expect(ownFieldHits(m, "   ", roleLabel)).toEqual([]);
+    expect(ownFieldHits(m, "finns inte", roleLabel)).toEqual([]);
+  });
+
+  it("en part vars namn innehåller termen ger '<roll>: <namn>' (#1870)", () => {
+    const m = matter("1", { parties: [{ role: "KLIENT", name: "Bo Klient" }, { role: "MOTPART", name: "Byggfirma Stenhammar AB" }] });
+    expect(ownFieldHits(m, "STENHAM", roleLabel)).toEqual(["Motpart: Byggfirma Stenhammar AB"]);
+    expect(ownFieldHits(m, " klient ", roleLabel)).toEqual(["Klient: Bo Klient"]);
+  });
+
+  it("flera parter som träffar ger en text var, i parternas ordning, efter ärendets egna fält", () => {
+    const m = matter("1", {
+      title: "Berg mot Bergström",
+      parties: [{ role: "KLIENT", name: "Anna Berg" }, { role: "VITTNE", name: "Eva Bergström" }],
+    });
+    expect(ownFieldHits(m, "berg", roleLabel)).toEqual(["Titel", "Klient: Anna Berg", "Vittne: Eva Bergström"]);
+  });
+
+  it("en part i skip visas inte; samma namn i en annan roll visas fortfarande", () => {
+    const m = matter("1", { parties: [{ role: "MOTPART", name: "Anna Andersson" }, { role: "VITTNE", name: "Anna Andersson" }] });
+    const skip = new Set([`MOTPART\u0000Anna Andersson`]);
+    expect(ownFieldHits(m, "anna", roleLabel, skip)).toEqual(["Vittne: Anna Andersson"]);
   });
 });
 
@@ -84,6 +104,20 @@ describe("mergeMatterSearch", () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.hits).toEqual(["Motpart: Anna Andersson", "Klient: Anna Berg"]);
+  });
+
+  it("en part som redan är jävsträff på raden visas bara som jävsträffen (#1870)", () => {
+    const m = matter("1", { parties: [{ role: "KLIENT", name: "Bo Klient" }, { role: "MOTPART", name: "Anna Andersson" }] });
+    const rows = mergeMatterSearch({
+      term: "Anna", conflictHits: [hit("1", { orgNumber: "556000-0000" })], conflictMatters: [m], listMatters: [], roleLabel,
+    });
+    expect(rows[0]?.hits).toEqual(["Motpart: Anna Andersson (556000-0000)"]);
+  });
+
+  it("listans ärenden utan jävsträff visar parterna som träffar", () => {
+    const m = matter("2", { parties: [{ role: "MOTPART", name: "Byggfirma Stenhammar AB" }] });
+    const rows = mergeMatterSearch({ term: "stenham", conflictHits: [], conflictMatters: [], listMatters: [m], roleLabel });
+    expect(rows[0]?.hits).toEqual(["Motpart: Byggfirma Stenhammar AB"]);
   });
 
   it("en jävsträff vars ärende inte hämtades hoppas över", () => {

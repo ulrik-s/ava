@@ -105,6 +105,23 @@ test("ärendelistans sökning: motpart i ett stängt ärende → 'Motpart: …' 
   await expect(page.getByRole("columnheader", { name: /Träff/ })).toHaveCount(0);
 });
 
+/**
+ * "Träff" visar varje part vars namn innehåller termen (#1870): en delsträng
+ * mitt i motpartens namn ger ingen jävsträff, men ärendet hittas via parten
+ * och Träff säger vilken.
+ */
+test("ärendelistans sökning: delsträng mitt i en motparts namn → 'Motpart: …' i Träff (#1870)", async ({ page }) => {
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/matters/`);
+  const search = page.getByPlaceholder("Sök ärenden...");
+  await search.fill("atteverk");
+  await search.press("Enter");
+
+  await expect(page.getByRole("columnheader", { name: /Träff/ })).toBeVisible({ timeout: 15_000 });
+  const row = page.getByRole("row").filter({ hasText: "Skattetvist Tand & Trä AB" });
+  await expect(row.getByText("Motpart: Skatteverket", { exact: true })).toBeVisible();
+});
+
 test("Nytt ärende: titeln fyller i sökrutan i 'Välj klient…', och vald klient fyller i en tom titel (#1644)", async ({ page }) => {
   await seedDemoLogin(page, BASE);
   await page.goto(`${BASE}/matters/?new=1`);

@@ -5,8 +5,9 @@
  *
  * Ren logik utan React: sidan hämtar ärendena (`matter.list`) och jävsträffarna
  * (`conflict.check`) och renderar bara resultatet härifrån. Matchningsreglerna
- * ändras inte: `ownFieldHits` säger bara VILKET av listsökningens fält som
- * stämde (samma fält och samma skiftlägesokänsliga delsträng som `matter.list`).
+ * ändras inte: `ownFieldHits` säger bara VILKET av listsökningens fält, eller
+ * vilken part (#1870), som stämde (samma skiftlägesokänsliga delsträng som
+ * `matter.list`).
  */
 
 /** En jävsträff så som sammanslagningen behöver den (ur `conflict.check`). */
@@ -26,8 +27,14 @@ export interface MergeableMatter {
   courtCaseNumber?: string | null | undefined;
   previousCourtCaseNumber?: string | null | undefined;
   insuranceReference?: string | null | undefined;
-  /** KLIENT-kontakten först (listradens form). */
-  contacts: ReadonlyArray<{ contact: { name: string } }>;
+  /** Ärendets parter, KLIENT först (listradens `parties`, #1869). */
+  parties: ReadonlyArray<MatterSearchParty>;
+}
+
+/** En part i ärendet så som "Träff" visar den: roll och namn (#1870). */
+export interface MatterSearchParty {
+  role: string;
+  name: string;
 }
 
 /** Ett ärende med texterna för "Träff". */
@@ -55,16 +62,31 @@ const OWN_FIELDS: ReadonlyArray<readonly [string, FieldReader]> = [
   ["Målnummer", (m) => m.courtCaseNumber],
   ["Tidigare målnummer", (m) => m.previousCourtCaseNumber],
   ["Försäkringsreferens", (m) => m.insuranceReference],
-  ["Klient", (m) => m.contacts[0]?.contact.name],
 ];
 
 const fold = (s: string): string => s.toLocaleLowerCase("sv");
 
-/** De av ärendets egna fält som innehåller termen (skiftlägesokänsligt). */
-export function ownFieldHits(m: MergeableMatter, term: string): string[] {
+/** Nyckeln för en part på raden (roll + namn), för att inte visa den två gånger. */
+function partyKey(role: string, name: string): string {
+  return `${role}\u0000${name}`;
+}
+
+/**
+ * De av ärendets egna fält som innehåller termen (skiftlägesokänsligt), sedan
+ * `<roll>: <namn>` för varje part vars namn innehåller termen, i parternas
+ * ordning (#1870). Parter vars nyckel (`partyKey`) finns i `skip` visas inte:
+ * de står redan som jävsträff på raden.
+ */
+export function ownFieldHits(
+  m: MergeableMatter, term: string, roleLabel: (role: string) => string, skip: ReadonlySet<string> = new Set(),
+): string[] {
   const needle = fold(term.trim());
   if (!needle) return [];
-  return OWN_FIELDS.filter(([, read]) => fold(read(m) ?? "").includes(needle)).map(([label]) => label);
+  const fields = OWN_FIELDS.filter(([, read]) => fold(read(m) ?? "").includes(needle)).map(([label]) => label);
+  const parties = m.parties
+    .filter((p) => fold(p.name).includes(needle) && !skip.has(partyKey(p.role, p.name)))
+    .map((p) => `${roleLabel(p.role)}: ${p.name}`);
+  return [...fields, ...parties];
 }
 
 /** "Motpart: <namn> (<person-/orgnummer>)" — numret bara när det finns. */
@@ -85,20 +107,33 @@ function hitTextsByMatter(hits: readonly MergeConflictHit[], roleLabel: (role: s
   return out;
 }
 
+/** Jävsträffarnas parter per ärende, som `partyKey`-nycklar. */
+function hitKeysByMatter(hits: readonly MergeConflictHit[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const hit of hits) {
+    const keys = out.get(hit.matterId) ?? new Set<string>();
+    keys.add(partyKey(hit.role, hit.contactName));
+    out.set(hit.matterId, keys);
+  }
+  return out;
+}
+
 /**
  * En lista, ett ärende per rad: jävsträffarnas ärenden överst (bäst först),
  * sedan ärendelistans sida utan de ärenden som redan visas överst.
  */
 export function mergeMatterSearch<M extends MergeableMatter>(input: MatterSearchMergeInput<M>): Array<MatterWithHits<M>> {
+  const { term, roleLabel } = input;
   const rows = new Map(input.conflictMatters.map((m) => [m.id, m]));
+  const skips = hitKeysByMatter(input.conflictHits);
   const top: Array<MatterWithHits<M>> = [];
-  for (const [id, texts] of hitTextsByMatter(input.conflictHits, input.roleLabel)) {
+  for (const [id, texts] of hitTextsByMatter(input.conflictHits, roleLabel)) {
     const m = rows.get(id);
-    if (m) top.push({ ...m, hits: [...ownFieldHits(m, input.term), ...texts] });
+    if (m) top.push({ ...m, hits: [...ownFieldHits(m, term, roleLabel, skips.get(id)), ...texts] });
   }
   const shown = new Set(top.map((m) => m.id));
   const rest = input.listMatters
     .filter((m) => !shown.has(m.id))
-    .map((m) => ({ ...m, hits: ownFieldHits(m, input.term) }));
+    .map((m) => ({ ...m, hits: ownFieldHits(m, term, roleLabel) }));
   return [...top, ...rest];
 }
