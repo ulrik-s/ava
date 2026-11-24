@@ -421,13 +421,13 @@ function runSessionGate(
 /** Klassificera + applicera OIDC-utfallet efter klon. Returnerar true om
  *  anroparen ska avbryta (terminalt). No-op (false) utan OIDC-session. */
 async function finishOidcLogin(a: {
-  needsOidc: boolean; oidcClaims: OidcClaims | null; users: unknown;
+  needsOidc: boolean; oidcClaims: OidcClaims | null; users: unknown; organizationId: string;
   setStatus: (s: Status) => void; setErrorMsg: (m: string | null) => void;
 }): Promise<boolean> {
   if (!a.needsOidc || !a.oidcClaims) return false;
   const { classifyOidcLogin } = await import("@/lib/client/backend/oidc-principal");
   const outcome = classifyOidcLogin(a.oidcClaims, (a.users ?? []) as never);
-  return applyOidcOutcome(outcome, a.setStatus, a.setErrorMsg);
+  return applyOidcOutcome(outcome, a.organizationId, a.setStatus, a.setErrorMsg);
 }
 
 /** Fel-rapportering för loadSelfHosted-catch (no-op om laddningen avbrutits). */
@@ -444,6 +444,7 @@ function reportLoadError(
  *  avbryta (terminalt): nekad → fel-status; behörig → bind principal + reload. */
 function applyOidcOutcome(
   outcome: OidcLoginOutcome,
+  organizationId: string,
   setStatus: (s: Status) => void,
   setErrorMsg: (m: string | null) => void,
 ): boolean {
@@ -457,7 +458,7 @@ function applyOidcOutcome(
     // verifierad online → offline-grace:n räknas härifrån (#1245).
     patchFirmaConfig({
       principalId: outcome.principal.id,
-      organizationId: outcome.principal.organizationId,
+      organizationId, // byrån som bindningsfasen löste; user.list bär den inte (#1865)
       authorEmail: outcome.principal.email,
       authorName: outcome.principal.name,
       sessionVerifiedAt: Date.now(),
@@ -514,14 +515,13 @@ async function defaultServerFirstStore(local: LocalDataPlace | "binding"): Promi
  *  och bind/avvisa principalen. Returnerar true om anroparen ska avbryta. No-op
  *  (false) när ingen OIDC-session pågår. */
 async function bindOidcFirstLogin(a: {
-  needsOidc: boolean; oidcClaims: OidcClaims | null; client: SelfHostedClient;
+  needsOidc: boolean; oidcClaims: OidcClaims | null; client: SelfHostedClient; organizationId: string;
   setStatus: (s: Status) => void; setErrorMsg: (m: string | null) => void;
 }): Promise<boolean> {
   if (!a.needsOidc) return false;
-  // `user.list` returnerar `{ users }` (router-formen) — plocka ut ARRAYEN (#628),
-  // i byrån som bindningsfasen löste (#1865).
+  // `user.list` ger `{ users }` — plocka ut ARRAYEN (#628), i byrån som bindningsfasen löste (#1865).
   const { users } = await a.client.user.list.query();
-  return finishOidcLogin({ needsOidc: a.needsOidc, oidcClaims: a.oidcClaims, users, setStatus: a.setStatus, setErrorMsg: a.setErrorMsg });
+  return finishOidcLogin({ ...a, users });
 }
 
 /**
@@ -545,7 +545,7 @@ async function loadSelfHosted(a: SelfHostedBootstrapArgs, oidc: { needsOidc: boo
   if (isCancelled()) return;
   const principal = await resolveClientPrincipal(store.store, firmaConfig, { binding });
   const client = makeClient(store, principal);
-  if (await bindOidcFirstLogin({ ...oidc, client, setStatus, setErrorMsg }) || bindClientOrganization(firmaConfig, principal.organizationId)) return;
+  if (await bindOidcFirstLogin({ ...oidc, client, organizationId: principal.organizationId, setStatus, setErrorMsg }) || bindClientOrganization(firmaConfig, principal.organizationId)) return;
   if (isCancelled()) return;
   onStoreReady(store, client);
   await queryClient.invalidateQueries();

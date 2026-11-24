@@ -16,6 +16,7 @@ import { bootstrapSelfHosted } from "@/components/shell/demo-bootstrap";
 import { sessionNotice, setSessionNotice } from "@/lib/client/auth/session-notice";
 import { activeLocalScope, bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
 import { loadFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 
 const baseConfig: FirmaConfig = {
@@ -299,19 +300,21 @@ describe("bootstrapSelfHosted", () => {
 describe("bootstrapSelfHosted — byrån (#1865)", () => {
   const SERVER_ORG = "org-server";
   /** En store vars synkade data har de givna byråerna, och Lena i den första. */
-  function storeWithOrgs(ids: string[]) {
-    return {
-      store: new LocalStore({
+  function storeWithOrgs(ids: string[]): CachingSyncDataStore {
+    return CachingSyncDataStore.createEphemeral({
+      transport: noSyncTransport,
+      seed: {
         organizations: ids.map((id) => ({ id, name: `Byrå ${id}` })),
         users: ids.map((id) => ({ id: "u-lena", organizationId: id, email: "a@b.se", name: "A", role: "LAWYER" })),
-      }, async () => {}),
-    } as never;
+      },
+    });
   }
   const unsaved: FirmaConfig = { ...noPrincipal, organizationId: "" };
 
   it("OIDC-bindningen läser allowlisten i den synkade byrån och sparar den", async () => {
     probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
-    const principal = { id: "u-lena", email: "a@b.se", name: "A", role: "LAWYER", organizationId: SERVER_ORG };
+    // Som i drift: user.list-raderna bär inget organizationId, så principalen ur allowlisten saknar byrå.
+    const principal = { id: "u-lena", email: "a@b.se", name: "A", role: "LAWYER", organizationId: undefined };
     classifyOidcLogin.mockReturnValueOnce({ kind: "authorized", principal });
     const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
     const args = makeArgs({ firmaConfig: unsaved, makeStore: vi.fn(() => Promise.resolve(storeWithOrgs([SERVER_ORG]))) });
@@ -365,6 +368,20 @@ describe("bootstrapSelfHosted — byrån (#1865)", () => {
     expect(args.openLocal).toHaveBeenCalledWith(expect.anything(), { binding: true });
     expect(classifyOidcLogin).toHaveBeenCalledTimes(1);
     expect(reload).toHaveBeenCalledTimes(1);
+    reload.mockRestore();
+  });
+  it("efter OIDC-bindningen startar nästa uppstart utan att binda igen (ingen omladdningsloop)", async () => {
+    probeUserinfo.mockResolvedValue({ kind: "authenticated", claims: lena });
+    classifyOidcLogin.mockReturnValueOnce({ kind: "authorized", principal: { id: "u-lena", email: "a@b.se", name: "A", role: "LAWYER" } });
+    const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
+    const makeStore = vi.fn(() => Promise.resolve(storeWithOrgs([SERVER_ORG])));
+    await bootstrapSelfHosted(makeArgs({ firmaConfig: unsaved, makeStore }));
+    const second = makeArgs({ firmaConfig: loadFirmaConfig(), makeStore });
+    await bootstrapSelfHosted(second);
+    expect(classifyOidcLogin).toHaveBeenCalledTimes(1);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(second.openLocal).toHaveBeenCalledWith(expect.objectContaining({ organizationId: SERVER_ORG }), { binding: false });
+    expect(second.onStoreReady).toHaveBeenCalledTimes(1);
     reload.mockRestore();
   });
 });
