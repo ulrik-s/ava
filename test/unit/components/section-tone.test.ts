@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
-import { SECTION_FILL_CLASS, sectionHeaderClass, type SectionTone } from "@/components/ui/section-tone";
+import { SECTION_CARD_CLASS, SECTION_FILL_CLASS, sectionHeaderClass, type SectionTone } from "@/components/ui/section-tone";
 
 const TONES: readonly SectionTone[] = ["red", "amber", "blue", "purple", "green", "indigo", "orange", "gray"];
 
@@ -60,6 +60,19 @@ describe("SECTION_FILL_CLASS (#1844)", () => {
   it("vit yta utan egen ram och rundning", () => {
     expect(SECTION_FILL_CLASS).toBe("bg-white");
     expect(SECTION_FILL_CLASS).not.toMatch(/border|rounded/);
+  });
+});
+
+describe("SECTION_CARD_CLASS (#1846)", () => {
+  it("vit yta med tunn ram och 8 px luft", () => {
+    const classes = SECTION_CARD_CLASS.split(" ");
+    expect(classes).toEqual(expect.arrayContaining(["bg-white", "rounded-lg", "border", "border-gray-200", "p-2"]));
+  });
+
+  it("inga stora luftmått eller marginaler", () => {
+    const classes = SECTION_CARD_CLASS.split(" ");
+    for (const old of ["p-4", "p-5", "p-6"]) expect(classes).not.toContain(old);
+    expect(SECTION_CARD_CLASS).not.toMatch(/\bm[btxy]?-/);
   });
 });
 

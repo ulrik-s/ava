@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
+import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { labelForContactType, labelForMatterRole, contactTypeOptions } from "@/lib/client/labels";
@@ -225,7 +226,6 @@ function ContactDetailsView({ c, onEdit, onDelete, deletePending }: DetailsViewP
           </button>
         </div>
       </div>
-
       <ContactContactFields c={c} />
       {c.notes && (
         <div className="mt-4">
@@ -247,7 +247,7 @@ interface AddChildFormProps {
 /** Formuläret för att lägga till en kontaktperson. */
 function AddChildForm({ form, setForm, onSubmit, isPending }: AddChildFormProps) {
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} className="p-4 border-b border-gray-200">
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} className="p-2 border-b border-gray-200">
       <div className="grid grid-cols-2 gap-3">
         <input type="text" required placeholder="Namn *" value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -284,8 +284,8 @@ interface ChildSectionProps {
 function ChildContactsSection(p: ChildSectionProps) {
   const children = p.c.children ?? [];
   return (
-    <div className="bg-white rounded-lg border border-gray-200 mb-6">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+    <div className={SECTION_FILL_CLASS}>
+      <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between">
         <h2 className="font-semibold text-gray-900">Kontaktpersoner</h2>
         <button onClick={() => p.setShowForm(!p.showForm)} className="text-sm text-blue-600 hover:underline">
           {p.showForm ? "Avbryt" : "+ Lägg till"}
@@ -301,7 +301,7 @@ function ChildContactsSection(p: ChildSectionProps) {
       )}
       <div className="divide-y divide-gray-100">
         {children.map((child) => (
-          <EntityLink key={child.id} route="contacts" id={child.id} className="block px-6 py-3 hover:bg-gray-50">
+          <EntityLink key={child.id} route="contacts" id={child.id} className="block px-2 py-3 hover:bg-gray-50">
             <p className="text-sm font-medium text-gray-900">{child.name}</p>
             <p className="text-xs text-gray-500">
               {child.email && `${child.email} · `}{child.phone}
@@ -310,7 +310,7 @@ function ChildContactsSection(p: ChildSectionProps) {
           </EntityLink>
         ))}
         {children.length === 0 && !p.showForm && (
-          <p className="px-6 py-4 text-sm text-gray-500">Inga kontaktpersoner</p>
+          <p className="px-2 py-4 text-sm text-gray-500">Inga kontaktpersoner</p>
         )}
       </div>
     </div>
@@ -329,15 +329,15 @@ function matterStatus(status: string): { cls: string; label: string } {
 /** Ärende-listan kontakten är kopplad till. */
 function LinkedMattersSection({ matterLinks }: { matterLinks: ContactData["matterLinks"] }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
-      <div className="px-6 py-4 border-b border-gray-200">
+    <div className={SECTION_FILL_CLASS}>
+      <div className="px-3 py-2 border-b border-gray-200">
         <h2 className="font-semibold text-gray-900">Ärenden</h2>
       </div>
       <div className="divide-y divide-gray-100">
         {matterLinks.map((link: { id: string; role: string; matter: { id: string; matterNumber: string; title: string; status: string } }) => {
           const st = matterStatus(link.matter.status);
           return (
-            <EntityLink key={link.id} route="matters" id={link.matter.id} className="block px-6 py-4 hover:bg-gray-50">
+            <EntityLink key={link.id} route="matters" id={link.matter.id} className="block px-2 py-4 hover:bg-gray-50">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-900">
@@ -373,7 +373,7 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
   const isOrg = c.contactType !== "PERSON";
 
   const details = (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
       {d.editing ? (
         <ContactEditForm
           form={d.editForm}
@@ -402,8 +402,8 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
           addPending={d.addChild.isPending}
         />
       ),
-    }] : []),
-    { id: "matters", title: "Ärenden", render: () => <LinkedMattersSection matterLinks={c.matterLinks} /> },
+      fill: true }] : []),
+    { id: "matters", title: "Ärenden", render: () => <LinkedMattersSection matterLinks={c.matterLinks} />, fill: true },
   ];
 
   return (

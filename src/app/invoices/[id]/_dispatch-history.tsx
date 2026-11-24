@@ -6,6 +6,7 @@
  * Read-only här; köning/sändning sker via `invoiceDispatch.queue`/`updateStatus`.
  */
 
+import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
 
@@ -47,8 +48,8 @@ export function DispatchHistory({ invoiceId }: { invoiceId: InvoiceId }) {
   const rows = (dispatches.data ?? []) as DispatchRow[];
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h2 className="font-semibold mb-3">Utskick</h2>
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
+      <h2 className="font-semibold mb-2">Utskick</h2>
       {dispatches.isLoading ? (
         <p className="text-sm text-gray-400">Laddar…</p>
       ) : rows.length === 0 ? (

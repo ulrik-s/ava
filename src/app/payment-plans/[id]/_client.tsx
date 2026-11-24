@@ -4,6 +4,7 @@ import { ArrowLeft, Ban, Wallet } from "lucide-react";
 import Link from "next/link";
 import { PanelPage } from "@/components/layout/panel-page";
 import { Money } from "@/components/ui/money";
+import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
@@ -113,7 +114,7 @@ function PlanHeader({ p }: { p: PlanDetail }) {
 /** Plan-detaljer (belopp, förfallodag, faktura) + avbryt-knapp för aktiv plan. */
 function PlanSummaryCard({ p, onCancel, cancelling }: { p: PlanDetail; onCancel: () => void; cancelling: boolean }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
       <dl className="grid grid-cols-2 gap-y-3 text-sm">
         <dt className="text-gray-500">Månadsbelopp</dt>
         <dd className="font-mono text-gray-900"><Money ore={p.monthlyAmount} basis="gross" /></dd>
@@ -142,7 +143,7 @@ function PlanSummaryCard({ p, onCancel, cancelling }: { p: PlanDetail; onCancel:
       </dl>
 
       {p.status === "ACTIVE" && (
-        <div className="mt-5 pt-4 border-t border-gray-100">
+        <div className="mt-2 pt-2 border-t border-gray-100">
           <button
             type="button"
             onClick={() => {

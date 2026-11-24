@@ -29,8 +29,8 @@ const addChildState = { isPending: false };
 // Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
 // alla paneler efter varandra, synkront, så testerna kan granska innehållet.
 vi.mock("@/components/layout/panel-page", () => ({
-  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
-    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode; fill?: boolean }> }) => (
+    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id} data-fill={String(p.fill)}>{p.render()}</div>)}</>
   ),
 }));
 
@@ -175,6 +175,14 @@ describe("ContactDetailPage", () => {
     expect(screen.getByText("Bo Boman")).toBeInTheDocument();
     expect(screen.getByText(/2026-001/)).toBeInTheDocument();
     expect(screen.getByText(/Tvist/)).toBeInTheDocument();
+  });
+
+  it("Kontaktpersoner och Ärenden går ut till rutans kant, Uppgifter får rutans luft (fill, #1846)", async () => {
+    contactQuery.data = orgContact;
+    const { container } = renderPage();
+    await screen.findByRole("heading", { name: "Acme AB" });
+    const fills = [...container.querySelectorAll("[data-panel]")].map((el) => [el.getAttribute("data-panel"), el.getAttribute("data-fill")]);
+    expect(fills).toEqual([["details", "undefined"], ["people", "true"], ["matters", "true"]]);
   });
 
   it("öppnar formulär för att lägga till kontaktperson", async () => {

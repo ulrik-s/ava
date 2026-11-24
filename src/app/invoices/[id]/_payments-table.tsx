@@ -2,6 +2,7 @@
 
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 
 interface Payment {
   id: string;
@@ -28,8 +29,8 @@ const COLUMNS: Column<Payment>[] = [
 
 export function PaymentsTable({ payments, paidSum }: Props) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h2 className="font-semibold mb-3">Betalningar</h2>
+    <div className={SECTION_CARD_CLASS}>
+      <h2 className="font-semibold mb-2">Betalningar</h2>
       {payments.length === 0 ? (
         <p className="text-sm text-gray-500">Inga betalningar registrerade.</p>
       ) : (
