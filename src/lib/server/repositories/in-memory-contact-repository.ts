@@ -30,6 +30,7 @@ export class InMemoryContactRepository extends InMemoryRepository<Contact> imple
       parentId: null,
       deletedAt: null, // mjukt raderade syns inte, som i Postgres (#1678)
       ...(opts.contactType ? { contactType: opts.contactType } : {}),
+      ...(opts.ids ? { id: { in: [...opts.ids] } } : {}),
       ...(opts.search
         ? {
             OR: [

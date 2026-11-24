@@ -37,6 +37,8 @@ export interface ContactFull extends Contact {
 export interface ContactListOptions {
   search?: string | undefined;
   contactType?: ContactType | undefined;
+  /** Bara dessa kontakter. Tom lista = inga kontakter. */
+  ids?: readonly ContactId[] | undefined;
   page: number;
   pageSize: number;
 }
