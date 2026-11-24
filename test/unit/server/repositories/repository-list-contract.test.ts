@@ -21,8 +21,9 @@ import { isDeepStrictEqual } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { Contact } from "@/lib/shared/schemas/contact";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import { asId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
-import type { Matter } from "@/lib/shared/schemas/matter";
+import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { type KnownDeviation, ratchetDiff } from "../../../../tooling/scripts/ratchet";
 import { DRIZZLE_NAME, type OpenRepos, openDrizzleRepos, openInMemoryRepos } from "./contract-backends";
@@ -79,6 +80,10 @@ async function contactNames(repos: Repositories, org: OrganizationId, search?: s
 
 async function matterNumbers(repos: Repositories, org: OrganizationId, search?: string): Promise<string[]> {
   return (await repos.matters.listForOrg(org, { search, page: 1, pageSize: 50 })).matters.map((m) => m.matterNumber).sort();
+}
+
+async function addParty(repos: Repositories, matter: Matter, contact: Contact, role: MatterRole, createdAt: Date): Promise<MatterContact> {
+  return repos.matterContacts.create({ id: asId<"MatterContactId">(uuidv7()), matterId: matter.id, contactId: contact.id, role, createdAt });
 }
 
 const numbersOf = (matters: readonly Matter[]): string[] => matters.map((m) => m.matterNumber).sort();
@@ -170,6 +175,32 @@ const SCENARIOS: readonly Scenario[] = [
       const org = newOrg();
       for (const matterNumber of ["AA2026-0001", "aa2026-0002"]) await addMatter(repos, org, { matterNumber });
       return differs(numbersOf(await repos.matters.listByNumberPrefix(org, "AA2026-")), ["AA2026-0001"]);
+    },
+  },
+  {
+    name: "listraden bär parterna med klienten först, utan mjukt raderade kopplingar",
+    run: async (repos) => {
+      const org = newOrg();
+      const matter = await addMatter(repos, org, { matterNumber: "P-1" });
+      await addMatter(repos, org, { matterNumber: "P-2" });
+      const klient = await addContact(repos, org, { name: "Klient AB" });
+      await addParty(repos, matter, await addContact(repos, org, { name: "Motpart AB" }), "MOTPART", day("2026-01-01"));
+      await addParty(repos, matter, klient, "KLIENT", day("2026-01-02"));
+      const gone = await addParty(repos, matter, await addContact(repos, org, { name: "Borta AB" }), "OVRIG", day("2026-01-03"));
+      await repos.matterContacts.softDelete(gone.id);
+      await addParty(repos, matter, await addContact(repos, org, { name: "Ombud AB" }), "OMBUD", day("2026-01-04"));
+      const rows = (await repos.matters.listForOrg(org, { page: 1, pageSize: 50 })).matters;
+      const shape = (n: string) => {
+        const row = rows.find((m) => m.matterNumber === n);
+        return { parties: row?.parties, contacts: row?.contacts };
+      };
+      return differs({ p1: shape("P-1"), p2: shape("P-2") }, {
+        p1: {
+          parties: [{ role: "KLIENT", name: "Klient AB" }, { role: "MOTPART", name: "Motpart AB" }, { role: "OMBUD", name: "Ombud AB" }],
+          contacts: [{ contact: { id: klient.id, name: "Klient AB" } }],
+        },
+        p2: { parties: [], contacts: [] },
+      });
     },
   },
   {

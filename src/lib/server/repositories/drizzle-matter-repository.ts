@@ -1,19 +1,21 @@
 /**
  * Drizzle `MatterRepository` (ADR 0020) — server-impl. Ärver bas-CRUD;
  * org-scopar direkt på `matters.organizationId`. Listan/detaljen berikar
- * KLIENT-kontakt + relations-antal (`_count`) via grupperade sido-queries
+ * parter (KLIENT först) + relations-antal (`_count`) via grupperade sido-queries
  * (robustare än korrelerade subqueries; jfr document-folder-repo:t).
  */
 
 import { and, asc, desc, eq, ilike, inArray, isNull, like, or, type SQL, sql } from "drizzle-orm";
-import type { ContactId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
+import type { MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { containsPattern, prefixPattern } from "../db/like-pattern";
 import { contacts, documents, matterContacts, matters, timeEntries } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
-import type {
-  MatterDetailRow, MatterListFilter, MatterListResult, MatterListRow, MatterRepository,
+import {
+  listPartiesOf,
+  type MatterDetailRow, type MatterListFilter, type MatterListLink, type MatterListResult, type MatterListRow,
+  type MatterRepository,
 } from "./matter-repository";
 
 /** Id-filtret (#1642): en tom lista matchar inga ärenden. */
@@ -71,15 +73,12 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       .limit(filter.pageSize).offset((filter.page - 1) * filter.pageSize);
     const [agg] = await this.db.select({ total: sql<number>`count(*)` }).from(matters).where(where);
     const ids = rows.map((r) => r.id);
-    const [counts, klient] = await Promise.all([this.countsFor(ids), this.klientFor(ids)]);
-    const matterRows = rows.map((r): MatterListRow => {
-      const k = klient.get(r.id);
-      return {
-        ...r,
-        contacts: k ? [{ contact: k }] : [],
-        _count: counts.get(r.id) ?? { documents: 0, timeEntries: 0, contacts: 0 },
-      };
-    });
+    const [counts, parties] = await Promise.all([this.countsFor(ids), this.partiesFor(ids)]);
+    const matterRows = rows.map((r): MatterListRow => ({
+      ...r,
+      ...listPartiesOf(parties.get(r.id) ?? []),
+      _count: counts.get(r.id) ?? { documents: 0, timeEntries: 0, contacts: 0 },
+    }));
     return { matters: matterRows, total: Number(agg?.total ?? 0) };
   }
 
@@ -105,18 +104,20 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
     return out;
   }
 
-  /** KLIENT-kontakt (id+namn) per ärende-id (första). */
-  private async klientFor(ids: MatterId[]): Promise<Map<string, { id: ContactId; name: string }>> {
-    const out = new Map<string, { id: ContactId; name: string }>();
+  /** Kopplingarna (roll, kontaktens id+namn) per ärende-id, utan mjukt raderade, i `createdAt`-ordning. */
+  private async partiesFor(ids: MatterId[]): Promise<Map<string, MatterListLink[]>> {
+    const out = new Map<string, MatterListLink[]>();
     if (ids.length === 0) return out;
     const rows = await this.db
-      .select({ matterId: matterContacts.matterId, cId: contacts.id, cName: contacts.name })
+      .select({ matterId: matterContacts.matterId, role: matterContacts.role, id: contacts.id, name: contacts.name })
       .from(matterContacts)
       .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
-      .where(and(inArray(matterContacts.matterId, ids), eq(matterContacts.role, "KLIENT")));
+      .where(and(inArray(matterContacts.matterId, ids), isNull(matterContacts.deletedAt)))
+      .orderBy(asc(matterContacts.createdAt));
     for (const r of rows) {
-      const mid = r.matterId;
-      if (!out.has(mid)) out.set(mid, { id: r.cId, name: r.cName });
+      const links = out.get(r.matterId) ?? [];
+      links.push({ role: r.role, contact: { id: r.id, name: r.name } });
+      out.set(r.matterId, links);
     }
     return out;
   }
