@@ -23,7 +23,7 @@ import { pluralChanges } from "@/lib/client/utils";
  *  mapp). Utbruten ur SyncDiagnostics så dess två ternarier inte räknas in. */
 function NoProviderNotice({ tier, folderName }: { tier: string | null; folderName: string | null }) {
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded p-3 text-xs text-gray-600 mt-4 space-y-1">
+    <div className="bg-gray-50 border border-gray-200 rounded p-3 text-xs text-gray-600 mt-2 space-y-1">
       <p>
         <strong className="text-gray-800">Synk:</strong>{" "}
         {tier === "demo"
@@ -85,7 +85,7 @@ export function SyncDiagnostics() {
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 mt-4">
+    <div className="bg-white border border-gray-200 rounded-lg p-2 mt-2">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-gray-900">Synkstatus</h3>
@@ -104,7 +104,7 @@ export function SyncDiagnostics() {
       </div>
 
       {lastError && (
-        <div className="mt-3 bg-red-50 border border-red-200 rounded p-3">
+        <div className="mt-2 bg-red-50 border border-red-200 rounded p-3">
           <p className="text-xs font-semibold text-red-900 mb-1">Senaste fel</p>
           <pre className="text-xs text-red-800 whitespace-pre-wrap break-words font-mono">
             {lastError}
@@ -116,7 +116,7 @@ export function SyncDiagnostics() {
         </div>
       )}
 
-      <p className="text-[11px] text-gray-400 mt-3">
+      <p className="text-[11px] text-gray-400 mt-2">
         Synk: server-first (tRPC mot servern); offline-ändringar synkas när du är online igen.
       </p>
     </div>

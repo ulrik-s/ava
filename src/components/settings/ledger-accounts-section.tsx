@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
 import {
   DEFAULT_LEDGER_ACCOUNT_MAP,
@@ -120,9 +121,9 @@ function LedgerAccountForm({ initial }: { initial: LedgerAccountMap }) {
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+    <div className={SECTION_CARD_CLASS}>
       <h2 className="font-semibold text-gray-900 mb-1">Konto-mappning (bokföringsexport)</h2>
-      <p className="text-xs text-gray-500 mb-4">
+      <p className="text-xs text-gray-500 mb-2">
         BAS-konton som bokföringen bokför mot — driver både SIE-exporten och
         Fortnox-connectorn. Förifyllt med standard för advokatbyrå. Saknas
         mappningen vägrar Fortnox-connectorn att boka (completeness-grind).
@@ -146,7 +147,7 @@ function LedgerAccountForm({ initial }: { initial: LedgerAccountMap }) {
         <AccountRow key={role.key} role={role} value={draft[role.key]} onChange={(next) => setRole(role.key, next)} />
       ))}
 
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-2 flex items-center gap-3">
         <button
           type="button"
           onClick={handleSave}
@@ -180,14 +181,14 @@ export function LedgerAccountsSection() {
 
   if (me.data?.role !== "ADMIN") {
     return (
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+      <div className={SECTION_CARD_CLASS}>
         <p className="text-sm text-gray-500">Endast administratörer kan redigera konto-mappningen.</p>
       </div>
     );
   }
   if (settings.isLoading) {
     return (
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+      <div className={SECTION_CARD_CLASS}>
         <p className="text-xs text-gray-400">Laddar…</p>
       </div>
     );

@@ -54,7 +54,7 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false,
     <div className={wrapperCls}>
       {!inline && <PanelHeader />}
 
-      <div className={`${inline ? "" : "mt-4 "}space-y-3 text-sm`}>
+      <div className={`${inline ? "space-y-2" : "mt-4 space-y-3"} text-sm`}>
         <TierPicker value={tier} onChange={setTier} />
         <TierExplainer tier={tier} />
         {tier === "demo" && <DemoRepoField value={repo} onChange={setRepo} />}
@@ -172,7 +172,7 @@ export function FooterButtons(props: {
   onUseDemo: () => void;
 }) {
   return (
-    <div className="mt-6 flex items-center justify-between">
+    <div className={`${props.inline ? "mt-2" : "mt-6"} flex items-center justify-between`}>
       <button type="button" onClick={props.onUseDemo} className="text-xs text-gray-500 hover:underline">
         Återställ till demo
       </button>

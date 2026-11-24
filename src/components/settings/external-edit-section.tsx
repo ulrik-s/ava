@@ -9,6 +9,7 @@
 
 import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { isFsaSupported, loadHandle, ensureReadWrite } from "@/lib/client/fsa/handle-store";
 import { preloadAllDocuments } from "@/lib/client/fsa/preload-documents";
 
@@ -69,12 +70,12 @@ export function ExternalEditSection() {
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center gap-2 mb-3">
+    <div className={SECTION_CARD_CLASS}>
+      <div className="flex items-center gap-2 mb-2">
         <Pencil size={16} className="text-gray-500" />
         <h2 className="font-semibold text-gray-900">Editera dokument i extern app</h2>
       </div>
-      <p className="text-xs text-gray-500 mb-3">
+      <p className="text-xs text-gray-500 mb-2">
         Klicka <strong>🖥 Editera externt</strong> på en dokumentrad → AVA pekar ut
         filen i din lokala mapp så du dubbelklickar den i Finder/Explorer och
         öppnar i <em>PDF Gear, Preview, Word</em> osv. När du sparar (Cmd+S)
@@ -82,7 +83,7 @@ export function ExternalEditSection() {
         sparningar, eller direkt via &quot;Spara nu&quot;-knappen i banner:n.
       </p>
 
-      <div className="text-xs space-y-1 mb-4">
+      <div className="text-xs space-y-1 mb-2">
         <div>
           <strong>Browser-kompatibilitet:</strong>{" "}
           {supported

@@ -14,6 +14,7 @@ import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-sec
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
 import { OrgImageSection } from "@/components/settings/org-image-section";
 import { SyncDevicesSection } from "@/components/sync/sync-devices-section";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { useCanSeeBackup } from "@/lib/client/backend/server-backup";
 import { trpc } from "@/lib/client/trpc";
 import type { OrgImage } from "@/lib/shared/org-image";
@@ -67,8 +68,8 @@ function OfficesSection() {
   if (isLoading) return <div className="text-xs text-gray-400 py-2">Laddar kontor…</div>;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center justify-between mb-4">
+    <div className={SECTION_CARD_CLASS}>
+      <div className="flex items-center justify-between mb-2">
         <h2 className="font-semibold text-gray-900">Kontor</h2>
         <button
           onClick={() => { setAdding(true); setForm(emptyOffice()); }}
@@ -344,9 +345,9 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
   const websiteId = useId();
   const thresholdId = useId();
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <h3 className="font-semibold text-gray-900 mb-4">Kontaktuppgifter</h3>
-      <div className="space-y-3">
+    <div className={SECTION_CARD_CLASS}>
+      <h3 className="font-semibold text-gray-900 mb-2">Kontaktuppgifter</h3>
+      <div className="space-y-2">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor={nameId} className="block text-xs font-medium text-gray-700 mb-1">Byråns namn</label>
@@ -415,8 +416,7 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
           <HourlyRatesFields value={form.hourlyRates} onChange={(hourlyRates) => setForm({ ...form, hourlyRates })} />
         </div>
       </div>
-
-      <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
+      <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
         <span className="italic">Ändringar sparas automatiskt.</span>
         {isPending && <span>Sparar…</span>}
         {saved && <span className="text-green-600">✓ Sparat</span>}
@@ -429,7 +429,7 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
 /** Förhandsgranskning av dokument-sidfoten från byrå-uppgifterna. */
 function DocFooterPreview({ form }: { form: OrgForm }) {
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-5">
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
       <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wider">Förhandsgranskning av sidfot</p>
       <div className="bg-white border border-gray-200 rounded p-3 text-[11px] text-gray-500 border-t-2">
         <div className="flex items-center justify-between">
@@ -502,6 +502,6 @@ export default function SettingsPage() {
 
 /** Panelens korta förklaring överst. */
 function PanelIntro({ text }: { text: string }) {
-  return <p className="mb-3 text-xs text-gray-500">{text}</p>;
+  return <p className="mb-2 text-xs text-gray-500">{text}</p>;
 }
 

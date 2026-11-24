@@ -11,6 +11,7 @@
 
 import { Building2, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { orgImageSchema, type OrgImage } from "@/lib/shared/org-image";
 import { primitiveText } from "@/lib/shared/primitive-text";
 
@@ -49,12 +50,12 @@ export function OrgImageSection({ title, description, value, onChange }: Props) 
     onChange(result.image);
   };
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center gap-2 mb-4">
+    <div className={SECTION_CARD_CLASS}>
+      <div className="flex items-center gap-2 mb-2">
         <Building2 size={16} className="text-gray-500" />
         <h3 className="font-semibold text-gray-900">{title}</h3>
       </div>
-      <p className="text-xs text-gray-500 mb-4">{description} PNG eller JPEG, max 300 kB.</p>
+      <p className="text-xs text-gray-500 mb-2">{description} PNG eller JPEG, max 300 kB.</p>
       <div className="flex items-center gap-4">
         <div className="w-40 h-20 border border-gray-200 rounded flex items-center justify-center bg-gray-50 shrink-0 overflow-hidden">
           {value

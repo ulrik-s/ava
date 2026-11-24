@@ -10,6 +10,7 @@
 import { Download, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatFileSize } from "@/components/documents/_drag-helpers";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { downloadBackup, useBackupStatus, useCanSeeBackup, useRequestBackup } from "@/lib/client/backend/server-backup";
 import type { BackupExport, BackupStatus } from "@/lib/shared/backup";
 
@@ -47,7 +48,7 @@ function useNow(fixed: number | undefined): number {
 
 function Explanation() {
   return (
-    <p className="text-xs text-gray-500 mb-3">
+    <p className="text-xs text-gray-500 mb-2">
       Tar en backup av byråns databas och alla dokument och laddar ner den till den här datorn. Filen är
       krypterad: den kan bara öppnas med byråns privata age-nyckel, som ligger i lösenordshanteraren — inte
       på servern. Hur den återställs står i{" "}
@@ -95,7 +96,7 @@ function StateLine({ status }: { status: BackupStatus }) {
 function RequestButton({ status, now, pending, onRequest }: { status: BackupStatus; now: number; pending: boolean; onRequest: () => void }) {
   const tooSoon = now < status.nextRequestAt;
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-3">
+    <div className="mt-2 flex flex-wrap items-center gap-3">
       <button type="button" onClick={onRequest} disabled={pending || status.state === "running" || tooSoon}
         className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
         Ta backup nu
@@ -117,7 +118,7 @@ export function BackupSection({ now }: { now?: number }) {
   useAutoDownload(status.data, awaitingSince, () => setAwaitingSince(null));
   if (!visible) return null;
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5" data-testid="backup-section">
+    <div className={SECTION_CARD_CLASS} data-testid="backup-section">
       <h2 className="font-semibold text-gray-900 mb-2">Backup</h2>
       <Explanation />
       {status.error && <p role="alert" className="mb-2 text-sm text-red-700">{status.error.message}</p>}

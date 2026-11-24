@@ -7,6 +7,7 @@
  * Här kan man bara titta + ta bort.
  */
 
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
 
 const KEY_LABELS: Record<string, string> = {
@@ -37,7 +38,7 @@ export function OrgDefaultsSection() {
 
   if (!isAdmin) {
     return (
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+      <div className={SECTION_CARD_CLASS}>
         <p className="text-sm text-gray-500">
           Endast administratörer kan se och hantera org-globala standardvyer.
         </p>
@@ -48,8 +49,8 @@ export function OrgDefaultsSection() {
   const defaults = (list.data ?? []) as Array<{ id: string; key: string }>;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center justify-between mb-3">
+    <div className={SECTION_CARD_CLASS}>
+      <div className="flex items-center justify-between mb-2">
         <h2 className="font-semibold text-gray-900">Org-globala standardvyer</h2>
         <p className="text-xs text-gray-500">Sätts från kolumn-menyn (⋯) i varje lista.</p>
       </div>
@@ -80,7 +81,7 @@ export function OrgDefaultsSection() {
           ))}
         </ul>
       )}
-      <p className="mt-3 text-xs text-gray-500">
+      <p className="mt-2 text-xs text-gray-500">
         Personliga inställningar vinner alltid över org-globala. Användare som inte
         har gjort egna val ser de globala värdena.
       </p>
