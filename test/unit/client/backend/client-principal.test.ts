@@ -2,11 +2,13 @@
  * Klientens principal (#1864): rollen läses ur den inloggades rad i den lokala
  * datan, och blir aldrig ADMIN som standard.
  */
-import { describe, expect, it } from "vitest-compat";
+import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import {
-  clientPrincipal, clientPrincipalId, FALLBACK_CLIENT_ROLE, resolveClientPrincipal, resolveClientRole,
+  bindClientOrganization, clientPrincipal, clientPrincipalId, FALLBACK_CLIENT_ROLE, MANY_ORGANIZATIONS_MESSAGE,
+  NO_ORGANIZATION_MESSAGE, resolveClientPrincipal, resolveClientRole, resolveOrganizationId,
   type ClientIdentityConfig,
 } from "@/lib/client/backend/client-principal";
+import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 
 function storeWith(): LocalStore {
@@ -71,5 +73,62 @@ describe("resolveClientPrincipal", () => {
   it("bindningsfasen ger ASSISTANT utan att läsa storen", async () => {
     const p = await resolveClientPrincipal(storeWith(), { ...cfg, principalId: "u-admin" }, { binding: true });
     expect(p.role).toBe("ASSISTANT");
+  });
+});
+
+/** En store med de givna byråerna (#1865). */
+function storeWithOrgs(ids: string[]): LocalStore {
+  return new LocalStore({ organizations: ids.map((id) => ({ id, name: `Byrå ${id}` })) }, async () => {});
+}
+
+describe("resolveOrganizationId (#1865)", () => {
+  it("det sparade org-id:t, utan att läsa storen", async () => {
+    expect(await resolveOrganizationId(storeWithOrgs([]), "org-sparad")).toBe("org-sparad");
+  });
+
+  it("utan sparat id: den enda byrån i den synkade datan", async () => {
+    expect(await resolveOrganizationId(storeWithOrgs(["org-server"]), "")).toBe("org-server");
+  });
+
+  it("ingen byrå: ett begripligt fel", async () => {
+    await expect(resolveOrganizationId(storeWithOrgs([]), "")).rejects.toThrow(NO_ORGANIZATION_MESSAGE);
+    expect(NO_ORGANIZATION_MESSAGE).toBe("Hittade ingen byrå på servern. Kontrollera att du är uppkopplad och försök igen.");
+  });
+
+  it("flera byråer: AVA väljer inte", async () => {
+    await expect(resolveOrganizationId(storeWithOrgs(["a", "b"]), "")).rejects.toThrow(MANY_ORGANIZATIONS_MESSAGE);
+    expect(MANY_ORGANIZATIONS_MESSAGE).toBe("Servern har flera byråer. AVA kan inte välja.");
+  });
+});
+
+describe("resolveClientPrincipal i bindningsfasen (#1865)", () => {
+  it("utan sparat org-id får principalen byrån ur den synkade datan", async () => {
+    const p = await resolveClientPrincipal(storeWithOrgs(["org-server"]), { ...cfg, organizationId: "" }, { binding: true });
+    expect(p).toMatchObject({ organizationId: "org-server", role: "ASSISTANT" });
+  });
+});
+
+describe("bindClientOrganization (#1865)", () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it("ett sparat org-id: ingen bindning, ingen omladdning", () => {
+    const reload = vi.fn();
+    expect(bindClientOrganization({ organizationId: "org-1" }, "org-1", reload)).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+    expect(localStorage.getItem("ava.firma")).toBeNull();
+  });
+
+  it("utan sparat org-id: sparar byrån och laddar om", () => {
+    const reload = vi.fn();
+    expect(bindClientOrganization({ organizationId: "" }, "org-server", reload)).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(loadFirmaConfig().organizationId).toBe("org-server");
+  });
+
+  it("laddar om sidan som standard", () => {
+    const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
+    expect(bindClientOrganization({ organizationId: "" }, "org-server")).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+    reload.mockRestore();
   });
 });
