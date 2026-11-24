@@ -85,6 +85,24 @@ describe("FirmaSettingsPanel — server-first", () => {
   });
 });
 
+describe("FirmaSettingsPanel — luft inline och fristående (#1847)", () => {
+  const fieldsOf = (): Element | null => screen.getByText("Läge").parentElement?.parentElement ?? null;
+  const footerOf = (): Element | null => screen.getByText("Återställ till demo").parentElement;
+
+  it("inline: fälten space-y-2 och knappraden mt-2", () => {
+    render(<FirmaSettingsPanel initial={baseConfig} inline onSaved={() => {}} onCancel={() => {}} />);
+    expect(fieldsOf()).toHaveClass("space-y-2");
+    expect(fieldsOf()).not.toHaveClass("mt-4");
+    expect(footerOf()).toHaveClass("mt-2");
+  });
+
+  it("fristående: oförändrat mt-4 space-y-3 och mt-6", () => {
+    render(<FirmaSettingsPanel initial={baseConfig} onSaved={() => {}} onCancel={() => {}} />);
+    expect(fieldsOf()).toHaveClass("mt-4", "space-y-3");
+    expect(footerOf()).toHaveClass("mt-6");
+  });
+});
+
 describe("TierPicker", () => {
   it("renderar två tier-knappar (demo + self-hosted)", () => {
     render(<TierPicker value="demo" onChange={() => {}} />);

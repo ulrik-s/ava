@@ -90,6 +90,26 @@ describe("SyncDiagnostics", () => {
   });
 });
 
+describe("SyncDiagnostics — 8 px luft i Datakälla-rutan (#1847)", () => {
+  it("synkstatusrutan har p-2 mt-2 och fel/fotnot mt-2", () => {
+    reset();
+    ctxState.lastError = "fel";
+    const { container } = render(<SyncDiagnostics />);
+    expect(container.firstElementChild).toHaveClass("p-2", "mt-2");
+    expect(screen.getByText(/Senaste fel/i).parentElement).toHaveClass("mt-2");
+    expect(screen.getByText(/server-first/)).toHaveClass("mt-2");
+    expect(container.innerHTML).not.toMatch(/\b(mt-3|mt-4|p-4)\b/);
+  });
+
+  it("meddelandet utan provider har mt-2", () => {
+    reset();
+    ctxState.providerKind = null;
+    const { container } = render(<SyncDiagnostics />);
+    expect(container.firstElementChild).toHaveClass("mt-2");
+    expect(container.innerHTML).not.toMatch(/\bmt-4\b/);
+  });
+});
+
 describe("StateLabel (#6-ratchet: renderar-uppslag per läge)", () => {
   const cases: Array<[SyncState, RegExp]> = [
     [{ kind: "idle" }, /Väntar på första synk/],
