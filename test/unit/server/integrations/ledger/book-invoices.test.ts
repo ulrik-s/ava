@@ -101,6 +101,23 @@ describe("bookUnbookedInvoices", () => {
     expect(res.filter((r) => r.externalId !== null)).toHaveLength(2);
   });
 
+  it("moms på en sats utan momskonto: felet per faktura, ingen push och ingen markering, övriga bokförs (#1902)", async () => {
+    const c = fakeConnector();
+    const marked: string[] = [];
+    const bad = invoice({
+      id: "inv-2", invoiceNumber: "F-2026-0002", amount: 10_100,
+      vatBreakdown: [{ kind: "utlagg", vatRate: 0, netOre: 10_000, vatOre: 100 }],
+    });
+    const res = await bookUnbookedInvoices({
+      invoices: [invoice({ id: "inv-1" }), bad, invoice({ id: "inv-3" })],
+      connector: c, markBooked: (id) => { marked.push(id); return Promise.resolve(); },
+    });
+    expect(res[1]?.externalId).toBeNull();
+    expect(res[1]?.error).toContain("Ärende 2026-0001 - Faktura F-2026-0002: en rad i momsuppdelningen har 1,00 kr moms på satsen 0 %");
+    expect(c.pushed.map((p) => p.key)).toEqual(["inv-1", "inv-3"]);
+    expect(marked).toEqual(["inv-1", "inv-3"]);
+  });
+
   it("markerar INTE som bokförd när pushen fallerar", async () => {
     // Annars vore fakturan omöjlig att boka om — märkt men obokförd.
     const c = fakeConnector({ failOn: "inv-1" });

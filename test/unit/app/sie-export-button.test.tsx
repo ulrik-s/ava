@@ -5,6 +5,18 @@ import { encodePc8 } from "@/lib/shared/accounting/pc8";
 
 const downloadMock = vi.fn();
 
+const GOOD_ITEMS = [
+  { amount: 12_500, invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0042", status: "SENT" },
+  { amount: 9_999, invoiceDate: "2026-05-01", invoiceNumber: "F-1", status: "DRAFT" },
+];
+/** En utställd faktura med moms på 0 % – verifikatet går inte att bygga (#1902). */
+const BAD_INVOICE = {
+  amount: 10_100, invoiceDate: "2026-05-26", invoiceNumber: "F-2026-0043", status: "SENT",
+  vatBreakdown: [{ kind: "utlagg", vatRate: 0, netOre: 10_000, vatOre: 100 }],
+};
+/** Fakturorna som listan ger; byts per test. */
+let listItems: unknown[] = GOOD_ITEMS;
+
 vi.mock("@/lib/client/download-text", () => ({
   downloadBytes: (...args: unknown[]) => downloadMock(...args),
 }));
@@ -18,15 +30,7 @@ vi.mock("@/lib/client/trpc", () => ({
     invoice: {
       list: {
         // Kuvertform sedan #1014 — knappen läser `data.items`.
-        useQuery: () => ({
-          data: {
-            items: [
-              { amount: 12_500, invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0042", status: "SENT" },
-              { amount: 9_999, invoiceDate: "2026-05-01", invoiceNumber: "F-1", status: "DRAFT" },
-            ],
-            total: 2,
-          },
-        }),
+        useQuery: () => ({ data: { items: listItems, total: listItems.length } }),
       },
     },
     organization: {
@@ -71,5 +75,24 @@ describe("SieExportButton", () => {
     const [filename, bytes] = downloadMock.mock.calls[0] as [string, Uint8Array];
     expect(filename).toBe("bokforing_20260101.sie");
     expect(bin(bytes)).toContain(pc8("#GEN 20260101"));
+  });
+
+  it("en faktura vars verifikat inte går att bygga: felraden visas, ingen fil; nästa lyckade export tar bort raden (#1902)", () => {
+    downloadMock.mockClear();
+    listItems = [...GOOD_ITEMS, BAD_INVOICE];
+    const { rerender } = render(<SieExportButton />);
+    fireEvent.click(screen.getByRole("button", { name: /Exportera SIE/ }));
+    expect(downloadMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Kunde inte exportera SIE: Faktura F-2026-0043: en rad i momsuppdelningen har 1,00 kr moms på satsen 0 %, " +
+      "som saknar momskonto (bara 6, 12 och 25 % har ett). " +
+      "Verifikatet skulle inte balansera, så fakturan kan inte bokföras förrän momsuppdelningen är rättad.",
+    );
+
+    listItems = GOOD_ITEMS;
+    rerender(<SieExportButton />);
+    fireEvent.click(screen.getByRole("button", { name: /Exportera SIE/ }));
+    expect(downloadMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
