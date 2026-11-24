@@ -11,7 +11,9 @@
  * stänger det.
  *
  * Flytten kräver en token som når båda repona (`FLOW_TRANSFER_TOKEN`, Ulriks).
- * Utan den loggar klockan bara vad som skulle flyttas.
+ * Utan den loggar klockan bara vad som skulle flyttas. Nekar GitHub en flytt
+ * varnar klockan och går vidare: de andra flyttarna, PR:ernas klocka och
+ * CI-stegen ska inte vänta på en token.
  */
 import type { GitHub, OpenItem } from "./github";
 
@@ -31,9 +33,19 @@ export function strayIssues(items: readonly OpenItem[], now: number, hasOpenPr: 
 /** Kodrepot och inkorgen med en token som når båda. */
 export interface Mover { source: GitHub; intake: GitHub; intakeRepo: string }
 
+/** Flyttar en förfrågan till inkorgen och märker den där. Ger [gammalt, nytt nummer]. */
+function moveOne(issue: OpenItem, mover: Mover): [number, number] {
+  const n = mover.source.transferIssue(issue.number, mover.intakeRepo);
+  mover.intake.addLabel(n, "intern");
+  mover.intake.addLabel(n, issue.labels.includes("bug") ? "bugg" : "förslag");
+  return [issue.number, n];
+}
+
 /**
  * Flyttar förfrågningarna i kodrepot till inkorgen. Ger [gammalt, nytt nummer]
  * per flyttad issue. Utan `mover` (ingen token) eller i rapportläge loggas bara.
+ * En flytt som inte blir klar (GitHub nekar den, eller märkningen) ger en
+ * varning på körningen (`::warning::`) och räknas inte som flyttad.
  */
 export function moveStrayIssues(from: GitHub, mover: Mover | null, ctx: { now: number; enforce: boolean; log: (line: string) => void }): Array<[number, number]> {
   const { enforce, log } = ctx;
@@ -44,11 +56,14 @@ export function moveStrayIssues(from: GitHub, mover: Mover | null, ctx: { now: n
     log(`förfrågningar i kodrepot: ${stray.map((i) => `#${i.number}`).join(", ")} — ${why}`);
     return [];
   }
-  return stray.map((i): [number, number] => {
-    const n = mover.source.transferIssue(i.number, mover.intakeRepo);
-    mover.intake.addLabel(n, "intern");
-    mover.intake.addLabel(n, i.labels.includes("bug") ? "bugg" : "förslag");
-    log(`#${i.number} → ${mover.intakeRepo}#${n} (intern)`);
-    return [i.number, n];
+  return stray.flatMap((i): Array<[number, number]> => {
+    try {
+      const moved = moveOne(i, mover);
+      log(`#${moved[0]} → ${mover.intakeRepo}#${moved[1]} (intern)`);
+      return [moved];
+    } catch (e) {
+      log(`::warning::flytten av #${i.number} till ${mover.intakeRepo} blev inte klar: ${e instanceof Error ? e.message : String(e)}`);
+      return [];
+    }
   });
 }

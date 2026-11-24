@@ -94,6 +94,43 @@ describe("inkorgen", () => {
     expect(gh.calls.some((c) => c.startsWith("issue transfer"))).toBe(false);
   });
 
+  it("en nekad flytt varnar och stoppar varken nästa flytt eller klockan", () => {
+    const denied = "gh issue transfer 5 ulrik-s/ava-feedback -R ulrik-s/ava: GraphQL: Resource not accessible by personal access token (transferIssue)";
+    const source = fakeGh();
+    const intake = fakeGh();
+    const deniesFive: GhRunner = (args) => {
+      if (args.join(" ").startsWith("issue transfer 5 ")) throw new Error(denied);
+      return source.run(args);
+    };
+    const lines: string[] = [];
+    const moved = moveStrayIssues(gitHub("ulrik-s/ava", source.run), {
+      source: gitHub("ulrik-s/ava", deniesFive), intake: gitHub("ulrik-s/ava-feedback", intake.run), intakeRepo: "ulrik-s/ava-feedback",
+    }, { now: NOW, enforce: true, log: log(lines) });
+    expect(moved).toEqual([[8, 100]]);
+    expect(intake.calls).toEqual([
+      "api repos/ulrik-s/ava-feedback/issues/100/labels -f labels[]=intern",
+      "api repos/ulrik-s/ava-feedback/issues/100/labels -f labels[]=förslag",
+    ]);
+    expect(lines).toEqual([
+      `::warning::flytten av #5 till ulrik-s/ava-feedback blev inte klar: ${denied}`,
+      "#8 → ulrik-s/ava-feedback#100 (intern)",
+    ]);
+  });
+
+  it("en flytt vars märkning nekas räknas inte som flyttad, och varningen säger vilket anrop som föll", () => {
+    const source = fakeGh();
+    const deniesLabels: GhRunner = (args) => { throw new Error(`gh ${args.join(" ")}: HTTP 403`); };
+    const lines: string[] = [];
+    const moved = moveStrayIssues(gitHub("ulrik-s/ava", source.run), {
+      source: gitHub("ulrik-s/ava", source.run), intake: gitHub("ulrik-s/ava-feedback", deniesLabels), intakeRepo: "ulrik-s/ava-feedback",
+    }, { now: NOW, enforce: true, log: log(lines) });
+    expect(moved).toEqual([]);
+    expect(lines).toEqual([
+      "::warning::flytten av #5 till ulrik-s/ava-feedback blev inte klar: gh api repos/ulrik-s/ava-feedback/issues/100/labels -f labels[]=intern: HTTP 403",
+      "::warning::flytten av #8 till ulrik-s/ava-feedback blev inte klar: gh api repos/ulrik-s/ava-feedback/issues/101/labels -f labels[]=intern: HTTP 403",
+    ]);
+  });
+
   it("inget att flytta: ingen loggrad", () => {
     const lines: string[] = [];
     const run: GhRunner = () => JSON.stringify([[issue(6, ["agent-task"])]]);

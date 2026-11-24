@@ -75,7 +75,9 @@ annat issue till inkorgen som `intern` + `bugg`/`förslag` när det är äldre �
 Flytten kräver en token som når båda repona: hemligheten
 `FLOW_TRANSFER_TOKEN` i `ulrik-s/ava` (en fine-grained PAT med *Issues: read
 and write* på båda repona), som `agent-flow.yml` skickar till klockans steg.
-Utan den loggar klockan bara vad som skulle flyttas.
+Utan den loggar klockan bara vad som skulle flyttas. Nekar GitHub flytten
+(token räcker inte till) står det som en varning på klockans körning. Klockan
+går vidare med resten och försöker igen nästa timme.
 
 Genomgången 2026-11-18 flyttade de 70 gamla issuena: de klara och
 inaktuella stängdes med belägg, resten ligger i inkorgen som `intern` +
