@@ -6,4 +6,4 @@
  * (register-workers, extract-text-dispatcher-registrar) fortsätter peka hit.
  */
 
-export { extractText, detectKind, type ExtractInput } from "@/lib/shared/extract-text";
+export { extractText, detectKind } from "@/lib/shared/extract-text";

@@ -7,7 +7,7 @@
  *
  * Från dessa exporteras:
  *   • Union-typ (`MatterRole`, `ContactType`) — typsäkra nycklar
- *   • zod-schema (`matterRoleSchema`, `contactTypeSchema`) — runtime-validering
+ *   • zod-schema (`matterRoleSchema`, `contactTypeSchema`) — runtime-validering, importeras ur enums.ts
  *   • Dropdown-listor (`matterRoleOptions`, `contactTypeOptions`) — {value,label}-tupler
  *   • Typade label-helpers (`labelForMatterRole`, `labelForContactType`)
  *
@@ -20,13 +20,10 @@
 
 import {
   MATTER_ROLE_LABELS,
-  matterRoleSchema,
   type MatterRole,
   CONTACT_TYPE_LABELS,
-  contactTypeSchema,
   type ContactType,
   PAYMENT_METHOD_LABELS,
-  paymentMethodSchema,
   type PaymentMethod,
   type TimeEntryKind,
 } from "@/lib/shared/schemas/enums";
@@ -35,7 +32,7 @@ import {
 // shared/schemas/enums.ts (delad kod, synlig för alla lager). Här re-exporteras
 // de tillsammans med de UI-nära derivationerna (dropdown-options, label-helpers,
 // runtime-guards).
-export { MATTER_ROLE_LABELS, matterRoleSchema, CONTACT_TYPE_LABELS, contactTypeSchema };
+export { MATTER_ROLE_LABELS, CONTACT_TYPE_LABELS };
 export type { MatterRole, ContactType };
 
 // ─── Matter roles (UI-derivationer) ──────────────────────────────
@@ -90,7 +87,7 @@ export function isContactType(v: unknown): v is ContactType {
 // ─── Payment method (UI-derivationer) ────────────────────────────
 // PAYMENT_METHOD-enumet bor i shared/schemas/enums.ts (delad källa,
 // schema-validering). Här re-exporteras det + UI-derivationerna.
-export { PAYMENT_METHOD_LABELS, paymentMethodSchema };
+export { PAYMENT_METHOD_LABELS };
 export type { PaymentMethod };
 
 const paymentMethodKeys = Object.keys(PAYMENT_METHOD_LABELS) as [PaymentMethod, ...PaymentMethod[]];

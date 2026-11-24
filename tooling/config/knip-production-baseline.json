@@ -8,7 +8,6 @@
   "src/lib/client/github/pull.ts",
   "src/lib/client/github/push.ts",
   "src/lib/client/github/sync-state.ts",
-  "src/lib/client/graph/mail-document.ts",
   "src/lib/client/sync/external-actions.ts",
   "src/lib/client/template-recipients.ts",
   "src/lib/client/todo/todo-views.ts",
