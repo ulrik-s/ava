@@ -15,7 +15,7 @@
  * `test` kommer från `_demo-test` → varje förfrågan utanför testets egen origin
  * blockeras och fäller testet (#932).
  */
-import { DEMO_BASE_URL, seedDemoConfig, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL, seedDemoConfig, seedDemoLogin, test, expect } from "./_demo-test";
 
 test("färsk besökare (ingen principal) → /login renderar inloggningen, fastnar inte på 'Laddar…'", async ({ page, context, baseURL }) => {
   const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
@@ -37,4 +37,26 @@ test("färsk besökare (ingen principal) → /login renderar inloggningen, fastn
   // Explicit regressionsvakt: vi får INTE ha fastnat på "AVA Laddar…"-skärmen.
   const body = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
   expect(body, "demon fastnade på bootstrap-platshållaren").not.toBe("AVA Laddar…");
+});
+
+// #1864: klienten kör routrarna med den inloggades roll, läst ur hennes rad,
+// i stället för ADMIN. En jurist som försöker byta sin egen roll får serverns
+// fel redan i webbläsaren.
+test("en jurist som försöker byta sin egen roll får felet direkt", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base, "LAWYER");
+
+  const meta = await (await page.request.get(`${base}/.ava/meta.json`)).json() as {
+    users: Array<{ id: string; name: string; role: string }>;
+  };
+  const lawyer = meta.users.find((u) => u.role === "LAWYER");
+  if (!lawyer) throw new Error("demon saknar en jurist");
+  await page.goto(`${base}/users/`, { waitUntil: "load" });
+  await page.getByRole("link", { name: lawyer.name }).click();
+
+  const role = page.getByLabel("Roll");
+  await expect(role).toHaveValue("LAWYER", { timeout: 25_000 });
+  await role.selectOption("ADMIN");
+  await page.getByRole("button", { name: /^Spara$/ }).click();
+  await expect(page.getByText("Endast administratörer kan ändra roller.")).toBeVisible({ timeout: 10_000 });
 });

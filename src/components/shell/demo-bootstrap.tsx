@@ -28,6 +28,7 @@ import { decideSessionGate, loginUrl, offlineGateMessage, type CachedIdentity } 
 import { setSessionNotice } from "@/lib/client/auth/session-notice";
 import type { SessionProbe } from "@/lib/client/auth/session-probe";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
+import { resolveClientPrincipal } from "@/lib/client/backend/client-principal";
 import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { inProcessPorts } from "@/lib/client/backend/in-process-ports";
@@ -47,9 +48,9 @@ import { makeAppQueryClient } from "@/lib/client/query-client";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
 import { trpc } from "@/lib/client/trpc";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
+import type { Principal } from "@/lib/server/auth/principal";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
-import { asId } from "@/lib/shared/schemas/ids";
 import { ActiveMatterPrefetch } from "./active-matter-prefetch";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
@@ -104,7 +105,7 @@ async function rehydrateGeneratedDocs(): Promise<void> {
   for (const b of blobs) stashGeneratedDoc(b.id, b.bytes, b.mimeType, b.fileName);
 }
 
-function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, recordProcedure?: ProcedureRecorder) {
+function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, principal: Principal, recordProcedure?: ProcedureRecorder) {
   const ports = inProcessPorts(dataStore, firmaConfig);
 
   return trpc.createClient({
@@ -113,18 +114,8 @@ function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, r
         dataStore,
         ports,
         ...(recordProcedure ? { recordProcedure } : {}),
-        authProvider: new GitAuthProvider({
-          // principalId sätts av login-flowet (`/login`). Demo utan satt
-          // principal → guest-id (datakällan filtrerar bort user-bundna
-          // queries tills login gjorts). Self-hosted-seed:en använder
-          // "current-user" tills self-hosted-login är implementerad.
-          id: asId<"UserId">(firmaConfig.principalId
-            || (firmaConfig.tier === "self-hosted" ? "current-user" : "")),
-          email: firmaConfig.authorEmail,
-          name: firmaConfig.authorName,
-          role: "ADMIN",
-          organizationId: asId<"OrganizationId">(firmaConfig.organizationId),
-        }),
+        // Principalen bär den inloggades roll ur hennes rad (#1864), aldrig ADMIN som standard.
+        authProvider: new GitAuthProvider(principal),
       }).createLink(),
     ],
     transformer: superjson,
@@ -182,18 +173,22 @@ function useDemoBootstrap(args: BootstrapArgs) {
     // den bundlade `demo-seed.json` in via reconcile/pull (ADR 0025). Demons
     // påhittade data delas medvetet av demoanvändarna (#1347: gemensamma namn).
     bindLocalNamespace(SHARED_NAMESPACE);
+    // En funktion, inte variabeln: avbrottet kan komma under varje await.
+    const isCancelled = (): boolean => cancelled;
     void (async () => {
       try {
         const store = await createDemoStore(firmaConfig);
-        if (cancelled) return;
-        const client = createDemoTrpcClient(store.store, firmaConfig);
+        if (isCancelled()) return;
+        const principal = await resolveClientPrincipal(store.store, firmaConfig);
+        if (isCancelled()) return;
+        const client = createDemoTrpcClient(store.store, firmaConfig, principal);
         onStoreReady(store, client);
         await queryClient.invalidateQueries();
         setStatus("ready");
         void preloadDocs(firmaConfig, store);
         void rehydrateGeneratedDocs();
       } catch (err) {
-        if (cancelled) return;
+        if (isCancelled()) return;
         setStatus("error");
         setErrorMsg(err instanceof Error ? err.message : String(err));
       }
@@ -485,7 +480,8 @@ interface SelfHostedBootstrapArgs {
   makeStore?: (local: LocalDataPlace | "binding") => Promise<CachingSyncDataStore>;
   /** Webbläsaren för sessionsgrinden (#1245). */
   gateEnv?: GateEnv;
-  makeClient?: (store: CachingSyncDataStore) => SelfHostedClient;
+  /** Klienten byggs med principalen, vars roll lästs ur den inloggades rad (#1864). */
+  makeClient?: (store: CachingSyncDataStore, principal: Principal) => SelfHostedClient;
   /** Förbered den inloggades lokala databaser (#1347); `null` = bindningsfasen. */
   openLocal?: (cfg: IdentityConfig, args: { binding: boolean }) => Promise<LocalDataPlace | null>;
   /** Proxyns utloggning, om en utloggning inte hann avsluta den (#1347) — avgjort av proxyns svar (#1418). */
@@ -543,11 +539,12 @@ async function openSelfHostedStore(a: SelfHostedBootstrapArgs, binding: boolean)
 async function loadSelfHosted(a: SelfHostedBootstrapArgs, oidc: { needsOidc: boolean; oidcClaims: OidcClaims | null }): Promise<void> {
   const { firmaConfig, queryClient, setStatus, setErrorMsg, onStoreReady, isCancelled } = a;
   // Procedur-kön (#1265, ADR 0037): servern kör om köbara anrop auktoritativt.
-  const makeClient = a.makeClient ?? ((store: CachingSyncDataStore) =>
-    createDemoTrpcClient(store.store, firmaConfig, (call, exec) => store.runQueuedProcedure(call, exec)));
+  const makeClient = a.makeClient ?? ((store: CachingSyncDataStore, principal: Principal) =>
+    createDemoTrpcClient(store.store, firmaConfig, principal, (call, exec) => store.runQueuedProcedure(call, exec)));
   const store = await openSelfHostedStore(a, oidc.needsOidc);
   if (isCancelled()) return;
-  const client = makeClient(store);
+  const principal = await resolveClientPrincipal(store.store, firmaConfig, { binding: oidc.needsOidc });
+  const client = makeClient(store, principal);
   if (await bindOidcFirstLogin({ ...oidc, client, setStatus, setErrorMsg })) return;
   if (isCancelled()) return;
   onStoreReady(store, client);

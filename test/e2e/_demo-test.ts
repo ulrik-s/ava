@@ -67,8 +67,11 @@ export async function seedDemoConfig(
  * Användaren läses ur den serverade `.ava/meta.json` i stället för att
  * hårdkodas: seed-datat genereras om vid varje `build:demo`, och en hårdkodad
  * UUID hade tystnat till "sidan renderar inte" nästa gång seeden ändras.
+ *
+ * `role` väljer vem som loggas in (#1864): klienten läser rollen ur
+ * användarens rad, så en spec som gör adminhandlingar loggar in som `ADMIN`.
  */
-export async function seedDemoLogin(page: Page, baseUrl: string = DEMO_BASE_URL): Promise<void> {
+export async function seedDemoLogin(page: Page, baseUrl: string = DEMO_BASE_URL, role: string = "ADMIN"): Promise<void> {
   const url = `${baseUrl}/.ava/meta.json`;
   const res = await page.request.get(url);
   if (!res.ok()) {
@@ -78,8 +81,8 @@ export async function seedDemoLogin(page: Page, baseUrl: string = DEMO_BASE_URL)
     organizationId: string;
     users: Array<{ id: string; name: string; role: string }>;
   };
-  const user = meta.users.find((u) => u.role === "ADMIN") ?? meta.users[0];
-  if (!user) throw new Error(`${url} saknar users — build-demo-repo har inte seedat klart`);
+  const user = meta.users.find((u) => u.role === role);
+  if (!user) throw new Error(`${url} saknar en användare med rollen ${role} — build-demo-repo har inte seedat klart`);
   await seedDemoConfig(page, {
     principalId: user.id,
     organizationId: meta.organizationId,
