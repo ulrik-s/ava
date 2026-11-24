@@ -4,7 +4,7 @@
  * och svaret alltid blev null).
  */
 import { afterEach, describe, expect, it, vi } from "vitest-compat";
-import { loadServerEndSessionUrl, loadServerHelperConfig } from "@/lib/client/backend/server-trpc-client";
+import { loadServerEndSessionUrl, loadServerHelperConfig, loadServerOffice365Config } from "@/lib/client/backend/server-trpc-client";
 
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
@@ -34,5 +34,25 @@ describe("loadServerEndSessionUrl (#1347)", () => {
     global.fetch = fetchMock;
     expect(await loadServerEndSessionUrl()).toBe("https://idp.example/logout");
     expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/api\/trpc\/system\.signOutConfig/);
+  });
+});
+
+describe("loadServerOffice365Config (#1949)", () => {
+  it("frågar serverns system.office365Config och ger byråns Entra-app", async () => {
+    const cfg = { clientId: "cid", tenantId: "tid" };
+    const fetchMock = vi.fn(() => Promise.resolve(trpcResponse(cfg)));
+    global.fetch = fetchMock;
+    expect(await loadServerOffice365Config()).toEqual(cfg);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/api\/trpc\/system\.office365Config/);
+  });
+
+  it("servern utan Entra → null", async () => {
+    global.fetch = vi.fn(() => Promise.resolve(trpcResponse(null)));
+    expect(await loadServerOffice365Config()).toBeNull();
+  });
+
+  it("servern går inte att nå → null, utan att något kastas", async () => {
+    global.fetch = vi.fn(() => Promise.reject(new TypeError("Failed to fetch")));
+    expect(await loadServerOffice365Config()).toBeNull();
   });
 });

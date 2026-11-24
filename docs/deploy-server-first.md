@@ -155,6 +155,10 @@ och Caddy skriver över headern med det verifierade värdet.
 # OAUTH2_PROXY_CLIENT_ID sätts automatiskt; ange bara om de skiljer sig.
 ```
 
+Har `AVA_IDENTITY_AUDIENCE` flera värden (kommaseparerat) ska oauth2-proxys
+klient-id stå först: webbappen använder det första värdet som sin Entra-app för
+Microsoft Graph (`system.office365Config`, #1949).
+
 - issuer och audience (ovan), och att token:en är signerad med RS256,
 - att servern når IdP:ns OIDC-discovery och nycklar,
 - oauth2-proxy lägger sin ID-token i auth-svaret

@@ -44,3 +44,19 @@ describe("serverCapabilities", () => {
     expect(serverCapabilities().llm).toBe(true);
   });
 });
+
+describe("systemRouter.office365Config (#1949)", () => {
+  afterEach(() => { delete process.env.AVA_IDENTITY_AUDIENCE; delete process.env.AVA_IDENTITY_ISSUER; });
+
+  it("Entra-miljö ger klient-id och tenant", async () => {
+    process.env.AVA_IDENTITY_AUDIENCE = "cid,helper";
+    process.env.AVA_IDENTITY_ISSUER = "https://login.microsoftonline.com/tid-1/v2.0";
+    expect(await systemRouter.createCaller({} as never).office365Config()).toEqual({ clientId: "cid", tenantId: "tid-1" });
+  });
+
+  it("annars null", async () => {
+    process.env.AVA_IDENTITY_AUDIENCE = "ava";
+    process.env.AVA_IDENTITY_ISSUER = "https://kc.example/realms/ava";
+    expect(await systemRouter.createCaller({} as never).office365Config()).toBeNull();
+  });
+});

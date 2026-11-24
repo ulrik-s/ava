@@ -10,6 +10,7 @@
 import { DEMO_CAPABILITIES } from "@/lib/shared/capabilities";
 import { signOutConfig } from "../auth/sign-out-config";
 import { helperOidcConfig } from "../http/bearer-claims";
+import { webAppOffice365Config } from "../integrations/msgraph/web-app-config";
 import { publicProcedure, router } from "../trpc-core";
 
 export const systemRouter = router({
@@ -26,4 +27,10 @@ export const systemRouter = router({
    * fungera även om sessionen redan gått ut.
    */
   signOutConfig: publicProcedure.query(() => signOutConfig()),
+  /**
+   * Byråns Entra-app för webbappens Microsoft Graph (#1949): klient-id och
+   * tenant ur installationens miljö, `null` utan Entra (Keycloak, demon).
+   * `publicProcedure` — ingen hemlighet, som grannarna.
+   */
+  office365Config: publicProcedure.query(() => webAppOffice365Config()),
 });

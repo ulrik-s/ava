@@ -12,6 +12,7 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { HelperConfigRequest } from "@/lib/shared/helper/protocol";
+import type { Office365Config } from "@/lib/shared/office365-config";
 import { serverTrpcEndpoint } from "./http-backend-runtime";
 
 /** Klient mot serverns tRPC-endpoint (`baseUrl` default: samma origin). */
@@ -31,4 +32,16 @@ export function loadServerHelperConfig(): Promise<HelperConfigRequest | null> {
 /** IdP:ns utloggnings-URL (#1347), läst AV SERVERN (env:en finns bara där). */
 export async function loadServerEndSessionUrl(): Promise<string | null> {
   return (await serverTrpcClient().system.signOutConfig.query()).endSessionUrl;
+}
+
+/**
+ * Byråns Entra-app för Microsoft Graph (#1949), läst AV SERVERN (env:en finns
+ * bara där). Når servern inte (demon) → null, utan att något kastas.
+ */
+export async function loadServerOffice365Config(): Promise<Office365Config | null> {
+  try {
+    return await serverTrpcClient().system.office365Config.query();
+  } catch {
+    return null;
+  }
 }
