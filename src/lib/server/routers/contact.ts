@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { conflictScore, parseConflictQuery } from "@/lib/shared/conflict-match";
+import { rankContacts } from "@/lib/shared/contact-search";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { Contact } from "@/lib/shared/schemas/contact";
 import { contactTypeSchema } from "@/lib/shared/schemas/enums";
@@ -9,22 +9,16 @@ import { router, orgProcedure, requireOrgOwned, TRPCError } from "../trpc";
 
 export const contactRouter = router({
   /**
-   * Klientsök (#1128): samma matchning som jävskontrollen — förnamn, efternamn,
-   * person-/orgnummer, var för sig eller tillsammans; bäst träff först. Driver
-   * "Välj klient…"-dialogen, som inte kan vara en dropdown när byrån har många.
+   * Klientsök (#1128): byråns sökregel för kontakter (#1866) — jävskontrollens
+   * matchning (förnamn, efternamn, person-/orgnummer, var för sig eller
+   * tillsammans) plus delsträngar och e-post med lägst rang; bäst träff först.
+   * Driver "Välj klient…"-dialogen, som inte kan vara en dropdown när byrån har många.
    */
   search: orgProcedure
     .input(z.object({ term: z.string().trim().min(1), limit: z.number().int().min(1).max(100).default(20) }))
     .query(async ({ ctx, input }) => {
-      const query = parseConflictQuery(input.term);
       const all = await ctx.repos.contacts.listAllForOrg(asId<"OrganizationId">(ctx.orgId));
-      const contacts = all
-        .map((c) => ({ c, score: conflictScore(c, query, "both") }))
-        .filter((s) => s.score > 0)
-        .sort((a, b) => b.score - a.score || a.c.name.localeCompare(b.c.name, "sv"))
-        .slice(0, input.limit)
-        .map((s) => s.c);
-      return { contacts };
+      return { contacts: rankContacts(all, input.term).slice(0, input.limit) };
     }),
 
   list: orgProcedure
