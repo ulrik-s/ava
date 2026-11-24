@@ -11,6 +11,7 @@ import {
   invoiceIdSchema,
   type OrganizationId,
 } from "@/lib/shared/schemas/ids";
+import { isLockedEntry, type LockableEntry } from "@/lib/shared/time-entry-lock";
 import { isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE } from "@/lib/shared/time-hours";
 import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
@@ -22,16 +23,17 @@ import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 import type { Context } from "../trpc-core";
 
 /**
- * En fryst post (`frozenAt`, satt när den ingick i en slutfaktura eller
- * kostnadsräkning) får varken ändras eller tas bort: det fakturerade eller till
- * domstolen redovisade underlaget hade annars inte längre stämt med posterna.
- * Aconto fryser inte — de posterna är fortfarande redigerbara.
+ * En låst post (`isLockedEntry`: fakturerad eller fryst av en slutfaktura eller
+ * kostnadsräkning, #1862/#1863) får varken ändras eller tas bort: det fakturerade
+ * eller till domstolen redovisade underlaget hade annars inte längre stämt med
+ * posterna. Samma regel och lydelse som utläggsroutern. Aconto låser inte — de
+ * posterna är fortfarande redigerbara.
  */
-function assertEditable(entry: { frozenAt?: Date | string | null | undefined }): void {
-  if (entry.frozenAt) {
+function assertEditable(entry: LockableEntry): void {
+  if (isLockedEntry(entry)) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Tidposten ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort.",
+      message: "Tidposten ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort.",
     });
   }
 }

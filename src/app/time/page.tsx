@@ -11,9 +11,11 @@ import { trpc } from "@/lib/client/trpc";
 import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
+import type { LockableEntry } from "@/lib/shared/time-entry-lock";
 import { TimeEntryEditModal, timeActionsColumn, useTimeEntryEditing } from "./_time-entry-editing";
 
-interface TimeRow {
+/** En rad på /time, med låsfälten som avgör om den får ändras (#1863). */
+interface TimeRow extends LockableEntry {
   id: string;
   date: string | Date;
   minutes: number;
@@ -21,7 +23,6 @@ interface TimeRow {
   billable: boolean;
   matter: { id: string; matterNumber: string; title: string };
   user?: { name?: string | null } | null;
-  frozenAt?: Date | string | null;
 }
 
 const timeColumns: Column<TimeRow>[] = [
@@ -229,7 +230,7 @@ export default function TimePage() {
       <DataTable
         prefKey="list.time-entries"
         columns={columns}
-        data={(timeEntries.data?.entries ?? []) as TimeRow[]}
+        data={timeEntries.data?.entries ?? []}
         rowKey={(e) => e.id}
         emptyMessage="Inga tidsposter."
       />

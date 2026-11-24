@@ -131,7 +131,7 @@ describe("DrizzleProcedureReplayer", () => {
     } as never);
     const res = await replayer.replay(call("timeEntry.update", { id, minutes: 90 }, [id]), ctx);
     expect(res).toMatchObject({ status: "rejected", code: "PRECONDITION_FAILED" });
-    expect(res.status === "rejected" && res.reason).toMatch(/slutfaktura eller kostnadsräkning/);
+    expect(res.status === "rejected" && res.reason).toMatch(/ingår i en faktura eller kostnadsräkning/);
     expect(await repos.timeEntries.getById(asId<"TimeEntryId">(id))).toMatchObject({ minutes: 60 });
     // Serverns läge följer med, så klienten kastar sitt optimistiska.
     expect(res.rows[0]).toMatchObject({ entity: "timeEntry", row: { id, minutes: 60 } });

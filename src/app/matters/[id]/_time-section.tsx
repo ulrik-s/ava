@@ -14,6 +14,7 @@ import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-
 import type { MatterStatus, PaymentMethod, TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 import type { StandardAtgard } from "@/lib/shared/standard-atgard";
+import { isLockedEntry, LOCKED_ENTRY_HINT } from "@/lib/shared/time-entry-lock";
 import { useMarkRadgivning, type MarkRadgivning } from "./_radgivning-entry";
 import { RattshjalpCapWarning } from "./_rattshjalp-cap-warning";
 import { StandardAtgardSuggestions } from "./_standard-atgard-suggestions";
@@ -252,19 +253,19 @@ function MarkRadgivningButton({ entry, radgivning }: { entry: TimeEntryRow; radg
 }
 
 /**
- * Ändra/Ta bort — eller låst (#1170): servern avvisar ändring av en post som
- * ingår i slutfaktura eller kostnadsräkning. Förr visades Ändra ändå och
+ * Ändra/Ta bort — eller låst (#1170, #1863): servern avvisar ändring av en post
+ * som är låst (`isLockedEntry`: fakturerad eller fryst). Förr visades Ändra ändå och
  * sparandet föll tyst — "inget händer". En låst ej debiterbar post kan ändå
  * markeras som rådgivning (#1235).
  */
 function TimeRowActions({ entry, onEdit, onDelete, radgivning }: {
   entry: TimeEntryRow; onEdit: (e: TimeEntryRow) => void; onDelete: (id: TimeEntryId) => void; radgivning: MarkRadgivning;
 }) {
-  if (entry.frozenAt) {
+  if (isLockedEntry(entry)) {
     return (
       <span className="whitespace-nowrap">
         <MarkRadgivningButton entry={entry} radgivning={radgivning} />
-        <span className="text-xs text-gray-500" title="Ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort.">
+        <span className="text-xs text-gray-500" title={LOCKED_ENTRY_HINT}>
           🔒 Låst
         </span>
       </span>

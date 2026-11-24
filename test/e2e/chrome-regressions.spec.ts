@@ -3,9 +3,11 @@
  *  - kolumnbredd: dra i kolumnkanten ändrade inget (markören ändrades, men
  *    automatisk tabell-layout höll kolumnen kvar)
  *  - tidsposter som ingår i slutfaktura/kostnadsräkning visade "Ändra" men
- *    sparandet föll tyst; nu "🔒 Låst", och olåsta sparas
+ *    sparandet föll tyst; nu "🔒 Låst", och olåsta sparas. Låst avgörs med
+ *    samma regel som appen (`isLockedEntry`, #1863): faktura eller frysning.
  */
 
+import { isLockedEntry } from "../../src/lib/shared/time-entry-lock";
 import { DEMO_BASE_URL, fetchDemoSeed, seedDemoLogin, test, expect } from "./_demo-test";
 
 test("kolumnbredd går att ändra genom att dra i kanten", async ({ page, baseURL }) => {
@@ -33,7 +35,7 @@ test("låsta tidsposter visar Låst; en olåst post går att ändra och spara", 
   const byMatter = new Map<string, { frozen: number; open: number }>();
   for (const e of entries) {
     const c = byMatter.get(e.matterId) ?? { frozen: 0, open: 0 };
-    if (e.frozenAt) c.frozen++; else c.open++;
+    if (isLockedEntry(e)) c.frozen++; else c.open++;
     byMatter.set(e.matterId, c);
   }
   const matterId = [...byMatter].find(([, c]) => c.frozen > 0 && c.open > 0)?.[0];
