@@ -5,17 +5,18 @@
 
 import type { PgBoss } from "pg-boss";
 import { describe, expect, it, vi } from "vitest-compat";
+import { JOB_QUEUES } from "@/lib/server/jobs/job-queue";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { asId } from "@/lib/shared/schemas/ids";
 
 describe("QueueBackedDocumentAnalyzer", () => {
-  it("enqueue:ar classify-document med documentId + organizationId + singletonKey (idempotens)", async () => {
+  it("enqueue:ar classify-document-v2 med documentId + organizationId + singletonKey (idempotens)", async () => {
     const send = vi.fn(async () => "job-1");
     const analyzer = new QueueBackedDocumentAnalyzer(() => ({ send } as unknown as PgBoss), "org-1");
     await analyzer.analyze(asId<"DocumentId">("doc-9"));
-    // singletonKey = documentId → som mest ett väntande classify-jobb per dokument (#504).
+    // singletonKey = documentId → som mest ett väntande classify-jobb per dokument (#504, #1900).
     expect(send).toHaveBeenCalledWith(
-      "classify-document",
+      JOB_QUEUES.classifyDocument,
       { documentId: "doc-9", organizationId: "org-1" },
       { singletonKey: "doc-9" },
     );

@@ -145,7 +145,7 @@ function main(): void {
   const ledger = ledgerWiring(config.organizationId);
   const ports = {
     ...noopPorts,
-    email: makeEmailPort(() => jobRuntime?.boss ?? null),
+    email: makeEmailPort(() => jobRuntime?.boss ?? null, config.organizationId),
     // Dokumentklassificering (#518): `document.analyze` enqueue:ar ett
     // classify-document-jobb durabelt på pg-boss i st.f. noop.
     documentAnalyzer: new QueueBackedDocumentAnalyzer(() => jobRuntime?.boss ?? null, config.organizationId),
