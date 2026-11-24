@@ -24,7 +24,7 @@
 
 import { buildSemanticVoucher, type VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { isIssued } from "@/lib/shared/invoice-state-machine";
-import type { LedgerAttachment, LedgerConnector } from "./port";
+import type { LedgerAttachment, LedgerConnector, PushVoucherResult } from "./port";
 
 /** Fakturaraden drivrutinen behöver — en delmängd av listvyns rad. */
 export interface BookableInvoice {
@@ -53,6 +53,8 @@ export interface BookingOutcome {
   /** Satt vid lyckad push (t.ex. "A/42"). Ömsesidigt uteslutande med `error`. */
   externalId: string | null;
   error: string | null;
+  /** Varför bilagan inte arkiverades med verifikatet (#1885); bokföringen lyckas ändå. */
+  attachmentError: string | null;
 }
 
 export interface BookInvoicesDeps {
@@ -65,18 +67,35 @@ export interface BookInvoicesDeps {
   attachmentFor?: (inv: BookableInvoice) => Promise<LedgerAttachment | undefined>;
 }
 
-/** Bilagan för en faktura, eller undefined. Fel här får INTE stoppa bokföringen:
- *  ett saknat PDF är ett arkiveringsproblem, inte ett bokföringsproblem. */
+/** Felets text, för utfallets `error` och `attachmentError`. */
+function reasonOf(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Bilagan (om någon) och skälet när den inte kunde hämtas (#1885). */
+interface AttachmentFetch {
+  attachment?: LedgerAttachment;
+  error: string | null;
+}
+
+/** Bilagan för en faktura. Fel här får INTE stoppa bokföringen: ett saknat PDF
+ *  är ett arkiveringsproblem, inte ett bokföringsproblem. Skälet sparas (#1885). */
 async function attachmentOrNone(
   inv: BookableInvoice,
   fetcher: BookInvoicesDeps["attachmentFor"],
-): Promise<LedgerAttachment | undefined> {
-  if (!fetcher) return undefined;
+): Promise<AttachmentFetch> {
+  if (!fetcher) return { error: null };
   try {
-    return await fetcher(inv);
-  } catch {
-    return undefined;
+    const attachment = await fetcher(inv);
+    return attachment ? { attachment, error: null } : { error: null };
+  } catch (e) {
+    return { error: reasonOf(e) };
   }
+}
+
+/** Skälet att bilagan saknas: hämtningens fel, annars connectorns (#1885). */
+function attachmentErrorOf(fetched: AttachmentFetch, res: PushVoucherResult): string | null {
+  return fetched.error ?? res.attachmentError ?? null;
 }
 
 /** Verifikat-push:aren, eller ett tydligt fel. Porten gör metoden valfri och
@@ -120,18 +139,18 @@ async function bookOne(inv: BookableInvoice, deps: BookInvoicesDeps, push: PushF
       invoiceNumber: inv.invoiceNumber,
       matterNumber: inv.matter?.matterNumber ?? null,
     });
-    const attachment = await attachmentOrNone(inv, deps.attachmentFor);
+    const fetched = await attachmentOrNone(inv, deps.attachmentFor);
     const res = await push(voucher, {
       idempotencyKey: inv.id,
-      ...(attachment ? { attachment } : {}),
+      ...(fetched.attachment ? { attachment: fetched.attachment } : {}),
     });
     // Write-back FÖRST efter lyckad push: kraschar vi mellan dem är fakturan
     // bokförd men omärkt → nästa körning dubbelbokför. Därför är det här den
     // enda riskfönstret, och felet säger vilket verifikat som skapades.
     await markBookedOrExplain(res.externalId, () => deps.markBooked(inv.id, res.externalId));
-    return { ...base, externalId: res.externalId, error: null };
+    return { ...base, externalId: res.externalId, error: null, attachmentError: attachmentErrorOf(fetched, res) };
   } catch (e) {
-    return { ...base, externalId: null, error: e instanceof Error ? e.message : String(e) };
+    return { ...base, externalId: null, error: reasonOf(e), attachmentError: null };
   }
 }
 

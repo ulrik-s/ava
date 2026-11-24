@@ -15,6 +15,7 @@
 
 import type { SemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
 import type {
+  LedgerAttachment,
   LedgerCapabilities,
   LedgerConnector,
   LedgerPushContext,
@@ -51,11 +52,24 @@ export class FortnoxLedgerConnector implements LedgerConnector {
     const resp = await this.deps.client.createVoucher(fortnoxVoucher);
     const series = resp.Voucher.VoucherSeries;
     const number = String(resp.Voucher.VoucherNumber);
-    // Bifoga faktura-PDF:en till konteringen (#785) — lagkrav att originalet arkiveras.
-    if (ctx?.attachment) {
-      const fileId = await this.deps.client.uploadInboxFile(ctx.attachment.fileName, ctx.attachment.bytes, ctx.attachment.contentType);
+    const externalId = `${series}/${number}`;
+    if (!ctx?.attachment) return { externalId };
+    const attachmentError = await this.attachOrExplain(ctx.attachment, series, number);
+    return attachmentError ? { externalId, attachmentError } : { externalId };
+  }
+
+  /**
+   * Bifoga faktura-PDF:en till konteringen (#785) — lagkrav att originalet
+   * arkiveras. Verifikatet finns redan, så ett fel här kastas inte (#1885): det
+   * blir skälet som returneras, annars null.
+   */
+  private async attachOrExplain(attachment: LedgerAttachment, series: string, number: string): Promise<string | null> {
+    try {
+      const fileId = await this.deps.client.uploadInboxFile(attachment.fileName, attachment.bytes, attachment.contentType);
       await this.deps.client.connectFileToVoucher(fileId, series, number);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
     }
-    return { externalId: `${series}/${number}` };
   }
 }
