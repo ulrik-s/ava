@@ -88,6 +88,34 @@ describe("FortnoxLedgerConnector", () => {
     expect(connections).toEqual([{ fileId: "file-guid-1", series: "A", number: "7" }]);
   });
 
+  // #1885: verifikatet finns redan — ett fel med bilagan kastas inte, det blir ett skäl.
+  it("en uppladdning som kastar ger ändå verifikatet, med skälet i attachmentError", async () => {
+    const { client, connections } = makeClient();
+    client.uploadInboxFile = () => Promise.reject(new Error("Fortnox: 500 inkorgen nere"));
+    const connector = new FortnoxLedgerConnector({ client, mapping: MAPPING });
+    const res = await connector.pushVoucher(semantic, { idempotencyKey: "br-1", attachment: { fileName: "F.pdf", bytes: new Uint8Array([1]) } });
+    expect(res).toEqual({ externalId: "A/7", attachmentError: "Fortnox: 500 inkorgen nere" });
+    expect(connections).toHaveLength(0);
+  });
+
+  it("en koppling som kastar ger ändå verifikatet, med skälet i attachmentError", async () => {
+    const { client, uploads } = makeClient();
+    client.connectFileToVoucher = () => Promise.reject(new Error("koppling nekad"));
+    const connector = new FortnoxLedgerConnector({ client, mapping: MAPPING });
+    const res = await connector.pushVoucher(semantic, { idempotencyKey: "br-1", attachment: { fileName: "F.pdf", bytes: new Uint8Array([1]) } });
+    expect(res).toEqual({ externalId: "A/7", attachmentError: "koppling nekad" });
+    expect(uploads).toHaveLength(1);
+  });
+
+  it("ett fel i createVoucher kastar som förut, och ingen fil laddas upp", async () => {
+    const { client, uploads } = makeClient();
+    client.createVoucher = () => Promise.reject(new Error("Fortnox: 400 Felaktig datastruktur"));
+    const connector = new FortnoxLedgerConnector({ client, mapping: MAPPING });
+    await expect(connector.pushVoucher(semantic, { idempotencyKey: "br-1", attachment: { fileName: "F.pdf", bytes: new Uint8Array([1]) } }))
+      .rejects.toThrow(/400/);
+    expect(uploads).toHaveLength(0);
+  });
+
   it("utan attachment laddas ingen fil upp", async () => {
     const { client, uploads, connections } = makeClient();
     const connector = new FortnoxLedgerConnector({ client, mapping: MAPPING });
