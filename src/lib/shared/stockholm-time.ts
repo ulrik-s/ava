@@ -51,6 +51,15 @@ export function stockholmDayStart(day: string): Date {
 }
 
 /**
+ * Ögonblicket för klockslaget `time` ("HH:MM") på den svenska kalenderdagen
+ * `day` ("YYYY-MM-DD") (#1855) — ett förhörs starttid, oavsett var koden kör.
+ */
+export function stockholmDateTime(day: string, time: string): Date {
+  const at = Temporal.PlainDateTime.from(`${day}T${time}`).toZonedDateTime(STOCKHOLM_TZ);
+  return new Date(at.epochMilliseconds);
+}
+
+/**
  * Gränserna för den svenska kalenderperioden `from`–`to` (båda "YYYY-MM-DD",
  * båda dagarna med): från början av `from` till sista millisekunden före
  * början av dagen efter `to`. Använd den på servern när ett ögonblick ska

@@ -28,6 +28,7 @@ import {
 import type { KrClaim } from "./kr-claim";
 import { formatDecimalHours, formatDecimalHoursWithUnit, formatOreAsKr } from "./kr-format";
 import type { OrgImage } from "./org-image";
+import { FORORDNANDE_AVSLUT_LABELS, type ForordnandeAvslut } from "./schemas/enums";
 
 /** Byråns uppgifter som dokumentet visar (brevhuvud, sidfot, bankgiro, ort). */
 export interface KrOrganization {
@@ -60,7 +61,7 @@ export interface KrHuvudforhandling {
 export type KrArvodeBasis =
   | { kind: "lopande"; notes: readonly string[] }
   | { kind: "brottmalstaxa"; level: TaxaLevel; taxa: TaxaResult; tidsspillan: TidsspillanUtover }
-  | { kind: "forordnande"; ford: Extract<ForordnandeResult, { kind: "taxa" }> };
+  | { kind: "forordnande"; ford: Extract<ForordnandeResult, { kind: "taxa" }>; avslut?: ForordnandeAvslut | undefined };
 
 /** Indata till dokumentvyn. */
 export interface KrDocumentInput {
@@ -209,11 +210,16 @@ function forordnandeRows(ford: ForordnandeTaxa): KrRowSpec[] {
   ];
 }
 
-function forordnandeNotes(ford: ForordnandeTaxa): string[] {
+/** Hur förundersökningen avslutades (#1855) — utan uppgift som tidigare. */
+function avslutText(avslut: ForordnandeAvslut | undefined): string {
+  return avslut ? FORORDNANDE_AVSLUT_LABELS[avslut] : "Förundersökningen har avslutats utan åtal";
+}
+
+function forordnandeNotes(ford: ForordnandeTaxa, avslut: ForordnandeAvslut | undefined): string[] {
   const ts = ford.tidsspillan;
   const total = ts.ingarOvrigMinutes + ts.ingarVardagMinutes + ts.extraOvrigMinutes + ts.extraVardagMinutes;
   const notes = [
-    `Förundersökningen har avslutats utan åtal — förordnandemål (DVFS 2025:5). Taxa, förhörstid ${ford.taxa.intervalLabel}.`,
+    `${avslutText(avslut)} — förordnandemål (DVFS 2025:5). Taxa, förhörstid ${ford.taxa.intervalLabel}.`,
     `Tidsspillan totalt ${formatDecimalHoursWithUnit(total)}, varav ${formatDecimalHoursWithUnit(ts.ingarOvrigMinutes + ts.ingarVardagMinutes)} ingår i taxan.`,
   ];
   if (ford.gransvardeOverskrids) notes.push("Arbetet överstiger taxans gränsvärde — taxan får frångås (10 §). Överväg löpande räkning.");
@@ -239,7 +245,7 @@ export function krArvodePart(basis: KrArvodeBasis, huf: KrHuvudforhandling, time
   switch (basis.kind) {
     case "lopande": return { rows: hourlyRowSpecs(lines), notes: [...basis.notes], specSuffix: "", lines };
     case "brottmalstaxa": return { rows: brottmalRows(basis, huf, lines), notes: brottmalNotes(basis, huf), specSuffix: " (ingår i taxan)", lines };
-    case "forordnande": return { rows: forordnandeRows(basis.ford), notes: forordnandeNotes(basis.ford), specSuffix: " (ingår i taxan)", lines };
+    case "forordnande": return { rows: forordnandeRows(basis.ford), notes: forordnandeNotes(basis.ford, basis.avslut), specSuffix: " (ingår i taxan)", lines };
     default: { const never: never = basis; return never; }
   }
 }
