@@ -12,7 +12,8 @@
  *   - mjukt raderade rader syns inte i listor, totaler eller dubblettkontroller,
  *   - `%` och `_` i en sökterm eller ett prefix är vanliga tecken,
  *   - sökningen skiljer inte på versaler och gemener, också för Å/Ä/Ö,
- *   - ärendenummerprefixet matchar exakt, med skiftläge.
+ *   - ärendenummerprefixet matchar exakt, med skiftläge,
+ *   - kontaktlistans id-filter ger bara de angivna kontakterna; tom lista = inga.
  *
  * Kända avvikelser per backend står i en ratchet-lista (`tooling/scripts/ratchet.ts`).
  */
@@ -137,6 +138,36 @@ const SCENARIOS: readonly Scenario[] = [
         lower: await contactNames(repos, org, "åsa"),
         upper: await contactNames(repos, org, "ÖBERG"),
       }, { lower: ["Åsa Öberg"], upper: ["Åsa Öberg"] });
+    },
+  },
+  {
+    // #1867: en sida ur en lista som redan är rangordnad i koden, med listradens _count.
+    name: "kontaktlistans id-filter: bara de angivna toppnivåkontakterna i byrån, tom lista = inga",
+    run: async (repos) => {
+      const org = newOrg();
+      const alfa = await addContact(repos, org, { name: "Alfa AB", contactType: "COMPANY" });
+      const beta = await addContact(repos, org, { name: "Beta" });
+      await addContact(repos, org, { name: "Ceta" });
+      const child = await addContact(repos, org, { name: "Barn", parentId: alfa.id });
+      const gone = await addContact(repos, org, { name: "Borta" });
+      await repos.contacts.softDelete(gone.id);
+      const foreign = await addContact(repos, newOrg(), { name: "Annan" });
+      await addParty(repos, await addMatter(repos, org, {}), alfa, "KLIENT", day("2026-01-01"));
+      const page = { page: 1, pageSize: 50 };
+      const list = await repos.contacts.listForOrg(org, { ...page, ids: [alfa.id, beta.id, child.id, gone.id, foreign.id] });
+      const empty = await repos.contacts.listForOrg(org, { ...page, ids: [] });
+      const typed = await repos.contacts.listForOrg(org, { ...page, ids: [alfa.id, beta.id], contactType: "COMPANY" });
+      return differs({
+        rows: list.contacts.map((c) => ({ name: c.name, _count: c._count })).sort((a, b) => a.name.localeCompare(b.name)),
+        total: list.total,
+        empty: { names: empty.contacts.map((c) => c.name), total: empty.total },
+        typed: typed.contacts.map((c) => c.name),
+      }, {
+        rows: [{ name: "Alfa AB", _count: { matterLinks: 1, children: 1 } }, { name: "Beta", _count: { matterLinks: 0, children: 0 } }],
+        total: 2,
+        empty: { names: [], total: 0 },
+        typed: ["Alfa AB"],
+      });
     },
   },
   {

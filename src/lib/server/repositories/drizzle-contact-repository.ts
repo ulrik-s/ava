@@ -14,7 +14,7 @@ import type { AppDb } from "../db/types";
 import type {
   ContactFull, ContactListOptions, ContactListResult, ContactListRow, ContactRepository,
 } from "./contact-repository";
-import { DrizzleRepository, versionedTable } from "./drizzle-repository";
+import { DrizzleRepository, idsWhere, versionedTable } from "./drizzle-repository";
 
 /** Sökningen: termen bokstavligt, `%` och `_` är vanliga tecken — som i minnesrepot (#1678). */
 function searchWhere(pattern: string) {
@@ -44,6 +44,7 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
       isNull(contacts.deletedAt),
       opts.contactType ? eq(contacts.contactType, opts.contactType) : undefined,
       opts.search ? searchWhere(containsPattern(opts.search)) : undefined,
+      opts.ids ? idsWhere(contacts.id, opts.ids) : undefined,
     );
     const rows = await this.db
       .select().from(contacts)

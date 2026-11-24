@@ -46,6 +46,17 @@ describe("ContactRepository — in-memory", () => {
     expect((await repo.listForOrg(asId<"OrganizationId">("org-2"), { page: 1, pageSize: 50 })).total).toBe(0); // fel org
   });
 
+  // #1867: id-filtret — bara de angivna kontakterna, med _count; tom lista = inga.
+  it("listForOrg: ids ger de angivna toppnivåkontakterna med _count, tom lista ger inga", async () => {
+    const { store, c1, child } = seed();
+    const repo = new InMemoryContactRepository(store);
+    const org = asId<"OrganizationId">("org-1");
+    const res = await repo.listForOrg(org, { ids: [c1, child], page: 1, pageSize: 50 });
+    expect(res.contacts.map((c) => ({ id: c.id, _count: c._count }))).toEqual([{ id: c1, _count: { matterLinks: 1, children: 1 } }]);
+    expect(res.total).toBe(1);
+    expect(await repo.listForOrg(org, { ids: [], page: 1, pageSize: 50 })).toEqual({ contacts: [], total: 0 });
+  });
+
   it("getByIdFull: barn + ärende-kopplingar, org-scopad", async () => {
     const { store, c1 } = seed();
     const repo = new InMemoryContactRepository(store);
