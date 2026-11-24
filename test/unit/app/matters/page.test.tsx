@@ -110,6 +110,7 @@ describe("MattersPage", () => {
           status: "ACTIVE",
           matterType: "Familjerätt",
           contacts: [{ contact: { id: "c1", name: "Anna" } }],
+          parties: [{ role: "KLIENT", name: "Anna" }],
           _count: { documents: 5, timeEntries: 10, contacts: 3 },
         },
       ],
@@ -186,6 +187,7 @@ describe("MattersPage", () => {
           status: "CLOSED",
           matterType: null,
           contacts: [],
+          parties: [],
           _count: { documents: 0, timeEntries: 0, contacts: 0 },
         },
         {
@@ -195,6 +197,7 @@ describe("MattersPage", () => {
           status: "ARCHIVED",
           matterType: null,
           contacts: [],
+          parties: [],
           _count: { documents: 0, timeEntries: 0, contacts: 0 },
         },
       ],
@@ -209,7 +212,7 @@ describe("MattersPage", () => {
   it("visar ärendetypen som egen kolumn — '—' när typ saknas", () => {
     const row = (id: string, matterType: string | null) => ({
       id, matterNumber: `2026-000${id}`, title: `Fall ${id}`, status: "ACTIVE", matterType,
-      contacts: [], _count: { documents: 0, timeEntries: 0, contacts: 0 },
+      contacts: [], parties: [], _count: { documents: 0, timeEntries: 0, contacts: 0 },
     });
     mattersQuery.data = { matters: [row("1", "Bodelning"), row("2", null)], total: 2, pages: 1 };
     render(<MattersPage />);
@@ -222,7 +225,7 @@ describe("MattersPage", () => {
     employeesQuery.data.users = [{ id: "u-cd", name: "Cecilia D", matterNumberPrefix: "CD" }];
     const row = (id: string, matterNumber: string) => ({
       id, matterNumber, title: `Fall ${id}`, status: "ACTIVE", responsibleLawyerId: "u-cd",
-      contacts: [], _count: { documents: 0, timeEntries: 0, contacts: 0 },
+      contacts: [], parties: [], _count: { documents: 0, timeEntries: 0, contacts: 0 },
     });
     mattersQuery.data = { matters: [row("1", "AB2026-0001"), row("2", "CD2026-0002")], total: 2, pages: 1 };
     render(<MattersPage />);

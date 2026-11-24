@@ -27,6 +27,8 @@ export interface MatterRow {
   previousCourtCaseNumber?: string | null | undefined;
   insuranceReference?: string | null | undefined;
   contacts: Array<{ contact: { name: string } }>;
+  /** Ärendets parter, KLIENT först (#1869); "Träff" visar de som matchar (#1870). */
+  parties: Array<{ role: string; name: string }>;
   _count: { contacts: number };
   hits?: string[] | undefined;
 }
