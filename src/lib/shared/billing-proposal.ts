@@ -10,6 +10,9 @@ import { arvodeInclVatOre } from "./invoice-calc";
 import type { ExpenseKind, TimeEntryKind } from "./schemas/enums";
 import { shareOfRow } from "./whole-kronor";
 
+/** Klientens andel i aconto-förslaget (20 %, i bips) när ärendet inte har en egen. */
+export const DEFAULT_ACCONTO_SHARE_BIPS = 2000;
+
 /**
  * Föreslaget aconto-belopp i öre, inkl. moms (#1726):
  *   belopp = (%-sats (bips) × upparbetat värde exkl. moms) + 25 % moms − Σ tidigare aconton.
