@@ -262,3 +262,14 @@ test("faktura-detalj visar tidsspecifikationen i decimaltimmar", async ({ page }
   await expect(row).toContainText(`${(entry?.minutes ?? 0) / 60} h`);
   await expect(page.locator("body")).not.toContainText(/\d\.\d h/);
 });
+
+// #1868: Parter söker med samma regel som Välj klient — "efternamn förnamn"
+// hittar kontakten, vilket den gamla delsträngssökningen i repot inte gjorde.
+test("Parter: en sökning 'efternamn förnamn' hittar kontakten", async ({ page }) => {
+  const seed = await fetchDemoSeed(page, BASE);
+  expect(seed.contacts.some((c) => c.name === "Cecilia Carlsson"), "demodatan ska ha kontakten Cecilia Carlsson").toBe(true);
+  await page.goto(`${BASE}/contacts/`, { waitUntil: "domcontentloaded" });
+  await page.getByPlaceholder("Sök parter...").fill("Carlsson Cecilia");
+  await expect(page.locator("tr", { hasText: "Cecilia Carlsson" }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("tr", { hasText: "Anna Andersson" })).toHaveCount(0);
+});

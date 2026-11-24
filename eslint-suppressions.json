@@ -3100,7 +3100,7 @@
   },
   "test/unit/server/routers/contact.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
+      "count": 2
     }
   },
   "test/unit/server/routers/document.events.test.ts": {
