@@ -5,7 +5,7 @@
  * Bas-CRUD ärvs; läsmetoderna org-scopar direkt (ärenden bär `organizationId`).
  */
 
-import type { MatterStatus } from "@/lib/shared/schemas/enums";
+import type { MatterRole, MatterStatus } from "@/lib/shared/schemas/enums";
 import type { ContactId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import type { Repository } from "./types";
@@ -21,10 +21,42 @@ export interface MatterContactContactView {
   phone?: string | null;
 }
 
-/** Listrad: ärende + KLIENT-kontakt + relations-antal (matter.list). */
+/** En part på listraden (#1869): kopplingens roll och kontaktens namn. */
+export interface MatterListParty {
+  role: MatterRole;
+  name: string;
+}
+
+/** Listrad: ärende + KLIENT-kontakt + parter + relations-antal (matter.list). */
 export interface MatterListRow extends Matter {
+  /** Den första KLIENT-parten (klientkolumnen); tom om ärendet saknar klient. */
   contacts: Array<{ contact: { id: ContactId; name: string } }>;
+  /**
+   * Ärendets parter (#1869): KLIENT först, sedan övriga, inom varje grupp i
+   * kopplingens `createdAt`-ordning. Mjukt raderade kopplingar är inte med.
+   */
+  parties: MatterListParty[];
   _count: { documents: number; timeEntries: number; contacts: number };
+}
+
+/** En ärendekoppling som listraden byggs av (kontakten med id och namn). */
+export interface MatterListLink {
+  role: MatterRole;
+  contact: { id: ContactId; name: string };
+}
+
+/**
+ * Listradens `parties` och `contacts` ur samma kopplingar (#1869), så att
+ * klientkolumnen och parterna har samma källa. `links` är i `createdAt`-ordning.
+ */
+export function listPartiesOf(links: readonly MatterListLink[]): Pick<MatterListRow, "contacts" | "parties"> {
+  const klient = links.filter((l) => l.role === "KLIENT");
+  const ordered = [...klient, ...links.filter((l) => l.role !== "KLIENT")];
+  const first = klient[0];
+  return {
+    contacts: first ? [{ contact: { id: first.contact.id, name: first.contact.name } }] : [],
+    parties: ordered.map((l) => ({ role: l.role, name: l.contact.name })),
+  };
 }
 
 /** Detaljrad: ärende + alla kontakter (createdAt asc) + relations-antal (matter.getById). */
