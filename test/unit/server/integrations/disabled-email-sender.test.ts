@@ -49,14 +49,14 @@ describe("loadActiveSmtpConfig", () => {
 describe("makeEmailPort", () => {
   it("avstängt → vägrande port; den KÖAR inget (boss:en rörs aldrig)", async () => {
     let bossTouched = false;
-    const port = makeEmailPort(() => { bossTouched = true; return null; }, { AVA_EMAIL_DISABLED: "1" });
+    const port = makeEmailPort(() => { bossTouched = true; return null; }, "org-1", { AVA_EMAIL_DISABLED: "1" });
     expect(port).toBeInstanceOf(DisabledEmailSender);
     await expect(port.send({ to: "k@x.se", subject: "s", text: "t" })).rejects.toThrow(EMAIL_DISABLED_MESSAGE);
     expect(bossTouched).toBe(false);
   });
 
   it("på → den köande porten som förut", () => {
-    expect(makeEmailPort(() => null, {})).toBeInstanceOf(QueueBackedEmailSender);
+    expect(makeEmailPort(() => null, "org-1", {})).toBeInstanceOf(QueueBackedEmailSender);
   });
 });
 

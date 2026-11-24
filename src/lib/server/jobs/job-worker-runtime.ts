@@ -16,6 +16,7 @@ import {
   JOB_QUEUES,
   JOB_SCHEDULE_TZ,
   JOB_SCHEDULES,
+  RETIRED_JOB_QUEUES,
   type JobQueueName,
   type JobSchedule,
   createJobQueue,
@@ -64,13 +65,21 @@ export async function startJobRuntime(opts: JobRuntimeOptions): Promise<JobRunti
   return { boss, stop: () => boss.stop({ graceful: true }) };
 }
 
-/** Registrera en `boss.work`-worker per kö som har en handler. */
-async function registerWorkers(
-  boss: Awaited<ReturnType<typeof createJobQueue>>,
-  handlers: JobHandlers,
-): Promise<void> {
-  for (const name of Object.values(JOB_QUEUES)) {
-    const handler = handlers[name];
+/** Den del av pg-boss som worker-registreringen använder (fejkbar i enhetstester). */
+export interface WorkBoss {
+  work(name: string, handler: (jobs: Job[]) => Promise<void>): Promise<string>;
+}
+
+/** Köerna som ska ha en worker: varje kö, och varje gammal kö med efterträdarens handler (#1900). */
+function workerQueues(handlers: JobHandlers): Array<readonly [string, JobHandler | undefined]> {
+  const current = Object.values(JOB_QUEUES).map((name) => [name, handlers[name]] as const);
+  const retired = Object.entries(RETIRED_JOB_QUEUES).map(([old, next]) => [old, handlers[next]] as const);
+  return [...current, ...retired];
+}
+
+/** Registrera en `boss.work`-worker per kö som har en handler, också de gamla köerna. */
+export async function registerWorkers(boss: WorkBoss, handlers: JobHandlers): Promise<void> {
+  for (const [name, handler] of workerQueues(handlers)) {
     if (!handler) continue;
     await boss.work(name, async (jobs: Job[]) => {
       for (const job of jobs) await handler(job);

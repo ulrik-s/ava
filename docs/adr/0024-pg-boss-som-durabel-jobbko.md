@@ -1,6 +1,9 @@
 # ADR 0024 — pg-boss som durabel jobb-kö (server-first)
 
 Status: Accepterad (2026-06-19)
+**Reviderad 2026-11-24 (#1900):** `singletonKey` stoppar bara dubbletter i en kö
+med en policy, så e-post- och klassningskön byttes mot `email-dispatch-v2`
+(`exclusive`) och `classify-document-v2` (`stately`); se [Idempotens](#idempotens).
 
 ## Kontext
 
@@ -32,7 +35,7 @@ Varje krav i #504 mappas mot pg-boss:
 | #504-krav | pg-boss |
 |-----------|---------|
 | Claim/lease, ingen dubbelkörning | `fetch` använder `FOR UPDATE SKIP LOCKED`; en kraschad workers lease löper ut → jobbet återtas |
-| Retry/backoff, `maxAttempts` | `createQueue(name, { retryLimit, retryBackoff: true })` (`startJobQueue`, retryLimit 5) |
+| Retry/backoff, `maxAttempts` | `createQueue(name, { retryLimit, retryBackoff: true, ...JOB_QUEUE_OPTIONS[name] })` (`startJobQueue`, retryLimit 5; köns policy och retention ur `JOB_QUEUE_OPTIONS`) |
 | `runAfter` (fördröjd/schemalagd) | `send(name, data, { startAfter })`; cron via `schedule()` |
 | Dead-letter | inbyggt `failed`-state efter uttömda retries |
 | Status `queued/running/done/failed` | pg-boss jobb-state-maskin |
@@ -45,14 +48,22 @@ Två lager, i linje med ADR 0017 ("server upsertar på id → ingen dubbel-skapa
 vid omspelning"):
 
 1. **Enqueue-dedupe (`singletonKey`):** anrop till `send` förses med en stabil
-   nyckel så att som mest ETT väntande/aktivt jobb finns per nyckel — upprepade
-   triggers (reconcile-replay, dubbelklick, at-least-once-anrop uppströms)
-   skapar inte dubbletter.
-   - `classify-document`: `singletonKey = documentId` — det väntande jobbet
-     läser ändå dokumentets aktuella state, så att droppa dubbletten är säkert.
-   - `email-dispatch`: `singletonKey = SendEmailInput.idempotencyKey` när
-     anroparen anger den (t.ex. fakturans/påminnelsens UUIDv7) → en replay
-     skickar inte samma mejl två gånger. Utan nyckel: oförändrat beteende.
+   nyckel, och kön har en policy som gör nyckeln unik: `exclusive` ger som mest
+   ett köat eller pågående jobb per nyckel, `stately` som mest ett köat och ett
+   pågående. Upprepade triggers (reconcile-replay, dubbelklick,
+   at-least-once-anrop uppströms) skapar då inte dubbletter.
+   Med standardpolicyn gör `singletonKey` ingenting. En kös policy kan inte
+   bytas efter att kön skapats, så ett byte görs med en ny kö (`-v2`), och
+   samma handler tömmer den gamla (`RETIRED_JOB_QUEUES`, #1900).
+   - `classify-document-v2` (`stately`): `singletonKey = documentId`. En
+     dubblett tappas bara när ett jobb redan väntar, och det väntande jobbet
+     läser dokumentets aktuella state. Ändras dokumentet medan ett jobb pågår
+     köas ett nytt.
+   - `email-dispatch-v2` (`exclusive`): `singletonKey = <byrå>:<idempotencyKey>`
+     när anroparen anger en nyckel (t.ex. påminnelsens
+     `payment.due:<plan>:<månad>`) → en replay skickar inte samma mejl två
+     gånger. Utan nyckel får jobbet en slumpad nyckel (`uuidv7()`), så att mejl
+     utan nyckel inte stoppar varandra.
 
 2. **Idempotenta handlers:** varje handler ska kunna köras om utan biverkningar
    (classify skriver samma `documentType`; metadata-uppdateringar är upsertande).
@@ -73,9 +84,15 @@ connection mot samma DB.
 - Nya server-jobb läggs till genom att (a) lägga ett namn i `JOB_QUEUES`, (b)
   registrera en handler i `buildServerFirstJobHandlers`, (c) enqueue:a via en
   port (`QueueBackedEmailSender`/`QueueBackedDocumentAnalyzer`-mönstret) med en
-  `singletonKey` när idempotens behövs.
-- Enhetstester mockar `boss.send` och verifierar payload + `singletonKey`; ett
-  riktigt pg-boss-mot-Postgres-test behövs inte för portarna.
+  `singletonKey` när idempotens behövs. `createQueue` får köns optioner ur
+  `JOB_QUEUE_OPTIONS`, och en ny kö som använder `singletonKey` får en policy där.
+- Portarnas enhetstester mockar `boss.send` och verifierar payload +
+  `singletonKey`, men köernas dubblettstopp testas mot riktig pg-boss
+  (`PG_TEST_URL`).
+- **Bakåtrullning (#1900):** backas servern till en tagg från före köbytet
+  väntar mejl och dokumentanalyser i `email-dispatch-v2` och
+  `classify-document-v2` tills en nyare tagg körs igen. Efter 14 dagar tar
+  pg-boss bort dem.
 - Om vi någon gång vill bort från pg-boss-beroendet får en egen kö övervägas på
   nytt — men först när ett konkret skäl finns (denna ADR supersedas då).
 

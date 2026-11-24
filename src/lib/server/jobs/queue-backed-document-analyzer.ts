@@ -1,6 +1,6 @@
 /**
  * `QueueBackedDocumentAnalyzer` (#518) — `IDocumentAnalyzer`-porten för
- * server-first som KÖAR ett `classify-document`-jobb durabelt på pg-boss i
+ * server-first som KÖAR ett `classify-document-v2`-jobb durabelt på pg-boss i
  * st.f. att klassificera synkront. `classify-document-handler` plockar och
  * kör (filnamns-heuristik nu, server-LLM i Fas 3). Routrar anropar
  * `ctx.ports.documentAnalyzer.analyze(documentId)` som vanligt
@@ -24,10 +24,10 @@ export class QueueBackedDocumentAnalyzer implements IDocumentAnalyzer {
   async analyze(documentId: DocumentId): Promise<void> {
     const boss = this.getBoss();
     if (!boss) throw new Error("jobb-kön är inte redo — dokumentet kunde inte köas för klassificering");
-    // Idempotens (#504, ADR 0024): `singletonKey = documentId` → som mest ETT
-    // väntande/aktivt classify-jobb per dokument. Upprepade analyze-anrop
-    // (uppladdning + manuell "Analysera" + reconcile-replay) skapar inte
-    // dubbletter; det väntande jobbet läser ändå dokumentets aktuella state.
+    // Idempotens (#504, #1900, ADR 0024): kön är `stately` och
+    // `singletonKey = documentId`. En dubblett tappas bara när ett jobb redan
+    // väntar, och det väntande jobbet läser dokumentets aktuella state. Ändras
+    // dokumentet medan ett jobb pågår köas ett nytt.
     await boss.send(
       JOB_QUEUES.classifyDocument,
       { documentId, organizationId: this.organizationId },

@@ -17,17 +17,25 @@
  * vid start med `boss.schedule`, bara om kön har en handler, och tar bort
  * scheman i databasen som inte längre är deklarerade. Inga egna `setInterval`.
  *
+ * Köpolicy (#1900, ADR 0024): `singletonKey` stoppar bara dubbletter i en kö
+ * med en policy (`exclusive`, `stately` …); med standardpolicyn gör nyckeln
+ * ingenting. En kös policy kan inte bytas efter att kön skapats, så ett byte
+ * görs med en ny kö (`-v2`), och den gamla kön töms av samma handler
+ * (`RETIRED_JOB_QUEUES`).
+ *
  * Anslutning: connectionString (pg-boss egen pool). `fromDrizzle`-adaptern delar
  * pool men antar `pg`-resultatformen (`.rows`) → krockar med vårt postgres-js +
  * pglite — därför egen connection (samma DB, eget schema).
  */
 
-import { PgBoss, type ScheduleOptions } from "pg-boss";
+import { PgBoss, type Queue, type ScheduleOptions } from "pg-boss";
 
 /** De server-sidiga jobb-köerna (Fas 3 kopplar in handlers). */
 export const JOB_QUEUES = {
-  emailDispatch: "email-dispatch",
-  classifyDocument: "classify-document",
+  /** `exclusive`: som mest ett köat eller pågående mejl per nyckel (#1900). */
+  emailDispatch: "email-dispatch-v2",
+  /** `stately`: som mest ett köat och ett pågående jobb per dokument (#1900). */
+  classifyDocument: "classify-document-v2",
   /** Indexera ett dokuments sidtext utan omklassificering (#1215, backfill). */
   indexDocument: "index-document",
   fortnoxSync: "fortnox-sync",
@@ -37,6 +45,29 @@ export const JOB_QUEUES = {
 } as const;
 
 export type JobQueueName = (typeof JOB_QUEUES)[keyof typeof JOB_QUEUES];
+
+/** Hur länge ett köat jobb (created/retry) får vänta innan pg-boss tar bort det: 14 dagar. */
+export const QUEUED_JOB_RETENTION_SECONDS = 14 * 24 * 60 * 60;
+
+/** En kös egna optioner utöver retry: policyn som gör `singletonKey` unik (#1900). */
+export type JobQueueOptionsFor = Pick<Queue, "policy" | "retentionSeconds">;
+
+/** Köernas policy och retention; en kö som använder `singletonKey` ska ha en post här. */
+export const JOB_QUEUE_OPTIONS: Partial<Record<JobQueueName, JobQueueOptionsFor>> = {
+  [JOB_QUEUES.emailDispatch]: { policy: "exclusive", retentionSeconds: QUEUED_JOB_RETENTION_SECONDS },
+  [JOB_QUEUES.classifyDocument]: { policy: "stately", retentionSeconds: QUEUED_JOB_RETENTION_SECONDS },
+};
+
+/**
+ * De gamla köerna (utan policy) och kön som ersatt dem (#1900). De skapas och
+ * får en worker med efterträdarens handler: jobb som redan ligger i dem ska
+ * köras klart, och en worker utan kö loggar `jobqueue.error` vid varje
+ * pollning. Inget nytt köas här.
+ */
+export const RETIRED_JOB_QUEUES = {
+  "email-dispatch": JOB_QUEUES.emailDispatch,
+  "classify-document": JOB_QUEUES.classifyDocument,
+} as const satisfies Record<string, JobQueueName>;
 
 /** Tidszonen för alla schemalagda jobb: en kalenderdag i AVA är dagen i Stockholm (#1677). */
 export const JOB_SCHEDULE_TZ = "Europe/Stockholm";
@@ -72,13 +103,24 @@ export function createJobQueue(opts: JobQueueOptions): PgBoss {
   return new PgBoss({ connectionString: opts.connectionString, schema: opts.schema ?? DEFAULT_SCHEMA });
 }
 
+/** Den del av pg-boss som köstarten använder (fejkbar i enhetstester); `PgBoss` uppfyller den. */
+export interface QueueBoss {
+  start(): Promise<unknown>;
+  createQueue(name: string, options?: Omit<Queue, "name">): Promise<void>;
+}
+
 /**
  * Starta pg-boss (skapar/migrerar `pgboss`-schemat — idempotent) och registrera
- * alla köer med retry + exponentiell backoff. Anropa en gång vid server-start.
+ * alla köer med retry + exponentiell backoff, och köns policy ur
+ * `JOB_QUEUE_OPTIONS`. De gamla köerna skapas som förut, utan policy.
+ * `createQueue` ändrar inte en befintlig kö. Anropa en gång vid server-start.
  */
-export async function startJobQueue(boss: PgBoss, retryLimit = DEFAULT_RETRY_LIMIT): Promise<void> {
+export async function startJobQueue(boss: QueueBoss, retryLimit = DEFAULT_RETRY_LIMIT): Promise<void> {
   await boss.start();
   for (const name of Object.values(JOB_QUEUES)) {
+    await boss.createQueue(name, { retryLimit, retryBackoff: true, ...JOB_QUEUE_OPTIONS[name] });
+  }
+  for (const name of Object.keys(RETIRED_JOB_QUEUES)) {
     await boss.createQueue(name, { retryLimit, retryBackoff: true });
   }
 }

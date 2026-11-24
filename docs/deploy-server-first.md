@@ -567,6 +567,10 @@ version går ut. Med en `contract`-migration stannar deployen i stället och
 säger det; då gäller det manuella nedan. Timern försöker inte samma tagg igen
 (`releases/.deploy-failed`): rätta och sätt en ny tagg.
 
+Backas servern till en tagg från före köbytet (#1900) väntar mejl och
+dokumentanalyser i `email-dispatch-v2` och `classify-document-v2` tills en
+nyare tagg körs igen. Efter 14 dagar tar pg-boss bort dem.
+
 **Klienten** (en UI-regression — det vanliga fallet) byts tillbaka på en
 sekund, utan omstart:
 
@@ -686,7 +690,7 @@ dokument får dem efter migration 0027 och omstart av `server-first` med:
 avarun tooling/scripts/backfill-search-index.ts --reclassify
 ```
 
-Skriptet köar ett `classify-document`-jobb per dokument (indexering +
+Skriptet köar ett `classify-document-v2`-jobb per dokument (indexering +
 klassificering + segmentering). Användarens val skrivs inte över:
 specialvärden i dokumenttypen (Kostnadsräkning, E-post, fritext) rörs inte och
 får inga delar; en dokumenttyp som användaren satt (en kategorikod som servern

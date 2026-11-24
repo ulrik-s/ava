@@ -2914,9 +2914,6 @@
     }
   },
   "test/unit/server/jobs/queue-backed-email-sender.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "no-restricted-syntax": {
       "count": 1
     }

@@ -138,7 +138,11 @@
 - **pg-boss jobb-kö** (#504): durabel server-sidig kö på samma Postgres (eget
   `pgboss`-schema). Claim/lease (FOR UPDATE SKIP LOCKED), retry/backoff,
   dead-letter. Handlers (t.ex. e-postutskick via smtp-sender) registreras i
-  runtimen; `ctx.ports.email` köar durabelt. **Schemalagda jobb** (#1802):
+  runtimen; `ctx.ports.email` köar durabelt. En kö som använder `singletonKey`
+  har en policy i `JOB_QUEUE_OPTIONS` (`exclusive`/`stately`), annars stoppar
+  nyckeln inga dubbletter; policyn kan inte bytas på en befintlig kö, så de
+  gamla köerna utan policy (`RETIRED_JOB_QUEUES`) töms av efterträdarens
+  handler (#1900). **Schemalagda jobb** (#1802):
   en post i `JOB_SCHEDULES` (kö + cron i svensk tid, `missed` `once` som
   standard) plus köns handler i `buildServerFirstJobHandlers`; runtimen
   registrerar den med `boss.schedule` vid start, bara när kön har en handler,
@@ -146,7 +150,7 @@
   `ledger-keepalive` (#1815, måndag 03:00) håller bokföringsanslutningen vid
   liv via `ILedgerService.keepAlive`, bara när Fortnox är konfigurerat;
   `reconnect-required` loggas på `error` varje vecka tills någon ansluter.
-- **Fulltextsökning** (#1215): dokumentjobben (`classify-document`,
+- **Fulltextsökning** (#1215): dokumentjobben (`classify-document-v2`,
   `index-document`) extraherar texten EN gång per jobb, per sida
   (`extractPages`), och skriver den till `document_pages` (genererad
   `tsvector`, 'swedish'-stemming, GIN-index). `PostgresSearchIndex` svarar på
@@ -444,7 +448,7 @@ CachingSyncDataStore: LocalStore uppdateras OPTIMISTISKT (UI ser ändringen dire
 ```
 
 Server-sidiga sido-effekter (e-postutskick m.m.) går INTE synkront i request:en —
-de **köas durabelt** via pg-boss (`ctx.ports.email.send` → `email-dispatch`-kön →
+de **köas durabelt** via pg-boss (`ctx.ports.email.send` → `email-dispatch-v2`-kön →
 handler → smtp-sender, med retry/backoff/dead-letter). Tål server-restart (#504).
 
 ## Auth
@@ -462,7 +466,7 @@ den verifierar mot IdP:n; `forwarded` är reserv.
 ## Dokumentklassificering (LLM)
 
 Klassificering av dokument (`documentType`) körs **server-side** via jobb-kön
-(#518): vid upload enqueue:as ett `classify-document`-jobb som läser dokument-
+(#518): vid upload enqueue:as ett `classify-document-v2`-jobb som läser dokument-
 bytes, extraherar text (pdfjs/mammoth) och frågar en ollama-tjänst bakom
 docker-`--profile llm` (`AVA_LLM_ENDPOINT`/`AVA_LLM_MODEL`). Fail-soft hela
 vägen → filnamns-heuristik (`guessFromFilename`) om LLM:en är av/nere. Ingen
