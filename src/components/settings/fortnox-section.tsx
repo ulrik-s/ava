@@ -9,6 +9,7 @@
  * ut), måste anslutas igen (Fortnox godtog inte förnyelsen) och inte ansluten.
  */
 
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { useConnectLedger, useLedgerStatus } from "@/lib/client/backend/server-ledger";
 import { trpc } from "@/lib/client/trpc";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
@@ -55,7 +56,7 @@ export function FortnoxSection() {
   if (!status.data?.configured) return null;
   const hasConnected = status.data.connected || status.data.reconnectRequired;
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+    <div className={SECTION_CARD_CLASS}>
       <StatusLine status={status.data} />
       <p className="mt-1 text-xs text-gray-500">
         Utställda fakturor bokförs som verifikat mot kontona nedan (knappen &quot;Bokför i Fortnox&quot; på fakturan).
@@ -65,7 +66,7 @@ export function FortnoxSection() {
           type="button"
           disabled={connect.isPending}
           onClick={() => connect.mutate()}
-          className="mt-3 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          className="mt-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
         >
           {hasConnected ? "Anslut igen" : "Anslut Fortnox"}
         </button>

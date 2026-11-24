@@ -10,6 +10,7 @@
 
 import { ExternalLink, CheckCircle2, XCircle, Loader2, CloudUpload, AlertTriangle, CloudCheck, Copy, Check } from "lucide-react";
 import { useState } from "react";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { useHelper, useHelperSyncStatus, triggerHelperUpdateCheck } from "@/lib/client/helper/use-helper";
 
 const GUIDE_URL = "https://github.com/ulrik-s/ava/blob/main/docs/helper-installation.md";
@@ -18,11 +19,11 @@ export function HelperSection() {
   const status = useHelper();
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center gap-2 mb-3">
+    <div className={SECTION_CARD_CLASS}>
+      <div className="flex items-center gap-2 mb-2">
         <h2 className="font-semibold text-gray-900">AVA Helper</h2>
       </div>
-      <p className="text-xs text-gray-500 mb-4">
+      <p className="text-xs text-gray-500 mb-2">
         Liten app på din Mac som öppnar PDF/Word-dokument direkt i dina vanliga
         program (Word, PDF Gear, Förhandsvisning…) och skickar tillbaka
         ändringarna till AVA när du sparar. Installeras en gång. Öppna
@@ -34,7 +35,7 @@ export function HelperSection() {
       {status.version ? <SyncStatus /> : null}
       {status.checked && !status.version ? <MacInstall /> : null}
 
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
         <a href={GUIDE_URL} target="_blank" rel="noreferrer"
           className="inline-flex items-center gap-1 text-blue-600 hover:underline">
           <ExternalLink size={14} /> Installationsguide
@@ -67,9 +68,9 @@ function MacInstall() {
     void navigator.clipboard.writeText(command).then(() => setCopied(true), () => setCopied(false));
   };
   return (
-    <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm">
+    <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 p-2 text-sm">
       <p className="font-medium text-gray-900 mb-2">Installera på Mac</p>
-      <ol className="list-decimal pl-5 space-y-1 text-gray-700 mb-3">
+      <ol className="list-decimal pl-5 space-y-1 text-gray-700 mb-2">
         <li>Klicka på <strong>Kopiera</strong> nedan.</li>
         <li>Tryck <kbd className="font-mono bg-white border rounded px-1">⌘ mellanslag</kbd>, skriv <strong>Terminal</strong> och tryck Enter.</li>
         <li>Klistra in (<kbd className="font-mono bg-white border rounded px-1">⌘ V</kbd>) och tryck Enter.</li>

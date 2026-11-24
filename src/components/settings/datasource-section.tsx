@@ -10,6 +10,7 @@
 import { Database } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSignOutFlow } from "@/components/shell/sign-out-flow";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import type { FirmaConfig } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
@@ -27,19 +28,19 @@ export function DatasourceSection() {
 
   if (!config) {
     return (
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+      <div className={SECTION_CARD_CLASS}>
         <div className="text-xs text-gray-400">Laddar datakälla…</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center gap-2 mb-3">
+    <div className={SECTION_CARD_CLASS}>
+      <div className="flex items-center gap-2 mb-2">
         <Database size={16} className="text-gray-500" />
         <h2 className="font-semibold text-gray-900">Datakälla & inloggning</h2>
       </div>
-      <p className="text-xs text-gray-500 mb-4">
+      <p className="text-xs text-gray-500 mb-2">
         Self-hosted: din byrås data ligger på er server (Postgres) som du loggar
         in på via OIDC. Klienten är offline-first — ändringar sparas lokalt och
         synkas automatiskt mot servern när du är online. Demon kör utan server.
@@ -67,7 +68,7 @@ export function LoginStatus() {
   const { requestSignOut, busy, dialog } = useSignOutFlow();
 
   return (
-    <div className="mt-4 border-t border-gray-100 pt-4">
+    <div className="mt-2 border-t border-gray-100 pt-2">
       <span className="text-xs text-gray-500 block mb-1">Inloggning</span>
       {me.isLoading ? (
         <p className="text-xs text-gray-400">Kollar inloggning…</p>

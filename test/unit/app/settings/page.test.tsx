@@ -5,6 +5,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import SettingsPage from "@/app/settings/page";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { requestUrl } from "@/lib/shared/request-url";
 import { TINY_PNG, TINY_PNG_BYTES } from "../../../helpers/tiny-images";
 
@@ -141,6 +142,18 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("heading", { name: /Logotyp/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^Kontor$/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Kontaktuppgifter/i })).toBeInTheDocument();
+  });
+
+  it("rutornas avdelningar har tunn ram och 8 px luft (SECTION_CARD_CLASS, #1847)", () => {
+    render(<SettingsPage />);
+    for (const name of [/^Kontor$/, /Kontaktuppgifter/]) {
+      const card = screen.getByRole("heading", { name }).closest("div.rounded-lg");
+      expect(card?.className).toBe(SECTION_CARD_CLASS);
+    }
+    const preview = screen.getByText(/Förhandsgranskning av sidfot/).parentElement;
+    expect(preview?.className.split(" ")).toContain("p-2");
+    expect(preview?.className).not.toMatch(/p-4|mb-5/);
+    expect(screen.getByText(/Visas i genererade dokument/).className.split(" ")).toContain("mb-2");
   });
 
   it("populerar form från settings.data och visar i förhandsgranskning", () => {
