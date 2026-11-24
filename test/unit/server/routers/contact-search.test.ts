@@ -18,8 +18,9 @@ function caller() {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "Byrån" }, { id: "org-2", name: "Annan byrå" }],
     contacts: [
-      { id: "c1", organizationId: "org-1", name: "Anna Karlsson", contactType: "PERSON", personalNumber: "19800101-1234", parentId: null },
+      { id: "c1", organizationId: "org-1", name: "Anna Karlsson", contactType: "PERSON", personalNumber: "19800101-1234", email: "anna@exempel.se", parentId: null },
       { id: "c2", organizationId: "org-1", name: "Annika Berg", contactType: "PERSON", personalNumber: "19750505-4321", parentId: null },
+      { id: "c6", organizationId: "org-1", name: "Björn Kask", contactType: "PERSON", parentId: null },
       { id: "c3", organizationId: "org-1", name: "Lindström Bygg AB", contactType: "COMPANY", orgNumber: "556677-8899", parentId: null },
       // Kontaktperson under bolaget — väljs inte som klient.
       { id: "c4", organizationId: "org-1", name: "Anna Lindström", contactType: "PERSON", parentId: "c3" },
@@ -57,5 +58,18 @@ describe("contacts.search (#1128)", () => {
 
   it("respekterar limit", async () => {
     expect((await caller().contacts.search({ term: "Ann", limit: 1 })).contacts).toHaveLength(1);
+  });
+
+  // #1866: delsträngsregeln — e-post, de fyra sista siffrorna och mitt i ett ord.
+  it("e-post, de fyra sista siffrorna och en delsträng mitt i ett ord ger träff", async () => {
+    const c = caller();
+    expect(names(await c.contacts.search({ term: "anna@exempel" }))).toEqual(["Anna Karlsson"]);
+    expect(names(await c.contacts.search({ term: "1234" }))).toEqual(["Anna Karlsson"]);
+    expect(names(await c.contacts.search({ term: "sson" }))).toEqual(["Anna Karlsson"]);
+  });
+
+  it("delsträngsträffar rangordnas efter jävsträffarna", async () => {
+    // "ka": Karlsson och Kask börjar på termen; Annika har den bara mitt i ordet.
+    expect(names(await caller().contacts.search({ term: "ka" }))).toEqual(["Anna Karlsson", "Björn Kask", "Annika Berg"]);
   });
 });
