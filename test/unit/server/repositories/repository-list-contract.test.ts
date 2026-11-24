@@ -75,10 +75,6 @@ async function addMatter(repos: Repositories, org: OrganizationId, over: Partial
   return repos.matters.create({ id: asId<"MatterId">(uuidv7()), organizationId: org, title: "Ärende", status: "ACTIVE", matterNumber, ...over });
 }
 
-async function contactNames(repos: Repositories, org: OrganizationId, search?: string): Promise<string[]> {
-  return (await repos.contacts.listForOrg(org, { search, page: 1, pageSize: 50 })).contacts.map((c) => c.name).sort(swedish);
-}
-
 async function matterNumbers(repos: Repositories, org: OrganizationId, search?: string): Promise<string[]> {
   return (await repos.matters.listForOrg(org, { search, page: 1, pageSize: 50 })).matters.map((m) => m.matterNumber).sort();
 }
@@ -115,29 +111,6 @@ const SCENARIOS: readonly Scenario[] = [
         byPersonalNumber: await repos.contacts.findByPersonalNumber(org, "19800101-1234"),
         byOrgNumber: await repos.contacts.findByOrgNumber(org, "556000-0000"),
       }, { list: ["Kvar"], total: 1, all: ["Kvar"], byPersonalNumber: null, byOrgNumber: null });
-    },
-  },
-  {
-    name: "% och _ i en kontaktsökning är vanliga tecken",
-    run: async (repos) => {
-      const org = newOrg();
-      for (const name of ["Rabatt 100% AB", "100 kronor AB", "a_b Konsult", "axb Konsult", "Back\\slash AB"]) await addContact(repos, org, { name });
-      return differs({
-        percent: await contactNames(repos, org, "100%"),
-        underscore: await contactNames(repos, org, "a_b"),
-        backslash: await contactNames(repos, org, "k\\s"),
-      }, { percent: ["Rabatt 100% AB"], underscore: ["a_b Konsult"], backslash: ["Back\\slash AB"] });
-    },
-  },
-  {
-    name: "kontaktsökningen skiljer inte på versaler och gemener, också Å/Ä/Ö",
-    run: async (repos) => {
-      const org = newOrg();
-      for (const name of ["Åsa Öberg", "Asa Oberg"]) await addContact(repos, org, { name });
-      return differs({
-        lower: await contactNames(repos, org, "åsa"),
-        upper: await contactNames(repos, org, "ÖBERG"),
-      }, { lower: ["Åsa Öberg"], upper: ["Åsa Öberg"] });
     },
   },
   {

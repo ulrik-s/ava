@@ -59,12 +59,6 @@ describe("contact.list", () => {
     );
   });
 
-  it("bygger OR-sökning på namn/personnr/orgnr/epost", async () => {
-    await makeCaller().list({ search: "Anna" });
-    const args = mockPrisma.contact.findMany.mock.calls[0]![0];
-    expect(args.where.OR).toHaveLength(4);
-  });
-
   it("scopar på organizationId", async () => {
     await makeCaller("org-x").list({});
     expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(

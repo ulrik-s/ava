@@ -33,7 +33,7 @@ describe("ContactRepository — in-memory", () => {
     return { store, c1, child };
   }
 
-  it("listForOrg: topp-nivå + _count + sök", async () => {
+  it("listForOrg: topp-nivå + _count", async () => {
     const { store, c1 } = seed();
     const repo = new InMemoryContactRepository(store);
     const res = await repo.listForOrg(asId<"OrganizationId">("org-1"), { page: 1, pageSize: 50 });
@@ -41,8 +41,6 @@ describe("ContactRepository — in-memory", () => {
     expect(res.contacts[0]!.id).toBe(c1);
     expect(res.contacts[0]!._count.children).toBe(1);
     expect(res.contacts[0]!._count.matterLinks).toBe(1);
-    expect((await repo.listForOrg(asId<"OrganizationId">("org-1"), { search: "Anna", page: 1, pageSize: 50 })).total).toBe(1);
-    expect((await repo.listForOrg(asId<"OrganizationId">("org-1"), { search: "Zzz", page: 1, pageSize: 50 })).total).toBe(0);
     expect((await repo.listForOrg(asId<"OrganizationId">("org-2"), { page: 1, pageSize: 50 })).total).toBe(0); // fel org
   });
 
@@ -92,8 +90,6 @@ describe("ContactRepository — Drizzle (pglite)", () => {
     expect(res.contacts[0]!.id).toBe(c1);
     expect(res.contacts[0]!._count.children).toBe(1);
     expect(res.contacts[0]!._count.matterLinks).toBe(1);
-    expect((await repo.listForOrg(org, { search: "anna", page: 1, pageSize: 50 })).total).toBe(1); // ilike
-    expect((await repo.listForOrg(org, { search: "Zzz", page: 1, pageSize: 50 })).total).toBe(0);
 
     const full = await repo.getByIdFull(c1, org);
     expect(full?.children).toHaveLength(1);

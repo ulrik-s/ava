@@ -31,16 +31,6 @@ export class InMemoryContactRepository extends InMemoryRepository<Contact> imple
       deletedAt: null, // mjukt raderade syns inte, som i Postgres (#1678)
       ...(opts.contactType ? { contactType: opts.contactType } : {}),
       ...(opts.ids ? { id: { in: [...opts.ids] } } : {}),
-      ...(opts.search
-        ? {
-            OR: [
-              { name: { contains: opts.search, mode: "insensitive" as const } },
-              { personalNumber: { contains: opts.search } },
-              { orgNumber: { contains: opts.search } },
-              { email: { contains: opts.search, mode: "insensitive" as const } },
-            ],
-          }
-        : {}),
     };
     const [contacts, total] = await Promise.all([
       this.delegate.findMany({
