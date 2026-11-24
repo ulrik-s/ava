@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
+import { SECTION_CARD_CLASS, SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { parseCamtXml, type CamtFile } from "@/lib/shared/payments/camt-parse";
@@ -134,15 +135,15 @@ export default function PaymentImportPage() {
   const panels = [
     { id: "file", title: "Fil", render: () => (
       <>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-gray-500 mb-2">
           camt.054/053 (SEB/Bankgirot &quot;Kontohändelser via fil&quot;) — matchas mot OCR, fakturanummer eller fri text.
           Domstolsbetalningar (utan OCR) matchas på ärende-/målnummer mot förväntade fordringar (#173).
           Driftskrav: ta emot domstolsbetalningar på ett bankgiro/konto som tillåter <em>fri referens</em> —
           ett OCR-låst bankgiro kan avvisa betalningar utan OCR.
         </p>
-        {doneMsg && <p className="mb-4 text-sm text-green-700 bg-green-50 rounded p-3">{doneMsg}</p>}
+        {doneMsg && <p className="mb-2 text-sm text-green-700 bg-green-50 rounded p-3">{doneMsg}</p>}
         <FilePicker onXml={(x) => { setDoneMsg(null); setXml(x); }} xml={xml} />
-        {parsed.error && <p className="mt-4 text-sm text-red-700">Kunde inte läsa filen: {parsed.error}</p>}
+        {parsed.error && <p className="mt-2 text-sm text-red-700">Kunde inte läsa filen: {parsed.error}</p>}
       </>
     ) },
     { id: "match", title: "Matchning", render: () => (outcome
@@ -176,9 +177,9 @@ function ReceivableSuggestions({
   onSettle: (s: ReceivableSuggestion) => void;
 }) {
   return (
-    <div className="mt-6 bg-white rounded-lg border border-gray-200 p-5">
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
       <h2 className="font-semibold text-gray-900 mb-1">Domstolsbetalningar — förväntade fordringar ({suggestions.length})</h2>
-      <p className="text-xs text-gray-500 mb-3">
+      <p className="text-xs text-gray-500 mb-2">
         Matchade på ärende-/målnummer i betalningens referens. Bekräfta varje avprickning —
         utbetalt belopp bokas (ev. prutning hanteras automatiskt, #173).
       </p>
@@ -190,7 +191,7 @@ function ReceivableSuggestions({
 
 function FilePicker({ onXml, xml }: { onXml: (s: string) => void; xml: string }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-3">
+    <div className={`${SECTION_CARD_CLASS} space-y-2`}>
       <label className="block text-sm font-medium text-gray-700">
         Välj camt-fil (XML)
         <input
@@ -219,9 +220,9 @@ function FilePicker({ onXml, xml }: { onXml: (s: string) => void; xml: string })
 function ImportPreview({ outcome, labels, busy, onBook }: { outcome: MatchOutcome; labels: Record<string, string>; busy: boolean; onBook: () => void }) {
   const sum = outcome.bookable.reduce((s, b) => s + b.amountOre, 0);
   return (
-    <div className="mt-6 space-y-6">
-      <section className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-900 mb-3">Matchade betalningar ({outcome.bookable.length})</h2>
+    <div className="space-y-2">
+      <section className={SECTION_CARD_CLASS}>
+        <h2 className="font-semibold text-gray-900 mb-2">Matchade betalningar ({outcome.bookable.length})</h2>
         {outcome.bookable.length === 0 ? (
           <p className="text-sm text-gray-500">Inga matchade betalningar i filen.</p>
         ) : (
@@ -229,7 +230,7 @@ function ImportPreview({ outcome, labels, busy, onBook }: { outcome: MatchOutcom
             columns={bookableColumns(labels)} />
         )}
         {outcome.bookable.length > 0 && (
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-2 flex items-center justify-between">
             <span className="text-sm text-gray-600">Summa: <Money ore={sum} basis="gross" className="font-mono font-medium" /></span>
             <button
               type="button"
@@ -243,8 +244,8 @@ function ImportPreview({ outcome, labels, busy, onBook }: { outcome: MatchOutcom
         )}
       </section>
       {outcome.unmatched.length > 0 && (
-        <section className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="font-semibold text-gray-900 mb-3">Kräver granskning ({outcome.unmatched.length})</h2>
+        <section className={SECTION_CARD_CLASS}>
+          <h2 className="font-semibold text-gray-900 mb-2">Kräver granskning ({outcome.unmatched.length})</h2>
           <ul className="space-y-1.5 text-sm">
             {outcome.unmatched.map((u) => (
               <li key={u.tx.reference} className="flex items-center justify-between">

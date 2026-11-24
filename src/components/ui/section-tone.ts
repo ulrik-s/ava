@@ -31,6 +31,12 @@ const TONES: Readonly<Record<SectionTone, string>> = {
  */
 export const SECTION_FILL_CLASS = "bg-white";
 
+/**
+ * Ytan för en av flera avdelningar i samma ruta (#1846): vit med tunn ram och
+ * 8 px luft inuti. Rutan ger 8 px runt och mellan avdelningarna.
+ */
+export const SECTION_CARD_CLASS = "bg-white rounded-lg border border-gray-200 p-2";
+
 /** Klasser för en avdelnings rubrikrad. `layout` = flex-uppställningen (default: titel vänster, åtgärder höger). */
 export function sectionHeaderClass(tone: SectionTone, layout = "flex items-center justify-between"): string {
   return `px-3 py-2 border-b border-l-4 ${TONES[tone]} ${layout}`;

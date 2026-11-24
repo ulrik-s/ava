@@ -8,6 +8,7 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
@@ -35,9 +36,9 @@ export function ArSummarySection({ from, to, userId, lawyerName }: { from: strin
   const suffix = userId && lawyerName ? ` — andel för ${lawyerName}` : "";
 
   return (
-    <section className="bg-white rounded-lg border border-gray-200 p-6">
+    <section className={`${SECTION_FILL_CLASS} p-2`}>
       <h2 className="font-semibold text-gray-900 mb-1">Kundfordringar</h2>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-gray-500 mb-2">
         Fakturor utställda i perioden{suffix} — fakturerat, inbetalt och konstaterad kundförlust.
       </p>
 
@@ -122,7 +123,7 @@ const AR_COLUMNS: Column<ArRow>[] = [
 
 function ArInvoiceTable({ rows }: { rows: readonly ArRow[] }) {
   return (
-    <div className="mt-6">
+    <div className="mt-2">
       <h3 className="text-sm font-medium text-gray-600 mb-2">Per faktura</h3>
       <DataTable prefKey="list.report-ar-invoices" columns={AR_COLUMNS} data={[...rows]} rowKey={(r) => r.id} />
     </div>

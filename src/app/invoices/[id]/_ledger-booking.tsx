@@ -28,7 +28,7 @@ function buttonLabel(invoiceBooked: boolean, pending: number): string {
 
 function BookedLine({ fortnoxId, bookedPayments }: { fortnoxId: string; bookedPayments: number }) {
   return (
-    <p className="mt-3 text-sm text-green-700">
+    <p className="mt-2 text-sm text-green-700">
       ✓ Bokförd i Fortnox (verifikat {fortnoxId}){bookedPayments > 0 && ` · ${bookedPayments} betalning${bookedPayments === 1 ? "" : "ar"} bokförd${bookedPayments === 1 ? "" : "a"}`}
     </p>
   );
@@ -51,7 +51,7 @@ export function LedgerBooking({ invoiceId, status, fortnoxId, payments }: Props)
     <>
       {fortnoxId && <BookedLine fortnoxId={fortnoxId} bookedPayments={payments.length - pending} />}
       {canBook && (
-        <div className="mt-3">
+        <div className="mt-2">
           <button
             type="button"
             disabled={book.isPending}

@@ -9,6 +9,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { Money } from "@/components/ui/money";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
@@ -130,7 +131,7 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
 /** Betalningar, ev. avbetalningsplan och avskrivningar — det som rör vad som kommit in. */
 function InvoicePaymentsPanel({ inv, ledger, onCancelPlan }: { inv: Inv; ledger: LedgerView; onCancelPlan: () => void }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {inv.paymentPlan && <PaymentPlanCard plan={inv.paymentPlan} onCancel={onCancelPlan} />}
       <PaymentsTable payments={inv.payments} paidSum={ledger.paidSum} />
       {ledger.writeOffs.length > 0 && <WriteOffsCard writeOffs={ledger.writeOffs} />}
@@ -141,7 +142,7 @@ function InvoicePaymentsPanel({ inv, ledger, onCancelPlan }: { inv: Inv; ledger:
 /** Vita summerings-kortet: SummaryGrid + åtgärdsknappar + ev. notering. */
 function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: InvoiceDetailState }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className={SECTION_CARD_CLASS}>
       <SummaryGrid
         inv={inv} paidSum={ledger.paidSum} writtenOffSum={ledger.writtenOffSum}
         outstanding={ledger.outstanding} accontoDeductionTotal={ledger.accontoDeductionTotal} netAmount={ledger.netAmount}
@@ -160,7 +161,7 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
         onSetStatus={(status) => s.setStatus.mutate({ invoiceId: inv.id, status: status as Parameters<typeof s.setStatus.mutate>[0]["status"] })}
       />
       <LedgerBooking invoiceId={inv.id} status={inv.status} fortnoxId={inv.fortnoxId} payments={inv.payments} />
-      {inv.notes && <p className="mt-4 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
+      {inv.notes && <p className="mt-2 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
     </div>
   );
 }
@@ -181,11 +182,11 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
   const totalMinutes = view.timeLines.reduce((s, l) => s + l.minutes, 0);
   const totalAmount = view.timeLines.reduce((s, l) => s + l.amountOre, 0);
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className={SECTION_CARD_CLASS}>
       <h2 className="font-semibold text-gray-900 mb-1">Specifikation</h2>
-      <p className="text-sm text-gray-500 mb-4">Samma underlag och belopp som faktura-dokumentet.</p>
+      <p className="text-sm text-gray-500 mb-2">Samma underlag och belopp som faktura-dokumentet.</p>
       {view.timeLines.length > 0 && (
-        <table className="min-w-full text-sm mb-4">
+        <table className="min-w-full text-sm mb-2">
           <thead>
             <tr className="text-left text-xs text-gray-500">
               <th className="py-1 font-normal">Datum</th>
@@ -285,8 +286,8 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
 
 function WriteOffsCard({ writeOffs }: { writeOffs: ReadonlyArray<{ amount: number; writtenOffAt?: string | Date; reason?: string | null | undefined }> }) {
   return (
-    <div className="bg-white rounded-lg border border-red-200 p-6">
-      <h2 className="font-semibold text-red-900 mb-3">Konstaterad kundförlust</h2>
+    <div className="bg-white rounded-lg border border-red-200 p-2">
+      <h2 className="font-semibold text-red-900 mb-2">Konstaterad kundförlust</h2>
       <table className="min-w-full text-sm">
         <tbody className="divide-y divide-gray-100">
           {writeOffs.map((w, i) => (
@@ -355,7 +356,7 @@ function CreditBanners({ inv }: { inv: Inv }) {
   return (
     <>
       {creditNote && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm">
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 text-sm">
           <p className="font-medium text-orange-900">Denna faktura är krediterad.</p>
           <p className="text-orange-800 mt-1">
             <EntityLink route="invoices" id={creditNote.id} className="underline">
@@ -366,7 +367,7 @@ function CreditBanners({ inv }: { inv: Inv }) {
         </div>
       )}
       {inv.invoiceType === "CREDIT" && creditedInvoice && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm">
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 text-sm">
           <p className="font-medium text-orange-900">Detta är en kreditfaktura.</p>
           <p className="text-orange-800 mt-1">
             Krediterar{" "}
@@ -389,7 +390,7 @@ function PaymentPlanCard({
   onCancel: () => void;
 }) {
   return (
-    <div className="bg-white rounded-lg border border-indigo-200 p-6">
+    <div className="bg-white rounded-lg border border-indigo-200 p-2">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="font-semibold text-indigo-900">Avbetalningsplan</h2>
@@ -405,9 +406,8 @@ function PaymentPlanCard({
           </button>
         )}
       </div>
-
       {plan.reminders.length > 0 && (
-        <div className="mt-4 pt-4 border-t">
+        <div className="mt-2 pt-2 border-t">
           <p className="text-xs font-medium mb-2">Utskick</p>
           <ul className="text-xs text-gray-600 space-y-1">
             {plan.reminders.map((r: { id: string; type: string; dueMonth: string; sentAt: string | Date }) => (
@@ -476,9 +476,9 @@ function FinalInvoiceExtras({ inv, ledger }: { inv: Inv; ledger: LedgerView }) {
 /** Slutfaktura-sammanställning (#349 C): hela ärendets belopp + betalningar. */
 function SettlementSummaryCard({ settlement }: { settlement: MatterSettlement }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className={SECTION_CARD_CLASS}>
       <h2 className="font-semibold text-gray-900 mb-1">Sammanställning</h2>
-      <p className="text-sm text-gray-500 mb-4">Hela ärendets belopp och betalningar.</p>
+      <p className="text-sm text-gray-500 mb-2">Hela ärendets belopp och betalningar.</p>
       <dl className="divide-y divide-gray-100">
         {settlementRows(settlement).map((r) => (
           <div key={r.label} className="flex items-center justify-between py-1.5">
@@ -498,10 +498,10 @@ function SpecificationCard({ timeEntries, expenses, rounding }: { timeEntries: S
   const expenseInclOf = (e: SpecExpenseRow) => specCardTotals([], [e], rounding).expensesGrossOre;
   const { arvodeVatOre: arvodeMomsOre, totalOre: summaUnderlag } = specCardTotals(timeEntries, expenses, rounding);
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h2 className="font-semibold mb-3">Underlag (specifikation)</h2>
+    <div className={SECTION_CARD_CLASS}>
+      <h2 className="font-semibold mb-2">Underlag (specifikation)</h2>
       {timeEntries.length > 0 && (
-        <div className="mb-4">
+        <div className="mb-2">
           <p className="text-xs font-medium text-gray-500 mb-1">Arbetad tid</p>
           <table className="min-w-full text-sm">
             <thead>
@@ -532,7 +532,7 @@ function SpecificationCard({ timeEntries, expenses, rounding }: { timeEntries: S
         </div>
       )}
       {expenses.length > 0 && (
-        <div className="mb-4">
+        <div className="mb-2">
           <p className="text-xs font-medium text-gray-500 mb-1">Utlägg</p>
           <table className="min-w-full text-sm">
             <tbody className="divide-y divide-gray-100">
@@ -557,8 +557,8 @@ function SpecificationCard({ timeEntries, expenses, rounding }: { timeEntries: S
 
 function AccontoDeductions({ deductions }: { deductions: AccontoDeductionRow[] }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h2 className="font-semibold mb-3">Acontoavdrag</h2>
+    <div className={SECTION_CARD_CLASS}>
+      <h2 className="font-semibold mb-2">Acontoavdrag</h2>
       <table className="min-w-full text-sm">
         <tbody className="divide-y divide-gray-100">
           {deductions.map((d: AccontoDeductionRow) => d.accontoInvoice && (

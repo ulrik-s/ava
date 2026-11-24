@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
@@ -161,7 +162,7 @@ export default function ReportsPage() {
 function SummaryCard({ report }: { report: Report }) {
   const { totals, user } = report;
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
       <div className="flex flex-wrap gap-6 text-sm">
         <div>
           <div className="text-gray-500 text-xs uppercase">Advokat</div>
@@ -218,9 +219,9 @@ const mattersTableColumns: Column<MatterRow>[] = [
 
 function MattersTable({ report }: { report: Report }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
       <h2 className="font-semibold text-gray-900 mb-1">{SECTION_TITLES.matters}</h2>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-gray-500 mb-2">
         Ärenden där {report.user.name} har registrerat tid eller utlägg.
       </p>
 
@@ -263,9 +264,9 @@ function WeeklyTable({ report }: { report: Report }) {
   const anyActivity = report.weeklyRows.some((r) => r.totalMinutes > 0);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
       <h2 className="font-semibold text-gray-900 mb-1">{SECTION_TITLES.weekly}</h2>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-gray-500 mb-2">
         ISO-veckor som överlappar perioden. Debiterbar tid i fetstil.
       </p>
 
@@ -316,9 +317,9 @@ function UnbilledTable({ report }: { report: Report }) {
   const hasHighRisk = riskTotals.HIGH + riskTotals.UNKNOWN > 0;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
       <h2 className="font-semibold text-gray-900 mb-1">{SECTION_TITLES.unbilled}</h2>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-gray-500 mb-2">
         Debiterbar tid och utlägg för {report.user.name} inom perioden som
         ännu inte är knutna till en faktura.
       </p>
@@ -328,7 +329,7 @@ function UnbilledTable({ report }: { report: Report }) {
       ) : (
         <>
           {/* Kreditrisk-sammanfattning */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
             {(["LOW", "MEDIUM", "HIGH", "UNKNOWN"] as const).map((risk) => (
               <div
                 key={risk}
@@ -345,7 +346,7 @@ function UnbilledTable({ report }: { report: Report }) {
           </div>
 
           {hasHighRisk && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <div className="mb-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               ⚠ {formatCurrency(riskTotals.HIGH + riskTotals.UNKNOWN)} av det ofakturerade
               arbetet ligger under hög eller okänd kreditrisk. Kontrollera
               betalningssätt på berörda ärenden innan du fakturerar.

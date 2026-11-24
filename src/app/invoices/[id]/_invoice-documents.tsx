@@ -5,6 +5,7 @@
  * (ADR 0038) och öppning i ny flik. Utbruten ur `_client.tsx` (filstorleken).
  */
 
+import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
@@ -51,8 +52,8 @@ export function InvoiceDocumentsCard({ documents }: { documents: InvoiceDocRow[]
   const utils = trpc.useUtils();
   if (documents.length === 0) return null;
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h2 className="font-semibold mb-3">Fakturadokument</h2>
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
+      <h2 className="font-semibold mb-2">Fakturadokument</h2>
       <ul className="text-sm divide-y divide-gray-100">
         {documents.map((d) => (
           <li key={d.id} className="py-2 flex items-center justify-between">
