@@ -68,6 +68,12 @@ describe("MatterHeaderDetails", () => {
     render(<MatterHeaderDetails {...EMPTY} contacts={ADVERSE} insuranceReference="SK-1" />);
     expect(screen.queryByTestId("matter-insurance-reference")).not.toBeInTheDocument();
   });
+
+  it("rollen Försäkringsbolag avgör, inte kontakttypen: ett företag i rollen visar referensen (#1961)", () => {
+    const company = [{ role: "FORSAKRINGSBOLAG", contact: { contactType: "COMPANY" } }] as const;
+    render(<MatterHeaderDetails {...EMPTY} contacts={company} insuranceReference="SK-1" />);
+    expect(screen.getByTestId("matter-insurance-reference")).toHaveTextContent("Försäkringsreferens: SK-1");
+  });
 });
 
 describe("MatterTypeText", () => {
