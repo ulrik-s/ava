@@ -70,6 +70,10 @@
 >   (inbyggda + byråns egna) ersätter `documentType` + taggar. Övergången tål
 >   pågående migrering: additiv migration, läs-/skrivregel, äldre indata översätts,
 >   backfill efter omstart (#1632).
+> - [ADR 0039](./adr/0039-timvis-backup.md) — **timvis backup**: varje timme en
+>   timexport (hela databasen + dokumenten som ändrats sedan den senaste fulla
+>   exporten) ovanpå den oförändrade nattliga fulla exporten; systemd-timer på
+>   hosten, hämtaren varje timme. Förlusten vid haveri blir högst ungefär en timme (#1895).
 
 ## Två lager
 
