@@ -18,7 +18,7 @@ import { useMatterDocuments, type MatterDocument } from "@/lib/client/documents/
 import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
 import { isHiddenBillingRun, isHiddenInvoice } from "@/lib/shared/hidden-billing-rows";
-import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
+import { KOSTNADSRAKNING_STATUS_LABELS, krStateOf, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { pickKrDocForRun } from "@/lib/shared/kr-document";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type InvoiceStatus, type InvoiceType } from "@/lib/shared/schemas/enums";
@@ -129,6 +129,13 @@ interface BillingListRow {
   hidden: boolean;
 }
 
+/** Statuskolumnen (#1860): en kostnadsräkning visar sin livscykel, en ångrad
+ *  ("Annullerad") och aconto/slutfaktura körningens allmänna status. */
+function runStatusLabel(r: BillingRunRow): string {
+  if (r.type !== "KOSTNADSRAKNING" || r.status === "VOIDED") return BILLING_RUN_STATUS_LABELS[r.status];
+  return KOSTNADSRAKNING_STATUS_LABELS[krStateOf(r).status];
+}
+
 /** Billing-run → listrad. Aconto visar sin sats (#878) så den varierande
  *  rättshjälpsavgiften syns per period; KR-raden länkar till sitt dokument. */
 function runListRow(r: BillingRunRow, docs: readonly MatterDocument[], client: DownloadClient): BillingListRow {
@@ -136,7 +143,7 @@ function runListRow(r: BillingRunRow, docs: readonly MatterDocument[], client: D
   const rate = r.type === "ACCONTO" && r.clientShareBips != null ? ` (${r.clientShareBips / 100} %)` : "";
   return {
     key: r.id, date: runDateOf(r), type: `${typeLabel}${rate}`, recipient: r.recipient,
-    status: BILLING_RUN_STATUS_LABELS[r.status],
+    status: runStatusLabel(r),
     amountOre: r.amountOre, actions: <RunActions r={r} docs={docs} client={client} />,
     hidden: isHiddenBillingRun(r),
   };

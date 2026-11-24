@@ -23,6 +23,18 @@ import type { BillingRunStatus, BillingRunType } from "./schemas/enums";
 export const kostnadsrakningStatusSchema = z.enum(["INSKICKAD", "BESLUTAD", "OVERKLAGAD", "FAKTURERAD"]);
 export type KostnadsrakningStatus = z.infer<typeof kostnadsrakningStatusSchema>;
 
+/**
+ * Kostnadsräkningens livscykel som användaren ser den (#1860), t.ex. i ärendets
+ * faktureringslista. Kartan ligger bredvid enumen så att kompilatorn kräver alla
+ * statusar (som `VAT_RATE_LABELS` i `vat.ts`).
+ */
+export const KOSTNADSRAKNING_STATUS_LABELS: Readonly<Record<KostnadsrakningStatus, string>> = {
+  INSKICKAD: "Väntar på dom",
+  BESLUTAD: "Beslutad",
+  OVERKLAGAD: "Överklagad",
+  FAKTURERAD: "Fakturerad",
+};
+
 export type KostnadsrakningAction =
   | "REGISTRERA_BESLUT"
   | "SKAPA_FAKTURA"
