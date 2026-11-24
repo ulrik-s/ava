@@ -65,7 +65,7 @@ inte" och då avgör offline-graceperioden (`session-gate.ts`):
 | nätverksfel, inget svar inom 3 s, 5xx | nås inte | startar lokalt + bannern | besked: anslut till nätet |
 | omdirigering (3xx/`opaqueredirect`), annan 4xx | nås inte | startar lokalt + bannern | besked: anslut till nätet |
 | 200 med HTML/annan typ (captive portal), JSON utan email | nås inte | startar lokalt + bannern | besked: anslut till nätet |
-| 404 (ingen oauth2-proxy, basic-auth-drift) | finns inte | som förut | som förut |
+| 404 (ingen oauth2-proxy, basic-auth-drift) | finns inte | som förut; första starten läser byrån från servern och sparar den | (samma) |
 
 Inom grace skickas ingen hårt vidare till IdP:n: den kan vara nere (då
 hamnade användaren på en felsida), och ett formulär mitt i skrivandet ska inte

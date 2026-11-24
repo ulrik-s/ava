@@ -9,12 +9,12 @@
  * strängare än servern, som fortfarande avgör behörigheten.
  */
 
-import type { FirmaConfig } from "@/lib/client/firma/firma-config";
+import { patchFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
 import type { Principal } from "@/lib/server/auth/principal";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import type { UserRole } from "@/lib/shared/schemas/enums";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { UNBOUND_PRINCIPAL } from "./local-data/local-data-session";
 
 /** Rollen när den inloggades rad saknas: den snävaste, aldrig `ADMIN`. */
@@ -56,16 +56,50 @@ export function clientPrincipal(cfg: ClientIdentityConfig, role: UserRole): Prin
   };
 }
 
+/** Felet när den synkade datan saknar byrå (#1865). */
+export const NO_ORGANIZATION_MESSAGE = "Hittade ingen byrå på servern. Kontrollera att du är uppkopplad och försök igen.";
+/** Felet när den synkade datan har flera byråer (#1865). */
+export const MANY_ORGANIZATIONS_MESSAGE = "Servern har flera byråer. AVA kan inte välja.";
+
+/**
+ * Klientens organisations-id (#1865): det sparade, annars den enda byrån i den
+ * synkade datan, så att klienten scopar mot samma byrå som servern.
+ * Ingen byrå eller flera byråer kastar ett `Error` med ett besked till användaren.
+ */
+export async function resolveOrganizationId(dataStore: IDataStore, configured: string): Promise<OrganizationId> {
+  if (configured) return asId<"OrganizationId">(configured);
+  const [only, ...rest] = await dataStore.organizations.findMany();
+  if (!only) throw new Error(NO_ORGANIZATION_MESSAGE);
+  if (rest.length > 0) throw new Error(MANY_ORGANIZATIONS_MESSAGE);
+  return asId<"OrganizationId">(only.id);
+}
+
 /**
  * Principalen för en uppstart, efter att storen är öppnad. I bindningsfasen
- * (OIDC-bindningen, storen i minnet) finns ingen bunden rad att läsa: där
- * används `ASSISTANT`, som räcker för att läsa byråns användare.
+ * (OIDC-bindningen, eller inget sparat org-id; storen i minnet) finns ingen
+ * bunden rad att läsa: där löses byrån först, och rollen är `ASSISTANT`, som
+ * räcker för att läsa byråns användare.
  */
 export async function resolveClientPrincipal(
   dataStore: IDataStore, cfg: ClientIdentityConfig, opts: { binding?: boolean } = {},
 ): Promise<Principal> {
-  const role = opts.binding
-    ? FALLBACK_CLIENT_ROLE
-    : await resolveClientRole(dataStore, clientPrincipalId(cfg), cfg.organizationId);
-  return clientPrincipal(cfg, role);
+  if (!opts.binding) {
+    return clientPrincipal(cfg, await resolveClientRole(dataStore, clientPrincipalId(cfg), cfg.organizationId));
+  }
+  const organizationId = await resolveOrganizationId(dataStore, cfg.organizationId);
+  return clientPrincipal({ ...cfg, organizationId }, FALLBACK_CLIENT_ROLE);
+}
+
+/**
+ * Org-bindningen (#1865): utan sparat org-id sparas byrån som bindningsfasen
+ * löste, och sidan laddas om (som OIDC-bindningen). Returnerar true om
+ * anroparen ska avbryta; false när ett org-id redan är sparat.
+ */
+export function bindClientOrganization(
+  cfg: Pick<FirmaConfig, "organizationId">, organizationId: string, reload: () => void = () => window.location.reload(),
+): boolean {
+  if (cfg.organizationId) return false;
+  patchFirmaConfig({ organizationId });
+  reload();
+  return true;
 }

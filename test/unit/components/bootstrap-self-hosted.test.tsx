@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { bootstrapSelfHosted } from "@/components/shell/demo-bootstrap";
 import { sessionNotice, setSessionNotice } from "@/lib/client/auth/session-notice";
 import { activeLocalScope, bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
-import type { FirmaConfig } from "@/lib/client/firma/firma-config";
+import { loadFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 
 const baseConfig: FirmaConfig = {
@@ -292,5 +292,79 @@ describe("bootstrapSelfHosted", () => {
     expect(args.setStatus).toHaveBeenCalledWith("error");
     expect(args.setErrorMsg).toHaveBeenCalledWith(expect.stringMatching(/Anslut till nätet/));
     expect(args.makeStore).not.toHaveBeenCalled();
+  });
+});
+
+// #1865: klientens organisations-id kommer från inloggningen eller den synkade datan.
+describe("bootstrapSelfHosted — byrån (#1865)", () => {
+  const SERVER_ORG = "org-server";
+  /** En store vars synkade data har de givna byråerna, och Lena i den första. */
+  function storeWithOrgs(ids: string[]) {
+    return {
+      store: new LocalStore({
+        organizations: ids.map((id) => ({ id, name: `Byrå ${id}` })),
+        users: ids.map((id) => ({ id: "u-lena", organizationId: id, email: "a@b.se", name: "A", role: "LAWYER" })),
+      }, async () => {}),
+    } as never;
+  }
+  const unsaved: FirmaConfig = { ...noPrincipal, organizationId: "" };
+
+  it("OIDC-bindningen läser allowlisten i den synkade byrån och sparar den", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
+    const principal = { id: "u-lena", email: "a@b.se", name: "A", role: "LAWYER", organizationId: SERVER_ORG };
+    classifyOidcLogin.mockReturnValueOnce({ kind: "authorized", principal });
+    const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
+    const args = makeArgs({ firmaConfig: unsaved, makeStore: vi.fn(() => Promise.resolve(storeWithOrgs([SERVER_ORG]))) });
+    await bootstrapSelfHosted(args);
+    expect(args.makeClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ organizationId: SERVER_ORG, role: "ASSISTANT" }));
+    expect(loadFirmaConfig()).toMatchObject({ principalId: "u-lena", organizationId: SERVER_ORG });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(args.onStoreReady).not.toHaveBeenCalled();
+    reload.mockRestore();
+  });
+
+  it("absent-start utan sparat org-id: bindningsfasen, byrån sparas och sidan laddas om", async () => {
+    const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
+    const args = makeArgs({ firmaConfig: unsaved, makeStore: vi.fn(() => Promise.resolve(storeWithOrgs([SERVER_ORG]))) });
+    await bootstrapSelfHosted(args);
+    expect(args.openLocal).toHaveBeenCalledTimes(1);
+    expect(args.openLocal).toHaveBeenCalledWith(unsaved, { binding: true });
+    expect(args.makeStore).toHaveBeenCalledWith("binding");
+    expect(loadFirmaConfig().organizationId).toBe(SERVER_ORG);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(args.onStoreReady).not.toHaveBeenCalled();
+    reload.mockRestore();
+  });
+
+  it("absent-start utan byrå på servern: felet visas, ingen store till appen", async () => {
+    const args = makeArgs({ firmaConfig: unsaved, makeStore: vi.fn(() => Promise.resolve(storeWithOrgs([]))) });
+    await bootstrapSelfHosted(args);
+    expect(args.setStatus).toHaveBeenCalledWith("error");
+    expect(args.setErrorMsg).toHaveBeenCalledWith("Hittade ingen byrå på servern. Kontrollera att du är uppkopplad och försök igen.");
+    expect(args.onStoreReady).not.toHaveBeenCalled();
+    expect(localStorage.getItem("ava.firma")).toBeNull();
+  });
+
+  it("en installation med …0001 sparat behåller sin namnrymd", async () => {
+    const ORG_0001 = "00000000-0000-0000-0000-000000000001";
+    const prevIdb = Reflect.get(globalThis, "indexedDB");
+    Reflect.set(globalThis, "indexedDB", new IDBFactory());
+    const { openLocal: _o, pendingSignOut: _p, ...defaults } = makeArgs({ firmaConfig: { ...baseConfig, organizationId: ORG_0001 } });
+    await bootstrapSelfHosted(defaults);
+    Reflect.set(globalThis, "indexedDB", prevIdb);
+    expect(activeLocalScope()).toEqual({ organizationId: ORG_0001, principalId: "p1" });
+    expect(defaults.setStatus).toHaveBeenCalledWith("ready");
+    bindLocalNamespace(SHARED_NAMESPACE);
+  });
+
+  it("en cachad identitet utan org-id binder om", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "authenticated", claims: lena });
+    const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
+    const args = makeArgs({ firmaConfig: { ...baseConfig, organizationId: "" }, makeStore: vi.fn(() => Promise.resolve(storeWithOrgs([SERVER_ORG]))) });
+    await bootstrapSelfHosted(args);
+    expect(args.openLocal).toHaveBeenCalledWith(expect.anything(), { binding: true });
+    expect(classifyOidcLogin).toHaveBeenCalledTimes(1);
+    expect(reload).toHaveBeenCalledTimes(1);
+    reload.mockRestore();
   });
 });

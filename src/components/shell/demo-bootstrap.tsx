@@ -28,7 +28,7 @@ import { decideSessionGate, loginUrl, offlineGateMessage, type CachedIdentity } 
 import { setSessionNotice } from "@/lib/client/auth/session-notice";
 import type { SessionProbe } from "@/lib/client/auth/session-probe";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
-import { resolveClientPrincipal } from "@/lib/client/backend/client-principal";
+import { bindClientOrganization, resolveClientPrincipal } from "@/lib/client/backend/client-principal";
 import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { inProcessPorts } from "@/lib/client/backend/in-process-ports";
@@ -380,9 +380,9 @@ const browserGateEnv: GateEnv = {
 
 type GateOutcome = { kind: "continue"; needsOidc: boolean; oidcClaims: OidcClaims | null } | { kind: "halt" };
 
-/** Identiteten klienten senast arbetade under, eller null om ingen är bunden. */
+/** Identiteten klienten senast arbetade under, eller null om ingen är bunden (principal och byrå, #1865). */
 function cachedIdentity(cfg: FirmaConfig): CachedIdentity | null {
-  return cfg.principalId ? { principalId: cfg.principalId, email: cfg.authorEmail, verifiedAt: cfg.sessionVerifiedAt } : null;
+  return cfg.principalId && cfg.organizationId ? { principalId: cfg.principalId, email: cfg.authorEmail, verifiedAt: cfg.sessionVerifiedAt } : null;
 }
 
 /**
@@ -457,6 +457,7 @@ function applyOidcOutcome(
     // verifierad online → offline-grace:n räknas härifrån (#1245).
     patchFirmaConfig({
       principalId: outcome.principal.id,
+      organizationId: outcome.principal.organizationId,
       authorEmail: outcome.principal.email,
       authorName: outcome.principal.name,
       sessionVerifiedAt: Date.now(),
@@ -517,10 +518,8 @@ async function bindOidcFirstLogin(a: {
   setStatus: (s: Status) => void; setErrorMsg: (m: string | null) => void;
 }): Promise<boolean> {
   if (!a.needsOidc) return false;
-  // `user.list` returnerar `{ users }` (router-formen) — plocka ut ARRAYEN.
-  // (Tidigare skickades hela objektet → `OidcAuthProvider.find` kastade →
-  // boot:en fastnade tyst på "AVA Laddar…" eftersom denna väg lämnar
-  // trpcClient null, så fel-skärmen aldrig renderas.)
+  // `user.list` returnerar `{ users }` (router-formen) — plocka ut ARRAYEN (#628),
+  // i byrån som bindningsfasen löste (#1865).
   const { users } = await a.client.user.list.query();
   return finishOidcLogin({ needsOidc: a.needsOidc, oidcClaims: a.oidcClaims, users, setStatus: a.setStatus, setErrorMsg: a.setErrorMsg });
 }
@@ -541,11 +540,12 @@ async function loadSelfHosted(a: SelfHostedBootstrapArgs, oidc: { needsOidc: boo
   // Procedur-kön (#1265, ADR 0037): servern kör om köbara anrop auktoritativt.
   const makeClient = a.makeClient ?? ((store: CachingSyncDataStore, principal: Principal) =>
     createDemoTrpcClient(store.store, firmaConfig, principal, (call, exec) => store.runQueuedProcedure(call, exec)));
-  const store = await openSelfHostedStore(a, oidc.needsOidc);
+  const binding = oidc.needsOidc || !firmaConfig.organizationId; // bindningsfasen också utan org-id; den binds och laddar om (#1865)
+  const store = await openSelfHostedStore(a, binding);
   if (isCancelled()) return;
-  const principal = await resolveClientPrincipal(store.store, firmaConfig, { binding: oidc.needsOidc });
+  const principal = await resolveClientPrincipal(store.store, firmaConfig, { binding });
   const client = makeClient(store, principal);
-  if (await bindOidcFirstLogin({ ...oidc, client, setStatus, setErrorMsg })) return;
+  if (await bindOidcFirstLogin({ ...oidc, client, setStatus, setErrorMsg }) || bindClientOrganization(firmaConfig, principal.organizationId)) return;
   if (isCancelled()) return;
   onStoreReady(store, client);
   await queryClient.invalidateQueries();
