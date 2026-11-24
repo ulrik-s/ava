@@ -178,7 +178,7 @@ function ContactEditForm({ form, setForm, onSubmit, onCancel, isPending }: EditF
 /** E-post/telefon/adress-rutnätet (varsin rad bara om satt). */
 function ContactContactFields({ c }: { c: ContactData }) {
   return (
-    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
       {c.email && <div><span className="text-gray-500">E-post:</span> <span className="text-gray-900">{c.email}</span></div>}
       {c.phone && <div><span className="text-gray-500">Telefon:</span> <span className="text-gray-900">{c.phone}</span></div>}
       {c.address && <div><span className="text-gray-500">Adress:</span> <span className="text-gray-900">{c.address}</span></div>}
@@ -228,7 +228,7 @@ function ContactDetailsView({ c, onEdit, onDelete, deletePending }: DetailsViewP
       </div>
       <ContactContactFields c={c} />
       {c.notes && (
-        <div className="mt-4">
+        <div className="mt-2">
           <p className="text-sm text-gray-500">Anteckningar</p>
           <p className="text-sm text-gray-900 mt-1">{c.notes}</p>
         </div>
@@ -355,7 +355,7 @@ function LinkedMattersSection({ matterLinks }: { matterLinks: ContactData["matte
           );
         })}
         {matterLinks.length === 0 && (
-          <p className="px-6 py-4 text-sm text-gray-500">Inte kopplad till några ärenden</p>
+          <p className="px-2 py-4 text-sm text-gray-500">Inte kopplad till några ärenden</p>
         )}
       </div>
     </div>

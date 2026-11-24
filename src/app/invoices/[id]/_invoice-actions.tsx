@@ -64,7 +64,7 @@ export function InvoiceActions({
   const v = computeVisibility(invoiceType, status, hasPlan, hasCreditNote, outstanding);
 
   return (
-    <div className="mt-5 flex gap-2 flex-wrap">
+    <div className="mt-2 flex gap-2 flex-wrap">
       {v.pay && (
         <button onClick={onShowPayment} className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700">
           Registrera betalning
