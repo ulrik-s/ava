@@ -171,8 +171,15 @@ För varje godkänd:
      steg 3. Loop 4 bygger den inte förrän alla är stängda. Bero bara på
      issues som redan finns, aldrig på en som skapas senare, så att det
      aldrig blir en cirkel.
-   - Näst sist, på egen rad: `Prioritet: <hög|medel|låg>` från intagets
-     prio-flagga (utan flagga: `medel`). Loop 4 bygger högst prioritet först.
+   - Näst sist, på egen rad: `Prioritet: <hög|medel|låg>`. Loop 4 bygger
+     högst prioritet först. **Användarna går före internt arbete** (#2047):
+     - en förfrågan från en användare (`user-request`): alltid `hög`,
+     - en intern förfrågan (`intern`): intagets prio-flagga, men högst
+       `medel` (utan flagga: `medel`).
+
+     En jurist som väntar på en funktion ska inte stå i kö bakom teknisk
+     skuld. Vill Ulrik att något internt går först sätter han själv
+     `prio-hög` på arbetsordern.
    - Sist, på egen rad: `Intag: ava-feedback#<nr>`
 7. Kommentera på intag-issuen med listan över skapade issues
    (`ulrik-s/ava#N`), och under rubriken **Beroenden** vilka issues från
