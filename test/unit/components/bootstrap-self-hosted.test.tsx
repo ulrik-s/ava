@@ -16,6 +16,7 @@ import { bootstrapSelfHosted } from "@/components/shell/demo-bootstrap";
 import { sessionNotice, setSessionNotice } from "@/lib/client/auth/session-notice";
 import { activeLocalScope, bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
 import type { FirmaConfig } from "@/lib/client/firma/firma-config";
+import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 
 const baseConfig: FirmaConfig = {
   tier: "self-hosted", repo: "https://firma.example/data.git", token: "",
@@ -26,7 +27,19 @@ const { principalId: _omit, ...noPrincipal } = baseConfig;
 
 // `user.list` returnerar router-formen `{ users }` (INTE en naken array) —
 // matchar produktionen så bind-shapen testas på riktigt.
-const fakeStore = { store: {} } as never;
+// Storen bär den inloggades rad (#1864): klientens roll läses ur den.
+const fakeStore = {
+  store: new LocalStore({
+    users: [
+      { id: "p1", organizationId: "org", email: "a@b.se", name: "A", role: "LAWYER" },
+      { id: "current-user", organizationId: "org", email: "user@firma.local", name: "Lokal", role: "ADMIN" },
+    ],
+  }, async () => {}),
+} as never;
+/** Rollen i principalen som klienten byggdes med. */
+function clientRole(makeClient: unknown): unknown {
+  return (makeClient as { mock: { calls: Array<[unknown, { role: string }]> } }).mock.calls[0]?.[1].role;
+}
 /** Den inloggades lokala databaser (#1347) — en fejk-plats; `openLocal` testas för sig. */
 const place = { factory: {} as IDBFactory, ns: { kind: "shared" as const }, adoptsLegacy: false };
 function clientReturning(users: unknown[]) {
@@ -78,10 +91,31 @@ describe("bootstrapSelfHosted", () => {
     // Samma identitet → den inloggades egna databaser (#1347).
     expect(args.openLocal).toHaveBeenCalledWith(baseConfig, { binding: false });
     expect(args.makeStore).toHaveBeenCalledWith(place);
-    expect(args.makeClient).toHaveBeenCalledWith(fakeStore);
+    expect(args.makeClient).toHaveBeenCalledWith(fakeStore, {
+      id: "p1", email: "a@b.se", name: "A", role: "LAWYER", organizationId: "org",
+    });
     expect(args.onStoreReady).toHaveBeenCalledWith(fakeStore, expect.anything());
     expect(args.setStatus).toHaveBeenCalledWith("ready");
     expect(args.setErrorMsg).not.toHaveBeenCalled();
+  });
+
+  // #1864: klienten får den inloggades roll ur hennes rad, aldrig ADMIN som standard.
+  it("#1864: en principal utan rad i byrån får ASSISTANT", async () => {
+    const args = makeArgs({ firmaConfig: { ...baseConfig, principalId: "okand" } });
+    await bootstrapSelfHosted(args);
+    expect(clientRole(args.makeClient)).toBe("ASSISTANT");
+  });
+
+  it("#1864: absent-start med sparat org-id ger current-user-radens roll", async () => {
+    const args = makeArgs({ firmaConfig: noPrincipal });
+    await bootstrapSelfHosted(args);
+    expect(args.makeClient).toHaveBeenCalledWith(fakeStore, expect.objectContaining({ id: "current-user", role: "ADMIN", organizationId: "org" }));
+  });
+
+  it("#1864: absent-start utan current-user-rad ger ASSISTANT", async () => {
+    const args = makeArgs({ firmaConfig: { ...noPrincipal, organizationId: "annan-byra" } });
+    await bootstrapSelfHosted(args);
+    expect(clientRole(args.makeClient)).toBe("ASSISTANT");
   });
 
   it("avbruten innan klar → ingen onStoreReady/ready", async () => {
@@ -111,6 +145,8 @@ describe("bootstrapSelfHosted", () => {
     expect(args.openLocal).toHaveBeenCalledWith(noPrincipal, { binding: true });
     expect(args.makeStore).toHaveBeenCalledWith("binding");
     expect(listQuery).toHaveBeenCalledTimes(1);
+    // Bindningsfasen: ingen bunden rad, user.list kräver ingen admin (#1864).
+    expect(clientRole(args.makeClient)).toBe("ASSISTANT");
     expect(args.onStoreReady).toHaveBeenCalled();
     expect(args.setStatus).toHaveBeenCalledWith("ready");
   });
