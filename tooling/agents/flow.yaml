@@ -196,8 +196,9 @@ machines:
       intern:
         color: "6e7781"
         description: Internt arbete (Ulrik eller en agent) — ingen användare att fråga
-        # Sätts av Ulrik eller av klockan med hans token (flytten från ava), aldrig
-        # av en agent: agenternas förhandsgodkända skrivningar ändras inte.
+        # Sätts av Ulrik eller av klockan (flytten från ava med hans token, och
+        # delar av en intern förfrågan, #2073), aldrig av en agent: agenternas
+        # förhandsgodkända skrivningar ändras inte.
         by: ulrik
 
   code-issue:

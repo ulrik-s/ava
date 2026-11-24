@@ -67,3 +67,50 @@ export function moveStrayIssues(from: GitHub, mover: Mover | null, ctx: { now: n
     }
   });
 }
+
+/** Flaggan för internt arbete, och den för en användares förfrågan. */
+const INTERN = "intern";
+const USER_REQUEST = "user-request";
+
+/** En del (sub-issue) utan flagga, och dess förälder i samma repo. */
+export interface OrphanedPart { number: number; parent: number }
+
+/**
+ * Delar av en förfrågan i `repo` som saknar både `intern` och `user-request`
+ * (#2073). Loop 1 delar upp en förfrågan i sub-issues, men en agent får inte
+ * sätta `intern`: delen stod utan flagga, och loop 1 tog den aldrig.
+ */
+export function orphanedParts(items: readonly OpenItem[], repo: string): OrphanedPart[] {
+  return items.flatMap((i) => {
+    const flagged = i.labels.includes(INTERN) || i.labels.includes(USER_REQUEST);
+    return !i.isPr && !flagged && i.parent?.repo === repo ? [{ number: i.number, parent: i.parent.number }] : [];
+  });
+}
+
+/**
+ * Sätter `intern` på delarna vars förälder är intern, med en kommentar. Ger
+ * delarnas nummer. Föräldern kan vara stängd (uppdelad), så dess etiketter
+ * läses för sig, en gång per förälder. I rapportläge loggas bara.
+ */
+export function markInternalParts(gh: GitHub, repo: string, ctx: { enforce: boolean; log: (line: string) => void }): number[] {
+  const parentLabels = new Map<number, string[]>();
+  return orphanedParts(gh.openItems(), repo).flatMap(({ number, parent }) => {
+    try {
+      const labels = parentLabels.get(parent) ?? gh.labelsOf(parent);
+      parentLabels.set(parent, labels);
+      if (!labels.includes(INTERN)) return [];
+      markPart(gh, number, parent, ctx);
+      return [number];
+    } catch (e) {
+      ctx.log(`::warning::#${number}: föräldern #${parent} gick inte att läsa: ${e instanceof Error ? e.message : String(e)}`);
+      return [];
+    }
+  });
+}
+
+function markPart(gh: GitHub, n: number, parent: number, ctx: { enforce: boolean; log: (line: string) => void }): void {
+  if (!ctx.enforce) { ctx.log(`#${n}: del av #${parent} (intern) — intern saknas (bara rapport)`); return; }
+  gh.addLabel(n, INTERN);
+  gh.comment(n, `Flödesvakten: del av #${parent}, som är intern. Etiketten \`intern\` är satt, så att loop 1 tar den.`);
+  ctx.log(`#${n}: del av #${parent} (intern) — intern satt`);
+}

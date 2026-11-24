@@ -62,6 +62,8 @@ vad som behöver avgöras. Kvittot står på statusissuen
 användarnas förfrågningar: Ulriks egna idéer och buggar, agenternas
 uppföljningar och teknisk skuld går samma väg. En förfrågan som inte kommer
 från en användare i AVA har flaggan `intern` (satt av Ulrik eller klockan).
+Delar loop 1 upp en intern förfrågan sätter klockan `intern` på delarna
+(sub-issues till originalet), eftersom en agent inte får sätta den själv.
 Loop 1 verifierar den som andra, men det finns ingen användare att fråga:
 frågor går till Ulrik (`blockerad`), och AVA visar den aldrig för användarna
 (de ser bara förfrågningar med sitt eget märke).

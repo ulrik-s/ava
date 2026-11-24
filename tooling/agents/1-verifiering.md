@@ -69,7 +69,9 @@ alla andra, med de här skillnaderna:
   Det finns ingen användare att visa vägen.
 - **Flera orelaterade saker:** dela upp den själv enligt "Flera saker i en
   förfrågan" (#1872), men utan meddelandet till användaren. Varje del blir en
-  ny förfrågan med `intern` och rätt typ. En del som kräver ett nytt mönster
+  ny förfrågan med rätt typ, kopplad som sub-issue till originalet. Sätt inte
+  `intern`: flödesvakten tar bort den från en agent, och klockan sätter den på
+  delen inom en timme eftersom originalet är internt (#2073). En del som kräver ett nytt mönster
   eller en ADR blir en egen del med ADR-utkastet i texten; den frågar du inte
   om nu.
 - **En bugg** återskapas mot `main`, inte mot en användares release.

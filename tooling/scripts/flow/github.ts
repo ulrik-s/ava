@@ -57,6 +57,8 @@ const itemSchema = z.object({
   /** Bara på issues: antalet ÖPPNA blockerare (`blocked_by`) och öppna saker den blockerar. */
   issue_dependencies_summary: z.object({ blocked_by: z.number(), blocking: z.number() }).nullable().optional(),
   node_id: z.string().optional(),
+  /** Bara på issues: föräldern, när issuen är en del (sub-issue) av en annan. */
+  parent_issue_url: z.string().nullable().optional(),
 });
 type ItemRow = z.infer<typeof itemSchema>;
 
@@ -88,19 +90,30 @@ export interface TimedLabelEvent extends LabelEvent { at: string }
 export interface Deps { blockedBy: number; blocking: number }
 
 /** En öppen issue eller PR. `id` (inte numret) behövs för att lägga till ett beroende, `nodeId` (GraphQL) för projekttavlan. */
-export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string; id?: number; nodeId?: string; deps?: Deps }
+export interface OpenItem { number: number; title: string; body: string; labels: string[]; isPr: boolean; createdAt?: string; id?: number; nodeId?: string; deps?: Deps; parent?: IssueRef }
+
+/** En issue i ett visst repo. */
+export interface IssueRef { repo: string; number: number }
+
+/** `https://api.github.com/repos/o/r/issues/12` → `{ repo: "o/r", number: 12 }`. */
+export function issueRefOf(url: string): IssueRef | null {
+  const m = /\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)$/.exec(url);
+  return m?.[1] && m[2] ? { repo: m[1], number: Number(m[2]) } : null;
+}
 
 /** En öppen issue i ett beroende: nummer, id och etiketter. */
 export interface DepIssue { number: number; id: number; labels: string[] }
 
 function toOpenItem(i: ItemRow): OpenItem {
   const deps = i.issue_dependencies_summary;
+  const parent = i.parent_issue_url ? issueRefOf(i.parent_issue_url) : null;
   return {
     number: i.number, title: i.title, body: i.body ?? "", labels: i.labels.map((l) => l.name), isPr: i.pull_request !== undefined,
     ...(i.created_at === undefined ? {} : { createdAt: i.created_at }),
     ...(i.id === undefined ? {} : { id: i.id }),
     ...(i.node_id === undefined ? {} : { nodeId: i.node_id }),
     ...(deps ? { deps: { blockedBy: deps.blocked_by, blocking: deps.blocking } } : {}),
+    ...(parent ? { parent } : {}),
   };
 }
 
@@ -250,6 +263,10 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
     dispatch(workflow: string, ref: string): void { run(["api", "-X", "POST", `repos/${repo}/actions/workflows/${workflow}/dispatches`, "-f", `ref=${ref}`]); },
     createIssue(title: string, body: string, label: string): void { run(["api", `repos/${repo}/issues`, "-f", `title=${title}`, "-f", `body=${body}`, "-f", `labels[]=${label}`]); },
     setBody(n: number, body: string): void { run(["api", "-X", "PATCH", `repos/${repo}/issues/${n}`, "-f", `body=${body}`]); },
+    /** Etiketterna på en issue, öppen eller stängd. */
+    labelsOf(n: number): string[] {
+      return parseJsonWith(z.array(z.object({ name: z.string() })), run(["api", `repos/${repo}/issues/${n}/labels`])).map((l) => l.name);
+    },
     addLabel(n: number, label: string): void { run(["api", `repos/${repo}/issues/${n}/labels`, "-f", `labels[]=${label}`]); },
     /** Ta bort en etikett. Är den redan borta (404) är målet nått — inget fel. */
     removeLabel(n: number, label: string): void {
