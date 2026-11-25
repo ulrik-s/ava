@@ -24,8 +24,9 @@ describe("generate-demo-manifest", () => {
   }
 
   function runScript(): { paths: string[]; generatedAt: string; version: number } {
-    execFileSync("bun", ["tooling/scripts/generate-demo-manifest.ts", TMP], {
-      cwd: resolve(__dirname, "..", "..", ".."),
+    const root = resolve(__dirname, "..", "..", "..");
+    execFileSync("bun", [resolve(root, "tooling/scripts/generate-demo-manifest.ts"), TMP], {
+      cwd: root,
       stdio: ["ignore", "pipe", "pipe"],
     });
     return JSON.parse(readFileSync(resolve(TMP, "manifest.json"), "utf8"));

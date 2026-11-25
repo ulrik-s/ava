@@ -8,8 +8,6 @@
     "tooling/scripts/*.ts!",
     "tooling/load/run.ts!",
     "src/bin/*.ts!",
-    "tooling/ava-cli/ava.ts!",
-    "tooling/ava-cli/ava-mcp.ts!",
     "office-addin/taskpane/taskpane.ts!",
     "helper-ui/src/engine/main.ts!",
     "helper-ui/src/status-poller.ts!",
@@ -42,14 +40,10 @@
   "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [
     "tailwindcss",
-    "@hughescr/stryker-bun-runner"
+    "^(@hughescr/stryker-bun-runner|@stryker-mutator/(bun-runner|api))$"
   ],
   "ignoreBinaries": [
     "dot",
-    "tooling/scripts/generate-demo-manifest.ts",
-    "build.ts",
-    "gh",
-    "security",
     "openssl"
   ],
   "commitlint": {
