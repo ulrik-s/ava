@@ -125,7 +125,7 @@ describe("FortnoxClient.createVoucher", () => {
 });
 
 describe("FortnoxClient fil-bilaga (#785)", () => {
-  it("uploadInboxFile → POST /3/inbox (multipart) och returnerar fil-id", async () => {
+  it("uploadInboxFile → POST /3/inbox?path=Inbox_v (multipart) och returnerar fil-id", async () => {
     let url = ""; let auth = ""; let isForm = false;
     const fetchFn = (async (u: string | URL | Request, init?: RequestInit) => {
       url = requestUrl(u);
@@ -138,12 +138,12 @@ describe("FortnoxClient fil-bilaga (#785)", () => {
 
     const id = await client.uploadInboxFile("Faktura.pdf", new Uint8Array([1, 2, 3]));
     expect(id).toBe("guid-9");
-    expect(url).toBe("https://api.test/3/inbox");
+    expect(url).toBe("https://api.test/3/inbox?path=Inbox_v");
     expect(auth).toBe("Bearer at-fresh");
     expect(isForm).toBe(true);
   });
 
-  it("connectFileToVoucher → POST /3/voucherfileconnections med FileId/serie/nummer", async () => {
+  it("connectFileToVoucher → POST /3/voucherfileconnections?financialyear=<id> med FileId/serie/nummer", async () => {
     let url = ""; let body: unknown;
     const fetchFn = (async (u: string | URL | Request, init?: RequestInit) => {
       url = requestUrl(u);
@@ -152,8 +152,8 @@ describe("FortnoxClient fil-bilaga (#785)", () => {
     }) as typeof globalThis.fetch;
     const client = new FortnoxClient(config, new InMemoryFortnoxTokenStore(fresh()), fetchFn);
 
-    await client.connectFileToVoucher("guid-9", "A", "7");
-    expect(url).toBe("https://api.test/3/voucherfileconnections");
+    await client.connectFileToVoucher("guid-9", "A", "7", 4);
+    expect(url).toBe("https://api.test/3/voucherfileconnections?financialyear=4");
     expect(body).toEqual({ VoucherFileConnection: { FileId: "guid-9", VoucherSeries: "A", VoucherNumber: "7" } });
   });
 });

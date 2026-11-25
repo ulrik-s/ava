@@ -2,7 +2,8 @@
  * E2E mot RIKTIGA Fortnox Voucher API (#1030, #1035).
  *
  * Till skillnad från enhetstesterna (injicerad `fetch`) går det här hela vägen:
- * OAuth-refresh → bygg semantiskt verifikat → POST /3/vouchers → läs tillbaka
+ * OAuth-refresh → bygg semantiskt verifikat → POST /3/vouchers → bifoga en
+ * PDF (inkorgen `Inbox_v` + koppling med räkenskapsåret, #1886) → läs tillbaka
  * verifikatet → verifiera balans och write-back. Det är den enda kontrollen
  * som fångar att wire-formatet fortfarande stämmer med vad Fortnox faktiskt
  * accepterar (jfr `client.ts`: fel nesting ger 400/2002381).
@@ -35,6 +36,7 @@ import { FortnoxLedgerConnector } from "@/lib/server/integrations/fortnox/connec
 import { bookUnbookedInvoices, type BookableInvoice } from "@/lib/server/integrations/ledger/book-invoices";
 import { withBookingWindow, type BookingWindow } from "@/lib/server/integrations/ledger/booking-window";
 import type { LedgerConnector } from "@/lib/server/integrations/ledger/port";
+import { assertAttached, e2eAttachment } from "./fortnox-attachment";
 import {
   assertVoucherDelta, bookingWindow, buildConfig, buildMapping, ciBookingDate, connect,
   emitRotatedToken, snapshotVouchers,
@@ -57,18 +59,21 @@ function testInvoice(stamp: string, bookingDate: string): BookableInvoice {
   };
 }
 
-/** Steg 2: bokför testfakturan och verifiera write-back. */
+/** Steg 2: bokför testfakturan med PDF-bilaga och verifiera write-back + bilaga. */
 async function pushTestInvoice(connector: LedgerConnector, invoice: BookableInvoice): Promise<string> {
-  console.log(`→ Steg 2: bokför testfaktura ${invoice.invoiceNumber} (125,00 kr inkl moms) …`);
+  console.log(`→ Steg 2: bokför testfaktura ${invoice.invoiceNumber} (125,00 kr inkl moms) med PDF …`);
   const marked: Array<[string, string]> = [];
   const [outcome] = await bookUnbookedInvoices({
     invoices: [invoice], connector,
     markBooked: async (id, ext) => { marked.push([id, ext]); },
+    attachmentFor: (inv) => Promise.resolve(e2eAttachment(inv.invoiceNumber ?? inv.id)),
   });
   if (!outcome || outcome.error || !outcome.externalId) {
     throw new Error(`Bokföring misslyckades: ${outcome?.error ?? "inget utfall"}`);
   }
   console.log(`  ✓ Verifikat skapat: ${outcome.externalId}`);
+  assertAttached(outcome);
+  console.log("  ✓ PDF uppladdad till Inbox_v och kopplad till verifikatet (med räkenskapsår)");
   if (marked.length !== 1) throw new Error(`Write-back uteblev — markBooked anropades ${marked.length} gånger.`);
   console.log(`  ✓ fortnoxId skrevs tillbaka: ${marked[0]![1]}`);
   return outcome.externalId;
