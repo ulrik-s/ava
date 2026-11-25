@@ -48,6 +48,7 @@ import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-s
 import { DEFAULT_INTEGRITY_INTERVAL_MS, runContentIntegrityCheck, scheduleContentIntegrity } from "@/lib/server/integrity/content-integrity";
 import { backfillBadDebtWriteOffs } from "@/lib/server/jobs/bad-debt-write-off-backfill";
 import { backfillDocumentKinds } from "@/lib/server/jobs/document-kinds-backfill";
+import { createDrizzleEmailDispatchLog } from "@/lib/server/jobs/email-dispatch-log";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
 import { backfillPublicAssignmentTypes } from "@/lib/server/jobs/public-assignment-backfill";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
@@ -180,6 +181,8 @@ function main(): void {
   const llm = loadLlmConfigFromEnv();
   const handlers = buildServerFirstJobHandlers({
     ...(smtp ? { smtp } : {}),
+    // #1901: samma idempotensnyckel skickas högst en gång per byrå.
+    emailLog: createDrizzleEmailDispatchLog(api.repos),
     documents: api.repos.documents,
     // #1220: segmenteringen skriver dokumentdelar (synkas till klienterna).
     parts: api.repos.documentParts,
