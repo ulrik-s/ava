@@ -13,7 +13,8 @@
  *   - `%` och `_` i en sökterm eller ett prefix är vanliga tecken,
  *   - sökningen skiljer inte på versaler och gemener, också för Å/Ä/Ö,
  *   - ärendenummerprefixet matchar exakt, med skiftläge,
- *   - kontaktlistans id-filter ger bara de angivna kontakterna; tom lista = inga.
+ *   - kontaktlistans id-filter ger bara de angivna kontakterna; tom lista = inga,
+ *   - ärendelistan på ansvarig och i ordningen "senast hänt" (#1967).
  *
  * Kända avvikelser per backend står i en ratchet-lista (`tooling/scripts/ratchet.ts`).
  */
@@ -23,7 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { Contact } from "@/lib/shared/schemas/contact";
 import type { MatterRole } from "@/lib/shared/schemas/enums";
-import { asId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
+import { asId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { type KnownDeviation, ratchetDiff } from "../../../../tooling/scripts/ratchet";
@@ -84,6 +85,61 @@ async function addParty(repos: Repositories, matter: Matter, contact: Contact, r
 }
 
 const numbersOf = (matters: readonly Matter[]): string[] => matters.map((m) => m.matterNumber).sort();
+
+/** En kort paus, så att två skrivningar får olika tider. */
+const tick = (): Promise<void> => new Promise((resolve) => { setTimeout(resolve, 5); });
+
+/** Slagen av poster som räknas i "senast hänt" (#1967). */
+type PostKind = "timeEntries" | "expenses" | "documents" | "serviceNotes";
+const POST_KINDS: readonly PostKind[] = ["timeEntries", "expenses", "documents", "serviceNotes"];
+
+/** En post av slaget i ärendet; svarar med hur den ändras och raderas. */
+async function addPost(repos: Repositories, org: OrganizationId, matterId: MatterId, kind: PostKind): Promise<{ touch: () => Promise<unknown>; remove: () => Promise<unknown> }> {
+  const userId = newUser();
+  const date = day("2026-01-01");
+  switch (kind) {
+    case "timeEntries": {
+      const row = await repos.timeEntries.create({ id: asId<"TimeEntryId">(uuidv7()), userId, matterId, date, minutes: 30, description: "Samtal", hourlyRate: 150_000 });
+      return { touch: () => repos.timeEntries.update(row.id, { minutes: 45 }), remove: () => repos.timeEntries.softDelete(row.id) };
+    }
+    case "expenses": {
+      const row = await repos.expenses.create({ id: asId<"ExpenseId">(uuidv7()), userId, matterId, date, amount: 10_000, description: "Resa", billable: true });
+      return { touch: () => repos.expenses.update(row.id, { amount: 12_000 }), remove: () => repos.expenses.softDelete(row.id) };
+    }
+    case "documents": {
+      const row = await repos.documents.create({ id: asId<"DocumentId">(uuidv7()), matterId, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "documents/content/a", uploadedById: userId });
+      return { touch: () => repos.documents.update(row.id, { fileName: "b.pdf" }), remove: () => repos.documents.softDelete(row.id) };
+    }
+    case "serviceNotes": {
+      const row = await repos.serviceNotes.create({ id: asId<"ServiceNoteId">(uuidv7()), organizationId: org, matterId, authorId: userId, date: "2026-01-01", time: "10:00", text: "Samtal" });
+      return { touch: () => repos.serviceNotes.update(row.id, { text: "Samtal 2" }), remove: () => repos.serviceNotes.softDelete(row.id) };
+    }
+  }
+}
+
+/** Ärendenumren i ordningen "senast hänt". */
+async function byLastActivity(repos: Repositories, org: OrganizationId, page = 1, pageSize = 50): Promise<string[]> {
+  return (await repos.matters.listForOrg(org, { orderBy: "lastActivity", page, pageSize })).matters.map((m) => m.matterNumber);
+}
+
+/** Ärenden A, B, C skapade i den ordningen, med en paus emellan. */
+async function threeMatters(repos: Repositories, org: OrganizationId): Promise<Matter[]> {
+  const out: Matter[] = [];
+  for (const matterNumber of ["A", "B", "C"]) {
+    out.push(await addMatter(repos, org, { matterNumber }));
+    await tick();
+  }
+  return out;
+}
+
+/** Kör `run` med en ny byrå per postslag och samla ordningarna per slag. */
+async function perKind(run: (org: OrganizationId, kind: PostKind) => Promise<unknown>): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  for (const kind of POST_KINDS) out[kind] = await run(newOrg(), kind);
+  return out;
+}
+
+const forEveryKind = (value: unknown): Record<string, unknown> => Object.fromEntries(POST_KINDS.map((k) => [k, value]));
 
 const SCENARIOS: readonly Scenario[] = [
   {
@@ -205,6 +261,69 @@ const SCENARIOS: readonly Scenario[] = [
         },
         p2: { parties: [], contacts: [] },
       });
+    },
+  },
+  {
+    name: "ärendelistan filtreras på ansvarig jurist, och totalen följer filtret",
+    run: async (repos) => {
+      const org = newOrg();
+      const lawyer = newUser();
+      await addMatter(repos, org, { matterNumber: "R-1", responsibleLawyerId: lawyer });
+      await addMatter(repos, org, { matterNumber: "R-2", responsibleLawyerId: newUser() });
+      await addMatter(repos, org, { matterNumber: "R-3" });
+      const list = await repos.matters.listForOrg(org, { responsibleLawyerId: lawyer, page: 1, pageSize: 50 });
+      return differs({ list: numbersOf(list.matters), total: list.total }, { list: ["R-1"], total: 1 });
+    },
+  },
+  {
+    name: "senast hänt: utan poster på skapad, och en ny post av varje slag flyttar upp sitt ärende",
+    run: async (repos) => differs(await perKind(async (org, kind) => {
+      const [a] = await threeMatters(repos, org);
+      const before = await byLastActivity(repos, org);
+      if (a) await addPost(repos, org, a.id, kind);
+      return { before, after: await byLastActivity(repos, org) };
+    }), forEveryKind({ before: ["C", "B", "A"], after: ["A", "C", "B"] })),
+  },
+  {
+    name: "senast hänt: en ändrad post flyttar upp sitt ärende",
+    run: async (repos) => differs(await perKind(async (org, kind) => {
+      const [a, b] = await threeMatters(repos, org);
+      if (!a || !b) return null;
+      const post = await addPost(repos, org, a.id, kind);
+      await tick();
+      await addPost(repos, org, b.id, kind);
+      const before = await byLastActivity(repos, org);
+      await tick();
+      await post.touch();
+      return { before, after: await byLastActivity(repos, org) };
+    }), forEveryKind({ before: ["B", "A", "C"], after: ["A", "B", "C"] })),
+  },
+  {
+    name: "senast hänt: en mjukt raderad post räknas inte",
+    run: async (repos) => differs(await perKind(async (org, kind) => {
+      const [a] = await threeMatters(repos, org);
+      if (!a) return null;
+      const post = await addPost(repos, org, a.id, kind);
+      await tick();
+      await post.remove();
+      return byLastActivity(repos, org);
+    }), forEveryKind(["C", "B", "A"])),
+  },
+  {
+    name: "senast hänt: sida 2 fortsätter samma ordning med samma total; utan orderBy skapad fallande",
+    run: async (repos) => {
+      const org = newOrg();
+      const [a] = await threeMatters(repos, org);
+      if (a) await addPost(repos, org, a.id, "timeEntries");
+      const first = await repos.matters.listForOrg(org, { orderBy: "lastActivity", page: 1, pageSize: 2 });
+      const second = await repos.matters.listForOrg(org, { orderBy: "lastActivity", page: 2, pageSize: 2 });
+      const plain = await repos.matters.listForOrg(org, { page: 1, pageSize: 50 });
+      return differs({
+        pages: [first.matters.map((m) => m.matterNumber), second.matters.map((m) => m.matterNumber)],
+        totals: [first.total, second.total],
+        plain: plain.matters.map((m) => m.matterNumber),
+        counts: first.matters.map((m) => m._count.timeEntries),
+      }, { pages: [["A", "C"], ["B"]], totals: [3, 3], plain: ["C", "B", "A"], counts: [1, 0] });
     },
   },
   {

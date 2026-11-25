@@ -7,14 +7,19 @@ import type { MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids"
 import type { Matter } from "@/lib/shared/schemas/matter";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
+import { compareLastActivity, lastActivityByMatter } from "./matter-last-activity";
 import {
   listPartiesOf, partiesByMatter,
   type MatterDetailRow, type MatterListFilter, type MatterListLink, type MatterListParty, type MatterListResult,
   type MatterListRow, type MatterRepository,
 } from "./matter-repository";
 
-/** Delegaten repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
-export type MatterRepoSource = Pick<IDataStore, "matters">;
+/**
+ * Delegaterna repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och
+ * `LocalStore`. Tidsposter, utlägg, dokument och tjänsteanteckningar läses för
+ * ordningen "senast hänt" (#1967).
+ */
+export type MatterRepoSource = Pick<IDataStore, "matters" | "timeEntries" | "expenses" | "documents" | "serviceNotes">;
 
 /** Listraden ur delegatens rad med alla (icke-raderade) kopplingar i `contacts`. */
 type MatterLinksRow = Matter & { contacts: MatterListLink[]; _count: MatterListRow["_count"] };
@@ -26,6 +31,12 @@ const LINKS_INCLUDE = {
   orderBy: { createdAt: "asc" },
 } as const;
 
+/** Listradens relationer: kopplingarna och relations-antalen. */
+const LIST_INCLUDE = {
+  contacts: LINKS_INCLUDE,
+  _count: { select: { documents: true, timeEntries: true, contacts: true } },
+} as const;
+
 /** Org-scopat where för listan (replikerar routerns Prisma-where). */
 function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<string, unknown> {
   const ins = (s: string) => ({ contains: s, mode: "insensitive" as const });
@@ -34,6 +45,7 @@ function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<
     deletedAt: null, // mjukt raderade syns inte, som i Postgres (#1678)
     ...(f.status ? { status: f.status } : {}),
     ...(f.employeeId ? { timeEntries: { some: { userId: f.employeeId } } } : {}),
+    ...(f.responsibleLawyerId ? { responsibleLawyerId: f.responsibleLawyerId } : {}),
     ...(f.ids ? { id: { in: [...f.ids] } } : {}),
     ...(f.search
       ? {
@@ -50,9 +62,17 @@ function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<
   };
 }
 
+/** Listraden: kopplingarna blir `contacts` (klienten) och `parties`. */
+function toListRow(r: MatterLinksRow): MatterListRow {
+  return { ...r, ...listPartiesOf(r.contacts) };
+}
+
 export class InMemoryMatterRepository extends InMemoryRepository<Matter> implements MatterRepository {
+  private readonly source: MatterRepoSource;
+
   constructor(store: MatterRepoSource, now?: () => Date) {
     super(store.matters, now ?? (() => new Date()));
+    this.source = store;
   }
 
   async getByIdInOrg(id: MatterId, organizationId: OrganizationId): Promise<Matter | null> {
@@ -67,21 +87,40 @@ export class InMemoryMatterRepository extends InMemoryRepository<Matter> impleme
 
   async listForOrg(organizationId: OrganizationId, filter: MatterListFilter): Promise<MatterListResult> {
     const where = listWhere(organizationId, filter);
+    if (filter.orderBy === "lastActivity") return this.listByLastActivity(where, filter);
     const [rows, total] = await Promise.all([
       this.delegate.findMany({
         where,
         orderBy: { createdAt: "desc" },
         skip: (filter.page - 1) * filter.pageSize,
         take: filter.pageSize,
-        include: {
-          contacts: LINKS_INCLUDE,
-          _count: { select: { documents: true, timeEntries: true, contacts: true } },
-        },
+        include: LIST_INCLUDE,
       }) as Promise<MatterLinksRow[]>,
       this.delegate.count({ where }),
     ]);
-    const matters = rows.map((r): MatterListRow => ({ ...r, ...listPartiesOf(r.contacts) }));
-    return { matters, total };
+    return { matters: rows.map(toListRow), total };
+  }
+
+  /**
+   * "Senast hänt" (#1967): alla träffar utan sidindelning, de fyra samlingarna
+   * en gång var, sortering och sidan klipps ut. Sidans rader hämtas sedan med
+   * samma include som standardlistan och läggs i sorterad ordning.
+   */
+  private async listByLastActivity(where: Record<string, unknown>, filter: MatterListFilter): Promise<MatterListResult> {
+    const hits = (await this.delegate.findMany({ where })) as Matter[];
+    const ids = hits.map((m) => m.id);
+    const { timeEntries, expenses, documents, serviceNotes } = this.source;
+    const byMatter = { where: { matterId: { in: ids } } };
+    const posts = await Promise.all([
+      timeEntries.findMany(byMatter), expenses.findMany(byMatter), documents.findMany(byMatter), serviceNotes.findMany(byMatter),
+    ]);
+    const activity = lastActivityByMatter(posts.flat(), ids);
+    const start = (filter.page - 1) * filter.pageSize;
+    const pageIds = [...hits].sort(compareLastActivity(activity)).slice(start, start + filter.pageSize).map((m) => m.id);
+    const rows = (await this.delegate.findMany({ where: { id: { in: pageIds } }, include: LIST_INCLUDE })) as MatterLinksRow[];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const ordered = pageIds.flatMap((id) => byId.get(id) ?? []);
+    return { matters: ordered.map(toListRow), total: hits.length };
   }
 
   async listPartiesFor(organizationId: OrganizationId, matterIds: readonly MatterId[]): Promise<Map<MatterId, MatterListParty[]>> {

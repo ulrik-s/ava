@@ -70,11 +70,31 @@ export interface MatterDetailRow extends Matter {
   _count: { documents: number; timeEntries: number; emails: number };
 }
 
+/** Ordningarna `listForOrg` kan ge (#1967). */
+export const MATTER_LIST_ORDERS = ["createdAt", "lastActivity"] as const;
+
+/**
+ * Ordningen i `listForOrg` (#1967), fallande:
+ * - `createdAt`: när ärendet skapades (standard).
+ * - `lastActivity`: när något senast hände i ärendet. Det är den senaste
+ *   `updatedAt` bland ärendets **tidsposter, utlägg, dokument och
+ *   tjänsteanteckningar**, där mjukt raderade poster (`deletedAt`) inte räknas.
+ *   Har ärendet inga sådana poster gäller ärendets `createdAt`. Vid lika tid
+ *   kommer det nyast skapade ärendet först, och sist `id` fallande (bytevis,
+ *   som Postgres jämför uuid). Det här är den enda definitionen; båda repona
+ *   (`compareLastActivity` och Drizzles SQL) följer den.
+ */
+export type MatterListOrder = (typeof MATTER_LIST_ORDERS)[number];
+
 /** Filter/paginering för `listForOrg`. */
 export interface MatterListFilter {
   search?: string | undefined;
   status?: MatterStatus | undefined;
   employeeId?: UserId | undefined;
+  /** Bara ärenden där juristen är ansvarig (#1967). */
+  responsibleLawyerId?: UserId | undefined;
+  /** Ordningen; utelämnad = `createdAt` (#1967). */
+  orderBy?: MatterListOrder | undefined;
   /** Bara dessa ärenden (#1642, jävsträffarnas rader). Tom lista = inga ärenden. */
   ids?: readonly MatterId[] | undefined;
   page: number;
@@ -91,7 +111,7 @@ export interface MatterRepository extends Repository<Matter> {
   getByIdInOrg(id: MatterId, organizationId: OrganizationId): Promise<Matter | null>;
   /** Alla (icke-raderade) ärenden i org:en. */
   listByOrg(organizationId: OrganizationId): Promise<Matter[]>;
-  /** Org-scopad, paginerad/sökbar lista (createdAt desc) med KLIENT + _count + total. */
+  /** Org-scopad, paginerad/sökbar lista i ordningen `orderBy` (standard createdAt desc) med KLIENT + _count + total. */
   listForOrg(organizationId: OrganizationId, filter: MatterListFilter): Promise<MatterListResult>;
   /**
    * Ärendenas parter för flera ärenden i ett anrop (#1964), med samma ordning
