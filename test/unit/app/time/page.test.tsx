@@ -5,6 +5,7 @@
 import { act, render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import TimePage from "@/app/time/page";
+import { rowOrder, sortColumn } from "../../../helpers/data-table";
 
 const timeQuery: {
   data: {
@@ -28,6 +29,13 @@ const moveMutate = vi.fn();
 /** Serverfel från flytten (#2042). */
 let moveError: { message: string } | null = null;
 const deleteMutate = vi.fn();
+/** Det listan senast frågades efter: sida och period. */
+const listInput = vi.fn((_input: { page: number; from?: Date; to?: Date }) => timeQuery);
+/** onSuccess från create/delete — testet anropar dem som servern hade gjort. */
+const succeeded: Record<"create" | "remove", (() => void) | undefined> = {
+  create: undefined, remove: undefined,
+};
+type MutationOpts = { onSuccess?: () => void } | undefined;
 /** Serverfel från update (t.ex. PRECONDITION_FAILED för en fryst post). */
 let updateError: { message: string } | null = null;
 
@@ -35,11 +43,21 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     timeEntry: {
-      list: { useQuery: () => timeQuery },
-      create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
+      list: { useQuery: (input: { page: number; from?: Date; to?: Date }) => listInput(input) },
+      create: {
+        useMutation: (opts: MutationOpts) => {
+          succeeded.create = opts?.onSuccess;
+          return { mutate: createMutate, isPending: false };
+        },
+      },
       update: { useMutation: () => ({ mutate: updateMutate, isPending: false, error: updateError }) },
       moveToMatter: { useMutation: () => ({ mutate: moveMutate, isPending: false, error: moveError }) },
-      delete: { useMutation: () => ({ mutate: deleteMutate, isPending: false, error: null }) },
+      delete: {
+        useMutation: (opts: MutationOpts) => {
+          succeeded.remove = opts?.onSuccess;
+          return { mutate: deleteMutate, isPending: false, error: null };
+        },
+      },
     },
     // Byråns standardåtgärder (#956) läses av ändra-formuläret. Tom → ingen väljare.
     organization: { getSettings: { useQuery: () => ({ data: { standardAtgarder: [] } }) } },
@@ -294,5 +312,126 @@ describe("TimePage — flytta posten till ett annat ärende (#2042)", () => {
     moveError = { message: "Tidposten ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort." };
     render(<TimePage />);
     expect(screen.getByRole("alert")).toHaveTextContent(/kostnadsräkning/);
+  });
+});
+
+// ── Kolumnerna, perioden och mutationernas svar (#1904) ─────────────────
+
+/** Tre poster där varje kolumn ger en egen ordning. */
+const sortableEntries = (): Array<Record<string, unknown>> => [
+  { id: "a", date: "2026-03-01", minutes: 30, description: "Bbb", billable: true,
+    matter: { id: "m1", matterNumber: "2026-0002", title: "X" }, user: { name: "Cecilia" } },
+  { id: "b", date: "2026-01-01", minutes: 90, description: "Ccc", billable: false,
+    matter: { id: "m2", matterNumber: "2026-0003", title: "Y" }, user: null },
+  { id: "c", date: "2026-02-01", minutes: 60, description: "Aaa", billable: true,
+    matter: { id: "m3", matterNumber: "2026-0001", title: "Z" }, user: { name: "Bo" } },
+];
+const descriptions = ["Aaa", "Bbb", "Ccc"];
+
+describe("TimePage — kolumnerna sorterar på det som visas (#1904)", () => {
+  beforeEach(() => {
+    timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
+  });
+
+  it("Datum, Ärende och Advokat", () => {
+    render(<TimePage />);
+    sortColumn("Datum", "asc");
+    expect(rowOrder(descriptions)).toEqual(["Ccc", "Aaa", "Bbb"]);
+    sortColumn("Ärende", "asc");
+    expect(rowOrder(descriptions)).toEqual(["Aaa", "Bbb", "Ccc"]);
+    sortColumn("Advokat", "desc");
+    expect(rowOrder(descriptions)).toEqual(["Bbb", "Aaa", "Ccc"]);
+  });
+
+  it("Tid, Beskrivning och Deb.", () => {
+    render(<TimePage />);
+    sortColumn("Tid (h)", "desc");
+    expect(rowOrder(descriptions)).toEqual(["Ccc", "Aaa", "Bbb"]);
+    sortColumn("Beskrivning", "desc");
+    expect(rowOrder(descriptions)).toEqual(["Ccc", "Bbb", "Aaa"]);
+    sortColumn("Deb.", "asc");
+    expect(rowOrder(descriptions)[0]).toBe("Ccc");
+  });
+
+  it("summaraden räknar ihop tiden på raderna", () => {
+    render(<TimePage />);
+    expect(screen.getByText("3")).toHaveClass("font-mono");
+  });
+});
+
+describe("TimePage — periodfiltret (#1904)", () => {
+  const lastInput = () => listInput.mock.calls.at(-1)?.[0];
+
+  it("Från och Till begränsar listan och går till första sidan; Rensa tar bort perioden", () => {
+    timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    expect(lastInput()?.page).toBe(2);
+    fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
+    expect(lastInput()).toMatchObject({ page: 1, from: new Date("2026-01-01T00:00:00.000") });
+    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    fireEvent.change(screen.getByLabelText("Till"), { target: { value: "2026-01-31" } });
+    expect(lastInput()).toMatchObject({ page: 1, to: new Date("2026-01-31T23:59:59.999") });
+    fireEvent.click(screen.getByRole("button", { name: "Rensa" }));
+    expect(lastInput()).toMatchObject({ page: 1, from: undefined, to: undefined });
+    expect(screen.queryByRole("button", { name: "Rensa" })).toBeNull();
+  });
+
+  it("Föregående går tillbaka en sida", () => {
+    timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Föregående/i }));
+    expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
+  });
+});
+
+describe("TimePage — registreringens och ändringens svar (#1904)", () => {
+  it("datumet i formuläret skickas med", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    fireEvent.change(screen.getByLabelText(/Datum \*/), { target: { value: "2026-05-04" } });
+    fireEvent.change(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i), { target: { value: "Möte" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-05-04" }));
+  });
+
+  it("när tiden registrerats stängs formuläret, fälten töms och listan laddas om", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    fireEvent.change(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i), { target: { value: "Möte" } });
+    act(() => succeeded.create?.());
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /^Spara$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    expect(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i).value).toBe("");
+  });
+
+  it("när ändringen sparats stängs dialogen och listan laddas om", () => {
+    timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
+    render(<TimePage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Ändra" })[0] as HTMLElement);
+    const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    // Ändringen skickar onSuccess med anropet (#2042), inte med hooken.
+    act(() => (updateMutate.mock.calls.at(-1)?.[1] as MutationOpts)?.onSuccess?.());
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).toBeNull();
+  });
+
+  it("Avbryt i dialogen stänger den utan att spara", () => {
+    timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
+    render(<TimePage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Ändra" })[0] as HTMLElement);
+    const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).toBeNull();
+    expect(updateMutate).not.toHaveBeenCalled();
+  });
+
+  it("när posten tagits bort laddas listan om", () => {
+    render(<TimePage />);
+    act(() => succeeded.remove?.());
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
   });
 });
