@@ -5,6 +5,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import InvoicesPage from "@/app/invoices/page";
+import { rowOrder, sortColumn } from "../../../helpers/data-table";
 
 // Kuvertform sedan #1014 — sidan läser `data.items`.
 const invoicesQuery = {
@@ -111,6 +112,29 @@ describe("InvoicesPage", () => {
     expect(screen.getByText("Skickad")).toBeInTheDocument();
     expect(screen.getByText(/2026-0001 — Bodelning/)).toBeInTheDocument();
     expect(screen.getByText(/2026-0002 — Tvist/)).toBeInTheDocument();
+  });
+
+  it("varje kolumn sorterar på det som visas", () => {
+    setInvoices([
+      { id: "i1", invoiceNumber: "F-2", invoiceDate: "2026-03-01", invoiceType: "STANDARD", status: "PAID",
+        amount: 100, matter: { id: "m1", matterNumber: "2026-0001", title: "A" } },
+      { id: "i2", invoiceNumber: "F-1", invoiceDate: "2026-01-01", invoiceType: "ACCONTO", status: "SENT",
+        amount: 500, matter: { id: "m2", matterNumber: "2026-0002", title: "B" } },
+    ]);
+    render(<InvoicesPage />);
+    const numbers = ["F-1", "F-2"];
+    sortColumn("Fakturanr", "asc");
+    expect(rowOrder(numbers)).toEqual(["F-1", "F-2"]);
+    sortColumn("Datum", "desc");
+    expect(rowOrder(numbers)).toEqual(["F-2", "F-1"]);
+    sortColumn("Ärende", "desc");
+    expect(rowOrder(numbers)).toEqual(["F-1", "F-2"]);
+    sortColumn("Typ", "desc");
+    expect(rowOrder(numbers)).toEqual(["F-2", "F-1"]);
+    sortColumn("Status", "desc");
+    expect(rowOrder(numbers)).toEqual(["F-1", "F-2"]);
+    sortColumn("Belopp", "asc");
+    expect(rowOrder(numbers)).toEqual(["F-2", "F-1"]);
   });
 
   it("länkar varje rad till faktura- och ärendesidor", () => {

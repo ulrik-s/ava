@@ -6,6 +6,7 @@ import { act, render, screen, fireEvent, waitFor, within } from "@testing-librar
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import MattersPage from "@/app/matters/page";
 import { ClientPickerDialog } from "@/components/contacts/client-picker-dialog";
+import { openColumnMenu, rowOrder, rowWith, sortColumn } from "../../../helpers/data-table";
 
 const mattersQuery: {
   data: { matters: Array<Record<string, unknown>>; total: number; pages: number };
@@ -31,6 +32,8 @@ const searchQuery = vi.fn((input: { term: string }) => ({ data: { contacts: inpu
 /** onSuccess från contacts.create — testet anropar den som servern hade gjort. */
 let contactCreated: ((c: { id: string; name: string }) => void) | undefined;
 const createMatterMutate = vi.fn();
+/** onSuccess från matter.create — testet anropar den som servern hade gjort. */
+let matterCreated: (() => void) | undefined;
 /** Byråns ärendetyper (org-inställning) — tom = fritext. */
 let matterTypes: string[] = [];
 const searchParamsGet = vi.fn((_: string): string | null => null);
@@ -45,7 +48,10 @@ vi.mock("@/lib/client/trpc", () => ({
     matter: {
       list: { useQuery: () => mattersQuery },
       create: {
-        useMutation: () => ({ mutate: createMatterMutate, isPending: false }),
+        useMutation: (opts?: { onSuccess?: () => void }) => {
+          matterCreated = opts?.onSuccess;
+          return { mutate: createMatterMutate, isPending: false };
+        },
       },
     },
     // Sammanslagen sökning (#1642) — täcks i page-search.test.tsx.
@@ -464,5 +470,111 @@ describe("MattersPage — titel och klient fyller i varandra (#1644)", () => {
     fireEvent.change(within(screen.getByRole("dialog")).getByRole("searchbox"), { target: { value: "Anna" } });
     fireEvent.click(screen.getByRole("button", { name: /Anna Karlsson/ }));
     expect(titleInput().value).toBe("Bodelning");
+  });
+});
+
+// ── Kolumnerna, täckningen och formulärets händelser (#1903) ─────────────
+
+/** Fyra ärenden där varje kolumn ger en egen ordning. */
+const sortableMatters = (): Array<Record<string, unknown>> => [
+  { id: "a", matterNumber: "2026-0009", title: "Alfa", status: "CLOSED", matterType: "Familjerätt", isTaxeArende: true,
+    contacts: [{ contact: { name: "Örjan" } }], parties: [], _count: { contacts: 1 },
+    paymentMethod: "RATTSHJALP", rattshjalpMaxTimmar: 100, coverageUsage: { billableMinutes: 95 * 60, billableValueOre: 0 } },
+  { id: "b", matterNumber: "AB2026-0001", title: "Beta", status: "ACTIVE", matterType: null,
+    contacts: [], parties: [], _count: { contacts: 4 },
+    paymentMethod: "RATTSSKYDD", rattsskyddMaxOre: 100_000, coverageUsage: { billableMinutes: 0, billableValueOre: 150_000 } },
+  { id: "c", matterNumber: "2026-0010", title: "Gamma", status: "ARCHIVED", matterType: "Arv",
+    contacts: [{ contact: { name: "Anna" } }], parties: [], _count: { contacts: 2 },
+    paymentMethod: "RATTSHJALP", coverageUsage: { billableMinutes: 600, billableValueOre: 0 } },
+  { id: "d", matterNumber: "XYZ-1", title: "Delta", status: "ACTIVE", matterType: "Brott",
+    contacts: [{ contact: { name: "Bo" } }], parties: [], _count: { contacts: 0 } },
+];
+
+describe("MattersPage — kolumner och täckning (#1903)", () => {
+  beforeEach(() => {
+    mattersQuery.data = { matters: sortableMatters(), total: 4, pages: 1 };
+  });
+
+  it("varje kolumn sorterar på det som visas", () => {
+    render(<MattersPage />);
+    sortColumn("Ärendenr", "asc");
+    expect(rowOrder(["Alfa", "Beta", "Gamma", "Delta"])).toEqual(["Alfa", "Gamma", "Beta", "Delta"]);
+    sortColumn("Titel", "desc");
+    expect(rowOrder(["Alfa", "Beta", "Gamma", "Delta"])).toEqual(["Gamma", "Delta", "Beta", "Alfa"]);
+    sortColumn("Ärendetyp", "asc");
+    expect(rowOrder(["Alfa", "Gamma", "Delta"])).toEqual(["Gamma", "Delta", "Alfa"]);
+    sortColumn("Klient", "desc");
+    expect(rowOrder(["Alfa", "Gamma", "Delta"])).toEqual(["Alfa", "Delta", "Gamma"]);
+    sortColumn("Status", "asc");
+    expect(rowOrder(["Alfa", "Beta", "Gamma"])).toEqual(["Beta", "Gamma", "Alfa"]);
+    sortColumn("Parter", "desc");
+    expect(rowOrder(["Alfa", "Beta", "Gamma", "Delta"])).toEqual(["Beta", "Gamma", "Alfa", "Delta"]);
+    sortColumn("Täckning (tak)", "desc");
+    expect(rowOrder(["Alfa", "Beta", "Gamma", "Delta"])).toEqual(["Beta", "Alfa", "Gamma", "Delta"]);
+  });
+
+  it("Täckning visar procent med varning nära och över taket, '—' utan tak; taxeärendet märks Taxa", () => {
+    render(<MattersPage />);
+    expect(screen.getByTitle("Över tak")).toHaveTextContent("⚠ 150 %");
+    expect(screen.getByTitle("Över tak").className).toContain("text-red-700");
+    expect(screen.getByTitle("Närmar sig tak")).toHaveTextContent("⚠ 95 %");
+    expect(screen.getByTitle("Närmar sig tak").className).toContain("text-amber-800");
+    expect(screen.getByTitle("Inom tak")).toHaveTextContent("10 %");
+    expect(screen.getByTitle("Inom tak").className).toContain("text-gray-600");
+    expect(within(rowWith("Delta")).getAllByText("—").length).toBeGreaterThan(0);
+    expect(within(rowWith("Alfa")).getByText("Taxa")).toBeInTheDocument();
+    expect(within(rowWith("Beta")).queryByText("Taxa")).toBeNull();
+  });
+
+  it("filter på Täckning väljer på etiketten", () => {
+    render(<MattersPage />);
+    openColumnMenu("Täckning (tak)");
+    fireEvent.change(screen.getByPlaceholderText("Skriv för att filtrera…"), { target: { value: "över" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tillämpa" }));
+    expect(screen.getByText("Beta")).toBeInTheDocument();
+    expect(screen.queryByText("Alfa")).toBeNull();
+    expect(screen.queryByText("Delta")).toBeNull();
+  });
+});
+
+describe("MattersPage — formulärets händelser (#1903)", () => {
+  it("när ärendet skapats stängs formuläret och listan laddas om", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.change(screen.getByLabelText("Titel *"), { target: { value: "Tvist" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    act(() => matterCreated?.());
+    expect(utilsMock.matter.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Skapa ärende/i })).toBeNull();
+  });
+
+  it("ansvarig jurist väljs ur byråns användare och skickas med", () => {
+    employeesQuery.data.users = [{ id: "u2", name: "Eva Ek" }];
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.change(screen.getByLabelText("Titel *"), { target: { value: "Tvist" } });
+    fireEvent.change(screen.getByLabelText("Ansvarig advokat/jurist"), { target: { value: "u2" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ responsibleLawyerId: "u2" }));
+  });
+
+  it("medarbetarfiltret skickar vald medarbetare till listan", () => {
+    employeesQuery.data.users = [{ id: "u2", name: "Eva Ek" }];
+    render(<MattersPage />);
+    const filter = screen.getAllByRole("combobox").find(
+      (el) => within(el).queryByRole("option", { name: "Alla medarbetare" }) !== null,
+    ) as HTMLSelectElement;
+    fireEvent.change(filter, { target: { value: "u2" } });
+    expect(filter.value).toBe("u2");
+  });
+
+  it("klientdialogen stängs med Avbryt utan att välja klient", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Välj klient/ }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("button", { name: /Välj klient/ })).toBeInTheDocument();
   });
 });

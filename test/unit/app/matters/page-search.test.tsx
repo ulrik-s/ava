@@ -7,6 +7,7 @@
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import MattersPage from "@/app/matters/page";
+import { rowOrder, sortColumn } from "../../../helpers/data-table";
 
 type Row = Record<string, unknown>;
 const row = (id: string, over: Row = {}): Row => ({
@@ -146,6 +147,20 @@ describe("Ärendelistan — sammanslagen sökning (#1642)", () => {
     render(<MattersPage />);
     expect(within(bodyRow(0)).getByText("Motpart: Byggfirma Stenhammar AB")).toBeInTheDocument();
     expect(within(bodyRow(0)).queryByText(/Klient:/)).toBeNull();
+  });
+
+  it("Träff-kolumnen sorterar på träffarnas text (#1903)", () => {
+    listMatters = [
+      row("1", { parties: [{ role: "MOTPART", name: "Stenhammar Bygg" }] }),
+      row("2"),
+      row("3", { parties: [{ role: "KLIENT", name: "Anna Stenhammar" }] }),
+    ];
+    checkState.data = { searchTerm: "stenham", matchCount: 0, results: [] };
+    render(<MattersPage />);
+    sortColumn("Träff", "desc");
+    expect(rowOrder(["Ärende 1", "Ärende 2", "Ärende 3"])).toEqual(["Ärende 1", "Ärende 3", "Ärende 2"]);
+    sortColumn("Träff", "asc");
+    expect(rowOrder(["Ärende 1", "Ärende 2", "Ärende 3"])).toEqual(["Ärende 2", "Ärende 3", "Ärende 1"]);
   });
 
   it("inga jävsträffar: märkningen 'Inga träffar' och listan med Träff-kolumnen; inget id-anrop", () => {

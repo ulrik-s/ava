@@ -9,6 +9,7 @@
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { columnHeader, openColumnMenu, rowOrder, sortColumn } from "../../helpers/data-table";
 
 interface Row { id: string; name: string; age: number }
 const cols: Column<Row>[] = [
@@ -26,10 +27,11 @@ const setOrgMutate = vi.fn();
 const clearOrgMutate = vi.fn();
 const me = { data: { id: "u1", role: "ADMIN" as string } };
 const persisted = { data: undefined as undefined | { user: unknown; org: unknown } };
+const invalidatePrefs = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
+    useUtils: () => ({ prefs: { get: { invalidate: invalidatePrefs } } }),
     user: { current: { useQuery: () => me } },
     prefs: {
       get: { useQuery: () => ({ data: persisted.data, isLoading: false }) },
@@ -307,5 +309,145 @@ describe("DataTable — footer/summa + interaktioner", () => {
     return new Promise<void>((resolve) => {
       setTimeout(() => { expect(saveMutate).toHaveBeenCalled(); resolve(); }, 500);
     });
+  });
+});
+
+// ── Händelser i menyer, toolbar och rubriker (#1903) ─────────────────────
+
+/** Mutationsmocken anropar sitt onSuccess som servern hade gjort. */
+const succeed = (_input: unknown, opts?: { onSuccess?: () => void }): void => { opts?.onSuccess?.(); };
+
+/** Den genomskinliga ytan bakom en öppen meny (klick där stänger den). */
+const backdrop = (root: HTMLElement): HTMLElement => {
+  const el = root.querySelector<HTMLElement>(".fixed.inset-0");
+  if (!el) throw new Error("ingen öppen meny");
+  return el;
+};
+const headerLabels = (): Array<string | null> => screen.getAllByRole("columnheader").map((h) => h.textContent);
+
+describe("DataTable — händelser (#1903)", () => {
+  it("'Återställ vy' rensar den personliga vyn och laddar om prefs", () => {
+    persisted.data = { user: { sortBy: "age", sortDir: "desc" }, org: null };
+    clearMutate.mockImplementation(succeed);
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    expect(rowOrder(["Anna", "Bo"])).toEqual(["Bo", "Anna"]);
+    fireEvent.click(screen.getByRole("button", { name: "Återställ vy" }));
+    expect(clearMutate).toHaveBeenCalledWith({ key: "x" }, expect.anything());
+    expect(invalidatePrefs).toHaveBeenCalledWith({ key: "x" });
+    expect(screen.queryByText(/Sortering:/)).not.toBeInTheDocument();
+    expect(rowOrder(["Anna", "Bo"])).toEqual(["Anna", "Bo"]);
+  });
+
+  it("'Spara som org-default' laddar om prefs när servern svarat", () => {
+    setOrgMutate.mockImplementation(succeed);
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: "Spara som org-default" }));
+    expect(invalidatePrefs).toHaveBeenCalledWith({ key: "x" });
+  });
+
+  it("'Ta bort org-default' tar bort byråns vy och laddar om prefs", () => {
+    persisted.data = { user: null, org: { sortBy: "age" } };
+    clearOrgMutate.mockImplementation(succeed);
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort org-default" }));
+    expect(clearOrgMutate).toHaveBeenCalledWith({ key: "x" }, expect.anything());
+    expect(invalidatePrefs).toHaveBeenCalledWith({ key: "x" });
+  });
+
+  it("Sortera fallande vänder ordningen; 'Ta bort sortering' återställer den", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    sortColumn("Ålder", "desc");
+    expect(rowOrder(["Anna", "Bo"])).toEqual(["Bo", "Anna"]);
+    expect(screen.getByText("Sortering: Ålder ↓")).toBeInTheDocument();
+    openColumnMenu("Ålder");
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort sortering" }));
+    expect(rowOrder(["Anna", "Bo"])).toEqual(["Anna", "Bo"]);
+    expect(screen.queryByText(/Sortering:/)).not.toBeInTheDocument();
+  });
+
+  it("filter: skriv + Enter filtrerar; Rensa i menyn tar bort filtret", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    openColumnMenu("Namn");
+    const input = screen.getByPlaceholderText("Skriv för att filtrera…");
+    fireEvent.change(input, { target: { value: "bo" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.queryByText("Anna")).not.toBeInTheDocument();
+    expect(screen.getByText('Filter: Namn="bo"')).toBeInTheDocument();
+    openColumnMenu("Namn");
+    fireEvent.click(screen.getByRole("button", { name: "Rensa" }));
+    expect(screen.getByText("Anna")).toBeInTheDocument();
+    expect(screen.queryByText(/Filter:/)).not.toBeInTheDocument();
+  });
+
+  it("filter: Tillämpa filtrerar; Escape stänger menyn utan att filtrera", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    openColumnMenu("Namn");
+    fireEvent.change(screen.getByPlaceholderText("Skriv för att filtrera…"), { target: { value: "anna" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tillämpa" }));
+    expect(screen.queryByText("Bo")).not.toBeInTheDocument();
+    openColumnMenu("Namn");
+    const input = screen.getByPlaceholderText<HTMLInputElement>("Skriv för att filtrera…");
+    expect(input.value).toBe("anna");
+    fireEvent.change(input, { target: { value: "x" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getByText('Filter: Namn="anna"')).toBeInTheDocument();
+  });
+
+  it("chipets kryss tar bort filtret", () => {
+    persisted.data = { user: { filters: { name: "anna" } }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    expect(screen.queryByText("Bo")).not.toBeInTheDocument();
+    expect(screen.getByText('Filter: Namn="anna"')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort" }));
+    expect(screen.getByText("Bo")).toBeInTheDocument();
+    expect(screen.queryByText(/Filter:/)).not.toBeInTheDocument();
+  });
+
+  it("gruppera via menyn, sluta via menyn och via chipets kryss", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    openColumnMenu("Namn");
+    fireEvent.click(screen.getByRole("button", { name: "Gruppera på den här" }));
+    expect(screen.getByText("Gruppering: Namn")).toBeInTheDocument();
+    openColumnMenu("Namn");
+    fireEvent.click(screen.getByRole("button", { name: "Sluta gruppera" }));
+    expect(screen.queryByText(/Gruppering:/)).not.toBeInTheDocument();
+    openColumnMenu("Namn");
+    fireEvent.click(screen.getByRole("button", { name: "Gruppera på den här" }));
+    expect(screen.getByText("Gruppering: Namn")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort" }));
+    expect(screen.queryByText(/Gruppering:/)).not.toBeInTheDocument();
+  });
+
+  it("klick utanför stänger rubrikmenyn och 'Kolumner'-listan", () => {
+    const { baseElement } = render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    openColumnMenu("Namn");
+    fireEvent.click(backdrop(baseElement));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Kolumner" }));
+    expect(screen.getByRole("group", { name: "Kolumner" })).toBeInTheDocument();
+    fireEvent.click(backdrop(baseElement));
+    expect(screen.queryByRole("group", { name: "Kolumner" })).not.toBeInTheDocument();
+  });
+
+  it("dra en rubrik och släpp på en annan flyttar kolumnen dit", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    const store = new Map<string, string>();
+    const dataTransfer = { setData: (k: string, v: string) => store.set(k, v), getData: (k: string) => store.get(k) ?? "" };
+    fireEvent.dragStart(columnHeader("Ålder"), { dataTransfer });
+    fireEvent.dragOver(columnHeader("Namn"), { dataTransfer });
+    fireEvent.drop(columnHeader("Namn"), { dataTransfer });
+    expect(headerLabels()[0]).toMatch(/^Ålder/);
+    expect(headerLabels()[1]).toMatch(/^Namn/);
+  });
+
+  it("släpp på samma kolumn eller utan dragdata ändrar inget", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    const nameTh = columnHeader("Namn");
+    fireEvent.drop(nameTh, { dataTransfer: { getData: () => "name" } });
+    fireEvent.drop(nameTh, { dataTransfer: { getData: () => "" } });
+    fireEvent.drop(nameTh, { dataTransfer: { getData: () => "okänd" } });
+    expect(headerLabels()[0]).toMatch(/^Namn/);
   });
 });
