@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest-compat";
 import { dayLabel, toIsoDate, toLocalTime, toSwedishLongDate } from "@/lib/shared/iso-date";
 import { addDays, stockholmDay, stockholmTime, stockholmYear } from "@/lib/shared/stockholm-time";
 import { nearStockholmNewYear } from "../../helpers/arbitraries";
+import { inProcessZone, plainDateBetween, PROCESS_ZONES } from "../../helpers/process-zone";
 
 const HOUR_MS = 3_600_000;
 const pad2 = (n: number): string => String(n).padStart(2, "0");
@@ -95,9 +96,7 @@ describe("stockholmDay / stockholmTime / stockholmYear", () => {
  * den svenska mallen inga inledande nollor ("999-03-01") — inget datum AVA
  * hanterar.
  */
-const plainDate: fc.Arbitrary<string> = fc
-  .date({ min: new Date("1000-01-01T00:00:00Z"), max: new Date("9999-12-31T00:00:00Z"), noInvalidDate: true })
-  .map((d) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`);
+const plainDate = plainDateBetween(1000, 9999);
 
 describe("toIsoDate / toLocalTime", () => {
   it("ett rent datum behåller sin dag", () => {
@@ -116,28 +115,6 @@ describe("toIsoDate / toLocalTime", () => {
 });
 
 // ─── Oberoende av processens tidszon ──────────────────────────────────────
-
-/** Zoner långt från Stockholm åt båda hållen, halv- och kvartstimmar, egen sommartid. */
-const PROCESS_ZONES = [
-  "UTC", "Europe/Stockholm", "America/Los_Angeles", "America/St_Johns", "Asia/Tokyo",
-  "Asia/Kathmandu", "Australia/Lord_Howe", "Pacific/Kiritimati", "Pacific/Pago_Pago",
-] as const;
-
-/**
- * Kör `fn` med processens tidszon satt till `tz` och återställ efteråt. Bun läser
- * om `process.env.TZ` vid varje tilldelning (https://bun.com/docs/test/dates-times);
- * `bun test` kör annars i Etc/UTC. Återställ med en TILLDELNING — efter
- * `delete process.env.TZ` slår senare tilldelningar inte längre igenom i Bun 1.3.
- */
-function inProcessZone<T>(tz: string, fn: () => T): T {
-  const original = process.env.TZ;
-  process.env.TZ = tz;
-  try {
-    return fn();
-  } finally {
-    process.env.TZ = original ?? "Etc/UTC";
-  }
-}
 
 /** Allt hjälparna svarar för en tidpunkt och ett rent datum. */
 const answers = (d: Date, plain: string): string[] =>

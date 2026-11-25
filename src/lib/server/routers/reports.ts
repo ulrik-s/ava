@@ -5,6 +5,7 @@ import {
   type BilledInvoiceInput,
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
+import { calendarDate, isoWeek, weeksInRange } from "@/lib/shared/calendar-periods";
 import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
@@ -29,44 +30,6 @@ import { router, protectedProcedure } from "../trpc";
  */
 
 // ─── ISO-vecka ───────────────────────────────────────────────────────
-
-/** Kalenderdagen "YYYY-MM-DD" som UTC-midnatt: ett rent kalendervärde för veckomatematiken. */
-function calendarDate(day: string): Date {
-  return new Date(`${day}T00:00:00Z`);
-}
-
-function isoWeek(d: Date): { year: number; week: number } {
-  const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dayNr = (dt.getUTCDay() + 6) % 7;
-  dt.setUTCDate(dt.getUTCDate() - dayNr + 3);
-  const firstThursday = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
-  const week = 1 + Math.round(
-    ((dt.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7,
-  );
-  return { year: dt.getUTCFullYear(), week };
-}
-
-function mondayOfIsoWeek(d: Date): Date {
-  const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dayNr = (dt.getUTCDay() + 6) % 7;
-  dt.setUTCDate(dt.getUTCDate() - dayNr);
-  return dt;
-}
-
-function weeksInRange(from: Date, to: Date): { isoYear: number; week: number; start: Date; end: Date }[] {
-  const weeks: { isoYear: number; week: number; start: Date; end: Date }[] = [];
-  let cursor = mondayOfIsoWeek(from);
-  const end = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
-  while (cursor.getTime() <= end.getTime()) {
-    const weekEnd = new Date(cursor);
-    weekEnd.setUTCDate(cursor.getUTCDate() + 6);
-    const { year, week } = isoWeek(cursor);
-    weeks.push({ isoYear: year, week, start: new Date(cursor), end: weekEnd });
-    cursor = new Date(cursor);
-    cursor.setUTCDate(cursor.getUTCDate() + 7);
-  }
-  return weeks;
-}
 
 function weekKey(isoYear: number, week: number): string {
   return `${isoYear}-W${String(week).padStart(2, "0")}`;
