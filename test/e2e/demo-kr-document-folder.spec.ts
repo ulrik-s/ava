@@ -64,6 +64,21 @@ test.describe("släpp filer utifrån i dokumentvyn (#1615)", () => {
     await expect(page.locator("tr").filter({ has: saved }).locator("[style*='padding-left: 20px']").first()).toBeVisible();
   });
 
+  // #1974: rutan visar släppmålet i Mapp, och en annan vald mapp gäller vid Spara.
+  test("en PDF släppt på en mapp visar mappen i Mapp, och en annan vald mapp gäller", async ({ page }) => {
+    await dropFile(page, "Domstol", "kallelse.pdf", "application/pdf", "%PDF-1.4\n%%EOF");
+    const dialog = page.getByRole("dialog", { name: "Namnge dokumentet" });
+    const folder = dialog.getByLabel("Mapp");
+    await expect(folder.locator("option:checked")).toHaveText("Domstol");
+    await folder.selectOption({ label: "Domstol › Kallelse" });
+    await dialog.getByRole("textbox").fill("Kallelse till huvudförhandling");
+    await dialog.getByRole("button", { name: "Spara" }).click();
+    const saved = page.getByText("Kallelse till huvudförhandling.pdf");
+    await expect(saved).toBeVisible({ timeout: 30_000 });
+    // Raden ligger under Domstol › Kallelse: djup 2, inte direkt under Domstol.
+    await expect(page.locator("tr").filter({ has: saved }).locator("[style*='padding-left: 36px']").first()).toBeVisible();
+  });
+
   test("ett mejl som .eml släppt på roten förifylls med ämnesraden och sparas som .eml (#1616)", async ({ page }) => {
     await dropFile(page, "Rot", "mejl.eml", "message/rfc822", "Subject: =?UTF-8?Q?M=C3=B6te_om_f=C3=B6rlikning?=\r\n\r\nText");
     const dialog = page.getByRole("dialog", { name: "Namnge dokumentet" });
