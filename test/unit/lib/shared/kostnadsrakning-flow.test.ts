@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import {
-  availableKrActions, canKrAction, applyKrAction, isActiveKr, krStateOf,
+  availableKrActions, canKrAction, applyKrAction, isActiveKr, krStateOf, KOSTNADSRAKNING_STATUS_LABELS,
   type ActiveKrSource, type KostnadsrakningState,
 } from "@/lib/shared/kostnadsrakning-flow";
 
@@ -111,5 +111,13 @@ describe("isActiveKr", () => {
 
   it("andra körningstyper är aldrig en aktiv KR", () => {
     expect(isActiveKr({ type: "FINAL", status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD" })).toBe(false);
+  });
+});
+
+describe("KOSTNADSRAKNING_STATUS_LABELS (#1860)", () => {
+  it("har en svensk etikett per livsstatus", () => {
+    expect(KOSTNADSRAKNING_STATUS_LABELS).toEqual({
+      INSKICKAD: "Väntar på dom", BESLUTAD: "Beslutad", OVERKLAGAD: "Överklagad", FAKTURERAD: "Fakturerad",
+    });
   });
 });

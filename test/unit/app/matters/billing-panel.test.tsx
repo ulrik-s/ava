@@ -550,3 +550,54 @@ describe("BillingPanel — Fakturering-listan döljer annullerade och krediterin
     expect(screen.getByRole("button", { name: "Visa annullerade (1)" })).toBeInTheDocument();
   });
 });
+
+describe("BillingPanel — Fakturering-listan visar kostnadsräkningens livscykel (#1860)", () => {
+  const kr = (over: Partial<BillingRunRow>): BillingRunRow => ({
+    id: "kr1", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", recipient: "DOMSTOL",
+    amountOre: 50_000, createdAt: "2026-03-01", reference: "KR-2026-0001", ...over,
+  });
+  /** Statuskolumnen (fjärde cellen) på listraden som bär referensen `ref`
+   *  (en aktiv KR visar referensen också i sitt kort, utanför tabellen). */
+  const statusCell = (ref = "KR-2026-0001"): string | null => {
+    const row = screen.getAllByText(ref).map((el) => el.closest("tr")).find((tr) => tr != null);
+    return row ? within(row).getAllByRole("cell")[3]?.textContent ?? null : null;
+  };
+  const panel = () => render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
+
+  beforeEach(() => { invoiceListData = []; });
+
+  it.each([
+    ["BESLUTAD", "PENDING_VERDICT", "Beslutad"],
+    ["OVERKLAGAD", "PENDING_VERDICT", "Överklagad"],
+    ["FAKTURERAD", "SENT", "Fakturerad"],
+    ["INSKICKAD", "PENDING_VERDICT", "Väntar på dom"],
+  ])("KR i %s (körning %s) visar %s", (krStatus, status, label) => {
+    runsData = { runs: [kr({ kostnadsrakningStatus: krStatus, status })] };
+    panel();
+    expect(statusCell()).toBe(label);
+  });
+
+  it("äldre KR utan livsstatus och utan faktura visar Väntar på dom", () => {
+    runsData = { runs: [kr({ kostnadsrakningStatus: null })] };
+    panel();
+    expect(statusCell()).toBe("Väntar på dom");
+  });
+
+  it("en ångrad KR visar Annullerad och är dold från början", () => {
+    runsData = { runs: [kr({ kostnadsrakningStatus: "INSKICKAD", status: "VOIDED" })] };
+    panel();
+    expect(screen.queryByText("KR-2026-0001")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (1)" }));
+    expect(statusCell()).toBe("Annullerad");
+  });
+
+  it("aconto och slutfaktura visar körningens status som förut", () => {
+    runsData = { runs: [
+      { id: "a1", type: "ACCONTO", status: "SENT", recipient: "KLIENT", amountOre: 1000, createdAt: "2026-03-01", invoiceId: "inv-a1", invoice: { id: "inv-a1", invoiceNumber: "F-a1" } },
+      { id: "f1", type: "FINAL", status: "DRAFT", recipient: "KLIENT", amountOre: 1000, createdAt: "2026-03-02", invoiceId: "inv-f1", invoice: { id: "inv-f1", invoiceNumber: "F-f1" } },
+    ] };
+    panel();
+    expect(statusCell("F-a1")).toBe("Skickad");
+    expect(statusCell("F-f1")).toBe("Utkast");
+  });
+});
