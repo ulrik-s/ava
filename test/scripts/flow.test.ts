@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { INTAKE_LABELS } from "@/lib/shared/feedback";
+import { AGENT_PR_PER_DAY } from "../../tooling/scripts/agent-guard";
 import { dispatchTarget, earlierFire, type FetchFn, FIRE_WINDOW_MS } from "../../tooling/scripts/flow/dispatch";
 import { renderMermaid } from "../../tooling/scripts/flow/generate";
 import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
@@ -347,16 +348,17 @@ describe("klockan mot GitHub", () => {
     expect(cancelHung(gitHub("ulrik-s/ava", gh.run), now, 60, false, () => {})).toEqual([42]);
   });
 
-  // Dygnstaket (#2027): 22 PR:er på en timme i går → #30 var nr 22 när den skapades.
-  const burst = Array.from({ length: 22 }, (_, i) => new Date(Date.parse("2026-11-19T10:00:00Z") + i * 3 * 60_000).toISOString());
+  // Dygnstaket (#2027): taket + 2 PR:er på en timme i går → #30 var sist, över taket, när den skapades.
+  const burst = Array.from({ length: AGENT_PR_PER_DAY + 2 }, (_, i) => new Date(Date.parse("2026-11-19T10:00:00Z") + i * 2 * 60_000).toISOString());
+  const lastInBurst = burst.at(-1) ?? "";
   const pullsOpen = (labels: string[]) => [[
-    { number: 30, title: "t", body: "Closes #3", labels: labels.map((name) => ({ name })), created_at: burst[21] },
+    { number: 30, title: "t", body: "Closes #3", labels: labels.map((name) => ({ name })), created_at: lastInBurst },
     { number: 31, title: "t", body: "Closes #4", labels: [{ name: "agent-pr" }, { name: "granskad" }], created_at: "2026-11-20T11:00:00Z" },
   ]];
 
   it("capReleased: över taket när den skapades och under det nu", () => {
-    const created = Date.parse(burst[21] ?? "");
-    expect(capReleased(created, burst, created + 60_000)).toBe(false); // fortfarande nr 22
+    const created = Date.parse(lastInBurst);
+    expect(capReleased(created, burst, created + 60_000)).toBe(false); // fortfarande över taket
     expect(capReleased(created, burst, now)).toBe(true); // fönstret har passerat
     expect(capReleased(Date.parse(burst[3] ?? ""), burst, now)).toBe(false); // nr 4: aldrig över taket
   });

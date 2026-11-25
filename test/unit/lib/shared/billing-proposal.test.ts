@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { DEFAULT_ACCONTO_SHARE_BIPS, proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { DEFAULT_ACCONTO_SHARE_BIPS, buildProposal, proposedAccontoOre } from "@/lib/shared/billing-proposal";
 
 describe("proposedAccontoOre", () => {
   it("20 % av 5000 kr utan tidigare aconton → 1000 kr + moms = 1250 kr", () => {
@@ -41,5 +41,15 @@ describe("proposedAccontoOre", () => {
 describe("DEFAULT_ACCONTO_SHARE_BIPS (#1852)", () => {
   it("20 % när ärendet saknar egen andel", () => {
     expect(DEFAULT_ACCONTO_SHARE_BIPS).toBe(2000);
+  });
+});
+
+describe("buildProposal — postens datum (#1888)", () => {
+  it("datumet följer med för tidsposter och utlägg", () => {
+    const te = [{ id: "t1", description: "Möte", minutes: 60, hourlyRate: 100_000, billable: true, date: new Date("2026-03-02T09:00:00Z") }];
+    const ex = [{ id: "e1", description: "Avgift", amount: 5_000, billable: true, date: "2026-03-05" }];
+    const proposal = buildProposal(te, ex, 0, { paymentMethod: "PRIVAT" }, "2026-04-01");
+    expect(proposal.timeEntries[0]?.date).toEqual(new Date("2026-03-02T09:00:00Z"));
+    expect(proposal.expenses[0]?.date).toBe("2026-03-05");
   });
 });

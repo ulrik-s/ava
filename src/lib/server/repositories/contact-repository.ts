@@ -35,8 +35,9 @@ export interface ContactFull extends Contact {
 
 /** Filter/paginering för `listForOrg`. */
 export interface ContactListOptions {
-  search?: string | undefined;
   contactType?: ContactType | undefined;
+  /** Bara dessa kontakter. Tom lista = inga kontakter. */
+  ids?: readonly ContactId[] | undefined;
   page: number;
   pageSize: number;
 }
@@ -47,7 +48,7 @@ export interface ContactListResult {
 }
 
 export interface ContactRepository extends Repository<Contact> {
-  /** Topp-nivå-kontakter (parentId null) i org:en, paginerat + sökbart, med _count. */
+  /** Topp-nivå-kontakter (parentId null) i org:en, paginerat, med _count. Sökning sker i routern (#1868). */
   listForOrg(organizationId: OrganizationId, opts: ContactListOptions): Promise<ContactListResult>;
   /** ALLA topp-nivå-kontakter i org:en, oformaterat — underlag för klientsök som
    *  rangordnar själv (conflict-match, #1128). Kontaktpersoner (barn) ingår inte. */

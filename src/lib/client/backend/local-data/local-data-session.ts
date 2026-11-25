@@ -22,7 +22,7 @@ import { bindLocalNamespace, localScopeSchema, userNamespace, type LocalScope } 
 import { purgeLegacyCaches, purgeLocalData, resumePendingPurge, type PurgeEnv } from "./purge-local-data";
 
 /** Principalen när ingen är bunden och driften saknar OIDC (samma som in-process-routerns). */
-const UNBOUND_PRINCIPAL = "current-user";
+export const UNBOUND_PRINCIPAL = "current-user";
 
 /** Configens fält som avgör vems data det är. */
 export type IdentityConfig = Pick<FirmaConfig, "organizationId" | "principalId" | "authorEmail">;

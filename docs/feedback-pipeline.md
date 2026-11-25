@@ -62,6 +62,8 @@ vad som behöver avgöras. Kvittot står på statusissuen
 användarnas förfrågningar: Ulriks egna idéer och buggar, agenternas
 uppföljningar och teknisk skuld går samma väg. En förfrågan som inte kommer
 från en användare i AVA har flaggan `intern` (satt av Ulrik eller klockan).
+Delar loop 1 upp en intern förfrågan sätter klockan `intern` på delarna
+(sub-issues till originalet), eftersom en agent inte får sätta den själv.
 Loop 1 verifierar den som andra, men det finns ingen användare att fråga:
 frågor går till Ulrik (`blockerad`), och AVA visar den aldrig för användarna
 (de ser bara förfrågningar med sitt eget märke).
@@ -75,7 +77,9 @@ annat issue till inkorgen som `intern` + `bugg`/`förslag` när det är äldre �
 Flytten kräver en token som når båda repona: hemligheten
 `FLOW_TRANSFER_TOKEN` i `ulrik-s/ava` (en fine-grained PAT med *Issues: read
 and write* på båda repona), som `agent-flow.yml` skickar till klockans steg.
-Utan den loggar klockan bara vad som skulle flyttas.
+Utan den loggar klockan bara vad som skulle flyttas. Nekar GitHub flytten
+(token räcker inte till) står det som en varning på klockans körning. Klockan
+går vidare med resten och försöker igen nästa timme.
 
 Genomgången 2026-11-18 flyttade de 70 gamla issuena: de klara och
 inaktuella stängdes med belägg, resten ligger i inkorgen som `intern` +
@@ -216,7 +220,7 @@ förfrågan i inkorgen, medan en grund kan höra till flera.
     (`src/lib/shared/brottmalstaxa.ts`, `forordnandetaxa.ts`) och bokföringen
     (`src/lib/shared/accounting/`). Samma lista står i `.github/CODEOWNERS`.
   - innehåller en destruktiv migration,
-  - är fler än 20 på ett dygn,
+  - är fler än 30 på ett dygn,
   - eller inte har `granskad`.
 
   `människa-godkänd` (bara Ulrik) släpper de två första. Granskningsloopen
@@ -522,7 +526,7 @@ komplexitet < 8, jscpd, knip, täckning, Agentvakten).
 
 **Du godkänner** ett förslag genom att sätta `granskad` på det (själv,
 inte via en agent). Då bygger implementationen det, men först när inga
-användarönskemål väntar. Det går genom samma granskning och samma tak på 20
+användarönskemål väntar. Det går genom samma granskning och samma tak på 30
 PR:er per dygn. Befintliga tester får inte ändras: de är kontraktet. Förslag
 du inte godkänner stängs efter fyra veckor.
 

@@ -54,6 +54,8 @@ test("kostnadsräkning som väntar på dom: registrera beslut → skapa faktura"
   await dialog.getByLabel(/Prutning/i).fill(String(PRUTNING_KR));
   await dialog.getByRole("button", { name: /^Spara beslut$/ }).click();
   await expect(dialog).toBeHidden({ timeout: 15_000 });
+  // Faktureringslistan visar kostnadsräkningens livscykel, inte körningens status (#1860).
+  await expect(page.getByRole("cell", { name: "Beslutad", exact: true })).toBeVisible({ timeout: 15_000 });
 
   // Steg 2: fakturan skapas ur beslutet (dialogen tar inget belopp — servern
   // läser det ur KR:n). Att knappen dyker upp FÖRST nu är hela poängen med att
@@ -88,6 +90,8 @@ test("överklagad kostnadsräkning: hovrättens beslut är slutgiltigt", async (
 
   await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
   await showPanel(page, "Fakturering");
+  // Faktureringslistan säger att kostnadsräkningen är överklagad (#1860).
+  await expect(page.getByRole("cell", { name: "Överklagad", exact: true })).toBeVisible({ timeout: 30_000 });
   // Ett överklagande är inte avgjort: varken fakturering eller ett nytt
   // överklagande ska erbjudas medan hovrätten har målet.
   await expect(page.getByRole("button", { name: /^Registrera hovrättens beslut$/ })).toBeVisible({ timeout: 30_000 });

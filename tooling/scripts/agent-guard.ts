@@ -24,7 +24,7 @@ import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
 import { destructiveStatements } from "./lib/migration-kind";
 
-export const AGENT_PR_PER_DAY = 20;
+export const AGENT_PR_PER_DAY = 30;
 
 /** Sökvägar en agent inte får röra utan `människa-godkänd`. */
 export const PROTECTED_PATHS: readonly RegExp[] = [

@@ -61,6 +61,14 @@ describe("ProfilePage", () => {
     expect(screen.getByText(/används för inloggningen/)).toBeInTheDocument();
   });
 
+  it("Dina uppgifter går ut till rutans kant utan egen ram, med 8 px luft (SECTION_FILL_CLASS, #1847)", () => {
+    render(<ProfilePage />);
+    const section = screen.getByRole("heading", { name: "Dina uppgifter" }).closest("section");
+    const classes = (section?.className ?? "").split(" ");
+    expect(classes).toEqual(expect.arrayContaining(["bg-white", "p-2"]));
+    expect(section?.className).not.toMatch(/border|rounded|p-5|mb-5/);
+  });
+
   it("renderar anslutna tjänster (IntegrationsSection)", () => {
     integrations.available = true;
     render(<ProfilePage />);

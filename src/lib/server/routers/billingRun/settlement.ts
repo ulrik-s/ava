@@ -9,6 +9,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { settledNote } from "@/lib/shared/billing-notes";
+import { krCanCreateInvoice } from "@/lib/shared/billing-todo";
 import {
   expenseGrossOre, expenseNetOre, settlementArvodeNet, vatOreOf,
   type UnfrozenWork,
@@ -17,7 +18,7 @@ import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
 import { rattsskyddCoverage } from "@/lib/shared/coverage-billing";
 import { resolveHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
-import { krStateOf } from "@/lib/shared/kostnadsrakning-flow";
+import { isActiveKr, krStateOf } from "@/lib/shared/kostnadsrakning-flow";
 import { isRadgivningInvoiced } from "@/lib/shared/rattshjalp";
 import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
 import { BILLING_RUN_RECIPIENT_LABELS, billingRunRecipientSchema, type PaymentMethod } from "@/lib/shared/schemas/enums";
@@ -50,7 +51,7 @@ async function resolveSettlementWork(
   repos: Repositories, orgId: OrganizationId, matterId: MatterId,
 ): Promise<{ work: UnfrozenWork; krRun: BillingRunListRow | undefined }> {
   const runs = await repos.billingRuns.listForOrg(orgId, matterId);
-  const krRun = runs.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
+  const krRun = runs.find(isActiveKr);
   const work = krRun ? await fetchWorkByRun(repos, krRun.id) : await fetchUnfrozenWork(repos, matterId);
   return { work, krRun };
 }
@@ -87,7 +88,7 @@ function settlementLines(a: SettlementLinesInput): SettlementAllocation {
  *  (rättsskydd, ingen KR) används det inmatade beloppet. */
 function resolveAwardedOre(krRun: BillingRunListRow | undefined, inputAwardedOre: number | undefined): number | null {
   if (!krRun) return inputAwardedOre ?? null;
-  if (krRun.kostnadsrakningStatus !== "BESLUTAD") {
+  if (!krCanCreateInvoice(krRun)) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Registrera domstolens beslut innan du skapar fakturan." });
   }
   return krRun.awardedOre ?? null;

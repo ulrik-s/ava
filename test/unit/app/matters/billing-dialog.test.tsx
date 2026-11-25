@@ -25,8 +25,8 @@ const persistGeneratedDoc = vi.fn(async () => {});
 let proposalData: unknown = {
   workValueOre: 500_000, // 5000 kr upparbetat
   priorAccontoSumOre: 0,
-  timeEntries: [{ id: "te-1", description: "Möte med klient", minutes: 120, hourlyRate: 250_000, billable: true, valueOre: 500_000 }],
-  expenses: [{ id: "ex-1", description: "Ansökningsavgift", amount: 90_000, billable: true }],
+  timeEntries: [{ id: "te-1", description: "Möte med klient", minutes: 120, hourlyRate: 250_000, billable: true, valueOre: 500_000, date: new Date("2026-03-02T09:00:00Z") }],
+  expenses: [{ id: "ex-1", description: "Ansökningsavgift", amount: 90_000, billable: true, date: "2026-03-10" }],
 };
 let proposalLoading = false;
 
@@ -67,8 +67,8 @@ beforeEach(() => {
   proposalLoading = false;
   proposalData = {
     workValueOre: 500_000, priorAccontoSumOre: 0,
-    timeEntries: [{ id: "te-1", description: "Möte med klient", minutes: 120, hourlyRate: 250_000, billable: true, valueOre: 500_000 }],
-    expenses: [{ id: "ex-1", description: "Ansökningsavgift", amount: 90_000, billable: true }],
+    timeEntries: [{ id: "te-1", description: "Möte med klient", minutes: 120, hourlyRate: 250_000, billable: true, valueOre: 500_000, date: new Date("2026-03-02T09:00:00Z") }],
+    expenses: [{ id: "ex-1", description: "Ansökningsavgift", amount: 90_000, billable: true, date: "2026-03-10" }],
   };
 });
 
@@ -245,6 +245,67 @@ describe("BillingDialog — FINAL", () => {
     const call = finalMutate.mock.calls[0]![0] as Record<string, unknown>;
     expect(call.timeEntryIds).toBeUndefined();
     expect(call.expenseIds).toBeUndefined();
+  });
+
+  it("varje post visar sitt datum som svensk kalenderdag (#1888)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    expect(screen.getByText("2026-03-02")).toBeInTheDocument();
+    expect(screen.getByText("2026-03-10")).toBeInTheDocument();
+  });
+
+  it("datumintervallet markerar posterna inom det och avmarkerar övriga (#1888)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Från och med"), { target: { value: "2026-03-05" } });
+    expect(screen.getByText(/Poster att fakturera \(1\/2 valda\)/)).toBeInTheDocument();
+    expect(screen.getByText("Valt värde").nextElementSibling?.textContent).toMatch(/900,00/);
+    fireEvent.change(screen.getByLabelText("Till och med"), { target: { value: "2026-03-05" } });
+    expect(screen.getByText(/Poster att fakturera \(0\/2 valda\)/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Från och med"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
+    expect(finalMutate).toHaveBeenCalledWith(expect.objectContaining({ timeEntryIds: ["te-1"], expenseIds: [] }));
+  });
+
+  it("ett kryss efter intervallet står kvar (#1888)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Från och med"), { target: { value: "2026-03-05" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Möte med klient/ })); // tidsposten utanför intervallet
+    expect(screen.getByText(/Poster att fakturera \(2\/2 valda\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
+    expect(finalMutate).toHaveBeenCalledWith(expect.objectContaining({ timeEntryIds: ["te-1"], expenseIds: ["ex-1"] }));
+  });
+
+  it("två tömda datumfält markerar allt och skickar inga id:n (#1888)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Till och med"), { target: { value: "2026-03-05" } });
+    fireEvent.change(screen.getByLabelText("Till och med"), { target: { value: "" } });
+    expect(screen.getByText(/Poster att fakturera \(2\/2 valda\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
+    expect(finalMutate).toHaveBeenCalledWith(expect.not.objectContaining({ timeEntryIds: expect.anything() }));
+  });
+
+  it("utan beskrivning heter raderna Tidspost och Utlägg", () => {
+    proposalData = {
+      workValueOre: 0, priorAccontoSumOre: 0,
+      timeEntries: [{ id: "t", description: "", minutes: 1, hourlyRate: 1, billable: true, valueOre: 1, date: "2026-01-01" },
+        { id: "n", description: "Ej debiterbar", minutes: 1, hourlyRate: 1, billable: false, valueOre: 1, date: "2026-01-01" }],
+      expenses: [{ id: "e", description: "", amount: 1, billable: true, date: "2026-01-01" }],
+    };
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    expect(screen.getByText("Tidspost")).toBeInTheDocument();
+    expect(screen.getByText("Utlägg")).toBeInTheDocument();
+    expect(screen.queryByText("Ej debiterbar")).toBeNull();
+  });
+
+  it("utan förslag (ingen data) visas tomtexten", () => {
+    proposalData = undefined;
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    expect(screen.getByText(/Inga ofakturerade poster/)).toBeInTheDocument();
+  });
+
+  it("visar laddningstext medan förslaget hämtas", () => {
+    proposalLoading = true;
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    expect(screen.getByText(/Laddar ofakturerade poster/)).toBeInTheDocument();
   });
 
   it("byt mottagare → skickas i payloaden", () => {

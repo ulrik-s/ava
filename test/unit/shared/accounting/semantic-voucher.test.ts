@@ -3,6 +3,7 @@ import {
   buildPaymentVoucher,
   buildSemanticVoucher,
   type SemanticVoucherRow,
+  type VatBreakdownLine,
   type VoucherRole,
 } from "@/lib/shared/accounting/semantic-voucher";
 
@@ -234,6 +235,63 @@ describe("buildSemanticVoucher", () => {
         expect(empty.rows).toEqual(buildSemanticVoucher(c.input).rows);
       });
     }
+  });
+});
+
+// #1902: moms på en sats utan momskonto ger ett fel i stället för ett
+// obalanserat verifikat; satsen mappas exakt (förr "närmaste nedåt").
+describe("buildSemanticVoucher – moms på en sats utan momskonto (#1902)", () => {
+  const base = { invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0090", matterNumber: "AA2026-0007" };
+  const PREFIX = "Ärende AA2026-0007 - Faktura F-2026-0090: en rad i momsuppdelningen har ";
+  const SUFFIX = ", som saknar momskonto (bara 6, 12 och 25 % har ett). " +
+    "Verifikatet skulle inte balansera, så fakturan kan inte bokföras förrän momsuppdelningen är rättad.";
+  const build = (lines: VatBreakdownLine[], amount = 0) => () => buildSemanticVoucher({ ...base, amount, vatBreakdown: lines });
+
+  it("intagets motexempel: arvode med 0,01 kr moms på 0 % kastar", () => {
+    expect(build([{ kind: "arvode", vatRate: 0, netOre: 0, vatOre: 1 }])).toThrow(`${PREFIX}0,01 kr moms på satsen 0 %${SUFFIX}`);
+  });
+
+  it("intagets motexempel: utlägg med 1 kr moms på 0 % kastar", () => {
+    expect(build([{ kind: "utlagg", vatRate: 0, netOre: 10_000, vatOre: 100 }], 10_100))
+      .toThrow(`${PREFIX}1,00 kr moms på satsen 0 %${SUFFIX}`);
+  });
+
+  for (const [vatRate, sats] of [[300, "3"], [1000, "10"], [3000, "30"], [1250, "12,5"]] as const) {
+    it(`moms på ${sats} % kastar (förr närmaste konto nedåt)`, () => {
+      expect(build([{ kind: "arvode", vatRate, netOre: 10_000, vatOre: 500 }], 10_500))
+        .toThrow(`${PREFIX}5,00 kr moms på satsen ${sats} %${SUFFIX}`);
+    });
+  }
+
+  it("en kredit med negativ moms på 0 % kastar", () => {
+    expect(build([{ kind: "utlagg", vatRate: 0, netOre: -10_000, vatOre: -100 }], -10_100)).toThrow("satsen 0 %");
+  });
+
+  it("utan ärende- och fakturanummer börjar felet med den neutrala titeln", () => {
+    expect(() => buildSemanticVoucher({ amount: 0, invoiceDate: "2026-05-25", vatBreakdown: [{ kind: "arvode", vatRate: 0, netOre: 0, vatOre: 1 }] }))
+      .toThrow("Kundfaktura (AVA): en rad i momsuppdelningen har 0,01 kr moms");
+  });
+
+  it("en udda sats utan moms balanserar, utan momsrad", () => {
+    const v = buildSemanticVoucher({ ...base, amount: 10_000, vatBreakdown: [{ kind: "utlagg", vatRate: 1000, netOre: 10_000, vatOre: 0 }] });
+    expect(v.rows).toEqual([
+      { role: "kundfordran", debit: 10_000, credit: 0 },
+      { role: "intaktUtlagg", debit: 0, credit: 10_000 },
+    ]);
+  });
+
+  it("6, 12 och 25 % bokförs på satsens eget konto", () => {
+    const v = buildSemanticVoucher({
+      ...base, amount: 14_300, vatBreakdown: [
+        { kind: "arvode", vatRate: 2500, netOre: 4_000, vatOre: 1_000 },
+        { kind: "utlagg", vatRate: 1200, netOre: 5_000, vatOre: 600 },
+        { kind: "utlagg", vatRate: 600, netOre: 3_500, vatOre: 200 },
+      ],
+    });
+    expect(byRole(v.rows, "momsUtgaende").credit).toBe(1_000);
+    expect(byRole(v.rows, "momsUtgaende12").credit).toBe(600);
+    expect(byRole(v.rows, "momsUtgaende06").credit).toBe(200);
+    expect(sum(v.rows, "debit")).toBe(sum(v.rows, "credit"));
   });
 });
 

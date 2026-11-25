@@ -103,6 +103,24 @@ describe("FortnoxLedgerService", () => {
     await expect(push(voucher, { idempotencyKey: "a" })).rejects.toThrow(/400/);
     expect((await push(voucher, { idempotencyKey: "b" })).externalId).toBe("A/9");
   });
+
+  // #1885: ett fel med bilagan efter skapat verifikat kommer igenom låset som ett skäl, inte ett kast.
+  it("attachmentError kommer igenom bokföringslåset", async () => {
+    const fetchFn = ((url: string | URL | Request) => {
+      const u = requestUrl(url);
+      if (u.endsWith("/oauth-v1/token")) return Promise.resolve(json(TOKENS));
+      if (u.endsWith("/3/vouchers")) return Promise.resolve(json({ Voucher: { VoucherSeries: "A", VoucherNumber: 4, Year: 1 } }));
+      return Promise.resolve(new Response("bilagan nekad", { status: 400 }));
+    }) as typeof globalThis.fetch;
+    const svc = new FortnoxLedgerService(config, memVault(), fetchFn);
+    await svc.completeConnect("org-1", "c", stateOf(await svc.authorizeUrl("org-1")));
+    const push = svc.connector("org-1", DEFAULT_LEDGER_ACCOUNT_MAP).pushVoucher;
+    if (!push) throw new Error("pushVoucher saknas");
+    const voucher = buildSemanticVoucher({ amount: 100, vatOre: 0, vatBreakdown: null, invoiceDate: "2026-09-25", invoiceNumber: "F-3", matterNumber: null });
+    const res = await push(voucher, { idempotencyKey: "c", attachment: { fileName: "F-3.pdf", bytes: new Uint8Array([1]) } });
+    expect(res.externalId).toBe("A/4");
+    expect(res.attachmentError).toEqual(expect.any(String));
+  });
 });
 
 // ─── Anslutningens status och keepAlive (#1814) ──────────────────────

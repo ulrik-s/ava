@@ -1,7 +1,8 @@
 /**
- * TimeSection — efter borttagning av Fakturerad/Faktura-kolumner och
- * "Låst på faktura"-state. Rättshjälp/rättsskydd-flödet bryter 1:1-
- * kopplingen mellan tidsrad och faktura, så koppling visas inte längre.
+ * TimeSection — utan Fakturerad/Faktura-kolumner: rättshjälp/rättsskydd-flödet
+ * bryter 1:1-kopplingen mellan tidsrad och faktura, så kopplingen visas inte.
+ * En post med faktura (`invoiceId`) är däremot låst, som en fryst (#1863):
+ * samma regel (`isLockedEntry`) som servern.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -88,11 +89,13 @@ describe("TimeSection — utan invoice-koppling i UI", () => {
     expect(screen.queryByText("2026-0042")).not.toBeInTheDocument();
   });
 
-  it("fakturakoppling (invoiceId) låser INTE — alla entries får Ändra + Ta bort", () => {
+  it("en post med bara fakturakoppling (invoiceId) är låst — bara den öppna får Ändra + Ta bort (#1863)", () => {
     renderSection();
-    expect(screen.queryByText(/Låst/)).not.toBeInTheDocument();
-    expect(screen.getAllByText("Ändra")).toHaveLength(2);
-    expect(screen.getAllByText("Ta bort")).toHaveLength(2);
+    expect(screen.getByText("🔒 Låst")).toHaveAttribute(
+      "title", "Ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort.",
+    );
+    expect(screen.getAllByText("Ändra")).toHaveLength(1);
+    expect(screen.getAllByText("Ta bort")).toHaveLength(1);
   });
 });
 
@@ -101,8 +104,8 @@ describe("TimeSection — frysta poster och sparfel (#1170)", () => {
     extraEntries.push({ id: "te-3", date: new Date("2026-03-01"), minutes: 45, description: "Huvudförhandling", billable: true,
       user: { name: "Anna" }, frozenAt: new Date("2026-06-01") });
     renderSection();
-    expect(screen.getByText("🔒 Låst")).toHaveAttribute("title", expect.stringContaining("kan inte ändras"));
-    expect(screen.getAllByText("Ändra")).toHaveLength(2); // bara de två olåsta
+    expect(screen.getAllByText("🔒 Låst")).toHaveLength(2); // den frysta och den fakturerade
+    expect(screen.getAllByText("Ändra")).toHaveLength(1); // bara den olåsta
   });
 
   it("misslyckad borttagning säger till (alert) — aldrig tyst", () => {

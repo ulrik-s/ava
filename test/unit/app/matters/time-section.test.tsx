@@ -104,7 +104,7 @@ describe("TimeSection — arvodeskategori (#953)", () => {
     expect(select).toHaveValue("ARBETE"); // default
     const values = Array.from((select as HTMLSelectElement).options).map((o) => o.value);
     expect(values).toEqual([
-      "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP", "FORHANDLING",
+      "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP", "FORHANDLING", "FORHOR",
     ]);
 
     fireEvent.change(select, { target: { value: "TIDSSPILLAN_OVRIG_TID" } });
@@ -420,5 +420,64 @@ describe("TimeSection — tid i timmar med decimal (#1545)", () => {
     const [, second] = screen.getAllByText("Ändra"); // raden med 90 minuter
     if (second) fireEvent.click(second);
     expect(screen.getByLabelText("Tid (h) *")).toHaveValue("1,5");
+  });
+});
+
+/**
+ * Förhör (#1855): en tidspost med starttid och längd. Klockslaget behövs för
+ * förordnandetaxans 3 §, så formuläret tar det för den här kategorin och läser
+ * tillbaka det när posten ändras.
+ */
+/** Första radens Ändra-knapp. */
+function firstEdit(): HTMLElement {
+  const [button] = screen.getAllByText("Ändra");
+  if (!button) throw new Error("ingen rad att ändra");
+  return button;
+}
+
+describe("TimeSection — förhör med starttid (#1855)", () => {
+  it("Förhör visar Starttid och hjälptexten, också utanför rättshjälp och rättsskydd", () => {
+    render(<TimeSection matterId={matterId} paymentMethod="OFFENTLIGT_UPPDRAG" />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+    expect(screen.queryByLabelText("Starttid *")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "FORHOR" } });
+    expect(screen.getByLabelText("Starttid *")).toBeRequired();
+    expect(screen.getByText(/Ett uppehåll på 15 minuter eller mer/)).toHaveTextContent("registrera förhöret som två poster");
+    expect(screen.queryByText(/slutregleringsårets normer/)).not.toBeInTheDocument();
+  });
+
+  it("ett nytt förhör sparas med starttiden i svensk tid", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+    fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "FORHOR" } });
+    fireEvent.change(screen.getByLabelText("Datum *"), { target: { value: "2026-03-02" } });
+    fireEvent.change(screen.getByLabelText("Starttid *"), { target: { value: "09:30" } });
+    fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Förhör med klienten" } });
+    fireEvent.click(screen.getByText("Spara"));
+    const sent = createMutate.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(sent).toMatchObject({ matterId, kind: "FORHOR", date: "2026-03-02T08:30:00.000Z" });
+    expect(sent).not.toHaveProperty("startTime");
+  });
+
+  it("att ändra ett förhör behåller klockslaget", () => {
+    const original = timeQuery.data;
+    const forhor = { id: "t4", date: "2026-03-09T08:15:00.000Z", minutes: 45, description: "Förhör hos polisen", billable: true, user: { name: "Anna" }, hourlyRate: 162_600, kind: "FORHOR" };
+    timeQuery.data = { entries: [forhor], totalMinutes: 45 };
+    try {
+      render(<TimeSection matterId={matterId} />);
+      fireEvent.click(firstEdit());
+      expect(screen.getByLabelText("Starttid *")).toHaveValue("09:15");
+      fireEvent.click(screen.getByText("Spara"));
+      expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "t4", kind: "FORHOR", date: "2026-03-09T08:15:00.000Z" }));
+    } finally {
+      timeQuery.data = original;
+    }
+  });
+
+  it("andra kategorier skickar bara dagen", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(firstEdit());
+    fireEvent.click(screen.getByText("Spara"));
+    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "t1", date: "2026-03-01" }));
   });
 });

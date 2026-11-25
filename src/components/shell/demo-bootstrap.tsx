@@ -28,6 +28,7 @@ import { decideSessionGate, loginUrl, offlineGateMessage, type CachedIdentity } 
 import { setSessionNotice } from "@/lib/client/auth/session-notice";
 import type { SessionProbe } from "@/lib/client/auth/session-probe";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
+import { bindClientOrganization, resolveClientPrincipal } from "@/lib/client/backend/client-principal";
 import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { inProcessPorts } from "@/lib/client/backend/in-process-ports";
@@ -47,9 +48,9 @@ import { makeAppQueryClient } from "@/lib/client/query-client";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
 import { trpc } from "@/lib/client/trpc";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
+import type { Principal } from "@/lib/server/auth/principal";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
-import { asId } from "@/lib/shared/schemas/ids";
 import { ActiveMatterPrefetch } from "./active-matter-prefetch";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
@@ -104,7 +105,7 @@ async function rehydrateGeneratedDocs(): Promise<void> {
   for (const b of blobs) stashGeneratedDoc(b.id, b.bytes, b.mimeType, b.fileName);
 }
 
-function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, recordProcedure?: ProcedureRecorder) {
+function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, principal: Principal, recordProcedure?: ProcedureRecorder) {
   const ports = inProcessPorts(dataStore, firmaConfig);
 
   return trpc.createClient({
@@ -113,18 +114,8 @@ function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, r
         dataStore,
         ports,
         ...(recordProcedure ? { recordProcedure } : {}),
-        authProvider: new GitAuthProvider({
-          // principalId sätts av login-flowet (`/login`). Demo utan satt
-          // principal → guest-id (datakällan filtrerar bort user-bundna
-          // queries tills login gjorts). Self-hosted-seed:en använder
-          // "current-user" tills self-hosted-login är implementerad.
-          id: asId<"UserId">(firmaConfig.principalId
-            || (firmaConfig.tier === "self-hosted" ? "current-user" : "")),
-          email: firmaConfig.authorEmail,
-          name: firmaConfig.authorName,
-          role: "ADMIN",
-          organizationId: asId<"OrganizationId">(firmaConfig.organizationId),
-        }),
+        // Principalen bär den inloggades roll ur hennes rad (#1864), aldrig ADMIN som standard.
+        authProvider: new GitAuthProvider(principal),
       }).createLink(),
     ],
     transformer: superjson,
@@ -182,18 +173,22 @@ function useDemoBootstrap(args: BootstrapArgs) {
     // den bundlade `demo-seed.json` in via reconcile/pull (ADR 0025). Demons
     // påhittade data delas medvetet av demoanvändarna (#1347: gemensamma namn).
     bindLocalNamespace(SHARED_NAMESPACE);
+    // En funktion, inte variabeln: avbrottet kan komma under varje await.
+    const isCancelled = (): boolean => cancelled;
     void (async () => {
       try {
         const store = await createDemoStore(firmaConfig);
-        if (cancelled) return;
-        const client = createDemoTrpcClient(store.store, firmaConfig);
+        if (isCancelled()) return;
+        const principal = await resolveClientPrincipal(store.store, firmaConfig);
+        if (isCancelled()) return;
+        const client = createDemoTrpcClient(store.store, firmaConfig, principal);
         onStoreReady(store, client);
         await queryClient.invalidateQueries();
         setStatus("ready");
         void preloadDocs(firmaConfig, store);
         void rehydrateGeneratedDocs();
       } catch (err) {
-        if (cancelled) return;
+        if (isCancelled()) return;
         setStatus("error");
         setErrorMsg(err instanceof Error ? err.message : String(err));
       }
@@ -385,9 +380,9 @@ const browserGateEnv: GateEnv = {
 
 type GateOutcome = { kind: "continue"; needsOidc: boolean; oidcClaims: OidcClaims | null } | { kind: "halt" };
 
-/** Identiteten klienten senast arbetade under, eller null om ingen är bunden. */
+/** Identiteten klienten senast arbetade under, eller null om ingen är bunden (principal och byrå, #1865). */
 function cachedIdentity(cfg: FirmaConfig): CachedIdentity | null {
-  return cfg.principalId ? { principalId: cfg.principalId, email: cfg.authorEmail, verifiedAt: cfg.sessionVerifiedAt } : null;
+  return cfg.principalId && cfg.organizationId ? { principalId: cfg.principalId, email: cfg.authorEmail, verifiedAt: cfg.sessionVerifiedAt } : null;
 }
 
 /**
@@ -426,13 +421,13 @@ function runSessionGate(
 /** Klassificera + applicera OIDC-utfallet efter klon. Returnerar true om
  *  anroparen ska avbryta (terminalt). No-op (false) utan OIDC-session. */
 async function finishOidcLogin(a: {
-  needsOidc: boolean; oidcClaims: OidcClaims | null; users: unknown;
+  needsOidc: boolean; oidcClaims: OidcClaims | null; users: unknown; organizationId: string;
   setStatus: (s: Status) => void; setErrorMsg: (m: string | null) => void;
 }): Promise<boolean> {
   if (!a.needsOidc || !a.oidcClaims) return false;
   const { classifyOidcLogin } = await import("@/lib/client/backend/oidc-principal");
   const outcome = classifyOidcLogin(a.oidcClaims, (a.users ?? []) as never);
-  return applyOidcOutcome(outcome, a.setStatus, a.setErrorMsg);
+  return applyOidcOutcome(outcome, a.organizationId, a.setStatus, a.setErrorMsg);
 }
 
 /** Fel-rapportering för loadSelfHosted-catch (no-op om laddningen avbrutits). */
@@ -449,6 +444,7 @@ function reportLoadError(
  *  avbryta (terminalt): nekad → fel-status; behörig → bind principal + reload. */
 function applyOidcOutcome(
   outcome: OidcLoginOutcome,
+  organizationId: string,
   setStatus: (s: Status) => void,
   setErrorMsg: (m: string | null) => void,
 ): boolean {
@@ -462,6 +458,7 @@ function applyOidcOutcome(
     // verifierad online → offline-grace:n räknas härifrån (#1245).
     patchFirmaConfig({
       principalId: outcome.principal.id,
+      organizationId, // byrån som bindningsfasen löste; user.list bär den inte (#1865)
       authorEmail: outcome.principal.email,
       authorName: outcome.principal.name,
       sessionVerifiedAt: Date.now(),
@@ -485,7 +482,8 @@ interface SelfHostedBootstrapArgs {
   makeStore?: (local: LocalDataPlace | "binding") => Promise<CachingSyncDataStore>;
   /** Webbläsaren för sessionsgrinden (#1245). */
   gateEnv?: GateEnv;
-  makeClient?: (store: CachingSyncDataStore) => SelfHostedClient;
+  /** Klienten byggs med principalen, vars roll lästs ur den inloggades rad (#1864). */
+  makeClient?: (store: CachingSyncDataStore, principal: Principal) => SelfHostedClient;
   /** Förbered den inloggades lokala databaser (#1347); `null` = bindningsfasen. */
   openLocal?: (cfg: IdentityConfig, args: { binding: boolean }) => Promise<LocalDataPlace | null>;
   /** Proxyns utloggning, om en utloggning inte hann avsluta den (#1347) — avgjort av proxyns svar (#1418). */
@@ -517,16 +515,13 @@ async function defaultServerFirstStore(local: LocalDataPlace | "binding"): Promi
  *  och bind/avvisa principalen. Returnerar true om anroparen ska avbryta. No-op
  *  (false) när ingen OIDC-session pågår. */
 async function bindOidcFirstLogin(a: {
-  needsOidc: boolean; oidcClaims: OidcClaims | null; client: SelfHostedClient;
+  needsOidc: boolean; oidcClaims: OidcClaims | null; client: SelfHostedClient; organizationId: string;
   setStatus: (s: Status) => void; setErrorMsg: (m: string | null) => void;
 }): Promise<boolean> {
   if (!a.needsOidc) return false;
-  // `user.list` returnerar `{ users }` (router-formen) — plocka ut ARRAYEN.
-  // (Tidigare skickades hela objektet → `OidcAuthProvider.find` kastade →
-  // boot:en fastnade tyst på "AVA Laddar…" eftersom denna väg lämnar
-  // trpcClient null, så fel-skärmen aldrig renderas.)
+  // `user.list` ger `{ users }` — plocka ut ARRAYEN (#628), i byrån som bindningsfasen löste (#1865).
   const { users } = await a.client.user.list.query();
-  return finishOidcLogin({ needsOidc: a.needsOidc, oidcClaims: a.oidcClaims, users, setStatus: a.setStatus, setErrorMsg: a.setErrorMsg });
+  return finishOidcLogin({ ...a, users });
 }
 
 /**
@@ -543,12 +538,14 @@ async function openSelfHostedStore(a: SelfHostedBootstrapArgs, binding: boolean)
 async function loadSelfHosted(a: SelfHostedBootstrapArgs, oidc: { needsOidc: boolean; oidcClaims: OidcClaims | null }): Promise<void> {
   const { firmaConfig, queryClient, setStatus, setErrorMsg, onStoreReady, isCancelled } = a;
   // Procedur-kön (#1265, ADR 0037): servern kör om köbara anrop auktoritativt.
-  const makeClient = a.makeClient ?? ((store: CachingSyncDataStore) =>
-    createDemoTrpcClient(store.store, firmaConfig, (call, exec) => store.runQueuedProcedure(call, exec)));
-  const store = await openSelfHostedStore(a, oidc.needsOidc);
+  const makeClient = a.makeClient ?? ((store: CachingSyncDataStore, principal: Principal) =>
+    createDemoTrpcClient(store.store, firmaConfig, principal, (call, exec) => store.runQueuedProcedure(call, exec)));
+  const binding = oidc.needsOidc || !firmaConfig.organizationId; // bindningsfasen också utan org-id; den binds och laddar om (#1865)
+  const store = await openSelfHostedStore(a, binding);
   if (isCancelled()) return;
-  const client = makeClient(store);
-  if (await bindOidcFirstLogin({ ...oidc, client, setStatus, setErrorMsg })) return;
+  const principal = await resolveClientPrincipal(store.store, firmaConfig, { binding });
+  const client = makeClient(store, principal);
+  if (await bindOidcFirstLogin({ ...oidc, client, organizationId: principal.organizationId, setStatus, setErrorMsg }) || bindClientOrganization(firmaConfig, principal.organizationId)) return;
   if (isCancelled()) return;
   onStoreReady(store, client);
   await queryClient.invalidateQueries();

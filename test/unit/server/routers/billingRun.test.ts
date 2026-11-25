@@ -374,6 +374,14 @@ describe("billingRun.setVerdict", () => {
     await expect(caller.billingRun.setVerdict({ billingRunId: kr.run.id })).rejects.toThrow(/beslut/i);
   });
 
+  it("vägrar en fakturerad äldre kostnadsräkning utan livsstatus (null + faktura, #1861)", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await ds.billingRuns.update({ where: { id: kr.run.id }, data: { kostnadsrakningStatus: null, invoiceId: asId<"InvoiceId">("inv-old") } });
+    await expect(caller.billingRun.setVerdict({ billingRunId: kr.run.id }))
+      .rejects.toThrow("Registrera domstolens beslut innan du skapar fakturan.");
+  });
+
   it("kastar om billing-run inte är KOSTNADSRAKNING", async () => {
     const { caller } = makeCaller({ workMinutes: 60 });
     const acc = await caller.billingRun.createAcconto({
@@ -921,6 +929,23 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     const krAfter = await ds.billingRuns.findFirst({ where: { id: kr.run.id } }) as { kostnadsrakningStatus: string; invoiceId: string | null };
     expect(krAfter.kostnadsrakningStatus).toBe("FAKTURERAD");
     expect(krAfter.invoiceId).toBeFalsy(); // KR länkar aldrig till en slutfaktura
+  });
+
+  it("slutregleringen hittar en äldre kostnadsräkning utan livsstatus (null + PENDING_VERDICT, #1861)", async () => {
+    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
+    const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await ds.billingRuns.update({ where: { id: kr.run.id }, data: { kostnadsrakningStatus: null } });
+    // Kostnadsräkningen väntar på dom: utan registrerat beslut vägras fakturan, med samma besked.
+    await expect(c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET" }))
+      .rejects.toThrow("Registrera domstolens beslut innan du skapar fakturan.");
+  });
+
+  it("slutregleringen bortser från en ångrad kostnadsräkning (#1861)", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
+    const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await c.billingRun.voidKostnadsrakning({ billingRunId: kr.run.id });
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET", awardedOre: 300000 });
+    expect(res.clientInvoice.amount + res.payerInvoice.amount).toBe(300000);
   });
 
   it("rättsskydd tidsuppdelat (#810): arbete före tvist → klient 100 %, retro+efter beslut täckt", async () => {

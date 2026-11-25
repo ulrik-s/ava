@@ -11,7 +11,7 @@ import MattersPage from "@/app/matters/page";
 type Row = Record<string, unknown>;
 const row = (id: string, over: Row = {}): Row => ({
   id, matterNumber: `2026-000${id}`, title: `Ärende ${id}`, status: "ACTIVE",
-  contacts: [], _count: { contacts: 0 }, ...over,
+  contacts: [], parties: [], _count: { contacts: 0 }, ...over,
 });
 
 let listMatters: Row[] = [];
@@ -138,6 +138,14 @@ describe("Ärendelistan — sammanslagen sökning (#1642)", () => {
     expect(within(bodyRow(1)).getByText("Titel")).toBeInTheDocument();
     expect(within(bodyRow(1)).getByText("Motpart: Anna Andersson")).toBeInTheDocument();
     expect(within(bodyRow(2)).getByText("Ärende 2")).toBeInTheDocument();
+  });
+
+  it("en part vars namn innehåller termen visas i Träff, också utan jävsträff på samma part (#1870)", () => {
+    listMatters = [row("1", { parties: [{ role: "KLIENT", name: "Bo Berg" }, { role: "MOTPART", name: "Byggfirma Stenhammar AB" }] }), row("2")];
+    checkState.data = { searchTerm: "stenham", matchCount: 0, results: [] };
+    render(<MattersPage />);
+    expect(within(bodyRow(0)).getByText("Motpart: Byggfirma Stenhammar AB")).toBeInTheDocument();
+    expect(within(bodyRow(0)).queryByText(/Klient:/)).toBeNull();
   });
 
   it("inga jävsträffar: märkningen 'Inga träffar' och listan med Träff-kolumnen; inget id-anrop", () => {

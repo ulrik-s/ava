@@ -225,6 +225,16 @@ describe("TimePage — ändra och ta bort", () => {
     expect(screen.queryByRole("button", { name: "Ta bort" })).not.toBeInTheDocument();
   });
 
+  it("en post med bara faktura (invoiceId) visas som Låst utan knappar, med serverns lydelse (#1863)", () => {
+    withRows({ ...entry, invoiceId: "inv-1" });
+    render(<TimePage />);
+    expect(screen.getByText("Låst")).toHaveAttribute(
+      "title", "Ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort.",
+    );
+    expect(screen.queryByRole("button", { name: "Ändra" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ta bort" })).not.toBeInTheDocument();
+  });
+
   it("visar serverns fel (t.ex. låst post) för användaren", () => {
     updateError = { message: "Tidposten ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort." };
     withRows(entry);

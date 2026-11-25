@@ -164,8 +164,8 @@
     "happy-dom": "^21.0.4",
     "husky": "^9.1.7",
     "jscpd": "^5.4.3",
-    "knip": "6.16.1",
-    "lint-staged": "17.0.7",
+    "knip": "^6.48.0",
+    "lint-staged": "^17.6.2",
     "pdf-lib": "^1.17.1",
     "playwright": "^1.65.0",
     "tailwindcss": "^4.3.5",
@@ -193,6 +193,6 @@
     "source-map-js": "^1.2.2"
   },
   "patchedDependencies": {
-    "lint-staged@17.0.7": "patches/lint-staged@17.0.7.patch"
+    "lint-staged@17.6.2": "patches/lint-staged@17.6.2.patch"
   }
 }

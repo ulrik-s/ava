@@ -91,18 +91,17 @@ const DEMO_DEFAULT: FirmaConfig = {
  * export), eller cross-origin när dev-servern körs på `:3000` — `pickProvider`
  * + same-origin-detektor hanterar bägge.
  *
- * Default-org matchar server-first-runtimens default `AVA_ORGANIZATION_ID`
- * (server-first docker-stacken, #410/#626) så klientens in-process-queries
- * (allowlist vid OIDC-login, data) scopar mot SAMMA org som servern seedar.
- * (Det gamla "firma-ab" var git-tierns repo-namn, #500–502-pensionerat, och
- * matchade aldrig en server-first-org — org-kolumnen är ett uuid.)
+ * Inget standard-org-id (#1865): första starten läser byrån ur den synkade
+ * datan (`resolveOrganizationId`) och sparar den, så att klientens
+ * in-process-queries (allowlist vid OIDC-login, data) scopar mot SAMMA org som
+ * servern, också när byrån inte har standard-id:t `AVA_ORGANIZATION_ID`.
  * Författar-identiteten är generisk; användaren uppdaterar via `/settings`.
  */
 const SELF_HOSTED_LOCALHOST_DEFAULT: FirmaConfig = {
   tier: "self-hosted",
   repo: "http://localhost:8080/git/firma.git",
   token: "",
-  organizationId: "00000000-0000-0000-0000-000000000001",
+  organizationId: "",
   authorName: "Lokal användare",
   authorEmail: "user@firma.local",
 };

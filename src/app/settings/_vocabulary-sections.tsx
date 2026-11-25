@@ -10,6 +10,7 @@
  */
 
 import { useState } from "react";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
 import { KIND_LABELS, KNOWN_KINDS } from "@/lib/shared/document-kind";
 
@@ -127,9 +128,9 @@ function VocabularySection({ field, intro, empty, placeholder, flag }: Vocabular
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <p className="text-sm text-gray-500 mb-3">{intro}</p>
-      <div className="flex flex-wrap gap-1.5 mb-3">
+    <div className={SECTION_CARD_CLASS}>
+      <p className="text-sm text-gray-500 mb-2">{intro}</p>
+      <div className="flex flex-wrap gap-1.5 mb-2">
         {tags.length === 0 && <span className="text-xs text-gray-400 italic">{empty}</span>}
         {tags.map((tag) => (
           <VocabularyChip

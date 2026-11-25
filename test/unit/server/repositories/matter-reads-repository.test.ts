@@ -45,6 +45,7 @@ describe("Matter-läsningar — in-memory", () => {
     const list = await mRepo.listForOrg(ORG, { page: 1, pageSize: 20 });
     expect(list.total).toBe(1);
     expect(list.matters[0]!.contacts[0]?.contact.name).toBe("Klient AB");
+    expect(list.matters[0]?.parties).toEqual([{ role: "KLIENT", name: "Klient AB" }]); // #1869
     expect(list.matters[0]!._count).toMatchObject({ documents: 1, timeEntries: 1, contacts: 1 });
     expect((await mRepo.listForOrg(ORG, { search: "tvist", page: 1, pageSize: 20 })).total).toBe(1);
     expect((await mRepo.listForOrg(ORG, { search: "t 3288", page: 1, pageSize: 20 })).total).toBe(1); // via målnummer (#1134)
@@ -114,6 +115,7 @@ describe("Matter-läsningar — Drizzle (pglite)", () => {
     const list = await mRepo.listForOrg(org, { page: 1, pageSize: 20 });
     expect(list.total).toBe(1);
     expect(list.matters[0]!.contacts[0]?.contact.name).toBe("Klient AB");
+    expect(list.matters[0]?.parties).toEqual([{ role: "KLIENT", name: "Klient AB" }]); // #1869
     expect(list.matters[0]!._count).toMatchObject({ documents: 1, timeEntries: 1, contacts: 1 });
     expect((await mRepo.listForOrg(org, { search: "tvist", page: 1, pageSize: 20 })).total).toBe(1);
     expect((await mRepo.listForOrg(org, { search: "t 3288", page: 1, pageSize: 20 })).total).toBe(1); // via målnummer (#1134)

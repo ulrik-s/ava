@@ -7,12 +7,17 @@ import type { MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids"
 import type { Matter } from "@/lib/shared/schemas/matter";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
-import type {
-  MatterDetailRow, MatterListFilter, MatterListResult, MatterListRow, MatterRepository,
+import {
+  listPartiesOf,
+  type MatterDetailRow, type MatterListFilter, type MatterListLink, type MatterListResult, type MatterListRow,
+  type MatterRepository,
 } from "./matter-repository";
 
 /** Delegaten repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
 export type MatterRepoSource = Pick<IDataStore, "matters">;
+
+/** Listraden ur delegatens rad med alla (icke-raderade) kopplingar i `contacts`. */
+type MatterLinksRow = Matter & { contacts: MatterListLink[]; _count: MatterListRow["_count"] };
 
 /** Org-scopat where för listan (replikerar routerns Prisma-where). */
 function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<string, unknown> {
@@ -55,19 +60,24 @@ export class InMemoryMatterRepository extends InMemoryRepository<Matter> impleme
 
   async listForOrg(organizationId: OrganizationId, filter: MatterListFilter): Promise<MatterListResult> {
     const where = listWhere(organizationId, filter);
-    const [matters, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.delegate.findMany({
         where,
         orderBy: { createdAt: "desc" },
         skip: (filter.page - 1) * filter.pageSize,
         take: filter.pageSize,
         include: {
-          contacts: { where: { role: "KLIENT" }, include: { contact: { select: { id: true, name: true } } }, take: 1 },
+          contacts: {
+            where: { deletedAt: null },
+            include: { contact: { select: { id: true, name: true } } },
+            orderBy: { createdAt: "asc" },
+          },
           _count: { select: { documents: true, timeEntries: true, contacts: true } },
         },
-      }) as Promise<MatterListRow[]>,
+      }) as Promise<MatterLinksRow[]>,
       this.delegate.count({ where }),
     ]);
+    const matters = rows.map((r): MatterListRow => ({ ...r, ...listPartiesOf(r.contacts) }));
     return { matters, total };
   }
 

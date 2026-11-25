@@ -32,6 +32,21 @@ describe("kundförlust i SIE (#1676)", () => {
   });
 });
 
+describe("moms på en sats utan momskonto i SIE (#1902)", () => {
+  const bad = { amount: 10_100, vatBreakdown: [{ kind: "utlagg" as const, vatRate: 0, netOre: 10_000, vatOre: 100 }] };
+
+  it("en utställd felaktig faktura kastar med fakturanumret i texten", () => {
+    expect(() => invoicesToSie([inv(), inv({ ...bad, invoiceNumber: "F-2026-0043" })], { company, generatedDate: "20260612" }))
+      .toThrow("Faktura F-2026-0043: en rad i momsuppdelningen har 1,00 kr moms på satsen 0 %");
+  });
+
+  it("ett felaktigt utkast stoppar inte exporten", () => {
+    const sie = invoicesToSie([inv(), inv({ ...bad, status: "DRAFT", invoiceNumber: "F-2026-0043" })], { company, generatedDate: "20260612" });
+    expect(sie).toContain('#VER "A" "20260042"');
+    expect(sie.includes("F-2026-0043")).toBe(false);
+  });
+});
+
 describe("invoicesToSie", () => {
   it("renderar utfärdade fakturor med BAS-default-konton + #GEN", () => {
     const sie = invoicesToSie([inv()], { company, generatedDate: "20260612" });

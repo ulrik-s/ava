@@ -28,6 +28,14 @@ import type { Repository, RowBase } from "./types";
 export type VersionedTable = PgTable & Record<"id" | "deletedAt" | "version", AnyColumn>;
 
 /**
+ * Id-filtret för listor (#1642, #1867): bara raderna med dessa id:n. En tom
+ * lista matchar inga rader (``sql`false` ``), aldrig alla.
+ */
+export function idsWhere(column: AnyColumn, ids: readonly string[]): SQL {
+  return ids.length > 0 ? inArray(column, [...ids]) : sql`false`;
+}
+
+/**
  * Markera en konkret tabell som `VersionedTable`. Type-checkat: tabellen MÅSTE
  * ha reconcile-kolumnerna (id/version/deletedAt via `baseColumns`) — saknas de
  * blir det kompileringsfel. Ersätter `as unknown as VersionedTable` med ett

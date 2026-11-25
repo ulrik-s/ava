@@ -13,7 +13,7 @@ import { AGENT_PR_PER_DAY, rankInLast24h } from "./agent-guard";
 import { dispatchTarget, type FetchFn, fire } from "./flow/dispatch";
 import { type GitHub, gitHub, runGhWithToken } from "./flow/github";
 import { prioOrder } from "./flow/health";
-import { moveStrayIssues } from "./flow/inbox";
+import { markInternalParts, moveStrayIssues } from "./flow/inbox";
 import { loadFlow } from "./flow/load";
 import type { Flow, Machine } from "./flow/schema";
 import {
@@ -183,6 +183,8 @@ if (import.meta.main) {
     runTimeouts(m, gh, Date.now(), enforce, console.log);
     if (enforce) await runNudges(flow, m, watchItems(m, gh), { now: Date.now(), env: process.env, fetchFn: fetch, log: console.log, started });
     if (m.items === "pulls") closeDuplicatePulls(gh, enforce, console.log);
+    // Inkorgen: delar av en intern förfrågan får `intern`, som en agent inte får sätta (#2073).
+    if (m.items === "issues" && m.repo === intakeRepo) markInternalParts(gh, m.repo, { enforce, log: console.log });
     // Inkorgen: en förfrågan i kodrepot flyttas till intaget (kräver en token som når båda).
     if (codeIssues) {
       const mover = token ? { source: gitHub(m.repo, runGhWithToken(token)), intake: gitHub(intakeRepo, runGhWithToken(token)), intakeRepo } : null;

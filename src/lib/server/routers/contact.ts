@@ -1,30 +1,53 @@
 import { z } from "zod";
-import { conflictScore, parseConflictQuery } from "@/lib/shared/conflict-match";
+import { rankContacts } from "@/lib/shared/contact-search";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { Contact } from "@/lib/shared/schemas/contact";
 import { contactTypeSchema } from "@/lib/shared/schemas/enums";
-import { contactIdSchema, asId } from "@/lib/shared/schemas/ids";
+import type { ContactType } from "@/lib/shared/schemas/enums";
+import { contactIdSchema, asId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
+import type { ContactListResult, ContactListRow, ContactRepository } from "../repositories/contact-repository";
 import { router, orgProcedure, requireOrgOwned, TRPCError } from "../trpc";
+
+/** En sökning på Parter: termen (inte tom efter trim), filtret och sidan. */
+interface ContactSearchPage {
+  term: string;
+  contactType?: ContactType | undefined;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * Parter-sökningen (#1868): byråns sökregel (`rankContacts`, #1866), samma som
+ * Välj klient. Kandidaterna rangordnas, sidan klipps ur den rangordnade listan,
+ * och sidans rader hämtas med sin `_count` via repots `ids`-filter (#1867).
+ */
+async function searchContactPage(repo: ContactRepository, orgId: OrganizationId, q: ContactSearchPage): Promise<ContactListResult> {
+  const all = await repo.listAllForOrg(orgId);
+  const candidates = q.contactType ? all.filter((c) => c.contactType === q.contactType) : all;
+  const ranked = rankContacts(candidates, q.term);
+  const ids = ranked.slice((q.page - 1) * q.pageSize, q.page * q.pageSize).map((c) => c.id);
+  const { contacts } = await repo.listForOrg(orgId, { ids, page: 1, pageSize: Math.max(ids.length, 1) });
+  const byId = new Map(contacts.map((c) => [c.id, c]));
+  const rows = ids.flatMap((id): ContactListRow[] => {
+    const row = byId.get(id);
+    return row ? [row] : [];
+  });
+  return { contacts: rows, total: ranked.length };
+}
 
 export const contactRouter = router({
   /**
-   * Klientsök (#1128): samma matchning som jävskontrollen — förnamn, efternamn,
-   * person-/orgnummer, var för sig eller tillsammans; bäst träff först. Driver
-   * "Välj klient…"-dialogen, som inte kan vara en dropdown när byrån har många.
+   * Klientsök (#1128): byråns sökregel för kontakter (#1866) — jävskontrollens
+   * matchning (förnamn, efternamn, person-/orgnummer, var för sig eller
+   * tillsammans) plus delsträngar och e-post med lägst rang; bäst träff först.
+   * Driver "Välj klient…"-dialogen, som inte kan vara en dropdown när byrån har många.
    */
   search: orgProcedure
     .input(z.object({ term: z.string().trim().min(1), limit: z.number().int().min(1).max(100).default(20) }))
     .query(async ({ ctx, input }) => {
-      const query = parseConflictQuery(input.term);
       const all = await ctx.repos.contacts.listAllForOrg(asId<"OrganizationId">(ctx.orgId));
-      const contacts = all
-        .map((c) => ({ c, score: conflictScore(c, query, "both") }))
-        .filter((s) => s.score > 0)
-        .sort((a, b) => b.score - a.score || a.c.name.localeCompare(b.c.name, "sv"))
-        .slice(0, input.limit)
-        .map((s) => s.c);
-      return { contacts };
+      return { contacts: rankContacts(all, input.term).slice(0, input.limit) };
     }),
 
   list: orgProcedure
@@ -38,15 +61,14 @@ export const contactRouter = router({
         pageSize: z.number().min(1).max(1000).default(20),
       })
     )
-    // Migrerad till repository-sömmen (ADR 0020): listForOrg kapslar in
-    // topp-nivå-filter, sök och _count.
+    // Repository-sömmen (ADR 0020): listForOrg kapslar in topp-nivå-filter och
+    // _count. En sökterm går genom byråns sökregel (#1868), inte repot.
     .query(async ({ ctx, input }) => {
-      const { contacts, total } = await ctx.repos.contacts.listForOrg(ctx.orgId, {
-        search: input.search,
-        contactType: input.contactType,
-        page: input.page,
-        pageSize: input.pageSize,
-      });
+      const term = input.search?.trim() ?? "";
+      const opts = { contactType: input.contactType, page: input.page, pageSize: input.pageSize };
+      const { contacts, total } = term
+        ? await searchContactPage(ctx.repos.contacts, ctx.orgId, { ...opts, term })
+        : await ctx.repos.contacts.listForOrg(ctx.orgId, opts);
       return { contacts, total, pages: Math.ceil(total / input.pageSize) };
     }),
 

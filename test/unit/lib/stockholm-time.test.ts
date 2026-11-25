@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import {
-  STOCKHOLM_TZ, stockholmDay, stockholmDayStart, stockholmPeriod, stockholmTime, stockholmYear,
+  STOCKHOLM_TZ, stockholmDateTime, stockholmDay, stockholmDayStart, stockholmPeriod, stockholmTime, stockholmYear,
 } from "@/lib/shared/stockholm-time";
 
 describe("stockholmDay", () => {
@@ -107,5 +107,17 @@ describe("stockholmPeriod (#1797)", () => {
   it("ogiltig dag kastar", () => {
     expect(() => stockholmPeriod("2026-01-01", "nej")).toThrow();
     expect(() => stockholmPeriod("nej", "2026-01-01")).toThrow();
+  });
+});
+
+describe("stockholmDateTime (#1855)", () => {
+  it("klockslaget på den svenska dagen, vintertid och sommartid", () => {
+    expect(stockholmDateTime("2026-03-02", "09:30").toISOString()).toBe("2026-03-02T08:30:00.000Z");
+    expect(stockholmDateTime("2026-07-01", "09:30").toISOString()).toBe("2026-07-01T07:30:00.000Z");
+  });
+
+  it("tillbaka till samma dag och klockslag", () => {
+    const d = stockholmDateTime("2026-12-31", "23:45");
+    expect([stockholmDay(d), stockholmTime(d)]).toEqual(["2026-12-31", "23:45"]);
   });
 });

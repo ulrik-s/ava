@@ -20,7 +20,7 @@
  */
 import { type ConsoleMessage } from "@playwright/test";
 
-import { DEMO_BASE_URL, seedDemoConfig, showPanel, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL, fetchDemoSeed, seedDemoConfig, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 // Seed-identiteter (ur .ava/meta.json). "Logga in som Anna" = seedad config.
 const ANNA = "e1c7d494-c148-5998-b717-df386937d5a1";
@@ -95,4 +95,68 @@ test("fakturadokument öppnas i ny flik — dirigeras INTE in i ärendet (+ inge
   expect(popup, "dokumentet ska öppnas i en ny flik").not.toBeNull();
   // 3) Ingen hydrerings-#418.
   expect(hydrationErrors, `React #418 / hydrerings-fel: ${hydrationErrors.join(" | ")}`).toEqual([]);
+});
+
+/** Svenska kalenderdagar (ÅÅÅÅ-MM-DD) i postlistans rader. */
+const DAY_RE = /\d{4}-\d{2}-\d{2}/;
+/** Den äldre tidspostens dag — före allt ofakturerat i seeden. */
+const OLD_DAY = "2026-01-15";
+const OLD_POST = "E2E: äldre genomgång (#1888)";
+
+/** Första aktiva privata ärendet (id-sorterat → stabilt) med ofrysta tidsposter. */
+function privatMatterWithPosts(seed: Awaited<ReturnType<typeof fetchDemoSeed>>): string {
+  const hasPosts = (id: string): boolean => seed.timeEntries.some((t) => t.matterId === id && !t.frozenAt && !t.invoiceId);
+  const hit = seed.matters.filter((m) => m.paymentMethod === "PRIVAT" && m.status === "ACTIVE")
+    .map((m) => m.id).sort().find(hasPosts);
+  if (hit === undefined) throw new Error("seeden saknar ett aktivt privat ärende med ofrysta tidsposter");
+  return hit;
+}
+
+test("faktura med datumintervall: bara posterna inom intervallet faktureras (#1888)", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const matterId = privatMatterWithPosts(await fetchDemoSeed(page, base));
+
+  // En tidspost på en äldre dag, så att intervallet delar listan.
+  await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
+  const tid = page.getByRole("region", { name: "Tid" }).last();
+  await expect(tid).toBeVisible({ timeout: 25_000 });
+  await tid.getByRole("button", { name: /Registrera tid/ }).click();
+  const timeDialog = page.getByRole("dialog", { name: "Registrera tid" });
+  await timeDialog.getByLabel("Datum *").fill(OLD_DAY);
+  await timeDialog.getByLabel("Beskrivning *").fill(OLD_POST);
+  await timeDialog.locator("button[type=submit]").click();
+  await expect(timeDialog).toHaveCount(0);
+  await expect(tid.getByText(OLD_POST)).toBeVisible();
+  // Fakturaförslaget hämtades innan posten fanns: ladda om (demon sparar lokalt).
+  await page.reload({ waitUntil: "load" });
+
+  await showPanel(page, "Fakturering");
+  const openDialog = async () => {
+    await page.getByRole("button", { name: "+ Skapa faktura" }).click({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Faktura till klient" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText(/Poster att fakturera/)).toBeVisible({ timeout: 15_000 });
+    return dialog;
+  };
+
+  const dialog = await openDialog();
+  await expect(dialog.getByText(OLD_POST)).toBeVisible();
+  const rows = dialog.locator("label").filter({ has: page.getByRole("checkbox") }).filter({ hasText: DAY_RE });
+  const days = (await rows.allTextContents()).map((t) => DAY_RE.exec(t)?.[0] ?? "");
+  const total = days.length;
+  const inRange = days.filter((d) => d <= OLD_DAY).length;
+  expect(inRange).toBeGreaterThan(0);
+  expect(inRange, "intervallet ska dela listan").toBeLessThan(total);
+
+  await dialog.getByLabel("Till och med").fill(OLD_DAY);
+  await expect(dialog.getByText(`Poster att fakturera (${inRange}/${total} valda)`)).toBeVisible();
+  await dialog.getByRole("button", { name: "Skapa faktura" }).click();
+  await expect(dialog).toBeHidden({ timeout: 20_000 });
+
+  // Posterna inom intervallet är frysta på fakturan; de övriga står kvar ofakturerade.
+  const after = await openDialog();
+  const left = total - inRange;
+  await expect(after.getByText(`Poster att fakturera (${left}/${left} valda)`)).toBeVisible({ timeout: 15_000 });
+  await expect(after.getByText(OLD_POST)).toHaveCount(0);
 });

@@ -33,7 +33,7 @@ import type { MutationEvent } from "./writable-delegate";
 
 export type { ProcedureTouch } from "./procedure-touches";
 export {
-  isOwnedBy, isProcedureCall, queueEntrySchema, queueOwnerSchema, queuedProcedureCallSchema,
+  isOwnedBy, isProcedureCall, queueEntrySchema, queuedProcedureCallSchema,
   type QueuedMutation, type QueuedProcedureCall, type QueueEntry, type QueueOwner,
 } from "./queue-entry";
 

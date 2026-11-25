@@ -62,6 +62,12 @@ export interface LedgerPushContext {
 export interface PushVoucherResult {
   /** Externt verifikat-id (t.ex. Fortnox VoucherSeries+VoucherNumber). */
   externalId: string;
+  /**
+   * Skälet när verifikatet skapades men bilagan inte kunde arkiveras med det
+   * (#1885). Bilagan stoppar aldrig bokföringen: verifikatet finns, och ett kast
+   * här skulle låta nästa körning bokföra fakturan en gång till.
+   */
+  attachmentError?: string;
 }
 
 /** Domän-faktura för `pushInvoice` (samexistens: faktura skapas i ledger-systemet). */

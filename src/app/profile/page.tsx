@@ -12,6 +12,7 @@ import { User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { IntegrationsSection, useIntegrationsAvailable } from "@/components/settings/integrations-section";
+import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
 import { mileageRateFromKrPerMil, mileageRateKrPerMil } from "@/lib/shared/mileage-rate";
 import { Field } from "./_field";
@@ -91,9 +92,9 @@ function ProfileBasicsSection({ form, setForm, email, role, onSave, saving, save
   saveError: string | null;
 }) {
   return (
-    <section className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <h2 className="font-semibold text-gray-900 mb-3">Dina uppgifter</h2>
-      <div className="space-y-3 text-sm">
+    <section className={`${SECTION_FILL_CLASS} p-2`}>
+      <h2 className="font-semibold text-gray-900 mb-2">Dina uppgifter</h2>
+      <div className="space-y-2 text-sm">
         <Field label="Namn">
           <input
             type="text"
@@ -123,7 +124,7 @@ function ProfileBasicsSection({ form, setForm, email, role, onSave, saving, save
           </div>
         </Field>
       </div>
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-2 flex items-center gap-3">
         <button
           type="button"
           onClick={onSave}

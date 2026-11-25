@@ -71,7 +71,7 @@ describe("bookUnbookedInvoices", () => {
       invoices: [invoice()], connector: c,
       markBooked: async (id, ext) => { marked.push([id, ext]); },
     });
-    expect(res).toEqual([{ invoiceId: "inv-1", invoiceNumber: "F-2026-0001", externalId: "A/1", error: null }]);
+    expect(res).toEqual([{ invoiceId: "inv-1", invoiceNumber: "F-2026-0001", externalId: "A/1", error: null, attachmentError: null }]);
     expect(marked).toEqual([["inv-1", "A/1"]]);
   });
 
@@ -99,6 +99,23 @@ describe("bookUnbookedInvoices", () => {
     expect(res[1]?.error).toMatch(/Felaktig datastruktur/);
     expect(res[1]?.externalId).toBeNull();
     expect(res.filter((r) => r.externalId !== null)).toHaveLength(2);
+  });
+
+  it("moms på en sats utan momskonto: felet per faktura, ingen push och ingen markering, övriga bokförs (#1902)", async () => {
+    const c = fakeConnector();
+    const marked: string[] = [];
+    const bad = invoice({
+      id: "inv-2", invoiceNumber: "F-2026-0002", amount: 10_100,
+      vatBreakdown: [{ kind: "utlagg", vatRate: 0, netOre: 10_000, vatOre: 100 }],
+    });
+    const res = await bookUnbookedInvoices({
+      invoices: [invoice({ id: "inv-1" }), bad, invoice({ id: "inv-3" })],
+      connector: c, markBooked: (id) => { marked.push(id); return Promise.resolve(); },
+    });
+    expect(res[1]?.externalId).toBeNull();
+    expect(res[1]?.error).toContain("Ärende 2026-0001 - Faktura F-2026-0002: en rad i momsuppdelningen har 1,00 kr moms på satsen 0 %");
+    expect(c.pushed.map((p) => p.key)).toEqual(["inv-1", "inv-3"]);
+    expect(marked).toEqual(["inv-1", "inv-3"]);
   });
 
   it("markerar INTE som bokförd när pushen fallerar", async () => {
@@ -169,6 +186,54 @@ describe("bookUnbookedInvoices", () => {
     });
     expect(res[0]?.externalId).toBe("A/1");
     expect(res[0]?.error).toBeNull();
+  });
+
+  // #1885: skälet slängs inte, och bokföringen lyckas ändå (markBooked körs).
+  it("ett fel i attachmentFor: bokförd och märkt, skälet i attachmentError", async () => {
+    const marked: string[] = [];
+    const res = await bookUnbookedInvoices({
+      invoices: [invoice()], connector: fakeConnector(),
+      markBooked: (id) => { marked.push(id); return Promise.resolve(); },
+      attachmentFor: () => Promise.reject(new Error("PDF saknas")),
+    });
+    expect(res).toEqual([{ invoiceId: "inv-1", invoiceNumber: "F-2026-0001", externalId: "A/1", error: null, attachmentError: "PDF saknas" }]);
+    expect(marked).toEqual(["inv-1"]);
+  });
+
+  it("connectorns attachmentError: bokförd och märkt, skälet i utfallet", async () => {
+    const marked: string[] = [];
+    const c = {
+      capabilities: () => CAPS,
+      pushVoucher: () => Promise.resolve({ externalId: "A/3", attachmentError: "inkorgen nere" }),
+    };
+    const res = await bookUnbookedInvoices({
+      invoices: [invoice()], connector: c,
+      markBooked: (id) => { marked.push(id); return Promise.resolve(); },
+      attachmentFor: () => Promise.resolve({ fileName: "F.pdf", bytes: new Uint8Array([1]) }),
+    });
+    expect(res[0]).toMatchObject({ externalId: "A/3", error: null, attachmentError: "inkorgen nere" });
+    expect(marked).toEqual(["inv-1"]);
+  });
+
+  it("attachmentFor utan bilaga: ingen bilaga skickas, attachmentError är null", async () => {
+    const seen: unknown[] = [];
+    const c = {
+      capabilities: () => CAPS,
+      pushVoucher: (_v: SemanticVoucher, ctx: { attachment?: unknown }) => { seen.push(ctx.attachment); return Promise.resolve({ externalId: "A/1" }); },
+    };
+    const res = await bookUnbookedInvoices({
+      invoices: [invoice()], connector: c, markBooked: () => Promise.resolve(),
+      attachmentFor: () => Promise.resolve(undefined),
+    });
+    expect(seen).toEqual([undefined]);
+    expect(res[0]?.attachmentError).toBeNull();
+  });
+
+  it("ett fel i pushen: inget verifikat, attachmentError är null", async () => {
+    const res = await bookUnbookedInvoices({
+      invoices: [invoice()], connector: fakeConnector({ failOn: "inv-1" }), markBooked: () => Promise.resolve(),
+    });
+    expect(res[0]).toMatchObject({ externalId: null, error: "Fortnox: 400 Felaktig datastruktur", attachmentError: null });
   });
 
   it("kastar om connectorn saknar pushVoucher-kapabilitet", async () => {

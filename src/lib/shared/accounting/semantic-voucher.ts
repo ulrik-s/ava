@@ -11,15 +11,19 @@
  *   Kredit intäkt (arvode)  = netto (exkl moms)
  *   Kredit utgående moms     = moms
  *
- * Kreditfaktura (negativt belopp) vänder debet/kredit. Balans GARANTERAS
- * genom att moms räknas som brutto − netto (ingen avrundnings-glipa), så
- * invarianten Σdebet == Σkredit == |fakturabelopp| alltid håller.
+ * Kreditfaktura (negativt belopp) vänder debet/kredit. Σdebet == Σkredit
+ * gäller för varje verifikat som byggs: enkelradsvägen räknar moms som
+ * brutto − netto (ingen avrundnings-glipa), och per-sats-vägen bokför varje
+ * rads moms på satsens eget momskonto. En uppdelning med moms på en sats utan
+ * momskonto (bara 6, 12 och 25 % har ett) ger ett fel i stället för ett
+ * obalanserat verifikat (#1902).
  *
  * Alla belopp är i ÖRE (heltal) — precis som i resten av domänen. Öre→SEK
  * (eller annan presentation) sker först i renderaren.
  */
 
 import { hasVatBreakdown, invoiceVatOre } from "@/lib/shared/invoice-vat";
+import { formatOreAsKr } from "@/lib/shared/kr-format";
 import type { VatRate } from "@/lib/shared/vat";
 
 /** Bokföringsroller som faktura-domänen känner till (systemoberoende).
@@ -39,7 +43,11 @@ export type VoucherRole =
 export interface VatBreakdownLine {
   /** Arvode (alltid 25 %) eller (vidarefakturerat) utlägg (egen sats). */
   kind: "arvode" | "utlagg";
-  /** Moms-sats i basis points (0/600/1200/2500). */
+  /**
+   * Moms-sats i basis points (0/600/1200/2500). Bara 600, 1200 och 2500 har ett
+   * momskonto: en rad med moms (`vatOre ≠ 0`) på en annan sats ger ett fel när
+   * verifikatet byggs, så att Σdebet == Σkredit gäller för varje verifikat (#1902).
+   */
   vatRate: number;
   /** Netto (exkl moms) i öre. */
   netOre: number;
@@ -47,12 +55,31 @@ export interface VatBreakdownLine {
   vatOre: number;
 }
 
-/** Moms-roll för en sats; null = momsfritt (ingen moms-rad). */
+/** Satsens momskonto, exakt (#1902): 25, 12 och 6 %. Alla andra satser saknar konto. */
+const MOMS_ROLE_BY_RATE: ReadonlyMap<number, VoucherRole> = new Map([
+  [2500, "momsUtgaende"],
+  [1200, "momsUtgaende12"],
+  [600, "momsUtgaende06"],
+]);
+
+/** Moms-roll för en sats; null = satsen saknar momskonto. */
 function momsRoleForRate(vatRate: number): VoucherRole | null {
-  if (vatRate >= 2500) return "momsUtgaende";
-  if (vatRate >= 1200) return "momsUtgaende12";
-  if (vatRate >= 600) return "momsUtgaende06";
-  return null;
+  return MOMS_ROLE_BY_RATE.get(vatRate) ?? null;
+}
+
+/**
+ * Momskontot för en rad som bär moms (#1902). En sats utan momskonto kastar ett
+ * vanligt `Error`: momsen kan inte bokföras, och verifikatet skulle inte balansera.
+ */
+function momsRoleOf(line: VatBreakdownLine, description: string): VoucherRole {
+  const role = momsRoleForRate(line.vatRate);
+  if (role) return role;
+  const sats = String(line.vatRate / 100).replace(".", ",");
+  throw new Error(
+    `${description}: en rad i momsuppdelningen har ${formatOreAsKr(line.vatOre)} moms på satsen ${sats} %, ` +
+    "som saknar momskonto (bara 6, 12 och 25 % har ett). " +
+    "Verifikatet skulle inte balansera, så fakturan kan inte bokföras förrän momsuppdelningen är rättad.",
+  );
 }
 
 /** En verifikatrad mot en roll. Exakt EN av debit/credit > 0 (öre, heltal). */
@@ -115,14 +142,16 @@ function signedRow(role: VoucherRole, ore: number, naturalDebit: boolean): Seman
  *
  * Hanterar NEGATIVA rader (#977) — en kreditfaktura bär sin uppdelning med
  * omvända tecken, precis som en kreditnota ska spegla originalet post för post.
+ * En rad utan moms bokförs bara som intäkt, oavsett sats; en rad med moms på en
+ * sats utan momskonto kastar (#1902, `momsRoleOf`).
  */
-function buildPerRateRows(breakdown: VatBreakdownLine[]): SemanticVoucherRow[] {
+function buildPerRateRows(breakdown: VatBreakdownLine[], description: string): SemanticVoucherRow[] {
   const arvodeNet = breakdown.filter((l) => l.kind === "arvode").reduce((s, l) => s + l.netOre, 0);
   const utlaggNet = breakdown.filter((l) => l.kind === "utlagg").reduce((s, l) => s + l.netOre, 0);
   const momsByRole = new Map<VoucherRole, number>();
-  for (const l of breakdown) {
-    const role = momsRoleForRate(l.vatRate);
-    if (role && l.vatOre !== 0) momsByRole.set(role, (momsByRole.get(role) ?? 0) + l.vatOre);
+  for (const l of breakdown.filter((line) => line.vatOre !== 0)) {
+    const role = momsRoleOf(l, description);
+    momsByRole.set(role, (momsByRole.get(role) ?? 0) + l.vatOre);
   }
   const brutto = arvodeNet + utlaggNet + breakdown.reduce((s, l) => s + l.vatOre, 0);
   const rows = [
@@ -147,15 +176,12 @@ export function buildSemanticVoucher(
 ): SemanticVoucher {
   // Per-sats-vägen läser tecknet ur RADERNA (#977); enkelrads-vägen har bara
   // `amount` att gå på och behöver därför fortfarande den globala flaggan.
+  const description = voucherDescription(invoice);
   const rows = hasVatBreakdown(invoice)
-    ? buildPerRateRows(invoice.vatBreakdown)
+    ? buildPerRateRows(invoice.vatBreakdown, description)
     : buildSingleRateRows(invoice, vatRate, invoice.amount >= 0);
 
-  return {
-    date: invoice.invoiceDate,
-    description: voucherDescription(invoice),
-    rows,
-  };
+  return { date: invoice.invoiceDate, description, rows };
 }
 
 /**

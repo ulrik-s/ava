@@ -12,6 +12,7 @@
 
 import { Plug } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import "@/lib/client/integrations/office365-connector"; // ⚠ side-effect: registrerar
 import { listConnectors } from "@/lib/client/integrations/registry";
@@ -34,17 +35,17 @@ export function IntegrationsSection() {
   if (!available) return null;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center gap-2 mb-3">
+    <div className={`${SECTION_FILL_CLASS} p-2`}>
+      <div className="flex items-center gap-2 mb-2">
         <Plug size={16} className="text-gray-500" />
         <h2 className="font-semibold text-gray-900">Anslutna tjänster</h2>
       </div>
-      <p className="text-xs text-gray-500 mb-4">
+      <p className="text-xs text-gray-500 mb-2">
         Logga in mot externa tjänster för att läsa mejl, OneDrive-filer
         och kalender direkt i AVA. Dina åtkomst-tokens lagras endast på
         den här enheten — de sparas aldrig i firmans git-repo.
       </p>
-      <ul className="space-y-3">
+      <ul className="space-y-2">
         {connectors.map((c) => <ConnectorRow key={c.id} connector={c} />)}
       </ul>
     </div>

@@ -30,10 +30,10 @@ import {
   withColumnHidden, menuPosition, withColumnWidth, withColumnWidths, fixedTableWidth,
 } from "./data-table-logic";
 
-export type { SortDir, Column, DataTablePrefs, RowGroup } from "./data-table-logic";
+export type { Column, DataTablePrefs } from "./data-table-logic";
 export {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,
-  isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent, hideBelowClass,
+  isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent,
 } from "./data-table-logic";
 
 type FooterFn<T> = (rows: T[]) => Partial<Record<string, React.ReactNode>>;

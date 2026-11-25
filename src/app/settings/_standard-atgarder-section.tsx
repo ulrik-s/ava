@@ -15,6 +15,7 @@
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { HoursInput } from "@/components/ui/hours-input";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
 import { formatDecimalHours } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type TimeEntryKind } from "@/lib/shared/schemas/enums";
@@ -56,8 +57,8 @@ export function StandardAtgarderSection() {
   const save = (next: StandardAtgard[]): void => update.mutate({ standardAtgarder: next });
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <p className="text-sm text-gray-500 mb-3">
+    <div className={SECTION_CARD_CLASS}>
+      <p className="text-sm text-gray-500 mb-2">
         Åtgärder som förekommer i varje ärende. De föreslås när tid registreras och
         fyller beskrivning och tidsåtgång, så alla på byrån redovisar dem likadant.
         Tiden är en <strong>huvudregel</strong> — handläggaren kan justera den i det
@@ -70,7 +71,7 @@ export function StandardAtgarderSection() {
       {update.error && (
         <p className="mt-2 text-xs text-red-600">Kunde inte spara standardåtgärderna: {update.error.message}</p>
       )}
-      <p className="mt-3 text-xs text-gray-400">
+      <p className="mt-2 text-xs text-gray-400">
         Skedet styr var åtgärden föreslås. <em>Avställ</em> behåller åtgärden för
         historikens skull men slutar föreslå den — använd det i stället för att ta
         bort en åtgärd som redan använts i ärenden.
@@ -87,7 +88,7 @@ interface ListProps {
 
 function AtgardTable({ list, isPending, onSave }: ListProps) {
   if (list.length === 0) {
-    return <p className="text-xs text-gray-400 italic mb-3">Inga standardåtgärder ännu.</p>;
+    return <p className="text-xs text-gray-400 italic mb-2">Inga standardåtgärder ännu.</p>;
   }
   const dim = (a: StandardAtgard): string => (a.active ? "" : "text-gray-400");
   const columns: Column<StandardAtgard>[] = [
@@ -103,7 +104,7 @@ function AtgardTable({ list, isPending, onSave }: ListProps) {
       render: (a) => <AtgardActions a={a} list={list} isPending={isPending} onSave={onSave} /> },
   ];
   return (
-    <div className="mb-4">
+    <div className="mb-2">
       <DataTable prefKey="list.standard-atgarder" columns={columns} data={list} rowKey={(a) => a.id} />
     </div>
   );

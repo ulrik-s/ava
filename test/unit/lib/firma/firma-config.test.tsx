@@ -49,9 +49,8 @@ describe("firma-config", () => {
       const cfg = loadFirmaConfig();
       expect(cfg.tier).toBe("self-hosted");
       expect(cfg.repo).toBe("http://localhost:8080/git/firma.git");
-      // #628: org alignad med server-first-runtimens default AVA_ORGANIZATION_ID
-      // (klientens in-process-queries scopar mot samma org som servern seedar).
-      expect(cfg.organizationId).toBe("00000000-0000-0000-0000-000000000001");
+      // #1865: inget standard-org-id — första starten läser byrån ur den synkade datan.
+      expect(cfg.organizationId).toBe("");
     });
 
     it("returnerar sparad config", () => {

@@ -23,6 +23,14 @@ describe("Modal", () => {
     expect(screen.getByRole("dialog", { name: "Ändra tidregistrering" })).toBeInTheDocument();
   });
 
+  it("blir aldrig högre än skärmen: panelen har en maxhöjd och innehållet rullar, rubriken står still", () => {
+    render(<Modal open={true} title="Nytt i AVA" onClose={() => {}}><p>Lång lista</p></Modal>);
+    const body = screen.getByText("Lång lista").closest("[data-modal-body]");
+    expect(body).toHaveClass("overflow-y-auto", "min-h-0");
+    expect(body?.parentElement).toHaveClass("max-h-[90vh]", "flex-col");
+    expect(screen.getByText("Nytt i AVA").parentElement).toHaveClass("shrink-0");
+  });
+
   it("klick på Stäng-knappen anropar onClose", () => {
     const onClose = vi.fn();
     render(<Modal open={true} title="T" onClose={onClose}><p>x</p></Modal>);

@@ -32,4 +32,10 @@ describe("StorageStatus", () => {
     render(<StorageStatus request={() => new Promise<StoragePersistence>(() => {})} />);
     expect(screen.getByText(/Kontrollerar/)).toBeInTheDocument();
   });
+
+  it("har 8 px luft i Datakälla-rutan (#1847)", () => {
+    render(<StorageStatus request={() => new Promise<StoragePersistence>(() => {})} />);
+    expect(screen.getByTestId("storage-status")).toHaveClass("mt-2", "pt-2");
+    expect(screen.getByTestId("storage-status")).not.toHaveClass("mt-4", "pt-4");
+  });
 });

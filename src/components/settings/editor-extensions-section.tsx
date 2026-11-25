@@ -9,6 +9,7 @@
  */
 
 import { FileText } from "lucide-react";
+import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 
 interface ExtRow {
   name: string;
@@ -40,17 +41,17 @@ const PDF_EXTENSIONS: ExtRow[] = [
 
 export function EditorExtensionsSection(): React.ReactElement {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center gap-2 mb-3">
+    <div className={SECTION_CARD_CLASS}>
+      <div className="flex items-center gap-2 mb-2">
         <FileText size={16} className="text-gray-500" />
         <h2 className="font-semibold text-gray-900">Editera dokument med dina favoritprogram</h2>
       </div>
-      <p className="text-xs text-gray-500 mb-4">
+      <p className="text-xs text-gray-500 mb-2">
         AVA bygger inte egen editor — vi pekar på etablerade verktyg.
         Två vägar beroende på filtyp:
       </p>
 
-      <div className="space-y-5">
+      <div className="space-y-2">
         <div>
           <h3 className="text-sm font-semibold text-gray-800 mb-2">Office-filer (Word, Excel, PowerPoint)</h3>
           <p className="text-xs text-gray-600">
@@ -65,7 +66,7 @@ export function EditorExtensionsSection(): React.ReactElement {
 
         <div>
           <h3 className="text-sm font-semibold text-gray-800 mb-2">PDF-editering — webb-extensions</h3>
-          <p className="text-xs text-gray-600 mb-3">
+          <p className="text-xs text-gray-600 mb-2">
             Klicka <strong>🖥 Editera externt</strong> på en doc-rad i AVA → välj &quot;Öppna fil&quot; i
             modalen → filen öppnas i extensionen. Save → ladda ner ny version → upload i AVA.
           </p>

@@ -38,7 +38,7 @@ export function StorageStatus({ request = requestPersistentStorageOnce }: { requ
 
   const view = persistence ? VIEWS[persistence] : null;
   return (
-    <div className="mt-4 border-t border-gray-100 pt-4" data-testid="storage-status" data-persistence={persistence ?? "pending"}>
+    <div className="mt-2 border-t border-gray-100 pt-2" data-testid="storage-status" data-persistence={persistence ?? "pending"}>
       <span className="text-xs text-gray-500 mb-1 flex items-center gap-1.5">
         <HardDrive size={12} aria-hidden /> Lagring på den här enheten
       </span>

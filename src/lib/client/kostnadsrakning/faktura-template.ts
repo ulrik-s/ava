@@ -23,19 +23,22 @@
  */
 
 import { formatCurrency } from "@/lib/client/utils";
-import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
 import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
-import { buildInvoiceSpecification, type InvoiceSpecification } from "@/lib/shared/invoice-specification";
+import type { InvoiceSpecification } from "@/lib/shared/invoice-specification";
 import { invoiceVatOre } from "@/lib/shared/invoice-vat";
-import { formatDecimalHours } from "@/lib/shared/kr-format";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import { svd as svDate } from "@/lib/shared/settlement-view"; // svensk kalenderdag (#1677)
-import { roundingOf } from "@/lib/shared/whole-kronor";
+import {
+  expenseTotals, groupByKind, quantityLabel, resolveSpec, specTables, sumOf, unitRateOre,
+  type CarriedWorkLine, type Fc, type FakturaExpenseRow, type FakturaTimeGroup, type FakturaTimeRow, type SpecLine,
+} from "./faktura-spec-view";
 
 export type { InvoiceSpecification };
+export type { FakturaExpenseRow, FakturaTimeGroup, FakturaTimeRow };
 
 /** En rad i den itemiserade summeringen (#858): `add` = delbelopp, `deduct` =
  *  avgår (−), `info` = spårbarhets-rad utan beloppspåverkan (visas parentes). */
@@ -52,7 +55,7 @@ export interface FakturaBreakdown {
   rows: BreakdownRow[];
   totalLabel: string;
   totalOre: number;
-  timeLines?: ReadonlyArray<{ date: string | Date; description: string; minutes: number; amountOre: number; kind?: TimeEntryKind | null | undefined }> | undefined;
+  timeLines?: ReadonlyArray<CarriedWorkLine> | undefined;
 }
 
 export interface FakturaDocMeta {
@@ -112,16 +115,6 @@ export interface FakturaSummaryRow { label: string; rateLabel: string; hours: st
  */
 export interface FakturaSplitRow { label: string; amount: string; style: string; muted: boolean }
 
-/** En tidspost. Inget pris per post (#1439): posterna står under sin kategori,
- *  och kategorins timpris står i sammanställningen. */
-export interface FakturaTimeRow { date: string; description: string; hours: string; amount: string }
-
-/** Tidsspecifikationens deltabell för EN arvodeskategori (#1200) — rubrik,
- *  poster och delsumma ("Summa tidsspillan …: 3 tim — 4 461 kr"). */
-export interface FakturaTimeGroup { label: string; lines: FakturaTimeRow[]; subtotalLabel: string; hours: string; amount: string }
-
-export interface FakturaExpenseRow { date: string; description: string; net: string; gross: string }
-
 /** Färdigformaterad faktura — allt en renderare behöver, inga öre kvar. */
 export interface FakturaView {
   heading: string;
@@ -159,8 +152,6 @@ export interface FakturaView {
   expenseGrossTotal: string;
 }
 
-type Fc = (ore: number) => string;
-
 /** Rubrik (h1 + `<title>` + demo-generatorns filnamn) per fakturatyp. */
 export function fakturaHeading(inv: Pick<FakturaDocInvoice, "invoiceType" | "notes">): string {
   if (isRadgivning(inv)) return "Rådgivningsfaktura";
@@ -180,81 +171,6 @@ function footnoteFor(inv: Pick<FakturaDocInvoice, "notes">): string {
   return isRadgivning(inv)
     ? "Rådgivningstimmen (1 tim enligt rättshjälpstaxan) faktureras klienten separat och ingår INTE i kostnadsräkningen till domstolen."
     : "";
-}
-
-type CarriedWork = NonNullable<FakturaBreakdown["timeLines"]>;
-
-/**
- * Specifikationens underlag (#937): fakturans EGNA länkade rader när de finns,
- * annars nedbrytningens upparbetade arbete (#880) — klientens självrisk-faktura
- * och aconton har inga egna tidsposter (arbetet bärs av betalar-fakturan), men
- * ska ändå redovisa vad beloppet bygger på. Ren funktion.
- */
-function resolveSpec(a: FakturaTemplateArgs): InvoiceSpecification | null {
-  const { spec, breakdown } = a;
-  if (spec && spec.timeLines.length > 0) return spec;
-  const carried = breakdown?.timeLines;
-  if (!carried?.length) return spec ?? null;
-  return specFromCarriedWork(carried, spec, a.invoice);
-}
-
-/** Bygg specifikationen ur nedbrytningens arbete, med spec:ens utlägg/avdrag kvar. */
-function specFromCarriedWork(carried: CarriedWork, spec: InvoiceSpecification | null | undefined, invoice: FakturaDocInvoice): InvoiceSpecification {
-  return buildInvoiceSpecification({
-    timeLines: carried.map((l) => ({ date: l.date, description: l.description, minutes: l.minutes, amountOre: l.amountOre, kind: l.kind })),
-    expenseLines: spec?.expenseLines ?? [],
-    deductions: spec?.deductions ?? [],
-    payableOre: invoice.amount,
-    // Summeras med fakturans EGET avrundningssätt (#1438) — en äldre faktura
-    // visar samma moms som när den skapades.
-    rounding: roundingOf(invoice),
-  });
-}
-
-type SpecLine = InvoiceSpecification["timeLines"][number];
-
-/** Kategori-ordning i sammanställning och specifikation: arbete först, tidsspillan sist. */
-const KIND_ORDER = Object.keys(TIME_ENTRY_KIND_LABELS) as TimeEntryKind[];
-
-/**
- * Postens pris per enhet (öre, exkl moms): dagbeloppet för per-dygns-kategorier
- * (advokatberedskap har ingen timnorm, #950), annars timpriset ur belopp/minuter.
- */
-function unitRateOre(l: SpecLine): number {
-  if (isPerDayKind(l.kind)) return l.amountOre;
-  return l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
-}
-
-/**
- * Postens arvodeskategori (#925/#953). Bär raden sin ARVODESKATEGORI används
- * den — det är den enda uppgift som faktiskt avgör vilken norm posten ersätts på.
- * Att gissa ur timtaxan räcker inte: efter en retroaktiv höjning värderas posten
- * på slutregleringsårets norm men bär sitt eget datum, och två tidsspillan-normer
- * kan inte skiljas från arvodet på beloppet.
- *
- * Äldre fakturor (persisterade före #953) saknar kategorin. För dem räddas de två
- * tidsspillan-normerna ur taxan — resten är arvode.
- */
-function resolveKind(l: SpecLine): TimeEntryKind {
-  if (l.kind) return l.kind;
-  const rateOre = unitRateOre(l);
-  if (rateOre === tidsspillanFtaxForDate(l.date)) return "TIDSSPILLAN";
-  if (rateOre === tidsspillanOvrigFtaxForDate(l.date)) return "TIDSSPILLAN_OVRIG_TID";
-  return "ARBETE";
-}
-
-/** Tidsposterna per kategori, i KIND_ORDER; tomma kategorier utelämnas. */
-function groupByKind(lines: readonly SpecLine[]): Array<{ kind: TimeEntryKind; lines: SpecLine[] }> {
-  return KIND_ORDER
-    .map((kind) => ({ kind, lines: lines.filter((l) => resolveKind(l) === kind) }))
-    .filter((g) => g.lines.length > 0);
-}
-
-const sumOf = <T>(lines: readonly T[], pick: (l: T) => number): number => lines.reduce((s, l) => s + pick(l), 0);
-
-/** Omfattningen: timmar ("2,5") — eller antal dygn för per-dygns-kategorier. */
-function quantityLabel(kind: TimeEntryKind, lines: readonly SpecLine[]): string {
-  return isPerDayKind(kind) ? `${lines.length} dygn` : formatDecimalHours(sumOf(lines, (l) => l.minutes));
 }
 
 /** Priset per enhet ("1 500,00 kr/tim" eller "… kr/dygn"); tomt utan pris. */
@@ -370,44 +286,6 @@ function splitRowsFor(a: FakturaTemplateArgs, spec: InvoiceSpecification | null,
     { label: "Netto (exkl moms)", amount: fc(a.invoice.amount - vatOre), style: "", muted: false },
     { label: "Moms", amount: fc(vatOre), style: "", muted: false },
   ];
-}
-
-/** En tidspost i specifikationen — omfattning och belopp, inget pris (#1439). */
-function timeRow(l: SpecLine, fc: Fc): FakturaTimeRow {
-  return { date: svDate(l.date), description: l.description, hours: quantityLabel(resolveKind(l), [l]), amount: fc(l.amountOre) };
-}
-
-const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
-
-/** Tidsspecifikationen per arvodeskategori med delsumma (#1200). */
-function timeGroups(spec: InvoiceSpecification, fc: Fc): FakturaTimeGroup[] {
-  return groupByKind(spec.timeLines).map(({ kind, lines }) => ({
-    label: TIME_ENTRY_KIND_LABELS[kind],
-    lines: lines.map((l) => timeRow(l, fc)),
-    subtotalLabel: `Summa ${lowerFirst(TIME_ENTRY_KIND_LABELS[kind])}`,
-    hours: quantityLabel(kind, lines),
-    amount: fc(sumOf(lines, (l) => l.amountOre)),
-  }));
-}
-
-/** Specifikationens tabeller (tider + utlägg) ur den upplösta specifikationen. */
-function specTables(spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView, "hasSpec" | "timeLines" | "timeGroups" | "expenseLines"> {
-  if (!spec) return { hasSpec: false, timeLines: [], timeGroups: [], expenseLines: [] };
-  return {
-    hasSpec: spec.timeLines.length > 0 || spec.expenseLines.length > 0,
-    timeLines: spec.timeLines.map((l) => timeRow(l, fc)),
-    timeGroups: timeGroups(spec, fc),
-    expenseLines: spec.expenseLines.map((l) => ({ date: svDate(l.date), description: l.description, net: fc(l.netOre), gross: fc(l.grossOre) })),
-  };
-}
-
-type SpecExpense = InvoiceSpecification["expenseLines"][number];
-
-/** Utläggens summarad (#1506) — posternas netto/brutto summerade, tomma utan utlägg. */
-function expenseTotals(spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView, "expenseNetTotal" | "expenseGrossTotal"> {
-  const lines: readonly SpecExpense[] = spec?.expenseLines ?? [];
-  if (lines.length === 0) return { expenseNetTotal: "", expenseGrossTotal: "" };
-  return { expenseNetTotal: fc(sumOf(lines, (l) => l.netOre)), expenseGrossTotal: fc(sumOf(lines, (l) => l.grossOre)) };
 }
 
 /** Faktura-huvudets fält (rubrik/nr/datum/mottagare/org). Utbrutet → håller

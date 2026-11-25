@@ -2,7 +2,8 @@
  * Job-worker-runtime (#504 Fas 2). PG-gated (`PG_TEST_URL`, CI:s Postgres-jobb):
  * `startJobRuntime` startar pg-boss + registrerar workers; ett skickat jobb
  * körs av rätt handler; `stop()` stänger gracefully; deklarerade scheman
- * registreras i svensk tid och borttagna försvinner (#1802). Hoppas lokalt utan PG.
+ * registreras i svensk tid och borttagna försvinner (#1802); en gammal kö utan
+ * policy behåller den och töms av efterträdarens handler (#1900). Hoppas lokalt utan PG.
  */
 
 import postgres from "postgres";
@@ -59,6 +60,30 @@ describe("job-worker-runtime (PG_TEST_URL)", () => {
       // Ingen worker → jobbet är inte completed (created/retry, ej done).
       expect(job?.state).not.toBe("completed");
       await sender.stop({ graceful: false });
+    } finally {
+      await rt.stop();
+    }
+  }, 60_000);
+
+  itPg("en gammal email-dispatch utan policy (som i prod) behåller standard och töms av e-posthandlern", async () => {
+    schema = `pgboss_test_${uuidv7().replace(/-/g, "")}`;
+    const old = createJobQueue({ connectionString: url ?? "", schema });
+    old.on("error", () => {});
+    await old.start();
+    await old.createQueue("email-dispatch", { retryLimit: 5, retryBackoff: true });
+    await old.send("email-dispatch", { to: "gammal@ex.se" });
+    await old.stop({ graceful: false });
+
+    const got: unknown[] = [];
+    const rt = await startJobRuntime({
+      connectionString: url ?? "",
+      schema,
+      handlers: { [JOB_QUEUES.emailDispatch]: (job) => { got.push(job.data); return Promise.resolve(); } },
+    });
+    try {
+      expect((await rt.boss.getQueue("email-dispatch"))?.policy).toBe("standard");
+      for (let i = 0; i < 100 && got.length === 0; i++) await new Promise((r) => setTimeout(r, 100));
+      expect(got).toEqual([{ to: "gammal@ex.se" }]);
     } finally {
       await rt.stop();
     }

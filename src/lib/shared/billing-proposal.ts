@@ -43,13 +43,17 @@ export interface ProposalTimeEntry {
   hourlyRate: number;
   billable: boolean;
   valueOre: number;
+  /** Postens datum (#1888): postlistan visar det och väljer på datumintervall. */
+  date: Date | string;
 }
 
+/** En itemiserad utläggsrad i fakturaförslaget (#397), med postens datum (#1888). */
 export interface ProposalExpense {
   id: string;
   description: string;
   amount: number;
   billable: boolean;
+  date: Date | string;
 }
 
 /** Avdragsmedvetet fakturaförslag (#397): ofakturerade poster + nyckeltal. */
@@ -68,7 +72,7 @@ export interface BillingProposal {
  */
 export function buildProposal(
   te: ReadonlyArray<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; kind?: TimeEntryKind | null | undefined }>,
-  ex: ReadonlyArray<{ id: string; description?: string | null; amount: number; billable: boolean; kind?: ExpenseKind }>,
+  ex: ReadonlyArray<{ id: string; description?: string | null; amount: number; billable: boolean; date: Date | string; kind?: ExpenseKind }>,
   priorAccontoSumOre: number,
   matter: ValuationMatter,
   date: Date | string = new Date(),
@@ -78,11 +82,11 @@ export function buildProposal(
   const payable = payableCoverageEntries(te);
   const timeEntries: ProposalTimeEntry[] = payable.map((t) => ({
     id: t.id, description: t.description ?? "", minutes: t.minutes, hourlyRate: t.hourlyRate,
-    billable: t.billable, valueOre: matterEntryValueOre(matter, t, date),
+    billable: t.billable, valueOre: matterEntryValueOre(matter, t, date), date: t.date,
   }));
   const expenses: ProposalExpense[] = ex
     .filter((e) => e.kind !== "PRUTNING")
-    .map((e) => ({ id: e.id, description: e.description ?? "", amount: e.amount, billable: e.billable }));
+    .map((e) => ({ id: e.id, description: e.description ?? "", amount: e.amount, billable: e.billable, date: e.date }));
   const workValueOre = matterArvodeNet(matter, { timeEntries: te }, date)
     + expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0);
   return { workValueOre, priorAccontoSumOre, timeEntries, expenses };

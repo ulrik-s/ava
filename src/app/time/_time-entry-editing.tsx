@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   TimeForm as TimeEntryEditForm,
+  timeEntryInput,
   toEditForm,
   useStandardAtgarder,
   type EditForm,
@@ -12,12 +13,12 @@ import type { Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { trpc } from "@/lib/client/trpc";
 import { asId } from "@/lib/shared/schemas/ids";
+import { isLockedEntry, LOCKED_ENTRY_HINT, type LockableEntry } from "@/lib/shared/time-entry-lock";
 
-/** Det /time behöver för att ändra/ta bort en rad — oavsett vilket ärende den hör till. */
-export interface EditableTimeRow extends TimeEntryLike {
+/** Det /time behöver för att ändra/ta bort en rad — oavsett vilket ärende den
+ *  hör till — och låsfälten som avgör om den får ändras (`isLockedEntry`, #1863). */
+export interface EditableTimeRow extends TimeEntryLike, LockableEntry {
   id: string;
-  /** Satt när posten ingick i en slutfaktura/kostnadsräkning → låst. */
-  frozenAt?: Date | string | null;
 }
 
 /** Ändra + ta bort på /time, med samma formulär som ärendets tidsektion. */
@@ -35,7 +36,7 @@ export function useTimeEntryEditing() {
     setForm: (form: EditForm) => setEditing((e) => (e ? { ...e, form } : e)),
     startEdit: (row: EditableTimeRow) => setEditing({ id: row.id, form: toEditForm(row) }),
     close: () => setEditing(null),
-    save: () => { if (editing) update.mutate({ id: asId<"TimeEntryId">(editing.id), ...editing.form }); },
+    save: () => { if (editing) update.mutate({ id: asId<"TimeEntryId">(editing.id), ...timeEntryInput(editing.form) }); },
     confirmDelete: (row: EditableTimeRow) => {
       if (confirm("Ta bort tidregistreringen?")) remove.mutate({ id: asId<"TimeEntryId">(row.id) });
     },
@@ -46,12 +47,12 @@ export function useTimeEntryEditing() {
 
 type Editing = ReturnType<typeof useTimeEntryEditing>;
 
-/** Åtgärdskolumnen: Ändra/Ta bort, eller "Låst" för frysta poster. */
+/** Åtgärdskolumnen: Ändra/Ta bort, eller "Låst" för låsta poster (fakturerade eller frysta). */
 export function timeActionsColumn<T extends EditableTimeRow>(ed: Editing): Column<T> {
   return {
     key: "actions", label: "", sortable: false, align: "right", hideable: false,
-    render: (row) => (row.frozenAt ? (
-      <span className="text-xs text-gray-400" title="Ingår i en slutfaktura eller kostnadsräkning">Låst</span>
+    render: (row) => (isLockedEntry(row) ? (
+      <span className="text-xs text-gray-400" title={LOCKED_ENTRY_HINT}>Låst</span>
     ) : (
       <span className="whitespace-nowrap">
         <button type="button" onClick={() => ed.startEdit(row)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
