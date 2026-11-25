@@ -8,6 +8,7 @@ const FOLDERS: FolderNode[] = [
   { id: "kallelse", name: "Kallelse", parentId: "domstol" },
   { id: "domstol", name: "Domstol", parentId: null },
   { id: "aklagare", name: "Åklagare" },
+  { id: "arende", name: "Ärende", parentId: null },
   { id: "avtal", name: "Avtal", parentId: null },
   { id: "beslut", name: "Beslut", parentId: "domstol" },
 ];
@@ -24,13 +25,14 @@ describe("folderNamePath", () => {
 });
 
 describe("folderChoices", () => {
-  it("föräldrar före barn, syskon i svensk ordning med Å sist, etiketten med ›", () => {
+  it("föräldrar före barn, syskon i svensk ordning (Å före Ä, sist), etiketten med ›", () => {
     expect(folderChoices(FOLDERS)).toEqual([
       { id: "avtal", label: "Avtal" },
       { id: "domstol", label: "Domstol" },
       { id: "beslut", label: "Domstol › Beslut" },
       { id: "kallelse", label: "Domstol › Kallelse" },
       { id: "aklagare", label: "Åklagare" },
+      { id: "arende", label: "Ärende" },
     ]);
   });
   it("inga mappar ger inga val", () => expect(folderChoices([])).toEqual([]));
