@@ -161,7 +161,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "mail.findSaved": "Kontrollera om ett mail (Internet Message-ID) redan är sparat på ett ärende.",
 
   // ── Ärenden ──────────────────────────────────────────────────────
-  "matter.list": "Lista och sök byråns ärenden, valfritt filtrerat på status eller handläggare.",
+  "matter.list": "Lista och sök byråns ärenden, valfritt filtrerat på status eller handläggare; mine ger bara ärenden där den inloggade är ansvarig, och orderBy \"lastActivity\" sorterar på senast hänt i ärendet.",
   "matter.getById": "Hämta ett enskilt ärende med betalningssätt, klient och ekonomi.",
   "matter.create": "Lägg upp ett nytt ärende med betalningssätt (privat, rättshjälp, rättsskydd eller offentligt uppdrag).",
   "matter.update": "Uppdatera ett ärendes uppgifter.",
