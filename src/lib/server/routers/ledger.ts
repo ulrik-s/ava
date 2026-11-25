@@ -9,10 +9,13 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ledgerAccountMapSchema, type LedgerAccountMap } from "@/lib/shared/accounting/account-map";
+import { log } from "@/lib/shared/observability/logger";
+import { errorMessage } from "@/lib/shared/observability/redact";
 import { invoiceIdSchema, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { assertAdmin } from "../auth/assert-admin";
 import { bookUnbookedInvoices, isBookable, type BookableInvoice } from "../integrations/ledger/book-invoices";
 import { bookUnbookedPayments } from "../integrations/ledger/book-payments";
+import { invoicePdfAttachment } from "../integrations/ledger/invoice-attachment";
 import { orgProcedure, router } from "../trpc";
 import type { Context } from "../trpc-core";
 
@@ -61,8 +64,14 @@ async function bookTheInvoice(ctx: Ctx, inv: FullInvoice, connector: Connector):
   const [outcome] = await bookUnbookedInvoices({
     invoices: [bookable], connector,
     markBooked: (_id, externalId) => ctx.repos.invoices.update(inv.id, { fortnoxId: externalId }),
+    // Fakturans PDF arkiveras med verifikatet (#1887); ett fel här stoppar inte bokföringen.
+    attachmentFor: () => invoicePdfAttachment(ctx.ports.content, inv.documents),
   });
   if (!outcome?.externalId) throw asTrpcError(new Error(outcome?.error ?? "Bokföringen gav inget verifikat."));
+  if (outcome.attachmentError) {
+    // Bara id:n och ett maskerat skäl: aldrig filnamn eller innehåll.
+    log.warn("ledger.attachment_failed", { orgId: ctx.orgId, ids: [inv.id], message: errorMessage(outcome.attachmentError) });
+  }
   return outcome.externalId;
 }
 
