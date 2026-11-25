@@ -220,7 +220,7 @@ förfrågan i inkorgen, medan en grund kan höra till flera.
     (`src/lib/shared/brottmalstaxa.ts`, `forordnandetaxa.ts`) och bokföringen
     (`src/lib/shared/accounting/`). Samma lista står i `.github/CODEOWNERS`.
   - innehåller en destruktiv migration,
-  - är fler än 20 på ett dygn,
+  - är fler än 30 på ett dygn,
   - eller inte har `granskad`.
 
   `människa-godkänd` (bara Ulrik) släpper de två första. Granskningsloopen
@@ -526,7 +526,7 @@ komplexitet < 8, jscpd, knip, täckning, Agentvakten).
 
 **Du godkänner** ett förslag genom att sätta `granskad` på det (själv,
 inte via en agent). Då bygger implementationen det, men först när inga
-användarönskemål väntar. Det går genom samma granskning och samma tak på 20
+användarönskemål väntar. Det går genom samma granskning och samma tak på 30
 PR:er per dygn. Befintliga tester får inte ändras: de är kontraktet. Förslag
 du inte godkänner stängs efter fyra veckor.
 
