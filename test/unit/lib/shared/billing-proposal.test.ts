@@ -4,7 +4,9 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildProposal, proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { buildProposal, proposedAccontoOre, type ProposalExpenseInput } from "@/lib/shared/billing-proposal";
+import { expenseNetOre, matterArvodeNet } from "@/lib/shared/billing-work-value";
+import { asId } from "@/lib/shared/schemas/ids";
 
 describe("proposedAccontoOre", () => {
   it("20 % av 5000 kr utan tidigare aconton → 1000 kr + moms = 1250 kr", () => {
@@ -41,9 +43,49 @@ describe("proposedAccontoOre", () => {
 describe("buildProposal — postens datum (#1888)", () => {
   it("datumet följer med för tidsposter och utlägg", () => {
     const te = [{ id: "t1", description: "Möte", minutes: 60, hourlyRate: 100_000, billable: true, date: new Date("2026-03-02T09:00:00Z") }];
-    const ex = [{ id: "e1", description: "Avgift", amount: 5_000, billable: true, date: "2026-03-05" }];
+    const ex = [{ id: asId<"ExpenseId">("e1"), description: "Avgift", amount: 5_000, billable: true, date: "2026-03-05" }];
     const proposal = buildProposal(te, ex, 0, { paymentMethod: "PRIVAT" }, "2026-04-01");
     expect(proposal.timeEntries[0]?.date).toEqual(new Date("2026-03-02T09:00:00Z"));
     expect(proposal.expenses[0]?.date).toBe("2026-03-05");
+  });
+});
+
+// Förslaget räknar utläggen som fakturan (#1936): samma tal som createAcconto.
+describe("buildProposal — utläggen räknas som fakturan (#1936)", () => {
+  const DATE = "2026-04-01";
+  const te = [{ id: "t1", description: "Arbete", minutes: 600, hourlyRate: 150_000, billable: true, date: "2026-03-02", kind: "ARBETE" as const }];
+  const expense = (id: string, extra: Partial<ProposalExpenseInput>): ProposalExpenseInput => ({
+    id: asId<"ExpenseId">(id), description: id, amount: 0, billable: true, date: "2026-03-05", ...extra,
+  });
+  /** 1 060 kr inkl. 6 % moms (netto 1 000 kr) och 123,45 kr utan moms (123 kr i hela kronor). */
+  const ex = [
+    expense("moms6", { amount: 106_000, vatRate: 600, vatIncluded: true }),
+    expense("oren", { amount: 12_345, vatRate: 0, vatIncluded: false }),
+  ];
+
+  it("utlägg med moms inräknad och ören → samma underlag som createAcconto", () => {
+    const matter = { paymentMethod: "RATTSHJALP" as const };
+    const proposal = buildProposal(te, ex, 0, matter, DATE);
+    const server = matterArvodeNet(matter, { timeEntries: te }, DATE) + expenseNetOre({ timeEntries: [], expenses: ex });
+    expect(proposal.workValueOre).toBe(server);
+    expect(expenseNetOre({ timeEntries: [], expenses: ex })).toBe(100_000 + 12_300);
+  });
+
+  it("förslaget på andelen blir det servern räknar: 20 % ger 15 kr mindre än med rått belopp", () => {
+    const matter = { paymentMethod: "RATTSHJALP" as const };
+    const proposal = buildProposal(te, [ex[0] ?? expense("x", {})], 0, matter, DATE);
+    const raw = matterArvodeNet(matter, { timeEntries: te }, DATE) + 106_000;
+    expect(proposedAccontoOre(proposal.workValueOre, 2000, 0)).toBe(proposedAccontoOre(raw, 2000, 0) - 1_500);
+  });
+
+  it("PRUTNING och icke debiterbara utlägg räknas inte; listan är som förut", () => {
+    const all = [
+      ...ex,
+      expense("prut", { amount: -50_000, kind: "PRUTNING" }),
+      expense("egen", { amount: 40_000, billable: false }),
+    ];
+    const proposal = buildProposal([], all, 0, { paymentMethod: "PRIVAT" }, DATE);
+    expect(proposal.workValueOre).toBe(112_300);
+    expect(proposal.expenses.map((e) => [e.id, e.amount])).toEqual([["moms6", 106_000], ["oren", 12_345], ["egen", 40_000]]);
   });
 });

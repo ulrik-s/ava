@@ -1,11 +1,13 @@
 /**
  * Avdragsmedvetet fakturaförslag (#397) — ren formel-modul delad mellan
  * server-routern (`billingRun.proposal`/`createAcconto`) och klient-dialogen
- * (`_billing-dialog`) så samma uträkning aldrig divergerar.
+ * (`_billing-dialog`) så samma uträkning aldrig divergerar: utläggen räknas
+ * med samma regel som fakturan (`expenseNetOre`, #1936).
  */
 
-import { matterArvodeNet, matterEntryValueOre, type ValuationMatter } from "./billing-work-value";
+import { expenseNetOre, matterArvodeNet, matterEntryValueOre, type UnfrozenWork, type ValuationMatter } from "./billing-work-value";
 import { payableCoverageEntries } from "./brottmalstaxa";
+import type { ChargeableExpense } from "./expense-vat";
 import { arvodeInclVatOre } from "./invoice-calc";
 import type { ExpenseKind, TimeEntryKind } from "./schemas/enums";
 import { shareOfRow } from "./whole-kronor";
@@ -62,14 +64,24 @@ export interface BillingProposal {
 }
 
 /**
+ * En ofryst utläggsrad som förslaget läser: samma fält som fakturan räknar
+ * utläggen på (`UnfrozenWork`, med äkta utlägg ur `ChargeableExpense`, #1936).
+ */
+export type ProposalExpenseInput = UnfrozenWork["expenses"][number] & Pick<ChargeableExpense, "passThrough"> & {
+  description?: string | null; date: Date | string; kind?: ExpenseKind;
+};
+
+/**
  * Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397),
  * värderat enligt ärendets betalningssätt (se `matterArvodeNet`). `workValueOre`
- * är arvode netto + debiterbara utlägg. Rättshjälpens rådgivningstimme är en
- * låst (redan fakturerad) post och finns därför inte bland de ofrysta raderna.
+ * är arvode netto + debiterbara utlägg netto, räknade som fakturan
+ * (`expenseNetOre`: byråns ingående moms avdragen, hela kronor per rad, #1936).
+ * Rättshjälpens rådgivningstimme är en låst (redan fakturerad) post och finns
+ * därför inte bland de ofrysta raderna.
  */
 export function buildProposal(
   te: ReadonlyArray<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; kind?: TimeEntryKind | null | undefined }>,
-  ex: ReadonlyArray<{ id: string; description?: string | null; amount: number; billable: boolean; date: Date | string; kind?: ExpenseKind }>,
+  ex: ReadonlyArray<ProposalExpenseInput>,
   priorAccontoSumOre: number,
   matter: ValuationMatter,
   date: Date | string = new Date(),
@@ -81,10 +93,11 @@ export function buildProposal(
     id: t.id, description: t.description ?? "", minutes: t.minutes, hourlyRate: t.hourlyRate,
     billable: t.billable, valueOre: matterEntryValueOre(matter, t, date), date: t.date,
   }));
-  const expenses: ProposalExpense[] = ex
-    .filter((e) => e.kind !== "PRUTNING")
+  // Utan PRUTNING, som `createAcconto` (`fetchUnfrozenWork`).
+  const counted = ex.filter((e) => e.kind !== "PRUTNING");
+  const expenses: ProposalExpense[] = counted
     .map((e) => ({ id: e.id, description: e.description ?? "", amount: e.amount, billable: e.billable, date: e.date }));
   const workValueOre = matterArvodeNet(matter, { timeEntries: te }, date)
-    + expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0);
+    + expenseNetOre({ timeEntries: [], expenses: [...counted] });
   return { workValueOre, priorAccontoSumOre, timeEntries, expenses };
 }
