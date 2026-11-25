@@ -36,6 +36,23 @@ Outlook-tillägget. Connectorn läser i ordningen localStorage, byggtids-env
 (`NEXT_PUBLIC_AVA_MS_*`), servern; klient-id och tenant tolkas på ett ställe
 (`entraAppConfig` i `src/lib/shared/office365-config.ts`).
 
+### Entra-stegen i drift (#1950)
+
+Görs en gång, på **webbinloggningens app** i byråns Entra (samma app som
+`AVA_IDENTITY_AUDIENCE` pekar på):
+
+1. **Autentisering → Lägg till en plattform → Single-page application**, med
+   redirect-URI:n `https://<AVA-domän>/msal-redirect/` (avslutande snedstreck
+   ingår). MSAL v5 kräver en egen sida för popupen och den tysta förnyelsen
+   (`broadcastResponseToMainFrame` ur `@azure/msal-browser/redirect-bridge`);
+   AVA:s rot fungerar inte, för där körs appens uppstart.
+2. **API-behörigheter → Microsoft Graph → Delegerade → `Mail.Send`**, och
+   sedan **Bevilja administratörsmedgivande** för byrån.
+
+Connectorn räknar fram redirect-URI:n som `<origin><basePath>/msal-redirect/`
+(`msalRedirectUri`). För iOS Safari kan MSAL förladdas med `preload()`, så att
+popupen öppnas direkt i klicket.
+
 ## Ansluta
 
 ```bash

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest-compat";
 import { OFFICE365_CONFIG_KEY } from "@/lib/client/integrations/office365-config";
 import {
-  Office365Connector, statusFromResult,
+  msalRedirectUri, Office365Connector, statusFromResult,
   type MsalLike, type MsalResult, type MsalAccount,
 } from "@/lib/client/integrations/office365-connector";
 import type { ConnectionStatus } from "@/lib/client/integrations/types";
@@ -177,5 +177,74 @@ describe("disconnect", () => {
     await c.connect();
     await c.disconnect().catch(() => {});
     await expect(c.getAccessToken()).rejects.toThrow(/inte ansluten/);
+  });
+});
+
+describe("msalRedirectUri (#1950)", () => {
+  it("pekar på bridge-sidan, med och utan basePath", () => {
+    expect(msalRedirectUri("https://ava.byra.se", "")).toBe("https://ava.byra.se/msal-redirect/");
+    expect(msalRedirectUri("https://u.github.io", "/ava")).toBe("https://u.github.io/ava/msal-redirect/");
+  });
+});
+
+describe("preload (#1950)", () => {
+  /** Fabrik som räknar sina anrop, för att se att connect() inte laddar MSAL igen. */
+  function counting(msal: MsalLike) {
+    const calls: { clientId: string; authority: string }[] = [];
+    const factory = (opts: { clientId: string; authority: string }) => { calls.push(opts); return Promise.resolve(msal); };
+    return { calls, factory };
+  }
+
+  it("efter preload laddar connect() inte MSAL igen", async () => {
+    const msal = new FakeMsal();
+    const { calls, factory } = counting(msal);
+    const c = new Office365Connector(factory, noServer);
+    await c.preload();
+    await c.connect();
+    expect(calls).toEqual([{ clientId: "cid", authority: "https://login.microsoftonline.com/tid" }]);
+    expect((await c.getStatus()).kind).toBe("connected");
+  });
+
+  it("efter preload anropas popupen synkront i connect(), utan att vänta på något", async () => {
+    let configReads = 0;
+    const msal = new FakeMsal();
+    const c = new Office365Connector(counting(msal).factory, () => { configReads++; return Promise.resolve(null); });
+    await c.preload();
+    const reads = configReads;
+    const pending = c.connect();
+    expect(msal.popupCalls).toBe(1);
+    expect(configReads).toBe(reads);
+    await pending;
+  });
+
+  it("preload ändrar inte statusen", async () => {
+    const c = connectorWith(new FakeMsal());
+    await c.preload();
+    expect(await c.getStatus()).toEqual({ kind: "disconnected" });
+  });
+
+  it("utan konfiguration ger preload samma fel som connect", async () => {
+    localStorage.removeItem(OFFICE365_CONFIG_KEY);
+    const c = connectorWith(new FakeMsal());
+    await expect(c.preload()).rejects.toThrow("Microsoft 365 är inte inställt för den här AVA-installationen.");
+    await expect(c.connect()).rejects.toThrow("Microsoft 365 är inte inställt för den här AVA-installationen.");
+  });
+
+  it("en popup som faller efter preload hamnar i statusen", async () => {
+    const msal = new FakeMsal();
+    msal.popupError = new Error("popup_window_error");
+    const c = connectorWith(msal);
+    await c.preload();
+    await expect(c.connect()).rejects.toThrow(/popup_window_error/);
+    expect((await c.getStatus()).kind).toBe("error");
+  });
+
+  it("utan preload väntar connect() på fabriken innan popupen, som förut", async () => {
+    const msal = new FakeMsal();
+    const c = connectorWith(msal);
+    const pending = c.connect();
+    expect(msal.popupCalls).toBe(0);
+    await pending;
+    expect(msal.popupCalls).toBe(1);
   });
 });
