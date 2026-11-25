@@ -69,7 +69,7 @@ type Status = BootStatus;
 type GateDecision = "continue" | "skip-ready" | "redirect-login" | "skip-loading";
 
 export function pathSkipsAuth(p: string): boolean {
-  return /\/(demo|login)\/?$/.test(p);
+  return /\/(demo|login|msal-redirect)\/?$/.test(p);
 }
 
 function redirectToLogin(): void {

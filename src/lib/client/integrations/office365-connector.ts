@@ -11,7 +11,12 @@
  *
  * **MSAL laddas dynamiskt.** `@azure/msal-browser` är ett stort paket, och
  * ingen som aldrig ansluter Office 365 ska betala för det i sin bundle. Därför
- * `await import(...)` först i `connect()` — inte en toppnivå-import.
+ * `await import(...)` först i `connect()` eller `preload()` — inte en toppnivå-import.
+ *
+ * **MSAL kan förladdas (#1950).** iOS Safari öppnar bara en popup direkt i
+ * klicket. Efter en klar `preload()` anropar `connect()` popupen utan att
+ * först vänta på något. Popupen och den tysta förnyelsen landar på
+ * `/msal-redirect/`, som MSAL v5 kräver (`broadcastResponseToMainFrame`).
  *
  * **MSAL injiceras.** Popup-baserad auth går inte att enhetstesta, men allt
  * runt omkring går: statusövergångar, tyst förnyelse med popup-fallback,
@@ -19,6 +24,7 @@
  * det är den delen som faktiskt kan gå sönder.
  */
 
+import type { Office365Config } from "@/lib/shared/office365-config";
 import {
   authorityFor, OFFICE365_SCOPES, type Office365ConfigSource, resolveOffice365Config, serverOffice365Config,
 } from "./office365-config";
@@ -45,6 +51,14 @@ export interface MsalResult {
   readonly scopes?: readonly string[];
 }
 
+/** Felet när varken localStorage, byggtids-env eller servern ger någon app. */
+const NOT_CONFIGURED = "Microsoft 365 är inte inställt för den här AVA-installationen.";
+
+/** Sidan som popupen och den tysta förnyelsen landar på (MSAL v5:s redirect bridge). */
+export function msalRedirectUri(origin: string, basePath: string): string {
+  return `${origin}${basePath}/msal-redirect/`;
+}
+
 /** Skapar MSAL-instansen. Injicerbar; default laddar paketet dynamiskt. */
 export type MsalFactory = (opts: { clientId: string; authority: string }) => Promise<MsalLike>;
 
@@ -61,7 +75,7 @@ export type MsalFactory = (opts: { clientId: string; authority: string }) => Pro
 const defaultFactory: MsalFactory = async ({ clientId, authority }) => {
   const msal = await import("@azure/msal-browser");
   const app = new msal.PublicClientApplication({
-    auth: { clientId, authority, redirectUri: window.location.origin },
+    auth: { clientId, authority, redirectUri: msalRedirectUri(window.location.origin, process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "") },
     // MSAL cachar i sessionStorage som default. Tokens ska överleva en
     // omladdning men INTE ligga kvar för nästa person vid datorn — och en
     // advokatbyrås delade arbetsstation är inte ett påhittat fall.
@@ -103,6 +117,8 @@ export class Office365Connector implements IntegrationConnector {
   private readonly listeners = new Set<(s: ConnectionStatus) => void>();
   private msal: MsalLike | null = null;
   private account: MsalAccount | null = null;
+  /** Instansen från `preload()`, klar för en popup direkt i klicket. */
+  private preloaded: MsalLike | null = null;
 
   constructor(
     private readonly factory: MsalFactory = defaultFactory,
@@ -113,25 +129,50 @@ export class Office365Connector implements IntegrationConnector {
     return this.status;
   }
 
+  /**
+   * Ta fram konfigurationen, ladda MSAL och kör `initialize()` i förväg, så att
+   * `connect()` kan öppna popupen direkt i klicket. Ändrar inte statusen.
+   */
+  async preload(): Promise<void> {
+    const config = await resolveOffice365Config(this.fromServer);
+    if (!config) throw new Error(NOT_CONFIGURED);
+    this.preloaded = await this.create(config);
+  }
+
   async connect(): Promise<void> {
+    const ready = this.preloaded;
+    // Förladdat: popupen anropas synkront, utan await före (iOS Safari).
+    if (ready) return this.track(() => this.popup(ready));
     const config = await resolveOffice365Config(this.fromServer);
     if (!config) {
-      const message = "Microsoft 365 är inte inställt för den här AVA-installationen.";
-      this.setStatus({ kind: "error", message });
-      throw new Error(message);
+      this.setStatus({ kind: "error", message: NOT_CONFIGURED });
+      throw new Error(NOT_CONFIGURED);
     }
+    return this.track(async () => this.popup(await this.create(config)));
+  }
+
+  private create(config: Office365Config): Promise<MsalLike> {
+    return this.factory({ clientId: config.clientId, authority: authorityFor(config) });
+  }
+
+  /** Kör ett anslutningssteg med statusen `connecting`, och felet i statusen. */
+  private async track(step: () => Promise<void>): Promise<void> {
     this.setStatus({ kind: "connecting" });
     try {
-      this.msal = await this.factory({ clientId: config.clientId, authority: authorityFor(config) });
-      const result = await this.msal.acquireTokenPopup({ scopes: [...OFFICE365_SCOPES] });
-      this.account = result.account;
-      this.setStatus(statusFromResult(result));
+      await step();
     } catch (e: unknown) {
       // Statusen måste bära felet: UI:t renderas ur den, och ett kast som
       // lämnar status på "connecting" ser ut som en evig spinner.
       this.setStatus({ kind: "error", message: e instanceof Error ? e.message : String(e) });
       throw e;
     }
+  }
+
+  private async popup(msal: MsalLike): Promise<void> {
+    this.msal = msal;
+    const result = await msal.acquireTokenPopup({ scopes: [...OFFICE365_SCOPES] });
+    this.account = result.account;
+    this.setStatus(statusFromResult(result));
   }
 
   async disconnect(): Promise<void> {
