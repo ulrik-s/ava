@@ -5,7 +5,7 @@
  * en advokat inte registrera tidsspillan eller obekväm tid alls.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { TimeSection } from "@/app/matters/[id]/_time-section";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -37,6 +37,13 @@ const orgSettingsQuery = {
 const billingRunQuery = { data: { runs: [] as Array<Record<string, unknown>> }, isLoading: false };
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
+const moveMutate = vi.fn();
+const listInvalidate = vi.fn();
+const usageInvalidate = vi.fn();
+const MATTERS = [
+  { id: "m1", matterNumber: "2026-0001", title: "Vårdnad" },
+  { id: "m2", matterNumber: "2026-0002", title: "Arvskifte" },
+];
 // Rådgivningspostens status (#1207): `missing` = legacy-ärende utan låst post.
 const radgivningStatusQuery: { data: unknown } = { data: undefined };
 const markMutate = vi.fn();
@@ -44,13 +51,18 @@ const noopMut = () => ({ mutate: vi.fn(), isPending: false });
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ timeEntry: { list: { invalidate: vi.fn() } }, matter: { coverageUsage: { invalidate: vi.fn() } } }),
+    useUtils: () => ({ timeEntry: { list: { invalidate: listInvalidate } }, matter: { coverageUsage: { invalidate: usageInvalidate } } }),
     // Takvarningen i tidssektionen (#1520) — under taket här.
-    matter: { coverageUsage: { useQuery: () => ({ data: { billableMinutes: 0, billableValueOre: 0 } }) } },
+    matter: {
+      coverageUsage: { useQuery: () => ({ data: { billableMinutes: 0, billableValueOre: 0 } }) },
+      // Ärendena posten kan flyttas till (#2042).
+      list: { useQuery: () => ({ data: { matters: MATTERS } }) },
+    },
     timeEntry: {
       list: { useQuery: () => timeQuery },
       create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
       update: { useMutation: () => ({ mutate: updateMutate, isPending: false }) },
+      moveToMatter: { useMutation: () => ({ mutate: moveMutate, isPending: false }) },
       delete: { useMutation: noopMut },
       radgivningStatus: { useQuery: () => radgivningStatusQuery },
       markAsRadgivning: { useMutation: () => ({ mutate: markMutate, isPending: false }) },
@@ -69,6 +81,13 @@ vi.mock("@/lib/client/trpc", () => ({
 }));
 
 const matterId = asId<"MatterId">("m1");
+
+/** Det n:te elementet med texten — felar tydligt om det saknas. */
+function nthText(text: string, n: number): HTMLElement {
+  const el = screen.getAllByText(text)[n];
+  if (!el) throw new Error(`saknar ${text} nr ${n}`);
+  return el;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -138,10 +157,10 @@ describe("TimeSection — arvodeskategori (#953)", () => {
 
   it("kategorin är rättbar i efterhand — ändra-formuläret förifylls och skickar kind", () => {
     render(<TimeSection matterId={matterId} />);
-    fireEvent.click(screen.getAllByText("Ändra")[1]!); // raden med TIDSSPILLAN
+    fireEvent.click(nthText("Ändra", 1)); // raden med TIDSSPILLAN
     expect(screen.getByLabelText("Arvodeskategori *")).toHaveValue("TIDSSPILLAN");
     fireEvent.click(screen.getByText("Spara"));
-    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "t2", kind: "TIDSSPILLAN" }));
+    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "t2", kind: "TIDSSPILLAN" }), expect.anything());
   });
 
   it("normhjälptexten visas bara för täckningsärenden (rättshjälp/rättsskydd)", () => {
@@ -378,12 +397,12 @@ describe("TimeSection — Markera som rådgivning (#1207)", () => {
     radgivningStatusQuery.data = { kind: "missing", invoiceId: "inv-r" };
     const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" />);
-    fireEvent.click(screen.getAllByText(MARK)[0]!);
+    fireEvent.click(nthText(MARK, 0));
     expect(markMutate).not.toHaveBeenCalled();
-    expect(confirmSpy.mock.calls[0]![0]).toContain("delas");
-    fireEvent.click(screen.getAllByText(MARK)[0]!);
+    expect(confirmSpy.mock.calls[0]?.[0]).toContain("delas");
+    fireEvent.click(nthText(MARK, 0));
     expect(markMutate).toHaveBeenCalledTimes(1);
-    expect(markMutate.mock.calls[0]![0]).toEqual({ id: expect.stringMatching(/^t[123]$/) });
+    expect(markMutate.mock.calls[0]?.[0]).toEqual({ id: expect.stringMatching(/^t[123]$/) });
     confirmSpy.mockRestore();
   });
 });
@@ -468,7 +487,7 @@ describe("TimeSection — förhör med starttid (#1855)", () => {
       fireEvent.click(firstEdit());
       expect(screen.getByLabelText("Starttid *")).toHaveValue("09:15");
       fireEvent.click(screen.getByText("Spara"));
-      expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "t4", kind: "FORHOR", date: "2026-03-09T08:15:00.000Z" }));
+      expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "t4", kind: "FORHOR", date: "2026-03-09T08:15:00.000Z" }), expect.anything());
     } finally {
       timeQuery.data = original;
     }
@@ -478,6 +497,64 @@ describe("TimeSection — förhör med starttid (#1855)", () => {
     render(<TimeSection matterId={matterId} />);
     fireEvent.click(firstEdit());
     fireEvent.click(screen.getByText("Spara"));
-    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "t1", date: "2026-03-01" }));
+    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "t1", date: "2026-03-01" }), expect.anything());
+  });
+});
+
+describe("TimeSection — flytta posten till ett annat ärende (#2042)", () => {
+  type CallOpts = { onSuccess?: () => void } | undefined;
+  /** Kör anropets egen onSuccess, som när servern svarat. */
+  function succeed(mutate: ReturnType<typeof vi.fn>): void {
+    const callOpts = mutate.mock.calls.at(-1)?.[1] as CallOpts;
+    callOpts?.onSuccess?.();
+  }
+
+  it("fältet Ärende finns i Ändra tidregistrering, förvalt postens ärende", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(nthText("Ändra", 0));
+    expect(screen.getByLabelText("Ärende")).toHaveValue("2026-0001 — Vårdnad");
+  });
+
+  it("Registrera tid har inget ärendefält — posten hör till ärendet", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+    expect(screen.queryByLabelText("Ärende")).not.toBeInTheDocument();
+  });
+
+  it("samma ärende: bara update, och dialogen stängs", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(nthText("Ändra", 0));
+    fireEvent.click(screen.getByText("Spara"));
+    act(() => succeed(updateMutate));
+    expect(moveMutate).not.toHaveBeenCalled();
+    expect(listInvalidate).toHaveBeenCalledWith({ matterId });
+    expect(screen.queryByRole("dialog", { name: "Ändra tidregistrering" })).not.toBeInTheDocument();
+  });
+
+  it("ett annat ärende: update, sedan moveToMatter med postens id, och båda ärendena läses om", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(nthText("Ändra", 0));
+    fireEvent.change(screen.getByLabelText("Ärende"), { target: { value: "2026-0002 — Arvskifte" } });
+    fireEvent.click(screen.getByText("Spara"));
+    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), expect.anything());
+    expect(moveMutate).not.toHaveBeenCalled();
+    act(() => succeed(updateMutate));
+    expect(moveMutate).toHaveBeenCalledWith({ ids: ["t1"], matterId: "m2" }, expect.anything());
+    expect(screen.getByRole("dialog", { name: "Ändra tidregistrering" })).toBeInTheDocument();
+    act(() => succeed(moveMutate));
+    for (const id of ["m1", "m2"]) {
+      expect(listInvalidate).toHaveBeenCalledWith({ matterId: id });
+      expect(usageInvalidate).toHaveBeenCalledWith({ matterId: id });
+    }
+    expect(screen.queryByRole("dialog", { name: "Ändra tidregistrering" })).not.toBeInTheDocument();
+  });
+
+  it("ett rensat ärendefält flyttar inte", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(nthText("Ändra", 0));
+    fireEvent.change(screen.getByLabelText("Ärende"), { target: { value: "" } });
+    fireEvent.click(screen.getByText("Spara"));
+    act(() => succeed(updateMutate));
+    expect(moveMutate).not.toHaveBeenCalled();
   });
 });

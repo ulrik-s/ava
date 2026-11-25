@@ -25,12 +25,15 @@ const matterQuery: { data: { matters: Array<Record<string, unknown>> } } = {
 const utilsMock = { timeEntry: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } };
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
+const moveMutate = vi.fn();
+/** Serverfel från flytten (#2042). */
+let moveError: { message: string } | null = null;
 const deleteMutate = vi.fn();
 /** Det listan senast frågades efter: sida och period. */
 const listInput = vi.fn((_input: { page: number; from?: Date; to?: Date }) => timeQuery);
-/** onSuccess från create/update/delete — testet anropar dem som servern hade gjort. */
-const succeeded: Record<"create" | "update" | "remove", (() => void) | undefined> = {
-  create: undefined, update: undefined, remove: undefined,
+/** onSuccess från create/delete — testet anropar dem som servern hade gjort. */
+const succeeded: Record<"create" | "remove", (() => void) | undefined> = {
+  create: undefined, remove: undefined,
 };
 type MutationOpts = { onSuccess?: () => void } | undefined;
 /** Serverfel från update (t.ex. PRECONDITION_FAILED för en fryst post). */
@@ -47,12 +50,8 @@ vi.mock("@/lib/client/trpc", () => ({
           return { mutate: createMutate, isPending: false };
         },
       },
-      update: {
-        useMutation: (opts: MutationOpts) => {
-          succeeded.update = opts?.onSuccess;
-          return { mutate: updateMutate, isPending: false, error: updateError };
-        },
-      },
+      update: { useMutation: () => ({ mutate: updateMutate, isPending: false, error: updateError }) },
+      moveToMatter: { useMutation: () => ({ mutate: moveMutate, isPending: false, error: moveError }) },
       delete: {
         useMutation: (opts: MutationOpts) => {
           succeeded.remove = opts?.onSuccess;
@@ -82,6 +81,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   timeQuery.data = { entries: [], total: 0, pages: 0, totalMinutes: 0 };
   updateError = null;
+  moveError = null;
 });
 
 describe("TimePage", () => {
@@ -200,7 +200,7 @@ describe("TimePage", () => {
 describe("TimePage — ändra och ta bort", () => {
   const entry = {
     id: "t1", date: "2026-09-20", minutes: 45, description: "Genomgång av avtal",
-    billable: true, kind: "ARBETE",
+    billable: true, kind: "ARBETE", matterId: "m1",
     matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" },
     user: { name: "Cecilia" },
   };
@@ -218,7 +218,7 @@ describe("TimePage — ändra och ta bort", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
     expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({
       id: "t1", description: "Genomgång av avtal + mejl", minutes: 45, date: "2026-09-20",
-    }));
+    }), expect.anything());
   });
 
   it("Ta bort frågar först och tar bort vid ja", () => {
@@ -263,6 +263,55 @@ describe("TimePage — ändra och ta bort", () => {
     withRows(entry);
     render(<TimePage />);
     expect(screen.getByRole("alert")).toHaveTextContent(/slutfaktura/);
+  });
+});
+
+describe("TimePage — flytta posten till ett annat ärende (#2042)", () => {
+  const entry = {
+    id: "t1", date: "2026-09-20", minutes: 45, description: "Genomgång av avtal", billable: true, kind: "ARBETE",
+    matterId: "m1", matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" }, user: { name: "Cecilia" },
+  };
+  type CallOpts = { onSuccess?: () => void } | undefined;
+  const succeed = (mutate: ReturnType<typeof vi.fn>) => (mutate.mock.calls.at(-1)?.[1] as CallOpts)?.onSuccess?.();
+
+  beforeEach(() => {
+    timeQuery.data = { entries: [entry], total: 1, pages: 1, totalMinutes: 45 };
+    matterQuery.data = { matters: [
+      { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" },
+      { id: "m2", matterNumber: "UA2026-0002", title: "Hyrestvist" },
+    ] };
+  });
+
+  function openEdit() {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
+    return screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
+  }
+
+  it("fältet Ärende är förvalt postens ärende; samma ärende ger bara update", () => {
+    const dialog = openEdit();
+    expect(within(dialog).getByLabelText("Ärende")).toHaveValue("UA2026-0001 — Avtalstvist");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    act(() => succeed(updateMutate));
+    expect(moveMutate).not.toHaveBeenCalled();
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).not.toBeInTheDocument();
+  });
+
+  it("ett annat ärende: update och sedan moveToMatter med postens id", () => {
+    const dialog = openEdit();
+    fireEvent.change(within(dialog).getByLabelText("Ärende"), { target: { value: "UA2026-0002 — Hyrestvist" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    act(() => succeed(updateMutate));
+    expect(moveMutate).toHaveBeenCalledWith({ ids: ["t1"], matterId: "m2" }, expect.anything());
+    act(() => succeed(moveMutate));
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).not.toBeInTheDocument();
+  });
+
+  it("ett fel i flytten visas för användaren", () => {
+    moveError = { message: "Tidposten ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort." };
+    render(<TimePage />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/kostnadsräkning/);
   });
 });
 
@@ -362,8 +411,10 @@ describe("TimePage — registreringens och ändringens svar (#1904)", () => {
     timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
     render(<TimePage />);
     fireEvent.click(screen.getAllByRole("button", { name: "Ändra" })[0] as HTMLElement);
-    expect(screen.getByRole("dialog", { name: /Ändra tidregistrering/ })).toBeInTheDocument();
-    act(() => succeeded.update?.());
+    const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    // Ändringen skickar onSuccess med anropet (#2042), inte med hooken.
+    act(() => (updateMutate.mock.calls.at(-1)?.[1] as MutationOpts)?.onSuccess?.());
     expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
     expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).toBeNull();
   });

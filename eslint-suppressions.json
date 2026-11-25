@@ -1430,9 +1430,6 @@
     }
   },
   "test/unit/app/matters/time-section.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 5
-    },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     }
@@ -2705,9 +2702,6 @@
     }
   },
   "test/unit/server/events/emit.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 5
-    },
     "@typescript-eslint/require-await": {
       "count": 3
     }

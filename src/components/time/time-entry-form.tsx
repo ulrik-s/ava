@@ -1,11 +1,13 @@
 "use client";
 
+import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
 import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
 import { trpc } from "@/lib/client/trpc";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { toIsoDate, toLocalTime } from "@/lib/shared/iso-date";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 import { applicableStandardAtgarder, type StandardAtgard } from "@/lib/shared/standard-atgard";
 import { stockholmDateTime } from "@/lib/shared/stockholm-time";
 
@@ -121,8 +123,17 @@ export function applyStandardAtgard(form: EditForm, atgard: StandardAtgard | und
   };
 }
 
+/** Fältet **Ärende** i Ändra tidregistrering (#2042): valt ärende och listan att välja ur. */
+export interface MatterChoice {
+  matters: MatterOption[];
+  value: MatterId;
+  onChange: (matterId: MatterId) => void;
+}
+
 interface FormProps {
   form: EditForm;
+  /** Visar fältet **Ärende** överst (bara när en post ändras). */
+  matter?: MatterChoice | undefined;
   setForm: (f: EditForm) => void;
   submitLabel: string;
   isPending: boolean;
@@ -134,9 +145,10 @@ interface FormProps {
 }
 
 /** Tidpost-formuläret — delat av ärendets tidsektion och /time. */
-export function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, isCoverage, atgarder, onSubmit, onCancel }: FormProps) {
+export function TimeForm({ form, matter, setForm, submitLabel, isPending, isTaxeArende, isCoverage, atgarder, onSubmit, onCancel }: FormProps) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!hasInvalidHours(e.currentTarget)) onSubmit(); }}>
+      <MatterField matter={matter} />
       {isTaxeArende && (
         <div className="text-xs text-indigo-900 bg-indigo-50 border border-indigo-200 rounded px-3 py-2 mb-3">
           <strong>Taxeärende</strong> — arvodet ersätts enligt Domstolsverkets
@@ -215,6 +227,16 @@ export function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, 
         </button>
       </div>
     </form>
+  );
+}
+
+/** Ärendet posten ligger i, för att flytta den (#2042). Bara när en post ändras. */
+function MatterField({ matter }: { matter: MatterChoice | undefined }) {
+  if (!matter) return null;
+  return (
+    <div className="mb-3">
+      <MatterCombobox label="Ärende" matters={matter.matters} value={matter.value} onChange={matter.onChange} />
+    </div>
   );
 }
 
