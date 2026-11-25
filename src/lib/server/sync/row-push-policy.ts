@@ -14,7 +14,11 @@
  *   - loggar (`appendOnly`): jävskontrollens logg kan bara läggas till;
  *   - sökvägen till innehållet (`contentPath`, #1372): rätt form och
  *     dokumentets eget innehåll (`document-storage-path.ts`) när den sätts
- *     eller ändras.
+ *     eller ändras;
+ *   - samma ärende (`sameMatter`, #2044): en refererad rad ligger i radens
+ *     ärende, när referensen eller radens ärende sätts eller ändras;
+ *   - låsta fält (`lockedWhen`, #2044): fälten ändras inte när en vakt är satt
+ *     på serverns rad (fakturans och kostnadsräkningens egna dokument).
  *
  * Användare, byrån, kontor, byråns standardvyer och mallar tas inte emot här:
  * de är procedurägda (`procedure-owned.ts`) och skrivs bara genom att servern
@@ -45,6 +49,19 @@ interface RowPolicy {
   readonly appendOnly?: true;
   /** Fältet med sökvägen till radens innehåll i content-store:n. */
   readonly contentPath?: string;
+  /**
+   * Referensfält → entitet (#2044): den refererade raden ska ha samma
+   * `matterId` som raden. Prövas mot den sammanslagna raden när referensen
+   * eller radens `matterId` sätts eller ändras. En tom referens och en rad som
+   * inte finns prövas inte (som `refs`).
+   */
+  readonly sameMatter?: Readonly<Record<string, string>>;
+  /**
+   * Låsta fält (#2044): `fields` får inte ändras när någon av `guards` är satt
+   * på serverns rad. Ett fält som inte skickas, eller skickas med samma värde
+   * som servern har, räknas som oförändrat.
+   */
+  readonly lockedWhen?: { readonly fields: readonly string[]; readonly guards: readonly string[] };
 }
 
 const USER = "user";
@@ -60,9 +77,12 @@ export const ROW_PUSH_POLICY: Readonly<Record<string, RowPolicy>> = Object.freez
     refs: { matterId: MATTER, folderId: "documentFolder", invoiceId: "invoice", billingRunId: "billingRun" },
     actor: "uploadedById",
     contentPath: "storagePath",
+    sameMatter: { folderId: "documentFolder" },
+    // Vakterna står också bland fälten: en klient kan inte först nolla dem och sedan byta ärende.
+    lockedWhen: { fields: ["matterId", "invoiceId", "billingRunId"], guards: ["invoiceId", "billingRunId"] },
   },
   documentFolder: { refs: { matterId: MATTER, parentId: "documentFolder" } },
-  documentPart: { refs: { matterId: MATTER, documentId: DOCUMENT } },
+  documentPart: { refs: { matterId: MATTER, documentId: DOCUMENT }, sameMatter: { documentId: DOCUMENT } },
   documentAnalysisSuggestion: { refs: { documentId: DOCUMENT, acceptedContactId: "contact" } },
   matterEventSuggestion: { refs: { documentId: DOCUMENT } },
   serviceNote: { refs: { matterId: MATTER }, actor: "authorId" },
@@ -79,6 +99,8 @@ export const ROW_POLICY_REASONS = {
   badRef: "ogiltig referens",
   otherOrg: "annan byrå",
   contentPath: "Sökvägen till dokumentets innehåll är ogiltig.",
+  otherMatter: "annat ärende",
+  locked: "Raden hör till en faktura eller kostnadsräkning och kan inte byta ärende.",
 } as const;
 
 /** En avvisning från policyn. */
@@ -92,6 +114,12 @@ export interface RowPolicyRejection {
  */
 export type RefOrg = (entity: string, id: string) => Promise<string | null | undefined>;
 
+/**
+ * Ärendet en refererad rad ligger i (#2044), läst i samma transaktion som
+ * pushen: `null` om raden inte finns, `undefined` om den saknar ärende.
+ */
+export type RefMatter = (entity: string, id: string) => Promise<string | null | undefined>;
+
 /** Det policyn prövar: vad som skickades, vad servern har och vem som pushar. */
 export interface PolicyInput {
   readonly entity: string;
@@ -100,6 +128,7 @@ export interface PolicyInput {
   readonly existing: Row | null;
   readonly pusher: RowPusher;
   readonly refOrg: RefOrg;
+  readonly refMatter: RefMatter;
 }
 
 /** Entitetens policy (egna nycklar — inte `__proto__` o.d.). */
@@ -153,21 +182,68 @@ async function checkRefs(policy: RowPolicy, input: PolicyInput): Promise<RowPoli
   return null;
 }
 
-/** Sökvägen klienten sätter eller ändrar till, annars `undefined` (oförändrad eller inte skickad). */
-function changedContentPath(field: string, input: PolicyInput): unknown {
+/**
+ * Värdet klienten sätter eller ändrar fältet till, annars `undefined`
+ * (oförändrat eller inte skickat). Det enda ändringsprovet för `contentPath`,
+ * `sameMatter` och `lockedWhen` (#2044).
+ */
+function changedValue(field: string, input: Pick<PolicyInput, "incoming" | "existing">): unknown {
   const value = input.incoming?.[field];
   return value === input.existing?.[field] ? undefined : value;
 }
+
+const isChanged = (field: string, input: PolicyInput): boolean => changedValue(field, input) !== undefined;
 
 /**
  * Sökvägen till innehållet (#1372) prövas när den sätts eller ändras: rätt form
  * och dokumentets eget innehåll. En oförändrad sökväg (t.ex. seedens) går igenom.
  */
 function checkContentPath(policy: RowPolicy, input: PolicyInput): RowPolicyRejection | null {
-  const value = policy.contentPath === undefined ? undefined : changedContentPath(policy.contentPath, input);
+  const value = policy.contentPath === undefined ? undefined : changedValue(policy.contentPath, input);
   if (value === undefined) return null;
   const id = String(input.incoming?.id ?? input.existing?.id);
   return isDocumentStoragePath(value) && isOwnStoragePath(value, id) ? null : reject(ROW_POLICY_REASONS.contentPath);
+}
+
+/**
+ * Låsta fält (#2044): ändrar klienten ett av fälten när en vakt är satt på
+ * serverns rad, vägras raden. En ny rad har inga vakter på servern.
+ */
+function checkLocked(policy: RowPolicy, input: PolicyInput): RowPolicyRejection | null {
+  const rule = policy.lockedWhen;
+  if (!rule || !input.existing) return null;
+  const existing = input.existing;
+  if (!rule.guards.some((guard) => existing[guard] != null)) return null;
+  return rule.fields.some((field) => isChanged(field, input)) ? reject(ROW_POLICY_REASONS.locked) : null;
+}
+
+/** Den refererade raden ligger i `matterId`; en tom referens och en saknad rad prövas inte. */
+async function checkSameMatterRef(refMatter: RefMatter, entity: string, value: unknown, matterId: unknown): Promise<RowPolicyRejection | null> {
+  if (typeof value !== "string") return null;
+  const target = await refMatter(entity, value);
+  return target === null || target === matterId ? null : reject(ROW_POLICY_REASONS.otherMatter);
+}
+
+/**
+ * Samma ärende (#2044), prövat mot den sammanslagna raden när referensen eller
+ * radens `matterId` sätts eller ändras. En gammal rad som inte stämmer stoppar
+ * alltså inte en orelaterad ändring.
+ */
+async function checkSameMatter(policy: RowPolicy, input: PolicyInput): Promise<RowPolicyRejection | null> {
+  const row = merged(input);
+  if (!row || !policy.sameMatter) return null;
+  const matterChanged = isChanged("matterId", input);
+  for (const [field, entity] of Object.entries(policy.sameMatter)) {
+    if (!matterChanged && !isChanged(field, input)) continue;
+    const rejected = await checkSameMatterRef(input.refMatter, entity, row[field], row.matterId);
+    if (rejected) return rejected;
+  }
+  return null;
+}
+
+/** Referensreglerna, som läser de refererade raderna: byrån först, sedan ärendet (#2044). */
+async function checkRefRules(policy: RowPolicy, input: PolicyInput): Promise<RowPolicyRejection | null> {
+  return await checkRefs(policy, input) ?? await checkSameMatter(policy, input);
 }
 
 /**
@@ -181,7 +257,8 @@ export async function checkRowPolicy(input: PolicyInput): Promise<RowPolicyRejec
     ?? checkOwner(policy, input)
     ?? checkActor(policy, input)
     ?? checkContentPath(policy, input)
-    ?? await checkRefs(policy, input);
+    ?? checkLocked(policy, input)
+    ?? await checkRefRules(policy, input);
 }
 
 const CREATED_AT = "createdAt";

@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { ListPage } from "@/components/layout/list-page";
 import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
+import { MoveTimeEntriesButton, useTimeEntrySelection } from "@/components/time/move-time-entries";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -180,6 +181,7 @@ export default function TimePage() {
   });
 
   const editing = useTimeEntryEditing();
+  const marking = useTimeEntrySelection<TimeRow>();
   const columns = [...timeColumns, timeActionsColumn<TimeRow>(editing)];
 
   const createTimeEntry = trpc.timeEntry.create.useMutation({
@@ -228,12 +230,16 @@ export default function TimePage() {
         onClear={() => { setFromDate(""); setToDate(""); setPage(1); }}
       />
 
+      {/* /time listar alla ärendens poster: en omläsning täcker båda ärendena. */}
+      <MoveTimeEntriesButton selected={marking.selection.selected} onMoved={marking.clear}
+        refresh={() => { void utils.timeEntry.list.invalidate(); }} />
       <DataTable
         prefKey="list.time-entries"
         columns={columns}
         data={timeEntries.data?.entries ?? []}
         rowKey={(e) => e.id}
         emptyMessage="Inga tidsposter."
+        selection={marking.selection}
       />
       <TimeEntryEditModal ed={editing} />
       {timeEntries.data && timeEntries.data.pages > 1 && (

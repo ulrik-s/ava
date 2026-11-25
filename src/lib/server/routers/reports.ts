@@ -10,6 +10,7 @@ import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
 import { hasInvoice } from "@/lib/shared/time-entry-lock";
+import { loadPeriodWork } from "../reports/period-work";
 import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
 
@@ -384,12 +385,9 @@ export const reportsRouter = router({
 
       const org = ctx.user.organizationId;
 
-      // Migrerad till repository-sömmen (ADR 0020): listForLawyerInPeriod kapslar
-      // in org-scoping + matter-projektionen (betalsätt + KLIENT-kontakt).
-      const [user, timeEntries, expenses] = await Promise.all([
+      const [user, { timeEntries, expenses }] = await Promise.all([
         ctx.repos.users.getByIdInOrg(input.userId, org),
-        ctx.repos.timeEntries.listForLawyerInPeriod(org, input.userId, fromDate, toDate),
-        ctx.repos.expenses.listForLawyerInPeriod(org, input.userId, fromDate, toDate),
+        loadPeriodWork(ctx.repos, org, { kind: "lawyer", userId: input.userId }, fromDate, toDate),
       ]);
 
       if (!user) {

@@ -38,9 +38,21 @@ export interface SettlementViewLine {
   kind?: TimeEntryKind | null | undefined;
 }
 
+/** En utläggsrad i nedbrytningen (#1938) — samma form som `SpecExpenseLine`. */
+export interface SettlementViewExpenseLine {
+  date: string;
+  description: string;
+  netOre: number;
+  grossOre: number;
+  /** Äkta utlägg — vidarefakturerat utan moms (#975). */
+  passThrough?: boolean | undefined;
+}
+
 export interface SettlementView {
   /** Tidsspec-tabellen (arbetad tid). Tom → ingen tabell renderas. */
   timeLines: SettlementViewLine[];
+  /** Utläggsspecifikationen (#1938). Saknas på äldre fakturor → fakturans egna utlägg. */
+  expenseLines?: SettlementViewExpenseLine[] | undefined;
   /** Nedbrytningsraderna (beloppstrappan). */
   rows: SettlementRow[];
   /** Etikett på total-raden ("Att betala (inkl moms)" / "DOMSTOL — att betala …"). */

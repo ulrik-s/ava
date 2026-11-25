@@ -312,3 +312,26 @@ describe("ServerFirstSync", () => {
     expect(rejectedChanges.list()).toEqual([]);
   });
 });
+
+describe("ServerFirstSync — den periodiska synken (#1905)", () => {
+  it("var 30:e sekund synkas kön igen", async () => {
+    const ticks: Array<() => void> = [];
+    const realSetInterval = globalThis.setInterval;
+    const spy = vi.spyOn(globalThis, "setInterval").mockImplementation(((fn: () => void, ms?: number) => {
+      if (ms === 30_000) ticks.push(fn);
+      return realSetInterval(() => {}, 1_000_000);
+    }) as typeof setInterval);
+    try {
+      const { state, store } = fakeStore({ pending: 1 });
+      const { unmount } = wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
+      await waitFor(() => expect(state.reconciles).toBe(1));
+      state.pending = 1;
+      act(() => { for (const tick of ticks) tick(); });
+      await waitFor(() => expect(state.reconciles).toBe(2));
+      unmount();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+

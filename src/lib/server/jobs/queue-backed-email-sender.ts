@@ -29,12 +29,15 @@ export class QueueBackedEmailSender implements IEmailSender {
     // Idempotens (#504, #1900, ADR 0024): kön är `exclusive`, så `singletonKey`
     // `<byrå>:<idempotensnyckel>` ger som mest ett köat eller pågående mejl per
     // nyckel. Utan nyckel får mejlet en slumpad nyckel, så att mejl utan nyckel
-    // inte delar den tomma nyckeln (och stoppar varandra).
-    await boss.send(
-      JOB_QUEUES.emailDispatch,
-      { to: input.to, subject: input.subject, text: input.text },
-      { singletonKey: this.singletonKeyFor(input) },
-    );
+    // inte delar den tomma nyckeln (och stoppar varandra). Byrån och anroparens
+    // nyckel följer med i payloaden (#1901): handlern skickar samma nyckel högst
+    // en gång per byrå. Den slumpade nyckeln loggas aldrig.
+    await boss.send(JOB_QUEUES.emailDispatch, this.payloadFor(input), { singletonKey: this.singletonKeyFor(input) });
+  }
+
+  private payloadFor(input: SendEmailInput): object {
+    const mail = { to: input.to, subject: input.subject, text: input.text, organizationId: this.organizationId };
+    return input.idempotencyKey ? { ...mail, idempotencyKey: input.idempotencyKey } : mail;
   }
 
   private singletonKeyFor(input: SendEmailInput): string {

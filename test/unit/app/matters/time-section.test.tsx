@@ -5,8 +5,8 @@
  * en advokat inte registrera tidsspillan eller obekväm tid alls.
  */
 
-import { act, render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest-compat";
+import { act, render, screen, fireEvent, within } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest-compat";
 import { TimeSection } from "@/app/matters/[id]/_time-section";
 import { asId } from "@/lib/shared/schemas/ids";
 
@@ -38,6 +38,8 @@ const billingRunQuery = { data: { runs: [] as Array<Record<string, unknown>> }, 
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
 const moveMutate = vi.fn();
+/** Felhanterarna som flyttarna registrerat (#2043). */
+const moveOnError: Array<(e: { message: string }) => void> = [];
 const listInvalidate = vi.fn();
 const usageInvalidate = vi.fn();
 const MATTERS = [
@@ -62,7 +64,12 @@ vi.mock("@/lib/client/trpc", () => ({
       list: { useQuery: () => timeQuery },
       create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
       update: { useMutation: () => ({ mutate: updateMutate, isPending: false }) },
-      moveToMatter: { useMutation: () => ({ mutate: moveMutate, isPending: false }) },
+      moveToMatter: {
+        useMutation: (opts?: { onError?: (e: { message: string }) => void }) => {
+          if (opts?.onError) moveOnError.push(opts.onError);
+          return { mutate: moveMutate, isPending: false };
+        },
+      },
       delete: { useMutation: noopMut },
       radgivningStatus: { useQuery: () => radgivningStatusQuery },
       markAsRadgivning: { useMutation: () => ({ mutate: markMutate, isPending: false }) },
@@ -556,5 +563,56 @@ describe("TimeSection — flytta posten till ett annat ärende (#2042)", () => {
     fireEvent.click(screen.getByText("Spara"));
     act(() => succeed(updateMutate));
     expect(moveMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("TimeSection — markera flera poster och flytta dem (#2043)", () => {
+  type CallOpts = { onSuccess?: () => void } | undefined;
+  const rowOf = (text: string) => within(screen.getByText(text).closest("tr") as HTMLElement);
+  const original = timeQuery.data;
+  afterEach(() => { timeQuery.data = original; });
+
+  it("en låst post går inte att markera", () => {
+    timeQuery.data = { entries: [
+      { id: "t1", date: "2026-03-01", minutes: 60, description: "Öppen post", billable: true },
+      { id: "t2", date: "2026-03-02", minutes: 60, description: "Fryst post", billable: true, frozenAt: "2026-04-01" },
+    ], totalMinutes: 120 };
+    render(<TimeSection matterId={matterId} />);
+    expect(rowOf("Öppen post").getByRole("checkbox", { name: "Markera rad" })).toBeInTheDocument();
+    expect(rowOf("Fryst post").queryByRole("checkbox")).toBeNull();
+  });
+
+  it("knappen visar antalet, och det nuvarande ärendet är inte valbart", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(rowOf("Genomgång av handlingar").getByRole("checkbox", { name: "Markera rad" }));
+    fireEvent.click(rowOf("Restid till sammanträde").getByRole("checkbox", { name: "Markera rad" }));
+    fireEvent.click(screen.getByRole("button", { name: "Flytta till ärende… (2)" }));
+    const dialog = screen.getByRole("dialog", { name: "Flytta till ärende" });
+    const values = Array.from(dialog.querySelectorAll("datalist option")).map((o) => o.getAttribute("value"));
+    expect(values).toEqual(["2026-0002 — Arvskifte"]);
+  });
+
+  it("efter Flytta läses båda ärendena om och markeringen töms", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Markera alla" }));
+    fireEvent.click(screen.getByRole("button", { name: "Flytta till ärende… (3)" }));
+    const dialog = screen.getByRole("dialog", { name: "Flytta till ärende" });
+    fireEvent.change(within(dialog).getByLabelText("3 tidsposter flyttas till:"), { target: { value: "2026-0002 — Arvskifte" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Flytta" }));
+    expect(moveMutate).toHaveBeenCalledWith({ ids: ["t1", "t2", "t3"], matterId: "m2" }, expect.anything());
+    act(() => (moveMutate.mock.calls.at(-1)?.[1] as CallOpts)?.onSuccess?.());
+    expect(listInvalidate).toHaveBeenCalledWith({ matterId: "m1" });
+    expect(listInvalidate).toHaveBeenCalledWith({ matterId: "m2" });
+    expect(usageInvalidate).toHaveBeenCalledWith({ matterId: "m2" });
+    expect(screen.queryByRole("button", { name: /Flytta till ärende/ })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "Markera rad", checked: true })).toBeNull();
+  });
+
+  it("ett misslyckat anrop loggas, aldrig tyst", () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    render(<TimeSection matterId={matterId} />);
+    for (const onError of moveOnError) onError({ message: "låst" });
+    expect(log).toHaveBeenCalledWith("[timeEntry.moveToMatter] misslyckades:", { message: "låst" });
+    log.mockRestore();
   });
 });

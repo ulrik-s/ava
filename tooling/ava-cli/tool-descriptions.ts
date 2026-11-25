@@ -37,7 +37,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "billingRun.invoiceSpecification": "Fakturaspecifikation: de tids- och utläggsrader som är kopplade till en viss faktura, plus avdragna aconton och summering. Driver fakturadokumentet. En ren aconto-faktura får tomma rader.",
   "billingRun.createAcconto": "Skapa en aconto-faktura (à conto) på ett ärende. Fryser inte arbetet — posterna kan faktureras igen på slutfakturan, med aconto-beloppet avdraget.",
   "billingRun.createFinal": "Skapa slutfaktura på ett ärende: fakturerar allt ofakturerat arbete, drar av tidigare aconton och fryser posterna.",
-  "billingRun.createKostnadsrakning": "Skapa en kostnadsräkning till domstolen (offentligt uppdrag och rättshjälp). Status INSKICKAD — domstolens beslut registreras separat.",
+  "billingRun.createKostnadsrakning": "Skapa en kostnadsräkning till domstolen (offentligt uppdrag och rättshjälp). Status INSKICKAD — domstolens beslut registreras separat. I ett förordnandemål anges forordnande.avslut (NEDLAGD, STRAFFORELAGGANDE eller INGET_ATAL): yrkandet räknas då på förordnandetaxan och ärendets förhör, och avslutet sparas i anteckningen.",
   "billingRun.recordKostnadsrakningBeslut": "Registrera domstolens beslut på en kostnadsräkning: dömt belopp och eventuell prutning. INSKICKAD → BESLUTAD (tingsrätten), ÖVERKLAGAD → BESLUTAD slutgiltigt (hovrätten). Skapar ingen faktura — det är ett eget steg.",
   "billingRun.appealKostnadsrakning": "Överklaga domstolens prutning på en kostnadsräkning till hovrätten: BESLUTAD → ÖVERKLAGAD. Ingen ny kostnadsräkning skapas; hovrättens beslut registreras på samma körning.",
   "billingRun.voidKostnadsrakning": "Ångra en kostnadsräkning innan domstolen beslutat (INSKICKAD, inget dömt belopp, ingen faktura): låser upp de tidposter och utlägg den frös och annullerar körningen, så ärendet kan kompletteras och en ny kostnadsräkning skapas.",
@@ -161,7 +161,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "mail.findSaved": "Kontrollera om ett mail (Internet Message-ID) redan är sparat på ett ärende.",
 
   // ── Ärenden ──────────────────────────────────────────────────────
-  "matter.list": "Lista och sök byråns ärenden, valfritt filtrerat på status eller handläggare.",
+  "matter.list": "Lista och sök byråns ärenden, valfritt filtrerat på status eller handläggare; mine ger bara ärenden där den inloggade är ansvarig, och orderBy \"lastActivity\" sorterar på senast hänt i ärendet.",
   "matter.getById": "Hämta ett enskilt ärende med betalningssätt, klient och ekonomi.",
   "matter.create": "Lägg upp ett nytt ärende med betalningssätt (privat, rättshjälp, rättsskydd eller offentligt uppdrag).",
   "matter.update": "Uppdatera ett ärendes uppgifter.",

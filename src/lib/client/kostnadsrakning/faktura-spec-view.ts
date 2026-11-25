@@ -10,7 +10,7 @@
  */
 
 import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { buildInvoiceSpecification, type InvoiceSpecification } from "@/lib/shared/invoice-specification";
+import { buildInvoiceSpecification, type InvoiceSpecification, type SpecExpenseLine } from "@/lib/shared/invoice-specification";
 import { formatDecimalHours } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import { svd as svDate } from "@/lib/shared/settlement-view"; // svensk kalenderdag (#1677)
@@ -37,28 +37,39 @@ export interface FakturaExpenseRow { date: string; description: string; net: str
 interface SpecSource {
   invoice: { amount: number; amountRounding?: AmountRounding | null | undefined };
   spec?: InvoiceSpecification | null | undefined;
-  breakdown?: { timeLines?: ReadonlyArray<CarriedWorkLine> | undefined } | null | undefined;
+  breakdown?: CarriedWork | null | undefined;
+}
+
+/** Nedbrytningens underlag: upparbetat arbete (#880) och utlägg (#1938). */
+interface CarriedWork {
+  timeLines?: ReadonlyArray<CarriedWorkLine> | undefined;
+  expenseLines?: ReadonlyArray<SpecExpenseLine> | undefined;
 }
 
 /**
  * Specifikationens underlag (#937): fakturans EGNA länkade rader när de finns,
- * annars nedbrytningens upparbetade arbete (#880) — klientens självrisk-faktura
- * och aconton har inga egna tidsposter (arbetet bärs av betalar-fakturan), men
- * ska ändå redovisa vad beloppet bygger på. Ren funktion.
+ * annars nedbrytningens upparbetade arbete (#880) och utlägg (#1938) — klientens
+ * självrisk-faktura och aconton har inga egna tidsposter (arbetet bärs av
+ * betalar-fakturan), men ska ändå redovisa vad beloppet bygger på. Ren funktion.
  */
 export function resolveSpec(a: SpecSource): InvoiceSpecification | null {
   const { spec, breakdown } = a;
   if (spec && spec.timeLines.length > 0) return spec;
-  const carried = breakdown?.timeLines;
-  if (!carried?.length) return spec ?? null;
-  return specFromCarriedWork(carried, spec, a.invoice);
+  if (!breakdown || !hasCarriedWork(breakdown)) return spec ?? null;
+  return specFromCarriedWork(breakdown, spec, a.invoice);
 }
 
-/** Bygg specifikationen ur nedbrytningens arbete, med spec:ens utlägg/avdrag kvar. */
-function specFromCarriedWork(carried: ReadonlyArray<CarriedWorkLine>, spec: InvoiceSpecification | null | undefined, invoice: SpecSource["invoice"]): InvoiceSpecification {
+/** Bär nedbrytningen något underlag: tidsrader eller utläggsrader (#1938)? */
+function hasCarriedWork(b: CarriedWork): boolean {
+  return (b.timeLines?.length ?? 0) > 0 || (b.expenseLines?.length ?? 0) > 0;
+}
+
+/** Bygg specifikationen ur nedbrytningens arbete och utlägg; spec:ens utlägg om
+ *  nedbrytningen saknar egna, och spec:ens avdrag. */
+function specFromCarriedWork(carried: CarriedWork, spec: InvoiceSpecification | null | undefined, invoice: SpecSource["invoice"]): InvoiceSpecification {
   return buildInvoiceSpecification({
-    timeLines: carried.map((l) => ({ date: l.date, description: l.description, minutes: l.minutes, amountOre: l.amountOre, kind: l.kind })),
-    expenseLines: spec?.expenseLines ?? [],
+    timeLines: (carried.timeLines ?? []).map((l) => ({ date: l.date, description: l.description, minutes: l.minutes, amountOre: l.amountOre, kind: l.kind })),
+    expenseLines: carried.expenseLines ? [...carried.expenseLines] : spec?.expenseLines ?? [],
     deductions: spec?.deductions ?? [],
     payableOre: invoice.amount,
     // Summeras med fakturans EGET avrundningssätt (#1438) — en äldre faktura
