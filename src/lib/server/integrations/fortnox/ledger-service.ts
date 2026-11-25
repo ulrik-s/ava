@@ -145,7 +145,9 @@ export function fortnoxLedgerFromEnv(
   const { AVA_FORTNOX_CLIENT_ID: clientId, AVA_FORTNOX_CLIENT_SECRET: clientSecret, AVA_FORTNOX_REDIRECT_URI: redirectUri } = env;
   if (!clientId || !clientSecret || !redirectUri || !env.AVA_SECRETS_KEY || !env.AVA_SECRETS_FILE) return null;
   const config = fortnoxConfigSchema.parse({
-    clientId, clientSecret, redirectUri, scopes: ["bookkeeping"],
+    // Behörigheterna (#1886): bookkeeping för verifikaten, inbox för bilagan och
+    // connectfile för kopplingen. https://www.fortnox.se/developer/guides-and-good-to-know/scopes
+    clientId, clientSecret, redirectUri, scopes: ["bookkeeping", "inbox", "connectfile"],
     ...(env.AVA_FORTNOX_ACCOUNT_TYPE === "service" ? { accountType: "service" as const } : {}),
   });
   return new FortnoxLedgerService(config, createVaultFromEnv(env));

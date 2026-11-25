@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
 import type { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
-import { FortnoxLedgerConnector } from "@/lib/server/integrations/fortnox/connector";
+import { FortnoxLedgerConnector, MISSING_YEAR } from "@/lib/server/integrations/fortnox/connector";
 import type { FortnoxKontoMappning, FortnoxVoucher, FortnoxVoucherResponse } from "@/lib/server/integrations/fortnox/schema";
 import { assertConnectorMatchesCapabilities } from "@/lib/server/integrations/ledger/capabilities";
 import type { SemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
@@ -15,18 +15,18 @@ const MAPPING: FortnoxKontoMappning = {
 function makeClient() {
   const calls: FortnoxVoucher[] = [];
   const uploads: Array<{ fileName: string; size: number }> = [];
-  const connections: Array<{ fileId: string; series: string; number: string }> = [];
+  const connections: Array<{ fileId: string; series: string; number: string; year: number }> = [];
   const client: Pick<FortnoxClient, "createVoucher" | "uploadInboxFile" | "connectFileToVoucher"> = {
     createVoucher: async (v: FortnoxVoucher): Promise<FortnoxVoucherResponse> => {
       calls.push(v);
-      return { Voucher: { VoucherSeries: v.VoucherSeries, VoucherNumber: 7 } };
+      return { Voucher: { VoucherSeries: v.VoucherSeries, VoucherNumber: 7, Year: 4 } };
     },
     uploadInboxFile: async (fileName: string, bytes: Uint8Array): Promise<string> => {
       uploads.push({ fileName, size: bytes.length });
       return "file-guid-1";
     },
-    connectFileToVoucher: async (fileId: string, series: string, number: string): Promise<void> => {
-      connections.push({ fileId, series, number });
+    connectFileToVoucher: async (fileId: string, series: string, number: string, year: number): Promise<void> => {
+      connections.push({ fileId, series, number, year });
     },
   };
   return { client, calls, uploads, connections };
@@ -84,8 +84,19 @@ describe("FortnoxLedgerConnector", () => {
 
     expect(res).toEqual({ externalId: "A/7" });
     expect(uploads).toEqual([{ fileName: "Faktura AA2026-0001.pdf", size: 4 }]);
-    // Filen kopplas till det skapade verifikatet (serie/nummer från svaret).
-    expect(connections).toEqual([{ fileId: "file-guid-1", series: "A", number: "7" }]);
+    // Filen kopplas till det skapade verifikatet (serie/nummer/räkenskapsår från svaret, #1886).
+    expect(connections).toEqual([{ fileId: "file-guid-1", series: "A", number: "7", year: 4 }]);
+  });
+
+  // #1886: serie + nummer är unika bara inom ett räkenskapsår — utan Year ingen bilaga.
+  it("utan Year i svaret laddas ingenting upp, och skälet står i attachmentError", async () => {
+    const { client, uploads, connections } = makeClient();
+    client.createVoucher = (v) => Promise.resolve({ Voucher: { VoucherSeries: v.VoucherSeries, VoucherNumber: 7 } });
+    const connector = new FortnoxLedgerConnector({ client, mapping: MAPPING });
+    const res = await connector.pushVoucher(semantic, { idempotencyKey: "br-1", attachment: { fileName: "F.pdf", bytes: new Uint8Array([1]) } });
+    expect(res).toEqual({ externalId: "A/7", attachmentError: MISSING_YEAR });
+    expect(uploads).toHaveLength(0);
+    expect(connections).toHaveLength(0);
   });
 
   // #1885: verifikatet finns redan — ett fel med bilagan kastas inte, det blir ett skäl.

@@ -2,8 +2,11 @@
 
 Enhetstesterna för connectorn kör med injicerad `fetch` och bevisar att VÅR kod
 är konsekvent. De kan inte upptäcka att Fortnox ändrat sig. Det här flödet går
-hela vägen: OAuth-refresh → semantiskt verifikat → `POST /3/vouchers` → läs
-tillbaka verifikatet → kontrollera balans och idempotens.
+hela vägen: OAuth-refresh → semantiskt verifikat → `POST /3/vouchers` → bifoga
+en liten PDF (uppladdad till verifikatinkorgen `Inbox_v` och kopplad till
+verifikatet med räkenskapsåret, #1886) → läs tillbaka verifikatet → kontrollera
+balans och idempotens. Steget fäller körningen om bilagan inte kopplades
+(`attachmentError`). I `dry_run` skapas inget verifikat och inget laddas upp.
 
 Kör automatiskt på **push till `main`** (när Fortnox-/ledger-koden ändrats) och
 **nattligt 04:17 UTC**. Manuellt: **Actions → “Fortnox E2E” → Run workflow**.
@@ -63,7 +66,7 @@ Två skäl, båda oberoende av städbarheten:
 |---|---|---|
 | push till `main` / schedule | full körning: syntetisk faktura **och** täckningsärendet | 3 |
 | dispatch, `dry_run` | auth + `GET /3/voucherseries` | **0** |
-| dispatch, *(inget)* | en syntetisk faktura bokförs och läses tillbaka | 1 |
+| dispatch, *(inget)* | en syntetisk faktura bokförs med PDF-bilaga och läses tillbaka | 1 |
 | dispatch, `bookkeeping` | ett täckningsärende med **två betalande** körs upp i en riktig AVA-stack; BÅDA fakturorna bokförs och kontona verifieras | 3 |
 
 `bookkeeping`-läget är det som svarar på frågan *"blir det bokfört rätt?"* — per
@@ -254,8 +257,6 @@ anslutningen i stället för att förnya den.
 - **Testfakturan är syntetisk** (125,00 kr inkl moms, `E2E-<tidsstämpel>`) och
   byggs i minnet. Det som testas är ledger-vägen, inte repo-lagret — det har
   egna tester.
-- **Bilagor (#785) täcks inte** av e2e:t ännu; `uploadInboxFile` +
-  `connectFileToVoucher` är enhetstestade men inte körda skarpt.
 
 ## Fortnox i appen (#1172)
 
@@ -267,6 +268,28 @@ Servern bokför fakturor när dessa är satta (i `ava-server.env`, se
 | `AVA_FORTNOX_CLIENT_ID` / `AVA_FORTNOX_CLIENT_SECRET` | appen i Developer Portal |
 | `AVA_FORTNOX_REDIRECT_URI` | default `https://<domän>/settings/fortnox` — registrera exakt den i Developer Portal |
 | `AVA_SECRETS_KEY` | `openssl rand -base64 32` — krypterar tokens i valvet (volymen `secrets`) |
+
+### Behörigheter (#1886)
+
+AVA begär `bookkeeping inbox connectfile`
+([Fortnox lista över behörigheter](https://www.fortnox.se/developer/guides-and-good-to-know/scopes)):
+
+| Behörighet | Till vad |
+|---|---|
+| `bookkeeping` | verifikaten (`/3/vouchers`) |
+| `inbox` | faktura-PDF:en till verifikatinkorgen (`/3/inbox?path=Inbox_v`) |
+| `connectfile` | kopplingen PDF → verifikat (`/3/voucherfileconnections?financialyear=<id>`) |
+
+- Alla tre ska vara påslagna på appen i **Fortnox Developer Portal**, annars
+  avvisar Fortnox anslutningen.
+- `connectfile` kräver att byrån har licensen **Bokföring, Anläggning eller
+  Arkivplats**. Saknas den kan byrån inte ansluta på nytt
+  (`error_missing_license`), men en befintlig anslutning bokför vidare.
+- Nya behörigheter gäller först med en ny auktorisering. En byrå som anslöt
+  före #1886 bokför utan bilaga (skälet loggas) tills administratören
+  **ansluter igen**.
+- `fortnox:connect` läser behörigheterna ur `AVA_FORTNOX_SCOPES`; sätt
+  `AVA_FORTNOX_SCOPES="bookkeeping inbox connectfile"` när CI:s token tas fram.
 
 Administratören ansluter under **Inställningar → Bokföring → Anslut Fortnox**.
 Därefter har varje utställd faktura knappen **Bokför i Fortnox**; verifikatet
