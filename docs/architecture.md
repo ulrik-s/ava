@@ -74,6 +74,10 @@
 >   timexport (hela databasen + dokumenten som ändrats sedan den senaste fulla
 >   exporten) ovanpå den oförändrade nattliga fulla exporten; systemd-timer på
 >   hosten, hämtaren varje timme. Förlusten vid haveri blir högst ungefär en timme (#1895).
+> - [ADR 0040](./adr/0040-trpc-react-bindning-tanstack.md) — **React-bindningen för
+>   tRPC**: `@trpc/tanstack-react-query` (`TRPCProvider`, `useTRPC`) ersätter den
+>   utfasade `createTRPCReact`. Under flytten delar båda bindningarna klient och
+>   QueryClient, och ett spärrtest låter bara de gamla filerna använda den gamla (#1926).
 
 ## Två lager
 
