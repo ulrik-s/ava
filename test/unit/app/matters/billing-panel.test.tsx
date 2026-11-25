@@ -410,6 +410,82 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
   });
 });
 
+describe("BillingPanel — menyns öppna läge ägs av panelen (#1853)", () => {
+  it("knappen öppnar och stänger menyn, och ett klick utanför stänger den", () => {
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
+    const knapp = screen.getByRole("button", { name: "+ Skapa faktura" });
+    fireEvent.click(knapp);
+    expect(screen.getByRole("button", { name: "Faktura till klient" })).toBeInTheDocument();
+    fireEvent.click(knapp);
+    expect(screen.queryByRole("button", { name: "Faktura till klient" })).not.toBeInTheDocument();
+    fireEvent.click(knapp);
+    const overlay = document.querySelector(".fixed.inset-0");
+    expect(overlay).not.toBeNull();
+    if (overlay) fireEvent.click(overlay);
+    expect(screen.queryByRole("button", { name: "Faktura till klient" })).not.toBeInTheDocument();
+  });
+});
+
+describe("BillingPanel — genvägen fakturera nu (#1853)", () => {
+  const m1 = asId<"MatterId">("m1");
+
+  it("rättshjälp: begäran öppnar dialogen Aconto till klient och meddelar en gång", () => {
+    const done = vi.fn();
+    const { rerender } = render(<BillingPanel matterId={m1} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-01" }} shortcutRequested onShortcutDone={done} />);
+    expect(screen.getByTestId("billing-dialog")).toHaveTextContent("ACCONTO");
+    rerender(<BillingPanel matterId={m1} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-01" }} shortcutRequested onShortcutDone={done} />);
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it("privat ärende: begäran öppnar menyn + Skapa faktura", () => {
+    const done = vi.fn();
+    render(<BillingPanel matterId={m1} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} shortcutRequested onShortcutDone={done} />);
+    expect(screen.getByRole("button", { name: "Faktura till klient" })).toBeInTheDocument();
+    expect(screen.queryByTestId("billing-dialog")).not.toBeInTheDocument();
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it("inget öppnas innan körningarna har laddats", () => {
+    runsLoading = true;
+    const done = vi.fn();
+    const matter = { ...baseMatter, paymentMethod: "PRIVAT" as const };
+    const { rerender } = render(<BillingPanel matterId={m1} matter={matter} shortcutRequested onShortcutDone={done} />);
+    expect(screen.queryByRole("button", { name: "Faktura till klient" })).not.toBeInTheDocument();
+    expect(done).not.toHaveBeenCalled();
+    runsLoading = false;
+    rerender(<BillingPanel matterId={m1} matter={matter} shortcutRequested onShortcutDone={done} />);
+    expect(screen.getByRole("button", { name: "Faktura till klient" })).toBeInTheDocument();
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it("slutreglerat ärende: inget öppnas, men begäran meddelas ändå en gång", () => {
+    runsData = { runs: [{ id: "r1", type: "FINAL", status: "SENT", recipient: "FORSAKRING", amountOre: 100, createdAt: "2026-01-01" }] };
+    const done = vi.fn();
+    render(<BillingPanel matterId={m1} matter={{ ...baseMatter, paymentMethod: "RATTSSKYDD" }} shortcutRequested onShortcutDone={done} />);
+    expect(screen.queryByTestId("billing-dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "+ Skapa faktura" })).not.toBeInTheDocument();
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it("utan begäran öppnas inget", () => {
+    const done = vi.fn();
+    render(<BillingPanel matterId={m1} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} onShortcutDone={done} />);
+    expect(screen.queryByRole("button", { name: "Faktura till klient" })).not.toBeInTheDocument();
+    expect(done).not.toHaveBeenCalled();
+  });
+
+  it("en ny begäran efter en avslutad hanteras igen, utan onShortcutDone", () => {
+    const matter = { ...baseMatter, paymentMethod: "PRIVAT" as const };
+    const { rerender } = render(<BillingPanel matterId={m1} matter={matter} shortcutRequested />);
+    expect(screen.getByRole("button", { name: "Faktura till klient" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
+    rerender(<BillingPanel matterId={m1} matter={matter} shortcutRequested={false} />);
+    expect(screen.queryByRole("button", { name: "Faktura till klient" })).not.toBeInTheDocument();
+    rerender(<BillingPanel matterId={m1} matter={matter} shortcutRequested />);
+    expect(screen.getByRole("button", { name: "Faktura till klient" })).toBeInTheDocument();
+  });
+});
+
 describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
   it("RATTSHJALP utan registrerad rådgivning → auto-skapar (#839)", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP" }} />);

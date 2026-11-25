@@ -2,7 +2,9 @@
  * Drizzle `MatterRepository` (ADR 0020) — server-impl. Ärver bas-CRUD;
  * org-scopar direkt på `matters.organizationId`. Listan/detaljen berikar
  * parter (KLIENT först) + relations-antal (`_count`) via grupperade sido-queries
- * (robustare än korrelerade subqueries; jfr document-folder-repo:t).
+ * (robustare än korrelerade subqueries; jfr document-folder-repo:t). Ordningen
+ * "senast hänt" (#1967) sorterar däremot i SQL med korrelerade delfrågor, så att
+ * `limit`/`offset` ger rätt sidor.
  */
 
 import { and, asc, desc, eq, ilike, inArray, isNull, like, or, sql } from "drizzle-orm";
@@ -15,8 +17,27 @@ import { DrizzleRepository, idsWhere, versionedTable } from "./drizzle-repositor
 import {
   listPartiesOf, partiesByMatter,
   type MatterDetailRow, type MatterListFilter, type MatterListLink, type MatterListParty, type MatterListResult,
-  type MatterListRow, type MatterRepository,
+  type MatterListOrder, type MatterListRow, type MatterRepository,
 } from "./matter-repository";
+
+/**
+ * När något senast hände i ärendet (#1967, definitionen vid `MatterListOrder`):
+ * senaste `updated_at` bland ärendets ej raderade tidsposter, utlägg, dokument
+ * och tjänsteanteckningar, annars ärendets `created_at`. `greatest` hoppar över null.
+ */
+const LAST_ACTIVITY = sql`coalesce(greatest(
+  (select max(te.updated_at) from time_entries te where te.matter_id = ${matters.id} and te.deleted_at is null),
+  (select max(ex.updated_at) from expenses ex where ex.matter_id = ${matters.id} and ex.deleted_at is null),
+  (select max(d.updated_at) from documents d where d.matter_id = ${matters.id} and d.deleted_at is null),
+  (select max(sn.updated_at) from service_notes sn where sn.matter_id = ${matters.id} and sn.deleted_at is null)
+), ${matters.createdAt})`;
+
+/** Listans ordning: skapad fallande (standard), eller senast hänt med skapad och id som skiljelinjer. */
+function listOrder(order: MatterListOrder | undefined) {
+  return order === "lastActivity"
+    ? [desc(LAST_ACTIVITY), desc(matters.createdAt), desc(matters.id)]
+    : [desc(matters.createdAt)];
+}
 
 export class DrizzleMatterRepository extends DrizzleRepository<Matter> implements MatterRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
@@ -44,6 +65,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       eq(matters.organizationId, organizationId),
       isNull(matters.deletedAt),
       f.status ? eq(matters.status, f.status) : undefined,
+      f.responsibleLawyerId ? eq(matters.responsibleLawyerId, f.responsibleLawyerId) : undefined,
       f.employeeId
         ? sql`exists (select 1 from time_entries te where te.matter_id = ${matters.id} and te.user_id = ${f.employeeId})`
         : undefined,
@@ -64,7 +86,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
   async listForOrg(organizationId: OrganizationId, filter: MatterListFilter): Promise<MatterListResult> {
     const where = this.listWhere(organizationId, filter);
     const rows = await this.db.select().from(matters).where(where)
-      .orderBy(desc(matters.createdAt))
+      .orderBy(...listOrder(filter.orderBy))
       .limit(filter.pageSize).offset((filter.page - 1) * filter.pageSize);
     const [agg] = await this.db.select({ total: sql<number>`count(*)` }).from(matters).where(where);
     const ids = rows.map((r) => r.id);

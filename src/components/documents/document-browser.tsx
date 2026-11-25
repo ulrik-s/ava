@@ -116,7 +116,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
       {upload.uploadError && (
         <UploadErrorBanner message={upload.uploadError} onDismiss={() => upload.setUploadError(null)} />
       )}
-      <UploadNameDialog item={nameQueue.current} onSave={(file, options) => { void upload.enqueueUpload(file, options); }} onNext={nameQueue.next} />
+      <UploadNameDialog item={nameQueue.current} folders={folders} onSave={(file, options) => { void upload.enqueueUpload(file, options); }} onNext={nameQueue.next} />
 
       {showNewFolder && (
         <NewFolderForm

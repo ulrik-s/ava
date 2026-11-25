@@ -538,7 +538,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
-    const checkbox = screen.getAllByRole("checkbox")[0] as HTMLInputElement;
+    const checkbox = screen.getByRole<HTMLInputElement>("checkbox", { name: "Debiterbar" });
     expect(checkbox.checked).toBe(true);
     fireEvent.click(checkbox);
     expect(checkbox.checked).toBe(false);

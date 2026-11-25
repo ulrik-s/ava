@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
+import { folderNamePath } from "@/lib/shared/document-folder-path";
 import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
 import { DocumentNameCell } from "./_document-name-cell";
 import { documentKindsLabel } from "./_document-parts";
@@ -41,15 +42,7 @@ interface Props {
 const NO_SYNC: Map<string, SyncStatus> = new Map();
 
 function folderPath(folderId: DocumentFolderId | null, folders: FolderRecord[]): string {
-  if (!folderId) return "/";
-  const parts: string[] = [];
-  let current: FolderRecord | undefined = folders.find((f) => f.id === folderId);
-  while (current) {
-    parts.unshift(current.name);
-    const parentId = current.parentId;
-    current = parentId ? folders.find((f) => f.id === parentId) : undefined;
-  }
-  return "/" + parts.join("/");
+  return "/" + folderNamePath(folderId, folders).join("/");
 }
 
 export function DocumentsListView({

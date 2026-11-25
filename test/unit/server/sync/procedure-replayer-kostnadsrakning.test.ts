@@ -119,6 +119,24 @@ describe("kostnadsräkning och slutreglering i procedur-kön (#1276, steg 2d)", 
     expect(await repos.billingRuns.getById(asId<"BillingRunId">(second))).toMatchObject({ kostnadsrakningStatus: "OVERKLAGAD" });
   });
 
+  // Förordnandemål (#1857): det valfria fältet höjer inte köformatet. En köpost
+  // med avslutet körs om på förordnandetaxan; en äldre köpost utan det som förut.
+  it("inskick med och utan förordnande körs om", async () => {
+    const { matterId } = await matterWithWork("OFFENTLIGT_UPPDRAG");
+    const withFord = call("billingRun.createKostnadsrakning", { matterId, forordnande: { avslut: "STRAFFORELAGGANDE" } });
+    await accepted(withFord);
+    const fordRun = await repos.billingRuns.getById(asId<"BillingRunId">(derivedId(withFord.mutationId, "billingRun")));
+    expect(fordRun).toMatchObject({ notes: "Förordnandetaxa – strafföreläggande godkändes", kostnadsrakningStatus: "INSKICKAD" });
+    expect(fordRun?.workValueOreAtRun).toBeGreaterThan(0);
+
+    const other = await matterWithWork("OFFENTLIGT_UPPDRAG");
+    const legacy = call("billingRun.createKostnadsrakning", { matterId: other.matterId });
+    await accepted(legacy);
+    const legacyRun = await repos.billingRuns.getById(asId<"BillingRunId">(derivedId(legacy.mutationId, "billingRun")));
+    expect(legacyRun?.notes ?? null).toBeNull();
+    expect(legacyRun?.workValueOreAtRun).not.toBe(fordRun?.workValueOreAtRun);
+  });
+
   it("slutreglering (rättsskydd) och försäkringens prutning: fakturorna och körningarna får härledda id:n", async () => {
     const { matterId } = await matterWithWork("RATTSSKYDD", { clientShareBips: 2000 });
     const settle = call("billingRun.settleCoverage", { matterId, payerRecipient: "FORSAKRING" });

@@ -145,7 +145,7 @@ describe("TimePage", () => {
   it("togglar debiterbar-checkbox", () => {
     render(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
-    const checkbox = screen.getByRole<HTMLInputElement>("checkbox");
+    const checkbox = screen.getByRole<HTMLInputElement>("checkbox", { name: "Debiterbar" });
     expect(checkbox.checked).toBe(true);
     fireEvent.click(checkbox);
     expect(checkbox.checked).toBe(false);
@@ -312,6 +312,59 @@ describe("TimePage — flytta posten till ett annat ärende (#2042)", () => {
     moveError = { message: "Tidposten ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort." };
     render(<TimePage />);
     expect(screen.getByRole("alert")).toHaveTextContent(/kostnadsräkning/);
+  });
+});
+
+describe("TimePage — markera flera poster och flytta dem (#2043)", () => {
+  const entries = [
+    { id: "t1", date: "2026-09-20", minutes: 45, description: "Genomgång av avtal", billable: true,
+      matterId: "m1", matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" } },
+    { id: "t2", date: "2026-09-21", minutes: 30, description: "Telefonsamtal", billable: true,
+      matterId: "m1", matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" } },
+    { id: "t3", date: "2026-09-22", minutes: 60, description: "Fakturerat möte", billable: true, invoiceId: "inv1",
+      matterId: "m1", matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" } },
+  ];
+  type CallOpts = { onSuccess?: () => void } | undefined;
+  const rowBox = (text: string) => within(screen.getByText(text).closest("tr") as HTMLElement);
+
+  beforeEach(() => {
+    timeQuery.data = { entries, total: 3, pages: 1, totalMinutes: 135 };
+    matterQuery.data = { matters: [
+      { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" },
+      { id: "m2", matterNumber: "UA2026-0002", title: "Hyrestvist" },
+    ] };
+  });
+
+  it("en låst post går inte att markera, och knappen syns först när något är markerat", () => {
+    render(<TimePage />);
+    expect(rowBox("Fakturerat möte").queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Flytta till ärende/ })).toBeNull();
+    fireEvent.click(rowBox("Genomgång av avtal").getByRole("checkbox", { name: "Markera rad" }));
+    expect(screen.getByRole("button", { name: "Flytta till ärende… (1)" })).toBeInTheDocument();
+  });
+
+  it("Flytta anropar moveToMatter med de markerade, laddar om listan och tömmer markeringen", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Markera alla" }));
+    fireEvent.click(screen.getByRole("button", { name: "Flytta till ärende… (2)" }));
+    const dialog = screen.getByRole("dialog", { name: "Flytta till ärende" });
+    fireEvent.change(within(dialog).getByLabelText("2 tidsposter flyttas till:"), { target: { value: "UA2026-0002 — Hyrestvist" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Flytta" }));
+    expect(moveMutate).toHaveBeenCalledWith({ ids: ["t1", "t2"], matterId: "m2" }, expect.anything());
+    act(() => (moveMutate.mock.calls.at(-1)?.[1] as CallOpts)?.onSuccess?.());
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Flytta till ärende" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Flytta till ärende/ })).toBeNull();
+  });
+
+  it("Avbryt stänger dialogen och behåller markeringen", () => {
+    render(<TimePage />);
+    fireEvent.click(rowBox("Telefonsamtal").getByRole("checkbox", { name: "Markera rad" }));
+    fireEvent.click(screen.getByRole("button", { name: "Flytta till ärende… (1)" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Flytta till ärende" })).getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("dialog", { name: "Flytta till ärende" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Flytta till ärende… (1)" })).toBeInTheDocument();
+    expect(moveMutate).not.toHaveBeenCalled();
   });
 });
 

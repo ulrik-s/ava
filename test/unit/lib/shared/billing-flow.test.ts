@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import {
-  BILLING_FLOWS, COVERAGE_METHODS, availableActions, currentPhase, isCoverageMethod,
+  BILLING_FLOWS, COVERAGE_METHODS, availableActions, billingShortcut, currentPhase, isCoverageMethod,
   canBillingTransition, assertBillingTransition, type FlowRun,
 } from "@/lib/shared/billing-flow";
 
@@ -113,5 +113,35 @@ describe("isCoverageMethod (#1852)", () => {
     expect(isCoverageMethod("RATTSHJALP")).toBe(true);
     expect(isCoverageMethod("RATTSSKYDD")).toBe(true);
     for (const m of ["PRIVAT", "MIX", "PENDING", "OFFENTLIGT_UPPDRAG", null, undefined] as const) expect(isCoverageMethod(m)).toBe(false);
+  });
+});
+
+describe("billingShortcut — vad fakturera nu öppnar (#1853)", () => {
+  const nekad = "2026-05-01";
+  const cases: ReadonlyArray<[string, Parameters<typeof billingShortcut>[0], FlowRun[], "dialog" | "menu" | "none"]> = [
+    ["rättshjälp ARBETE", { paymentMethod: "RATTSHJALP" }, [], "dialog"],
+    ["rättshjälp VANTAR_DOM", { paymentMethod: "RATTSHJALP" }, [pendingKr], "menu"],
+    ["rättshjälp SLUTREGLERAD", { paymentMethod: "RATTSHJALP" }, [{ type: "KOSTNADSRAKNING", status: "SENT" }], "none"],
+    ["rättsskydd ARBETE", { paymentMethod: "RATTSSKYDD" }, [sentAcconto], "dialog"],
+    ["rättsskydd NEKAD", { paymentMethod: "RATTSSKYDD", rattsskyddNekadAt: nekad }, [], "none"],
+    ["rättsskydd SLUTREGLERAD", { paymentMethod: "RATTSSKYDD" }, [sentFinal], "none"],
+    ["PRIVAT", { paymentMethod: "PRIVAT" }, [], "menu"],
+    ["MIX", { paymentMethod: "MIX" }, [], "menu"],
+    ["PENDING", { paymentMethod: "PENDING" }, [], "menu"],
+    ["offentligt uppdrag ARBETE", { paymentMethod: "OFFENTLIGT_UPPDRAG" }, [], "menu"],
+    ["offentligt uppdrag VANTAR_DOM", { paymentMethod: "OFFENTLIGT_UPPDRAG" }, [pendingKr], "menu"],
+    ["offentligt uppdrag SLUTREGLERAD", { paymentMethod: "OFFENTLIGT_UPPDRAG" }, [{ type: "KOSTNADSRAKNING", status: "SENT" }], "none"],
+  ];
+
+  for (const [name, matter, runs, kind] of cases) {
+    it(`${name} → ${kind}`, () => {
+      expect(billingShortcut(matter, runs).kind).toBe(kind);
+    });
+  }
+
+  it("dialogen är flödets acontoåtgärd, samma som menyvalet", () => {
+    const shortcut = billingShortcut({ paymentMethod: "RATTSHJALP" }, []);
+    const acconto = availableActions({ paymentMethod: "RATTSHJALP" }, []).find((a) => a.type === "ACCONTO");
+    expect(shortcut).toEqual({ kind: "dialog", action: acconto });
   });
 });

@@ -10,6 +10,7 @@ import {
   defaultUploadName, readEmlSubject, UploadNameDialog, useUploadNameQueue, type NameQueueItem,
 } from "@/components/documents/_upload-name-dialog";
 import type { UploadOptions } from "@/components/documents/_use-file-upload";
+import type { FolderSelectFolder } from "@/components/documents/folder-select";
 import { cleanFileName } from "@/lib/shared/document-file-name";
 import { asId, type DocumentFolderId } from "@/lib/shared/schemas/ids";
 
@@ -29,10 +30,10 @@ describe("sparat namn (cleanFileName)", () => {
   it("tomt → null", () => expect(cleanFileName("  ", "skiss.pdf")).toBeNull());
 });
 
-function renderDialog(item: NameQueueItem | null) {
+function renderDialog(item: NameQueueItem | null, folders: FolderSelectFolder[] = []) {
   const onSave = vi.fn((_file: File, _options: UploadOptions) => {});
   const onNext = vi.fn();
-  render(<UploadNameDialog item={item} onSave={onSave} onNext={onNext} />);
+  render(<UploadNameDialog item={item} folders={folders} onSave={onSave} onNext={onNext} />);
   return { onSave, onNext };
 }
 
@@ -93,7 +94,7 @@ function QueueHarness({ files, folderId, onSave }: {
   return (
     <>
       <button type="button" onClick={() => queue.enqueue(files, folderId)}>öppna</button>
-      <UploadNameDialog item={queue.current} onSave={onSave} onNext={queue.next} />
+      <UploadNameDialog item={queue.current} folders={[]} onSave={onSave} onNext={queue.next} />
     </>
   );
 }
@@ -150,6 +151,34 @@ describe("readEmlSubject", () => {
   });
 });
 
+describe("UploadNameDialog: fältet Mapp (#1974)", () => {
+  const other = asId<"DocumentFolderId">("f2");
+  const FOLDERS: FolderSelectFolder[] = [
+    { id: folder, name: "Domstol", parentId: null },
+    { id: other, name: "Kallelse", parentId: folder },
+  ];
+  const folderSelect = () => screen.getByLabelText("Mapp");
+
+  it("visar släppmålet förvalt", () => {
+    renderDialog({ key: 1, file: pdf("skiss.pdf"), folderId: folder }, FOLDERS);
+    expect(folderSelect()).toHaveValue(folder);
+  });
+
+  it("ett annat val sparas i den valda mappen", () => {
+    const file = pdf("skiss.pdf");
+    const { onSave } = renderDialog({ key: 1, file, folderId: folder }, FOLDERS);
+    fireEvent.change(folderSelect(), { target: { value: other } });
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+    expect(onSave).toHaveBeenCalledWith(file, { folderId: other, fileName: "skiss.pdf" });
+  });
+
+  it("utan släppmål är Överst, utan mapp förvald", () => {
+    renderDialog({ key: 1, file: pdf("skiss.pdf"), folderId: null }, FOLDERS);
+    expect(folderSelect()).toHaveValue("");
+    expect(screen.getByRole("option", { name: "Överst, utan mapp", selected: true })).toBeInTheDocument();
+  });
+});
+
 describe("UploadNameDialog med mejl (#1616)", () => {
   it("släppt .eml med ämne → förifylld med ämnet; Spara → <ämne>.eml", async () => {
     const file = eml("x7f3.eml", "From: a@b.se\r\nSubject: =?UTF-8?Q?Ang=C3=A5ende_f=C3=B6rlikning?=\r\n\r\nText");
@@ -177,8 +206,8 @@ describe("UploadNameDialog med mejl (#1616)", () => {
 
   it("stängs rutan innan ämnet lästs händer inget", async () => {
     const item = { key: 1, file: eml("mejl.eml", "Subject: Ämnet\r\n\r\n"), folderId: null };
-    const { rerender } = render(<UploadNameDialog item={item} onSave={vi.fn()} onNext={vi.fn()} />);
-    rerender(<UploadNameDialog item={null} onSave={vi.fn()} onNext={vi.fn()} />);
+    const { rerender } = render(<UploadNameDialog item={item} folders={[]} onSave={vi.fn()} onNext={vi.fn()} />);
+    rerender(<UploadNameDialog item={null} folders={[]} onSave={vi.fn()} onNext={vi.fn()} />);
     await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

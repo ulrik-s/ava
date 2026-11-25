@@ -109,6 +109,49 @@ describe("matter.list", () => {
   });
 });
 
+describe("matter.list — mina ärenden och senast hänt (#1967)", () => {
+  const at = (iso: string): Date => new Date(`${iso}T08:00:00.000Z`);
+  const three = () => [
+    matter({ id: "m-a", matterNumber: `${YEAR}-0001`, createdAt: at("2026-01-01"), responsibleLawyerId: "user-1" }),
+    matter({ id: "m-b", matterNumber: `${YEAR}-0002`, createdAt: at("2026-01-02"), responsibleLawyerId: "user-2", status: "CLOSED" }),
+    matter({ id: "m-c", matterNumber: `${YEAR}-0003`, createdAt: at("2026-01-03"), responsibleLawyerId: "user-1", status: "CLOSED" }),
+  ];
+
+  it("mine: bara den inloggades ärenden, aldrig en kollegas", async () => {
+    const { caller } = makeCaller({ matters: three() });
+    expect((await caller.list({ mine: true })).matters.map((m) => m.id)).toEqual(["m-c", "m-a"]);
+    const colleague = makeCaller({ matters: three() }, ORG, "user-2").caller;
+    expect((await colleague.list({ mine: true })).matters.map((m) => m.id)).toEqual(["m-b"]);
+    expect((await caller.list({ mine: false })).total).toBe(3);
+  });
+
+  it("mine tillsammans med status", async () => {
+    const { caller } = makeCaller({ matters: three() });
+    const res = await caller.list({ mine: true, status: "CLOSED" });
+    expect(res.matters.map((m) => m.id)).toEqual(["m-c"]);
+    expect(res.total).toBe(1);
+  });
+
+  it("orderBy lastActivity: senast hänt överst, utan poster på skapad", async () => {
+    const { caller } = makeCaller({
+      matters: three(),
+      timeEntries: [{ id: "te1", organizationId: ORG, userId: "user-1", matterId: "m-a", minutes: 60, date: at("2026-01-05"), hourlyRate: 1000, billable: true, description: "x", updatedAt: at("2026-02-01") }],
+      expenses: [{ id: "ex1", organizationId: ORG, userId: "user-1", matterId: "m-b", amount: 100, date: at("2026-01-05"), description: "y", billable: true, updatedAt: at("2026-03-01"), deletedAt: at("2026-03-02") }],
+    });
+    expect((await caller.list({ orderBy: "lastActivity" })).matters.map((m) => m.id)).toEqual(["m-a", "m-c", "m-b"]);
+    expect((await caller.list({ orderBy: "createdAt" })).matters.map((m) => m.id)).toEqual(["m-c", "m-b", "m-a"]);
+  });
+
+  it("utan de nya fälten som i dag; ett okänt orderBy avvisas", async () => {
+    const { caller } = makeCaller({ matters: three() });
+    const res = await caller.list({});
+    expect(res.matters.map((m) => m.id)).toEqual(["m-c", "m-b", "m-a"]);
+    expect(Object.keys(res).sort()).toEqual(["matters", "pages", "total"]);
+    // @ts-expect-error -- ett värde utanför MATTER_LIST_ORDERS
+    await expect(caller.list({ orderBy: "title" })).rejects.toThrow();
+  });
+});
+
 describe("matter.getById", () => {
   it("hämtar matter med kontakter", async () => {
     const { caller } = makeCaller({

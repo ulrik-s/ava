@@ -4,7 +4,8 @@
  * Namnrutan före uppladdning (#1614): en dialog per fil, i tur och ordning,
  * förifylld med filens namn utan ändelse — för ett mejl (`.eml`) med ämnesraden
  * om den går att läsa (#1616). **Spara** laddar upp filen med det
- * valda namnet i målmappen; **Avbryt** hoppar bara över den filen.
+ * valda namnet i den mapp som är vald i fältet **Mapp** (släppmålet är förvalt,
+ * #1974); **Avbryt** hoppar bara över den filen.
  * **+ Ladda upp** använder den inte.
  */
 
@@ -14,6 +15,7 @@ import { cleanFileName, fileExtension } from "@/lib/shared/document-file-name";
 import { EML_HEAD_BYTES, emlSubject, isEmlFile } from "@/lib/shared/eml-subject";
 import type { DocumentFolderId } from "@/lib/shared/schemas/ids";
 import type { UploadOptions } from "./_use-file-upload";
+import { FolderSelect, type FolderSelectFolder } from "./folder-select";
 
 const INPUT = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 
@@ -82,21 +84,29 @@ export function useUploadNameQueue() {
   return { current: items[0] ?? null, enqueue, next };
 }
 
-function NameForm({ item, onSave, onNext }: {
+interface NameFormProps {
   item: NameQueueItem;
+  folders: readonly FolderSelectFolder[];
   onSave: (file: File, options: UploadOptions) => void;
   onNext: () => void;
-}) {
+}
+
+function NameForm({ item, folders, onSave, onNext }: NameFormProps) {
   const id = useId();
   const [name, setName] = usePrefilledName(item.file);
+  const [folderId, setFolderId] = useState(item.folderId);
   const saved = cleanFileName(name, item.file.name);
-  const save = () => { if (saved) onSave(item.file, { folderId: item.folderId, fileName: saved }); };
+  const save = () => { if (saved) onSave(item.file, { folderId, fileName: saved }); };
   return (
     <form aria-label="Namnge dokumentet" className="space-y-3" onSubmit={(e) => { e.preventDefault(); save(); }}>
       <div>
         <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">Namn</label>
         <input id={id} className={INPUT} value={name} autoFocus onChange={(e) => setName(e.target.value)} />
         <p className="mt-1 text-xs text-gray-500">{savedNameHint(name, item.file.name)}</p>
+      </div>
+      <div>
+        <label htmlFor={`${id}-folder`} className="block text-sm font-medium text-gray-700 mb-1">Mapp</label>
+        <FolderSelect id={`${id}-folder`} folders={folders} value={folderId} onChange={setFolderId} />
       </div>
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onNext} className="px-3 py-1.5 text-sm border border-gray-300 rounded">Avbryt</button>
@@ -110,17 +120,14 @@ function NameForm({ item, onSave, onNext }: {
 }
 
 /**
- * Namnrutan för den fil som står först i kön. Spara → `onSave(fil, {mapp, namn})`
+ * Namnrutan för den fil som står först i kön, med ärendets `folders` i **Mapp**.
+ * Spara → `onSave(fil, {mapp, namn})`
  * och nästa fil; Avbryt, krysset och Esc → nästa fil utan uppladdning.
  */
-export function UploadNameDialog({ item, onSave, onNext }: {
-  item: NameQueueItem | null;
-  onSave: (file: File, options: UploadOptions) => void;
-  onNext: () => void;
-}) {
+export function UploadNameDialog({ item, folders, onSave, onNext }: Omit<NameFormProps, "item"> & { item: NameQueueItem | null }) {
   return (
     <Modal open={item !== null} title="Namnge dokumentet" onClose={onNext}>
-      {item && <NameForm key={item.key} item={item} onSave={(file, options) => { onSave(file, options); onNext(); }} onNext={onNext} />}
+      {item && <NameForm key={item.key} item={item} folders={folders} onSave={(file, options) => { onSave(file, options); onNext(); }} onNext={onNext} />}
     </Modal>
   );
 }
