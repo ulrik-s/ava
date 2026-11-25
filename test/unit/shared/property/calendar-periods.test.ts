@@ -7,30 +7,10 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest-compat";
 import { isoWeekOfDay, periodContaining, periodsInRange, stepDay } from "@/lib/shared/calendar-periods";
-
-const pad2 = (n: number): string => String(n).padStart(2, "0");
+import { inProcessZone, plainDateBetween, PROCESS_ZONES } from "../../helpers/process-zone";
 
 /** En kalenderdag "YYYY-MM-DD" 1900–2199. */
-const plainDate: fc.Arbitrary<string> = fc
-  .date({ min: new Date("1900-01-01T00:00:00Z"), max: new Date("2199-12-31T00:00:00Z"), noInvalidDate: true })
-  .map((d) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`);
-
-/** Zoner långt från Stockholm åt båda hållen, halv- och kvartstimmar, egen sommartid. */
-const PROCESS_ZONES = [
-  "UTC", "Europe/Stockholm", "America/Los_Angeles", "America/St_Johns", "Asia/Tokyo",
-  "Asia/Kathmandu", "Australia/Lord_Howe", "Pacific/Kiritimati", "Pacific/Pago_Pago",
-] as const;
-
-/** Kör `fn` med processens tidszon satt till `tz` (se stockholm-time-testet om Bun och TZ). */
-function inProcessZone<T>(tz: string, fn: () => T): T {
-  const original = process.env.TZ;
-  process.env.TZ = tz;
-  try {
-    return fn();
-  } finally {
-    process.env.TZ = original ?? "Etc/UTC";
-  }
-}
+const plainDate = plainDateBetween(1900, 2199);
 
 /** Allt modulen svarar för en dag och ett kort intervall från den. */
 const answers = (day: string): unknown[] => [
