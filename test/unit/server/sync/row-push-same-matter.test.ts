@@ -2,8 +2,8 @@
  * Radpushen prövar att ett dokument och dess delar hör till sitt ärende och att
  * fakturans dokument stannar i sitt ärende (#2044), genom hela radvägen
  * (`DrizzleSyncStore` → `RowPushDecider` → radpolicyn) mot pglite. Uppslaget
- * görs i samma transaktion, så en del ser dokumentets ärende efter en flytt i
- * en tidigare post i samma push.
+ * görs i samma transaktion som skrivningen. Varje `sync.push` är en egen
+ * transaktion; en del ser dokumentets nya ärende när den pushas efter flytten.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
@@ -52,14 +52,14 @@ describe("radpushen: samma ärende och låsta fält (#2044, pglite)", () => {
   const matterOf = async (entity: "documents" | "documentParts", id: string): Promise<unknown> =>
     ((await repos[entity].getById(id as never)) as { matterId?: unknown } | null)?.matterId;
 
-  it("ett dokument och dess del i samma push flyttas tillsammans", async () => {
+  it("ett dokument och sedan dess del flyttas tillsammans", async () => {
     const s = await setup();
     expect(await sync.push(pusher(ORG), mut("document", { id: s.doc, matterId: s.to, folderId: s.toFolder }))).toMatchObject({ status: "accepted" });
     expect(await sync.push(pusher(ORG), mut("documentPart", { id: s.part, matterId: s.to }))).toMatchObject({ status: "accepted" });
     expect([await matterOf("documents", s.doc), await matterOf("documentParts", s.part)]).toEqual([s.to, s.to]);
   });
 
-  it("vägras dokumentet vägras också delen, och inget ändras", async () => {
+  it("vägras dokumentet vägras också delen efter det, och inget ändras", async () => {
     const s = await setup({ billingRunId: uuidv7() });
     expect(await sync.push(pusher(ORG), mut("document", { id: s.doc, matterId: s.to, folderId: s.toFolder })))
       .toMatchObject({ status: "conflict", reason: ROW_POLICY_REASONS.locked });
@@ -73,6 +73,13 @@ describe("radpushen: samma ärende och låsta fält (#2044, pglite)", () => {
     expect(await sync.push(pusher(ORG), mut("document", { id: s.doc, matterId: s.to })))
       .toMatchObject({ status: "conflict", reason: ROW_POLICY_REASONS.otherMatter });
     expect(await matterOf("documents", s.doc)).toBe(s.from);
+  });
+
+  it("ett dokument vars mapp inte finns prövas inte mot ärendet", async () => {
+    const s = await setup();
+    const missingFolder = uuidv7();
+    expect(await sync.push(pusher(ORG), mut("document", { id: s.doc, folderId: missingFolder }))).toMatchObject({ status: "accepted" });
+    expect(((await repos.documents.getById(s.doc as never)) as { folderId?: unknown } | null)?.folderId).toBe(missingFolder);
   });
 
   it("en del med inaktuellt ärende efter en flytt vägras och flyttar inte tillbaka", async () => {

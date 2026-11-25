@@ -241,6 +241,11 @@ async function checkSameMatter(policy: RowPolicy, input: PolicyInput): Promise<R
   return null;
 }
 
+/** Referensreglerna, som läser de refererade raderna: byrån först, sedan ärendet (#2044). */
+async function checkRefRules(policy: RowPolicy, input: PolicyInput): Promise<RowPolicyRejection | null> {
+  return await checkRefs(policy, input) ?? await checkSameMatter(policy, input);
+}
+
 /**
  * Får raden skrivas via radkön? `null` = ja. Byråavgränsningen av själva raden
  * (`checkScope`) och de procedurägda entiteterna prövas före.
@@ -253,8 +258,7 @@ export async function checkRowPolicy(input: PolicyInput): Promise<RowPolicyRejec
     ?? checkActor(policy, input)
     ?? checkContentPath(policy, input)
     ?? checkLocked(policy, input)
-    ?? await checkRefs(policy, input)
-    ?? await checkSameMatter(policy, input);
+    ?? await checkRefRules(policy, input);
 }
 
 const CREATED_AT = "createdAt";
