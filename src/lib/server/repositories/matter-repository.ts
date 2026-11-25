@@ -45,6 +45,11 @@ export interface MatterListLink {
   contact: { id: ContactId; name: string };
 }
 
+/** Parterna per ärende ur kopplingarna per ärende (#1964); ärenden utan kopplingar finns inte i `links`. */
+export function partiesByMatter(links: ReadonlyMap<MatterId, readonly MatterListLink[]>): Map<MatterId, MatterListParty[]> {
+  return new Map([...links].map(([id, l]) => [id, listPartiesOf(l).parties]));
+}
+
 /**
  * Listradens `parties` och `contacts` ur samma kopplingar (#1869), så att
  * klientkolumnen och parterna har samma källa. `links` är i `createdAt`-ordning.
@@ -88,6 +93,15 @@ export interface MatterRepository extends Repository<Matter> {
   listByOrg(organizationId: OrganizationId): Promise<Matter[]>;
   /** Org-scopad, paginerad/sökbar lista (createdAt desc) med KLIENT + _count + total. */
   listForOrg(organizationId: OrganizationId, filter: MatterListFilter): Promise<MatterListResult>;
+  /**
+   * Ärendenas parter för flera ärenden i ett anrop (#1964), med samma ordning
+   * och källa som listradens `parties`: KLIENT först, sedan övriga, inom varje
+   * grupp i kopplingens `createdAt`-ordning; mjukt raderade kopplingar är inte
+   * med. Org-scopad: ett ärende i en annan byrå, ett okänt eller mjukt raderat
+   * ärende och ett ärende utan parter saknas i kartan (anroparen använder
+   * `?? []`). En tom lista med id:n ger en tom karta.
+   */
+  listPartiesFor(organizationId: OrganizationId, matterIds: readonly MatterId[]): Promise<Map<MatterId, MatterListParty[]>>;
   /** Ärende by id med alla kontakter + _count, org-scopat. Null om saknas. */
   getByIdWithContacts(id: MatterId, organizationId: OrganizationId): Promise<MatterDetailRow | null>;
   /** Ärenden för en ansvarig jurist i org:en (#174 ärendenummer-serie). */
