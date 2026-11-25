@@ -2,9 +2,10 @@
  * Test för ContactsPage — listrendering, filter, +Ny kontakt-form.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import ContactsPage from "@/app/contacts/page";
+import { rowOrder, sortColumn } from "../../../helpers/data-table";
 
 const contactsQuery: {
   data: { contacts: Array<Record<string, unknown>>; total: number; pages: number };
@@ -15,6 +16,8 @@ const contactsQuery: {
 };
 const utilsMock = { contacts: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } };
 const createMutate = vi.fn();
+/** onSuccess från contacts.create — testet anropar den som servern hade gjort. */
+let contactCreated: (() => void) | undefined;
 const searchParamsGet = vi.fn((_: string): string | null => null);
 
 vi.mock("next/navigation", () => ({
@@ -26,7 +29,12 @@ vi.mock("@/lib/client/trpc", () => ({
     useUtils: () => utilsMock,
     contacts: {
       list: { useQuery: () => contactsQuery },
-      create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
+      create: {
+        useMutation: (opts?: { onSuccess?: () => void }) => {
+          contactCreated = opts?.onSuccess;
+          return { mutate: createMutate, isPending: false };
+        },
+      },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
@@ -205,5 +213,42 @@ describe("ContactsPage", () => {
     const orgNr = screen.getByLabelText<HTMLInputElement>(/Organisationsnummer/);
     fireEvent.change(orgNr, { target: { value: "556677-8899" } });
     expect(orgNr.value).toBe("556677-8899");
+  });
+
+  it("när parten skapats stängs formuläret, listan laddas om och nästa formulär är tomt", () => {
+    render(<ContactsPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
+    fireEvent.change(screen.getByLabelText("Namn *"), { target: { value: "Cecilia C" } });
+    fireEvent.click(screen.getByRole("button", { name: /Spara part/i }));
+    act(() => contactCreated?.());
+    expect(utilsMock.contacts.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Spara part/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
+    expect(screen.getByLabelText<HTMLInputElement>("Namn *").value).toBe("");
+  });
+
+  it("varje kolumn sorterar på det som visas", () => {
+    contactsQuery.data = {
+      contacts: [
+        { id: "c1", name: "Bertil AB", contactType: "COMPANY", personalNumber: null, orgNumber: "556677-8899",
+          email: null, _count: { matterLinks: 1 } },
+        { id: "c2", name: "Anna Andersson", contactType: "PERSON", personalNumber: "19850225-6655", orgNumber: null,
+          email: "anna@x.se", _count: { matterLinks: 3 } },
+      ],
+      total: 2,
+      pages: 1,
+    };
+    render(<ContactsPage />);
+    const names = ["Bertil AB", "Anna Andersson"];
+    sortColumn("Namn", "asc");
+    expect(rowOrder(names)).toEqual(["Anna Andersson", "Bertil AB"]);
+    sortColumn("Typ", "desc");
+    expect(rowOrder(names)).toEqual(["Anna Andersson", "Bertil AB"]);
+    sortColumn("Personnr/Orgnr", "desc");
+    expect(rowOrder(names)).toEqual(["Bertil AB", "Anna Andersson"]);
+    sortColumn("E-post", "asc");
+    expect(rowOrder(names)).toEqual(["Bertil AB", "Anna Andersson"]);
+    sortColumn("Ärenden", "desc");
+    expect(rowOrder(names)).toEqual(["Anna Andersson", "Bertil AB"]);
   });
 });

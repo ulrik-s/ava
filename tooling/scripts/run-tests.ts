@@ -130,9 +130,12 @@ const FAST = process.argv.includes("--fast");
 // → register), ett dok per mottagare resp. generellt, mall-utan-innehåll-fel +
 // ladd/tom-tillstånd → _generate-modal.tsx (tidigare otestad) → lokalt 92.79%
 // rader / 87.57% funktioner. FUNC dras upp 85.8 → 85.9 (~1.67% marginal).
-// LINE oförändrat).
-const LINE_FLOOR = 0.900;
-const FUNC_FLOOR = 0.859;
+// LINE oförändrat) → 95.0 rader / 93.1 funktioner (#1903, steg 1 av 5: DataTable
+// och listsidorna för ärenden, fakturor och parter utlöser sina händelser → de
+// 46 otäckta funktionerna täckta, lokalt 97.79% rader / 93.68% funktioner. LINE
+// till målet 95.0; FUNC = uppmätt avrundat nedåt till tiondel minus 0.5).
+const LINE_FLOOR = 0.950;
+const FUNC_FLOOR = 0.931;
 
 /**
  * AI-ytans golv (#1025). `tooling/ava-cli/` — CLI:t + MCP-servern — mättes
