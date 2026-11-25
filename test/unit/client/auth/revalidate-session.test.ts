@@ -25,11 +25,13 @@ describe("revalidateSession", () => {
     expect(d.notify).toHaveBeenCalledWith("signed-out");
   });
 
-  it("servern säger att kontot inte är aktivt → karantän-beskedet, utan att fråga proxyn", async () => {
+  it("servern säger att kontot inte är aktivt → karantän-beskedet och bannern, utan att fråga proxyn (#1962)", async () => {
     const d = deps(signedIn);
     expect(await revalidateSession(d, "account-inactive")).toBe(ACCOUNT_REVOKED_MESSAGE);
+    expect(d.notify).toHaveBeenCalledTimes(1);
+    expect(d.notify).toHaveBeenCalledWith("account-inactive");
     expect(d.probe).not.toHaveBeenCalled();
-    expect(d.notify).not.toHaveBeenCalled();
+    expect(d.reload).not.toHaveBeenCalled();
   });
 
   it("servern säger att token gått ut → 'Logga in igen', inte 'kontot spärrat'", async () => {

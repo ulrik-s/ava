@@ -9,7 +9,9 @@ import {
   userIdSchema,
   timeEntryIdSchema,
   invoiceIdSchema,
+  type MatterId,
   type OrganizationId,
+  type TimeEntryId,
 } from "@/lib/shared/schemas/ids";
 import { isLockedEntry, type LockableEntry } from "@/lib/shared/time-entry-lock";
 import { isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE } from "@/lib/shared/time-hours";
@@ -67,8 +69,43 @@ async function rateOnKindChange(
   repos: Context["repos"], orgId: OrganizationId, owned: TimeEntry, kind: TimeEntryKind | undefined,
 ): Promise<number | undefined> {
   if (kind === undefined || kind === (owned.kind ?? "ARBETE")) return undefined;
+  return rateFor(repos, orgId, owned, { kind, matterId: owned.matterId });
+}
+
+/** Postens á-pris med en ny kategori eller ett nytt ärende, med postens jurists priser. */
+async function rateFor(
+  repos: Context["repos"], orgId: OrganizationId, owned: TimeEntry,
+  change: { kind: TimeEntryKind | null | undefined; matterId: MatterId },
+): Promise<number> {
   const user = await repos.users.getByIdInOrg(owned.userId, orgId);
-  return entryRateOre(repos, orgId, { kind, date: owned.date, matterId: owned.matterId, userRates: user?.hourlyRates });
+  return entryRateOre(repos, orgId, { kind: change.kind, date: owned.date, matterId: change.matterId, userRates: user?.hourlyRates });
+}
+
+/** Posterna som ska flyttas, var och en i byrån och olåst — annars vägras hela anropet. */
+async function loadMovable(repos: Context["repos"], orgId: OrganizationId, ids: TimeEntryId[]): Promise<TimeEntry[]> {
+  const entries = await Promise.all(ids.map((id) => repos.timeEntries.getByIdInOrg(id, orgId)));
+  return entries.map((entry) => {
+    if (!entry) throw new TRPCError({ code: "NOT_FOUND" });
+    assertEditable(entry);
+    return entry;
+  });
+}
+
+/**
+ * Flyttar posterna till `matterId` (#2042) med målärendets á-pris, som om de
+ * registrerats där. Alla prövas innan någon skrivs (allt eller inget). En post
+ * som redan ligger i målärendet lämnas orörd. Ger posterna som flyttades, som
+ * de såg ut före flytten (deras `matterId` är ärendet de kom från).
+ */
+async function moveEntries(
+  repos: Context["repos"], orgId: OrganizationId, ids: TimeEntryId[], matterId: MatterId,
+): Promise<TimeEntry[]> {
+  const moving = (await loadMovable(repos, orgId, ids)).filter((entry) => entry.matterId !== matterId);
+  for (const entry of moving) {
+    const hourlyRate = await rateFor(repos, orgId, entry, { kind: entry.kind, matterId });
+    await repos.timeEntries.update(entry.id, { matterId, hourlyRate });
+  }
+  return moving;
 }
 
 export const timeEntryRouter = router({
@@ -193,6 +230,25 @@ export const timeEntryRouter = router({
       }) satisfies Partial<TimeEntry>);
       await emit.timeEntryUpdated(ctx, { id: updated.id, matterId: updated.matterId });
       return updated;
+    }),
+
+  /**
+   * Flytta tidsposter till ett annat ärende (#2042). Köas som anrop och körs om
+   * på servern — tidsposter är procedurägda, så timpriset räknas mot serverns
+   * priser och låsregeln prövas där. Datum, tid, beskrivning och övriga fält
+   * ändras inte. En händelse `time-entry.moved` per flyttad post.
+   */
+  moveToMatter: orgProcedure
+    .input(z.object({
+      ids: z.array(timeEntryIdSchema).min(1).max(500)
+        .refine((ids) => new Set(ids).size === ids.length, "Samma tidspost får bara anges en gång."),
+      matterId: matterIdSchema,
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await requireMatterInOrg(ctx, input.matterId);
+      const moved = await ctx.repos.transaction((repos) => moveEntries(repos, ctx.orgId, input.ids, input.matterId));
+      for (const entry of moved) await emit.timeEntryMoved(ctx, { id: entry.id, matterId: input.matterId }, entry.matterId);
+      return { moved: moved.length };
     }),
 
   delete: orgProcedure

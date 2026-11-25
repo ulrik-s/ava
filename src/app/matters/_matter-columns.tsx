@@ -7,6 +7,7 @@ import { MatterNumber } from "@/components/matter/matter-number";
 import type { Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { coverageStatus } from "@/lib/shared/coverage-cap";
+import { isTaxeMatter } from "@/lib/shared/public-assignment";
 import type { MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 
 /** En rad i ärendelistan (`matter.list`); `hits` = texterna för "Träff" (#1642). */
@@ -102,7 +103,7 @@ export const matterColumns: Column<MatterRow>[] = [
     render: (m) => (
       <span>
         <EntityLink route="matters" id={m.id} className="text-sm font-medium text-blue-600 hover:underline">{m.title}</EntityLink>
-        {m.isTaxeArende && (
+        {isTaxeMatter(m) && (
           <span
             className="ml-2 inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
             title="Taxeärende — ersättning enligt Domstolsverkets fastställda taxa">Taxa</span>

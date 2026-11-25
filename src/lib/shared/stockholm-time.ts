@@ -60,6 +60,16 @@ export function stockholmDateTime(day: string, time: string): Date {
 }
 
 /**
+ * Kalenderdagen `days` dagar efter `day` (båda "YYYY-MM-DD"; negativt `days`
+ * betyder bakåt). Ren kalenderräkning: varken processens tidszon eller
+ * sommartid påverkar steget. Ogiltig dag kastar `RangeError`, som
+ * `stockholmDayStart`.
+ */
+export function addDays(day: string, days: number): string {
+  return Temporal.PlainDate.from(day).add({ days }).toString();
+}
+
+/**
  * Gränserna för den svenska kalenderperioden `from`–`to` (båda "YYYY-MM-DD",
  * båda dagarna med): från början av `from` till sista millisekunden före
  * början av dagen efter `to`. Använd den på servern när ett ögonblick ska
@@ -67,6 +77,6 @@ export function stockholmDateTime(day: string, time: string): Date {
  * omställning till eller från sommartid.
  */
 export function stockholmPeriod(from: string, to: string): { from: Date; to: Date } {
-  const dayAfter = Temporal.PlainDate.from(to).add({ days: 1 }).toString();
+  const dayAfter = addDays(to, 1);
   return { from: stockholmDayStart(from), to: new Date(stockholmDayStart(dayAfter).getTime() - 1) };
 }

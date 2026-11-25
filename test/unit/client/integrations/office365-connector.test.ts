@@ -41,8 +41,11 @@ class FakeMsal implements MsalLike {
   }
 }
 
-function connectorWith(msal: MsalLike): Office365Connector {
-  return new Office365Connector(async () => msal);
+/** Ingen server att fråga, om inget annat sägs. */
+const noServer = (): Promise<null> => Promise.resolve(null);
+
+function connectorWith(msal: MsalLike, fromServer: () => Promise<{ clientId: string; tenantId: string } | null> = noServer): Office365Connector {
+  return new Office365Connector(async () => msal, fromServer);
 }
 
 beforeEach(() => {
@@ -103,7 +106,17 @@ describe("connect", () => {
   it("vägrar när konfigurationen saknas, med ett läsbart fel", async () => {
     localStorage.removeItem(OFFICE365_CONFIG_KEY);
     const c = connectorWith(new FakeMsal());
-    await expect(c.connect()).rejects.toThrow(/inte konfigurerad/);
+    await expect(c.connect()).rejects.toThrow("Microsoft 365 är inte inställt för den här AVA-installationen.");
+  });
+
+  // #1949: i drift kommer byråns app från servern när webbläsaren inte har någon.
+  it("tar konfigurationen från servern när localStorage och env saknar den", async () => {
+    localStorage.removeItem(OFFICE365_CONFIG_KEY);
+    const seen: { clientId: string; authority: string }[] = [];
+    const c = new Office365Connector((opts) => { seen.push(opts); return Promise.resolve(new FakeMsal()); },
+      () => Promise.resolve({ clientId: "srv", tenantId: "stid" }));
+    await c.connect();
+    expect(seen).toEqual([{ clientId: "srv", authority: "https://login.microsoftonline.com/stid" }]);
   });
 });
 

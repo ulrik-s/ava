@@ -4,7 +4,8 @@
  * grenar som avgör VÄGEN.
  */
 import { describe, expect, it } from "vitest-compat";
-import { valueKrRun, type KrRunMatter } from "@/lib/server/billing/kr-run-valuation";
+import { krRunGrossOre, krRunNotes, valueKrRun, type KrRunMatter } from "@/lib/server/billing/kr-run-valuation";
+import { forhorFromTimeEntries } from "@/lib/shared/forordnandetaxa";
 import { kostnadsrakningClaimInclVat } from "@/lib/shared/kostnadsrakning";
 
 const NOW = new Date("2026-09-29T12:00:00.000Z");
@@ -80,5 +81,72 @@ describe("valueKrRun", () => {
   it("exakt maxgränsen (3 tim 45 min) går — taxan gäller till och med den", () => {
     expect(valueKrRun({ ...TAXE, taxaHuvudforhandlingMin: 225 }, NO_WORK, {}, NOW).kind).toBe("taxa");
     expect(() => valueKrRun({ ...TAXE, taxaHuvudforhandlingMin: 226 }, NO_WORK, {}, NOW)).toThrow(/maxgräns/);
+  });
+});
+
+// Förordnandemål (#1857): förordnandetaxan med ärendets förhör, som dokumentet.
+describe("valueKrRun — förordnandemål", () => {
+  const OU: KrRunMatter = { paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: false };
+  const NEDLAGD = { forordnande: { avslut: "NEDLAGD" as const } };
+  /** Ett förhör en tisdag (UTC 08:00 = 10:00 svensk tid) på `minutes` minuter. */
+  const forhor = (minutes: number, date = "2026-09-22T08:00:00.000Z") => ({
+    id: `te-${date}-${minutes}`, date: new Date(date), minutes, description: "Förhör", hourlyRate: 250_000, billable: true, kind: "FORHOR" as const,
+  });
+  const claim = (work: { timeEntries: ReturnType<typeof forhor>[] }, hasFTax = true): number => kostnadsrakningClaimInclVat({
+    forordnande: { forhor: forhorFromTimeEntries(work.timeEntries), avslut: "NEDLAGD" },
+    yrkandeDate: NOW, hasFTax, isTaxeArende: true, timeEntries: [...work.timeEntries], expenses: [],
+  });
+
+  it("förhör inom taxan → förordnandetaxan, samma belopp som dokumentet, ärendet ändras inte", () => {
+    const work = { timeEntries: [forhor(60)], expenses: [] };
+    const v = valueKrRun({ ...OU, taxaHuvudforhandlingMin: 95 }, work, { ...NEDLAGD, isTaxeArende: false }, NOW);
+    expect(v).toEqual({ kind: "forordnande", grossOre: claim(work), matterPatch: {} });
+    expect(claim(work)).toBeGreaterThan(0);
+  });
+
+  it("förhör utanför taxan (kväll) → löpande räkning, som dokumentet", () => {
+    const work = { timeEntries: [forhor(60, "2026-09-22T18:00:00.000Z")], expenses: [] };
+    const v = valueKrRun(OU, work, NEDLAGD, NOW);
+    expect(v).toEqual({ kind: "forordnande", grossOre: claim(work), matterPatch: {} });
+    const inom = valueKrRun(OU, { timeEntries: [forhor(60)], expenses: [] }, NEDLAGD, NOW);
+    expect(v.kind !== "norm" && inom.kind !== "norm" && v.grossOre !== inom.grossOre).toBe(true);
+  });
+
+  it("utan förhör → taxans lägsta belopp (6 §)", () => {
+    expect(valueKrRun(OU, NO_WORK, NEDLAGD, NOW)).toEqual({ kind: "forordnande", grossOre: claim({ timeEntries: [] }), matterPatch: {} });
+    expect(claim({ timeEntries: [] })).toBeGreaterThan(0);
+  });
+
+  it("utan F-skatt: dialogens val, annars ärendets → lägre belopp", () => {
+    const work = { timeEntries: [forhor(60)], expenses: [] };
+    expect(valueKrRun(OU, work, { ...NEDLAGD, hasFTax: false }, NOW)).toMatchObject({ grossOre: claim(work, false) });
+    expect(valueKrRun({ ...OU, taxaHasFTax: false }, work, NEDLAGD, NOW)).toMatchObject({ grossOre: claim(work, false) });
+    expect(claim(work, false)).toBeLessThan(claim(work));
+  });
+
+  it("inte offentligt uppdrag → PRECONDITION_FAILED", () => {
+    expect(() => valueKrRun({ paymentMethod: "RATTSHJALP" }, NO_WORK, NEDLAGD, NOW)).toThrow(/offentligt uppdrag/);
+  });
+});
+
+describe("krRunNotes", () => {
+  it("utan förordnande → anteckningen som den är", () => {
+    expect(krRunNotes("Egen", {})).toBe("Egen");
+    expect(krRunNotes(undefined, {})).toBeUndefined();
+  });
+
+  it("förordnande → avslutet sparas i anteckningen", () => {
+    expect(krRunNotes(null, { forordnande: { avslut: "NEDLAGD" } })).toBe("Förordnandetaxa – förundersökningen lades ned");
+    expect(krRunNotes("Egen", { forordnande: { avslut: "STRAFFORELAGGANDE" } })).toBe("Egen\nFörordnandetaxa – strafföreläggande godkändes");
+  });
+});
+
+describe("krRunGrossOre", () => {
+  it("värderingens belopp, eller normvägens", () => {
+    const norm = (): number => 42;
+    expect(krRunGrossOre({ kind: "taxa", grossOre: 1, matterPatch: {} }, norm)).toBe(1);
+    expect(krRunGrossOre({ kind: "lopande", grossOre: 2, matterPatch: {} }, norm)).toBe(2);
+    expect(krRunGrossOre({ kind: "forordnande", grossOre: 3, matterPatch: {} }, norm)).toBe(3);
+    expect(krRunGrossOre({ kind: "norm", matterPatch: {} }, norm)).toBe(42);
   });
 });

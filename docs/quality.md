@@ -83,7 +83,7 @@ AI-ytan tappa sin täckning utan att totalen rörde sig mätbart.
 
 | Område | Golv rader | Golv funktioner | Faktisk (lcov, --parallel) |
 |---|---|---|---|
-| `src/` | 90.0 % | 85.9 % | ~90.7 % / ~87.5 % |
+| `src/` | 95.0 % | 94.3 % | ~98.4 % / ~94.8 % |
 | `tooling/ava-cli/` (CLI + MCP) | 95.0 % | 92.0 % | 96.1 % / 93.7 % |
 | Outlook-tillägget (`src/lib/client/addin/` + `office-addin/`) | 94.0 % | 97.0 % | 95.1 % / 100 % (enprocess 99.3 %) |
 | `tooling/scripts/` | 76.5 % | 78.0 % | — |

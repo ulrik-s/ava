@@ -16,7 +16,7 @@ function fakeBoss() {
 }
 
 describe("QueueBackedEmailSender", () => {
-  it("köar på email-dispatch-v2 med {to,subject,text}; utan nyckel får varje mejl en egen slumpad nyckel", async () => {
+  it("köar på email-dispatch-v2 med {to,subject,text,byrå}; utan nyckel får varje mejl en egen slumpad nyckel", async () => {
     const { boss, send } = fakeBoss();
     const sender = new QueueBackedEmailSender(() => boss, "org-1");
     await sender.send({ to: "domstol@ex.se", subject: "Faktura F-1", text: "Bifogat.", html: "<p>ignoreras</p>" });
@@ -24,19 +24,20 @@ describe("QueueBackedEmailSender", () => {
     expect(JOB_QUEUES.emailDispatch).toBe("email-dispatch-v2");
     const calls: Array<[string, object, { singletonKey: string }]> = send.mock.calls;
     expect(calls.map((c) => c[0])).toEqual([JOB_QUEUES.emailDispatch, JOB_QUEUES.emailDispatch]);
-    expect(calls[0]?.[1]).toEqual({ to: "domstol@ex.se", subject: "Faktura F-1", text: "Bifogat." });
+    // Ingen `idempotencyKey` i payloaden: den slumpade nyckeln loggas aldrig (#1901).
+    expect(calls[0]?.[1]).toEqual({ to: "domstol@ex.se", subject: "Faktura F-1", text: "Bifogat.", organizationId: "org-1" });
     const keys = calls.map((c) => c[2].singletonKey);
     expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
     expect(keys[0]).not.toBe(keys[1]);
   });
 
-  it("idempotensnyckel → singletonKey `<byrå>:<nyckel>`; payloaden saknar nyckeln", async () => {
+  it("idempotensnyckel → singletonKey `<byrå>:<nyckel>`; payloaden bär byrån och nyckeln (#1901)", async () => {
     const { boss, send } = fakeBoss();
     const sender = new QueueBackedEmailSender(() => boss, "org-1");
     await sender.send({ to: "x@y.se", subject: "s", text: "t", idempotencyKey: "payment.due:p1:2026-11" });
     expect(send).toHaveBeenCalledWith(
       JOB_QUEUES.emailDispatch,
-      { to: "x@y.se", subject: "s", text: "t" },
+      { to: "x@y.se", subject: "s", text: "t", organizationId: "org-1", idempotencyKey: "payment.due:p1:2026-11" },
       { singletonKey: "org-1:payment.due:p1:2026-11" },
     );
   });

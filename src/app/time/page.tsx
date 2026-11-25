@@ -17,6 +17,7 @@ import { TimeEntryEditModal, timeActionsColumn, useTimeEntryEditing } from "./_t
 /** En rad på /time, med låsfälten som avgör om den får ändras (#1863). */
 interface TimeRow extends LockableEntry {
   id: string;
+  matterId: MatterId;
   date: string | Date;
   minutes: number;
   description: string;

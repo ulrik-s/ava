@@ -39,7 +39,7 @@ export interface CachedIdentity {
 export type GateDecision =
   | { kind: "bind"; claims: OidcClaims }
   | { kind: "proceed"; verifiedNow: boolean }
-  | { kind: "proceed-locally"; notice: Exclude<SessionNotice, "token-expired"> }
+  | { kind: "proceed-locally"; notice: Extract<SessionNotice, "signed-out" | "unreachable"> }
   | { kind: "login" }
   | { kind: "offline-expired" }
   | { kind: "offline-unbound" }

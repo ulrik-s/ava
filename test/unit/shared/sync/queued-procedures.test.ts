@@ -19,6 +19,8 @@ describe("isQueuedProcedure", () => {
   it("Markera som rådgivning köas som anrop — tidsposter är procedurägda (#1349)", () => {
     expect(isQueuedProcedure("timeEntry.markAsRadgivning")).toBe(true);
     expect(queuedProcedureEntity("timeEntry.markAsRadgivning")).toBe("timeEntry");
+    expect(isQueuedProcedure("timeEntry.moveToMatter")).toBe(true);
+    expect(queuedProcedureEntity("timeEntry.moveToMatter")).toBe("timeEntry");
   });
 
   it("omklassning av ett dokument köas som anrop — servern äger klassificeringen (#1156)", () => {

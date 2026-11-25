@@ -28,6 +28,7 @@ import {
   matterIdSchema,
   userIdSchema,
 } from "./ids";
+import { settlementBreakdownSchema } from "./settlement-breakdown";
 
 /**
  * TimeEntry — tidsregistrering på ärende. Lagras i `time-entries/<id>.json`.
@@ -113,27 +114,8 @@ export const expenseSchema = z.object({
 
 export type Expense = z.infer<typeof expenseSchema>;
 
-/** Persisterad nedbrytningsvy på en faktura (#876/#880) — matchar `SettlementView`.
- *  Tidsspec-tabell (arbetad tid) + rader (trappa) + total. Delas av slutreglering
- *  OCH aconto (aconton visar det upparbetade arbetet klienten betalar för). */
-export const settlementBreakdownSchema = z.object({
-  timeLines: z.array(z.object({
-    date: z.string(),
-    description: z.string(),
-    minutes: z.number().int(),
-    amountOre: z.number().int(),
-    /** Arvodeskategori (#953) — sammanställningen på klientens faktura benämner
-     *  raderna på den (arbete/obekväm tid/tidsspillan). Saknas på äldre fakturor. */
-    kind: timeEntryKindSchema.nullish(),
-  })),
-  rows: z.array(z.object({
-    label: z.string(),
-    amountOre: z.number().int(),
-    kind: z.enum(["add", "deduct", "info"]),
-  })),
-  totalLabel: z.string(),
-  totalOre: z.number().int(),
-});
+// Nedbrytningen bor i en egen fil (#1938); exporteras vidare för befintliga importer.
+export { settlementBreakdownSchema };
 
 /**
  * Invoice — `amount` i öre (brutto för FINAL, negativt för CREDIT).

@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest-compat";
 import { ServerFirstSync, type SyncableStore } from "@/components/shell/server-first-sync";
-import { SESSION_EXPIRED_MESSAGE, TOKEN_EXPIRED_MESSAGE } from "@/lib/client/auth/revalidate-session";
+import { ACCOUNT_REVOKED_MESSAGE, SESSION_EXPIRED_MESSAGE, TOKEN_EXPIRED_MESSAGE } from "@/lib/client/auth/revalidate-session";
 import { sessionNotice, setSessionNotice } from "@/lib/client/auth/session-notice";
 import type { StoragePersistence } from "@/lib/client/storage/persistent-storage";
 import { flushServerSync, onServerSynced, unsyncedChangeCount } from "@/lib/client/sync/server-sync-flush";
@@ -103,6 +103,22 @@ describe("ServerFirstSync", () => {
       wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
       await waitFor(() => expect(screen.getByTestId("sync-pill")).toHaveAttribute("title", TOKEN_EXPIRED_MESSAGE));
       expect(sessionNotice()).toBe("token-expired");
+    });
+
+    it("serverns skäl 'account-inactive' → karantän-beskedet och bannern, proxyn frågas inte (#1962)", async () => {
+      setSessionNotice(null);
+      const original = globalThis.fetch;
+      const proxy = vi.fn((_url: string) => Promise.resolve(jsonResponse(200, {})));
+      globalThis.fetch = fetchFake(proxy);
+      try {
+        const { store } = fakeStore({ pending: 1, blocked: unauthorized({ authFailure: "account-inactive" }) });
+        wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
+        await waitFor(() => expect(screen.getByTestId("sync-pill")).toHaveAttribute("title", ACCOUNT_REVOKED_MESSAGE));
+        expect(sessionNotice()).toBe("account-inactive");
+        expect(proxy).not.toHaveBeenCalled();
+      } finally {
+        globalThis.fetch = original;
+      }
     });
 
     it("utan skäl frågas proxyn: ingen session → 'Logga in igen'", async () => {
@@ -296,3 +312,26 @@ describe("ServerFirstSync", () => {
     expect(rejectedChanges.list()).toEqual([]);
   });
 });
+
+describe("ServerFirstSync — den periodiska synken (#1905)", () => {
+  it("var 30:e sekund synkas kön igen", async () => {
+    const ticks: Array<() => void> = [];
+    const realSetInterval = globalThis.setInterval;
+    const spy = vi.spyOn(globalThis, "setInterval").mockImplementation(((fn: () => void, ms?: number) => {
+      if (ms === 30_000) ticks.push(fn);
+      return realSetInterval(() => {}, 1_000_000);
+    }) as typeof setInterval);
+    try {
+      const { state, store } = fakeStore({ pending: 1 });
+      const { unmount } = wrap(<ServerFirstSync reportDevice={noReport} store={store} />);
+      await waitFor(() => expect(state.reconciles).toBe(1));
+      state.pending = 1;
+      act(() => { for (const tick of ticks) tick(); });
+      await waitFor(() => expect(state.reconciles).toBe(2));
+      unmount();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+

@@ -19,7 +19,9 @@
  * det är den delen som faktiskt kan gå sönder.
  */
 
-import { loadOffice365Config, authorityFor, OFFICE365_SCOPES } from "./office365-config";
+import {
+  authorityFor, OFFICE365_SCOPES, type Office365ConfigSource, resolveOffice365Config, serverOffice365Config,
+} from "./office365-config";
 import { registerConnector } from "./registry";
 import type { IntegrationConnector, ConnectionStatus } from "./types";
 
@@ -102,16 +104,19 @@ export class Office365Connector implements IntegrationConnector {
   private msal: MsalLike | null = null;
   private account: MsalAccount | null = null;
 
-  constructor(private readonly factory: MsalFactory = defaultFactory) {}
+  constructor(
+    private readonly factory: MsalFactory = defaultFactory,
+    private readonly fromServer: Office365ConfigSource = serverOffice365Config,
+  ) {}
 
   async getStatus(): Promise<ConnectionStatus> {
     return this.status;
   }
 
   async connect(): Promise<void> {
-    const config = loadOffice365Config();
+    const config = await resolveOffice365Config(this.fromServer);
     if (!config) {
-      const message = "Office 365 är inte konfigurerad — ange klient-id och tenant under Inställningar.";
+      const message = "Microsoft 365 är inte inställt för den här AVA-installationen.";
       this.setStatus({ kind: "error", message });
       throw new Error(message);
     }

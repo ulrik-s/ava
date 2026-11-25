@@ -15,7 +15,8 @@ import { InMemoryContactRepository } from "@/lib/server/repositories/in-memory-c
 import { InMemoryMatterContactRepository } from "@/lib/server/repositories/in-memory-matter-contact-repository";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
+import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -155,5 +156,83 @@ describe("Matter-läsningar — Drizzle (pglite)", () => {
     expect(await ids({ ids: [a, other] })).toEqual([a]);
     expect(await ids({ ids: [] })).toEqual([]);
     expect(await ids({})).toEqual([a, b].sort());
+  });
+});
+
+/**
+ * `listPartiesFor` (#1964) — samma scenario i båda backends: ärende A har
+ * motpart (först kopplad), klient och ombud plus en mjukt raderad koppling; B
+ * har en klient; C saknar parter; D är mjukt raderat; E ligger i en annan byrå.
+ */
+function partiesScenario() {
+  const org = asId<"OrganizationId">(uuidv7());
+  const otherOrg = asId<"OrganizationId">(uuidv7());
+  const m = { a: asId<"MatterId">(uuidv7()), b: asId<"MatterId">(uuidv7()), c: asId<"MatterId">(uuidv7()), d: asId<"MatterId">(uuidv7()), e: asId<"MatterId">(uuidv7()) };
+  const k = { motpart: asId<"ContactId">(uuidv7()), klient: asId<"ContactId">(uuidv7()), ombud: asId<"ContactId">(uuidv7()), borta: asId<"ContactId">(uuidv7()) };
+  const at = (n: number) => new Date(`2026-01-0${n}T00:00:00Z`);
+  const matterRows: Array<typeof matters.$inferInsert> = [
+    { id: m.a, organizationId: org, matterNumber: "P-1", title: "A", status: "ACTIVE", deletedAt: null },
+    { id: m.b, organizationId: org, matterNumber: "P-2", title: "B", status: "ACTIVE", deletedAt: null },
+    { id: m.c, organizationId: org, matterNumber: "P-3", title: "C", status: "ACTIVE", deletedAt: null },
+    { id: m.d, organizationId: org, matterNumber: "P-4", title: "D", status: "ACTIVE", deletedAt: at(9) },
+    { id: m.e, organizationId: otherOrg, matterNumber: "P-5", title: "E", status: "ACTIVE", deletedAt: null },
+  ];
+  const contactRows: Array<typeof contacts.$inferInsert> = [
+    { id: k.motpart, organizationId: org, name: "Motpart AB", contactType: "COMPANY" },
+    { id: k.klient, organizationId: org, name: "Klient AB", contactType: "COMPANY" },
+    { id: k.ombud, organizationId: org, name: "Ombud AB", contactType: "COMPANY" },
+    { id: k.borta, organizationId: org, name: "Borta AB", contactType: "COMPANY" },
+  ];
+  const link = (matterId: MatterId, contactId: ContactId, role: MatterRole, n: number, deletedAt: Date | null = null): typeof matterContacts.$inferInsert =>
+    ({ id: asId<"MatterContactId">(uuidv7()), matterId, contactId, role, createdAt: at(n), deletedAt });
+  const linkRows: Array<typeof matterContacts.$inferInsert> = [
+    link(m.a, k.motpart, "MOTPART", 1),
+    link(m.a, k.klient, "KLIENT", 2),
+    link(m.a, k.ombud, "OMBUD", 3),
+    link(m.a, k.borta, "MOTPART", 4, at(5)),
+    link(m.b, k.motpart, "KLIENT", 1),
+    link(m.d, k.klient, "KLIENT", 1),
+    link(m.e, k.klient, "KLIENT", 1),
+  ];
+  return { org, m, k, matterRows, contactRows, linkRows };
+}
+
+type PartiesScenario = ReturnType<typeof partiesScenario>;
+
+async function expectPartiesFor(repo: InMemoryMatterRepository | DrizzleMatterRepository, s: PartiesScenario): Promise<void> {
+  const got = await repo.listPartiesFor(s.org, [s.m.a, s.m.b, s.m.c, s.m.d, s.m.e, asId<"MatterId">(uuidv7())]);
+  expect([...got.keys()].sort()).toEqual([s.m.a, s.m.b].sort());
+  expect(got.get(s.m.a)).toEqual([
+    { role: "KLIENT", name: "Klient AB" },
+    { role: "MOTPART", name: "Motpart AB" },
+    { role: "OMBUD", name: "Ombud AB" },
+  ]);
+  expect(got.get(s.m.b)).toEqual([{ role: "KLIENT", name: "Motpart AB" }]);
+  expect((await repo.listPartiesFor(s.org, [])).size).toBe(0);
+  // Listan har samma källa: klientkolumnen med kontaktens id, parterna i samma ordning.
+  const row = (await repo.listForOrg(s.org, { ids: [s.m.a], page: 1, pageSize: 20 })).matters[0];
+  expect(row?.contacts).toEqual([{ contact: { id: s.k.klient, name: "Klient AB" } }]);
+  expect(row?.parties).toEqual(got.get(s.m.a));
+}
+
+describe("listPartiesFor (#1964) — in-memory", () => {
+  it("parterna per ärende, KLIENT först, org-scopat; tom lista ger tom karta", async () => {
+    const s = partiesScenario();
+    const store = new LocalStore(prebakeJoins({ matters: s.matterRows, contacts: s.contactRows, matterContacts: s.linkRows }), async () => {});
+    await expectPartiesFor(new InMemoryMatterRepository(store), s);
+  });
+});
+
+describe("listPartiesFor (#1964) — Drizzle (pglite)", () => {
+  let handle: TestDbHandle;
+  beforeAll(async () => { handle = await createTestDb(); });
+  afterAll(async () => { await handle.close(); });
+
+  it("parterna per ärende i en fråga, KLIENT först, org-scopat; tom lista ger tom karta", async () => {
+    const s = partiesScenario();
+    await handle.db.insert(matters).values(s.matterRows.map((r) => ({ ...r, version: 1 })));
+    await handle.db.insert(contacts).values(s.contactRows.map((r) => ({ ...r, version: 1 })));
+    await handle.db.insert(matterContacts).values(s.linkRows.map((r) => ({ ...r, version: 1 })));
+    await expectPartiesFor(new DrizzleMatterRepository(handle.db), s);
   });
 });

@@ -5,15 +5,22 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import DocumentSearchPage from "@/app/search/page";
+import { rowOrder, sortColumn } from "../../../helpers/data-table";
 
 const searchQuery = {
-  data: undefined as { hits: unknown[]; totalHits: number } | undefined,
+  data: undefined as
+    | { hits: unknown[]; totalHits: number; facets?: { documentTypes?: Array<{ type: string; count: number }> } }
+    | undefined,
   isFetching: false,
   error: null as Error | null,
 };
 
 // Omfångsvalet (server/lokal) testas i use-document-search.test.tsx.
-vi.mock("@/lib/client/search/use-document-search", () => ({ useDocumentSearch: () => searchQuery }));
+/** Det sökningen senast fick: termen och typfiltret. */
+const searchInput = vi.fn((_input: { query: string; documentTypes?: string[] }) => searchQuery);
+vi.mock("@/lib/client/search/use-document-search", () => ({
+  useDocumentSearch: (input: { query: string; documentTypes?: string[] }) => searchInput(input),
+}));
 
 let docTypes: Array<{ type: string; count: number }> = [];
 
@@ -35,6 +42,8 @@ vi.mock("@/lib/client/trpc", () => ({
 }));
 
 beforeEach(() => {
+  docTypes = [];
+  searchInput.mockClear();
   searchQuery.data = undefined;
   searchQuery.isFetching = false;
   searchQuery.error = null;
@@ -124,5 +133,81 @@ describe("DocumentSearchPage", () => {
     searchQuery.error = new Error("Meilisearch nere");
     render(<DocumentSearchPage />);
     expect(screen.getByText(/Meilisearch nere/i)).toBeInTheDocument();
+  });
+});
+
+// ── Sorteringen och typfiltret (#1904) ──────────────────────────────────
+
+function search(term: string): void {
+  const input = screen.getByPlaceholderText(/Sök i dokument/i);
+  fireEvent.change(input, { target: { value: term } });
+  fireEvent.submit(input.closest("form") as HTMLFormElement);
+}
+
+const hit = (documentId: string, fileName: string, matterNumber: string): Record<string, unknown> => ({
+  documentId, fileName, matterId: `m-${documentId}`, matterNumber, matterTitle: "X", highlight: "x",
+});
+
+describe("DocumentSearchPage — kolumnerna sorterar på det som visas (#1904)", () => {
+  it("Fil på filnamnet och Ärende på ärendenumret", () => {
+    searchQuery.data = {
+      hits: [hit("d1", "b.pdf", "2026-0002"), hit("d2", "c.pdf", "2026-0001"), hit("d3", "a.pdf", "2026-0003")],
+      totalHits: 3,
+    };
+    render(<DocumentSearchPage />);
+    search("avtal");
+    const files = ["a.pdf", "b.pdf", "c.pdf"];
+    sortColumn("Fil", "asc");
+    expect(rowOrder(files)).toEqual(["a.pdf", "b.pdf", "c.pdf"]);
+    sortColumn("Ärende", "asc");
+    expect(rowOrder(files)).toEqual(["c.pdf", "b.pdf", "a.pdf"]);
+  });
+});
+
+describe("DocumentSearchPage — typfiltret (#1904)", () => {
+  beforeEach(() => {
+    docTypes = [{ type: "FUP", count: 2 }, { type: "STAMNING", count: 5 }];
+  });
+
+  const chip = (label: string): HTMLInputElement => {
+    const box = screen.getByText(label).closest("label")?.querySelector("input");
+    if (!box) throw new Error(`Ingen kryssruta för ${label}`);
+    return box;
+  };
+
+  it("kryss väljer typen, nytt kryss tar bort den, och Sök skickar valet", () => {
+    render(<DocumentSearchPage />);
+    expect(screen.getByText("Inga filter — söker i alla typer.")).toBeInTheDocument();
+    fireEvent.click(chip("Stämning"));
+    fireEvent.click(chip("FUP"));
+    expect(screen.getByText(/Filter aktivt: 2 typ\(er\)/)).toBeInTheDocument();
+    fireEvent.click(chip("FUP"));
+    expect(chip("FUP").checked).toBe(false);
+    search("yrkande");
+    expect(searchInput).toHaveBeenLastCalledWith({ query: "yrkande", documentTypes: ["STAMNING"] });
+  });
+
+  it("Rensa filter tar bort alla valda typer", () => {
+    render(<DocumentSearchPage />);
+    fireEvent.click(chip("Stämning"));
+    fireEvent.click(screen.getByRole("button", { name: "Rensa filter" }));
+    expect(chip("Stämning").checked).toBe(false);
+    expect(screen.queryByRole("button", { name: "Rensa filter" })).toBeNull();
+    search("yrkande");
+    expect(searchInput).toHaveBeenLastCalledWith({ query: "yrkande" });
+  });
+
+  it("efter sökning visar räknarna träffarna per typ, 0 för typer utan träff", () => {
+    searchQuery.data = { hits: [], totalHits: 3, facets: { documentTypes: [{ type: "STAMNING", count: 3 }] } };
+    render(<DocumentSearchPage />);
+    expect(screen.getByText(/räknarna visar träffar för ""/)).toBeInTheDocument();
+    expect(screen.getByText("Stämning").closest("label")).toHaveTextContent("Stämning (3)");
+    expect(screen.getByText("FUP").closest("label")).toHaveTextContent("(0)");
+  });
+
+  it("efter sökning utan typräkning står alla typer på 0", () => {
+    searchQuery.data = { hits: [], totalHits: 0 };
+    render(<DocumentSearchPage />);
+    expect(screen.getByText("Stämning").closest("label")).toHaveTextContent("Stämning (0)");
   });
 });

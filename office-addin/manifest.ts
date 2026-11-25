@@ -12,6 +12,7 @@
  */
 
 import type { AddinConfig } from "@/lib/client/addin/addin-auth";
+import { entraAppConfig } from "@/lib/shared/office365-config";
 
 type Env = Record<string, string | undefined>;
 const value = (env: Env, key: string): string | undefined => env[key]?.trim() || undefined;
@@ -32,10 +33,12 @@ export function manifestVersion(env: Env): string {
 
 /** Tilläggets konfiguration, eller null om installationen saknar Entra-uppgifter. */
 export function addinConfigFromEnv(env: Env): AddinConfig | null {
-  const clientId = value(env, "AVA_ADDIN_CLIENT_ID") ?? value(env, "OAUTH2_PROXY_CLIENT_ID");
-  const issuer = value(env, "OIDC_ISSUER_URL") ?? "";
-  const tenantId = value(env, "AVA_ADDIN_TENANT_ID") ?? /login\.microsoftonline\.com\/([^/]+)/.exec(issuer)?.[1];
-  return clientId && tenantId ? { clientId, tenantId } : null;
+  return entraAppConfig({
+    clientId: value(env, "OAUTH2_PROXY_CLIENT_ID"),
+    issuer: value(env, "OIDC_ISSUER_URL"),
+    clientIdOverride: value(env, "AVA_ADDIN_CLIENT_ID"),
+    tenantIdOverride: value(env, "AVA_ADDIN_TENANT_ID"),
+  });
 }
 
 /** config.js: sätter `window.AVA_ADDIN` (läses av taskpane.ts). */

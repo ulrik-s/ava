@@ -56,6 +56,8 @@ vi.mock("@/lib/client/trpc", () => ({
       removeContact: { useMutation: () => stubs.removeContact },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       coverageUsage: { useQuery: () => coverageQuery },
+      // Ärendena en tidspost kan flyttas till (#2042).
+      list: { useQuery: () => ({ data: { matters: [] } }) },
     },
     watchlist: {
       // WatchSection: ärendets övriga signaler (#1167).
@@ -73,6 +75,7 @@ vi.mock("@/lib/client/trpc", () => ({
       list: { useQuery: () => timeQuery },
       create: { useMutation: () => stubs.createTimeEntry },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      moveToMatter: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     expense: {
@@ -391,6 +394,28 @@ describe("MatterDetailPage", () => {
     const withRows = renderPage();
     await waitFor(() => expect(panel(withRows.container)).not.toBeNull());
     receivablesQuery.data = [];
+  });
+
+  it("märket Taxa och taxetexterna följer isTaxeMatter, inte flaggan ensam (#1971)", async () => {
+    const taxeTexts = async (): Promise<{ badge: boolean; time: boolean; expense: boolean }> => {
+      const header = await waitFor(() => screen.getByTestId("matter-header"));
+      const badge = within(header).queryByText("Taxa") !== null;
+      fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+      const time = screen.queryByText("Taxeärende") !== null;
+      fireEvent.click(screen.getByRole("button", { name: /\+ Nytt utlägg/i }));
+      const expense = screen.queryAllByText("Taxeärende").length > (time ? 1 : 0);
+      return { badge, time, expense };
+    };
+
+    matterQuery.data = { ...M, paymentMethod: "PRIVAT", isTaxeArende: true };
+    const privat = renderPage();
+    expect(await taxeTexts()).toEqual({ badge: false, time: false, expense: false });
+    privat.unmount();
+
+    matterQuery.data = { ...M, paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: true };
+    renderPage();
+    expect(await taxeTexts()).toEqual({ badge: true, time: true, expense: true });
+    matterQuery.data = M;
   });
 
   it("renderar matterNumber + title + klient-länk", async () => {

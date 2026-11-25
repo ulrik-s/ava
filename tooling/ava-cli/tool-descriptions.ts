@@ -37,7 +37,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "billingRun.invoiceSpecification": "Fakturaspecifikation: de tids- och utläggsrader som är kopplade till en viss faktura, plus avdragna aconton och summering. Driver fakturadokumentet. En ren aconto-faktura får tomma rader.",
   "billingRun.createAcconto": "Skapa en aconto-faktura (à conto) på ett ärende. Fryser inte arbetet — posterna kan faktureras igen på slutfakturan, med aconto-beloppet avdraget.",
   "billingRun.createFinal": "Skapa slutfaktura på ett ärende: fakturerar allt ofakturerat arbete, drar av tidigare aconton och fryser posterna.",
-  "billingRun.createKostnadsrakning": "Skapa en kostnadsräkning till domstolen (offentligt uppdrag och rättshjälp). Status INSKICKAD — domstolens beslut registreras separat.",
+  "billingRun.createKostnadsrakning": "Skapa en kostnadsräkning till domstolen (offentligt uppdrag och rättshjälp). Status INSKICKAD — domstolens beslut registreras separat. I ett förordnandemål anges forordnande.avslut (NEDLAGD, STRAFFORELAGGANDE eller INGET_ATAL): yrkandet räknas då på förordnandetaxan och ärendets förhör, och avslutet sparas i anteckningen.",
   "billingRun.recordKostnadsrakningBeslut": "Registrera domstolens beslut på en kostnadsräkning: dömt belopp och eventuell prutning. INSKICKAD → BESLUTAD (tingsrätten), ÖVERKLAGAD → BESLUTAD slutgiltigt (hovrätten). Skapar ingen faktura — det är ett eget steg.",
   "billingRun.appealKostnadsrakning": "Överklaga domstolens prutning på en kostnadsräkning till hovrätten: BESLUTAD → ÖVERKLAGAD. Ingen ny kostnadsräkning skapas; hovrättens beslut registreras på samma körning.",
   "billingRun.voidKostnadsrakning": "Ångra en kostnadsräkning innan domstolen beslutat (INSKICKAD, inget dömt belopp, ingen faktura): låser upp de tidposter och utlägg den frös och annullerar körningen, så ärendet kan kompletteras och en ny kostnadsräkning skapas.",
@@ -230,6 +230,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "system.capabilities": "Vad den här installationen kan (demo, self-hosted eller serverdrift) — styr vilka funktioner som är tillgängliga.",
   "system.helperConfig": "Inloggningskonfiguration som webbappen pushar till den lokala hjälpprocessen. Null i demon.",
   "system.signOutConfig": "Var utloggningen avslutas hos identitetsleverantören (IdP:ns utloggningsadress), eller null om bara proxyns session avslutas.",
+  "system.office365Config": "Byråns Entra-app för Microsoft 365 (klient-id och tenant, samma app som webbinloggningen), eller null om installationen inte loggar in med Entra.",
 
   // ── Uppgifter ────────────────────────────────────────────────────
   "task.list": "Lista uppgifter, valfritt filtrerat på status eller ärende.",
@@ -243,6 +244,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "timeEntry.list": "Lista tidsposter, valfritt filtrerat på ärende, medarbetare och datumintervall.",
   "timeEntry.create": "Registrera arbetad tid på ett ärende. Kategorin styr ersättningen: arbete, tidsspillan, arbete på obekväm tid, eller advokatberedskap som ersätts per dygn med noll minuter.",
   "timeEntry.update": "Uppdatera en tidspost.",
+  "timeEntry.moveToMatter": "Flytta en eller flera olåsta tidsposter till ett annat ärende. Timpriset räknas om mot målärendet; datum, tid och beskrivning ändras inte. Fakturerade eller frysta poster vägras.",
   "timeEntry.delete": "Radera en tidspost.",
   "timeEntry.report": "Tidsrapport aggregerad över en period.",
   "timeEntry.radgivningStatus": "Visa om ett rättshjälpsärendes rådgivningsfaktura saknar låst rådgivningspost (missing) eller redan har en (present).",

@@ -16,6 +16,7 @@ import { createSmtpSender, type SmtpConfig } from "@/lib/server/integrations/ema
 import { createOllamaPartClassifier, createOllamaKindSuggester, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
 import type { IContentStore, IDocumentPageIndex } from "@/lib/server/ports";
 import { extractPages } from "@/lib/shared/extract-text";
+import type { EmailDispatchLog } from "./email-dispatch-log";
 import { createClassifyDocumentHandler, type ClassifyDocumentDeps } from "./handlers/classify-document-handler";
 import type { ClassifiableDoc, PageDeps } from "./handlers/document-text";
 import { createEmailDispatchHandler } from "./handlers/email-dispatch-handler";
@@ -27,6 +28,9 @@ import type { JobHandlers } from "./job-worker-runtime";
 export interface JobHandlerConfig {
   /** SMTP-konfig för e-postutskick. Saknas → ingen email-worker registreras. */
   smtp?: SmtpConfig;
+  /** Byråns logg över skickade mejl (#1901). Satt → samma idempotensnyckel
+   *  skickas högst en gång per byrå; saknas → varje jobb skickas. */
+  emailLog?: EmailDispatchLog;
   /** Dokument-repo för `classify-document`-jobbet (#518). Saknas → ingen classify-worker. */
   documents?: ClassifyDocumentDeps["documents"];
   /** Content-store + LLM-konfig (#518 Fas 3). Båda satta → server-LLM-klassificering
@@ -126,7 +130,7 @@ function registerDocumentHandlers(handlers: JobHandlers, cfg: JobHandlerConfig &
 export function buildServerFirstJobHandlers(cfg: JobHandlerConfig): JobHandlers {
   const handlers: JobHandlers = {};
   if (cfg.smtp) {
-    handlers[JOB_QUEUES.emailDispatch] = createEmailDispatchHandler(createSmtpSender(cfg.smtp));
+    handlers[JOB_QUEUES.emailDispatch] = createEmailDispatchHandler(createSmtpSender(cfg.smtp), cfg.emailLog);
   }
   if (cfg.documents) registerDocumentHandlers(handlers, { ...cfg, documents: cfg.documents });
   if (cfg.ledger) {

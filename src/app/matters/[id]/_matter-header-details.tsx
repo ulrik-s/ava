@@ -48,8 +48,8 @@ export interface MatterHeaderDetailsProps {
   previousCourtCaseNumber: string;
   insuranceReference: string;
   description?: string | null | undefined;
-  /** Ärendets kontakter — försäkringsreferensen visas bara med ett
-   *  försäkringsbolag som inte står på motsidan (#1511/#1532). */
+  /** Ärendets kontakter — försäkringsreferensen visas bara med en part i
+   *  rollen Försäkringsbolag (#1511, #1961). */
   contacts: readonly MatterContactWithRole[];
 }
 

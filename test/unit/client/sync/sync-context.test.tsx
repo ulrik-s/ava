@@ -84,3 +84,27 @@ describe("SyncProviderRoot", () => {
     await waitFor(() => expect(pick).toHaveBeenCalledTimes(2));
   });
 });
+
+describe("standardvärdena (#1905)", () => {
+  it("utan pickProvider väljs ingen provider: synken är av", async () => {
+    render(<SyncProviderRoot token="t"><Probe /></SyncProviderRoot>);
+    await waitFor(() => expect(read().kind).toBe("synced"));
+    expect(read()).toMatchObject({ providerKind: null, enabled: false });
+  });
+
+  it("utanför provider:n gör Synka nu och ändringsnotisen ingenting", async () => {
+    const results: unknown[] = [];
+    function Buttons() {
+      const c = useSyncContext();
+      return (
+        <>
+          <button onClick={() => { void c.syncNow().then((r) => results.push(r)); }}>synka</button>
+          <button onClick={() => { results.push(c.notifyChange()); }}>notis</button>
+        </>
+      );
+    }
+    render(<Buttons />);
+    act(() => { screen.getByText("notis").click(); screen.getByText("synka").click(); });
+    await waitFor(() => expect(results).toEqual([undefined, undefined]));
+  });
+});

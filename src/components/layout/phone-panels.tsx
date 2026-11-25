@@ -7,7 +7,8 @@
  * (#1612) lägger tillbaka den som aktiv.
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { TabBar } from "@/components/ui/tab-bar";
 import { AddPanelMenu, type PanelChoices } from "./add-panel-menu";
 import type { PanelDef } from "./panel-def";
 
@@ -37,6 +38,15 @@ function useActiveTab(firstId: string | undefined, activePanel: string | null | 
   return [activeId, setActiveId] as const;
 }
 
+/** ×-knappen efter en flik som användaren får ta bort, annars inget. */
+function closeButton(p: PanelDef, closable: Props["closable"], onClose: Props["onClose"]): ReactNode {
+  if (!onClose || !closable?.has(p.id)) return null;
+  return (
+    <button type="button" aria-label={`Ta bort ${p.title}`} onClick={() => onClose(p.id)}
+      className="rounded px-1.5 py-1.5 text-sm text-gray-500 hover:bg-gray-100">×</button>
+  );
+}
+
 export function PhonePanels({ panels, closable, onClose, choices, activePanel }: Props) {
   const [activeId, setActiveId] = useActiveTab(panels[0]?.id, activePanel);
   const active = panels.find((p) => p.id === activeId) ?? panels[0];
@@ -44,20 +54,8 @@ export function PhonePanels({ panels, closable, onClose, choices, activePanel }:
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center gap-1 border-b border-gray-200 pb-1">
-        <div role="tablist" aria-label="Paneler" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-          {panels.map((p) => (
-            <span key={p.id} className="flex items-center">
-              <button type="button" role="tab" aria-selected={p.id === active?.id} onClick={() => setActiveId(p.id)}
-                className={`whitespace-nowrap rounded px-3 py-1.5 text-sm font-semibold dark:font-normal ${p.id === active?.id ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"}`}>
-                {p.title}
-              </button>
-              {onClose && closable?.has(p.id) && (
-                <button type="button" aria-label={`Ta bort ${p.title}`} onClick={() => onClose(p.id)}
-                  className="rounded px-1.5 py-1.5 text-sm text-gray-500 hover:bg-gray-100">×</button>
-              )}
-            </span>
-          ))}
-        </div>
+        <TabBar ariaLabel="Paneler" active={active?.id} onSelect={setActiveId}
+          tabs={panels.map((p) => ({ id: p.id, label: p.title, after: closeButton(p, closable, onClose) }))} />
         {reveal && <AddPanelMenu choices={reveal} />}
       </div>
       <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto pt-3 space-y-2">{active?.render()}</div>

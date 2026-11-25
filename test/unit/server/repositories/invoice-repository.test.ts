@@ -52,10 +52,30 @@ async function assertContract(repo: InvoiceRepository): Promise<void> {
   expect(await repo.listByMatter(asId<"MatterId">(matterId))).toHaveLength(0);
 }
 
+/** Nedbrytningens utläggsrader (#1938) sparas och läses tillbaka lika. */
+async function assertBreakdownExpenseLines(repo: InvoiceRepository): Promise<void> {
+  const id = uuidv7();
+  const settlementBreakdown = {
+    timeLines: [], rows: [{ label: "Aconto", amountOre: 50_000, kind: "add" as const }],
+    totalLabel: "Att betala", totalOre: 50_000,
+    expenseLines: [
+      { date: "2026-05-02", description: "Resa", netOre: 10_000, grossOre: 12_500 },
+      { date: "2026-05-03", description: "Ansökningsavgift", netOre: 90_000, grossOre: 90_000, passThrough: true },
+    ],
+  };
+  await repo.create(inv({ id, settlementBreakdown }));
+  expect((await repo.getById(asId<"InvoiceId">(id)))?.settlementBreakdown).toEqual(settlementBreakdown);
+}
+
 describe("InvoiceRepository — in-memory", () => {
   it("uppfyller kontraktet", async () => {
     const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
     await assertContract(new InMemoryInvoiceRepository(store));
+  });
+
+  it("nedbrytningens utläggsrader sparas och läses tillbaka (#1938)", async () => {
+    const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
+    await assertBreakdownExpenseLines(new InMemoryInvoiceRepository(store));
   });
 
   it("lockForBooking är en no-op (#1453)", async () => {
@@ -253,6 +273,10 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
 
   it("uppfyller kontraktet", async () => {
     await assertContract(new DrizzleInvoiceRepository(handle.db));
+  });
+
+  it("nedbrytningens utläggsrader sparas och läses tillbaka (#1938)", async () => {
+    await assertBreakdownExpenseLines(new DrizzleInvoiceRepository(handle.db));
   });
 
   it("getByIdWithLedger hämtar betalningar", async () => {
