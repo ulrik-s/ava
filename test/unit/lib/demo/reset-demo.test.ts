@@ -38,6 +38,16 @@ function makeOpfs(names: string[]): OpfsMock {
   };
 }
 
+/** Namnen som en asynkron iterator, som OPFS-rotens `keys()`. */
+function asyncNames(names: string[]): AsyncIterableIterator<string> {
+  const it = names[Symbol.iterator]();
+  const iter: AsyncIterableIterator<string> = {
+    next: () => Promise.resolve(it.next()),
+    [Symbol.asyncIterator]: () => iter,
+  };
+  return iter;
+}
+
 function stubBrowser(opts: {
   ls: Storage;
   ss: Storage;
@@ -128,5 +138,58 @@ describe("resetDemoCompletely", () => {
     const { resetDemoCompletely } = await import("@/lib/client/demo/reset-demo");
     await expect(resetDemoCompletely()).resolves.toBeUndefined();
     expect(deleteHandle).not.toHaveBeenCalled();
+  });
+
+  it("raderar demons ava-demo*-databaser i IndexedDB och lämnar andra (#420, #1905)", async () => {
+    const deleted: string[] = [];
+    const outcomes = ["onsuccess", "onerror", "onblocked"] as const;
+    const factory = {
+      databases: () => Promise.resolve([{ name: "ava-demo-source" }, { name: "ava-demo-queue" }, { name: "ava-demo-x" }, { name: "ava-fsa" }, {}]),
+      deleteDatabase: (name: string) => {
+        const req: Record<string, (() => void) | null> = { onsuccess: null, onerror: null, onblocked: null };
+        const outcome = outcomes[deleted.length % outcomes.length] ?? "onsuccess";
+        deleted.push(name);
+        queueMicrotask(() => req[outcome]?.());
+        return req;
+      },
+    };
+    stubBrowser({ ls: makeStorage(), ss: makeStorage() });
+    vi.stubGlobal("indexedDB", factory);
+    const { resetDemoCompletely } = await import("@/lib/client/demo/reset-demo");
+    await resetDemoCompletely();
+    expect(deleted).toEqual(["ava-demo-source", "ava-demo-queue", "ava-demo-x"]);
+  });
+
+  it("är best-effort mot IndexedDB: databases() som kastar och deleteDatabase som kastar", async () => {
+    stubBrowser({ ls: makeStorage(), ss: makeStorage() });
+    vi.stubGlobal("indexedDB", { databases: () => Promise.reject(new Error("nere")) });
+    const { resetDemoCompletely } = await import("@/lib/client/demo/reset-demo");
+    await expect(resetDemoCompletely()).resolves.toBeUndefined();
+    vi.stubGlobal("indexedDB", { databases: () => Promise.resolve([{ name: "ava-demo-source" }]), deleteDatabase: () => { throw new Error("spärrad"); } });
+    await expect(resetDemoCompletely()).resolves.toBeUndefined();
+  });
+
+  it("är best-effort i OPFS: en lista som inte går att läsa och en post som inte går att radera", async () => {
+    const failing: OpfsMock["root"] = {
+      keys: () => { throw new Error("ingen iterator"); },
+      removeEntry: () => Promise.resolve(),
+    };
+    stubBrowser({ ls: makeStorage(), ss: makeStorage(), getDirectory: () => Promise.resolve(failing) });
+    const { resetDemoCompletely } = await import("@/lib/client/demo/reset-demo");
+    await expect(resetDemoCompletely()).resolves.toBeUndefined();
+    const refusing: OpfsMock["root"] = {
+      keys: () => asyncNames(["ava-demo__snapshot.json"]),
+      removeEntry: () => Promise.reject(new Error("låst")),
+    };
+    stubBrowser({ ls: makeStorage(), ss: makeStorage(), getDirectory: () => Promise.resolve(refusing) });
+    await expect(resetDemoCompletely()).resolves.toBeUndefined();
+  });
+
+  it("är best-effort när FSA-handeln inte går att radera", async () => {
+    deleteHandle.mockImplementationOnce(() => Promise.reject(new Error("IndexedDB saknas")));
+    stubBrowser({ ls: makeStorage(), ss: makeStorage() });
+    const { resetDemoCompletely } = await import("@/lib/client/demo/reset-demo");
+    await expect(resetDemoCompletely()).resolves.toBeUndefined();
+    expect(deleteHandle).toHaveBeenCalledWith("repo-root");
   });
 });

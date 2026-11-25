@@ -19,10 +19,14 @@ export interface SendEmailInput {
   text: string;
   html?: string;
   /**
-   * Idempotensnyckel (#504, ADR 0024). Sätts av anroparen till ett stabilt id
-   * för den utlösande händelsen (t.ex. fakturans/påminnelsens UUIDv7) → köas
-   * som pg-boss `singletonKey` så att en reconcile-replay eller dubbel-trigger
-   * inte skickar samma mejl två gånger (som mest ett väntande jobb per nyckel).
+   * Idempotensnyckel (#504, #1901, ADR 0024). Nyckeln identifierar ETT mejl
+   * (en mottagare och ett innehåll) inom byrån:
+   * - samma nyckel skickas högst en gång per byrå, även långt senare (köas som
+   *   pg-boss `singletonKey`, och handlern skriver den i `email_dispatch_log`
+   *   efter ett lyckat utskick);
+   * - två mejl från samma händelse behöver olika nycklar;
+   * - nyckeln byggs av id:n (t.ex. påminnelsens `payment.due:<plan>:<månad>`),
+   *   inte av adresser eller innehåll, eftersom den sparas.
    */
   idempotencyKey?: string;
 }

@@ -2863,9 +2863,6 @@
     }
   },
   "test/unit/server/jobs/email-dispatch-handler.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 3
-    },
     "no-restricted-syntax": {
       "count": 1
     }

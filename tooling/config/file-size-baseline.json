@@ -1,7 +1,7 @@
 {
   "src/app/contacts/[id]/_client.tsx": 422,
   "src/app/invoices/[id]/_client.tsx": 579,
-  "src/app/matters/[id]/_billing-panel.tsx": 658,
+  "src/app/matters/[id]/_billing-panel.tsx": 450,
   "src/app/matters/[id]/_kostnadsrakning-modal.tsx": 566,
   "src/app/settings/page.tsx": 508,
   "src/components/documents/document-browser.tsx": 532,
@@ -10,8 +10,7 @@
   "src/lib/client/jobs/job-queue.ts": 418,
   "src/lib/server/routers/invoice.ts": 539,
   "src/lib/server/routers/matter.ts": 414,
-  "src/lib/server/routers/reports.ts": 618,
+  "src/lib/server/routers/reports.ts": 616,
   "src/lib/shared/brottmalstaxa.ts": 537,
-  "src/lib/shared/kostnadsrakning.ts": 685,
-  "src/lib/shared/schemas/billing.ts": 406
+  "src/lib/shared/kostnadsrakning.ts": 685
 }

@@ -18,7 +18,7 @@ import { rng, type Rng } from "../../../helpers/seeded-rng";
 /** Betalningssätten egenskaperna gäller. */
 export type ScenarioMethod = "OFFENTLIGT_UPPDRAG" | "RATTSHJALP" | "RATTSSKYDD" | "PRIVAT";
 
-type Kind = "ARBETE" | "TIDSSPILLAN" | "TIDSSPILLAN_OVRIG_TID" | "ADVOKATBEREDSKAP";
+type Kind = "ARBETE" | "TIDSSPILLAN" | "TIDSSPILLAN_OVRIG_TID" | "ADVOKATBEREDSKAP" | "FORHOR";
 
 export type ScenarioEntry = {
   id: string; organizationId: string; userId: string; matterId: string; date: Date;
@@ -200,4 +200,24 @@ export function partialAwardOre(claimedOre: number, share: number): number {
 export function partialCaseFor(rp: Rng, method: "OFFENTLIGT_UPPDRAG" | "RATTSHJALP", now: Date): { s: Scenario; share: number } {
   const s = scenarioFor(rp, method, now);
   return { s, share: rp.next() };
+}
+
+/** Förordnandemålens egen slumpström (#1857), så att de andra fallen inte ändras. */
+export function forordnandeRngFor(seed: number): Rng {
+  return rng(seed + 2_000_000);
+}
+
+const AVSLUT = ["NEDLAGD", "STRAFFORELAGGANDE", "INGET_ATAL"] as const;
+
+/**
+ * Förordnandemål (#1857): offentligt uppdrag med 0–3 förhör (tidsposter med
+ * kategorin FORHOR) på slumpade tider, så att förhören hamnar både inom och
+ * utanför taxan, och ett slumpat avslut.
+ */
+export function forordnandeCaseFor(rf: Rng, now: Date): { s: Scenario; avslut: (typeof AVSLUT)[number] } {
+  const s = scenarioFor(rf, "OFFENTLIGT_UPPDRAG", now);
+  const forhor = Array.from({ length: rf.int(0, 3) }, (_, i): ScenarioEntry => ({
+    ...entry(rf, KINDS, now, s.entries.length + i), kind: "FORHOR", minutes: 6 * rf.int(1, 40),
+  }));
+  return { s: { ...s, entries: [...s.entries, ...forhor] }, avslut: rf.pick(AVSLUT) ?? "NEDLAGD" };
 }
