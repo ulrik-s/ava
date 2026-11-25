@@ -1,6 +1,7 @@
 # ADR 0018 — Offline-auth: OIDC `offline_access`-refresh-token (primär) + cachad session med grace (fallback)
 
-- **Status:** Accepterad
+- **Status:** Accepterad. **Reviderad 2026-11-25 (#1962):** karantänen för ett
+  spärrat konto är att kön hålls kvar, med besked i en banner.
 - **Datum:** 2026-06-17
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** offline-first-klient, auth, sync/reconcile, server-runtime, säkerhet
@@ -134,20 +135,23 @@ Oavsett mekanism pinnas följande:
   annars icke-extraherbar WebCrypto-nyckel. Aldrig i `localStorage` i klartext.
 - **Kort access-token-livslängd:** online-fönstret där en stulen access-token
   duger hålls kort (minuter) — refresh sköter förnyelsen.
-- **Karantän, inte tyst accept:** en offline-mutation från en session som
-  **återkallats medan enheten var offline** får **inte** tyst accepteras vid sync.
-  Den karantänsätts (avvisas som en reconcile-konflikt, ADR 0017 surface-klass)
-  och ytläggs — hellre synligt avvisad än tyst insläppt. Redan-accepterat
-  offline-arbete före återkallningen behålls; allt efter karantänsätts.
+- **Karantän, inte tyst accept:** arbete från ett konto som **inte längre är
+  aktivt** accepteras aldrig tyst vid sync. Servern svarar `401` med
+  `authFailure: "account-inactive"` på alla anrop och prövar inte posterna en
+  och en. Karantänen är att kön hålls kvar på enheten, med besked i en banner,
+  och kön synkas när kontot återaktiveras. Det som synkats före spärren ligger
+  kvar (#1962).
 
 ### Hur det möter reconcile (ADR 0017)
 
 Offline-mutationer bär redan klient-genererat UUIDv7-id (ADR 0003) och attribueras
-till den cachade/token-burna principalen. Vid replay (ADR 0017 steg 2) verifierar
-servern principalen mot sitt *aktuella* tillstånd: giltig → accepteras och stämplas
-med verifierad principal; återkallad → karantän (surface-konflikt). Detta kräver
-**ingen** ändring i reconcile-sekvensen — bara att principal-verifieringen körs som
-en del av server-validering per mutation.
+till den cachade/token-burna principalen. Servern prövar principalen mot sitt
+*aktuella* tillstånd vid varje anrop. Finns ingen aktiv principal svarar den `401`
+innan någon post spelas upp; klienten stannar kön (felklassen `halt`,
+`src/lib/shared/sync/sync-error.ts`) och visar bannern. En post som en annan
+användare köat vägras med `FORBIDDEN`/`syncRefusal: "foreign-entry"` (felklassen
+`quarantine`) och läggs bland de avvisade ändringarna (#1773). Sekvensen i
+reconcile ändras inte (#1962).
 
 ### Genomfört (#1245)
 
@@ -159,9 +163,9 @@ Option A (fallback) är byggd för webbklienten; Option B är inte byggd.
   `/oauth2/userinfo` vid varje start. Utloggad → inloggningen. Nås servern
   inte → den cachade identiteten gäller inom grace-tiden (7 dagar från
   `sessionVerifiedAt`, senaste lyckade verifiering online).
-- Ett 401 vid synk omvaliderar sessionen: utgången → inloggningen; giltig
-  session men avvisad → kontot är spärrat, ändringarna hålls kvar (karantän)
-  med besked. Inget töms tyst.
+- Ett 401 vid synk: `token-expired`, eller ingen session i proxyn, ger bannern
+  med "Logga in igen"; `account-inactive` ger bannern utan "Logga in igen", och
+  ändringarna hålls kvar (#1962). Inget töms tyst.
 - **Avvikelse från "krypterad i vila":** den cachade identiteten är ingen
   bearer-hemlighet — den ger ingen serveråtkomst (proxyns HttpOnly-cookie är
   sessionshemligheten), bara det som redan ligger okrypterat lokalt
@@ -200,7 +204,9 @@ Option A (fallback) är byggd för webbklienten; Option B är inte byggd.
   verkliga offline-mönster.
 - Var den krypterade token-/session-lagringen bor i klient-koden + helper-API:t
   (keychain vs WebCrypto-fallback per plattform/webbläsare).
-- Karantän-UX för det sällsynta återkallad-medan-offline-fallet (delar yta med
-  ADR 0017:s surface-konflikt-UX, #416).
+- ~~Karantän-UX för det sällsynta återkallad-medan-offline-fallet (delar yta med
+  ADR 0017:s surface-konflikt-UX, #416).~~ → **beslutat (#1962):** kön hålls kvar
+  på enheten och bannern säger att kontot inte längre är aktivt, utan "Logga in
+  igen". Kön synkas när en administratör har återaktiverat kontot.
 - Triggern för att bygga C (enhets-signering): vilken affärsbyrå-/ACL-milstolpe
   gör non-repudiation till ett hårt krav.

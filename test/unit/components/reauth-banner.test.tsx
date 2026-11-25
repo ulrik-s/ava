@@ -41,4 +41,22 @@ describe("ReauthBanner", () => {
     expect(assign).toHaveBeenCalledWith(expect.stringMatching(/^\/oauth2\/start\?rd=/));
     assign.mockRestore();
   });
+
+  it("spärrat konto: beskedet utan 'Logga in igen'; det kan komma efter start och försvinner efter en lyckad synk (#1962)", () => {
+    render(<ReauthBanner />);
+    act(() => { setSessionNotice("account-inactive"); });
+    expect(screen.getByTestId("reauth-banner")).toHaveTextContent(/inte längre aktivt i byrån/);
+    expect(screen.getByRole("alert")).toBe(screen.getByTestId("reauth-banner"));
+    expect(screen.queryByRole("button", { name: "Logga in igen" })).toBeNull();
+    act(() => { notifyServerSynced(); });
+    expect(screen.queryByTestId("reauth-banner")).toBeNull();
+  });
+
+  it("knappen finns kvar för de tre andra beskeden (#1962)", () => {
+    render(<ReauthBanner />);
+    for (const notice of ["signed-out", "token-expired", "unreachable"] as const) {
+      act(() => { setSessionNotice(notice); });
+      expect(screen.getByRole("button", { name: "Logga in igen" })).toBeInTheDocument();
+    }
+  });
 });

@@ -4,6 +4,7 @@
  *
  *   - Kontot är inte aktivt (servern vet) → besked om karantän: ändringarna
  *     hålls kvar på enheten — aldrig tyst borttagna — men sparas inte.
+ *     Beskedet visas i bannern, utan "Logga in igen" (#1962).
  *   - Proxyn har en session för någon ANNAN än den bundna (#1404) — någon
  *     loggade in i en annan flik och proxyns cookie byttes → ladda om.
  *     Sessionsgrinden binder då den nya användaren och rensar den förras
@@ -27,7 +28,7 @@ import type { SessionProbe } from "./session-probe";
 
 export interface RevalidateDeps {
   probe: () => Promise<SessionProbe>;
-  /** Visa "Logga in igen"-bannern. */
+  /** Visa beskedet i bannern. */
   notify: (notice: SessionNotice) => void;
   /** E-posten för den bundna användaren (firma-config), eller null om ingen är bunden (#1404). */
   boundEmail: string | null;
@@ -46,9 +47,10 @@ export const IDENTITY_SWITCH_MESSAGE =
 const MESSAGES: Record<Exclude<SessionNotice, "unreachable">, string> = {
   "signed-out": SESSION_EXPIRED_MESSAGE,
   "token-expired": TOKEN_EXPIRED_MESSAGE,
+  "account-inactive": ACCOUNT_REVOKED_MESSAGE,
 };
 
-function reauth(deps: RevalidateDeps, notice: Exclude<SessionNotice, "unreachable">): string {
+function announce(deps: RevalidateDeps, notice: Exclude<SessionNotice, "unreachable">): string {
   deps.notify(notice);
   return MESSAGES[notice];
 }
@@ -59,14 +61,14 @@ function authenticatedButRefused(deps: RevalidateDeps, claims: OidcClaims): stri
     deps.reload();
     return IDENTITY_SWITCH_MESSAGE;
   }
-  return reauth(deps, "token-expired");
+  return announce(deps, "token-expired");
 }
 
 /** Beskedet att visa (null = inget särskilt). `failure` = serverns skäl, om det kom med. */
 export async function revalidateSession(deps: RevalidateDeps, failure: AuthFailure | null): Promise<string | null> {
-  if (failure === "account-inactive") return ACCOUNT_REVOKED_MESSAGE;
-  if (failure === "token-expired") return reauth(deps, "token-expired");
+  if (failure === "account-inactive") return announce(deps, "account-inactive");
+  if (failure === "token-expired") return announce(deps, "token-expired");
   const probe = await deps.probe();
-  if (probe.kind === "signed-out") return reauth(deps, "signed-out");
+  if (probe.kind === "signed-out") return announce(deps, "signed-out");
   return probe.kind === "authenticated" ? authenticatedButRefused(deps, probe.claims) : null;
 }

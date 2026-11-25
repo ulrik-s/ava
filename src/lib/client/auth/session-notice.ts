@@ -10,12 +10,15 @@
  *     dess token.
  *   - `unreachable`   — inloggningen gick inte att kontrollera (inget nät,
  *     proxyn svarar inte, en captive portal).
+ *   - `account-inactive` — kontot är spärrat i byrån (#1962). Beskedet visas
+ *     utan "Logga in igen": en ny inloggning hjälper inte, en administratör
+ *     måste återaktivera kontot. Kön ligger kvar till dess.
  *
  * En lyckad synk visar att sessionen fungerar — då tas beskedet bort.
  */
 
 /** Varför användaren ombeds logga in igen. */
-export type SessionNotice = "signed-out" | "token-expired" | "unreachable";
+export type SessionNotice = "signed-out" | "token-expired" | "unreachable" | "account-inactive";
 
 type Listener = () => void;
 
@@ -45,9 +48,23 @@ const TEXTS: Record<SessionNotice, string> = {
   "signed-out": "Inloggningen har gått ut. Du arbetar lokalt — ändringarna sparas på servern när du loggat in igen.",
   "token-expired": "Servern godtar inte längre inloggningen. Du arbetar lokalt — ändringarna sparas på servern när du loggat in igen.",
   unreachable: "Inloggningen gick inte att kontrollera. Du arbetar lokalt — ändringarna sparas på servern när kontakten är tillbaka.",
+  "account-inactive": "Ditt konto är inte längre aktivt i byrån. Du arbetar lokalt — ändringarna finns kvar på enheten och sparas på servern när en administratör har återaktiverat kontot.",
+};
+
+/** Om bannern erbjuder "Logga in igen" — inte när kontot är spärrat (#1962). */
+const OFFERS_LOGIN: Record<SessionNotice, boolean> = {
+  "signed-out": true,
+  "token-expired": true,
+  unreachable: true,
+  "account-inactive": false,
 };
 
 /** Bannerns text. */
 export function sessionNoticeText(notice: SessionNotice): string {
   return TEXTS[notice];
+}
+
+/** Om bannern ska visa knappen "Logga in igen" för beskedet. */
+export function sessionNoticeOffersLogin(notice: SessionNotice): boolean {
+  return OFFERS_LOGIN[notice];
 }
