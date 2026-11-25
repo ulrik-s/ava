@@ -12,7 +12,6 @@ import type { RowSelection } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { isLockedEntry, type LockableEntry } from "@/lib/shared/time-entry-lock";
-import { useActiveMatterOptions } from "./use-save-time-entry";
 
 /** Låsta poster (fakturerade eller frysta) går inte att markera, samma regel som i routern. */
 export function isMovableEntry(entry: LockableEntry): boolean {
@@ -45,7 +44,6 @@ interface Props {
 /** **Flytta till ärende… (N)** när minst en post är markerad, och dialogen den öppnar. */
 export function MoveTimeEntriesButton({ selected, excludeMatterId, refresh, onMoved }: Props) {
   const [open, setOpen] = useState(false);
-  const matters = useActiveMatterOptions();
   const move = trpc.timeEntry.moveToMatter.useMutation({
     onError: (e) => console.error("[timeEntry.moveToMatter] misslyckades:", e),
   });
@@ -63,7 +61,7 @@ export function MoveTimeEntriesButton({ selected, excludeMatterId, refresh, onMo
         Flytta till ärende… ({selected.size})
       </button>
       <MoveToMatterDialog open={open} onClose={() => setOpen(false)} count={selected.size} noun="tidsposter"
-        matters={matters} excludeMatterId={excludeMatterId} onMove={onMove}
+        excludeMatterId={excludeMatterId} onMove={onMove}
         isPending={move.isPending} error={move.error?.message} />
     </div>
   );

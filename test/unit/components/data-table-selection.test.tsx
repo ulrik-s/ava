@@ -134,4 +134,13 @@ describe("DataTable — radmarkering (#2043)", () => {
     expect(screen.getByText("Summa 1").closest("tr")?.children).toHaveLength(cols.length + 2);
     expect(container.querySelector("td[colspan]")?.getAttribute("colspan")).toBe(String(cols.length + 2));
   });
+
+  it("fast tabellbredd räknar med markeringskolumnen", () => {
+    persisted.data = { user: { columns: [{ key: "name", width: 100 }] }, org: null };
+    const { container, unmount } = render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    expect(container.querySelector("table")?.style.width).toBe("212px");
+    unmount();
+    const withSelection = render(<Page />);
+    expect(withSelection.container.querySelector("table")?.style.width).toBe("244px");
+  });
 });

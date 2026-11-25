@@ -1,6 +1,5 @@
 "use client";
 
-import type { MatterOption } from "@/components/matter/matter-combobox";
 import { trpc } from "@/lib/client/trpc";
 import type { MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 import { timeEntryInput, type EditForm } from "./time-entry-form";
@@ -53,10 +52,4 @@ export function useSaveTimeEntry({ refresh, done }: SaveCallbacks) {
     isPending: update.isPending || move.isPending,
     error: update.error ?? move.error,
   };
-}
-
-/** Ärendena posten kan flyttas till: samma lista som registreringen på /time (aktiva ärenden). */
-export function useActiveMatterOptions(): MatterOption[] {
-  const matters = trpc.matter.list.useQuery({ pageSize: 500, status: "ACTIVE" });
-  return matters.data?.matters ?? [];
 }

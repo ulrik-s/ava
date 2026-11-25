@@ -12,6 +12,9 @@ import { selectableKeys, selectAllState, toggleAll, toggleRow, type RowSelection
 
 const CELL_CLASS = "px-2 py-2 w-8 align-top";
 
+/** Markeringskolumnens bredd i px (`w-8`), som räknas in i tabellens fasta bredd. */
+const SELECTION_COL_WIDTH = 32;
+
 /** "Markera alla" för de synliga rader som går att markera; delvis markerad när bara några är det. */
 export function SelectAllHeaderCell<T>({ selection, keys }: { selection: RowSelection<T>; keys: readonly string[] }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -20,7 +23,7 @@ export function SelectAllHeaderCell<T>({ selection, keys }: { selection: RowSele
     if (ref.current) ref.current.indeterminate = state === "some";
   }, [state]);
   return (
-    <th className={CELL_CLASS} data-selection-column="">
+    <th className={CELL_CLASS}>
       <input ref={ref} type="checkbox" aria-label="Markera alla" checked={state === "all"}
         disabled={keys.length === 0}
         onChange={() => selection.onChange(toggleAll(selection.selected, keys))} />
@@ -52,6 +55,8 @@ export interface SelectionColumn {
   header: React.ReactNode;
   /** Kolumnen finns: en extra cell först i varje rad. */
   lead: boolean;
+  /** Kolumnens bredd i px för tabellens fasta bredd: 0 utan markering. */
+  width: number;
 }
 
 /** Markeringskolumnen för de synliga (filtrerade) raderna; utan `selection` finns den inte. */
@@ -60,6 +65,6 @@ export function useSelectionColumn<T>(
 ): SelectionColumn {
   const isSelectable = selection?.isSelectable;
   const keys = useMemo(() => selectableKeys(visibleRows, rowKey, isSelectable), [visibleRows, rowKey, isSelectable]);
-  if (!selection) return { header: null, lead: false };
-  return { header: <SelectAllHeaderCell selection={selection} keys={keys} />, lead: true };
+  if (!selection) return { header: null, lead: false, width: 0 };
+  return { header: <SelectAllHeaderCell selection={selection} keys={keys} />, lead: true, width: SELECTION_COL_WIDTH };
 }

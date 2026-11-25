@@ -5,14 +5,16 @@
  *
  * Generell: dialogen vet inte vad som flyttas, bara hur många (`count`) och vad
  * de kallas (`noun`, t.ex. "tidsposter" eller "dokument"). Sidan gör flytten i
- * `onMove` med det valda ärendets id. Fält som bara gäller en sorts flytt läggs
- * som `children` under ärendet.
+ * `onMove` med det valda ärendets id. Ärendelistan (aktiva ärenden) hämtar
+ * dialogen själv. Fält som bara gäller en sorts flytt läggs som `children`
+ * under ärendet.
  */
 
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
-import { MatterCombobox, type MatterOption } from "./matter-combobox";
+import { MatterCombobox } from "./matter-combobox";
+import { useActiveMatterOptions } from "./use-active-matter-options";
 
 /** Props för `MoveToMatterDialog`. */
 export interface MoveToMatterDialogProps {
@@ -22,8 +24,6 @@ export interface MoveToMatterDialogProps {
   count: number;
   /** Vad de kallas i plural, t.ex. "tidsposter". */
   noun: string;
-  /** Ärendena som går att välja (aktiva ärenden). */
-  matters: readonly MatterOption[];
   /** Ärendet de redan ligger i: inte valbart. */
   excludeMatterId?: MatterId | undefined;
   /** Flytta till det valda ärendet. */
@@ -40,7 +40,7 @@ export interface MoveToMatterDialogProps {
 export function MoveToMatterDialog(props: MoveToMatterDialogProps): React.ReactElement | null {
   const { open, onClose, count, noun, excludeMatterId, onMove, isPending, error, children } = props;
   const [matterId, setMatterId] = useState<MatterId>(asId<"MatterId">(""));
-  const choices = props.matters.filter((m) => m.id !== excludeMatterId);
+  const choices = useActiveMatterOptions().filter((m) => m.id !== excludeMatterId);
   const close = (): void => { setMatterId(asId<"MatterId">("")); onClose(); };
   return (
     <Modal open={open} title="Flytta till ärende" onClose={close}>

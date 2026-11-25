@@ -123,7 +123,7 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   const grouped = useMemo(() => groupRows(filtered, columns, prefs.groupBy), [filtered, columns, prefs.groupBy]);
   const showOverrideBar = hasOverrides(prefs);
   const selectCol = useSelectionColumn(selection, filtered, rowKey);
-  const fixedWidth = fixedTableWidth(vCols, prefs, NARROW_COL_WIDTH * (selectCol.lead ? 2 : 1));
+  const fixedWidth = fixedTableWidth(vCols, prefs, NARROW_COL_WIDTH + selectCol.width);
 
   const resetPersonal = (): void => {
     setLocalPrefs({});

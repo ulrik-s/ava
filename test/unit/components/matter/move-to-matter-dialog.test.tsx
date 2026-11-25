@@ -1,7 +1,8 @@
 /**
  * `MoveToMatterDialog` (#2043) — flytta något till ett annat ärende: texten med
  * antal och substantiv, det nuvarande ärendet inte valbart, **Flytta** kräver
- * ett ärende, och fält under ärendet via `children`.
+ * ett ärende, och fält under ärendet via `children`. Dialogen hämtar själv de
+ * aktiva ärendena.
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -14,9 +15,14 @@ const MATTERS = [
   { id: asId<"MatterId">("m2"), matterNumber: "2026-0002", title: "Arvskifte" },
 ];
 
+const listQuery = vi.fn((_input: unknown): { data: { matters: typeof MATTERS } | undefined } => ({ data: { matters: MATTERS } }));
+vi.mock("@/lib/client/trpc", () => ({
+  trpc: { matter: { list: { useQuery: (input: unknown) => listQuery(input) } } },
+}));
+
 function renderDialog(over: Partial<MoveToMatterDialogProps> = {}) {
   const props: MoveToMatterDialogProps = {
-    open: true, onClose: vi.fn(), count: 3, noun: "tidsposter", matters: MATTERS, onMove: vi.fn(), ...over,
+    open: true, onClose: vi.fn(), count: 3, noun: "tidsposter", onMove: vi.fn(), ...over,
   };
   const view = render(<MoveToMatterDialog {...props} />);
   return { ...view, props };
@@ -32,6 +38,17 @@ describe("MoveToMatterDialog", () => {
     expect(screen.getByRole("dialog", { name: "Flytta till ärende" })).toBeInTheDocument();
     expect(matterInput()).toBeInTheDocument();
     expect(options(container)).toEqual(["2026-0001 — Vårdnad", "2026-0002 — Arvskifte"]);
+  });
+
+  it("hämtar själv de aktiva ärendena", () => {
+    renderDialog();
+    expect(listQuery).toHaveBeenCalledWith({ pageSize: 500, status: "ACTIVE" });
+  });
+
+  it("utan svar än: inga ärenden att välja", () => {
+    listQuery.mockReturnValueOnce({ data: undefined });
+    const { container } = renderDialog();
+    expect(options(container)).toEqual([]);
   });
 
   it("excludeMatterId finns inte bland valen", () => {
