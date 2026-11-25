@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from "vitest-compat";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { Mutex } from "@/lib/server/concurrency/mutex";
 import type { ILedgerService, LedgerKeepAliveOutcome } from "@/lib/server/ports";
 import { ledgerRouter } from "@/lib/server/routers/ledger";
 import { DEFAULT_LEDGER_ACCOUNT_MAP } from "@/lib/shared/accounting/account-map";
+import { nullSink, setLogSink, type LogRecord } from "@/lib/shared/observability/logger";
 
 const INV_ID = "0190a3f0-0000-7000-8000-000000000001";
 
@@ -11,6 +12,8 @@ interface Opts {
   invoice?: Record<string, unknown> | null;
   ledgerAccountMap?: unknown;
   ledger?: Partial<ILedgerService>;
+  /** Content-store:ns innehåll per sökväg (fakturans PDF, #1887). */
+  content?: Record<string, Uint8Array>;
 }
 
 /**
@@ -37,8 +40,10 @@ function lockingTransaction<R extends { invoices: object }>(repos: R, locks: { t
 
 function setup(o: Opts = {}) {
   const invoice = o.invoice === undefined
-    ? { id: INV_ID, amount: 12500, vatOre: 2500, vatBreakdown: null, invoiceDate: "2026-09-25", invoiceNumber: "F-1", status: "SENT", fortnoxId: null, matter: { matterNumber: "M-1" }, payments: [] }
+    ? { id: INV_ID, amount: 12500, vatOre: 2500, vatBreakdown: null, invoiceDate: "2026-09-25", invoiceNumber: "F-1", status: "SENT", fortnoxId: null, matter: { matterNumber: "M-1" }, payments: [], documents: [] }
     : o.invoice;
+  const files = o.content ?? {};
+  const content = { read: vi.fn((path: string) => Promise.resolve(files[path] ?? null)) };
   // Write-back syns i nästa läsning, som i databasen.
   const update = vi.fn(async (_id: string, patch: Record<string, unknown>) => {
     if (invoice) Object.assign(invoice, patch);
@@ -65,10 +70,10 @@ function setup(o: Opts = {}) {
   const ctx = {
     user: { id: "u1", email: "a@b.se", name: "A", role: o.role ?? "LAWYER", organizationId: "org-1" },
     repos: { ...repos, transaction: lockingTransaction(repos, locks) },
-    ports: { ledger },
+    ports: { ledger, content },
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- minimal ctx-attrapp
-  return { caller: ledgerRouter.createCaller(ctx as any), update, updatePayment, push, ledger, locks };
+  return { caller: ledgerRouter.createCaller(ctx as any), update, updatePayment, push, ledger, locks, content };
 }
 
 /** Portens status med förnyelsen (#1814); `Date` går över nätet med superjson. */
@@ -200,5 +205,49 @@ describe("ledger.bookInvoice", () => {
       ledger: { connector: () => ({ capabilities: () => ({ pushVoucher: true, pushInvoice: false, pullPayments: false, exportSie: false }), pushVoucher: async () => { calls++; if (calls === 2) throw new Error("Fortnox 500"); return { externalId: "A/9" }; } }) },
     });
     await expect(caller.bookInvoice({ invoiceId: INV_ID })).rejects.toThrow("En betalning kunde inte bokföras: Fortnox 500");
+  });
+});
+
+describe("ledger.bookInvoice — fakturans PDF som bilaga (#1887)", () => {
+  const logged: LogRecord[] = [];
+  beforeEach(() => { logged.length = 0; setLogSink((r) => { logged.push(r); }); });
+  afterEach(() => { setLogSink(nullSink); });
+
+  const PDF_BYTES = new Uint8Array([37, 80, 68, 70]);
+  const PDF_PATH = "documents/content/faktura-1.pdf";
+  const withDocuments = (documents: unknown[]) => ({
+    id: INV_ID, amount: 12500, vatOre: 2500, vatBreakdown: null, invoiceDate: "2026-09-25", invoiceNumber: "F-1",
+    status: "SENT", fortnoxId: null, matter: { matterNumber: "M-1" }, payments: [], documents,
+  });
+  const pdfDoc = { fileName: "Faktura F-1.pdf", mimeType: "application/pdf", storagePath: PDF_PATH, createdAt: new Date("2026-09-25") };
+
+  it("pushen får PDF:ens bytes och namn, och ingen varning loggas", async () => {
+    const { caller, push } = setup({ invoice: withDocuments([pdfDoc]), content: { [PDF_PATH]: PDF_BYTES } });
+    expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/7", payments: [] });
+    expect(push).toHaveBeenCalledWith(expect.anything(), {
+      idempotencyKey: INV_ID,
+      attachment: { fileName: "Faktura F-1.pdf", bytes: PDF_BYTES, contentType: "application/pdf" },
+    });
+    expect(logged.filter((r) => r.event === "ledger.attachment_failed")).toEqual([]);
+  });
+
+  it("utan PDF bokförs fakturan ändå, och varningen loggas utan filnamn", async () => {
+    const { caller, push, update } = setup({ invoice: withDocuments([]) });
+    expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/7", payments: [] });
+    expect(push).toHaveBeenCalledWith(expect.anything(), { idempotencyKey: INV_ID });
+    expect(update).toHaveBeenCalledWith(INV_ID, { fortnoxId: "A/7" });
+    const warning = logged.find((r) => r.event === "ledger.attachment_failed");
+    expect(warning).toMatchObject({ level: "warn", orgId: "org-1", ids: [INV_ID], message: "Fakturan har ingen PDF att bifoga." });
+  });
+
+  it("connectorns bilagefel loggas också, och bokföringen lyckas", async () => {
+    const { caller } = setup({
+      invoice: withDocuments([pdfDoc]),
+      content: { [PDF_PATH]: PDF_BYTES },
+      ledger: { connector: () => ({ capabilities: () => ({ pushVoucher: true, pushInvoice: false, pullPayments: false, exportSie: false }), pushVoucher: () => Promise.resolve({ externalId: "A/1", attachmentError: "Fortnox 403" }) }) },
+    });
+    expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/1", payments: [] });
+    expect(logged.find((r) => r.event === "ledger.attachment_failed")).toMatchObject({ message: "Fortnox 403" });
+    expect(JSON.stringify(logged)).not.toContain("Faktura F-1.pdf");
   });
 });
