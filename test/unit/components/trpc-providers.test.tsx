@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest-compat";
 import { TrpcProviders } from "@/components/shell/trpc-providers";
 import { trpc, useTRPC, useTRPCClient } from "@/lib/client/trpc";
 import { fakeTrpcClient, fakeTrpcLink, testQueryClient } from "../../helpers/trpc-fake";
+import { mutationDefaultsProbe } from "../../helpers/trpc-mutation-defaults";
 
 function ClassicReader() {
   const q = trpc.prefs.get.useQuery({ key: "k" });
@@ -60,5 +61,17 @@ describe("TrpcProviders – en klient och en cache för båda bindningarna", () 
     await screen.findByText("värde: 1");
     fireEvent.click(screen.getByText("rått"));
     await waitFor(() => expect(fake.calls.at(-1)).toEqual({ path: "prefs.clear", type: "mutation", input: { key: "rå" } }));
+  });
+
+  it("den nya bindningen får samma QueryClient (mutationsstandarder når fram)", async () => {
+    const qc = testQueryClient();
+    const { onSuccess, Probe } = mutationDefaultsProbe(qc);
+    const fake = fakeTrpcLink({ "prefs.clear": () => ({ ok: true }) });
+    render(
+      <TrpcProviders trpcClient={fakeTrpcClient(fake.link)} queryClient={qc}>
+        <Probe />
+      </TrpcProviders>,
+    );
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
   });
 });

@@ -1,9 +1,10 @@
 /** Testhjälparen för den nya tRPC-bindningen (#1926). */
 import { useQuery } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect } from "vitest-compat";
 import { useTRPC } from "@/lib/client/trpc";
 import { fakeTrpcClient, fakeTrpcLink, testQueryClient, TrpcTestProvider } from "../../../helpers/trpc-fake";
+import { mutationDefaultsProbe } from "../../../helpers/trpc-mutation-defaults";
 
 describe("fakeTrpcLink", () => {
   it("svarar per väg och sparar anropen", async () => {
@@ -57,5 +58,13 @@ describe("TrpcTestProvider", () => {
     render(<TrpcTestProvider link={fake.link} queryClient={qc}><Reader /></TrpcTestProvider>);
     await screen.findByText("org: satt");
     expect(qc.getQueryCache().getAll()).toHaveLength(1);
+  });
+
+  it("ger TRPCProvider samma QueryClient (mutationsstandarder når fram)", async () => {
+    const qc = testQueryClient();
+    const { onSuccess, Probe } = mutationDefaultsProbe(qc);
+    const fake = fakeTrpcLink({ "prefs.clear": () => ({ ok: true }) });
+    render(<TrpcTestProvider link={fake.link} queryClient={qc}><Probe /></TrpcTestProvider>);
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
   });
 });
