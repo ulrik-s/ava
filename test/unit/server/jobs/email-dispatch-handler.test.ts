@@ -8,6 +8,7 @@
 import type { Job } from "pg-boss";
 import { describe, it, expect, vi } from "vitest-compat";
 import type { EmailSender } from "@/lib/server/integrations/email/email-sender";
+import type { EmailDispatchLog } from "@/lib/server/jobs/email-dispatch-log";
 import { createEmailDispatchHandler } from "@/lib/server/jobs/handlers/email-dispatch-handler";
 import { JOB_QUEUES } from "@/lib/server/jobs/job-queue";
 import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server/jobs/server-first-handlers";
@@ -15,25 +16,103 @@ import type { LedgerKeepAliveOutcome } from "@/lib/server/ports";
 
 const job = (data: unknown): Job => ({ id: "j1", name: "email-dispatch", data } as unknown as Job);
 
+/** En logg i minnet: `sent` är de redan skickade nycklarna (`<byrå>|<nyckel>`). */
+function memoryLog(sent: string[] = []) {
+  const keys = new Set(sent);
+  const has = vi.fn((org: string, key: string) => Promise.resolve(keys.has(`${org}|${key}`)));
+  const record = vi.fn((org: string, key: string) => { keys.add(`${org}|${key}`); return Promise.resolve(); });
+  const log: EmailDispatchLog = { has, record };
+  return { log, has, record };
+}
+
+const keyed = { to: "x@y.se", subject: "s", text: "t", organizationId: "org-1", idempotencyKey: "payment.due:p1:2026-11" };
+
 describe("createEmailDispatchHandler", () => {
   it("validerar payloaden och skickar mejlet", async () => {
-    const sendMail = vi.fn(async () => ({ messageId: "<m1>" }));
+    const sendMail = vi.fn(() => Promise.resolve({ messageId: "<m1>" }));
     const sender: EmailSender = { sendMail };
     await createEmailDispatchHandler(sender)(job({ to: "domstol@ex.se", subject: "Faktura F-1", text: "Bifogat." }));
     expect(sendMail).toHaveBeenCalledWith({ to: "domstol@ex.se", subject: "Faktura F-1", text: "Bifogat." });
   });
 
   it("ogiltig payload → kastar (zod) utan att skicka", async () => {
-    const sendMail = vi.fn(async () => ({ messageId: "x" }));
+    const sendMail = vi.fn(() => Promise.resolve({ messageId: "x" }));
     await expect(createEmailDispatchHandler({ sendMail })(job({ subject: "x" }))).rejects.toThrow();
     expect(sendMail).not.toHaveBeenCalled();
   });
 
   it("propagerar sänd-fel (→ pg-boss retry/dead-letter)", async () => {
-    const sender: EmailSender = { sendMail: vi.fn(async () => { throw new Error("550 relay denied"); }) };
+    const sender: EmailSender = { sendMail: vi.fn(() => Promise.reject(new Error("550 relay denied"))) };
     await expect(
       createEmailDispatchHandler(sender)(job({ to: "x@y.se", subject: "s", text: "t" })),
     ).rejects.toThrow(/relay denied/);
+  });
+});
+
+describe("createEmailDispatchHandler med loggen (#1901)", () => {
+  it("en redan loggad nyckel ger inget utskick, och jobbet blir klart", async () => {
+    const sendMail = vi.fn(() => Promise.resolve({ messageId: "x" }));
+    const { log, record } = memoryLog(["org-1|payment.due:p1:2026-11"]);
+    await createEmailDispatchHandler({ sendMail }, log)(job(keyed));
+    expect(sendMail).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("en ny nyckel skickas med bara {to,subject,text} och loggas som (byrå, nyckel)", async () => {
+    const sendMail = vi.fn(() => Promise.resolve({ messageId: "x" }));
+    const { log, record } = memoryLog();
+    await createEmailDispatchHandler({ sendMail }, log)(job(keyed));
+    expect(sendMail).toHaveBeenCalledWith({ to: "x@y.se", subject: "s", text: "t" });
+    expect(record).toHaveBeenCalledWith("org-1", "payment.due:p1:2026-11");
+  });
+
+  it("samma nyckel två gånger skickas en gång", async () => {
+    const sendMail = vi.fn(() => Promise.resolve({ messageId: "x" }));
+    const { log } = memoryLog();
+    const handler = createEmailDispatchHandler({ sendMail }, log);
+    await handler(job(keyed));
+    await handler(job(keyed));
+    expect(sendMail).toHaveBeenCalledTimes(1);
+  });
+
+  it("vid SMTP-fel loggas inget, och felet kastas", async () => {
+    const sendMail = vi.fn(() => Promise.reject(new Error("550 relay denied")));
+    const { log, record } = memoryLog();
+    await expect(createEmailDispatchHandler({ sendMail }, log)(job(keyed))).rejects.toThrow(/relay denied/);
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("utan nyckel skickas mejlet utan att loggen tillfrågas", async () => {
+    const sendMail = vi.fn(() => Promise.resolve({ messageId: "x" }));
+    const { log, has, record } = memoryLog();
+    await createEmailDispatchHandler({ sendMail }, log)(job({ to: "x@y.se", subject: "s", text: "t", organizationId: "org-1" }));
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(has).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("utan byrå skickas mejlet utan att loggen tillfrågas", async () => {
+    const sendMail = vi.fn(() => Promise.resolve({ messageId: "x" }));
+    const { log, has } = memoryLog();
+    await createEmailDispatchHandler({ sendMail }, log)(job({ to: "x@y.se", subject: "s", text: "t", idempotencyKey: "k" }));
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(has).not.toHaveBeenCalled();
+  });
+
+  it("ett gammalt jobb {to,subject,text} parsas och skickas", async () => {
+    const sendMail = vi.fn(() => Promise.resolve({ messageId: "x" }));
+    const { log, has } = memoryLog();
+    await createEmailDispatchHandler({ sendMail }, log)(job({ to: "x@y.se", subject: "s", text: "t" }));
+    expect(sendMail).toHaveBeenCalledWith({ to: "x@y.se", subject: "s", text: "t" });
+    expect(has).not.toHaveBeenCalled();
+  });
+
+  it("utan logg skickas ett jobb med nyckel varje gång", async () => {
+    const sendMail = vi.fn(() => Promise.resolve({ messageId: "x" }));
+    const handler = createEmailDispatchHandler({ sendMail });
+    await handler(job(keyed));
+    await handler(job(keyed));
+    expect(sendMail).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -43,6 +122,13 @@ describe("buildServerFirstJobHandlers", () => {
   it("registrerar email-handlern när SMTP finns", () => {
     const handlers = buildServerFirstJobHandlers({ smtp });
     expect(typeof handlers[JOB_QUEUES.emailDispatch]).toBe("function");
+  });
+
+  it("med emailLog hoppar email-handlern över en loggad nyckel (#1901)", async () => {
+    const { log, has } = memoryLog(["org-1|payment.due:p1:2026-11"]);
+    const handler = buildServerFirstJobHandlers({ smtp, emailLog: log })[JOB_QUEUES.emailDispatch];
+    await handler?.(job(keyed));
+    expect(has).toHaveBeenCalledWith("org-1", "payment.due:p1:2026-11");
   });
 
   it("ingen email-handler utan SMTP", () => {
