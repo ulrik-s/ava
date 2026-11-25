@@ -112,3 +112,21 @@ const GATE_MESSAGES: Readonly<Record<"offline-expired" | "offline-unbound" | "se
 export function offlineGateMessage(decision: { kind: "offline-expired" | "offline-unbound" | "server-slow" }): string {
   return GATE_MESSAGES[decision.kind];
 }
+
+/** Besluten där starten stannar med ett besked. */
+export type HaltDecision = Extract<GateDecision, { kind: "server-slow" | "offline-expired" | "offline-unbound" }>;
+
+/** Stannar starten med ett besked (offline utan grace, eller trög server)? */
+export function isHaltDecision(d: GateDecision): d is HaltDecision {
+  return d.kind === "server-slow" || d.kind === "offline-expired" || d.kind === "offline-unbound";
+}
+
+/**
+ * Stoppa starten med beskedet. Svarar servern långsamt försöker starten igen av
+ * sig själv. ponytail: fast intervall; backoff om många flikar skulle hamra en trög server.
+ */
+export function haltGate(d: HaltDecision, retryLater: (ms: number) => void, fail: (message: string) => void): { kind: "halt" } {
+  if (d.kind === "server-slow") retryLater(SERVER_SLOW_RETRY_MS);
+  fail(offlineGateMessage(d));
+  return { kind: "halt" };
+}
