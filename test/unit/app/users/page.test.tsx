@@ -5,6 +5,8 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import UsersPage from "@/app/users/page";
+import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
+import { rowOrder, sortColumn } from "../../../helpers/data-table";
 
 const usersQuery = {
   data: { users: [] as Array<Record<string, unknown>> },
@@ -20,12 +22,21 @@ const deactivateMutation = {
   error: null,
 };
 
+/** onSuccess från user.deactivate — testet anropar den som servern hade gjort. */
+let deactivated: (() => void) | undefined;
+const listInvalidate = vi.fn();
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     user: {
       list: { useQuery: () => usersQuery },
       current: { useQuery: () => currentQuery },
-      deactivate: { useMutation: () => deactivateMutation },
+      deactivate: {
+        useMutation: (opts?: { onSuccess?: () => void }) => {
+          deactivated = opts?.onSuccess;
+          return deactivateMutation;
+        },
+      },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
@@ -34,7 +45,7 @@ vi.mock("@/lib/client/trpc", () => ({
       setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
-    useUtils: () => ({ user: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } }),
+    useUtils: () => ({ user: { list: { invalidate: listInvalidate } }, prefs: { get: { invalidate: vi.fn() } } }),
   },
 }));
 
@@ -149,5 +160,87 @@ describe("UsersPage — Bli denna (#1109)", () => {
     render(<UsersPage />);
     expect(screen.queryByText("Bli denna")).not.toBeInTheDocument();
     expect(screen.getByText("Inaktivera")).toBeInTheDocument();
+  });
+});
+
+// ── Kolumnerna, Bli denna och inaktiveringens svar (#1904) ──────────────
+
+/** Tre användare där varje kolumn ger en egen ordning. */
+const sortableUsers = (): Array<Record<string, unknown>> => [
+  { id: "a", name: "Alva", title: "Delägare", email: "c@x.se", role: "LAWYER",
+    hourlyRates: { ARBETE: 200000 }, mileageRate: 300 },
+  { id: "b", name: "Bertil", title: null, email: "a@x.se", role: "ASSISTANT",
+    hourlyRates: {}, mileageRate: null },
+  { id: "c", name: "Cecilia", title: "Biträdande jurist", email: "b@x.se", role: "OKÄND",
+    hourlyRates: { ARBETE: 100000 }, mileageRate: 250 },
+];
+
+describe("UsersPage — kolumnerna sorterar på det som visas (#1904)", () => {
+  beforeEach(() => {
+    usersQuery.data = { users: sortableUsers() };
+  });
+
+  const names = ["Alva", "Bertil", "Cecilia"];
+
+  it("Namn, Titel och E-post", () => {
+    render(<UsersPage />);
+    sortColumn("Namn", "desc");
+    expect(rowOrder(names)).toEqual(["Cecilia", "Bertil", "Alva"]);
+    sortColumn("Titel", "asc");
+    expect(rowOrder(names)).toEqual(["Bertil", "Cecilia", "Alva"]);
+    sortColumn("E-post", "asc");
+    expect(rowOrder(names)).toEqual(["Bertil", "Cecilia", "Alva"]);
+  });
+
+  it("Roll sorterar på etiketten och okänd roll på koden", () => {
+    render(<UsersPage />);
+    sortColumn("Roll", "desc");
+    expect(rowOrder(names)).toEqual(["Cecilia", "Bertil", "Alva"]);
+    expect(screen.getByText("OKÄND")).toBeInTheDocument();
+  });
+
+  it("Timarvode och Milersättning sorterar på beloppet, saknat belopp först", () => {
+    render(<UsersPage />);
+    sortColumn("Timarvode", "asc");
+    expect(rowOrder(names)).toEqual(["Bertil", "Cecilia", "Alva"]);
+    sortColumn("Milersättning", "desc");
+    expect(rowOrder(names)).toEqual(["Alva", "Cecilia", "Bertil"]);
+  });
+});
+
+describe("UsersPage — Bli denna och inaktiveringens svar (#1904)", () => {
+  it("Bli denna med confirm byter användare och laddar om startsidan", () => {
+    localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo" }));
+    usersQuery.data = { users: [sampleUser] };
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const replaceSpy = vi.spyOn(window.location, "replace").mockImplementation(() => undefined);
+    render(<UsersPage />);
+    fireEvent.click(screen.getByText("Bli denna"));
+    expect(confirmSpy).toHaveBeenCalledWith("Logga in som Anna Karlsson?");
+    expect(loadFirmaConfig()).toMatchObject({
+      principalId: "u1", authorName: "Anna Karlsson", authorEmail: "anna@x.se",
+    });
+    expect(replaceSpy).toHaveBeenCalledWith("/");
+    confirmSpy.mockRestore();
+    replaceSpy.mockRestore();
+  });
+
+  it("Bli denna med avbruten confirm byter inte användare", () => {
+    localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo" }));
+    usersQuery.data = { users: [sampleUser] };
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const replaceSpy = vi.spyOn(window.location, "replace").mockImplementation(() => undefined);
+    render(<UsersPage />);
+    fireEvent.click(screen.getByText("Bli denna"));
+    expect(replaceSpy).not.toHaveBeenCalled();
+    expect(loadFirmaConfig().principalId).toBeUndefined();
+    confirmSpy.mockRestore();
+    replaceSpy.mockRestore();
+  });
+
+  it("när användaren inaktiverats laddas listan om", () => {
+    render(<UsersPage />);
+    deactivated?.();
+    expect(listInvalidate).toHaveBeenCalled();
   });
 });

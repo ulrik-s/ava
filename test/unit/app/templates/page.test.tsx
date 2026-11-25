@@ -2,9 +2,10 @@
  * Test för TemplatesPage — listrendering, gruppering, ta-bort-dialog.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import TemplatesPage from "@/app/templates/page";
+import { rowOrder, rowWith, sortColumn } from "../../../helpers/data-table";
 
 const templatesQuery = {
   data: undefined as Array<Record<string, unknown>> | undefined,
@@ -16,9 +17,12 @@ const utilsMock = {
 };
 const deleteMutate = vi.fn();
 const deleteState = { isPending: false };
+/** onSuccess från documentTemplate.delete — testet anropar den som servern hade gjort. */
+let templateDeleted: (() => void) | undefined;
+const routerPush = vi.fn();
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 vi.mock("@/lib/client/trpc", () => ({
@@ -27,7 +31,10 @@ vi.mock("@/lib/client/trpc", () => ({
     documentTemplate: {
       list: { useQuery: () => templatesQuery },
       delete: {
-        useMutation: () => ({ mutate: deleteMutate, isPending: deleteState.isPending }),
+        useMutation: (opts?: { onSuccess?: () => void }) => {
+          templateDeleted = opts?.onSuccess;
+          return { mutate: deleteMutate, isPending: deleteState.isPending };
+        },
       },
     },
     prefs: {
@@ -130,5 +137,77 @@ describe("TemplatesPage", () => {
     expect(screen.getByText(/Ta bort mall\?/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Avbryt/i }));
     expect(screen.queryByText(/Ta bort mall\?/i)).not.toBeInTheDocument();
+  });
+});
+
+// ── Kolumnerna, radklicket och borttagningens svar (#1904) ──────────────
+
+/** Tre mallar där varje kolumn ger en egen ordning. */
+const sortableTemplates = (): Array<Record<string, unknown>> => [
+  { id: "a", name: "Alfa", category: "Processer", description: "Ccc", createdBy: { name: "Bo" },
+    updatedAt: "2026-03-01T00:00:00.000Z" },
+  { id: "b", name: "Beta", category: null, description: null, createdBy: null,
+    updatedAt: "2026-01-01T00:00:00.000Z" },
+  { id: "c", name: "Gamma", category: "Avtal", description: "Aaa", createdBy: { name: "Ada" },
+    updatedAt: "2026-02-01T00:00:00.000Z" },
+];
+
+describe("TemplatesPage — kolumnerna sorterar på det som visas (#1904)", () => {
+  beforeEach(() => {
+    templatesQuery.data = sortableTemplates();
+  });
+
+  const names = ["Alfa", "Beta", "Gamma"];
+
+  it("Namn, Kategori och Beskrivning", () => {
+    render(<TemplatesPage />);
+    sortColumn("Namn", "desc");
+    expect(rowOrder(names)).toEqual(["Gamma", "Beta", "Alfa"]);
+    sortColumn("Kategori", "asc");
+    expect(rowOrder(names)).toEqual(["Gamma", "Beta", "Alfa"]);
+    sortColumn("Beskrivning", "asc");
+    expect(rowOrder(names)).toEqual(["Beta", "Gamma", "Alfa"]);
+  });
+
+  it("Skapad av och Uppdaterad", () => {
+    render(<TemplatesPage />);
+    sortColumn("Skapad av", "desc");
+    expect(rowOrder(names)).toEqual(["Alfa", "Gamma", "Beta"]);
+    sortColumn("Uppdaterad", "asc");
+    expect(rowOrder(names)).toEqual(["Beta", "Gamma", "Alfa"]);
+  });
+});
+
+describe("TemplatesPage — radklick och borttagning (#1904)", () => {
+  it("klick på raden öppnar mallen för redigering", () => {
+    templatesQuery.data = sortableTemplates();
+    render(<TemplatesPage />);
+    fireEvent.click(rowWith("Gamma"));
+    expect(routerPush).toHaveBeenCalledWith("/templates/__shell__/edit/?id=c");
+  });
+
+  it("klick på Ta bort öppnar inte mallen", () => {
+    templatesQuery.data = sortableTemplates();
+    render(<TemplatesPage />);
+    fireEvent.click(screen.getAllByTitle("Ta bort")[0] as HTMLElement);
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(screen.getByText(/Ta bort mall\?/i)).toBeInTheDocument();
+  });
+
+  it("när mallen tagits bort stängs dialogen och listan laddas om", () => {
+    templatesQuery.data = sortableTemplates();
+    render(<TemplatesPage />);
+    fireEvent.click(screen.getAllByTitle("Ta bort")[0] as HTMLElement);
+    act(() => templateDeleted?.());
+    expect(utilsMock.documentTemplate.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByText(/Ta bort mall\?/i)).not.toBeInTheDocument();
+  });
+
+  it("medan borttagningen pågår är knappen låst", () => {
+    templatesQuery.data = sortableTemplates();
+    deleteState.isPending = true;
+    render(<TemplatesPage />);
+    fireEvent.click(screen.getAllByTitle("Ta bort")[0] as HTMLElement);
+    expect(screen.getByRole("button", { name: "Tar bort…" })).toBeDisabled();
   });
 });

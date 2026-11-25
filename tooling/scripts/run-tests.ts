@@ -133,9 +133,13 @@ const FAST = process.argv.includes("--fast");
 // LINE oförändrat) → 95.0 rader / 93.1 funktioner (#1903, steg 1 av 5: DataTable
 // och listsidorna för ärenden, fakturor och parter utlöser sina händelser → de
 // 46 otäckta funktionerna täckta, lokalt 97.79% rader / 93.68% funktioner. LINE
-// till målet 95.0; FUNC = uppmätt avrundat nedåt till tiondel minus 0.5).
+// till målet 95.0; FUNC = uppmätt avrundat nedåt till tiondel minus 0.5)
+// → 95.0 rader / 93.7 funktioner (#1904, steg 2 av 5: användare, sök, mallar
+// och tidregistreringen utlöser sina händelser → de 41 otäckta funktionerna
+// täckta, lokalt 97.84% rader / 94.25% funktioner. LINE oförändrat; FUNC =
+// uppmätt avrundat nedåt till tiondel minus 0.5).
 const LINE_FLOOR = 0.950;
-const FUNC_FLOOR = 0.931;
+const FUNC_FLOOR = 0.937;
 
 /**
  * AI-ytans golv (#1025). `tooling/ava-cli/` — CLI:t + MCP-servern — mättes
