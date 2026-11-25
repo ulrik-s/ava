@@ -52,8 +52,10 @@ const MATTER: HeaderEditMatter = {
   paymentMethod: "PRIVAT",
   responsibleLawyerId: "u-ulrik",
 };
-const CLIENT: MatterContactWithRole = { role: "KLIENT", contact: { contactType: "PERSON" } };
-const INSURER: MatterContactWithRole = { role: "FORSAKRINGSBOLAG", contact: { contactType: "INSURANCE_COMPANY" } };
+/** En part som anroparen skickar: rollen, och kontakten med sin typ. */
+type Party = MatterContactWithRole & { contact: { contactType: string } };
+const CLIENT: Party = { role: "KLIENT", contact: { contactType: "PERSON" } };
+const INSURER: Party = { role: "FORSAKRINGSBOLAG", contact: { contactType: "INSURANCE_COMPANY" } };
 
 function open(matter: Partial<HeaderEditMatter> = {}, contacts: readonly MatterContactWithRole[] = [CLIENT]): HTMLElement {
   render(<MatterHeaderEdit matterId={asId<"MatterId">("m1")} matter={{ ...MATTER, ...matter }} contacts={contacts} />);
@@ -103,6 +105,11 @@ describe("MatterHeaderEdit", () => {
     document.body.innerHTML = "";
     const adverse = open({}, [CLIENT, { ...INSURER, role: "MOTPART" }]);
     expect(within(adverse).queryByLabelText("Försäkringsreferens")).not.toBeInTheDocument();
+  });
+
+  it("rollen Försäkringsbolag avgör, inte kontakttypen: ett företag i rollen ger fältet (#1961)", () => {
+    const dialog = open({}, [CLIENT, { role: "FORSAKRINGSBOLAG", contact: { contactType: "COMPANY" } }]);
+    expect(within(dialog).getByLabelText("Försäkringsreferens")).toHaveValue("SK-1");
   });
 
   it("en ärendetyp som inte finns i byråns lista står på Välj ärendetyp…", () => {
