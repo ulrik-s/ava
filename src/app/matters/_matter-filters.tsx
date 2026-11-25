@@ -32,7 +32,7 @@ export function MatterFilters({ search, status, employeeId, employeesData, onSea
         onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
         <input type="text" placeholder="Sök ärenden..." value={search}
           onChange={(e) => onSearch(e.target.value)}
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm" />
         <button type="submit" disabled={searching || !search.trim()}
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
           {searching ? "Söker..." : "Sök"}

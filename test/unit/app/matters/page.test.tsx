@@ -175,6 +175,15 @@ describe("MattersPage", () => {
     expect(search.value).toBe("bodel");
   });
 
+  it("sökrutan har vit bakgrund, valrutorna bredvid ändras inte (#1963)", () => {
+    render(<MattersPage />);
+    expect(screen.getByPlaceholderText(/Sök ärenden/i)).toHaveClass("bg-white");
+    const filters = screen.getAllByRole("combobox").filter((el) =>
+      within(el).queryByRole("option", { name: /Alla statusar|Alla medarbetare/ }) !== null);
+    expect(filters).toHaveLength(2);
+    for (const el of filters) expect(el).not.toHaveClass("bg-white");
+  });
+
   it("visar paginering när pages > 1", () => {
     mattersQuery.data = { matters: [], total: 50, pages: 3 };
     render(<MattersPage />);
