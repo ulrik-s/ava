@@ -110,6 +110,11 @@ describe("installationens konfiguration (config.js)", () => {
     });
   });
 
+  it("AVA_ADDIN_CLIENT_ID och AVA_ADDIN_TENANT_ID går före webbinloggningens värden", () => {
+    expect(addinConfigFromEnv({ ...PROD_ENV, AVA_ADDIN_CLIENT_ID: " addin ", AVA_ADDIN_TENANT_ID: "t2" }))
+      .toEqual({ clientId: "addin", tenantId: "t2" });
+  });
+
   it("utan Entra-uppgifter: ingen konfiguration (panelen säger 'inte konfigurerat')", () => {
     expect(addinConfigFromEnv({ AVA_DOMAIN: "x" })).toBeNull();
     expect(renderConfigJs(null)).toContain("window.AVA_ADDIN = undefined;");

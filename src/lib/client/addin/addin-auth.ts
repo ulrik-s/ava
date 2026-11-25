@@ -19,13 +19,10 @@ import {
   type Configuration,
   type IPublicClientApplication,
 } from "@azure/msal-browser";
+import type { Office365Config } from "@/lib/shared/office365-config";
 
 /** Tilläggets konfiguration, satt per installation av `config.js` (office-addin/manifest.ts). */
-export interface AddinConfig {
-  /** AVA-appens klient-id i byråns Entra. */
-  clientId: string;
-  /** Byråns tenant-id. */
-  tenantId: string;
+export interface AddinConfig extends Office365Config {
   /** Graph-bas; bara E2E-servern sätter en egen. */
   graphBaseUrl?: string;
   /** Fasta token i stället för NAA — för E2E och lokal utveckling utan Outlook. */

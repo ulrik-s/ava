@@ -230,6 +230,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "system.capabilities": "Vad den här installationen kan (demo, self-hosted eller serverdrift) — styr vilka funktioner som är tillgängliga.",
   "system.helperConfig": "Inloggningskonfiguration som webbappen pushar till den lokala hjälpprocessen. Null i demon.",
   "system.signOutConfig": "Var utloggningen avslutas hos identitetsleverantören (IdP:ns utloggningsadress), eller null om bara proxyns session avslutas.",
+  "system.office365Config": "Byråns Entra-app för Microsoft 365 (klient-id och tenant, samma app som webbinloggningen), eller null om installationen inte loggar in med Entra.",
 
   // ── Uppgifter ────────────────────────────────────────────────────
   "task.list": "Lista uppgifter, valfritt filtrerat på status eller ärende.",

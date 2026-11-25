@@ -25,6 +25,17 @@ Scopes (`MS_DEFAULT_SCOPES` i `src/lib/server/integrations/msgraph/schema.ts`):
 | `Mail.Send` | skicka från ärendet |
 | `User.Read` | identifiera den inloggade |
 
+## Webbappens app (#1949)
+
+Webbappen (MSAL, `Mail.Send`) använder **webbinloggningens app**: servern svarar
+på `system.office365Config` med klient-id ur `AVA_IDENTITY_AUDIENCE` och tenanten
+ur `AVA_IDENTITY_ISSUER` (`null` när issuern inte är Entra). Har
+`AVA_IDENTITY_AUDIENCE` flera värden ska oauth2-proxys klient-id stå först, för
+det första värdet gäller. `AVA_ADDIN_CLIENT_ID`/`AVA_ADDIN_TENANT_ID` gäller bara
+Outlook-tillägget. Connectorn läser i ordningen localStorage, byggtids-env
+(`NEXT_PUBLIC_AVA_MS_*`), servern; klient-id och tenant tolkas på ett ställe
+(`entraAppConfig` i `src/lib/shared/office365-config.ts`).
+
 ## Ansluta
 
 ```bash
