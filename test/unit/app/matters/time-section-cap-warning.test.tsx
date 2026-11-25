@@ -13,11 +13,14 @@ const usage = { data: { billableMinutes: 0, billableValueOre: 0 } };
 const listInvalidate = vi.fn();
 const usageInvalidate = vi.fn();
 type Opts = { onSuccess?: () => void };
-const opts: { create: Opts; update: Opts; delete: Opts } = { create: {}, update: {}, delete: {} };
+const opts: { create: Opts; delete: Opts } = { create: {}, delete: {} };
 const mutation = (key: keyof typeof opts) => (o: Opts) => {
   opts[key] = o;
   return { mutate: vi.fn(), isPending: false, error: null };
 };
+/** Ändringen sparas genom anropets egen onSuccess (#2042) — lyckas direkt här. */
+const savedMutation = () => ({ mutate: vi.fn((_input: unknown, o?: Opts) => o?.onSuccess?.()), isPending: false, error: null });
+const entries: Array<Record<string, unknown>> = [];
 const noopMut = () => ({ mutate: vi.fn(), isPending: false });
 
 vi.mock("@/lib/client/trpc", () => ({
@@ -26,11 +29,12 @@ vi.mock("@/lib/client/trpc", () => ({
       timeEntry: { list: { invalidate: listInvalidate } },
       matter: { coverageUsage: { invalidate: usageInvalidate } },
     }),
-    matter: { coverageUsage: { useQuery: () => usage } },
+    matter: { coverageUsage: { useQuery: () => usage }, list: { useQuery: () => ({ data: { matters: [] } }) } },
     timeEntry: {
-      list: { useQuery: () => ({ data: { entries: [], totalMinutes: 0 }, isLoading: false }) },
+      list: { useQuery: () => ({ data: { entries, totalMinutes: 0 }, isLoading: false }) },
       create: { useMutation: mutation("create") },
-      update: { useMutation: mutation("update") },
+      update: { useMutation: savedMutation },
+      moveToMatter: { useMutation: savedMutation },
       delete: { useMutation: mutation("delete") },
       radgivningStatus: { useQuery: () => ({ data: undefined }) },
       markAsRadgivning: { useMutation: noopMut },
@@ -54,6 +58,7 @@ const WARNING = /Närmar sig taket|Taket passerat/;
 beforeEach(() => {
   vi.clearAllMocks();
   usage.data = { billableMinutes: 0, billableValueOre: 0 };
+  entries.length = 0;
 });
 
 describe("TimeSection — takvarning (#1520)", () => {
@@ -89,7 +94,16 @@ describe("TimeSection — takvarning (#1520)", () => {
     expect(screen.getByRole("dialog", { name: "Registrera tid" })).toBeInTheDocument();
   });
 
-  it.each(["create", "update", "delete"] as const)("%s hämtar om tidslistan och upparbetat mot taket", (key) => {
+  it("update hämtar om tidslistan och upparbetat mot taket", () => {
+    entries.push({ id: "t1", matterId, date: "2026-03-01", minutes: 60, description: "Samtal", billable: true });
+    render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" />);
+    fireEvent.click(screen.getByText("Ändra"));
+    fireEvent.click(screen.getByText("Spara"));
+    expect(listInvalidate).toHaveBeenCalledWith({ matterId });
+    expect(usageInvalidate).toHaveBeenCalledWith({ matterId });
+  });
+
+  it.each(["create", "delete"] as const)("%s hämtar om tidslistan och upparbetat mot taket", (key) => {
     render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" />);
     act(() => { opts[key].onSuccess?.(); });
     expect(listInvalidate).toHaveBeenCalledWith({ matterId });

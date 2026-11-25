@@ -186,3 +186,40 @@ test("en beskrivning över flera rader: datumet står i höjd med beskrivningens
 
   expect(Math.abs(await firstLineTop(dateCell) - await firstLineTop(descCell))).toBeLessThanOrEqual(2);
 });
+
+/*
+ * #2042: en tidspost registrerad i fel ärende flyttas till rätt ärende i
+ * Ändra tidregistrering på /time. Posten syns sedan i målärendets tidslista.
+ * Timpriset mot målärendet prövas i routerns och procedurkörningens tester.
+ */
+test("en post flyttas till ett annat ärende i Ändra tidregistrering", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const [from, to] = seed.matters.filter((m) => m.status === "ACTIVE" && m.matterNumber)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!from || !to) throw new Error("demon saknar två aktiva ärenden");
+  const label = (m: typeof from) => `${m.matterNumber ?? ""} — ${m.title}`;
+
+  await page.goto(`${base}/time/`, { waitUntil: "load" });
+  await page.getByRole("button", { name: /\+ Registrera tid/ }).click();
+  await page.getByLabel("Ärende *").fill(label(from));
+  const description = "E2E: registrerad i fel ärende (#2042)";
+  await page.getByLabel("Beskrivning *").fill(description);
+  await page.getByRole("button", { name: "Spara", exact: true }).click();
+
+  const row = page.getByRole("row").filter({ hasText: description });
+  await expect(row).toContainText(from.matterNumber ?? "");
+  await row.getByRole("button", { name: "Ändra" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ändra tidregistrering" });
+  await expect(dialog.getByLabel("Ärende")).toHaveValue(label(from));
+  await dialog.getByLabel("Ärende").fill(label(to));
+  await dialog.getByRole("button", { name: "Spara" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(row).toContainText(to.matterNumber ?? "");
+
+  await page.goto(`${base}/matters/${to.id}/`, { waitUntil: "load" });
+  const tid = page.getByRole("region", { name: "Tid" }).last();
+  await expect(tid).toBeVisible({ timeout: 25_000 });
+  await expect(tid.getByText(description)).toBeVisible();
+});

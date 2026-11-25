@@ -2,7 +2,7 @@
  * Test för TimePage — listrendering och nytt-tidsregistreringsflöde.
  */
 
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import TimePage from "@/app/time/page";
 
@@ -24,6 +24,9 @@ const matterQuery: { data: { matters: Array<Record<string, unknown>> } } = {
 const utilsMock = { timeEntry: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } };
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
+const moveMutate = vi.fn();
+/** Serverfel från flytten (#2042). */
+let moveError: { message: string } | null = null;
 const deleteMutate = vi.fn();
 /** Serverfel från update (t.ex. PRECONDITION_FAILED för en fryst post). */
 let updateError: { message: string } | null = null;
@@ -35,6 +38,7 @@ vi.mock("@/lib/client/trpc", () => ({
       list: { useQuery: () => timeQuery },
       create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
       update: { useMutation: () => ({ mutate: updateMutate, isPending: false, error: updateError }) },
+      moveToMatter: { useMutation: () => ({ mutate: moveMutate, isPending: false, error: moveError }) },
       delete: { useMutation: () => ({ mutate: deleteMutate, isPending: false, error: null }) },
     },
     // Byråns standardåtgärder (#956) läses av ändra-formuläret. Tom → ingen väljare.
@@ -59,6 +63,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   timeQuery.data = { entries: [], total: 0, pages: 0, totalMinutes: 0 };
   updateError = null;
+  moveError = null;
 });
 
 describe("TimePage", () => {
@@ -177,7 +182,7 @@ describe("TimePage", () => {
 describe("TimePage — ändra och ta bort", () => {
   const entry = {
     id: "t1", date: "2026-09-20", minutes: 45, description: "Genomgång av avtal",
-    billable: true, kind: "ARBETE",
+    billable: true, kind: "ARBETE", matterId: "m1",
     matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" },
     user: { name: "Cecilia" },
   };
@@ -195,7 +200,7 @@ describe("TimePage — ändra och ta bort", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
     expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({
       id: "t1", description: "Genomgång av avtal + mejl", minutes: 45, date: "2026-09-20",
-    }));
+    }), expect.anything());
   });
 
   it("Ta bort frågar först och tar bort vid ja", () => {
@@ -240,5 +245,54 @@ describe("TimePage — ändra och ta bort", () => {
     withRows(entry);
     render(<TimePage />);
     expect(screen.getByRole("alert")).toHaveTextContent(/slutfaktura/);
+  });
+});
+
+describe("TimePage — flytta posten till ett annat ärende (#2042)", () => {
+  const entry = {
+    id: "t1", date: "2026-09-20", minutes: 45, description: "Genomgång av avtal", billable: true, kind: "ARBETE",
+    matterId: "m1", matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" }, user: { name: "Cecilia" },
+  };
+  type CallOpts = { onSuccess?: () => void } | undefined;
+  const succeed = (mutate: ReturnType<typeof vi.fn>) => (mutate.mock.calls.at(-1)?.[1] as CallOpts)?.onSuccess?.();
+
+  beforeEach(() => {
+    timeQuery.data = { entries: [entry], total: 1, pages: 1, totalMinutes: 45 };
+    matterQuery.data = { matters: [
+      { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" },
+      { id: "m2", matterNumber: "UA2026-0002", title: "Hyrestvist" },
+    ] };
+  });
+
+  function openEdit() {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
+    return screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
+  }
+
+  it("fältet Ärende är förvalt postens ärende; samma ärende ger bara update", () => {
+    const dialog = openEdit();
+    expect(within(dialog).getByLabelText("Ärende")).toHaveValue("UA2026-0001 — Avtalstvist");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    act(() => succeed(updateMutate));
+    expect(moveMutate).not.toHaveBeenCalled();
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).not.toBeInTheDocument();
+  });
+
+  it("ett annat ärende: update och sedan moveToMatter med postens id", () => {
+    const dialog = openEdit();
+    fireEvent.change(within(dialog).getByLabelText("Ärende"), { target: { value: "UA2026-0002 — Hyrestvist" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    act(() => succeed(updateMutate));
+    expect(moveMutate).toHaveBeenCalledWith({ ids: ["t1"], matterId: "m2" }, expect.anything());
+    act(() => succeed(moveMutate));
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).not.toBeInTheDocument();
+  });
+
+  it("ett fel i flytten visas för användaren", () => {
+    moveError = { message: "Tidposten ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort." };
+    render(<TimePage />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/kostnadsräkning/);
   });
 });

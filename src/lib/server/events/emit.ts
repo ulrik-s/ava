@@ -117,6 +117,10 @@ export const emit = {
   timeEntryUpdated: (ctx: EmitCtx, entry: { id: TimeEntryId; matterId: MatterId }) =>
     emitUser(ctx, "time-entry.updated", { entryId: entry.id }, entry.matterId),
 
+  /** Posten flyttades till ett annat ärende (#2042) — händelsen hör till målet. */
+  timeEntryMoved: (ctx: EmitCtx, entry: { id: TimeEntryId; matterId: MatterId }, fromMatterId: MatterId) =>
+    emitUser(ctx, "time-entry.moved", { entryId: entry.id, fromMatterId }, entry.matterId),
+
   timeEntryDeleted: (ctx: EmitCtx, entryId: TimeEntryId, matterId: MatterId) =>
     emitUser(ctx, "time-entry.deleted", { entryId }, matterId),
 

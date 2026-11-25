@@ -56,6 +56,8 @@ vi.mock("@/lib/client/trpc", () => ({
       removeContact: { useMutation: () => stubs.removeContact },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       coverageUsage: { useQuery: () => coverageQuery },
+      // Ärendena en tidspost kan flyttas till (#2042).
+      list: { useQuery: () => ({ data: { matters: [] } }) },
     },
     watchlist: {
       // WatchSection: ärendets övriga signaler (#1167).
@@ -73,6 +75,7 @@ vi.mock("@/lib/client/trpc", () => ({
       list: { useQuery: () => timeQuery },
       create: { useMutation: () => stubs.createTimeEntry },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      moveToMatter: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     expense: {

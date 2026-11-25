@@ -38,6 +38,8 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   // "Markera som rådgivning" (#1349): låser posten och skapar ev. en restpost
   // (id härlett ur anropet). Tidsposter är procedurägda — radvägen avvisas.
   "timeEntry.markAsRadgivning": Object.freeze({ entity: "timeEntry" }),
+  // Flytt till ett annat ärende (#2042): servern räknar om timpriset och prövar låsregeln.
+  "timeEntry.moveToMatter": Object.freeze({ entity: "timeEntry" }),
   // Utläggen (#1276): servern kör om routern — byrån och låsta utlägg gäller.
   "expense.create": Object.freeze({ entity: "expense", idField: "id" }),
   "expense.update": Object.freeze({ entity: "expense" }),

@@ -20,6 +20,7 @@ const PROCEDURES: Readonly<Record<string, string>> = {
   "timeEntry.update": "Ändring av tidspost",
   "timeEntry.delete": "Borttagning av tidspost",
   "timeEntry.markAsRadgivning": "Markering av rådgivningstimmen",
+  "timeEntry.moveToMatter": "Flytt av tidspost till annat ärende",
   "expense.create": "Nytt utlägg",
   "expense.update": "Ändring av utlägg",
   "expense.delete": "Borttagning av utlägg",
