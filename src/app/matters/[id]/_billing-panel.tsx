@@ -36,6 +36,7 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { BILLING_RUN_RECIPIENT_LABELS, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
+import { BillingActions, useApplyBillingShortcut } from "./_billing-actions";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { openKrDoc, pickKrDoc, runDateOf, RunsList, svDate, type BillingRunRow, type KrDocInfo, type StandaloneInvoiceRow } from "./_billing-runs-list";
 import { BillingSummary } from "./_billing-summary";
@@ -64,6 +65,10 @@ interface MatterContext {
 interface Props {
   matterId: MatterId;
   matter: MatterContext;
+  /** Begäran om att fakturera nu (#1853): panelen öppnar det flödet väljer. */
+  shortcutRequested?: boolean | undefined;
+  /** Anropas en gång när begäran hanterats, också när inget öppnas. */
+  onShortcutDone?: (() => void) | undefined;
 }
 
 /** Fakturor som INTE är kopplade till en billing-run (t.ex. rådgivningstimmen). */
@@ -361,7 +366,7 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
   );
 }
 
-export function BillingPanel({ matterId, matter }: Props) {
+export function BillingPanel({ matterId, matter, shortcutRequested, onShortcutDone }: Props) {
   const runs = trpc.billingRun.list.useQuery({ matterId });
   const utils = trpc.useUtils();
   // Självupptäck inkonsistenser (t.ex. KR väntar på dom utan KR-dokument).
@@ -369,6 +374,7 @@ export function BillingPanel({ matterId, matter }: Props) {
   const [dialog, setDialog] = useState<DialogState>("NONE");
   const [showKr, setShowKr] = useState(false);
   const [showSettle, setShowSettle] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [verdictRunId, setVerdictRunId] = useState<BillingRunId | null>(null);
   const [beslutRunId, setBeslutRunId] = useState<BillingRunId | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
@@ -400,11 +406,13 @@ export function BillingPanel({ matterId, matter }: Props) {
     else if (a.dialog === "settlement") setShowSettle(true);
     else setDialog(a.type as DialogState);
   };
+  useApplyBillingShortcut({ requested: shortcutRequested, runs, matter: flowMatter, rows, onPick,
+    openMenu: () => setMenuOpen(true), onDone: onShortcutDone });
   return (
     <div className={SECTION_FILL_CLASS}>
       <div className={sectionHeaderClass("green")}>
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
-        <BillingActions actions={actions} onPick={onPick} />
+        <BillingActions actions={actions} open={menuOpen} onOpenChange={setMenuOpen} onPick={onPick} />
       </div>
       <BillingSummary matterId={matterId} runs={rows} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
@@ -588,34 +596,6 @@ function RattshjalpKrDialog({ matterId, matter, onClose, onRecorded }: { matterI
         </div>
       </div>
     </Modal>
-  );
-}
-
-/** Skapa-faktura-menyn — alternativen kommer från flödesmodellen (#816); panelen
- *  väljer inte längre per betalningssätt själv. Inga actions i fasen → ingen knapp. */
-function BillingActions({ actions, onPick }: { actions: readonly BillingAction[]; onPick: (a: BillingAction) => void }) {
-  const [open, setOpen] = useState(false);
-  if (actions.length === 0) return null;
-  return (
-    <div className="relative">
-      <button onClick={() => setOpen((v) => !v)} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">
-        + Skapa faktura
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-1 min-w-[14rem]">
-            {actions.map((a) => (
-              <button key={a.type}
-                onClick={() => { onPick(a); setOpen(false); }}
-                className="block w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 rounded">
-                {a.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 
