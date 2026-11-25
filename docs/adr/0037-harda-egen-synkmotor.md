@@ -212,6 +212,39 @@ analys, och fälten analysen skriver tas bort ur en radpush
 (`serverOwnedOnly` i `QUEUED_PROCEDURES`), och grinden för synkregistren godtar
 markeringen bara på en entitet med fält som servern äger.
 
+**Samma ärende och låsta fält i radpolicyn (#2044).**
+*Kontext:* radkön skriver färdiga rader, utan routrarnas regler. Radpolicyn
+(#1344, #1372) prövade radens egna fält, men inte att en rad hör ihop med sitt
+ärende eller att ett fält är låst av radens innehåll. Därför gällde
+dokumentets spärrar (mappen i ärendet, delarna i dokumentets ärende, fakturans
+och kostnadsräkningens egna dokument stannar i sitt ärende) bara i klientens
+körning, både för `moveDocument` och för flytt mellan ärenden.
+*Beslut:* radpolicyn får två deklarativa regler per entitet.
+`sameMatter: { referensfält: entitet }`: den refererade raden ska ha samma
+`matterId` som raden; uppslaget görs i samma transaktion som pushen.
+`lockedWhen: { fields, guards }`: fälten får inte ändras när någon av vakterna
+är satt på serverns rad. Båda prövas när fälten sätts eller ändras;
+`sameMatter` också när radens `matterId` ändras. `lockedWhen` låser också
+vakterna själva, så att en klient inte kan nolla `invoiceId` eller
+`billingRunId` och byta ärende i nästa push. Tomma och saknade referenser
+prövas inte. Först gäller de för `document` och `documentPart`. Gränsen mot
+procedurkön står kvar: regler om radens form och sammanhang hör hemma i
+radpolicyn; det som kräver att servern kör om ett flöde (serier, jävskontroll,
+pengar) går via procedurkön.
+*Alternativ:* spärrarna bara i klienten (enklast, men servern håller inte
+spärrarna); dokumentet procedurägt (går emot #1884 och är mycket större); en
+köad procedur för flytten (registrets grind fäller den, `serverOwnedOnly`, och
+radvägen tar ändå emot dokumentets rad); vakterna i `immutableOnUpdate` (tar
+tyst bort fälten ur pushen, så att den ser godkänd ut fast servern behåller ett
+annat värde, och dokumentets lås hamnar på två ställen).
+*Konsekvenser:* dokumentets spärrar gäller på servern för alla klienter och
+alla vägar (`moveDocument`, `updateMetadata` och flytt mellan ärenden). En
+vägrad dokumentrad drar med sig sina delar (delens `matterId` prövas mot
+dokumentets ärende på servern), och båda återställs i klienten (#1348).
+Radpolicyn läser fler rader per push, ett uppslag per satt referens, som
+`refs` redan gör. Andra entiteter med ett ärende (t.ex. mappens förälder) kan
+få samma regler senare utan ny mekanism.
+
 ## Konsekvenser
 
 - Affärsreglerna upprätthålls på servern utan att dubbelskrivas — samma kod körs

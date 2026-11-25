@@ -155,14 +155,32 @@ class RowApplication {
     const orgOf = (row: Row): Promise<string | undefined> => repo.organizationOf(row);
     return await checkScope(orgOf, pusher.organizationId, existing, incoming)
       ?? checkProcedureOwned(m.entity, existing)
-      ?? await checkRowPolicy({ entity: m.entity, kind: m.kind, incoming, existing, pusher, refOrg: (e, id) => this.refOrg(e, id) });
+      ?? await checkRowPolicy({
+        entity: m.entity, kind: m.kind, incoming, existing, pusher,
+        refOrg: (e, id) => this.refOrg(e, id),
+        refMatter: (e, id) => this.refMatter(e, id),
+      });
+  }
+
+  /** Den refererade raden och dess repo, läst i samma transaktion; `null` om den inte finns. */
+  private async refRow(entity: string, id: string): Promise<{ repo: EntityRepo; row: Row } | null> {
+    const repo = entityRepo(this.repos, entity);
+    const row = repo ? await repo.getById(id) : null;
+    return repo && row ? { repo, row } : null;
   }
 
   /** Byrån en refererad rad hör till; `null` om den inte finns. */
   private async refOrg(entity: string, id: string): Promise<string | null | undefined> {
-    const repo = entityRepo(this.repos, entity);
-    const row = repo ? await repo.getById(id) : null;
-    return repo && row ? repo.organizationOf(row) : null;
+    const ref = await this.refRow(entity, id);
+    return ref ? ref.repo.organizationOf(ref.row) : null;
+  }
+
+  /** Ärendet en refererad rad ligger i (#2044); `null` om den inte finns, `undefined` utan ärende. */
+  private async refMatter(entity: string, id: string): Promise<string | null | undefined> {
+    const ref = await this.refRow(entity, id);
+    if (!ref) return null;
+    const matterId = ref.row.matterId;
+    return typeof matterId === "string" ? matterId : undefined;
   }
 
   private async applyCreate(repo: EntityRepo, m: QueuedMutation, existing: Row | null): Promise<PushResult> {
