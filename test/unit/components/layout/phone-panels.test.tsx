@@ -3,7 +3,7 @@
  * inaktiv flik; mörkt läge behåller normal vikt.
  */
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest-compat";
+import { describe, expect, it, vi } from "vitest-compat";
 import { PhonePanels } from "@/components/layout/phone-panels";
 
 const panels = [
@@ -63,5 +63,22 @@ describe("PhonePanels activePanel (#1851)", () => {
   it("utan prop är första fliken vald", () => {
     render(<PhonePanels panels={panels} />);
     expect(selected()).toBe("Första");
+  });
+});
+
+// #1966: flikraden är den delade TabBar; × efter en valbar flik tar bort panelen.
+describe("PhonePanels × (#1966)", () => {
+  it("bara valbara paneler har ×, och det anropar onClose", () => {
+    const onClose = vi.fn();
+    render(<PhonePanels panels={panels} closable={new Set(["b"])} onClose={onClose} />);
+    expect(screen.getByRole("tablist", { name: "Paneler" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ta bort Första" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort Andra" }));
+    expect(onClose).toHaveBeenCalledWith("b");
+  });
+
+  it("utan onClose finns inget ×", () => {
+    render(<PhonePanels panels={panels} closable={new Set(["b"])} />);
+    expect(screen.queryByRole("button", { name: "Ta bort Andra" })).not.toBeInTheDocument();
   });
 });
