@@ -12,6 +12,7 @@
  *   visar dockytan (768 px är laptop enligt `PHONE_MAX_WIDTH`).
  * - meny: ☰ på telefonen, ikonmenyn till vänster på iPad.
  * - scroll: varken dokumentet eller `main` scrollar (som `docking-layout.spec.ts`).
+ * - dagspilarna: Startsidans ‹ › syns inom fönstret utan sidledsscroll (#2095).
  * - offline: appen öppnas offline via service workern (som `demo-offline.spec.ts`).
  */
 import type { Page } from "@playwright/test";
@@ -96,6 +97,17 @@ test("scroll: varken dokumentet eller main scrollar på ärendesidan, /matters/ 
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 30_000 });
     expect(await pageScroll(page), path).toEqual({ doc: 0, main: 0 });
   }
+});
+
+test("dagspilarna: Startsidans ‹ och › syns inom fönstret, och sidan scrollar inte i sidled (#2095)", async ({ page }) => {
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/`);
+  await expect(page.getByRole("heading", { name: "Startsida", level: 1 })).toBeVisible({ timeout: 30_000 });
+  for (const name of ["Föregående dag", "Nästa dag"]) {
+    await expect(page.getByRole("button", { name }), name).toBeInViewport({ ratio: 1 });
+  }
+  const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(sideways, "sidledsscroll").toBe(0);
 });
 
 test.describe("offline", () => {

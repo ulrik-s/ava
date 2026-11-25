@@ -7,7 +7,8 @@
  *   - Tidrapportering för vald dag (summa + lista)
  *   - Senaste 5 ärenden man jobbat i (timeEntry order desc, dedup)
  *
- * Dagsval: Igår / Idag / Imorgon / fritt datum.
+ * Dagsval: Igår / Idag / Imorgon / fritt datum, och pilarna ‹ › som stegar en
+ * dag i taget från den valda dagen (#2095).
  *
  * Användaren väljer själv vilka rutor som syns (#1612): alla kan tas bort
  * med × och läggas tillbaka med "Lägg till ruta". Kalendern är borttagen
@@ -18,12 +19,14 @@ import { Plus, Clock } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
+import { DayStepper } from "@/components/ui/day-stepper";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
+import { dayLabel } from "@/lib/shared/iso-date";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { DASHBOARD_CLOSABLE, dashboardLayout } from "./_dashboard-layout";
 
@@ -44,13 +47,6 @@ function rangeForDay(ymd: string): { from: Date; to: Date } {
   return { from, to };
 }
 
-function dayLabel(ymd: string): string {
-  if (ymd === todayYmd()) return "Idag";
-  if (ymd === offsetDayYmd(1)) return "Igår";
-  if (ymd === offsetDayYmd(-1)) return "Imorgon";
-  return new Date(`${ymd}T12:00:00`).toLocaleDateString("sv-SE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-}
-
 export default function Dashboard() {
   const [ymd, setYmd] = useState<string>(todayYmd());
   const panels = [
@@ -69,7 +65,7 @@ export default function Dashboard() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Startsida</h1>
-            <p className="text-sm text-gray-500 capitalize">{dayLabel(ymd)}</p>
+            <p className="text-sm text-gray-500 capitalize">{ymd && dayLabel(ymd, new Date())}</p>
           </div>
           <DaySwitcher ymd={ymd} onChange={setYmd} />
         </div>
@@ -122,11 +118,11 @@ function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => 
     { value: offsetDayYmd(-1), label: "Imorgon" },
   ];
   return (
-    <div className="flex items-center gap-2">
+    <DayStepper ymd={ymd} onChange={onChange}>
       <SegmentedControl options={options} value={ymd} onChange={onChange} ariaLabel="Dag" />
       <input type="date" value={ymd} onChange={(e) => onChange(e.target.value)}
         className="rounded-md border border-gray-200 px-2 py-1 text-xs" />
-    </div>
+    </DayStepper>
   );
 }
 

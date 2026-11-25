@@ -17,8 +17,8 @@
 
 import fc from "fast-check";
 import { describe, expect, it } from "vitest-compat";
-import { toIsoDate, toLocalTime, toSwedishLongDate } from "@/lib/shared/iso-date";
-import { stockholmDay, stockholmTime, stockholmYear } from "@/lib/shared/stockholm-time";
+import { dayLabel, toIsoDate, toLocalTime, toSwedishLongDate } from "@/lib/shared/iso-date";
+import { addDays, stockholmDay, stockholmTime, stockholmYear } from "@/lib/shared/stockholm-time";
 import { nearStockholmNewYear } from "../../helpers/arbitraries";
 
 const HOUR_MS = 3_600_000;
@@ -141,7 +141,8 @@ function inProcessZone<T>(tz: string, fn: () => T): T {
 
 /** Allt hjälparna svarar för en tidpunkt och ett rent datum. */
 const answers = (d: Date, plain: string): string[] =>
-  [stockholmDay(d), stockholmTime(d), String(stockholmYear(d)), toIsoDate(plain), toLocalTime(d.toISOString()), toSwedishLongDate(d)];
+  [stockholmDay(d), stockholmTime(d), String(stockholmYear(d)), toIsoDate(plain), toLocalTime(d.toISOString()), toSwedishLongDate(d),
+    addDays(plain, -1), addDays(plain, 1), dayLabel(plain, d)];
 
 describe("oberoende av processens tidszon (#1677)", () => {
   it("att byta TZ i processen slår faktiskt igenom (annars prövar egenskapen inget)", () => {
@@ -152,6 +153,14 @@ describe("oberoende av processens tidszon (#1677)", () => {
   it("samma svar i alla tidszoner som i UTC", () => {
     fc.assert(fc.property(fc.oneof(euInstant, anyInstant), plainDate, fc.constantFrom(...PROCESS_ZONES), (d, plain, tz) => {
       expect(inProcessZone(tz, () => answers(d, plain))).toEqual(inProcessZone("UTC", () => answers(d, plain)));
+    }));
+  });
+});
+
+describe("addDays (#2095)", () => {
+  it("n dagar fram och n dagar tillbaka ger samma dag", () => {
+    fc.assert(fc.property(plainDate, fc.integer({ min: -1000, max: 1000 }), (plain, n) => {
+      expect(addDays(addDays(plain, n), -n)).toBe(plain);
     }));
   });
 });

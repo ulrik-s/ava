@@ -4,7 +4,7 @@
  */
 
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import Dashboard from "@/app/page";
 
 const timeQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
@@ -13,6 +13,8 @@ const meQuery: { data: unknown } = { data: { id: "u1", name: "Anna" } };
 const watchlistQuery: { data: unknown; isLoading: boolean } = { data: { items: [] }, isLoading: false };
 
 const completeMutate = vi.fn();
+/** Det tidslistan senast frågades efter: den valda dagens gränser (#2095). */
+const timeListInput = vi.fn((_input: { from?: Date; to?: Date }) => timeQuery);
 
 // Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
 // alla paneler efter varandra, synkront, så testerna kan granska innehållet.
@@ -25,7 +27,7 @@ vi.mock("@/components/layout/panel-page", () => ({
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ watchlist: { list: { invalidate: vi.fn() } }, task: { listForMatter: { invalidate: vi.fn() } } }),
-    timeEntry: { list: { useQuery: () => timeQuery } },
+    timeEntry: { list: { useQuery: (input: { from?: Date; to?: Date }) => timeListInput(input) } },
     user: { current: { useQuery: () => meQuery } },
     watchlist: { list: { useQuery: () => watchlistQuery } },
     task: {
@@ -143,5 +145,71 @@ describe("Dashboard", () => {
     // "Senaste ärenden"-listan ska visa varje matter en gång (oavsett dubbletter i entries)
     expect(screen.getAllByText(/2026-0001 — Tvist/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/2026-0002 — Annat/).length).toBeGreaterThan(0);
+  });
+});
+
+describe("Dashboard — pilarna stegar en dag i taget (#2095)", () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-11-24T12:00:00Z"));
+  });
+  afterEach(() => {
+    vi.setSystemTime();
+  });
+
+  const prev = (): HTMLElement => screen.getByRole("button", { name: "Föregående dag" });
+  const next = (): HTMLElement => screen.getByRole("button", { name: "Nästa dag" });
+  const heading = (): HTMLElement => {
+    const label = screen.getByRole("heading", { name: /Startsida/i }).nextElementSibling;
+    if (!(label instanceof HTMLElement)) throw new Error("dagnamnet saknas");
+    return label;
+  };
+  const dateInput = (container: HTMLElement): HTMLInputElement => {
+    const input = container.querySelector('input[type="date"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error("datumfältet saknas");
+    return input;
+  };
+  const pressed = (): string[] =>
+    ["Igår", "Idag", "Imorgon"].filter((name) => screen.getByRole("button", { name }).getAttribute("aria-pressed") === "true");
+  const follows = (a: Node, b: Node): boolean => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it("‹ står före dagsvalet och › efter datumfältet", () => {
+    const { container } = render(<Dashboard />);
+    expect(follows(prev(), screen.getByRole("group", { name: "Dag" }))).toBe(true);
+    expect(follows(dateInput(container), next())).toBe(true);
+    expect(heading()).toHaveTextContent("Idag");
+    expect(heading()).toHaveClass("capitalize");
+  });
+
+  it("‹ ger Igår, sedan veckodagen; › tre gånger därifrån ger Imorgon", () => {
+    const { container } = render(<Dashboard />);
+    fireEvent.click(prev());
+    expect(heading()).toHaveTextContent("Igår");
+    expect(pressed()).toEqual(["Igår"]);
+    expect(dateInput(container).value).toBe("2026-11-23");
+    const inputs: Array<{ from?: Date }> = timeListInput.mock.calls.map((call: [{ from?: Date }]) => call[0]);
+    const dayQueries = inputs.map((input) => input.from).filter((from) => from !== undefined);
+    expect(dayQueries.at(-1)).toEqual(new Date("2026-11-23T00:00:00"));
+    fireEvent.click(prev());
+    expect(heading()).toHaveTextContent("söndag 22 november 2026");
+    expect(pressed()).toEqual([]);
+    fireEvent.click(next());
+    fireEvent.click(next());
+    fireEvent.click(next());
+    expect(pressed()).toEqual(["Imorgon"]);
+  });
+
+  it("pilarna stegar från ett datum som valts i fältet", () => {
+    const { container } = render(<Dashboard />);
+    fireEvent.change(dateInput(container), { target: { value: "2001-01-01" } });
+    fireEvent.click(next());
+    expect(dateInput(container).value).toBe("2001-01-02");
+  });
+
+  it("ett tömt datumfält stänger av pilarna och lämnar dagnamnet tomt", () => {
+    const { container } = render(<Dashboard />);
+    fireEvent.change(dateInput(container), { target: { value: "" } });
+    expect(prev()).toBeDisabled();
+    expect(next()).toBeDisabled();
+    expect(heading()).toHaveTextContent("");
   });
 });
