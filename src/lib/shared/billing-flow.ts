@@ -176,6 +176,29 @@ export function availableActions(matter: FlowMatter, runs: ReadonlyArray<FlowRun
   return flow.actionsByPhase[currentPhase(matter, runs)] ?? [];
 }
 
+/**
+ * Vad en "fakturera nu"-genväg öppnar i faktureringspanelen (#1853, ADR 0034):
+ * en dialog direkt (`dialog`, samma väg som menyvalet), menyn + Skapa faktura
+ * (`menu`) eller ingenting (`none`, fasen har inga åtgärder).
+ */
+export type BillingShortcut =
+  | { kind: "dialog"; action: BillingAction }
+  | { kind: "menu" }
+  | { kind: "none" };
+
+/**
+ * Avgör vad genvägen öppnar ur flödet: aconto till klient i rättshjälp och
+ * rättsskydd när fasen tillåter det, annars menyn när fasen har åtgärder,
+ * annars ingenting. Servern prövar fasen som förut, så genvägen kan aldrig
+ * erbjuda något som menyn inte gör.
+ */
+export function billingShortcut(matter: FlowMatter, runs: ReadonlyArray<FlowRun>): BillingShortcut {
+  const actions = availableActions(matter, runs);
+  const acconto = isCoverageMethod(matter.paymentMethod) ? actions.find((a) => a.type === "ACCONTO") : undefined;
+  if (acconto) return { kind: "dialog", action: acconto };
+  return actions.length > 0 ? { kind: "menu" } : { kind: "none" };
+}
+
 /** Är `action` laglig i `phase` för flödet? (server-guard, fas 3.) */
 export function canBillingTransition(method: PaymentMethod, phase: BillingPhase, action: BillingActionType): boolean {
   return (BILLING_FLOWS[method].actionsByPhase[phase] ?? []).some((a) => a.type === action);
