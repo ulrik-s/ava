@@ -10,6 +10,7 @@ import { z } from "zod";
 import {
   beslutRegisteredNote, invoiceCreatedNote, kostnadsrakningSubmittedNote, krAppealedNote, krVoidedNote,
 } from "@/lib/shared/billing-notes";
+import { krCanCreateInvoice } from "@/lib/shared/billing-todo";
 import { krGrossOre, matterKrArvodeRows } from "@/lib/shared/billing-work-value";
 import { isKrWorkEntry } from "@/lib/shared/kostnadsrakning";
 import { canVoidKostnadsrakning, krStateOf, type KostnadsrakningAction } from "@/lib/shared/kostnadsrakning-flow";
@@ -184,7 +185,7 @@ export const kostnadsrakningProcedures = {
         const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
         // Faktura skapas EFTER beslutet (#828): KR:n måste vara BESLUTAD; prutningen
         // läses från KR:ns registrerade beslut, inte som input.
-        if (run.kostnadsrakningStatus !== "BESLUTAD") {
+        if (!krCanCreateInvoice(run)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Registrera domstolens beslut innan du skapar fakturan." });
         }
         const prutningOre = run.prutningOre ?? 0;
