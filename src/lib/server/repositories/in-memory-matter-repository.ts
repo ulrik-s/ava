@@ -8,9 +8,9 @@ import type { Matter } from "@/lib/shared/schemas/matter";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import {
-  listPartiesOf,
-  type MatterDetailRow, type MatterListFilter, type MatterListLink, type MatterListResult, type MatterListRow,
-  type MatterRepository,
+  listPartiesOf, partiesByMatter,
+  type MatterDetailRow, type MatterListFilter, type MatterListLink, type MatterListParty, type MatterListResult,
+  type MatterListRow, type MatterRepository,
 } from "./matter-repository";
 
 /** Delegaten repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
@@ -18,6 +18,13 @@ export type MatterRepoSource = Pick<IDataStore, "matters">;
 
 /** Listraden ur delegatens rad med alla (icke-raderade) kopplingar i `contacts`. */
 type MatterLinksRow = Matter & { contacts: MatterListLink[]; _count: MatterListRow["_count"] };
+
+/** Ärendets icke-raderade kopplingar med kontaktens id och namn, i `createdAt`-ordning (lista och parter, #1964). */
+const LINKS_INCLUDE = {
+  where: { deletedAt: null },
+  include: { contact: { select: { id: true, name: true } } },
+  orderBy: { createdAt: "asc" },
+} as const;
 
 /** Org-scopat where för listan (replikerar routerns Prisma-where). */
 function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<string, unknown> {
@@ -67,11 +74,7 @@ export class InMemoryMatterRepository extends InMemoryRepository<Matter> impleme
         skip: (filter.page - 1) * filter.pageSize,
         take: filter.pageSize,
         include: {
-          contacts: {
-            where: { deletedAt: null },
-            include: { contact: { select: { id: true, name: true } } },
-            orderBy: { createdAt: "asc" },
-          },
+          contacts: LINKS_INCLUDE,
           _count: { select: { documents: true, timeEntries: true, contacts: true } },
         },
       }) as Promise<MatterLinksRow[]>,
@@ -79,6 +82,15 @@ export class InMemoryMatterRepository extends InMemoryRepository<Matter> impleme
     ]);
     const matters = rows.map((r): MatterListRow => ({ ...r, ...listPartiesOf(r.contacts) }));
     return { matters, total };
+  }
+
+  async listPartiesFor(organizationId: OrganizationId, matterIds: readonly MatterId[]): Promise<Map<MatterId, MatterListParty[]>> {
+    if (matterIds.length === 0) return new Map();
+    const rows = (await this.delegate.findMany({
+      where: { organizationId, id: { in: [...matterIds] }, deletedAt: null },
+      include: { contacts: LINKS_INCLUDE },
+    })) as Array<Matter & { contacts: MatterListLink[] }>;
+    return partiesByMatter(new Map(rows.filter((r) => r.contacts.length > 0).map((r) => [r.id, r.contacts])));
   }
 
   async getByIdWithContacts(id: MatterId, organizationId: OrganizationId): Promise<MatterDetailRow | null> {

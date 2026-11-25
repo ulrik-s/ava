@@ -13,9 +13,9 @@ import { contacts, documents, matterContacts, matters, timeEntries } from "../db
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, idsWhere, versionedTable } from "./drizzle-repository";
 import {
-  listPartiesOf,
-  type MatterDetailRow, type MatterListFilter, type MatterListLink, type MatterListResult, type MatterListRow,
-  type MatterRepository,
+  listPartiesOf, partiesByMatter,
+  type MatterDetailRow, type MatterListFilter, type MatterListLink, type MatterListParty, type MatterListResult,
+  type MatterListRow, type MatterRepository,
 } from "./matter-repository";
 
 export class DrizzleMatterRepository extends DrizzleRepository<Matter> implements MatterRepository {
@@ -68,7 +68,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       .limit(filter.pageSize).offset((filter.page - 1) * filter.pageSize);
     const [agg] = await this.db.select({ total: sql<number>`count(*)` }).from(matters).where(where);
     const ids = rows.map((r) => r.id);
-    const [counts, parties] = await Promise.all([this.countsFor(ids), this.partiesFor(ids)]);
+    const [counts, parties] = await Promise.all([this.countsFor(ids), this.linksFor(organizationId, ids)]);
     const matterRows = rows.map((r): MatterListRow => ({
       ...r,
       ...listPartiesOf(parties.get(r.id) ?? []),
@@ -99,15 +99,29 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
     return out;
   }
 
-  /** Kopplingarna (roll, kontaktens id+namn) per ärende-id, utan mjukt raderade, i `createdAt`-ordning. */
-  private async partiesFor(ids: MatterId[]): Promise<Map<string, MatterListLink[]>> {
-    const out = new Map<string, MatterListLink[]>();
+  async listPartiesFor(organizationId: OrganizationId, matterIds: readonly MatterId[]): Promise<Map<MatterId, MatterListParty[]>> {
+    return partiesByMatter(await this.linksFor(organizationId, matterIds));
+  }
+
+  /**
+   * Kopplingarna (roll, kontaktens id+namn) per ärende-id i EN grupperad fråga,
+   * org-scopad via join mot `matters` (mjukt raderade ärenden och kopplingar är
+   * inte med), i `createdAt`-ordning. Källan för både listan och `listPartiesFor` (#1964).
+   */
+  private async linksFor(organizationId: OrganizationId, ids: readonly MatterId[]): Promise<Map<MatterId, MatterListLink[]>> {
+    const out = new Map<MatterId, MatterListLink[]>();
     if (ids.length === 0) return out;
     const rows = await this.db
       .select({ matterId: matterContacts.matterId, role: matterContacts.role, id: contacts.id, name: contacts.name })
       .from(matterContacts)
+      .innerJoin(matters, eq(matterContacts.matterId, matters.id))
       .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
-      .where(and(inArray(matterContacts.matterId, ids), isNull(matterContacts.deletedAt)))
+      .where(and(
+        inArray(matterContacts.matterId, [...ids]),
+        isNull(matterContacts.deletedAt),
+        eq(matters.organizationId, organizationId),
+        isNull(matters.deletedAt),
+      ))
       .orderBy(asc(matterContacts.createdAt));
     for (const r of rows) {
       const links = out.get(r.matterId) ?? [];
