@@ -24,6 +24,19 @@ Gjorde du något i steg 1: gör högst två nya issues (steg 2) i samma körning
 
 ## 2. Nya issues (högst tre, en i taget)
 
+**Användarnas krav först (Ulrik, 2026-11-25).** Hämta EN gång per körning
+numren på användarnas öppna förfrågningar i intaget:
+
+```bash
+gh api "repos/ulrik-s/ava-feedback/issues?labels=user-request&state=open&per_page=100" --jq '[.[] | select(.pull_request | not) | .number]'
+```
+
+En issue räknas som **användarens** när raden `Intag: ava-feedback#N` pekar på
+ett av de numren, eller när en sådan issue väntar på den (`Beror på #N` eller
+GitHub-beroende): grunden byggs före det som står på den. Alla användarens
+issues går före alla andra (interna förbättringar, `intern`-förfrågningar,
+refaktoriseringar). Inom varje grupp gäller ordningen nedan.
+
 Välj den öppna issuen i `ulrik-s/ava` med högst prioritet, och den äldsta
 inom samma prioritet. Prioriteten är `prio-*`-flaggan: den effektiva, som
 klockan sätter (den egna, eller den högsta bland det som väntar på issuen,
