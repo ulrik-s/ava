@@ -49,7 +49,7 @@ function fakeTab(opts: { locks?: KeepaliveLocks; probe?: () => Promise<SessionPr
   const visibility: { visibilityState: DocumentVisibilityState } = { visibilityState: "visible" };
   const page = Object.assign(new EventTarget(), visibility);
   const notices: SessionNotice[] = [];
-  const probe = vi.fn(opts.probe ?? (async () => AUTHENTICATED));
+  const probe = vi.fn(opts.probe ?? (() => Promise.resolve(AUTHENTICATED)));
   const env: KeepaliveEnv = {
     probe,
     notify: (n) => { notices.push(n); },
@@ -105,6 +105,28 @@ describe("startSessionKeepalive — intervallet", () => {
   });
 });
 
+describe("startSessionKeepalive — grace-perioden förnyas (2026-11-25)", () => {
+  it("en bekräftad session sparar tiden, så att en flik som stått öppen länge inte låses ute", async () => {
+    const tab = fakeTab();
+    const markVerified = vi.fn();
+    const stop = startSessionKeepalive({ ...tab.env, markVerified, intervalMs: 1_000 });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(markVerified).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("utloggad eller okänt läge förnyar inte", async () => {
+    const markVerified = vi.fn();
+    for (const answer of [{ kind: "signed-out" }, { kind: "unreachable", reason: "timeout" }] as SessionProbe[]) {
+      const tab = fakeTab({ probe: () => Promise.resolve(answer) });
+      const stop = startSessionKeepalive({ ...tab.env, markVerified, intervalMs: 1_000 });
+      await vi.advanceTimersByTimeAsync(1_000);
+      stop();
+    }
+    expect(markVerified).not.toHaveBeenCalled();
+  });
+});
+
 describe("startSessionKeepalive — synlig flik och nätet tillbaka", () => {
   it("online → en fråga efter debounce", async () => {
     const tab = fakeTab();
@@ -144,7 +166,7 @@ describe("startSessionKeepalive — synlig flik och nätet tillbaka", () => {
 
 describe("startSessionKeepalive — utfallet går in i sessionsläget", () => {
   const once = async (probe: SessionProbe) => {
-    const tab = fakeTab({ probe: async () => probe });
+    const tab = fakeTab({ probe: () => Promise.resolve(probe) });
     const stop = startSessionKeepalive({ ...tab.env, intervalMs: 1_000 });
     await vi.advanceTimersByTimeAsync(1_000);
     return { tab, stop };
@@ -306,7 +328,7 @@ describe("startBrowserSessionKeepalive", () => {
 
   it("self-hosted: frågar /oauth2/userinfo när nätet kommer tillbaka; stoppet tar bort lyssnaren", async () => {
     configure({ tier: "self-hosted", principalId: "u-1", authorEmail: "anna@byra.se" });
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 401 }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(new Response("{}", { status: 401 })));
     const stop = startBrowserSessionKeepalive();
     window.dispatchEvent(new Event("online"));
     await vi.advanceTimersByTimeAsync(SESSION_KEEPALIVE_DEBOUNCE_MS);

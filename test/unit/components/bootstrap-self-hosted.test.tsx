@@ -73,7 +73,7 @@ vi.mock("@/lib/client/auth/session-probe", () => ({
 }));
 
 const NOW = Date.UTC(2026, 8, 30);
-const gateEnv = () => ({ now: () => NOW, redirect: vi.fn(), location: () => ({ pathname: "/ava/matters/", search: "" }) });
+const gateEnv = () => ({ now: () => NOW, redirect: vi.fn(), location: () => ({ pathname: "/ava/matters/", search: "" }), retryLater: vi.fn() });
 const lena = { email: "a@b.se", subject: "", issuer: "", name: "A" };
 
 beforeEach(() => {
@@ -292,6 +292,18 @@ describe("bootstrapSelfHosted", () => {
     await bootstrapSelfHosted(args);
     expect(args.setStatus).toHaveBeenCalledWith("error");
     expect(args.setErrorMsg).toHaveBeenCalledWith(expect.stringMatching(/Anslut till nätet/));
+    expect(args.makeStore).not.toHaveBeenCalled();
+  });
+
+  // 2026-11-25: VPS-disken stod still och servern svarade på 10–30 s — det var inte användaren som var offline.
+  it("trög server efter grace: 'servern svarar långsamt', försöker igen av sig själv, ingen utelåsning", async () => {
+    probeUserinfo.mockResolvedValueOnce({ kind: "unreachable", reason: "timeout" });
+    const env = gateEnv();
+    const args = makeArgs({ gateEnv: env, firmaConfig: { ...baseConfig, sessionVerifiedAt: NOW - 30 * 24 * 3600 * 1000 } });
+    await bootstrapSelfHosted(args);
+    expect(args.setErrorMsg).toHaveBeenCalledWith(expect.stringMatching(/Servern svarar långsamt/));
+    expect(env.retryLater).toHaveBeenCalledWith(10_000);
+    expect(env.redirect).not.toHaveBeenCalled();
     expect(args.makeStore).not.toHaveBeenCalled();
   });
 });
