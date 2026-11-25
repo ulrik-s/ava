@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useActiveMatterOptions } from "@/components/matter/use-active-matter-options";
+import { MoveTimeEntriesButton, useTimeEntrySelection } from "@/components/time/move-time-entries";
 import {
   TimeForm, applyStandardAtgard, emptyForm, timeEntryInput, toEditForm, useStandardAtgarder, type EditForm,
 } from "@/components/time/time-entry-form";
-import { useActiveMatterOptions, useSaveTimeEntry } from "@/components/time/use-save-time-entry";
+import { useSaveTimeEntry } from "@/components/time/use-save-time-entry";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
@@ -76,6 +78,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   const [editMatterId, setEditMatterId] = useState<MatterId>(matterId);
   const [createForm, setCreateForm] = useState<EditForm>(emptyForm);
   const matterOptions = useActiveMatterOptions();
+  const marking = useTimeEntrySelection<TimeEntryRow>();
 
   /** Tidslistan + upparbetat mot taket (#1520) — takvarningen följer med direkt. */
   function refreshMatters(matterIds: MatterId[]): void {
@@ -194,12 +197,15 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
 
       <div className="p-2">
         <RattshjalpCapWarning matterId={matterId} paymentMethod={paymentMethod} rattshjalpMaxTimmar={rattshjalpMaxTimmar} />
+        <MoveTimeEntriesButton selected={marking.selection.selected} excludeMatterId={matterId}
+          onMoved={marking.clear} refresh={(to) => refreshMatters([matterId, to])} />
         <DataTable
           prefKey={`list.matter-time.${matterId}`}
           columns={columns}
           data={rows}
           rowKey={(e) => e.id}
           emptyMessage="Inga tidsposter."
+          selection={marking.selection}
         />
       </div>
 

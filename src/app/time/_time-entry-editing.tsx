@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useActiveMatterOptions } from "@/components/matter/use-active-matter-options";
 import {
   TimeForm as TimeEntryEditForm,
   toEditForm,
@@ -8,7 +9,7 @@ import {
   type EditForm,
   type TimeEntryLike,
 } from "@/components/time/time-entry-form";
-import { useActiveMatterOptions, useSaveTimeEntry } from "@/components/time/use-save-time-entry";
+import { useSaveTimeEntry } from "@/components/time/use-save-time-entry";
 import type { Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { trpc } from "@/lib/client/trpc";

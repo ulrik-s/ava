@@ -17,20 +17,21 @@
  *     prefs.setOrgDefault. Merge: personal > org > komponent-default.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/client/trpc";
+import { ColumnMenu, type HeaderActions } from "./data-table-column-menu";
 
 // Pure logik + typer bor i `data-table-logic.ts` (#62, SRP). Re-exporteras här
 // så importörer + tester fortsätter peka på "@/components/ui/data-table".
-import type { SortDir, Column, DataTablePrefs, MenuPosition, RowGroup } from "./data-table-logic";
+import type { Column, DataTablePrefs, MenuPosition, RowGroup, RowSelection } from "./data-table-logic";
 import {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,
   isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent, hideBelowClass,
   withColumnHidden, menuPosition, withColumnWidth, withColumnWidths, fixedTableWidth,
 } from "./data-table-logic";
+import { SelectRowCell, SelectionSpacer, useSelectionColumn } from "./data-table-selection";
 
-export type { Column, DataTablePrefs } from "./data-table-logic";
+export type { Column, DataTablePrefs, RowSelection } from "./data-table-logic";
 export {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,
   isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent,
@@ -59,7 +60,16 @@ interface Props<T> {
   /** Per-kolumn-key footer-innehåll. Renderas i `<tfoot>` så cellerna
    *  alignar med kolumnerna. Använd för Summa-rader. */
   footer?: FooterFn<T>;
+  /**
+   * Radmarkering (#2043): en första kolumn med en kryssruta per rad och
+   * "Markera alla" för de synliga rader som går att markera. Sidan äger
+   * markeringen. Utelämnad: tabellen ser ut och fungerar som utan markering.
+   */
+  selection?: RowSelection<T>;
 }
+
+/** Bredden (px) på den smala avslutande kolumnen och på markeringskolumnen. */
+const NARROW_COL_WIDTH = 32;
 
 function widthOf<T>(col: Column<T>, prefs: DataTablePrefs): number | undefined {
   return prefs.columns?.find((c) => c.key === col.key)?.width ?? col.defaultWidth;
@@ -72,7 +82,7 @@ function cellClass<T>(col: Column<T>): string {
   return `px-3 py-2 align-top ${wrap} ${hideBelowClass(col)}`.trimEnd();
 }
 
-export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage, footer }: Props<T>) {
+export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage, footer, selection }: Props<T>) {
   const persisted = trpc.prefs.get.useQuery({ key: prefKey });
   const save = trpc.prefs.save.useMutation();
   const clear = trpc.prefs.clear.useMutation();
@@ -112,7 +122,8 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   const filtered = useMemo(() => filterRows(sorted, columns, prefs.filters), [sorted, columns, prefs.filters]);
   const grouped = useMemo(() => groupRows(filtered, columns, prefs.groupBy), [filtered, columns, prefs.groupBy]);
   const showOverrideBar = hasOverrides(prefs);
-  const fixedWidth = fixedTableWidth(vCols, prefs);
+  const selectCol = useSelectionColumn(selection, filtered, rowKey);
+  const fixedWidth = fixedTableWidth(vCols, prefs, NARROW_COL_WIDTH + selectCol.width);
 
   const resetPersonal = (): void => {
     setLocalPrefs({});
@@ -144,7 +155,8 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
       )}
       <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
         <table {...tableLayout(fixedWidth)}>
-          <DataTableHeader columns={columns} vCols={vCols} prefs={prefs} update={update} />
+          <DataTableHeader columns={columns} vCols={vCols} prefs={prefs} update={update}
+            lead={selectCol.header} />
           <tbody className="divide-y divide-gray-100">
             <BodyRows
               grouped={grouped}
@@ -154,9 +166,10 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
               onRowClick={onRowClick}
               emptyMessage={emptyMessage}
               columns={columns}
+              selection={selection}
             />
           </tbody>
-          <AutoFooter columns={columns} vCols={vCols} prefs={prefs} filtered={filtered} footer={footer} />
+          <AutoFooter columns={columns} vCols={vCols} prefs={prefs} filtered={filtered} footer={footer} lead={selectCol.lead} />
         </table>
       </div>
     </div>
@@ -169,13 +182,15 @@ interface AutoFooterProps<T> {
   prefs: DataTablePrefs;
   filtered: T[];
   footer?: FooterFn<T> | undefined;
+  /** Markeringskolumnen finns: en tom cell först. */
+  lead: boolean;
 }
 
-function AutoFooter<T>({ columns, vCols, prefs, filtered, footer }: AutoFooterProps<T>) {
+function AutoFooter<T>({ columns, vCols, prefs, filtered, footer, lead }: AutoFooterProps<T>) {
   if (filtered.length === 0) return null;
   if (!footer && !hasSummary(columns)) return null;
   const content = footer ? footer(filtered) : buildSummaryContent(columns, filtered);
-  return <FooterRow vCols={vCols} prefs={prefs} content={content} />;
+  return <FooterRow vCols={vCols} prefs={prefs} content={content} lead={lead} />;
 }
 
 interface ToolbarProps<T> {
@@ -346,10 +361,16 @@ interface BodyProps<T> {
   onRowClick?: ((row: T) => void) | undefined;
   emptyMessage?: string | undefined;
   columns: Column<T>[];
+  selection?: RowSelection<T> | undefined;
 }
 
-function BodyRows<T>({ grouped, vCols, prefs, rowKey, onRowClick, emptyMessage, columns }: BodyProps<T>) {
-  const totalCols = vCols.length + 1;
+/** Antal kolumner i en rad: de synliga, den avslutande och markeringskolumnen. */
+function totalColumns<T>(vCols: Column<T>[], selection: RowSelection<T> | undefined): number {
+  return vCols.length + (selection ? 2 : 1);
+}
+
+function BodyRows<T>({ grouped, vCols, prefs, rowKey, onRowClick, emptyMessage, columns, selection }: BodyProps<T>) {
+  const totalCols = totalColumns(vCols, selection);
   const isEmpty = grouped.every((g) => g.rows.length === 0);
   if (isEmpty) {
     return (
@@ -369,6 +390,7 @@ function BodyRows<T>({ grouped, vCols, prefs, rowKey, onRowClick, emptyMessage, 
         onRowClick={onRowClick}
         showSummary={showGroupSummary}
         columns={columns}
+        selection={selection}
       />
     ))}</>
   );
@@ -382,15 +404,25 @@ interface GroupBlockProps<T> {
   onRowClick?: ((row: T) => void) | undefined;
   showSummary: boolean;
   columns: Column<T>[];
+  selection?: RowSelection<T> | undefined;
 }
 
-function GroupSummaryRow<T>({ vCols, prefs, content }: { vCols: Column<T>[]; prefs: DataTablePrefs; content: Partial<Record<string, React.ReactNode>> }) {
+interface SummaryRowProps<T> {
+  vCols: Column<T>[];
+  prefs: DataTablePrefs;
+  content: Partial<Record<string, React.ReactNode>>;
+  /** Markeringskolumnen finns: en tom cell först. */
+  lead: boolean;
+}
+
+function GroupSummaryRow<T>({ vCols, prefs, content, lead }: SummaryRowProps<T>) {
   // Per-grupp-summa: light = bg-gray-100 (något mörkare än white-rader);
   // dark = slate-700 (ljusare än slate-800-rader, dvs "elevated"-tier).
   // Båda lägena ger ~5:1 kontrast på texten + tydlig border-300/slate-600.
   // Följer Material Design 3 surface-tiers + WCAG AA.
   return (
     <tr className="bg-gray-100 border-t border-gray-300 text-xs font-semibold text-gray-800">
+      <SelectionSpacer show={lead} />
       {vCols.map((c) => (
         <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }}
           className={`px-3 py-1.5 whitespace-nowrap ${hideBelowClass(c)}`.trimEnd()}>
@@ -402,8 +434,8 @@ function GroupSummaryRow<T>({ vCols, prefs, content }: { vCols: Column<T>[]; pre
   );
 }
 
-function GroupBlock<T>({ group, vCols, prefs, rowKey, onRowClick, showSummary, columns }: GroupBlockProps<T>) {
-  const totalCols = vCols.length + 1;
+function GroupBlock<T>({ group, vCols, prefs, rowKey, onRowClick, showSummary, columns, selection }: GroupBlockProps<T>) {
+  const totalCols = totalColumns(vCols, selection);
   return (
     <>
       {group.group !== null && (
@@ -415,6 +447,7 @@ function GroupBlock<T>({ group, vCols, prefs, rowKey, onRowClick, showSummary, c
       )}
       {group.rows.map((r) => (
         <tr key={rowKey(r)} className={onRowClick ? "hover:bg-gray-50 cursor-pointer" : ""} onClick={onRowClick ? () => onRowClick(r) : undefined}>
+          {selection && <SelectRowCell selection={selection} row={r} rowId={rowKey(r)} />}
           {vCols.map((c) => (
             <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }} className={cellClass(c)}>
               {c.render(r)}
@@ -424,22 +457,17 @@ function GroupBlock<T>({ group, vCols, prefs, rowKey, onRowClick, showSummary, c
         </tr>
       ))}
       {showSummary && (
-        <GroupSummaryRow vCols={vCols} prefs={prefs} content={buildSummaryContent(columns, group.rows)} />
+        <GroupSummaryRow vCols={vCols} prefs={prefs} content={buildSummaryContent(columns, group.rows)} lead={selection !== undefined} />
       )}
     </>
   );
 }
 
-interface FooterProps<T> {
-  vCols: Column<T>[];
-  prefs: DataTablePrefs;
-  content: Partial<Record<string, React.ReactNode>>;
-}
-
-function FooterRow<T>({ vCols, prefs, content }: FooterProps<T>) {
+function FooterRow<T>({ vCols, prefs, content, lead }: SummaryRowProps<T>) {
   return (
     <tfoot>
       <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
+        <SelectionSpacer show={lead} />
         {vCols.map((c) => (
           <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }}
             className={`px-3 py-2 whitespace-nowrap text-sm text-gray-900 ${hideBelowClass(c)}`.trimEnd()}>
@@ -457,15 +485,8 @@ interface HeaderProps<T> {
   vCols: Column<T>[];
   prefs: DataTablePrefs;
   update: Update;
-}
-
-interface HeaderActions {
-  setSort: (key: string, dir: SortDir | undefined) => void;
-  setFilter: (key: string, value: string) => void;
-  setGroupBy: (key: string | undefined) => void;
-  hideColumn: (key: string) => void;
-  reorder: (from: string, to: string) => void;
-  resize: (key: string, width: number) => void;
+  /** Markeringskolumnens rubrikcell, först i raden (#2043). */
+  lead?: React.ReactNode;
 }
 
 function buildHeaderActions<T>(
@@ -494,7 +515,7 @@ function buildHeaderActions<T>(
   };
 }
 
-function DataTableHeader<T>({ vCols, prefs, update }: HeaderProps<T>) {
+function DataTableHeader<T>({ vCols, prefs, update, lead }: HeaderProps<T>) {
   const actions = buildHeaderActions(prefs, vCols, update);
   const theadRef = useRef<HTMLTableSectionElement>(null);
   // När man börjar dra: frys ALLA kolumners nuvarande bredd, så tabellen kan gå
@@ -511,6 +532,7 @@ function DataTableHeader<T>({ vCols, prefs, update }: HeaderProps<T>) {
   return (
     <thead ref={theadRef} className="bg-gray-50 text-left">
       <tr>
+        {lead}
         {vCols.map((c) => (
           <HeaderCell key={c.key} col={c} prefs={prefs} width={widthOf(c, prefs)} actions={actions} onResizeStart={freezeWidths} />
         ))}
@@ -575,124 +597,6 @@ function HeaderCell<T>({ col, prefs, width, actions, onResizeStart }: HeaderCell
         onActive={(active) => { if (active) onResizeStart(); setResizing(active); }} />
     </th>
   );
-}
-
-interface ColumnMenuProps<T> {
-  col: Column<T>;
-  prefs: DataTablePrefs;
-  actions: HeaderActions;
-  onClose: () => void;
-  position: MenuPosition;
-}
-
-function SortSection<T>({ col, prefs, actions, onClose }: {
-  col: Column<T>; prefs: DataTablePrefs; actions: HeaderActions; onClose: () => void;
-}) {
-  const isSortedHere = prefs.sortBy === col.key;
-  return (
-    <>
-      <MenuButton active={isSortedHere && prefs.sortDir === "asc"}
-        onClick={() => { actions.setSort(col.key, "asc"); onClose(); }}>
-        Sortera stigande ↑
-      </MenuButton>
-      <MenuButton active={isSortedHere && prefs.sortDir === "desc"}
-        onClick={() => { actions.setSort(col.key, "desc"); onClose(); }}>
-        Sortera fallande ↓
-      </MenuButton>
-      {isSortedHere && (
-        <MenuButton onClick={() => { actions.setSort(col.key, undefined); onClose(); }}>
-          Ta bort sortering
-        </MenuButton>
-      )}
-      <Separator />
-    </>
-  );
-}
-
-function FilterSection<T>({ col, prefs, actions, onClose }: {
-  col: Column<T>; prefs: DataTablePrefs; actions: HeaderActions; onClose: () => void;
-}) {
-  const [draft, setDraft] = useState<string>(prefs.filters?.[col.key] ?? "");
-  const submit = (): void => { actions.setFilter(col.key, draft); onClose(); };
-  const hasActive = (prefs.filters?.[col.key] ?? "") !== "";
-  return (
-    <>
-      <div className="px-2 py-1.5">
-        <label className="block text-[10px] uppercase text-gray-500 mb-1">Filtrera</label>
-        <input type="text" value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onClose(); }}
-          autoFocus
-          placeholder="Skriv för att filtrera…"
-          className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400" />
-        <div className="mt-1 flex justify-end gap-1">
-          {hasActive && (
-            <button type="button" onClick={() => { actions.setFilter(col.key, ""); onClose(); }}
-              className="text-[11px] px-2 py-0.5 text-gray-600 hover:bg-gray-50 rounded">Rensa</button>
-          )}
-          <button type="button" onClick={submit}
-            className="text-[11px] px-2 py-0.5 bg-blue-600 text-white rounded hover:bg-blue-700">Tillämpa</button>
-        </div>
-      </div>
-      <Separator />
-    </>
-  );
-}
-
-/** Stäng menyn när sidan scrollar eller ändrar storlek — den är fäst i fönstret. */
-function useCloseOnScroll(onClose: () => void): void {
-  useEffect(() => {
-    window.addEventListener("scroll", onClose, true);
-    window.addEventListener("resize", onClose);
-    return () => {
-      window.removeEventListener("scroll", onClose, true);
-      window.removeEventListener("resize", onClose);
-    };
-  }, [onClose]);
-}
-
-function ColumnMenu<T>({ col, prefs, actions, onClose, position }: ColumnMenuProps<T>) {
-  const isGrouped = prefs.groupBy === col.key;
-  useCloseOnScroll(onClose);
-  // Portal: utanför tabellens overflow-behållare (#1152), se `menuPosition`.
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div role="menu" style={{ ...position, position: "fixed" }}
-        className="z-40 min-w-[14rem] overflow-y-auto bg-white border border-gray-200 rounded shadow-lg p-1 text-left text-sm font-normal">
-        {col.sortable && <SortSection col={col} prefs={prefs} actions={actions} onClose={onClose} />}
-        {isFilterable(col) && <FilterSection col={col} prefs={prefs} actions={actions} onClose={onClose} />}
-        {isGroupable(col) && (
-          <>
-            <MenuButton active={isGrouped}
-              onClick={() => { actions.setGroupBy(isGrouped ? undefined : col.key); onClose(); }}>
-              {isGrouped ? "Sluta gruppera" : "Gruppera på den här"}
-            </MenuButton>
-            <Separator />
-          </>
-        )}
-        {col.hideable !== false && (
-          <MenuButton onClick={() => { actions.hideColumn(col.key); onClose(); }}>
-            Dölj kolumn
-          </MenuButton>
-        )}
-      </div>
-    </>,
-    document.body,
-  );
-}
-
-function MenuButton({ active, onClick, children }: { active?: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button type="button" onClick={onClick}
-      className={`block w-full text-left px-3 py-1.5 text-xs rounded ${active ? "bg-blue-50 text-blue-900 font-semibold" : "text-gray-700 hover:bg-gray-50"}`}>
-      {children}
-    </button>
-  );
-}
-
-function Separator() {
-  return <div className="my-1 border-t border-gray-100" />;
 }
 
 /**

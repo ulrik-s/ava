@@ -289,3 +289,54 @@ export function fixedTableWidth<T>(vCols: readonly Column<T>[], prefs: DataTable
   }
   return vCols.length > 0 ? sum : null;
 }
+
+/**
+ * Radmarkering i `DataTable` (#2043). Sidan äger markeringen; tabellen visar
+ * kryssrutorna och räknar ut nästa markering med funktionerna nedan.
+ */
+export interface RowSelection<T> {
+  /** Nycklarna (`rowKey`) för de markerade raderna. */
+  selected: ReadonlySet<string>;
+  /** Anropas med hela nästa markering. */
+  onChange: (next: ReadonlySet<string>) => void;
+  /** Går raden att markera? Utelämnad: alla rader. En rad som inte går att markera har ingen kryssruta. */
+  isSelectable?: ((row: T) => boolean) | undefined;
+}
+
+/** Läget för "Markera alla": inget, några eller alla av de rader som går att markera. */
+export type SelectAllState = "none" | "some" | "all";
+
+/** Nycklarna för de synliga (filtrerade) rader som går att markera. */
+export function selectableKeys<T>(rows: readonly T[], rowKey: (row: T) => string, isSelectable?: (row: T) => boolean): string[] {
+  const rowsToMark = isSelectable ? rows.filter(isSelectable) : rows;
+  return rowsToMark.map(rowKey);
+}
+
+/** Hur många av `keys` som är markerade, som läget för "Markera alla". */
+export function selectAllState(selected: ReadonlySet<string>, keys: readonly string[]): SelectAllState {
+  const count = keys.filter((k) => selected.has(k)).length;
+  if (count === 0) return "none";
+  return count === keys.length ? "all" : "some";
+}
+
+/**
+ * "Markera alla" av eller på: är alla `keys` markerade avmarkeras de, annars
+ * markeras alla. Markerade rader utanför `keys` (t.ex. bortfiltrerade) behålls.
+ */
+export function toggleAll(selected: ReadonlySet<string>, keys: readonly string[]): ReadonlySet<string> {
+  const next = new Set(selected);
+  const allMarked = keys.length > 0 && selectAllState(selected, keys) === "all";
+  for (const k of keys) {
+    if (allMarked) next.delete(k);
+    else next.add(k);
+  }
+  return next;
+}
+
+/** En rad av eller på. */
+export function toggleRow(selected: ReadonlySet<string>, key: string): ReadonlySet<string> {
+  const next = new Set(selected);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  return next;
+}

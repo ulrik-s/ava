@@ -24,6 +24,10 @@ import {
   hasSummary,
   buildSummaryContent,
   hideBelowClass,
+  selectableKeys,
+  selectAllState,
+  toggleAll,
+  toggleRow,
 } from "@/components/ui/data-table-logic";
 
 interface Row { name: string; n: number; when: Date | null; type: string }
@@ -217,5 +221,51 @@ describe("hideBelowClass", () => {
     expect(hideBelowClass(col("sm"))).toBe("hidden sm:table-cell");
     expect(hideBelowClass(col("md"))).toBe("hidden md:table-cell");
     expect(hideBelowClass(col("lg"))).toBe("hidden lg:table-cell");
+  });
+});
+
+describe("radmarkering (#2043)", () => {
+  interface Pick { id: string; locked: boolean; name: string }
+  const items: Pick[] = [
+    { id: "a", locked: false, name: "Anna" },
+    { id: "b", locked: true, name: "Bo" },
+    { id: "c", locked: false, name: "Cia" },
+  ];
+  const key = (p: Pick): string => p.id;
+  const open = (p: Pick): boolean => !p.locked;
+
+  it("selectableKeys: alla rader utan isSelectable, annars bara de som går att markera", () => {
+    expect(selectableKeys(items, key)).toEqual(["a", "b", "c"]);
+    expect(selectableKeys(items, key, open)).toEqual(["a", "c"]);
+  });
+
+  it("selectableKeys: filtrerade (dolda) rader räknas inte", () => {
+    const pickCols: Column<Pick>[] = [{ key: "name", label: "Namn", render: (p) => p.name, sortable: true }];
+    const visible = filterRows(items, pickCols, { name: "cia" });
+    expect(selectableKeys(visible, key, open)).toEqual(["c"]);
+  });
+
+  it("selectAllState: inget, några eller alla markerade", () => {
+    expect(selectAllState(new Set(), ["a", "c"])).toBe("none");
+    expect(selectAllState(new Set(["a"]), ["a", "c"])).toBe("some");
+    expect(selectAllState(new Set(["a", "c", "x"]), ["a", "c"])).toBe("all");
+    expect(selectAllState(new Set(["x"]), [])).toBe("none");
+  });
+
+  it("toggleAll: markerar alla när inte alla är markerade, och behåller rader utanför", () => {
+    expect([...toggleAll(new Set(["x"]), ["a", "c"])].sort()).toEqual(["a", "c", "x"]);
+    expect([...toggleAll(new Set(["a"]), ["a", "c"])].sort()).toEqual(["a", "c"]);
+  });
+
+  it("toggleAll: avmarkerar alla när alla är markerade; inga rader ändrar inget", () => {
+    expect([...toggleAll(new Set(["a", "c", "x"]), ["a", "c"])]).toEqual(["x"]);
+    expect([...toggleAll(new Set(["x"]), [])]).toEqual(["x"]);
+  });
+
+  it("toggleRow: av och på, utan att ändra den gamla mängden", () => {
+    const before = new Set(["a"]);
+    expect([...toggleRow(before, "c")].sort()).toEqual(["a", "c"]);
+    expect([...toggleRow(before, "a")]).toEqual([]);
+    expect([...before]).toEqual(["a"]);
   });
 });
