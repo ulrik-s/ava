@@ -71,6 +71,10 @@ export function buildOffentligtScenario(parties: Parties, opts: OffentligtOpts =
   ev.push(
     { kind: "expense", dayOffset: 6, amountOre: 38_000, description: "Reskostnad häktesbesök" },
     { kind: "doc", dayOffset: 4, template: "brevTillOmbud" },
+    // Förhör under förundersökningen (#1855): tidsposter med kategorin Förhör,
+    // starttid kl. 09–14 (simuleringens klocka) och förhörets längd.
+    { kind: "time", dayOffset: 7, minutes: 75, description: "Förhör med klienten (förundersökning)", entryKind: "FORHOR" },
+    { kind: "time", dayOffset: 9, minutes: 45, description: "Förhör med målsäganden (förundersökning)", entryKind: "FORHOR" },
     { kind: "time", dayOffset: 12, minutes: 180, description: "Klientmöte + förberedelse inför huvudförhandling" },
     // "Deltagit i förhandling" (#1494, #2013): förhandlingstiden räknas på klockan,
     // inte som arbete — och utan posten visar kostnadsräkningen varken klocka eller taxa.

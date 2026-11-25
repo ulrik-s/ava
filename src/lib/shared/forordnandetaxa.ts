@@ -32,6 +32,7 @@ import {
   applyNoFTaxFactorForDate, computeBrottmalstaxa, TAXA_MAX_MINUTES,
   tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate, type TaxaResult,
 } from "./brottmalstaxa";
+import type { TimeEntryKind } from "./schemas/enums";
 
 /** Ett uppehåll i ett förhör. */
 export interface ForhorPaus {
@@ -44,6 +45,29 @@ export interface Forhor {
   start: Date | string;
   end: Date | string;
   pauses?: readonly ForhorPaus[];
+}
+
+/** Det `forhorFromTimeEntries` läser ur en tidspost. */
+export interface ForhorTimeEntry {
+  kind?: TimeEntryKind | null | undefined;
+  date: Date | string;
+  minutes: number;
+}
+
+/**
+ * Förhören ur ärendets tidsposter (#1855): varje post med kategorin `FORHOR` är
+ * ett förhör från starttiden (`date`) och `minutes` framåt, utan uppehåll, äldst
+ * först. Ett uppehåll på 15 minuter eller mer registreras som två poster, så
+ * summan är förhörstiden (5 §) och varje post prövas mot kontorstiden (3 §).
+ */
+export function forhorFromTimeEntries(entries: readonly ForhorTimeEntry[]): Forhor[] {
+  return entries
+    .filter((e) => e.kind === "FORHOR")
+    .map((e) => {
+      const start = new Date(e.date);
+      return { start, end: new Date(start.getTime() + e.minutes * 60_000) };
+    })
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
 /** Uppehåll kortare än så här räknas in i förhörstiden (5 § tredje st.). */

@@ -104,6 +104,12 @@ export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
  *                           (HUF), så posten räknas inte också som arbete där
  *                           (`isKrWorkEntry`). Utan en sådan post skapas
  *                           kostnadsräkningen utan förhandlingsklocka.
+ *   FORHOR                — "Förhör (förundersökning)": ett polisförhör i ett
+ *                           förordnandemål (#1855). Starttid med klockslag och
+ *                           längd; ett uppehåll på 15 minuter eller mer delar
+ *                           förhöret i två poster. Prissätts och räknas som
+ *                           arbete; förordnandetaxan läser förhören ur posterna
+ *                           (`forhorFromTimeEntries`).
  *
  * `ADVOKATBEREDSKAP` bryter mönstret: den ersätts per DAG, inte per timme, och
  * en post är ett dygns beredskap (`minutes` = 0 — beredskap är inte arbetad
@@ -117,9 +123,23 @@ export const TIME_ENTRY_KIND_LABELS = {
   TIDSSPILLAN_OVRIG_TID: "Tidsspillan helg/kväll",
   ADVOKATBEREDSKAP: "Advokatberedskap — garantiersättning per dag",
   FORHANDLING: "Deltagit i förhandling",
+  FORHOR: "Förhör (förundersökning)",
 } as const satisfies Record<string, string>;
 export const timeEntryKindSchema = enumFromLabels(TIME_ENTRY_KIND_LABELS);
 export type TimeEntryKind = z.infer<typeof timeEntryKindSchema>;
+
+/**
+ * Hur förundersökningen i ett förordnandemål avslutades (DVFS 2025:5, #1855).
+ * Etiketten är också kostnadsräkningens mening om avslutet.
+ */
+export const FORORDNANDE_AVSLUT_LABELS = {
+  NEDLAGD: "Förundersökningen lades ned",
+  STRAFFORELAGGANDE: "Strafföreläggande godkändes",
+  INGET_ATAL: "Förundersökningen avslutades utan åtal",
+} as const satisfies Record<string, string>;
+export const forordnandeAvslutSchema = enumFromLabels(FORORDNANDE_AVSLUT_LABELS);
+/** Förundersökningens avslut i ett förordnandemål. */
+export type ForordnandeAvslut = z.infer<typeof forordnandeAvslutSchema>;
 
 /**
  * De TIMBASERADE kategorierna — var och en har ett eget timpris som ärvs

@@ -30,7 +30,7 @@ import { formatDecimalHoursWithUnit, formatOreAsKr } from "./kr-format";
 import { omitUndefined } from "./omit-undefined";
 import type { OrgImage } from "./org-image";
 import { radgivningTextRad } from "./rattshjalp";
-import type { TimeEntryKind } from "./schemas/enums";
+import type { ForordnandeAvslut, TimeEntryKind } from "./schemas/enums";
 import type { BillingRunId } from "./schemas/ids";
 import { isLockedEntry, type LockableEntry } from "./time-entry-lock";
 import { roundToKronor, vatOnRow } from "./whole-kronor";
@@ -98,7 +98,7 @@ export interface BuildInput {
    * förhörstiden i stället för en huvudförhandling, plus tidsspillan utöver den
    * timme som ingår i taxan. Hamnar förhören utanför taxan räknas ärendet löpande.
    */
-  forordnande?: { forhor: readonly Forhor[] };
+  forordnande?: { forhor: readonly Forhor[]; avslut?: ForordnandeAvslut | undefined };
   /**
    * När YRKANDET framställs (#980) — datumet som avgör vilket års normer
    * arbetet värderas på. Default: nu.
@@ -262,10 +262,10 @@ function tidsspillanMinutes(billable: readonly TimeEntryInput[]): { vardagMinute
 /** Vad arvodet står på: förordnandetaxa, brottmålstaxa eller löpande räkning. */
 function arvodeBasis(a: {
   input: BuildInput; ford: ForordnandeResult | null; level: TaxaLevel; taxa: TaxaResult;
-  billable: readonly TimeEntryInput[]; yrkandeDate: Date;
+  billable: readonly TimeEntryInput[]; yrkandeDate: Date; avslut?: ForordnandeAvslut | undefined;
 }): KrArvodeBasis {
   const { input, ford, level, taxa, billable, yrkandeDate } = a;
-  if (ford?.kind === "taxa") return { kind: "forordnande", ford };
+  if (ford?.kind === "taxa") return { kind: "forordnande", ford, avslut: a.avslut };
   if (input.isTaxeArende ?? true) {
     // DVFS 2025:6 6 §: en timmes tidsspillan ingår i taxan; resten yrkas (#1182).
     return { kind: "brottmalstaxa", level, taxa, tidsspillan: tidsspillanUtover(tidsspillanMinutes(billable), yrkandeDate, input.hasFTax ?? true) };
@@ -567,7 +567,7 @@ export function buildKostnadsrakningContext(original: BuildInput): Kostnadsrakni
     start, end, minutes: huvudforhandlingMinutes, rateOrePerH: arvodeNorm,
     amountOre: Math.round((huvudforhandlingMinutes / 60) * arvodeNorm),
   };
-  const basis = arvodeBasis({ input, ford, level, taxa, billable: billableTimeEntries, yrkandeDate });
+  const basis = arvodeBasis({ input, ford, level, taxa, billable: billableTimeEntries, yrkandeDate, avslut: input.forordnande?.avslut });
   const claim = claimOf(krArvodePart(basis, huf, timeLines), expenseLines);
   const arvodeExclVat = claim.arvodeExclVat;
   // Delsummorna (äldre vy-fält): arvodets moms i hela kronor, utläggen tar resten

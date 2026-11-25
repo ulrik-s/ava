@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  TimeForm, applyStandardAtgard, emptyForm, toEditForm, useStandardAtgarder, type EditForm,
+  TimeForm, applyStandardAtgard, emptyForm, timeEntryInput, toEditForm, useStandardAtgarder, type EditForm,
 } from "@/components/time/time-entry-form";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
@@ -116,7 +116,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
 
   function saveEdit(): void {
     if (!editingId || !editForm) return;
-    updateTimeEntry.mutate({ id: editingId, ...editForm });
+    updateTimeEntry.mutate({ id: editingId, ...timeEntryInput(editForm) });
   }
 
   function confirmDelete(id: TimeEntryId): void {
@@ -216,7 +216,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
           isTaxeArende={isTaxeArende}
           isCoverage={isCoverage}
           atgarder={atgarder}
-          onSubmit={() => createTimeEntry.mutate({ ...createForm, matterId })}
+          onSubmit={() => createTimeEntry.mutate({ ...timeEntryInput(createForm), matterId })}
           onCancel={() => setShowCreate(false)}
         />
       </Modal>

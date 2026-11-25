@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   TimeForm as TimeEntryEditForm,
+  timeEntryInput,
   toEditForm,
   useStandardAtgarder,
   type EditForm,
@@ -35,7 +36,7 @@ export function useTimeEntryEditing() {
     setForm: (form: EditForm) => setEditing((e) => (e ? { ...e, form } : e)),
     startEdit: (row: EditableTimeRow) => setEditing({ id: row.id, form: toEditForm(row) }),
     close: () => setEditing(null),
-    save: () => { if (editing) update.mutate({ id: asId<"TimeEntryId">(editing.id), ...editing.form }); },
+    save: () => { if (editing) update.mutate({ id: asId<"TimeEntryId">(editing.id), ...timeEntryInput(editing.form) }); },
     confirmDelete: (row: EditableTimeRow) => {
       if (confirm("Ta bort tidregistreringen?")) remove.mutate({ id: asId<"TimeEntryId">(row.id) });
     },

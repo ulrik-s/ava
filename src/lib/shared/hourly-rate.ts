@@ -39,11 +39,12 @@ export function isHourlyKind(kind: TimeEntryKind): kind is HourlyTimeEntryKind {
 }
 
 /**
- * Kategorin vars timpris posten får: förhandling prissätts som timarvode, en
- * timbaserad kategori som sig själv, och beredskap (per dag) har inget timpris (null).
+ * Kategorin vars timpris posten får: förhandling och förhör (#1855) prissätts
+ * som timarvode, en timbaserad kategori som sig själv, och beredskap (per dag)
+ * har inget timpris (null).
  */
 export function rateKindOf(kind: TimeEntryKind): HourlyTimeEntryKind | null {
-  if (kind === "FORHANDLING") return "ARBETE";
+  if (kind === "FORHANDLING" || kind === "FORHOR") return "ARBETE";
   return isHourlyKind(kind) ? kind : null;
 }
 
