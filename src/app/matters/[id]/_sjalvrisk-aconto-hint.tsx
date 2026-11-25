@@ -1,0 +1,63 @@
+"use client";
+
+/**
+ * Självrisk-aconto-påminnelsen (#854, #1852) i ärendets Fakturering.
+ *
+ * Rättshjälp och rättsskydd: när nettot på det aconto som dialogen Aconto till
+ * klient föreslår har nått byråns tröskel påminner rutan om att skicka ett, och
+ * knappen öppnar samma dialog som menyvalet. Rutan räknar på samma underlag som
+ * dialogen (`billingRun.proposal`, `proposedAccontoOre`) och visas bara när
+ * aconto finns bland ärendets åtgärder (ADR 0034). Self-gating.
+ */
+
+import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
+import { isCoverageMethod, type BillingAction } from "@/lib/shared/billing-flow";
+import { DEFAULT_ACCONTO_SHARE_BIPS } from "@/lib/shared/billing-proposal";
+import { sjalvriskAccontoDue, unbilledClientShareNetOre } from "@/lib/shared/billing-todo";
+import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
+import type { PaymentMethod } from "@/lib/shared/schemas/enums";
+import type { MatterId } from "@/lib/shared/schemas/ids";
+
+/** Det påminnelsen behöver veta om ärendet och panelen. */
+export interface SjalvriskAccontoHintProps {
+  matterId: MatterId;
+  paymentMethod: PaymentMethod | null | undefined;
+  /** Ärendets klientandel; saknas den används dialogens standard. */
+  clientShareBips: number | null | undefined;
+  /** Ärendets tillgängliga faktureringsåtgärder (`availableActions`). */
+  actions: readonly BillingAction[];
+  /** Öppnar dialogen Aconto till klient. */
+  onOpen: () => void;
+}
+
+/** Gränsbeloppet är en byrå-inställning (#885); faller tillbaka på default-konstanten. */
+function useAccontoThreshold(enabled: boolean): number {
+  const orgThreshold = trpc.organization.getSettings.useQuery(undefined, { enabled }).data?.accontoThresholdOre;
+  return orgThreshold ?? SJALVRISK_ACCONTO_THRESHOLD_ORE;
+}
+
+export function SjalvriskAccontoHint({ matterId, paymentMethod, clientShareBips, actions, onOpen }: SjalvriskAccontoHintProps) {
+  const accontoAllowed = actions.some((a) => a.type === "ACCONTO");
+  const enabled = accontoAllowed && isCoverageMethod(paymentMethod);
+  const proposal = trpc.billingRun.proposal.useQuery({ matterId }, { enabled }).data;
+  const thresholdOre = useAccontoThreshold(enabled);
+  if (!proposal) return null;
+  const shareBips = clientShareBips ?? DEFAULT_ACCONTO_SHARE_BIPS;
+  const input = { workValueOre: proposal.workValueOre, priorAccontoSumOre: proposal.priorAccontoSumOre, clientShareBips: shareBips };
+  if (!sjalvriskAccontoDue({ ...input, method: paymentMethod, thresholdOre, accontoAllowed })) return null;
+  const netOre = unbilledClientShareNetOre(input.workValueOre, input.clientShareBips, input.priorAccontoSumOre);
+  return (
+    <div role="status" className="mx-2 mb-2 flex items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+      <span>
+        Klientens självrisk{input.priorAccontoSumOre > 0 ? " sedan förra acontot" : ""} har nått{" "}
+        <span className="font-mono font-semibold">{formatCurrency(netOre)}</span> exkl. moms
+        (tröskel {formatCurrency(thresholdOre)}) — dags att skicka ett självrisk-aconto.
+      </span>
+      <button type="button" onClick={onOpen}
+        className="shrink-0 rounded border border-amber-400 bg-white px-2 py-1 font-medium text-amber-900 hover:bg-amber-100">
+        Aconto till klient
+      </button>
+    </div>
+  );
+}

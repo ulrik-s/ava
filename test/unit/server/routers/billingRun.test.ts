@@ -88,6 +88,17 @@ describe("billingRun.proposal (#397)", () => {
     expect(p.workValueOre).toBe(Math.round(2 * timkostnadsnormFtaxForDate(new Date())));
   });
 
+  it("ett aconto som bara är utkast räknas inte av — som påminnelsen om självrisk (#1852)", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" });
+    await ds.billingRuns.create({ data: {
+      id: asId<"BillingRunId">("br-utkast"), matterId: asId<"MatterId">("m-1"), type: "ACCONTO", status: "DRAFT",
+      recipient: "KLIENT", amountOre: 60000, clientShareBips: 2000,
+    } });
+    expect((await caller.billingRun.proposal({ matterId: "m-1" })).priorAccontoSumOre).toBe(0);
+    await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 40000 });
+    expect((await caller.billingRun.proposal({ matterId: "m-1" })).priorAccontoSumOre).toBe(40000);
+  });
+
   it("returnerar ofakturerade poster, upparbetat värde och tidigare aconto-summa", async () => {
     const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT", expenseOre: 90000 }); // 5000 + 900 kr
     await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 60000 });

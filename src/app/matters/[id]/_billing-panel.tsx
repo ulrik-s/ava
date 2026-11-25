@@ -29,12 +29,11 @@ import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
-import { insurerPruningPending, krCanCreateInvoice, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
+import { insurerPruningPending, krCanCreateInvoice } from "@/lib/shared/billing-todo";
 import type { KrDocumentFields } from "@/lib/shared/kostnadsrakning";
 import { availableKrActions, canVoidKostnadsrakning, isActiveKr, krStateOf, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { OrgImage } from "@/lib/shared/org-image";
-import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_RECIPIENT_LABELS, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
@@ -43,6 +42,7 @@ import { BillingSummary } from "./_billing-summary";
 import { type KrRunClaim, KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { RadgivningEntryWarning } from "./_radgivning-entry";
 import { SettlementDialog } from "./_settlement-dialog";
+import { SjalvriskAccontoHint } from "./_sjalvrisk-aconto-hint";
 import { VerdictDialog } from "./_verdict-dialog";
 
 interface MatterContext {
@@ -409,7 +409,8 @@ export function BillingPanel({ matterId, matter }: Props) {
       <BillingSummary matterId={matterId} runs={rows} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
       <RadgivningEntryWarning matterId={matterId} paymentMethod={matter.paymentMethod} />
-      <SjalvriskAccontoHint matterId={matterId} matter={matter} rows={rows} />
+      <SjalvriskAccontoHint matterId={matterId} paymentMethod={matter.paymentMethod} clientShareBips={matter.clientShareBips}
+        actions={actions} onOpen={() => setDialog("ACCONTO")} />
       <InsurerPruningBanner matterId={matterId} matter={matter} rows={rows} onRecorded={refetch} />
       {activeKr && <KostnadsrakningCard matterId={matterId} run={activeKr}
         onRegistreraBeslut={() => setBeslutRunId(activeKr.id)}
@@ -479,28 +480,6 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
     <p role="alert" className="mx-2 mb-2 text-xs text-red-700">
       Rådgivningsfakturan kunde inte skapas: {create.error.message}
     </p>
-  );
-}
-
-/**
- * Självrisk-aconto-hint (#854): när klientens ackumulerade självrisk (rättshjälp)
- * nått tröskeln flaggar vi att det är dags att skicka ett aconto. Acontot skapas
- * via "+ Skapa faktura → Aconto till klient" (finns redan). Self-gating.
- */
-function SjalvriskAccontoHint({ matterId, matter, rows }: { matterId: MatterId; matter: MatterContext; rows: BillingRunRow[] }) {
-  const isRattshjalp = matter.paymentMethod === "RATTSHJALP";
-  const split = trpc.billingRun.coverageSplit.useQuery({ matterId }, { enabled: isRattshjalp }).data;
-  // Gränsbeloppet är en byrå-inställning (#885); faller tillbaka på default-konstanten.
-  const orgThreshold = trpc.organization.getSettings.useQuery(undefined, { enabled: isRattshjalp }).data?.accontoThresholdOre;
-  const threshold = orgThreshold ?? SJALVRISK_ACCONTO_THRESHOLD_ORE;
-  if (!split || !sjalvriskAccontoDue({ method: matter.paymentMethod, clientOre: split.clientOre, thresholdOre: threshold, runs: rows })) return null;
-  return (
-    <div className="mx-2 mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-      Klientens självrisk har nått{" "}
-      <span className="font-mono font-semibold">{formatCurrency(split.clientOre)}</span>{" "}
-      (tröskel {formatCurrency(threshold)}) — dags att skicka ett självrisk-aconto via
-      {" "}<strong>+ Skapa faktura → Aconto till klient</strong>.
-    </div>
   );
 }
 

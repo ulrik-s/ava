@@ -449,16 +449,18 @@ describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
     expect(schedule.getByText(/Slutligt myndighetsbeslut/).closest("tr")).not.toHaveClass("align-top");
   });
 
-  it("självrisk-aconto-hint visas när självrisken nått tröskeln (#854)", () => {
-    coverageSplitData = { clientOre: 160_000 }; // > 150 000 (tröskel)
+  it("självrisk-aconto-hint visas när självrisken nått tröskeln, och knappen öppnar Aconto till klient (#854, #1852)", () => {
+    proposalData = { ...proposalData, workValueOre: 800_000 }; // 20 % = 1 600 kr ≥ 1 500 kr (tröskel)
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
     expect(screen.getByText(/Klientens självrisk har nått/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Aconto till klient" }));
+    expect(screen.getByTestId("billing-dialog")).toHaveTextContent("ACCONTO");
   });
 
   it("ingen hint under tröskeln", () => {
-    coverageSplitData = { clientOre: 100_000 }; // < 150 000
+    proposalData = { ...proposalData, workValueOre: 500_000 }; // 20 % = 1 000 kr < 1 500 kr
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
-    expect(screen.queryByText(/Klientens självrisk har nått/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Klientens självrisk/)).not.toBeInTheDocument();
   });
 
   it("icke-rättshjälp → ingen rådgivnings-banner", () => {

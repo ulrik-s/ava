@@ -19,7 +19,7 @@ import type { FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrak
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { DEFAULT_ACCONTO_SHARE_BIPS, proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { toIsoDate } from "@/lib/shared/iso-date";
 import type { MatterId } from "@/lib/shared/schemas/ids";
@@ -121,7 +121,7 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   const workValueOre = proposal.data?.workValueOre ?? 0;
   const priorOre = proposal.data?.priorAccontoSumOre ?? 0;
   // Förifyll med ärendets %-sats (#778); 20 % som fallback om ej satt.
-  const [clientShareBips, setBips] = useState(meta.clientShareBips ?? 2000);
+  const [clientShareBips, setBips] = useState(meta.clientShareBips ?? DEFAULT_ACCONTO_SHARE_BIPS);
   const [amountKr, setAmountKr] = useState<number | null>(null); // null → följ förslaget
   const [invoiceDate, setInvoiceDate] = useState(() => toIsoDate(new Date()));
   const makeDoc = useFakturaDoc(matterId, meta);

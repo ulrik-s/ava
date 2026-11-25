@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildProposal, proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { DEFAULT_ACCONTO_SHARE_BIPS, buildProposal, proposedAccontoOre } from "@/lib/shared/billing-proposal";
 
 describe("proposedAccontoOre", () => {
   it("20 % av 5000 kr utan tidigare aconton → 1000 kr + moms = 1250 kr", () => {
@@ -35,6 +35,12 @@ describe("proposedAccontoOre", () => {
     expect(proposedAccontoOre(150, 3333, 0)).toBe(0);
     // 50 % av 3 kr = 1,50 kr → 2 kr; + moms 0,50 kr → 1 kr = 3 kr.
     expect(proposedAccontoOre(300, 5000, 0)).toBe(300);
+  });
+});
+
+describe("DEFAULT_ACCONTO_SHARE_BIPS (#1852)", () => {
+  it("20 % när ärendet saknar egen andel", () => {
+    expect(DEFAULT_ACCONTO_SHARE_BIPS).toBe(2000);
   });
 });
 

@@ -4,9 +4,13 @@
  * åtgärdsrutor; Frister visar dem inte (#1735).
  */
 
+import { accontoSplit } from "./acconto-vat";
+import { isCoverageMethod } from "./billing-flow";
+import { proposedAccontoOre } from "./billing-proposal";
 import { canKrAction, krStateOf, type KostnadsrakningStatus } from "./kostnadsrakning-flow";
 import type { BillingRunRecipient, BillingRunStatus, BillingRunType, InvoiceStatus, PaymentMethod } from "./schemas/enums";
 import type { BillingRunId } from "./schemas/ids";
+import { roundToKronor } from "./whole-kronor";
 
 /** Det predikaten läser ur en billing-run (panelens rader och repo-raderna passar båda). */
 export interface TodoRun {
@@ -32,22 +36,35 @@ export function krCanCreateInvoice(r: TodoRun): boolean {
   return canKrAction(krStateOf(r), "SKAPA_FAKTURA");
 }
 
-/** Har klienten redan fått ett självrisk-aconto? */
-export function hasSjalvriskAconto(runs: readonly TodoRun[]): boolean {
-  return runs.some((r) => r.type === "ACCONTO" && r.recipient === "KLIENT");
+/**
+ * Nettot (exkl. moms, öre) på det aconto som dialogen Aconto till klient
+ * föreslår: klientens andel av det upparbetade minus tidigare skickade aconton,
+ * avrundat till hela kronor som fakturan. Med moms är det exakt dialogens förslag.
+ */
+export function unbilledClientShareNetOre(workValueOre: number, clientShareBips: number, priorAccontoSumOre: number): number {
+  return accontoSplit(roundToKronor(proposedAccontoOre(workValueOre, clientShareBips, priorAccontoSumOre))).netOre;
 }
 
 export interface SjalvriskInput {
   method: PaymentMethod | null | undefined;
-  /** Klientens ackumulerade självrisk (netto, öre). */
-  clientOre: number;
+  /** Upparbetat värde exkl. moms (öre) — `billingRun.proposal`, som dialogen. */
+  workValueOre: number;
+  /** Summan av skickade aconton (brutto, öre) — `billingRun.proposal`. */
+  priorAccontoSumOre: number;
+  clientShareBips: number;
   thresholdOre: number;
-  runs: readonly TodoRun[];
+  /** Finns aconto bland ärendets tillgängliga åtgärder (`availableActions`)? */
+  accontoAllowed: boolean;
 }
 
-/** Självrisk-aconto (#854): rättshjälp, självrisken når tröskeln, inget aconto skickat. */
+/**
+ * Självrisk-aconto (#854, #1852): rättshjälp eller rättsskydd, aconto tillåtet i
+ * fasen, och nettot på dialogens förslag har nått tröskeln. Räknas om från noll
+ * efter varje skickat aconto.
+ */
 export function sjalvriskAccontoDue(s: SjalvriskInput): boolean {
-  return s.method === "RATTSHJALP" && !hasSjalvriskAconto(s.runs) && s.clientOre >= s.thresholdOre;
+  if (!isCoverageMethod(s.method) || !s.accontoAllowed) return false;
+  return unbilledClientShareNetOre(s.workValueOre, s.clientShareBips, s.priorAccontoSumOre) >= s.thresholdOre;
 }
 
 /**

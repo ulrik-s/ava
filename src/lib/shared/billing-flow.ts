@@ -117,6 +117,18 @@ export const BILLING_FLOWS: Record<PaymentMethod, BillingFlow> = {
 };
 
 /** Minimal vy av en billing-run för fas-härledningen. */
+/**
+ * Betalningssätt där en försäkring eller staten står för arvodet och klienten
+ * för en självrisk (rättshjälp, rättsskydd). Kategorin styr där vilken årsnorm
+ * slutregleringen värderar tiden på, och självrisk-acontot gäller båda (ADR 0034).
+ */
+export const COVERAGE_METHODS: ReadonlySet<PaymentMethod> = new Set<PaymentMethod>(["RATTSHJALP", "RATTSSKYDD"]);
+
+/** Är betalningssättet rättshjälp eller rättsskydd (`COVERAGE_METHODS`)? */
+export function isCoverageMethod(method: PaymentMethod | null | undefined): boolean {
+  return method != null && COVERAGE_METHODS.has(method);
+}
+
 export interface FlowRun {
   type: BillingRunType;
   status: BillingRunStatus;
