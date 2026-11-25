@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import {
-  checkRowPolicy, immutableOnUpdate, isSameCreation, ROW_POLICY_REASONS, ROW_PUSH_POLICY, type PolicyInput, type RefOrg,
+  checkRowPolicy, immutableOnUpdate, isSameCreation, ROW_POLICY_REASONS, ROW_PUSH_POLICY, type PolicyInput, type RefMatter, type RefOrg,
 } from "@/lib/server/sync/row-push-policy";
 import { PROCEDURE_OWNED_ENTITIES } from "@/lib/shared/sync/procedure-owned";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -23,8 +23,12 @@ const refOrg: RefOrg = async (_entity, id) => {
   return id === FOREIGN_MATTER ? OTHER_ORG : ORG;
 };
 
+/** Ärendet en refererad rad ligger i (#2044): mappar och dokument i `MATTER_OF`; MISSING finns inte. */
+const MATTER_OF = new Map<string, string | undefined>();
+const refMatter: RefMatter = (_entity, id) => Promise.resolve(MATTER_OF.has(id) ? MATTER_OF.get(id) : null);
+
 function input(over: Partial<PolicyInput>): PolicyInput {
-  return { entity: "task", kind: "create", incoming: {}, existing: null, pusher: pusher(ORG, ME), refOrg, ...over };
+  return { entity: "task", kind: "create", incoming: {}, existing: null, pusher: pusher(ORG, ME), refOrg, refMatter, ...over };
 }
 
 describe("neka som standard", () => {
@@ -150,5 +154,85 @@ describe("isSameCreation (#1380)", () => {
   it("skaparen (actor) måste vara densamma", () => {
     expect(isSameCreation("serviceNote", { createdAt: at, authorId: "u1" }, { createdAt: at, authorId: "u1" })).toBe(true);
     expect(isSameCreation("serviceNote", { createdAt: at, authorId: "u1" }, { createdAt: at, authorId: "u2" })).toBe(false);
+  });
+});
+
+describe("samma ärende och låsta fält (#2044)", () => {
+  const OTHER_MATTER = uuidv7();
+  const OWN_FOLDER = uuidv7();
+  const OTHER_FOLDER = uuidv7();
+  const DOC = uuidv7();
+  const NO_MATTER = uuidv7();
+  MATTER_OF.set(OWN_FOLDER, OWN_MATTER).set(OTHER_FOLDER, OTHER_MATTER).set(DOC, OWN_MATTER).set(NO_MATTER, undefined);
+
+  const doc = (over: Record<string, unknown> = {}) => ({ id: DOC, matterId: OWN_MATTER, folderId: OWN_FOLDER, title: "Avtal", ...over });
+  const update = (entity: string, existing: Record<string, unknown>, incoming: Record<string, unknown>) =>
+    checkRowPolicy(input({ entity, kind: "update", existing, incoming }));
+  const OTHER = { reason: ROW_POLICY_REASONS.otherMatter };
+  const LOCKED = { reason: ROW_POLICY_REASONS.locked };
+
+  it("ett dokument i en mapp i ett annat ärende vägras", async () => {
+    expect(await update("document", doc(), { folderId: OTHER_FOLDER })).toEqual(OTHER);
+    expect(await checkRowPolicy(input({ entity: "document", incoming: { ...doc({ folderId: OTHER_FOLDER }), uploadedById: ME } }))).toEqual(OTHER);
+  });
+
+  it("ett dokument som bara byter ärende, med mappen kvar i det gamla, vägras; utan mapp går det igenom", async () => {
+    expect(await update("document", doc(), { matterId: OTHER_MATTER })).toEqual(OTHER);
+    expect(await update("document", doc(), { matterId: OTHER_MATTER, folderId: OTHER_FOLDER })).toBeNull();
+    expect(await update("document", doc(), { matterId: OTHER_MATTER, folderId: null })).toBeNull();
+  });
+
+  it("en del vars ärende inte är dokumentets vägras, också när bara delens ärende ändras", async () => {
+    const part = { id: uuidv7(), documentId: DOC, matterId: OWN_MATTER };
+    expect(await checkRowPolicy(input({ entity: "documentPart", incoming: { ...part, matterId: OTHER_MATTER } }))).toEqual(OTHER);
+    expect(await update("documentPart", part, { matterId: OTHER_MATTER })).toEqual(OTHER);
+    expect(await checkRowPolicy(input({ entity: "documentPart", incoming: part }))).toBeNull();
+  });
+
+  it("en refererad rad utan ärende räknas som ett annat ärende", async () => {
+    expect(await update("document", doc(), { folderId: NO_MATTER })).toEqual(OTHER);
+  });
+
+  it("tom mapp och en referens som inte finns går igenom", async () => {
+    expect(await update("document", doc(), { folderId: null })).toBeNull();
+    expect(await update("document", doc(), { folderId: MISSING })).toBeNull();
+  });
+
+  it("en orelaterad ändring av en gammal rad som inte stämmer går igenom", async () => {
+    expect(await update("document", doc({ folderId: OTHER_FOLDER }), { title: "Nytt namn" })).toBeNull();
+    expect(await update("documentPart", { id: uuidv7(), documentId: DOC, matterId: OTHER_MATTER }, { kind: "BILAGA" })).toBeNull();
+  });
+
+  it("ett fakturerat dokument kan inte byta ärende men får byta mapp och titel", async () => {
+    const invoiced = doc({ invoiceId: uuidv7() });
+    expect(await update("document", invoiced, { matterId: OTHER_MATTER, folderId: OTHER_FOLDER })).toEqual(LOCKED);
+    expect(await update("document", doc({ billingRunId: uuidv7() }), { matterId: OTHER_MATTER, folderId: null })).toEqual(LOCKED);
+    const otherOwnFolder = uuidv7();
+    MATTER_OF.set(otherOwnFolder, OWN_MATTER);
+    expect(await update("document", invoiced, { folderId: otherOwnFolder, title: "Faktura 12" })).toBeNull();
+  });
+
+  it("vakterna själva kan inte nollas eller bytas", async () => {
+    const invoiceId = uuidv7();
+    const billingRunId = uuidv7();
+    expect(await update("document", doc({ invoiceId }), { invoiceId: null })).toEqual(LOCKED);
+    expect(await update("document", doc({ invoiceId }), { invoiceId: uuidv7() })).toEqual(LOCKED);
+    expect(await update("document", doc({ billingRunId }), { billingRunId: null })).toEqual(LOCKED);
+  });
+
+  it("samma värde som servern, eller ett fält som inte skickas, räknas som oförändrat", async () => {
+    const invoiceId = uuidv7();
+    expect(await update("document", doc({ invoiceId }), { ...doc({ invoiceId }), title: "Ny" })).toBeNull();
+    expect(await update("document", doc({ invoiceId }), { title: "Ny" })).toBeNull();
+  });
+
+  it("utan vakt på servern är fälten inte låsta, och en ny rad har inga vakter", async () => {
+    expect(await update("document", doc({ invoiceId: null }), { invoiceId: uuidv7() })).toBeNull();
+    expect(await checkRowPolicy(input({ entity: "document", incoming: { ...doc({ invoiceId: uuidv7() }), uploadedById: ME } }))).toBeNull();
+  });
+
+  it("en radering prövar varken ärendet eller låset", async () => {
+    expect(await checkRowPolicy(input({ entity: "documentPart", kind: "delete", existing: { id: uuidv7(), documentId: DOC, matterId: OTHER_MATTER }, incoming: null }))).toBeNull();
+    expect(await checkRowPolicy(input({ entity: "document", kind: "delete", existing: doc({ invoiceId: uuidv7() }), incoming: null }))).toBeNull();
   });
 });
