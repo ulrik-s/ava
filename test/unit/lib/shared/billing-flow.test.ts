@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import {
-  BILLING_FLOWS, availableActions, currentPhase,
+  BILLING_FLOWS, COVERAGE_METHODS, availableActions, currentPhase, isCoverageMethod,
   canBillingTransition, assertBillingTransition, type FlowRun,
 } from "@/lib/shared/billing-flow";
 
@@ -104,5 +104,14 @@ describe("canBillingTransition / assertBillingTransition — guards", () => {
     for (const flow of Object.values(BILLING_FLOWS)) {
       expect(flow.initialPhase in flow.actionsByPhase).toBe(true);
     }
+  });
+});
+
+describe("isCoverageMethod (#1852)", () => {
+  it("rättshjälp och rättsskydd, inget annat", () => {
+    expect([...COVERAGE_METHODS].sort()).toEqual(["RATTSHJALP", "RATTSSKYDD"]);
+    expect(isCoverageMethod("RATTSHJALP")).toBe(true);
+    expect(isCoverageMethod("RATTSSKYDD")).toBe(true);
+    for (const m of ["PRIVAT", "MIX", "PENDING", "OFFENTLIGT_UPPDRAG", null, undefined] as const) expect(isCoverageMethod(m)).toBe(false);
   });
 });

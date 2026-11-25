@@ -24,7 +24,7 @@ import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-t
 import { HelperAutoConfig } from "@/components/shell/helper-auto-config";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 import { loginDeniedMessage } from "@/lib/client/auth/login-denied";
-import { decideSessionGate, loginUrl, offlineGateMessage, type CachedIdentity } from "@/lib/client/auth/session-gate";
+import { decideSessionGate, haltGate, isHaltDecision, loginUrl, type CachedIdentity } from "@/lib/client/auth/session-gate";
 import { setSessionNotice } from "@/lib/client/auth/session-notice";
 import type { SessionProbe } from "@/lib/client/auth/session-probe";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
@@ -370,11 +370,13 @@ export interface GateEnv {
   now: () => number;
   redirect: (url: string) => void;
   location: () => { pathname: string; search: string };
+  retryLater: (ms: number) => void; // servern svarar långsamt: starta om efter en stund
 }
 
 const browserGateEnv: GateEnv = {
   now: () => Date.now(),
   redirect: (url) => { window.location.assign(url); },
+  retryLater: (ms) => { setTimeout(() => { window.location.reload(); }, ms); },
   location: () => window.location,
 };
 
@@ -399,6 +401,7 @@ function runSessionGate(
   setStatus: (s: Status) => void, setErrorMsg: (m: string | null) => void,
 ): GateOutcome {
   const decision = decideSessionGate(probe, cachedIdentity(firmaConfig), env.now());
+  if (isHaltDecision(decision)) return haltGate(decision, env.retryLater, (m) => { setStatus("error"); setErrorMsg(m); });
   switch (decision.kind) {
     case "bind": return { kind: "continue", needsOidc: true, oidcClaims: decision.claims };
     case "proceed":
@@ -409,11 +412,6 @@ function runSessionGate(
       return { kind: "continue", needsOidc: false, oidcClaims: null };
     case "login":
       env.redirect(loginUrl(env.location()));
-      return { kind: "halt" };
-    case "offline-expired":
-    case "offline-unbound":
-      setStatus("error");
-      setErrorMsg(offlineGateMessage(decision));
       return { kind: "halt" };
   }
 }

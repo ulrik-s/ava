@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
+import { isCoverageMethod } from "@/lib/shared/billing-flow";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import type { MatterStatus, PaymentMethod, TimeEntryKind } from "@/lib/shared/schemas/enums";
@@ -30,13 +31,6 @@ interface Props {
   matterStatus?: MatterStatus | undefined;
   /** Rättshjälpens timtak — takvarningen vid tidsregistreringen (#1520). */
   rattshjalpMaxTimmar?: number | null | undefined;
-}
-
-/** Ärenden där kategorin styr vilken ÅRSNORM slutregleringen värderar posten på. */
-const COVERAGE_METHODS = new Set<PaymentMethod>(["RATTSHJALP", "RATTSSKYDD"]);
-
-function isCoverageMethod(method: PaymentMethod | undefined): boolean {
-  return method !== undefined && COVERAGE_METHODS.has(method);
 }
 
 interface TimeEntryRow {

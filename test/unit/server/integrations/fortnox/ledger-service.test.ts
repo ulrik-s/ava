@@ -267,4 +267,10 @@ describe("fortnoxLedgerFromEnv", () => {
     expect(fortnoxLedgerFromEnv(full)).toBeInstanceOf(FortnoxLedgerService);
     expect(fortnoxLedgerFromEnv({ ...full, AVA_FORTNOX_ACCOUNT_TYPE: "service" })).toBeInstanceOf(FortnoxLedgerService);
   });
+
+  // #1886: bilagan kräver inbox (uppladdningen) och connectfile (kopplingen).
+  it("begär bookkeeping, inbox och connectfile", async () => {
+    const url = await fortnoxLedgerFromEnv(full)?.authorizeUrl("org-1");
+    expect(url).toContain("scope=bookkeeping+inbox+connectfile");
+  });
 });

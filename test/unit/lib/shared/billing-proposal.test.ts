@@ -4,7 +4,12 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildProposal, proposedAccontoOre, type ProposalExpenseInput } from "@/lib/shared/billing-proposal";
+import {
+  DEFAULT_ACCONTO_SHARE_BIPS,
+  buildProposal,
+  proposedAccontoOre,
+  type ProposalExpenseInput,
+} from "@/lib/shared/billing-proposal";
 import { expenseNetOre, matterArvodeNet } from "@/lib/shared/billing-work-value";
 import { asId } from "@/lib/shared/schemas/ids";
 
@@ -37,6 +42,12 @@ describe("proposedAccontoOre", () => {
     expect(proposedAccontoOre(150, 3333, 0)).toBe(0);
     // 50 % av 3 kr = 1,50 kr → 2 kr; + moms 0,50 kr → 1 kr = 3 kr.
     expect(proposedAccontoOre(300, 5000, 0)).toBe(300);
+  });
+});
+
+describe("DEFAULT_ACCONTO_SHARE_BIPS (#1852)", () => {
+  it("20 % när ärendet saknar egen andel", () => {
+    expect(DEFAULT_ACCONTO_SHARE_BIPS).toBe(2000);
   });
 });
 
@@ -75,7 +86,9 @@ describe("buildProposal — utläggen räknas som fakturan (#1936)", () => {
     const matter = { paymentMethod: "RATTSHJALP" as const };
     const proposal = buildProposal(te, [ex[0] ?? expense("x", {})], 0, matter, DATE);
     const raw = matterArvodeNet(matter, { timeEntries: te }, DATE) + 106_000;
-    expect(proposedAccontoOre(proposal.workValueOre, 2000, 0)).toBe(proposedAccontoOre(raw, 2000, 0) - 1_500);
+    expect(proposedAccontoOre(proposal.workValueOre, DEFAULT_ACCONTO_SHARE_BIPS, 0)).toBe(
+      proposedAccontoOre(raw, DEFAULT_ACCONTO_SHARE_BIPS, 0) - 1_500,
+    );
   });
 
   it("PRUTNING och icke debiterbara utlägg räknas inte; listan är som förut", () => {

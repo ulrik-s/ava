@@ -175,13 +175,14 @@ export class FortnoxClient {
   }
 
   /**
-   * Ladda upp en fil (faktura-PDF) till Fortnox inbox → returnerar fil-id (#785).
-   * Multipart/form-data: vi sätter INTE Content-Type själva så fetch lägger
+   * Ladda upp en fil (faktura-PDF) till verifikatinkorgen (`Inbox_v`) → returnerar
+   * fil-id (#785, #1886). Fortnox guide för verifikat lägger bilagan där, inte i
+   * inkorgens rot. Multipart/form-data: vi sätter INTE Content-Type själva så fetch lägger
    * boundary:n. Wire-detaljer (fältnamn "file", svarsnästling) bekräftas mot
    * sandbox; isolerat här för enkel justering.
    */
   async uploadInboxFile(fileName: string, bytes: Uint8Array, contentType?: string): Promise<string> {
-    const url = new URL("/3/inbox", this.config.apiBase).toString();
+    const url = new URL("/3/inbox?path=Inbox_v", this.config.apiBase).toString();
     const type = contentType ?? "application/pdf";
     const doPost = (token: string): Promise<Response> => {
       const form = new FormData();
@@ -196,10 +197,14 @@ export class FortnoxClient {
 
   /**
    * Koppla en uppladdad fil till ett verifikat (#785). Lagkrav: originalet
-   * (fakturan) ska arkiveras tillsammans med verifikatet.
+   * (fakturan) ska arkiveras tillsammans med verifikatet. Serie + nummer är
+   * unika bara inom ett räkenskapsår, så årets Id (`financialYearId`, samma som
+   * `listVouchers` tar) skickas med (#1886) — annars kan filen hamna på ett
+   * verifikat från ett annat år.
    */
-  async connectFileToVoucher(fileId: string, voucherSeries: string, voucherNumber: string): Promise<void> {
+  async connectFileToVoucher(fileId: string, voucherSeries: string, voucherNumber: string, financialYearId: number): Promise<void> {
     const body = { VoucherFileConnection: { FileId: fileId, VoucherSeries: voucherSeries, VoucherNumber: voucherNumber } };
-    await this.withRetry((t) => this.apiPost("/3/voucherfileconnections", t, body), "fil-koppling");
+    const path = `/3/voucherfileconnections?financialyear=${financialYearId}`;
+    await this.withRetry((t) => this.apiPost(path, t, body), "fil-koppling");
   }
 }

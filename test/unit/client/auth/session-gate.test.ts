@@ -3,13 +3,14 @@
  * klienten avgör vid varje start om användaren får arbeta.
  */
 import { describe, expect, it } from "vitest-compat";
-import { decideSessionGate, loginUrl, offlineGateMessage, sameIdentity, type CachedIdentity } from "@/lib/client/auth/session-gate";
+import { decideSessionGate, loginUrl, offlineGateMessage, sameIdentity, type CachedIdentity, haltGate, isHaltDecision, SERVER_SLOW_RETRY_MS } from "@/lib/client/auth/session-gate";
 import { DEFAULT_OFFLINE_GRACE_MS } from "@/lib/shared/offline-grace";
 
 const NOW = Date.UTC(2026, 8, 30, 8, 0);
 const DAY = 24 * 60 * 60 * 1000;
 const claims = { email: "Lena@Byra.se", subject: "", issuer: "", name: "Lena" };
-const UNREACHABLE = { kind: "unreachable", reason: "timeout" } as const;
+const UNREACHABLE = { kind: "unreachable", reason: "network" } as const;
+const SLOW = { kind: "unreachable", reason: "timeout" } as const;
 const cached = (verifiedAt: number | undefined): CachedIdentity => ({ principalId: "u1", email: "lena@byra.se", verifiedAt });
 
 describe("decideSessionGate", () => {
@@ -48,6 +49,13 @@ describe("decideSessionGate", () => {
     expect(decideSessionGate(UNREACHABLE, null, NOW)).toEqual({ kind: "offline-unbound" });
   });
 
+  it("servern svarar långsamt eller med fel efter grace → vänta ut servern, inte utelåsning (2026-11-25)", () => {
+    expect(decideSessionGate(SLOW, cached(NOW - 8 * DAY), NOW)).toEqual({ kind: "server-slow" });
+    expect(decideSessionGate({ kind: "unreachable", reason: "server-error" }, null, NOW)).toEqual({ kind: "server-slow" });
+    // Inom grace arbetar man som förut lokalt, oavsett skäl.
+    expect(decideSessionGate(SLOW, cached(NOW - DAY), NOW)).toEqual({ kind: "proceed-locally", notice: "unreachable" });
+  });
+
   it("grace-tiden kan ställas per byrå", () => {
     expect(decideSessionGate(UNREACHABLE, cached(NOW - 2 * DAY), NOW, DAY)).toEqual({ kind: "offline-expired" });
   });
@@ -65,6 +73,7 @@ describe("loginUrl / offlineGateMessage", () => {
   it("beskeden säger vad användaren ska göra", () => {
     expect(offlineGateMessage({ kind: "offline-expired" })).toMatch(/Anslut till nätet.*lokala ändringar finns kvar/);
     expect(offlineGateMessage({ kind: "offline-unbound" })).toMatch(/uppkopplad första gången/);
+    expect(offlineGateMessage({ kind: "server-slow" })).toMatch(/Servern svarar långsamt.*försöker igen automatiskt/);
   });
 });
 
@@ -75,5 +84,24 @@ describe("sameIdentity — grinden och omvalideringen avgör identiteten lika (#
 
   it("en annan e-post är en annan identitet", () => {
     expect(sameIdentity("bo@byra.se", claims)).toBe(false);
+  });
+});
+
+describe("haltGate / isHaltDecision", () => {
+  it("bara offline utan grace och trög server stannar starten", () => {
+    expect(isHaltDecision({ kind: "server-slow" })).toBe(true);
+    expect(isHaltDecision({ kind: "offline-expired" })).toBe(true);
+    expect(isHaltDecision({ kind: "proceed", verifiedNow: true })).toBe(false);
+    expect(isHaltDecision({ kind: "login" })).toBe(false);
+  });
+
+  it("trög server: beskedet visas och starten försöker igen; offline: bara beskedet", () => {
+    const retry: number[] = [];
+    const messages: string[] = [];
+    haltGate({ kind: "server-slow" }, (ms) => retry.push(ms), (m) => messages.push(m));
+    haltGate({ kind: "offline-expired" }, (ms) => retry.push(ms), (m) => messages.push(m));
+    expect(retry).toEqual([SERVER_SLOW_RETRY_MS]);
+    expect(messages[0]).toMatch(/Servern svarar långsamt/);
+    expect(messages[1]).toMatch(/Anslut till nätet/);
   });
 });

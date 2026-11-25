@@ -14,6 +14,9 @@
  *   - Utloggad utan giltig grace → till inloggningen (`/oauth2/start`).
  *   - Okänt läge utan giltig grace → besked; uppkoppling krävs — ett
  *     återkallat förtroende hålls inte vid liv i veckor.
+ *   - …men svarar servern långsamt eller med fel (timeout, 5xx) är det inte
+ *     användaren som är offline: "servern svarar långsamt", och starten
+ *     försöker igen av sig själv (2026-11-25: VPS-disken stod still).
  *   - Ingen OIDC i driften (`/oauth2/userinfo` saknas: basic-auth) → som förut.
  *
  * Servern omvaliderar ändå principalen vid varje synk; grinden är bara den
@@ -23,7 +26,7 @@
 import type { OidcClaims } from "@/lib/server/auth/oidc-auth-provider";
 import { DEFAULT_OFFLINE_GRACE_MS } from "@/lib/shared/offline-grace";
 import type { SessionNotice } from "./session-notice";
-import type { SessionProbe } from "./session-probe";
+import type { SessionProbe, UnreachableReason } from "./session-probe";
 
 /** Den identitet klienten arbetade under senast (ur firma-config). */
 export interface CachedIdentity {
@@ -39,7 +42,8 @@ export type GateDecision =
   | { kind: "proceed-locally"; notice: Exclude<SessionNotice, "token-expired"> }
   | { kind: "login" }
   | { kind: "offline-expired" }
-  | { kind: "offline-unbound" };
+  | { kind: "offline-unbound" }
+  | { kind: "server-slow" };
 
 function withinGrace(cached: CachedIdentity, now: number, graceMs: number): boolean {
   return cached.verifiedAt !== undefined && now - cached.verifiedAt <= graceMs;
@@ -59,10 +63,14 @@ function decideOnline(claims: OidcClaims, cached: CachedIdentity | null): GateDe
   return same ? { kind: "proceed", verifiedNow: true } : { kind: "bind", claims };
 }
 
-/** Okänt läge: inom grace arbetar man lokalt; annars krävs uppkoppling. */
-function decideUnreachable(cached: CachedIdentity | null, now: number, graceMs: number): GateDecision {
-  if (!cached) return { kind: "offline-unbound" };
-  return withinGrace(cached, now, graceMs) ? { kind: "proceed-locally", notice: "unreachable" } : { kind: "offline-expired" };
+/** Servern nås men svarar inte i tid, eller med fel: det är servern, inte användaren, som är borta. */
+const SERVER_SIDE: ReadonlySet<UnreachableReason> = new Set(["timeout", "server-error"]);
+
+/** Okänt läge: inom grace arbetar man lokalt; en trög server väntar man ut; annars krävs uppkoppling. */
+function decideUnreachable(cached: CachedIdentity | null, now: number, graceMs: number, reason: UnreachableReason): GateDecision {
+  if (cached && withinGrace(cached, now, graceMs)) return { kind: "proceed-locally", notice: "unreachable" };
+  if (SERVER_SIDE.has(reason)) return { kind: "server-slow" };
+  return cached ? { kind: "offline-expired" } : { kind: "offline-unbound" };
 }
 
 /** Bekräftat utloggad: inom grace en banner, annars till inloggningen (#1351). */
@@ -77,7 +85,7 @@ export function decideSessionGate(
   switch (probe.kind) {
     case "authenticated": return decideOnline(probe.claims, cached);
     case "signed-out": return decideSignedOut(cached, now, graceMs);
-    case "unreachable": return decideUnreachable(cached, now, graceMs);
+    case "unreachable": return decideUnreachable(cached, now, graceMs, probe.reason);
     case "absent": return { kind: "proceed", verifiedNow: false };
     default: {
       const exhaustive: never = probe;
@@ -91,9 +99,34 @@ export function loginUrl(current: { pathname: string; search: string }): string 
   return `/oauth2/start?rd=${encodeURIComponent(`${current.pathname}${current.search}`)}`;
 }
 
-/** Beskedet när klienten inte kan släppa in användaren offline. */
-export function offlineGateMessage(decision: { kind: "offline-expired" | "offline-unbound" }): string {
-  return decision.kind === "offline-expired"
-    ? "Du har arbetat offline längre än tillåtet. Anslut till nätet så att inloggningen kan förnyas — dina lokala ändringar finns kvar."
-    : "Du behöver vara uppkopplad första gången du loggar in.";
+/** Hur länge starten väntar innan den frågar servern igen när den svarar långsamt. */
+export const SERVER_SLOW_RETRY_MS = 10_000;
+
+const GATE_MESSAGES: Readonly<Record<"offline-expired" | "offline-unbound" | "server-slow", string>> = {
+  "offline-expired": "Du har arbetat offline längre än tillåtet. Anslut till nätet så att inloggningen kan förnyas — dina lokala ändringar finns kvar.",
+  "offline-unbound": "Du behöver vara uppkopplad första gången du loggar in.",
+  "server-slow": "Servern svarar långsamt just nu. AVA försöker igen automatiskt — dina lokala ändringar finns kvar.",
+};
+
+/** Beskedet när klienten inte kan släppa in användaren (offline, eller servern svarar inte i tid). */
+export function offlineGateMessage(decision: { kind: "offline-expired" | "offline-unbound" | "server-slow" }): string {
+  return GATE_MESSAGES[decision.kind];
+}
+
+/** Besluten där starten stannar med ett besked. */
+export type HaltDecision = Extract<GateDecision, { kind: "server-slow" | "offline-expired" | "offline-unbound" }>;
+
+/** Stannar starten med ett besked (offline utan grace, eller trög server)? */
+export function isHaltDecision(d: GateDecision): d is HaltDecision {
+  return d.kind === "server-slow" || d.kind === "offline-expired" || d.kind === "offline-unbound";
+}
+
+/**
+ * Stoppa starten med beskedet. Svarar servern långsamt försöker starten igen av
+ * sig själv. ponytail: fast intervall; backoff om många flikar skulle hamra en trög server.
+ */
+export function haltGate(d: HaltDecision, retryLater: (ms: number) => void, fail: (message: string) => void): { kind: "halt" } {
+  if (d.kind === "server-slow") retryLater(SERVER_SLOW_RETRY_MS);
+  fail(offlineGateMessage(d));
+  return { kind: "halt" };
 }

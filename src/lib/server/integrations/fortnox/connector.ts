@@ -38,6 +38,9 @@ const FORTNOX_CAPABILITIES: LedgerCapabilities = {
   exportSie: false,
 };
 
+/** Skälet när Fortnox svar på verifikatet saknar räkenskapsåret. */
+export const MISSING_YEAR = "Fortnox svar saknar räkenskapsår (Year) – bilagan laddades inte upp.";
+
 export class FortnoxLedgerConnector implements LedgerConnector {
   readonly name = "fortnox";
 
@@ -54,19 +57,27 @@ export class FortnoxLedgerConnector implements LedgerConnector {
     const number = String(resp.Voucher.VoucherNumber);
     const externalId = `${series}/${number}`;
     if (!ctx?.attachment) return { externalId };
-    const attachmentError = await this.attachOrExplain(ctx.attachment, series, number);
+    const attachmentError = await this.attachOrExplain(ctx.attachment, series, number, resp.Voucher.Year);
     return attachmentError ? { externalId, attachmentError } : { externalId };
   }
 
   /**
    * Bifoga faktura-PDF:en till konteringen (#785) — lagkrav att originalet
    * arkiveras. Verifikatet finns redan, så ett fel här kastas inte (#1885): det
-   * blir skälet som returneras, annars null.
+   * blir skälet som returneras, annars null. Utan räkenskapsår (`Year`) i svaret
+   * laddas ingenting upp (#1886): serie + nummer räcker inte för att hitta rätt
+   * verifikat, och fel verifikat är värre än inget.
    */
-  private async attachOrExplain(attachment: LedgerAttachment, series: string, number: string): Promise<string | null> {
+  private async attachOrExplain(
+    attachment: LedgerAttachment,
+    series: string,
+    number: string,
+    year: number | undefined,
+  ): Promise<string | null> {
+    if (year === undefined) return MISSING_YEAR;
     try {
       const fileId = await this.deps.client.uploadInboxFile(attachment.fileName, attachment.bytes, attachment.contentType);
-      await this.deps.client.connectFileToVoucher(fileId, series, number);
+      await this.deps.client.connectFileToVoucher(fileId, series, number, year);
       return null;
     } catch (e) {
       return e instanceof Error ? e.message : String(e);

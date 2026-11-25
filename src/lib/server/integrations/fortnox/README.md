@@ -19,7 +19,11 @@ Allt är enhetstestat utan riktig Fortnox (injicerad `fetch`).
 ## Vad som återstår (kräver dig / uppföljning)
 
 1. **Fortnox-credentials** — registrera en integration i [Developer Portal](https://www.fortnox.se/developer/developer-portal):
-   - scope **`bookkeeping`** (Voucher API), en **redirect-URI** som pekar på server-connectorn.
+   - scopes **`bookkeeping`** (Voucher API), **`inbox`** (faktura-PDF:en till verifikatinkorgen
+     `Inbox_v`) och **`connectfile`** (kopplingen till verifikatet, kräver licensen Bokföring,
+     Anläggning eller Arkivplats), se [behörigheterna](https://www.fortnox.se/developer/guides-and-good-to-know/scopes).
+     Alla tre slås på i Developer Portal; en byrå som anslöt före #1886 måste ansluta igen för att
+     få bilagor. Plus en **redirect-URI** som pekar på server-connectorn.
    - Du får `client_id` + `client_secret`. **Lägg dem i secrets-valvet (#79), inte i git.**
    - Skapa ett **sandbox** att validera mot innan skarp drift.
 2. **Konto-mappning** — `FortnoxKontoMappning` (verifikatserie + konton för kundfordran/arvode/moms) är ett **bokföringsbeslut per byrå**. Connectorn levereras utan defaults.
