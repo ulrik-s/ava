@@ -101,3 +101,31 @@ describe("IdbKv.update — läs och skriv i en transaktion (#1714)", () => {
     expect(await kv.get("a")).toBe(1);
   });
 });
+
+describe("IdbKv — nycklar, borttagning och fel vid öppning (#1905)", () => {
+  it("keys listar de lagrade nycklarna", async () => {
+    const kv = new IdbKv(new IDBFactory(), "kv-keys-list", "s");
+    expect(await kv.keys()).toEqual([]);
+    await kv.putAll([["b", 2], ["a", 1]]);
+    expect((await kv.keys()).sort()).toEqual(["a", "b"]);
+  });
+
+  it("delete tar bort nyckeln, och en saknad nyckel går bra", async () => {
+    const kv = new IdbKv(new IDBFactory(), "kv-delete", "s");
+    await kv.putAll([["a", 1], ["b", 2]]);
+    await kv.delete("a");
+    await kv.delete("saknas");
+    expect(await kv.getAll(["a", "b"])).toEqual([null, 2]);
+  });
+
+  it("en databas i en nyare version går inte att öppna: felet kastas vidare", async () => {
+    const factory = new IDBFactory();
+    await new Promise<void>((resolve, reject) => {
+      const req = factory.open("kv-newer", 2);
+      req.onsuccess = () => { req.result.close(); resolve(); };
+      req.onerror = () => reject(req.error ?? new Error("open"));
+    });
+    const kv = new IdbKv(factory, "kv-newer", "s");
+    await expect(kv.get("a")).rejects.toMatchObject({ name: "VersionError" });
+  });
+});

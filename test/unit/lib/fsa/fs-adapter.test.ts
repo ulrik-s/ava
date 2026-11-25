@@ -160,3 +160,50 @@ describe("FsaIsoGitAdapter", () => {
     expect(names.sort()).toEqual(["a.txt", "b.txt"]);
   });
 });
+
+describe("FsaIsoGitAdapter — kataloger, stat och symlänkar (#1905)", () => {
+  it("promises är adaptern själv (Node fs.promises-API)", () => {
+    const fs = new FsaIsoGitAdapter(makeRoot().root);
+    expect(fs.promises).toBe(fs);
+  });
+
+  it("mkdir skapar en katalog, och recursive skapar hela kedjan", async () => {
+    const { root, tree } = makeRoot();
+    const fs = new FsaIsoGitAdapter(root);
+    await fs.mkdir("/a");
+    await fs.mkdir("/b/c/d", { recursive: true });
+    expect([...tree.children.keys()].sort()).toEqual(["a", "b"]);
+    expect((await fs.stat("/b/c/d")).isDirectory()).toBe(true);
+  });
+
+  it("mkdir och rmdir på roten gör ingenting", async () => {
+    const { root, tree } = makeRoot();
+    const fs = new FsaIsoGitAdapter(root);
+    await fs.mkdir("/");
+    await fs.rmdir("/");
+    expect(tree.children.size).toBe(0);
+  });
+
+  it("rmdir tar bort katalogen", async () => {
+    const { root } = makeRoot();
+    const fs = new FsaIsoGitAdapter(root);
+    await fs.writeFile("/dir/x.txt", "1");
+    await fs.rmdir("/dir");
+    await expect(fs.stat("/dir")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("stat på en fil i en saknad katalog → ENOENT, och en fil är ingen symlänk", async () => {
+    const { root } = makeRoot();
+    const fs = new FsaIsoGitAdapter(root);
+    await expect(fs.stat("/saknas/x.txt")).rejects.toMatchObject({ code: "ENOENT" });
+    await fs.writeFile("/f.txt", "abc");
+    const s = await fs.stat("/f.txt");
+    expect([s.isFile(), s.isDirectory(), s.isSymbolicLink(), s.size]).toEqual([true, false, false, 3]);
+  });
+
+  it("readlink och symlink stöds inte", async () => {
+    const fs = new FsaIsoGitAdapter(makeRoot().root);
+    await expect(fs.readlink("/l")).rejects.toThrow("symlinks ej stödda");
+    await expect(fs.symlink("/t", "/l")).rejects.toThrow("symlinks ej stödda");
+  });
+});

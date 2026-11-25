@@ -13,6 +13,9 @@ import {
   fetchHelperStatus,
   fetchContentViaHelper,
   configureHelper,
+  composeMailViaHelper,
+  useHelperSyncStatus,
+  useDocSyncStatus,
   docSyncStatusMap,
   advanceSyncTracker,
   syncBadgeMap,
@@ -347,3 +350,87 @@ describe("advanceSyncTracker + syncBadgeMap (transient 'synkad')", () => {
     expect(t.syncedAt.has("a")).toBe(false);
   });
 });
+
+const PING: [string, () => Response] = [`${HTTPS}/ping`, () => new Response("ava-helper v1\n", { status: 200 })];
+
+describe("fel efter att helpern hittats (#1905)", () => {
+  it("status, innehåll och config sväljer ett nätfel mot en hittad helper", async () => {
+    global.fetch = routeFetch([PING]);
+    expect(await fetchHelperStatus()).toBeNull();
+    expect(await fetchContentViaHelper({ downloadUrl: "https://srv/d", fileName: "a.pdf" })).toBeNull();
+    expect(await configureHelper({ oidcIssuer: "https://idp", oidcClientId: "ava-helper" })).toBe(false);
+  });
+
+  it("en localStorage som kastar faller tillbaka på standardporten", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => { throw new Error("spärrad"); }, removeItem: () => {} });
+    try {
+      global.fetch = routeFetch([PING]);
+      expect(await resolveHelperBase()).toBe(HTTPS);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("composeMailViaHelper", () => {
+  const MAIL = { fileName: "a.pdf", contentBase64: "AQID", subject: "Ämne", body: "Hej" };
+
+  it("POST:ar mejlet till /compose-mail → true", async () => {
+    const fetchMock = routeFetch([PING, [`${HTTPS}/compose-mail`, () => new Response("{}", { status: 200 })]]);
+    global.fetch = fetchMock;
+    expect(await composeMailViaHelper(MAIL)).toBe(true);
+    const call = fetchMock.mock.calls.find(([u]: [string]) => u.endsWith("/compose-mail"));
+    expect(call?.[1]?.body).toBe(JSON.stringify(MAIL));
+  });
+
+  it("false när helpern saknas, vid 404 och vid nätfel", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("down"));
+    expect(await composeMailViaHelper(MAIL)).toBe(false);
+    resetHelperBaseCache();
+    global.fetch = routeFetch([PING, [`${HTTPS}/compose-mail`, () => new Response("nej", { status: 404 })]]);
+    expect(await composeMailViaHelper(MAIL)).toBe(false);
+    global.fetch = routeFetch([PING]);
+    expect(await composeMailViaHelper(MAIL)).toBe(false);
+  });
+});
+
+describe("useHelperSyncStatus och useDocSyncStatus", () => {
+  const entry = (id: string, status: "pending" | "conflict"): HelperSyncEntry => ({
+    id: `q-${id}`, fileName: "f", enqueuedAt: 0, attempts: 0, nextAttemptAt: 0, status,
+    document: { id: asId<"DocumentId">(id), trpcUrl: "x" },
+  });
+
+  function SyncProbe(): React.ReactElement {
+    const s = useHelperSyncStatus(20);
+    return <p>{s ? `väntar ${s.pending}` : "ingen helper"}</p>;
+  }
+
+  function BadgeProbe(): React.ReactElement {
+    const badges = useDocSyncStatus(20);
+    return <p>{[...badges].map(([id, b]) => `${id}:${b}`).join(",") || "inga"}</p>;
+  }
+
+  it("pollar /status och visar det senaste svaret; slutar vid avmontering", async () => {
+    let pending = 1;
+    const fetchMock = routeFetch([PING, [`${HTTPS}/status`, () => new Response(JSON.stringify({ pending, conflict: 0, total: pending, entries: [] }), { status: 200 })]]);
+    global.fetch = fetchMock;
+    const { unmount } = render(<SyncProbe />);
+    await waitFor(() => expect(screen.getByText("väntar 1")).toBeInTheDocument());
+    pending = 2;
+    await waitFor(() => expect(screen.getByText("väntar 2")).toBeInTheDocument());
+    unmount();
+    const calls = fetchMock.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 60));
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+
+  it("dokumentens märken: väntar, konflikt och sedan Synkad när posten lämnat kön", async () => {
+    let entries: HelperSyncEntry[] = [entry("d1", "pending"), entry("d2", "conflict")];
+    global.fetch = routeFetch([PING, [`${HTTPS}/status`, () => new Response(JSON.stringify({ pending: 1, conflict: 1, total: 2, entries }), { status: 200 })]]);
+    render(<BadgeProbe />);
+    await waitFor(() => expect(screen.getByText("d1:pending,d2:conflict")).toBeInTheDocument());
+    entries = [entry("d2", "conflict")];
+    await waitFor(() => expect(screen.getByText("d1:synced,d2:conflict")).toBeInTheDocument());
+  });
+});
+
