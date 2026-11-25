@@ -238,6 +238,24 @@ test("SPA-fallback redirectar till app-shellen vid 404", async ({ page }) => {
 
 // #1542: registrerad tid visas i decimaltimmar med svenskt decimalkomma,
 // aldrig som H:MM, och kolumnrubriken bär enheten "h".
+// #2095: pilarna på Startsidan stegar en dag i taget från den valda dagen.
+test("Startsidan: pilarna stegar en dag bakåt och framåt", async ({ page }) => {
+  await page.goto(`${BASE}/`);
+  const label = page.getByRole("heading", { name: "Startsida", level: 1 }).locator("xpath=following-sibling::p");
+  await expect(label).toHaveText("Idag", { timeout: 30_000 });
+  const day = (name: string) => page.getByRole("group", { name: "Dag" }).getByRole("button", { name });
+  const pressed = page.getByRole("group", { name: "Dag" }).locator('button[aria-pressed="true"]');
+  await page.getByRole("button", { name: "Föregående dag" }).click();
+  await expect(label).toHaveText("Igår");
+  await expect(day("Igår")).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Föregående dag" }).click();
+  await expect(pressed).toHaveCount(0);
+  await page.getByRole("button", { name: "Nästa dag" }).click();
+  await page.getByRole("button", { name: "Nästa dag" }).click();
+  await expect(label).toHaveText("Idag");
+  await expect(day("Idag")).toHaveAttribute("aria-pressed", "true");
+});
+
 test("tidssidan visar registrerad tid i decimaltimmar", async ({ page }) => {
   await page.goto(`${BASE}/time/`);
   await expect(page.getByText(/^Totalt: \d[\d\s]*(,\d{1,2})? h$/)).toBeVisible({ timeout: 30_000 });
