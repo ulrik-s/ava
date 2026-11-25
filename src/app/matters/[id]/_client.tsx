@@ -12,6 +12,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
+import { isTaxeMatter } from "@/lib/shared/public-assignment";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { BillingPanel } from "./_billing-panel";
@@ -64,9 +65,9 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   const klient = m.contacts.filter((c: { role: string }) => c.role === "KLIENT");
 
   const panels = matterPanels({
-    time: () => <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} paymentMethod={m.paymentMethod}
+    time: () => <TimeSection matterId={id} isTaxeArende={isTaxeMatter(m)} paymentMethod={m.paymentMethod}
       rattshjalpMaxTimmar={m.rattshjalpMaxTimmar} matterStatus={m.status} />,
-    expenses: () => <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />,
+    expenses: () => <ExpenseSection matterId={id} isTaxeArende={isTaxeMatter(m)} />,
     billing: () => <BillingPanel matterId={id} matter={m} />,
     receivables: () => <ExpectedReceivablesSection matterId={id} isCourtMatter={isCourtMatter(m)} />,
     watch: () => <WatchSection matterId={id} />,
@@ -144,7 +145,7 @@ function MatterHeaderActions({ m, isPending, onClose, onReopen, onGenerate }: {
 }) {
   return (
     <div className="flex items-center gap-2">
-      {m.isTaxeArende && (
+      {isTaxeMatter(m) && (
         <span
           className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
           title="Taxeärende — ersättning enligt Domstolsverkets fastställda taxa (DVFS) istället för löpande timdebitering. Domstolen kan frångå taxan när avsevärt mer arbete än normalt krävts."

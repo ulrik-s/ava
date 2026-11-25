@@ -393,6 +393,28 @@ describe("MatterDetailPage", () => {
     receivablesQuery.data = [];
   });
 
+  it("märket Taxa och taxetexterna följer isTaxeMatter, inte flaggan ensam (#1971)", async () => {
+    const taxeTexts = async (): Promise<{ badge: boolean; time: boolean; expense: boolean }> => {
+      const header = await waitFor(() => screen.getByTestId("matter-header"));
+      const badge = within(header).queryByText("Taxa") !== null;
+      fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+      const time = screen.queryByText("Taxeärende") !== null;
+      fireEvent.click(screen.getByRole("button", { name: /\+ Nytt utlägg/i }));
+      const expense = screen.queryAllByText("Taxeärende").length > (time ? 1 : 0);
+      return { badge, time, expense };
+    };
+
+    matterQuery.data = { ...M, paymentMethod: "PRIVAT", isTaxeArende: true };
+    const privat = renderPage();
+    expect(await taxeTexts()).toEqual({ badge: false, time: false, expense: false });
+    privat.unmount();
+
+    matterQuery.data = { ...M, paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: true };
+    renderPage();
+    expect(await taxeTexts()).toEqual({ badge: true, time: true, expense: true });
+    matterQuery.data = M;
+  });
+
   it("renderar matterNumber + title + klient-länk", async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("2026-0001")).toBeInTheDocument());

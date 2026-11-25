@@ -522,7 +522,7 @@ describe("MattersPage — kolumner och täckning (#1903)", () => {
     expect(rowOrder(["Alfa", "Beta", "Gamma", "Delta"])).toEqual(["Beta", "Alfa", "Gamma", "Delta"]);
   });
 
-  it("Täckning visar procent med varning nära och över taket, '—' utan tak; taxeärendet märks Taxa", () => {
+  it("Täckning visar procent med varning nära och över taket, '—' utan tak; taxeflaggan ensam märks inte Taxa", () => {
     render(<MattersPage />);
     expect(screen.getByTitle("Över tak")).toHaveTextContent("⚠ 150 %");
     expect(screen.getByTitle("Över tak").className).toContain("text-red-700");
@@ -531,8 +531,24 @@ describe("MattersPage — kolumner och täckning (#1903)", () => {
     expect(screen.getByTitle("Inom tak")).toHaveTextContent("10 %");
     expect(screen.getByTitle("Inom tak").className).toContain("text-gray-600");
     expect(within(rowWith("Delta")).getAllByText("—").length).toBeGreaterThan(0);
-    expect(within(rowWith("Alfa")).getByText("Taxa")).toBeInTheDocument();
+    // Rättshjälp med kvarglömd taxeflagga är inget taxeärende (#1971).
+    expect(within(rowWith("Alfa")).queryByText("Taxa")).toBeNull();
     expect(within(rowWith("Beta")).queryByText("Taxa")).toBeNull();
+  });
+
+  it("märket Taxa följer isTaxeMatter: offentligt uppdrag och taxeflaggan (#1971)", () => {
+    const row = (id: string, title: string, paymentMethod: string, isTaxeArende: boolean) => ({
+      id, matterNumber: `2026-00${id}`, title, status: "ACTIVE", matterType: null, isTaxeArende, paymentMethod,
+      contacts: [], parties: [], _count: { contacts: 0 },
+    });
+    mattersQuery.data = {
+      matters: [row("11", "Privat", "PRIVAT", true), row("12", "Offentligt", "OFFENTLIGT_UPPDRAG", true), row("13", "Utan", "OFFENTLIGT_UPPDRAG", false)],
+      total: 3, pages: 1,
+    };
+    render(<MattersPage />);
+    expect(within(rowWith("Privat")).queryByTitle(/^Taxeärende/)).toBeNull();
+    expect(within(rowWith("Offentligt")).getByTitle(/^Taxeärende/)).toHaveTextContent("Taxa");
+    expect(within(rowWith("Utan")).queryByTitle(/^Taxeärende/)).toBeNull();
   });
 
   it("filter på Täckning väljer på etiketten", () => {

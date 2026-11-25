@@ -5,7 +5,8 @@
  * För ett ärende med en sådan typ är betalningssättet alltid Offentligt
  * uppdrag. Servern avgör (`matter.create`/`matter.update`); klienten speglar
  * regeln bara för visning (ADR 0016). Namnen jämförs exakt, som byråns
- * `matterTypes`.
+ * `matterTypes`. Ett taxeärende (#1971) är ett offentligt uppdrag med
+ * brottmålstaxan: `isTaxeMatter` är den regeln, på ett ställe.
  */
 
 import type { PaymentMethod } from "./schemas/enums";
@@ -30,4 +31,17 @@ export function lockedPaymentMethod(
   org: PublicAssignmentSettings | null | undefined, matterType: string | null | undefined,
 ): PaymentMethod | undefined {
   return isPublicAssignmentType(org, matterType) ? PUBLIC_ASSIGNMENT_METHOD : undefined;
+}
+
+/**
+ * Är ärendet ett taxeärende (offentligt uppdrag, brottmålstaxan; ADR 0034,
+ * tillägget om taxeärendets yrkande)? Kräver BÅDE betalningssättet Offentligt
+ * uppdrag och taxeflaggan: ett ärende som bytt betalningssätt behåller
+ * flaggan men faktureras inte på taxa (#1971).
+ */
+export function isTaxeMatter(m: {
+  paymentMethod?: PaymentMethod | null | undefined;
+  isTaxeArende?: boolean | null | undefined;
+}): boolean {
+  return m.paymentMethod === PUBLIC_ASSIGNMENT_METHOD && m.isTaxeArende === true;
 }
