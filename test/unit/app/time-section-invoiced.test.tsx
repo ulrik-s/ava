@@ -170,7 +170,7 @@ describe("TimeSection — registrera/ändra/ta-bort-flöden", () => {
   it("toggla Debiterbar i skapa-formuläret + Avbryt stänger modalen", () => {
     renderSection();
     fireEvent.click(screen.getByText("+ Registrera tid"));
-    fireEvent.click(screen.getByRole("checkbox")); // Debiterbar
+    fireEvent.click(screen.getByRole("checkbox", { name: "Debiterbar" })); // Debiterbar
     fireEvent.click(screen.getByText("Avbryt"));
     expect(screen.queryByText("Registrera tid")).not.toBeInTheDocument();
   });

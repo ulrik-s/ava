@@ -7,7 +7,7 @@
  * här testet visar att det vanliga flödet fortsätter fungera för en jurist.
  */
 
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import {
   DEMO_BASE_URL, expect, fetchDemoSeed, matterIdWith, seedDemoConfig, seedDemoLogin, showPanel, test, type DemoSeed,
@@ -222,4 +222,50 @@ test("en post flyttas till ett annat ärende i Ändra tidregistrering", async ({
   const tid = page.getByRole("region", { name: "Tid" }).last();
   await expect(tid).toBeVisible({ timeout: 25_000 });
   await expect(tid.getByText(description)).toBeVisible();
+});
+
+/*
+ * #2043: två tidsposter som hamnat i fel ärende markeras i tidslistan på /time
+ * och flyttas tillsammans till rätt ärende. Båda syns sedan i målärendets
+ * tidslista. Låsregeln prövas i komponenttesterna.
+ */
+/** Registrera en post i ärendet via formuläret på /time. */
+async function register(page: Page, matterLabel: string, description: string): Promise<void> {
+  await page.getByRole("button", { name: /\+ Registrera tid/ }).click();
+  await page.getByLabel("Ärende *").fill(matterLabel);
+  await page.getByLabel("Beskrivning *").fill(description);
+  await page.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(page.getByRole("row").filter({ hasText: description })).toBeVisible();
+}
+
+test("två markerade tidsposter flyttas till ett annat ärende", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const [from, to] = seed.matters.filter((m) => m.status === "ACTIVE" && m.matterNumber)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!from || !to) throw new Error("demon saknar två aktiva ärenden");
+  const label = (m: typeof from) => `${m.matterNumber ?? ""} — ${m.title}`;
+  const first = "E2E: första posten i fel ärende (#2043)";
+  const second = "E2E: andra posten i fel ärende (#2043)";
+
+  await page.goto(`${base}/time/`, { waitUntil: "load" });
+  await register(page, label(from), first);
+  await register(page, label(from), second);
+
+  for (const description of [first, second]) {
+    await page.getByRole("row").filter({ hasText: description }).getByRole("checkbox", { name: "Markera rad" }).check();
+  }
+  await page.getByRole("button", { name: "Flytta till ärende… (2)" }).click();
+  const dialog = page.getByRole("dialog", { name: "Flytta till ärende" });
+  await dialog.getByLabel("2 tidsposter flyttas till:").fill(label(to));
+  await dialog.getByRole("button", { name: "Flytta" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Flytta till ärende/ })).toHaveCount(0);
+
+  await page.goto(`${base}/matters/${to.id}/`, { waitUntil: "load" });
+  const tid = page.getByRole("region", { name: "Tid" }).last();
+  await expect(tid).toBeVisible({ timeout: 25_000 });
+  await expect(tid.getByText(first)).toBeVisible();
+  await expect(tid.getByText(second)).toBeVisible();
 });
