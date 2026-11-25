@@ -26,7 +26,7 @@ import { formatCurrency } from "@/lib/client/utils";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
 import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
-import type { InvoiceSpecification } from "@/lib/shared/invoice-specification";
+import type { InvoiceSpecification, SpecExpenseLine } from "@/lib/shared/invoice-specification";
 import { invoiceVatOre } from "@/lib/shared/invoice-vat";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
@@ -56,6 +56,8 @@ export interface FakturaBreakdown {
   totalLabel: string;
   totalOre: number;
   timeLines?: ReadonlyArray<CarriedWorkLine> | undefined;
+  /** Nedbrytningens utlägg (#1938) — går före fakturans egna i specifikationen. */
+  expenseLines?: ReadonlyArray<SpecExpenseLine> | undefined;
 }
 
 export interface FakturaDocMeta {
