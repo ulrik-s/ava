@@ -12,9 +12,9 @@
  * primitiverna i src/lib/client/demo beskriver mönstret i prosa och undantas.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest-compat";
+import { sourceFiles } from "../../../../helpers/source-files";
 
 const ROUTES = "matters|contacts|invoices|payment-plans|users|templates";
 
@@ -27,20 +27,11 @@ const ROUTER_CONCAT = new RegExp(`router\\.(push|replace)\\(["'\`]/(${ROUTES})/[
 
 const SCAN_DIRS = ["src/app", "src/components"];
 
-function tsxFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true }) as Array<{ name: string; parentPath?: string; path?: string; isFile(): boolean }>) {
-    if (!entry.isFile() || !entry.name.endsWith(".tsx")) continue;
-    out.push(join(entry.parentPath ?? entry.path ?? dir, entry.name));
-  }
-  return out;
-}
-
 describe("inga detalj-route soft-navs (EntityLink-kontraktet)", () => {
   it("ingen <Link>/<a>/router.push mot /<route>/<id> i src/app + src/components", () => {
     const offenders: string[] = [];
     for (const base of SCAN_DIRS) {
-      for (const file of tsxFiles(base)) {
+      for (const file of sourceFiles(base, /\.tsx$/)) {
         const src = readFileSync(file, "utf8");
         src.split("\n").forEach((line, i) => {
           if (HREF_TEMPLATE.test(line) || ROUTER_TEMPLATE.test(line) || ROUTER_CONCAT.test(line)) {

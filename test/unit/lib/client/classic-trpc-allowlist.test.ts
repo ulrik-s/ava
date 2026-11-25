@@ -11,9 +11,10 @@
  * `repository-list-contract.test.ts`.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 import { describe, it, expect } from "vitest-compat";
+import { sourceFiles } from "../../../helpers/source-files";
 
 /** `import { …trpc… } from "@/lib/client/trpc"`, också över flera rader. */
 const CLASSIC_IMPORT = /import\s*\{([^}]*)\}\s*from\s*["']@\/lib\/client\/trpc["']/g;
@@ -148,13 +149,9 @@ function classicTrpcViolations(
 
 function scanSources(): Map<string, string> {
   const out = new Map<string, string>();
-  const entries = readdirSync(SCAN_DIR, { withFileTypes: true, recursive: true }) as Array<{
-    name: string; parentPath?: string; path?: string; isFile(): boolean;
-  }>;
-  for (const entry of entries) {
-    if (!entry.isFile() || !/\.tsx?$/.test(entry.name)) continue;
-    const file = relative(".", join(entry.parentPath ?? entry.path ?? SCAN_DIR, entry.name));
-    if (file !== DEFINING_FILE) out.set(file, readFileSync(file, "utf8"));
+  for (const file of sourceFiles(SCAN_DIR, /\.tsx?$/)) {
+    const rel = relative(".", file);
+    if (rel !== DEFINING_FILE) out.set(rel, readFileSync(rel, "utf8"));
   }
   return out;
 }
