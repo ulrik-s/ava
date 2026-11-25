@@ -85,6 +85,8 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   // Jävskontrollen (#1246): offline väntar den tills servern kört den.
   "matter.checkConflicts": Object.freeze({ entity: "matter" }),
   "matter.markConflictsReviewed": Object.freeze({ entity: "matter" }),
+  // Behåll som aktivt (#2098): datumet är anropets tid, servern kör om anropet.
+  "matter.keepActive": Object.freeze({ entity: "matter" }),
   // En ny part kontrolleras mot byråns alla ärenden (#1354) — det kan bara
   // servern. Kopplingen och kontrollen körs därför om där, som anrop.
   "matter.addContact": Object.freeze({ entity: "matterContact", idField: "id" }),

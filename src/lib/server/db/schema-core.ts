@@ -146,6 +146,8 @@ export const matters = pgTable("matters", {
   conflictReviewedById: uuid("conflict_reviewed_by_id").$type<UserId>(),
   conflictReviewedAt: timestamp("conflict_reviewed_at", { withTimezone: true }),
   conflictReviewNote: text("conflict_review_note"),
+  /** När någon senast valde Behåll som aktivt (#2098). */
+  keptActiveAt: timestamp("kept_active_at", { withTimezone: true }),
 }, (t) => [index("matters_org_idx").on(t.organizationId)]);
 
 /**
