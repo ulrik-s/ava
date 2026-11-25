@@ -9,7 +9,8 @@ import { DEFAULT_OFFLINE_GRACE_MS } from "@/lib/shared/offline-grace";
 const NOW = Date.UTC(2026, 8, 30, 8, 0);
 const DAY = 24 * 60 * 60 * 1000;
 const claims = { email: "Lena@Byra.se", subject: "", issuer: "", name: "Lena" };
-const UNREACHABLE = { kind: "unreachable", reason: "timeout" } as const;
+const UNREACHABLE = { kind: "unreachable", reason: "network" } as const;
+const SLOW = { kind: "unreachable", reason: "timeout" } as const;
 const cached = (verifiedAt: number | undefined): CachedIdentity => ({ principalId: "u1", email: "lena@byra.se", verifiedAt });
 
 describe("decideSessionGate", () => {
@@ -48,6 +49,13 @@ describe("decideSessionGate", () => {
     expect(decideSessionGate(UNREACHABLE, null, NOW)).toEqual({ kind: "offline-unbound" });
   });
 
+  it("servern svarar långsamt eller med fel efter grace → vänta ut servern, inte utelåsning (2026-11-25)", () => {
+    expect(decideSessionGate(SLOW, cached(NOW - 8 * DAY), NOW)).toEqual({ kind: "server-slow" });
+    expect(decideSessionGate({ kind: "unreachable", reason: "server-error" }, null, NOW)).toEqual({ kind: "server-slow" });
+    // Inom grace arbetar man som förut lokalt, oavsett skäl.
+    expect(decideSessionGate(SLOW, cached(NOW - DAY), NOW)).toEqual({ kind: "proceed-locally", notice: "unreachable" });
+  });
+
   it("grace-tiden kan ställas per byrå", () => {
     expect(decideSessionGate(UNREACHABLE, cached(NOW - 2 * DAY), NOW, DAY)).toEqual({ kind: "offline-expired" });
   });
@@ -65,6 +73,7 @@ describe("loginUrl / offlineGateMessage", () => {
   it("beskeden säger vad användaren ska göra", () => {
     expect(offlineGateMessage({ kind: "offline-expired" })).toMatch(/Anslut till nätet.*lokala ändringar finns kvar/);
     expect(offlineGateMessage({ kind: "offline-unbound" })).toMatch(/uppkopplad första gången/);
+    expect(offlineGateMessage({ kind: "server-slow" })).toMatch(/Servern svarar långsamt.*försöker igen automatiskt/);
   });
 });
 

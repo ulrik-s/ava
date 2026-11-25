@@ -26,7 +26,7 @@
  * API-anrop, och den valda fliken kan vara strypt i bakgrunden.
  */
 
-import { isDemoTier, loadFirmaConfig } from "@/lib/client/firma/firma-config";
+import { isDemoTier, loadFirmaConfig, patchFirmaConfig } from "@/lib/client/firma/firma-config";
 import { setSessionNotice, type SessionNotice } from "./session-notice";
 import { probeSession, type SessionProbe } from "./session-probe";
 
@@ -57,6 +57,12 @@ export interface KeepaliveEnv {
   probe: () => Promise<SessionProbe>;
   /** Visa "Logga in igen"-bannern. */
   notify: (notice: SessionNotice) => void;
+  /**
+   * Sessionen är just bekräftad online: spara tiden. Annars räknade grace-
+   * perioden bara från appstarten, och en flik öppen i över en vecka låste
+   * ute användaren nästa gång servern var trög (2026-11-25).
+   */
+  markVerified?: () => void;
   /** Är någon inloggad? Nej (utloggad, här eller i en annan flik) → stopp. */
   signedIn: () => boolean;
   /** Där `online` kommer (window). */
@@ -74,9 +80,10 @@ interface KeepaliveState {
   inFlight: boolean;
 }
 
-/** Svaret → sessionsläget. Bara `signed-out` är ett besked; `absent` = inget att hålla vid liv. */
-function applyProbe(probe: SessionProbe, notify: KeepaliveEnv["notify"], stop: () => void): void {
-  if (probe.kind === "signed-out") notify("signed-out");
+/** Svaret → sessionsläget. `signed-out` är ett besked, `authenticated` förnyar grace, `absent` = inget att hålla vid liv. */
+function applyProbe(probe: SessionProbe, env: KeepaliveEnv, stop: () => void): void {
+  if (probe.kind === "signed-out") env.notify("signed-out");
+  else if (probe.kind === "authenticated") env.markVerified?.();
   else if (probe.kind === "absent") stop();
 }
 
@@ -87,7 +94,7 @@ async function keepaliveOnce(env: KeepaliveEnv, state: KeepaliveState, stop: () 
   state.inFlight = true;
   try {
     const probe = await env.probe();
-    if (!state.stopped) applyProbe(probe, env.notify, stop);
+    if (!state.stopped) applyProbe(probe, env, stop);
   } finally {
     state.inFlight = false;
   }
@@ -147,6 +154,7 @@ export function startBrowserSessionKeepalive(): () => void {
   return startSessionKeepalive({
     probe: () => probeSession(),
     notify: setSessionNotice,
+    markVerified: () => { patchFirmaConfig({ sessionVerifiedAt: Date.now() }); },
     signedIn: () => Boolean(loadFirmaConfig().principalId),
     events: window,
     page: document,

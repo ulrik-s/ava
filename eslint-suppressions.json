@@ -1586,11 +1586,6 @@
       "count": 1
     }
   },
-  "test/unit/client/auth/session-keepalive.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 3
-    }
-  },
   "test/unit/client/auth/session-probe.test.ts": {
     "@typescript-eslint/require-await": {
       "count": 4

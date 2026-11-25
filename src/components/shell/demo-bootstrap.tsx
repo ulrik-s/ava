@@ -24,7 +24,7 @@ import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-t
 import { HelperAutoConfig } from "@/components/shell/helper-auto-config";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 import { loginDeniedMessage } from "@/lib/client/auth/login-denied";
-import { decideSessionGate, loginUrl, offlineGateMessage, type CachedIdentity } from "@/lib/client/auth/session-gate";
+import { decideSessionGate, type GateDecision as SessionDecision, loginUrl, offlineGateMessage, SERVER_SLOW_RETRY_MS, type CachedIdentity } from "@/lib/client/auth/session-gate";
 import { setSessionNotice } from "@/lib/client/auth/session-notice";
 import type { SessionProbe } from "@/lib/client/auth/session-probe";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
@@ -370,11 +370,15 @@ export interface GateEnv {
   now: () => number;
   redirect: (url: string) => void;
   location: () => { pathname: string; search: string };
+  /** Starta om efter en stund (servern svarar långsamt). */
+  retryLater: (ms: number) => void;
 }
 
 const browserGateEnv: GateEnv = {
   now: () => Date.now(),
   redirect: (url) => { window.location.assign(url); },
+  // ponytail: fast intervall; exponentiell backoff om många flikar skulle hamra en trög server.
+  retryLater: (ms) => { setTimeout(() => { window.location.reload(); }, ms); },
   location: () => window.location,
 };
 
@@ -399,6 +403,7 @@ function runSessionGate(
   setStatus: (s: Status) => void, setErrorMsg: (m: string | null) => void,
 ): GateOutcome {
   const decision = decideSessionGate(probe, cachedIdentity(firmaConfig), env.now());
+  if (isHalt(decision)) return haltWithMessage(decision, env, setStatus, setErrorMsg);
   switch (decision.kind) {
     case "bind": return { kind: "continue", needsOidc: true, oidcClaims: decision.claims };
     case "proceed":
@@ -410,12 +415,25 @@ function runSessionGate(
     case "login":
       env.redirect(loginUrl(env.location()));
       return { kind: "halt" };
-    case "offline-expired":
-    case "offline-unbound":
-      setStatus("error");
-      setErrorMsg(offlineGateMessage(decision));
-      return { kind: "halt" };
   }
+}
+
+type HaltDecision = Extract<SessionDecision, { kind: "server-slow" | "offline-expired" | "offline-unbound" }>;
+
+/** Stannar starten med ett besked (offline utan grace, eller trög server)? */
+function isHalt(d: SessionDecision): d is HaltDecision {
+  return d.kind === "server-slow" || d.kind === "offline-expired" || d.kind === "offline-unbound";
+}
+
+/** Starten stannar med ett besked; svarar servern långsamt försöker den igen av sig själv. */
+function haltWithMessage(
+  decision: HaltDecision, env: GateEnv,
+  setStatus: (s: Status) => void, setErrorMsg: (m: string | null) => void,
+): GateOutcome {
+  if (decision.kind === "server-slow") env.retryLater(SERVER_SLOW_RETRY_MS);
+  setStatus("error");
+  setErrorMsg(offlineGateMessage(decision));
+  return { kind: "halt" };
 }
 
 /** Klassificera + applicera OIDC-utfallet efter klon. Returnerar true om
