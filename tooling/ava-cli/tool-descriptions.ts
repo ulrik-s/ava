@@ -185,7 +185,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "paymentPlan.list": "Avbetalningsplaner med sina fakturor och förfallodagar.",
   "paymentPlan.getById": "Hämta en enskild avbetalningsplan.",
   "paymentPlan.cancel": "Avbryt en aktiv avbetalningsplan.",
-  "paymentPlan.recordReminder": "Logga en utskickad påminnelse för en plan (förfallen eller försenad, för en viss månad).",
+  "paymentPlan.recordReminder": "Registrera en påminnelse för en plan (förfaller eller försenad, för en viss månad). AVA skickar ingenting till klienten.",
   "paymentPlan.scanDueReminders": "Gå igenom alla planer och logga de påminnelser som förfallit. Idempotent — redan loggade månader hoppas över.",
 
   // ── Inställningar (användare och byrå) ───────────────────────────

@@ -86,6 +86,19 @@ describe("PaymentPlanDetailClient", () => {
     expect(screen.getByText("2026-04")).toBeInTheDocument();
   });
 
+  it("påminnelserna står som registrerade, inte skickade (#2135)", () => {
+    render(<PaymentPlanDetailClient id="pp1" />);
+    expect(screen.getByText(/^Registrerad /)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/skickad/i);
+  });
+
+  it("utan påminnelser: Inga påminnelser registrerade än (#2135)", () => {
+    planQuery.data = { ...planData, reminders: [] };
+    render(<PaymentPlanDetailClient id="pp1" />);
+    expect(screen.getByText("Inga påminnelser registrerade än.")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/skickad/i);
+  });
+
   it("Avbryt-knappen (aktiv plan) → confirm → cancel.mutate med planId", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<PaymentPlanDetailClient id="pp1" />);
