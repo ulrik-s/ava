@@ -41,8 +41,8 @@ describe("registerWorkers", () => {
 
   it("en kö utan handler får ingen worker, och inte heller ett gammalt namn vars efterträdare saknar handler", async () => {
     const { boss, workers } = fakeBoss();
-    await registerWorkers(boss, { [JOB_QUEUES.rulesTick]: () => Promise.resolve() });
-    expect([...workers.keys()]).toEqual([JOB_QUEUES.rulesTick]);
+    await registerWorkers(boss, { [JOB_QUEUES.indexDocument]: () => Promise.resolve() });
+    expect([...workers.keys()]).toEqual([JOB_QUEUES.indexDocument]);
     for (const old of Object.keys(RETIRED_JOB_QUEUES)) expect(workers.has(old)).toBe(false);
   });
 

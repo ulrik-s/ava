@@ -39,7 +39,7 @@ function scheduleRow(name: string, cron: string): Schedule {
 }
 
 const noop = (): Promise<void> => Promise.resolve();
-const handlers: JobHandlers = { [JOB_QUEUES.rulesTick]: noop, [JOB_QUEUES.fortnoxSync]: noop };
+const handlers: JobHandlers = { [JOB_QUEUES.indexDocument]: noop, [JOB_QUEUES.fortnoxSync]: noop };
 
 describe("JOB_SCHEDULES", () => {
   it("schemalägger bokföringens keepalive måndag 03:00 (#1815)", () => {
@@ -52,12 +52,12 @@ describe("registerSchedules", () => {
   it("registrerar varje schema med handler i svensk tid, missed once som standard", async () => {
     const f = fakeBoss();
     const schedules: JobSchedule[] = [
-      { queue: JOB_QUEUES.rulesTick, cron: "0 3 * * *" },
+      { queue: JOB_QUEUES.indexDocument, cron: "0 3 * * *" },
       { queue: JOB_QUEUES.fortnoxSync, cron: "*/15 * * * *", missed: "skip" },
     ];
     await registerSchedules(f.boss, handlers, schedules);
     expect(f.scheduled).toEqual([
-      { name: "rules-tick", cron: "0 3 * * *", data: null, options: { tz: "Europe/Stockholm", missed: "once" } },
+      { name: "index-document", cron: "0 3 * * *", data: null, options: { tz: "Europe/Stockholm", missed: "once" } },
       { name: "fortnox-sync", cron: "*/15 * * * *", data: null, options: { tz: "Europe/Stockholm", missed: "skip" } },
     ]);
     expect(f.unscheduled).toEqual([]);
@@ -71,19 +71,19 @@ describe("registerSchedules", () => {
   });
 
   it("tar bort sparade scheman som är odeklarerade eller saknar handler", async () => {
-    const f = fakeBoss(["rules-tick", "email-dispatch", "borttagen-ko"]);
+    const f = fakeBoss(["index-document", "email-dispatch", "borttagen-ko"]);
     const schedules: JobSchedule[] = [
-      { queue: JOB_QUEUES.rulesTick, cron: "0 3 * * *" },
+      { queue: JOB_QUEUES.indexDocument, cron: "0 3 * * *" },
       { queue: JOB_QUEUES.emailDispatch, cron: "0 * * * *" },
     ];
     await registerSchedules(f.boss, handlers, schedules);
     expect(f.unscheduled).toEqual(["email-dispatch", "borttagen-ko"]);
-    expect([...f.stored.keys()]).toEqual(["rules-tick"]);
+    expect([...f.stored.keys()]).toEqual(["index-document"]);
   });
 
   it("två starter i rad ger samma anrop och samma slutresultat", async () => {
     const f = fakeBoss(["borttagen-ko"]);
-    const schedules: JobSchedule[] = [{ queue: JOB_QUEUES.rulesTick, cron: "0 3 * * *" }];
+    const schedules: JobSchedule[] = [{ queue: JOB_QUEUES.indexDocument, cron: "0 3 * * *" }];
     await registerSchedules(f.boss, handlers, schedules);
     const first = { scheduled: [...f.scheduled], stored: [...f.stored.keys()] };
     f.scheduled.length = 0;

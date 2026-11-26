@@ -3,23 +3,19 @@
 /**
  * Fakturalistans röda markeringar (#1731): "Förfallen N dagar" och "Kom inte
  * fram", och knappen som visar bara de fakturorna. Regeln för förfallen är den
- * delade (`@/lib/shared/billing/invoice-overdue`), samma som "Att bevaka" använder.
+ * delade (`@/lib/shared/invoice-overdue`), samma som "Att bevaka" använder.
  */
 
 import { useMemo } from "react";
+import { MARK_CLASS, OverdueMark } from "@/components/billing/overdue-mark";
 import { trpc } from "@/lib/client/trpc";
 import { invoiceAttention, type InvoiceAttention, type OverdueCandidate } from "@/lib/shared/billing/invoice-overdue";
-import { dagar } from "@/lib/shared/watchlist";
-
-const MARK_CLASS = "text-[10px] rounded-full px-2 py-0.5 font-medium bg-red-100 text-red-700";
 
 /** De röda markeringarna efter statusmärket. En faktura kan ha båda. */
 export function AttentionMarks({ attention }: { attention: InvoiceAttention }) {
   return (
     <>
-      {attention.overdueDays !== null && (
-        <span className={`ml-1 ${MARK_CLASS}`}>Förfallen {dagar(attention.overdueDays)}</span>
-      )}
+      {attention.overdueDays !== null && <OverdueMark days={attention.overdueDays} />}
       {attention.failedDispatch && <span className={`ml-1 ${MARK_CLASS}`}>Kom inte fram</span>}
     </>
   );

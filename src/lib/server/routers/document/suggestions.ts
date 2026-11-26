@@ -37,7 +37,7 @@ import { orgProcedure } from "../../trpc";
 type Ctx = ConflictRecheckCtx & QueuedCallScope;
 type SuggOverride = {
   name?: string | undefined;
-  role?: string | undefined;
+  role?: MatterRole | undefined;
   contactType?: string | undefined;
   email?: string | null | undefined;
   phone?: string | null | undefined;

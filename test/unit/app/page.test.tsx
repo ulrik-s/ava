@@ -3,18 +3,27 @@
  * dagsväxlare (#1167). Kalendern är borttagen (#1623).
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import Dashboard from "@/app/page";
 
 const timeQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
 const meQuery: { data: unknown } = { data: { id: "u1", name: "Anna" } };
+/** Det Stapeldiagrammet frågades efter (#2112). */
+const chartCalls: Array<{ userId: string; from: string; to: string; granularity: string }> = [];
 /** "Frister" (#1062, #1735) — tom lista → panelen säger att det är lugnt (#1184). */
 const watchlistQuery: { data: unknown; isLoading: boolean } = { data: { items: [] }, isLoading: false };
 
 const completeMutate = vi.fn();
 /** Det tidslistan senast frågades efter: den valda dagens gränser (#2095). */
 const timeListInput = vi.fn((_input: { from?: Date; to?: Date }) => timeQuery);
+
+/** Sidhuvudets pil — Stapeldiagrammet har egna pilar med samma namn (#2112). */
+function headerArrow(name: "Föregående dag" | "Nästa dag"): HTMLElement {
+  const header = screen.getByRole("heading", { name: /Startsida/i }).parentElement?.parentElement;
+  if (!header) throw new Error("sidhuvudet saknas");
+  return within(header).getByRole("button", { name });
+}
 
 // Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
 // alla paneler efter varandra, synkront, så testerna kan granska innehållet.
@@ -26,8 +35,20 @@ vi.mock("@/components/layout/panel-page", () => ({
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ watchlist: { list: { invalidate: vi.fn() } }, task: { listForMatter: { invalidate: vi.fn() } } }),
-    timeEntry: { list: { useQuery: (input: { from?: Date; to?: Date }) => timeListInput(input) } },
+    useUtils: () => ({ watchlist: { list: { invalidate: vi.fn() } }, task: { listForMatter: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } }),
+    timeEntry: {
+      list: { useQuery: (input: { from?: Date; to?: Date }) => timeListInput(input) },
+      chart: {
+        useQuery: (input: (typeof chartCalls)[number]) => {
+          chartCalls.push(input);
+          return { data: { totalMinutes: 0, billableMinutes: 0, bars: [] } };
+        },
+      },
+    },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     user: { current: { useQuery: () => meQuery } },
     watchlist: { list: { useQuery: () => watchlistQuery } },
     task: {
@@ -39,6 +60,8 @@ vi.mock("@/lib/client/trpc", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  chartCalls.length = 0;
+  meQuery.data = { id: "u1", name: "Anna" };
   timeQuery.data = undefined;
   timeQuery.isLoading = false;
   watchlistQuery.data = { items: [] };
@@ -58,12 +81,12 @@ describe("Dashboard", () => {
   it("varje ruta är en avdelning ut till kanten (fill, #1844)", () => {
     const { container } = render(<Dashboard />);
     const fills = [...container.querySelectorAll("[data-panel]")].map((el) => el.getAttribute("data-fill"));
-    expect(fills).toEqual(["true", "true", "true"]);
+    expect(fills).toEqual(["true", "true", "true", "true"]);
   });
 
   it("har ingen Kalender-ruta (#1623)", () => {
     const { container } = render(<Dashboard />);
-    expect([...container.querySelectorAll("[data-panel]")].map((e) => e.getAttribute("data-panel"))).toEqual(["watch", "time", "recent"]);
+    expect([...container.querySelectorAll("[data-panel]")].map((e) => e.getAttribute("data-panel"))).toEqual(["watch", "time", "recent", "chart"]);
     expect(screen.queryByText(/Kalender/)).not.toBeInTheDocument();
   });
 
@@ -156,8 +179,8 @@ describe("Dashboard — pilarna stegar en dag i taget (#2095)", () => {
     vi.setSystemTime();
   });
 
-  const prev = (): HTMLElement => screen.getByRole("button", { name: "Föregående dag" });
-  const next = (): HTMLElement => screen.getByRole("button", { name: "Nästa dag" });
+  const prev = (): HTMLElement => headerArrow("Föregående dag");
+  const next = (): HTMLElement => headerArrow("Nästa dag");
   const heading = (): HTMLElement => {
     const label = screen.getByRole("heading", { name: /Startsida/i }).nextElementSibling;
     if (!(label instanceof HTMLElement)) throw new Error("dagnamnet saknas");
@@ -211,5 +234,35 @@ describe("Dashboard — pilarna stegar en dag i taget (#2095)", () => {
     expect(prev()).toBeDisabled();
     expect(next()).toBeDisabled();
     expect(heading()).toHaveTextContent("");
+  });
+});
+
+describe("Dashboard — Stapeldiagram med egna tider från i dag (#2112)", () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-11-24T12:00:00Z"));
+  });
+  afterEach(() => {
+    vi.setSystemTime();
+  });
+
+  it("rutan finns och frågar efter den inloggades vecka som innehåller i dag", () => {
+    const { container } = render(<Dashboard />);
+    expect(container.querySelector('[data-panel="chart"]')).not.toBeNull();
+    expect(chartCalls.at(-1)).toEqual({ userId: "u1", from: "2026-11-23", to: "2026-11-29", granularity: "day" });
+  });
+
+  it("ingen fråga innan user.current har svarat — rutan säger Laddar...", () => {
+    meQuery.data = undefined;
+    const { container } = render(<Dashboard />);
+    expect(chartCalls).toHaveLength(0);
+    expect(container.querySelector('[data-panel="chart"]')).toHaveTextContent("Laddar...");
+  });
+
+  it("dagväljaren i sidhuvudet ändrar inte diagrammets fråga", () => {
+    render(<Dashboard />);
+    fireEvent.click(screen.getByRole("button", { name: "Igår" }));
+    fireEvent.click(headerArrow("Föregående dag"));
+    const periods = new Set(chartCalls.map((c) => `${c.from}..${c.to}`));
+    expect([...periods]).toEqual(["2026-11-23..2026-11-29"]);
   });
 });

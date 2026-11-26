@@ -4,7 +4,7 @@
  */
 
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest-compat";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest-compat";
 
 import PaymentPlansPage, { formatScanResult } from "@/app/payment-plans/page";
 
@@ -61,7 +61,7 @@ describe("PaymentPlansPage — utestående", () => {
   it("visar utestående = total − inbetalt − avskrivet", () => {
     setRows([
       {
-        id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15,
+        id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15, startDate: new Date(),
         invoice: {
           amount: 100_000,
           payments: [{ amount: 30_000 }],
@@ -128,7 +128,7 @@ describe("PaymentPlansPage — Registrera påminnelser (#71, #2135)", () => {
 
 describe("PaymentPlansPage — filter, sök, rad-klick", () => {
   const planRow = {
-    id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15,
+    id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15, startDate: new Date(),
     invoice: {
       amount: 100_000, payments: [], writeOffs: [],
       matter: { matterNumber: "2026-0001", title: "Tvist", contacts: [{ contact: { id: "c1", name: "Anna" } }] },
@@ -171,5 +171,31 @@ describe("PaymentPlansPage — filter, sök, rad-klick", () => {
     listQuery.isLoading = true;
     render(<PaymentPlansPage />);
     expect(screen.getByText("Laddar…")).toBeInTheDocument();
+  });
+});
+
+describe("PaymentPlansPage — Förfallen N dagar (#2136)", () => {
+  const behind = (paid: number[]) => ({
+    id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 25, startDate: "2026-11-01T09:00:00.000Z",
+    invoice: {
+      amount: 100_000, payments: paid.map((amount) => ({ amount })), writeOffs: [],
+      matter: { matterNumber: "2026-0001", title: "Tvist", contacts: [] },
+    },
+  });
+
+  beforeEach(() => vi.setSystemTime(new Date("2026-11-28T10:00:00Z")));
+  afterEach(() => vi.setSystemTime());
+
+  it("en plan som ligger efter visar Förfallen 3 dagar efter statusmärket", () => {
+    setRows([behind([])]);
+    render(<PaymentPlansPage />);
+    expect(screen.getByText("Förfallen 3 dagar")).toBeInTheDocument();
+    expect(screen.getByText("Aktiv")).toBeInTheDocument();
+  });
+
+  it("en plan som är ikapp visar ingen markering", () => {
+    setRows([behind([10_000])]);
+    render(<PaymentPlansPage />);
+    expect(screen.queryByText(/^Förfallen/)).toBeNull();
   });
 });

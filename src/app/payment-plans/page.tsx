@@ -8,6 +8,7 @@
 import { Wallet, Search, BellRing } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { OverdueMark } from "@/components/billing/overdue-mark";
 import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
@@ -15,6 +16,7 @@ import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmente
 import { shellPath } from "@/lib/client/demo/entity-href";
 import { trpc } from "@/lib/client/trpc";
 import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
+import { paymentPlanOverdue } from "@/lib/shared/payment-plan-overdue";
 
 type Status = "ACTIVE" | "COMPLETED" | "CANCELLED";
 
@@ -47,6 +49,7 @@ interface PlanRow {
   status: Status;
   monthlyAmount: number;
   dayOfMonth: number;
+  startDate: Date | string;
   invoice?: {
     amount?: number;
     payments?: Array<{ amount: number }>;
@@ -87,6 +90,19 @@ export function formatScanResult(r: ScanResult): string {
   return `${r.planned} påminnelser registrerade — ${r.due} förfaller, ${r.overdue} försenade (av ${r.scanned} planer).`;
 }
 
+/** Planens statusmärke, och "Förfallen N dagar" när klienten ligger efter (#2136). */
+function PlanStatus({ plan }: { plan: PlanRow }) {
+  const overdue = paymentPlanOverdue(plan, new Date());
+  return (
+    <>
+      <span className={`text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${STATUS_PILL[plan.status]}`}>
+        {ROW_STATUS_LABEL[plan.status]}
+      </span>
+      {overdue && <OverdueMark days={overdue.overdueDays} />}
+    </>
+  );
+}
+
 const planColumns: Column<PlanRow>[] = [
   { key: "matterNumber", label: "Ärendenr", sortable: true,
     sortValue: (p) => p.invoice?.matter?.matterNumber ?? "",
@@ -98,11 +114,7 @@ const planColumns: Column<PlanRow>[] = [
     sortValue: (p) => p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "",
     render: (p) => <span className="text-sm text-gray-500">{p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "—"}</span> },
   { key: "status", label: "Status", sortable: true, sortValue: (p) => ROW_STATUS_LABEL[p.status],
-    render: (p) => (
-      <span className={`text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${STATUS_PILL[p.status]}`}>
-        {ROW_STATUS_LABEL[p.status]}
-      </span>
-    ),
+    render: (p) => <PlanStatus plan={p} />,
   },
   { key: "monthlyAmount", label: "Per månad", sortable: true, align: "right",
     sortValue: (p) => p.monthlyAmount,
