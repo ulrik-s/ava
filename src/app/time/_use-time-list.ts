@@ -4,19 +4,34 @@
  * Tidslistans tillstånd och fråga (#2096): dagen (startar alltid på idag),
  * perioden Från/Till och sidan, och `timeEntry.list` med gränserna ur
  * `listRange`. Varje ändring av dag eller period går till första sidan.
+ * Den som inte ser allas tider får bara sina egna poster, och frågan väntar
+ * tills tittaren är känd (#2114).
  */
 
 import { useState } from "react";
 import { listRange } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
+import type { TimeViewer } from "@/lib/client/use-time-viewer";
+import type { UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 /** Listans storlek per sida. */
 const PAGE_SIZE = 50;
 
-/** `timeEntry.list` för sidan och dagen eller perioden (perioden går före). */
-function useListQuery(page: number, day: string, from: string, to: string) {
-  return trpc.timeEntry.list.useQuery({ page, pageSize: PAGE_SIZE, ...listRange(day, from, to) });
+/** Personen listan begränsas till: ingen för den som ser allas, annars en själv. */
+function userFilter(viewer: TimeViewer): { userId?: UserId } {
+  return viewer.status === "ready" && !viewer.seesAll ? { userId: viewer.selfId } : {};
+}
+
+/**
+ * `timeEntry.list` för sidan och dagen eller perioden (perioden går före),
+ * begränsad efter tittaren och avstängd tills tittaren är känd.
+ */
+function useListQuery(viewer: TimeViewer, page: number, day: string, from: string, to: string) {
+  return trpc.timeEntry.list.useQuery(
+    { page, pageSize: PAGE_SIZE, ...listRange(day, from, to), ...userFilter(viewer) },
+    { enabled: viewer.status === "ready" },
+  );
 }
 
 /** Tidslistans tillstånd, fråga och ändrare: det {@link useTimeList} ger. */
@@ -42,13 +57,13 @@ export interface TimeList {
   onClear: () => void;
 }
 
-/** Tidslistans tillstånd, fråga och ändrare. */
-export function useTimeList(): TimeList {
+/** Tidslistans tillstånd, fråga och ändrare, för `viewer` (`useTimeViewer`). */
+export function useTimeList(viewer: TimeViewer): TimeList {
   const [page, setPage] = useState(1);
   const [day, setDay] = useState(() => stockholmDay(new Date()));
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const query = useListQuery(page, day, from, to);
+  const query = useListQuery(viewer, page, day, from, to);
   return {
     query, page, setPage, day, from, to,
     onDay: (v: string) => { setDay(v); setPage(1); },
