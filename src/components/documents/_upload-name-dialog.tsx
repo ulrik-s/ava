@@ -7,7 +7,7 @@
  * valda namnet i den mapp som är vald i fältet **Mapp** (släppmålet är förvalt,
  * #1974); utan släppmål föreslår rutan en mapp ur namnet (#1975).
  * **Avbryt** hoppar bara över den filen.
- * **+ Ladda upp** använder den inte.
+ * Både släpp och **+ Ladda upp** (#1976) går genom rutan.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
