@@ -20,6 +20,7 @@ import {
   extractEventSuggestions, extractPartySuggestions,
 } from "@/lib/shared/document-extraction";
 import type { DocumentAnalysisSuggestion, MatterEventSuggestion } from "@/lib/shared/schemas/document";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 
@@ -36,7 +37,7 @@ export interface SuggestFromTextResult {
 }
 
 /** Nyckel för ett kontaktförslag — samma part i samma roll är samma förslag. */
-function partyKey(p: { name: string; role: string }): string {
+function partyKey(p: { name: string; role: MatterRole }): string {
   return `${p.name.trim().toLowerCase()}|${p.role}`;
 }
 

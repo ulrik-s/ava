@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import InvoiceDetailPage from "@/app/invoices/[id]/_client";
 import { VatDisplayProvider } from "@/lib/client/vat/vat-display-context";
+import { rowOrder, sortColumn } from "../../../../helpers/data-table";
 
 const invoiceQuery = {
   data: undefined as Record<string, unknown> | undefined,
@@ -22,6 +23,10 @@ const utilsMock = {
     getById: { invalidate: vi.fn() },
     list: { invalidate: vi.fn() },
   },
+  // Utskickshistoriken laddas om efter ett utskick (#392).
+  invoiceDispatch: { list: { invalidate: vi.fn() } },
+  // Fakturadokumentet hämtas från servern via tRPC-klienten (#518).
+  client: { document: { downloadContent: { query: vi.fn() } } },
 };
 let setStatusOpts: { onSuccess: () => void } | undefined;
 const stubs = {
@@ -32,6 +37,21 @@ const stubs = {
   createCredit: { mutate: vi.fn(), isPending: false },
   writeOff: { mutate: vi.fn(), isPending: false },
 };
+
+/** Callbacks som sidan ger useMutation — testerna spelar upp serverns svar genom dem. */
+interface MutationOpts { onSuccess?: () => void; onError?: (e: Error) => void }
+type StubKey = keyof typeof stubs;
+const mutationOpts: Partial<Record<StubKey, MutationOpts>> = {};
+const captured = (key: StubKey, o: MutationOpts) => { mutationOpts[key] = o; return stubs[key]; };
+
+/** Låt mutationen svara som servern: lyckas, eller fel med `error` som meddelande. */
+function respond(key: StubKey, error?: string): void {
+  stubs[key].mutate = vi.fn(() => {
+    const o = mutationOpts[key];
+    if (error) o?.onError?.(new Error(error));
+    else o?.onSuccess?.();
+  });
+}
 
 // Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
 // alla paneler efter varandra, synkront, så testerna kan granska innehållet.
@@ -63,15 +83,18 @@ vi.mock("@/lib/client/trpc", () => ({
     useUtils: () => utilsMock,
     invoice: {
       getById: { useQuery: () => invoiceQuery },
-      recordPayment: { useMutation: () => stubs.recordPayment },
-      createPaymentPlan: { useMutation: () => stubs.createPaymentPlan },
+      recordPayment: { useMutation: (o: MutationOpts) => captured("recordPayment", o) },
+      createPaymentPlan: { useMutation: (o: MutationOpts) => captured("createPaymentPlan", o) },
       cancelPaymentPlan: { useMutation: () => stubs.cancelPaymentPlan },
       setStatus: { useMutation: (o: { onSuccess: () => void }) => { setStatusOpts = o; return stubs.setStatus; } },
-      createCredit: { useMutation: () => stubs.createCredit },
-      writeOff: { useMutation: () => stubs.writeOff },
+      createCredit: { useMutation: (o: MutationOpts) => captured("createCredit", o) },
+      writeOff: { useMutation: (o: MutationOpts) => captured("writeOff", o) },
     },
     invoiceDispatch: {
       list: { useQuery: () => ({ data: [], isLoading: false }) },
+      // Utskicksmodalen (#392): köningen lyckas direkt.
+      queue: { useMutation: (o: MutationOpts) => ({ mutate: () => o.onSuccess?.(), isPending: false }) },
+      recordManual: { useMutation: (o: MutationOpts) => ({ mutate: () => o.onSuccess?.(), isPending: false }) },
     },
   },
 }));
@@ -88,7 +111,17 @@ const openDocumentMock = vi.fn();
 vi.mock("@/lib/client/firma/open-document", () => ({
   openDocument: (deps: unknown) => openDocumentMock(deps),
 }));
-vi.mock("@/lib/client/fsa/handle-store", () => ({ loadHandle: vi.fn(async () => null) }));
+const loadHandleMock = vi.fn(async (_key: string) => null);
+vi.mock("@/lib/client/fsa/handle-store", () => ({ loadHandle: (key: string) => loadHandleMock(key) }));
+const loadDocumentBlobMock = vi.fn((_client: unknown, _doc: unknown) => Promise.resolve(null));
+vi.mock("@/lib/client/backend/load-document-blob", () => ({
+  loadDocumentBlob: (client: unknown, doc: unknown) => loadDocumentBlobMock(client, doc),
+}));
+// Utskicksmodalen probar annars den riktiga AVA Helper (#1368).
+vi.mock("@/lib/client/helper/use-helper", () => ({
+  useHelper: () => ({ version: null, checked: true }),
+  composeMailViaHelper: vi.fn(() => Promise.resolve(false)),
+}));
 vi.mock("@/lib/client/fsa/read-from-fsa", () => ({ readFromFsa: vi.fn(async () => null) }));
 
 const renderPage = () =>
@@ -590,5 +623,167 @@ describe("InvoiceDetailPage", () => {
     expect(arg.paidAt).toBe("2026-04-20");
     expect(arg.note).toBe("Banköverföring");
     expect(arg.amount).toBe(10000);
+  });
+});
+
+/** Sista knappen med namnet — modalens knapp står efter sidans egen. */
+function lastButton(name: RegExp | string): HTMLElement {
+  const btn = screen.getAllByRole("button", { name }).at(-1);
+  if (!btn) throw new Error(`knappen ${String(name)} saknas`);
+  return btn;
+}
+
+/** En åtgärdsmodal: knappen som öppnar den, rubriken, ifyllnad och skicka-knappen. */
+interface ModalCase { name: string; key: StubKey; open: RegExp; heading: RegExp; fill: () => void; submit: () => HTMLElement }
+
+const MODAL_CASES: readonly ModalCase[] = [
+  { name: "betalning", key: "recordPayment", open: /Registrera betalning/i, heading: /Registrera betalning/i,
+    fill: () => fireEvent.change(screen.getByLabelText("Belopp (kr)"), { target: { value: "5000" } }),
+    submit: () => lastButton(/^Spara$/i) },
+  { name: "avbetalningsplan", key: "createPaymentPlan", open: /Skapa avbetalningsplan/i, heading: /Skapa avbetalningsplan/i,
+    fill: () => fireEvent.change(screen.getByLabelText("Månadsbelopp (kr)"), { target: { value: "1000" } }),
+    submit: () => screen.getByRole("button", { name: /Skapa plan/i }) },
+  { name: "kreditering", key: "createCredit", open: /^Kreditera$/i, heading: /Kreditera faktura/i,
+    fill: () => {}, submit: () => lastButton(/Kreditera/i) },
+  { name: "avskrivning", key: "writeOff", open: /Skriv av som kundförlust/i, heading: /Skriv av som kundförlust/i,
+    fill: () => {}, submit: () => screen.getByRole("button", { name: "Skriv av" }) },
+];
+
+/** Öppna modalen, fyll i och skicka. */
+async function submitModal(c: ModalCase): Promise<void> {
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: c.open }));
+  c.fill();
+  fireEvent.click(c.submit());
+}
+
+describe("InvoiceDetailPage — serverns svar i åtgärdsmodalerna", () => {
+  for (const c of MODAL_CASES) {
+    it(`${c.name}: lyckat svar stänger modalen och hämtar fakturan om`, async () => {
+      respond(c.key);
+      await submitModal(c);
+      expect(stubs[c.key].mutate).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole("heading", { name: c.heading })).not.toBeInTheDocument();
+      expect(utilsMock.invoice.getById.invalidate).toHaveBeenCalledWith({ id: "i1" });
+      expect(utilsMock.invoice.list.invalidate).toHaveBeenCalled();
+    });
+
+    it(`${c.name}: serverfel visas i modalen, som står kvar`, async () => {
+      respond(c.key, "Servern nekade");
+      await submitModal(c);
+      expect(screen.getByText("Servern nekade")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: c.heading })).toBeInTheDocument();
+      expect(utilsMock.invoice.getById.invalidate).not.toHaveBeenCalled();
+    });
+  }
+
+  it("Avbryt i avskrivningsmodalen stänger den och nollställer felet", async () => {
+    const writeOff = MODAL_CASES.find((c) => c.key === "writeOff");
+    if (!writeOff) throw new Error("avskrivningsfallet saknas");
+    respond("writeOff", "Servern nekade");
+    await submitModal(writeOff);
+    fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("heading", { name: writeOff.heading })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: writeOff.open }));
+    expect(screen.queryByText("Servern nekade")).not.toBeInTheDocument();
+  });
+
+  it("avskrivningen skickar ifyllt belopp, anledning och datum", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Skriv av som kundförlust/i }));
+    fireEvent.change(screen.getByLabelText(/Belopp att skriva av/), { target: { value: "2500" } });
+    fireEvent.change(screen.getByLabelText("Anledning"), { target: { value: "Konkurs" } });
+    fireEvent.change(screen.getByLabelText("Avskrivningsdatum"), { target: { value: "2026-05-10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Skriv av" }));
+    expect(stubs.writeOff.mutate).toHaveBeenCalledWith({
+      invoiceId: "i1", amount: 250_000, reason: "Konkurs", writtenOffAt: "2026-05-10",
+    });
+  });
+});
+
+describe("InvoiceDetailPage — utskick och paneler", () => {
+  it("Skicka faktura öppnar utskicksmodalen; Stäng stänger den", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Skicka faktura" }));
+    expect(screen.getByRole("heading", { name: /Skicka faktura/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stäng" }));
+    expect(screen.queryByRole("heading", { name: /Skicka faktura/ })).not.toBeInTheDocument();
+  });
+
+  it("köat utskick laddar om utskickshistoriken och fakturan och stänger modalen (#392)", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Skicka faktura" }));
+    fireEvent.change(screen.getByPlaceholderText("klient@example.se"), { target: { value: "k@x.se" } });
+    fireEvent.click(screen.getByRole("button", { name: /Köa för automatiskt utskick/ }));
+    expect(utilsMock.invoiceDispatch.list.invalidate).toHaveBeenCalledWith({ invoiceId: "i1" });
+    expect(utilsMock.invoice.getById.invalidate).toHaveBeenCalledWith({ id: "i1" });
+    expect(utilsMock.invoice.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: /Skicka faktura/ })).not.toBeInTheDocument();
+  });
+
+  it("avbetalningsplanen listar skickade påminnelser per typ", async () => {
+    const reminders = [
+      { id: "r1", type: "DUE", dueMonth: "2026-05", sentAt: new Date("2026-05-05T08:00:00Z") },
+      { id: "r2", type: "OVERDUE", dueMonth: "2026-06", sentAt: new Date("2026-06-15T08:00:00Z") },
+    ];
+    invoiceQuery.data = { ...baseInvoice, paymentPlan: {
+      id: "pp1", monthlyAmount: 100_000, dayOfMonth: 5, startDate: new Date("2026-04-01"), status: "ACTIVE", notes: null, reminders,
+    } };
+    renderPage();
+    expect(await screen.findByText(/2026-05 — Månadspåminnelse skickat/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-06 — Förseningspåminnelse skickat/)).toBeInTheDocument();
+  });
+
+  it("slutregleringens beloppstrappa visar avdrag med minus och info-rader inom parentes (#876)", async () => {
+    const settlementBreakdown = { timeLines: [], totalLabel: "Att betala", totalOre: 80_000, rows: [
+      { label: "Beviljat belopp", amountOre: 100_000, kind: "add" },
+      { label: "Avgår prutning", amountOre: 20_000, kind: "deduct" },
+      { label: "Varav moms", amountOre: 16_000, kind: "info" },
+    ] };
+    invoiceQuery.data = { ...baseInvoice, invoiceType: "FINAL", settlementBreakdown };
+    renderPage();
+    const amountOf = (label: string) => screen.getByText(label).nextElementSibling?.textContent.replace(/\s/g, "");
+    expect(await screen.findByText("Beviljat belopp")).toBeInTheDocument();
+    expect(amountOf("Beviljat belopp")).toMatch(/^1000,00/);
+    expect(amountOf("Avgår prutning")).toMatch(/^−200,00/);
+    expect(amountOf("Varav moms")).toMatch(/^\(160,00.*\)$/);
+  });
+
+  it("betalningstabellen sorteras på datum, registrerare och belopp", async () => {
+    invoiceQuery.data = { ...baseInvoice, payments: [
+      { id: "p1", amount: 250_000, paidAt: new Date("2026-04-15"), note: "Bankgiro", recordedBy: { name: "Ada" } },
+      { id: "p2", amount: 100_000, paidAt: new Date("2026-04-20"), note: "Swish", recordedBy: { name: "Bertil" } },
+    ] };
+    renderPage();
+    await screen.findByText("Bankgiro");
+    const notes = ["Bankgiro", "Swish"];
+    sortColumn("Datum", "desc");
+    expect(rowOrder(notes)).toEqual(["Swish", "Bankgiro"]);
+    sortColumn("Registrerad av", "asc");
+    expect(rowOrder(notes)).toEqual(["Bankgiro", "Swish"]);
+    sortColumn("Belopp", "asc");
+    expect(rowOrder(notes)).toEqual(["Swish", "Bankgiro"]);
+  });
+
+  it("Fakturadokument: öppningen ger ny flik, felruta, FSA-handtaget och serverhämtningen", async () => {
+    const doc = { id: "faktura-i1", fileName: "Faktura 2026-0001.pdf", storagePath: "documents/content/abc.pdf" };
+    invoiceQuery.data = { ...baseInvoice, documents: [doc] };
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    renderPage();
+    fireEvent.click(await screen.findByText(doc.fileName));
+    await waitFor(() => expect(openDocumentMock).toHaveBeenCalledTimes(1));
+    const deps: { openUrl: (u: string) => void; notifyError: (m: string) => void; loadHandle: () => Promise<unknown>; fetchBlob: () => Promise<unknown> } =
+      openDocumentMock.mock.calls[0]?.[0];
+    deps.openUrl("blob:faktura");
+    expect(open).toHaveBeenCalledWith("blob:faktura", "_blank", "noopener,noreferrer");
+    deps.notifyError("Kunde inte öppna");
+    expect(alertSpy).toHaveBeenCalledWith("Kunde inte öppna");
+    await deps.loadHandle();
+    expect(loadHandleMock).toHaveBeenCalledWith("repo-root");
+    await deps.fetchBlob();
+    expect(loadDocumentBlobMock).toHaveBeenCalledWith(utilsMock.client, doc);
+    open.mockRestore();
+    alertSpy.mockRestore();
   });
 });

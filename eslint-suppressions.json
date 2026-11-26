@@ -842,25 +842,6 @@
       "count": 1
     }
   },
-  "src/lib/server/rules/execute.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 9
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
-  "src/lib/server/rules/scheduler.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
-      "count": 1
-    }
-  },
   "src/lib/server/secrets/crypto.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
@@ -3273,25 +3254,6 @@
   "test/unit/server/routers/user.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 10
-    }
-  },
-  "test/unit/server/rules/execute.test.ts": {
-    "@typescript-eslint/only-throw-error": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 6
-    },
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/rules/scheduler.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 6
-    },
-    "no-restricted-syntax": {
-      "count": 4
     }
   },
   "test/unit/server/search-document-type-filter.test.ts": {
