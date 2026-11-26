@@ -1212,7 +1212,7 @@ function buildTemplates(orgId: string, currentUserId: string): SeedDataset["docu
   const out: SeedDataset["documentTemplates"] = [];
   // templates
   const templates = [
-    { id: "tpl-fullmakt", name: "Fullmakt", category: "Allmänt", body: "<h1>Fullmakt</h1><p>{{contact.name}} ger härmed {{user.name}} rätt att företräda mig i ärende {{matter.matterNumber}}.</p>" },
+    { id: "tpl-fullmakt", name: "Fullmakt", category: "Allmänt", body: "<h1>Fullmakt</h1><p>{{klient.name}} ger härmed {{generatedBy.name}} rätt att företräda mig i ärende {{matter.matterNumber}}.</p>" },
     { id: "tpl-stamning", name: "Stämningsansökan", category: "Tvist", body: "<h1>Stämningsansökan</h1><p>Mål nr: {{matter.matterNumber}}</p>" },
     { id: "tpl-avtal", name: "Avtal", category: "Avtal", body: "<h1>Avtal</h1>" },
     { id: "tpl-forlikning", name: "Förlikningsavtal", category: "Tvist", body: "<h1>Förlikningsavtal</h1>" },
