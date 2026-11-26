@@ -258,6 +258,8 @@ test("Startsidan: pilarna stegar en dag bakåt och framåt", async ({ page }) =>
 
 test("tidssidan visar registrerad tid i decimaltimmar", async ({ page }) => {
   await page.goto(`${BASE}/time/`);
+  // Sidan öppnas på idag (#2096); en tidig Från visar alla demons poster.
+  await page.getByLabel("Från").fill("2000-01-01");
   await expect(page.getByText(/^Totalt: \d[\d\s]*(,\d{1,2})? h$/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("columnheader", { name: /^Tid \(h\)/ })).toBeVisible();
 

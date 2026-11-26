@@ -49,11 +49,26 @@ async function panelTexts(page: Page): Promise<Array<[string, string]>> {
   return out;
 }
 
-async function expectNoEmptyPanels(page: Page, path: string): Promise<void> {
+/** Ett förberedande steg innan panelerna läses. */
+type Prepare = (page: Page) => Promise<void>;
+
+/**
+ * Förberedelser per sökväg. `/time/` öppnas på idag (#2096), och demon har
+ * ingen post på dagens datum ("Inga tidsposter."): en tidig Från visar alla.
+ */
+const PREPARE: Readonly<Record<string, Prepare>> = {
+  "/time/": async (page) => { await page.getByLabel("Från").fill("2000-01-01"); },
+};
+
+async function expectNoEmptyPanels(page: Page, path: string, prepare: Prepare | undefined = PREPARE[path]): Promise<void> {
   await page.goto(`${BASE}${path}`);
   await expect(page.locator("main h1").first()).toBeVisible({ timeout: 30_000 });
   // Sidan är klar när inget längre laddar (dockytan laddas efter sidhuvudet).
   await expect(page.locator("main")).not.toContainText("Laddar", { timeout: 30_000 });
+  if (prepare) {
+    await prepare(page);
+    await expect(page.locator("main")).not.toContainText("Laddar", { timeout: 30_000 });
+  }
   for (const [title, text] of await panelTexts(page)) {
     expect(text.match(EMPTY_STATE)?.[0], `${path} — ${title}`).toBeUndefined();
   }

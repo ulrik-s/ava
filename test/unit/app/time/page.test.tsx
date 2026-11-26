@@ -3,8 +3,9 @@
  */
 
 import { act, render, screen, fireEvent, within } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import TimePage from "@/app/time/page";
+import { periodFrom, periodTo } from "@/lib/client/time-filter";
 import { rowOrder, sortColumn } from "../../../helpers/data-table";
 
 const timeQuery: {
@@ -78,10 +79,16 @@ vi.mock("@/lib/client/trpc", () => ({
 }));
 
 beforeEach(() => {
+  // Fast klocka (#2096): listan öppnas på idag = 2026-11-24 i Stockholm.
+  vi.setSystemTime(new Date("2026-11-24T12:00:00Z"));
   vi.clearAllMocks();
   timeQuery.data = { entries: [], total: 0, pages: 0, totalMinutes: 0 };
   updateError = null;
   moveError = null;
+});
+
+afterEach(() => {
+  vi.setSystemTime();
 });
 
 describe("TimePage", () => {
@@ -192,7 +199,7 @@ describe("TimePage", () => {
     };
     render(<TimePage />);
     expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
     expect(screen.getByText(/Sida 2 av 3/)).toBeInTheDocument();
   });
 });
@@ -418,23 +425,24 @@ describe("TimePage — periodfiltret (#1904)", () => {
   it("Från och Till begränsar listan och går till första sidan; Rensa tar bort perioden", () => {
     timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
     render(<TimePage />);
-    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
     expect(lastInput()?.page).toBe(2);
     fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
     expect(lastInput()).toMatchObject({ page: 1, from: new Date("2026-01-01T00:00:00.000") });
-    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
     fireEvent.change(screen.getByLabelText("Till"), { target: { value: "2026-01-31" } });
     expect(lastInput()).toMatchObject({ page: 1, to: new Date("2026-01-31T23:59:59.999") });
     fireEvent.click(screen.getByRole("button", { name: "Rensa" }));
-    expect(lastInput()).toMatchObject({ page: 1, from: undefined, to: undefined });
+    // Utan period visar listan åter dagen (#2096).
+    expect(lastInput()).toMatchObject({ page: 1, from: periodFrom("2026-11-24"), to: periodTo("2026-11-24") });
     expect(screen.queryByRole("button", { name: "Rensa" })).toBeNull();
   });
 
   it("Föregående går tillbaka en sida", () => {
     timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
     render(<TimePage />);
-    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Föregående/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Föregående" }));
     expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
   });
 });
@@ -486,5 +494,80 @@ describe("TimePage — registreringens och ändringens svar (#1904)", () => {
     render(<TimePage />);
     act(() => succeeded.remove?.());
     expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+  });
+});
+
+describe("TimePage — en dag i taget (#2096)", () => {
+  const lastInput = () => listInput.mock.calls.at(-1)?.[0];
+  const dayRange = (day: string) => ({ from: periodFrom(day), to: periodTo(day) });
+  const step = (name: "Föregående dag" | "Nästa dag") => fireEvent.click(screen.getByRole("button", { name }));
+
+  it("öppnas på idag, med Idag mellan pilarna", () => {
+    render(<TimePage />);
+    expect(lastInput()).toMatchObject({ page: 1, pageSize: 50, ...dayRange("2026-11-24") });
+    expect(screen.getByText("Idag")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Föregående dag" })).toBeInTheDocument();
+  });
+
+  it("pilarna byter dag och dagens namn", () => {
+    render(<TimePage />);
+    step("Föregående dag");
+    expect(lastInput()).toMatchObject(dayRange("2026-11-23"));
+    expect(screen.getByText("Igår")).toBeInTheDocument();
+    step("Nästa dag");
+    expect(screen.getByText("Idag")).toBeInTheDocument();
+    step("Nästa dag");
+    expect(screen.getByText("Imorgon")).toBeInTheDocument();
+    step("Nästa dag");
+    expect(screen.getByText("torsdag 26 november 2026")).toBeInTheDocument();
+    expect(lastInput()).toMatchObject(dayRange("2026-11-26"));
+  });
+
+  it("dagbyte går till första sidan", () => {
+    timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    expect(screen.getByText("Sida 2 av 3")).toBeInTheDocument();
+    step("Föregående dag");
+    expect(screen.getByText("Sida 1 av 3")).toBeInTheDocument();
+    expect(lastInput()).toMatchObject({ page: 1, ...dayRange("2026-11-23") });
+  });
+
+  it("Totalt: visar frågans summa", () => {
+    timeQuery.data.totalMinutes = 150;
+    render(<TimePage />);
+    expect(screen.getByText("Totalt: 2,5 h")).toBeInTheDocument();
+  });
+
+  it("bara Från ger perioden och döljer pilarna och dagens namn", () => {
+    render(<TimePage />);
+    fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
+    expect(lastInput()).toMatchObject({ from: periodFrom("2026-01-01"), to: undefined });
+    expect(screen.queryByText("Idag")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Föregående dag" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Nästa dag" })).toBeNull();
+  });
+
+  it("bara Till ger perioden och döljer pilarna", () => {
+    render(<TimePage />);
+    fireEvent.change(screen.getByLabelText("Till"), { target: { value: "2026-01-31" } });
+    expect(lastInput()).toMatchObject({ from: undefined, to: periodTo("2026-01-31") });
+    expect(screen.queryByRole("button", { name: "Nästa dag" })).toBeNull();
+  });
+
+  it("Rensa visar åter samma dag som innan perioden valdes", () => {
+    render(<TimePage />);
+    step("Föregående dag");
+    fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
+    expect(screen.queryByText("Igår")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Rensa" }));
+    expect(screen.getByText("Igår")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Föregående dag" })).toBeInTheDocument();
+    expect(lastInput()).toMatchObject({ page: 1, ...dayRange("2026-11-23") });
+  });
+
+  it("en dag utan poster visar tomtexten", () => {
+    render(<TimePage />);
+    expect(screen.getByText("Inga tidsposter.")).toBeInTheDocument();
   });
 });
