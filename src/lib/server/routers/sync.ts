@@ -13,10 +13,13 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { releaseLabel } from "@/lib/server/http/health";
+import { syncDeviceReportSchema } from "@/lib/shared/sync/device-health";
 import { serverSyncInfo } from "@/lib/shared/sync/protocol";
 import { FOREIGN_ENTRY_REFUSAL, SyncRefusal } from "@/lib/shared/sync/sync-error";
 import { assertAdmin } from "../auth/assert-admin";
-import { type QueuedMutation, queuedProcedureCallSchema as queuedCallShape } from "../data-store/in-memory/mutation-queue";
+import {
+  type QueuedMutation, queuedMutationSchema as queuedRowShape, queuedProcedureCallSchema as queuedCallShape, type QueueOwner, queueOwnerSchema,
+} from "../data-store/in-memory/mutation-queue";
 import { rowRefSchema } from "../data-store/in-memory/procedure-touches";
 import { MAX_ROW_REFS } from "../data-store/in-memory/sync-transport";
 import { analyzeIfNewContent, storagePathBefore } from "../sync/classify-new-content";
@@ -25,18 +28,19 @@ import type { SyncStore } from "../sync/sync-store";
 import { orgProcedure, router } from "../trpc";
 
 /**
- * Vem som köade posten (#1347). Klienten stämplar sina poster; servern kör
- * ändå alltid som den inloggade (`ctx.user`) och vägrar en post som en annan
- * användare köade — A:s osynkade ändringar får aldrig sparas i B:s namn.
+ * Vem som köade posten (#1347): klientens schema (#1849). Klienten stämplar
+ * sina poster; servern kör ändå alltid som den inloggade (`ctx.user`) och
+ * vägrar en post som en annan användare köade — A:s osynkade ändringar får
+ * aldrig sparas i B:s namn.
  */
-const queueOwnerSchema = z.object({ principalId: z.string(), organizationId: z.string() }).optional();
+const ownerSchema = queueOwnerSchema.optional();
 
 /** Beskedet när en köpost är en annan användares. */
 export const FOREIGN_QUEUE_ENTRY_MESSAGE =
   "Ändringen köades av en annan användare och sparas inte i ditt namn. Logga in som den användaren för att synka den.";
 
 /** Kasta om posten köades av någon annan än den inloggade (poster före #1347 saknar ägare). */
-function assertOwnEntry(userId: string, owner: z.infer<typeof queueOwnerSchema>): void {
+function assertOwnEntry(userId: string, owner: QueueOwner | undefined): void {
   if (owner && owner.principalId !== userId) {
     // Inte 401 (#1772): sessionen är giltig, och "logga in igen" hjälper inte —
     // klienten lägger posten i karantän (de avvisade ändringarna) och synkar vidare.
@@ -44,17 +48,14 @@ function assertOwnEntry(userId: string, owner: z.infer<typeof queueOwnerSchema>)
   }
 }
 
-const queuedMutationSchema = z.object({
-  mutationId: z.string(),
-  entity: z.string(),
-  kind: z.enum(["create", "update", "delete"]),
-  row: z.record(z.string(), z.unknown()),
-  previous: z.record(z.string(), z.unknown()).optional(),
-  baseVersion: z.number().optional(),
-  enqueuedAt: z.number(),
+/**
+ * En radpost (#1849): klientens köschema, så att servern tar emot det
+ * klienten köar, med serverns striktare krav på köformatet.
+ */
+const queuedMutationSchema = queuedRowShape.extend({
   /** Köformatet (#1247) — saknas på poster köade före stämplingen. */
   format: z.number().int().positive().optional(),
-  owner: queueOwnerSchema,
+  owner: ownerSchema,
 });
 
 /**
@@ -69,7 +70,7 @@ const queuedProcedureCallSchema = queuedCallShape.extend({
   codeVersion: z.string().max(200),
   /** Köformatet (#1247) — saknas på poster köade före stämplingen. */
   format: z.number().int().positive().optional(),
-  owner: queueOwnerSchema,
+  owner: ownerSchema,
 });
 
 function requireSync(sync: SyncStore | undefined): SyncStore {
@@ -78,16 +79,6 @@ function requireSync(sync: SyncStore | undefined): SyncStore {
   }
   return sync;
 }
-
-/** En enhets rapport (#1267). Etiketten är kort text om webbläsaren, aldrig innehåll. */
-const deviceReportSchema = z.object({
-  deviceId: z.string().uuid(),
-  label: z.string().max(120).nullable(),
-  pendingCount: z.number().int().nonnegative(),
-  oldestPendingAt: z.number().int().nonnegative().nullable(),
-  /** Felet som stoppade synken (#1353). Saknas från klienter före fältet. */
-  lastError: z.string().max(300).nullable().default(null),
-});
 
 function requireDevices(store: SyncDeviceStore | undefined): SyncDeviceStore {
   if (!store) {
@@ -103,7 +94,7 @@ export const syncRouter = router({
    * stämplar när rapporten kom.
    */
   reportDevice: orgProcedure
-    .input(deviceReportSchema)
+    .input(syncDeviceReportSchema)
     .mutation(async ({ ctx, input }) => {
       await requireDevices(ctx.syncDevices).report(ctx.orgId, ctx.user.id, input);
       return { ok: true as const };
@@ -157,7 +148,7 @@ export const syncRouter = router({
       const sync = requireSync(ctx.sync);
       const { owner, ...entry } = input;
       assertOwnEntry(ctx.user.id, owner);
-      const m = entry as QueuedMutation;
+      const m: QueuedMutation = entry;
       const before = await storagePathBefore(ctx.repos, m);
       const result = await sync.push({ organizationId: ctx.orgId, userId: ctx.user.id }, m);
       await analyzeIfNewContent({ content: ctx.ports.content, analyzer: ctx.ports.documentAnalyzer }, m, before, result);
