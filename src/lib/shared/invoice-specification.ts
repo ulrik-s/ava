@@ -24,8 +24,9 @@ export interface SpecTimeLine {
 /** En rad i utläggsspecifikationen (netto + brutto, exakt per momssats). */
 export interface SpecExpenseLine {
   date: Date | string; description: string; netOre: number; grossOre: number;
-  /** Äkta utlägg — vidarefakturerat utan moms (#975). Redovisas som egen grupp. */
-  passThrough?: boolean;
+  /** Äkta utlägg — vidarefakturerat utan moms (#975). Redovisas som egen grupp.
+   *  `undefined` tillåts: den sparade nedbrytningen (zod `.optional()`) har det (#1941). */
+  passThrough?: boolean | undefined;
 }
 /** En avdragen (tidigare betald) aconto-faktura. */
 export interface SpecDeduction { invoiceNumber: string; date: Date | string | null; amountOre: number }
