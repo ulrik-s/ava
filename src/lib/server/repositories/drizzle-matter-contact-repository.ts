@@ -77,11 +77,11 @@ export class DrizzleMatterContactRepository
     return { ...link, contact: contact as Contact };
   }
 
-  async findLink(matterId: MatterId, contactId: ContactId, role: string): Promise<MatterContact | null> {
+  async findLink(matterId: MatterId, contactId: ContactId, role: MatterRole): Promise<MatterContact | null> {
     const rows = await this.db.select().from(matterContacts)
       .where(and(
         eq(matterContacts.matterId, matterId), eq(matterContacts.contactId, contactId),
-        eq(matterContacts.role, role as MatterRole), isNull(matterContacts.deletedAt),
+        eq(matterContacts.role, role), isNull(matterContacts.deletedAt),
       )).limit(1);
     return rows[0] ?? null;
   }
