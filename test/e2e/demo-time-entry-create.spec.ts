@@ -305,3 +305,43 @@ test("tidslistan visar en dag i taget och bläddrar med pilarna", async ({ page,
   await expect(dayName("Idag")).toBeVisible();
   await expect(row).toBeVisible();
 });
+
+/*
+ * #2097: pilarna vid formulärets Datum * stegar datumet en dag. Formulärets
+ * datum är skilt från listans dag, och efter Spara börjar formuläret åter på idag.
+ */
+test("pilarna vid Datum * registrerar tid på igår, och formuläret börjar åter på idag", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const matter = seed.matters.find((m) => m.status === "ACTIVE" && m.matterNumber);
+  if (!matter) throw new Error("demon saknar ett aktivt ärende");
+  const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm" }).format(new Date());
+  const description = "E2E: igår via pilen (#2097)";
+  const row = page.getByRole("row").filter({ hasText: description });
+  const form = page.locator("form", { has: page.getByRole("button", { name: "Spara", exact: true }) });
+  const date = form.getByLabel("Datum *");
+
+  await page.goto(`${base}/time/`, { waitUntil: "load" });
+  await expect(page.getByText("Idag", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: /\+ Registrera tid/ }).click();
+  await expect(date).toHaveValue(today);
+  await form.getByRole("button", { name: "Föregående dag" }).click();
+  await expect(date).not.toHaveValue(today);
+  await form.getByRole("button", { name: "Nästa dag" }).click();
+  await expect(date).toHaveValue(today);
+
+  await form.getByRole("button", { name: "Föregående dag" }).click();
+  await form.getByLabel("Ärende *").fill(`${matter.matterNumber ?? ""} — ${matter.title}`);
+  await form.getByLabel("Beskrivning *").fill(description);
+  await form.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(row).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Föregående dag" }).click();
+  await expect(page.getByText("Igår", { exact: true })).toBeVisible();
+  await expect(row).toBeVisible();
+
+  await page.getByRole("button", { name: /\+ Registrera tid/ }).click();
+  await expect(date).toHaveValue(today);
+});
