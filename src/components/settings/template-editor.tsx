@@ -2,89 +2,7 @@
 
 import { ChevronDown, ChevronRight, Eye, Code } from "lucide-react";
 import { useState, useMemo } from "react";
-
-const VARIABLE_REFERENCE = [
-  {
-    group: "Ärende",
-    vars: [
-      { key: "matter.matterNumber", desc: "Ärendenummer (t.ex. 2024-0001)" },
-      { key: "matter.title", desc: "Ärendetitel" },
-      { key: "matter.description", desc: "Beskrivning" },
-      { key: "matter.status", desc: "Status (ACTIVE / CLOSED / ARCHIVED)" },
-      { key: "matter.matterType", desc: "Ärendetyp" },
-      { key: "matter.createdAt", desc: "Skapat datum (använd med {{formatDate}})" },
-    ],
-  },
-  {
-    group: "Organisation",
-    vars: [
-      { key: "organization.name", desc: "Byråns namn" },
-      { key: "organization.address", desc: "Adress (huvudkontor)" },
-      { key: "organization.phone", desc: "Telefon" },
-      { key: "organization.email", desc: "E-post" },
-      { key: "organization.orgNumber", desc: "Org.nummer" },
-      { key: "organization.bankgiro", desc: "Bankgiro" },
-      { key: "organization.mainOffice.name", desc: "Huvudkontorets namn" },
-      { key: "organization.mainOffice.address", desc: "Huvudkontorets adress" },
-      { key: "organization.offices", desc: "Alla kontor (loop)" },
-      { key: "organization.offices[i].name", desc: "Kontorets namn" },
-      { key: "organization.offices[i].address", desc: "Kontorets adress" },
-      { key: "organization.offices[i].phone", desc: "Kontorets telefon" },
-    ],
-  },
-  {
-    group: "Parter",
-    vars: [
-      { key: "klient.name", desc: "Klientens namn" },
-      { key: "klient.personalNumber", desc: "Personnummer" },
-      { key: "klient.address", desc: "Adress" },
-      { key: "klient.phone", desc: "Telefon" },
-      { key: "klient.email", desc: "E-post" },
-      { key: "motpart.name", desc: "Motpartens namn" },
-      { key: "recipient.name", desc: "Aktuell mottagares namn (null om ej vald)" },
-      { key: "recipient.address", desc: "Aktuell mottagares adress" },
-      { key: "recipient.email", desc: "Aktuell mottagares e-post" },
-      { key: "recipient.roleLabel", desc: "Roll (t.ex. Klient, Motpart)" },
-      { key: "contacts", desc: "Alla parter (loop)" },
-      { key: "contacts[i].name", desc: "Partens namn" },
-      { key: "contacts[i].roleLabel", desc: "Roll (t.ex. Klient)" },
-    ],
-  },
-  {
-    group: "Tid & Utlägg",
-    vars: [
-      { key: "timeEntries", desc: "Tidposter (loop)" },
-      { key: "timeEntries[i].description", desc: "Beskrivning" },
-      { key: "timeEntries[i].hours", desc: "Timmar (t.ex. 1,5 tim)" },
-      { key: "timeEntries[i].date", desc: "Datum" },
-      { key: "timeEntries[i].userName", desc: "Utförd av" },
-      { key: "expenses", desc: "Utlägg (loop)" },
-      { key: "expenses[i].description", desc: "Beskrivning" },
-      { key: "expenses[i].amount", desc: "Belopp i öre" },
-      { key: "totalTimeMinutes", desc: "Total tid (minuter)" },
-      { key: "totalTimeAmount", desc: "Total tid (öre)" },
-      { key: "totalExpenseAmount", desc: "Totala utlägg (öre)" },
-    ],
-  },
-  {
-    group: "Övrigt",
-    vars: [
-      { key: "today", desc: "Dagens datum (t.ex. 2026-04-16)" },
-      { key: "generatedBy.name", desc: "Genererat av (namn)" },
-      { key: "generatedBy.title", desc: "Titel" },
-    ],
-  },
-  {
-    group: "Hjälpfunktioner",
-    vars: [
-      { key: "{{formatDate date}}", desc: "Datum → 16 april 2026" },
-      { key: "{{formatDateShort date}}", desc: "Datum → 2026-04-16" },
-      { key: "{{formatAmount amountInOre}}", desc: "Öre → 1 250,00 kr" },
-      { key: "{{formatHours minutes}}", desc: "Minuter → decimaltimmar, 90 → 1,5" },
-    ],
-  },
-];
-
+import { TEMPLATE_VARIABLES } from "@/lib/client/templates/template-variables";
 
 interface Props {
   initialName?: string;
@@ -220,7 +138,7 @@ function EditorPane({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             spellCheck={false}
-            placeholder={`<h1>{{matter.title}}</h1>\n<p>Klient: {{klient.name}}</p>\n\n{{#each timeEntries}}\n<p>{{formatDateShort date}} – {{description}} ({{hours}})</p>\n{{/each}}`}
+            placeholder={`<h1>{{matter.title}}</h1>\n<p>Klient: {{klient.name}}</p>\n<p>{{formatDate today}}</p>`}
             className="flex-1 p-4 font-mono text-sm resize-none focus:outline-none bg-[#1e1e2e] text-[#cdd6f4] leading-relaxed"
           />
         )}
@@ -341,7 +259,7 @@ function VariableSidebar({
 }) {
   return (
     <div className="w-64 border-r border-gray-200 overflow-y-auto bg-gray-50 text-xs">
-      {VARIABLE_REFERENCE.map((section) => (
+      {TEMPLATE_VARIABLES.map((section) => (
         <div key={section.group}>
           <button
             onClick={() => toggleGroup(section.group)}

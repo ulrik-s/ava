@@ -11,6 +11,7 @@
  */
 
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import type { Parties, SimMatter } from "./events";
 import type { RunCtx } from "./runner";
 import { runScenario } from "./runner";
@@ -51,7 +52,7 @@ function clientEmailOf(parties: Parties, contacts: Any[]): string | undefined {
 /** Parter ur seedens matterContacts (klient/motpart/ombud/domstol) → party-events. */
 function deriveParties(matterId: string, seedContacts: Any[]): Parties {
   const mine = seedContacts.filter((c) => String(c.matterId) === matterId);
-  const byRole = (role: string): string | undefined => {
+  const byRole = (role: MatterRole): string | undefined => {
     const hit = mine.find((c) => String(c.role) === role);
     return hit ? String(hit.contactId) : undefined;
   };

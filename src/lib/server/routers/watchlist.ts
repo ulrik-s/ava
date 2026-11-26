@@ -16,7 +16,7 @@ import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
-  conflictCheckItems, coverageItems, deadlineItems, sortWatchlist, unbilledItems,
+  conflictCheckItems, coverageItems, deadlineItems, sortWatchlist, unbilledItems, withKlientNames,
   DEFAULT_THRESHOLDS, type CoverageMatter, type DeadlineTask, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";
 import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
@@ -46,6 +46,17 @@ interface MatterRow {
   responsibleLawyerId?: string | null;
   conflictCheckStatus?: string | null;
   conflictCheckHits?: number | null;
+}
+
+/**
+ * Klientens namn på posterna (#1965): parterna för ärendena i posterna, lästa i
+ * ETT repo-anrop oavsett antal ärenden. Inga ärenden → inget anrop.
+ */
+async function withClients(ctx: Ctx, items: readonly WatchlistItem[]): Promise<WatchlistItem[]> {
+  const ids = [...new Set(items.flatMap((i) => (i.matterId === null ? [] : [i.matterId])))];
+  if (ids.length === 0) return [...items];
+  const parties = await ctx.repos.matters.listPartiesFor(ctx.orgId, ids.map((id) => asId<"MatterId">(id)));
+  return withKlientNames(items, parties);
 }
 
 /** Täckningsunderlag: ärendets tak + upparbetat, batchat i ETT repo-anrop. */
@@ -157,7 +168,7 @@ export const watchlistRouter = router({
       ], stockholmDay(now));
 
       const scoped = input?.matterId ? items.filter((i) => i.matterId === String(input.matterId)) : items;
-      return { items: scoped, generatedAt: now.toISOString() };
+      return { items: await withClients(ctx, scoped), generatedAt: now.toISOString() };
     }),
 
   /**
