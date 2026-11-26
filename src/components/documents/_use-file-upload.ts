@@ -136,15 +136,13 @@ function usePendingUploads() {
 }
 
 /**
- * Uppladdnings-state + handlers. `handleFileUpload` är **+ Ladda upp**;
- * `enqueueUpload` tar en fil med målmapp och namn (namnrutan) och köar den
+ * Uppladdnings-state + handlers. `enqueueUpload` tar en fil med målmapp och
+ * namn från namnrutan (både släpp och **+ Ladda upp**, #1976) och köar den
  * efter de uppladdningar som redan pågår.
  */
-export function useFileUpload({ matterId, mutations, fileInputRef }: {
+export function useFileUpload({ matterId, mutations }: {
   matterId: MatterId;
   mutations: { createFromFsa: (input: RegisterInput) => Promise<void> };
-  /** Filväljaren bakom **+ Ladda upp**; nollställs efter varje val. */
-  fileInputRef: { readonly current: { value: string } | null };
 }) {
   const utils = trpc.useUtils();
   const { jobs } = useCapabilities();
@@ -229,18 +227,6 @@ export function useFileUpload({ matterId, mutations, fileInputRef }: {
     if (errors.length > 0) setUploadError((prev) => appendErrors(prev, errors));
   }
 
-  /** **+ Ladda upp**: alla valda filer, i roten med sina egna namn. */
-  async function handleFileUpload(e: { target: { files: ArrayLike<File> | null } }): Promise<void> {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    setUploadError(null);
-    try {
-      await uploadEach(files.map((file) => ({ file })));
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
-
   /** En fil från namnrutan; körs efter de uppladdningar som redan köats. */
   function enqueueUpload(file: File, options: UploadOptions): Promise<void> {
     chain.current = chain.current.then(() => uploadEach([{ file, options }]));
@@ -249,6 +235,6 @@ export function useFileUpload({ matterId, mutations, fileInputRef }: {
 
   return {
     uploading, uploadingIds: pending.uploadingIds, pendingUploads: pending.pendingUploads,
-    uploadError, setUploadError, handleFileUpload, enqueueUpload,
+    uploadError, setUploadError, enqueueUpload,
   };
 }

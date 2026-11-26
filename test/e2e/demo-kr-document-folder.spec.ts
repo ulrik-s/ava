@@ -79,6 +79,20 @@ test.describe("släpp filer utifrån i dokumentvyn (#1615)", () => {
     await expect(page.locator("tr").filter({ has: saved }).locator("[style*='padding-left: 36px']").first()).toBeVisible();
   });
 
+  // #1976: + Ladda upp går genom samma namnruta, och den valda mappen gäller.
+  test("+ Ladda upp öppnar namnrutan och sparar i den valda mappen", async ({ page }) => {
+    await page.locator("input[type=file]").setInputFiles({ name: "yttrande.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF") });
+    const dialog = page.getByRole("dialog", { name: "Namnge dokumentet" });
+    await expect(dialog.getByRole("textbox")).toHaveValue("yttrande");
+    await dialog.getByLabel("Mapp").selectOption({ label: "Domstol" });
+    await dialog.getByRole("textbox").fill("Yttrande över bevisning");
+    await dialog.getByRole("button", { name: "Spara" }).click();
+    const saved = page.getByText("Yttrande över bevisning.pdf");
+    await expect(saved).toBeVisible({ timeout: 30_000 });
+    // Raden ligger under Domstol: indragen (djup 1), inte i roten.
+    await expect(page.locator("tr").filter({ has: saved }).locator("[style*='padding-left: 20px']").first()).toBeVisible();
+  });
+
   test("ett mejl som .eml släppt på roten förifylls med ämnesraden och sparas som .eml (#1616)", async ({ page }) => {
     await dropFile(page, "Rot", "mejl.eml", "message/rfc822", "Subject: =?UTF-8?Q?M=C3=B6te_om_f=C3=B6rlikning?=\r\n\r\nText");
     const dialog = page.getByRole("dialog", { name: "Namnge dokumentet" });

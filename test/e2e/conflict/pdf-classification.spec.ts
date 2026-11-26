@@ -49,6 +49,8 @@ test("uppladdad PDF klassas ur texten i server-binären — också när servern 
 
   const upload = async (name: string): Promise<void> => {
     await page.locator('input[type="file"]').first().setInputFiles({ name, mimeType: "application/pdf", buffer: PDF });
+    // + Ladda upp går genom namnrutan (#1976); det förifyllda namnet behålls.
+    await page.getByRole("dialog", { name: "Namnge dokumentet" }).getByRole("button", { name: "Spara" }).click();
     await expect(page.getByText(name).first()).toBeVisible({ timeout: 30_000 });
   };
   await upload(first);

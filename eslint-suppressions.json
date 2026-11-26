@@ -1842,7 +1842,7 @@
   },
   "test/unit/components/document-browser.test.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 16
+      "count": 12
     },
     "@typescript-eslint/require-await": {
       "count": 7
