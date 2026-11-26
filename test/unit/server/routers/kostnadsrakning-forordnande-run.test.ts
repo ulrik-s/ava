@@ -3,7 +3,8 @@
  *
  * Med dialogens `forordnande` räknar servern yrkandet på förordnandetaxan och
  * ärendets förhör (tidsposterna med kategorin FORHOR), med samma funktion och
- * samma förhör som dokumentet. Avslutet sparas i körningens anteckning, och
+ * samma förhör som dokumentet. Avslutet sparas i körningens kolumn
+ * `forordnandeAvslut` (#2180) och i anteckningen, och
  * ärendet ändras inte. Utan fältet beter sig körningen som förut.
  */
 import { describe, expect, it } from "vitest-compat";
@@ -67,6 +68,10 @@ describe("createKostnadsrakning — förordnandemål (#1857)", () => {
     const before = await caller.matter.getById({ id: MATTER });
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: MATTER, forordnande: { avslut: "INGET_ATAL" }, isTaxeArende: true });
     expect(run.notes).toBe("Förordnandetaxa – förundersökningen avslutades utan åtal");
+    // Typad kolumn (#2180): avslutet går att läsa tillbaka strukturerat.
+    expect(run.forordnandeAvslut).toBe("INGET_ATAL");
+    const read = await caller.billingRun.byId({ id: run.id });
+    expect(read.forordnandeAvslut).toBe("INGET_ATAL");
     const after = await caller.matter.getById({ id: MATTER });
     const taxeFields = (m: typeof before) => [m.isTaxeArende, m.taxaLevel, m.taxaHuvudforhandlingMin, m.taxaHufStart];
     expect(taxeFields(after)).toEqual(taxeFields(before));
@@ -76,6 +81,7 @@ describe("createKostnadsrakning — förordnandemål (#1857)", () => {
     const { caller } = setup();
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: MATTER, notes: "Egen" });
     expect(run.notes).toBe("Egen");
+    expect(run.forordnandeAvslut).toBeNull();
     expect(run.workValueOreAtRun).not.toBe(documentClaim(new Date(run.periodTo ?? Date.now())));
   });
 

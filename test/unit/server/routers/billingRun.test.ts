@@ -113,6 +113,15 @@ describe("billingRun.createAcconto — nedbrytningen (#1940)", () => {
     const res = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 125_000, settlementBreakdown: given });
     expect(res.invoice.settlementBreakdown).toEqual(given);
   });
+
+  it("nedbrytningen sparas i acontots egen kolumn och, tills vidare, i settlementBreakdown (#2180)", async () => {
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" });
+    const { invoice } = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 100_000 });
+    expect(invoice.accontoBreakdown?.totalOre).toBe(100_000);
+    expect(invoice.settlementBreakdown).toEqual(invoice.accontoBreakdown);
+    const read = await caller.invoice.getById({ id: invoice.id });
+    expect(read.accontoBreakdown).toEqual(invoice.accontoBreakdown);
+  });
 });
 
 describe("billingRun.proposal (#397)", () => {
