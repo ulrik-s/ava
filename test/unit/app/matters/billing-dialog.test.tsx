@@ -30,6 +30,30 @@ let proposalData: unknown = {
 };
 let proposalLoading = false;
 
+/** Kör mutationens onSuccess (#1941); saknas den har dialogen inte renderats. */
+async function succeed(onSuccess: ((res: unknown) => Promise<void>) | undefined, res: unknown): Promise<void> {
+  if (!onSuccess) throw new Error("mutationen saknar onSuccess");
+  await onSuccess(res);
+}
+
+/** Texten i det första genererade fakturadokumentet. */
+async function docText(): Promise<string> {
+  // Mockens anrop är otypade (vi.fn utan signatur); argumentet läses som det persistGeneratedDoc tar.
+  const call = persistGeneratedDoc.mock.calls[0] as unknown[] | undefined;
+  const arg = call?.[0] as { bytes: Uint8Array } | undefined;
+  if (!arg) throw new Error("inget dokument genererades");
+  return (await pdfPageTexts(arg.bytes)).flat().join("\n");
+}
+
+/** En sparad acontonedbrytning (#1940): uträkningen som fakturan bär. */
+const BREAKDOWN = {
+  rows: [
+    { label: "Upparbetat", amountOre: 500_000, kind: "info" },
+    { label: "Klientens andel av upparbetat", amountOre: 100_000, kind: "add" },
+  ],
+  totalLabel: "Att betala nu", totalOre: 100_000,
+};
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({
@@ -185,6 +209,20 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     expect(persistGeneratedDoc).toHaveBeenCalled();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
+
+  it("dokumentet får fakturans sparade nedbrytning, som på fakturasidan (#1941)", async () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    await succeed(accontoOnSuccess, { invoice: { id: "inv-2", amount: 100_000, invoiceType: "ACCONTO", settlementBreakdown: BREAKDOWN } });
+    const text = await docText();
+    expect(text).toContain("Klientens andel av upparbetat");
+    expect(text).toContain("Att betala nu");
+  });
+
+  it("hjälptexten säger att beloppet bara ändras i undantagsfall (#1941)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    expect(screen.getByText(/Ändra bara beloppet i undantagsfall\. Skillnaden visas som Justering på fakturan\./)).toBeInTheDocument();
+    expect(screen.queryByText(/för att runda av/)).not.toBeInTheDocument();
+  });
 });
 
 describe("BillingDialog — FINAL", () => {
@@ -321,5 +359,13 @@ describe("BillingDialog — FINAL", () => {
     await finalOnSuccess!({ invoice: { id: "inv-7", amount: 590_000 } });
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ id: expect.stringMatching(UUID_RE), invoiceId: "inv-7" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("utan sparad nedbrytning blir dokumentet som förut (#1941)", async () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    await succeed(finalOnSuccess, { invoice: { id: "inv-8", amount: 590_000 } });
+    const text = await docText();
+    expect(text).not.toContain("Klientens andel av upparbetat");
+    expect(text).not.toContain("Att betala nu");
   });
 });

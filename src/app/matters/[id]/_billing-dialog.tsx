@@ -15,7 +15,7 @@ import { VatBreakdown } from "@/components/billing/vat-breakdown";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
-import type { FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
+import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
@@ -79,15 +79,21 @@ function recipientLabel(recipient: string, clientName?: string): string {
  * specifikation därefter, för BÅDE aconto och slutfaktura. Tider/utlägg och
  * avdragna aconto-fakturor hämtas ur `invoiceSpecification` — en ren aconto har
  * inga länkade rader och faller då tillbaka på fakturans `notes`-rad (#870).
+ * Fakturans sparade nedbrytning (acontot, #1940) följer med som på fakturasidan
+ * (#1941); en faktura utan nedbrytning får samma dokument som förut.
  */
-function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: FakturaDocInvoice, recipient: string) => Promise<void> {
+type DocInvoice = FakturaDocInvoice & { settlementBreakdown?: FakturaBreakdown | null | undefined };
+
+function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: DocInvoice, recipient: string) => Promise<void> {
   const register = trpc.document.register.useMutation();
   const utils = trpc.useUtils();
   const docMeta = docMetaFrom(meta);
-  return async (invoice: FakturaDocInvoice, recipient: string) => {
+  return async (invoice: DocInvoice, recipient: string) => {
     try {
       const spec = await utils.billingRun.invoiceSpecification.fetch({ matterId, invoiceId: invoice.id });
-      await generateFakturaFromTemplate({ invoice, matterId, recipient, meta: docMeta, register, utils, spec });
+      await generateFakturaFromTemplate({
+        invoice, matterId, recipient, meta: docMeta, register, utils, spec, breakdown: invoice.settlementBreakdown,
+      });
     } catch (e) { console.warn("[billing] faktura-dokument misslyckades:", e); }
   };
 }
@@ -135,7 +141,7 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
     }); }} className="space-y-3">
       <p className="text-sm text-gray-600">
         Acconto baseras på klientens självrisk-/avgifts-procentsats × upparbetat värde,
-        minus tidigare aconton. Justera beloppet vid behov (t.ex. för att runda av).
+        minus tidigare aconton. Ändra bara beloppet i undantagsfall. Skillnaden visas som Justering på fakturan.
       </p>
       <ProposalSummary workValueOre={workValueOre} priorOre={priorOre} suggestedOre={suggestedOre} />
       <Field label="Klientens andel (procent)">
