@@ -13,9 +13,11 @@ import type { SpecDeduction } from "@/lib/shared/invoice-specification";
 import { isKrWorkEntry } from "@/lib/shared/kostnadsrakning";
 import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
-import type { BillingRun } from "@/lib/shared/schemas/billing";
+import type { BillingRun, Expense, TimeEntry } from "@/lib/shared/schemas/billing";
 import type { BillingRunRecipient } from "@/lib/shared/schemas/enums";
-import { asId, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import {
+  asId, type BillingRunId, type ExpenseId, type InvoiceId, type MatterId, type OrganizationId, type TimeEntryId,
+} from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { newRowId, type QueuedCallScope } from "../../queued-call";
 import type { Repositories } from "../../repositories/repositories";
@@ -65,6 +67,45 @@ export async function accontoDeductionsByInvoiceIds(
 export async function priorAccontoDeductions(repos: Repositories, orgId: OrganizationId, matterId: MatterId): Promise<SpecDeduction[]> {
   const runs = await repos.billingRuns.listAccontoSent(matterId);
   return accontoDeductionsByInvoiceIds(repos, orgId, runs.map((r) => r.invoiceId));
+}
+
+/** Valda poster med hela raderna (#734, #1889). */
+export interface SelectedWork { timeEntries: TimeEntry[]; expenses: Expense[] }
+
+/**
+ * De valda posterna (#734, #1889), validerade som ofakturerade och olåsta i
+ * ärendet (#1862), med hela raderna. `null` när inget id anges: anroparen tar då
+ * allt ofryst. PRUTNING-utlägg utesluts (de länkas separat i kostnadsräknings-
+ * flödet). Delas av `createFinal` och `createKostnadsrakning`.
+ */
+export async function fetchSelectedWork(
+  repos: Repositories,
+  matterId: MatterId,
+  ids: { timeEntryIds?: TimeEntryId[] | undefined; expenseIds?: ExpenseId[] | undefined },
+): Promise<SelectedWork | null> {
+  if (ids.timeEntryIds === undefined && ids.expenseIds === undefined) return null;
+  const teIds = ids.timeEntryIds ?? [];
+  const exIds = ids.expenseIds ?? [];
+  const selTime = await repos.timeEntries.listUnbilled(matterId, teIds);
+  const selExp = await repos.expenses.listUnbilled(matterId, exIds);
+  if (selTime.length !== teIds.length || selExp.length !== exIds.length) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Någon vald post är redan fakturerad eller tillhör annat ärende." });
+  }
+  return { timeEntries: selTime, expenses: selExp.filter((e) => e.kind !== "PRUTNING") };
+}
+
+/** Frys valda poster (per post) eller, utan urval, hela ärendets ofrysta arbete. */
+export async function freezeSelectedWork(
+  repos: Repositories,
+  a: { matterId: MatterId; selected: SelectedWork | null; runId: BillingRunId; now: Date },
+): Promise<void> {
+  const { matterId, selected, runId, now } = a;
+  if (!selected) {
+    await freezeWork(repos, matterId, runId, now);
+    return;
+  }
+  await repos.timeEntries.freezeByIds(selected.timeEntries.map((t) => t.id), runId, now);
+  await repos.expenses.freezeByIds(selected.expenses.map((e) => e.id), runId, now);
 }
 
 export async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {

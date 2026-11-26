@@ -17,6 +17,8 @@ import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 import type { KrRunClaim } from "./_ersattning-section";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
+import { selectedTotals, UnbilledPosts, type SelectedPostIds } from "./_post-selection";
+import { useKrPosts } from "./_use-kr-posts";
 
 export interface MatterContext {
   matterNumber: string;
@@ -124,8 +126,8 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
   // Skapa (och frys) först när PDF:en faktiskt genererats — att stänga modalen
   // (Avbryt/Escape/X) skapade förut en inskickad KR av misstag (#1121). Körningens
   // id länkar sedan dokumentet (#1230).
-  const createRun = async (claim: KrRunClaim): Promise<BillingRunId> => {
-    const { run } = await createKr.mutateAsync({ matterId, ...claim });
+  const createRun = async (claim: KrRunClaim, posts: SelectedPostIds): Promise<BillingRunId> => {
+    const { run } = await createKr.mutateAsync({ matterId, ...claim, ...posts });
     onRecorded();
     return run.id;
   };
@@ -152,68 +154,69 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
 /**
  * Rättshjälpens kostnadsräkning till domstol (#806) — enkel bekräftelse (arbetet
  * värderas på timkostnadsnormen vid domen, inte brottmålstaxan). Skickar in
- * kostnadsräkningen, vilket fryser det upparbetade direkt; domen slutregleras
- * separat (klientens självrisk, statens del, ev. byrå-förlust).
+ * kostnadsräkningen, vilket fryser de valda posterna direkt (#1889); domen
+ * slutregleras separat (klientens självrisk, statens del, ev. byrå-förlust).
  */
 /** Samlar rättshjälps-KR:ns data + skapar billing-run:en OCH ett KR-dokument
  *  (#828 steg 4). Utbrutet ur dialogen så den håller sig under complexity 8. */
 function useRattshjalpKr(matterId: MatterId, matter: MatterContext, onClose: () => void, onRecorded: () => void) {
-  const proposal = trpc.billingRun.proposal.useQuery({ matterId });
   const krData = useKrModalData(matterId);
-  const timeEntries = trpc.timeEntry.list.useQuery({ matterId, pageSize: 100 });
+  const posts = useKrPosts(matterId, krData.expenses);
   const register = trpc.document.register.useMutation();
   const utils = trpc.useUtils();
-  const create = trpc.billingRun.createKostnadsrakning.useMutation({
-    onSuccess: async ({ run }) => {
-      // KR-dokumentet är en presentation av det inskickade — misslyckas det
-      // ska billing-run:en ändå stå kvar (best-effort), så fånga felet.
-      try {
-        await generateKrDoc({
-          matterId, register, utils,
-          meta: {
-            matterNumber: matter.matterNumber, matterTitle: matter.title, defenderName: krData.defenderName,
-            ...krDocumentFieldsOf(krData, matter),
-            ...omitUndefined({
-              clientName: clientOf(matter) || undefined, courtName: courtOf(matter),
-              defenderEmail: krData.defenderEmail, organizationName: krData.organizationName,
-              organizationOrgNumber: krData.organizationOrgNumber, organizationAddress: krData.organizationAddress,
-              radgivningPaid: matter.radgivningBetaldAt ? true : undefined,
-            }),
-          },
-          expenses: krData.expenses,
-          // Låsta poster (redan fakturerade, t.ex. rådgivningstimmen) utelämnas av
-          // byggaren; de som just DENNA kostnadsräkning frös är dess underlag (#1205).
-          timeEntries: timeEntries.data?.entries ?? [],
-          ownBillingRunId: run.id,
-        });
-      } catch (e) { console.warn("[rättshjälp-kr] dokument misslyckades:", e); }
-      onRecorded(); onClose();
-    },
-  });
-  return { proposal, create };
+  const create = trpc.billingRun.createKostnadsrakning.useMutation();
+  const submit = async (): Promise<void> => {
+    // Dokumentet byggs på exakt de poster som skickas (#1255, #1889) — fångade
+    // före anropet, så att ett förslag som läses om efter frysningen inte ändrar dem.
+    const { entries, expenses } = posts;
+    const { run } = await create.mutateAsync({ matterId, ...posts.selection.ids });
+    // KR-dokumentet är en presentation av det inskickade — misslyckas det
+    // ska billing-run:en ändå stå kvar (best-effort), så fånga felet.
+    try {
+      await generateKrDoc({
+        matterId, register, utils,
+        meta: {
+          matterNumber: matter.matterNumber, matterTitle: matter.title, defenderName: krData.defenderName,
+          ...krDocumentFieldsOf(krData, matter),
+          ...omitUndefined({
+            clientName: clientOf(matter) || undefined, courtName: courtOf(matter),
+            defenderEmail: krData.defenderEmail, organizationName: krData.organizationName,
+            organizationOrgNumber: krData.organizationOrgNumber, organizationAddress: krData.organizationAddress,
+            radgivningPaid: matter.radgivningBetaldAt ? true : undefined,
+          }),
+        },
+        expenses,
+        // Låsta poster (redan fakturerade, t.ex. rådgivningstimmen) utelämnas av
+        // byggaren; de som just DENNA kostnadsräkning frös är dess underlag (#1205).
+        timeEntries: entries,
+        ownBillingRunId: run.id,
+      });
+    } catch (e) { console.warn("[rättshjälp-kr] dokument misslyckades:", e); }
+    onRecorded(); onClose();
+  };
+  return { posts, create, submit };
 }
 
 function RattshjalpKrDialog({ matterId, matter, onClose, onRecorded }: { matterId: MatterId; matter: MatterContext; onClose: () => void; onRecorded: () => void }) {
-  const { proposal, create } = useRattshjalpKr(matterId, matter, onClose, onRecorded);
-  const d = proposal.data;
-  const arvodeOre = d ? d.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0) : 0;
-  const utlaggOre = d ? d.expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0) : 0;
+  const { posts, create, submit } = useRattshjalpKr(matterId, matter, onClose, onRecorded);
+  const { timeOre, expenseOre } = selectedTotals(posts.selection);
   return (
     <Modal open title="Kostnadsräkning till domstol" onClose={onClose} widthClass="max-w-md">
       <div className="space-y-3">
         <p className="text-sm text-gray-600">
           Kostnadsräkningen skapas och sparas i ärendet — du skickar den till domstolen
-          i nästa steg. Den är ingen faktura och kan prutas. Det upparbetade fryses nu;
+          i nästa steg. Den är ingen faktura och kan prutas. De valda posterna fryses nu;
           vid domen slutreglerar du (klientens självrisk, statens del och ev. byrå-förlust).
         </p>
+        <UnbilledPosts selection={posts.selection} loading={posts.loading} />
         <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 space-y-1 text-sm">
-          <div className="flex justify-between text-gray-700"><span>Arvode (exkl moms)</span><span className="font-mono">{formatCurrency(arvodeOre)}</span></div>
-          <div className="flex justify-between text-gray-700"><span>Utlägg</span><span className="font-mono">{formatCurrency(utlaggOre)}</span></div>
+          <div className="flex justify-between text-gray-700"><span>Arvode (exkl moms)</span><span className="font-mono">{formatCurrency(timeOre)}</span></div>
+          <div className="flex justify-between text-gray-700"><span>Utlägg</span><span className="font-mono">{formatCurrency(expenseOre)}</span></div>
         </div>
         {create.error && <p className="text-sm text-red-700">{create.error.message}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">Avbryt</button>
-          <button type="button" disabled={create.isPending} onClick={() => create.mutate({ matterId })}
+          <button type="button" disabled={create.isPending || posts.loading} onClick={() => void submit().catch(() => { /* felet visas via create.error */ })}
             className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
             {create.isPending ? "Skapar…" : "Skapa kostnadsräkning"}
           </button>

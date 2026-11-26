@@ -16,16 +16,13 @@
  *     `kostnadsrakning.generated`-event så byrå-regler kan trigga.
  */
 
-import type { inferRouterInputs } from "@trpc/server";
 import { Clock, FileText, X, AlertTriangle, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { bytesToBase64 } from "@/lib/client/bytes-base64";
 import { persistGeneratedDoc } from "@/lib/client/demo/persist-generated-doc";
-import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
+import { useHelper } from "@/lib/client/helper/use-helper";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { buildKostnadsrakningContext, hasHearingEntry, withDocumentFields, type KrDocumentFields } from "@/lib/shared/kostnadsrakning";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
@@ -36,6 +33,9 @@ import { uuidv7 } from "@/lib/shared/uuid";
 import {
   AvslutChoice, ErsattningSection, ForhorSection, forhorOf, forordnandeInputOf, krRunClaimOf, type KrRunClaim, useErsattning,
 } from "./_ersattning-section";
+import { maybeComposeMail, recordDocument } from "./_kostnadsrakning-record";
+import { UnbilledPosts, type SelectedPostIds } from "./_post-selection";
+import { useKrPosts } from "./_use-kr-posts";
 
 /** Dokumentfälten (#1218) — målnummer, titel och byråns sidfot — ärvs från KrDocumentFields. */
 interface Props extends KrDocumentFields {
@@ -67,8 +67,8 @@ interface Props extends KrDocumentFields {
    *  Escape/X skapade förut en inskickad KR, #1121). Id:t länkar dokumentet till
    *  körningen så att "Ångra kostnadsräkning" kan ta bort det (#1230). Dialogens
    *  huvudförhandling, nivå och taxeval följer med: servern yrkar samma taxa som
-   *  dokumentet (#1024). */
-  createRun: (claim: KrRunClaim) => Promise<BillingRunId>;
+   *  dokumentet (#1024). Urvalet ur postlistan (#1889) följer också med. */
+  createRun: (claim: KrRunClaim, posts: SelectedPostIds) => Promise<BillingRunId>;
 }
 
 function toDatetimeLocalValue(d: Date): string {
@@ -81,88 +81,6 @@ function defaultStart(stored?: string | Date | null): string {
   const d = new Date();
   d.setHours(9, 0, 0, 0);
   return toDatetimeLocalValue(d);
-}
-
-type RouterInputs = inferRouterInputs<AppRouter>;
-type DocListFilter = RouterInputs["document"]["list"];
-type DocTreeFilter = RouterInputs["document"]["tree"];
-
-interface RecordDocOpts {
-  recordKostn: { mutateAsync: (i: RouterInputs["kostnadsrakning"]["record"]) => Promise<unknown> };
-  utils: {
-    document: {
-      list: { invalidate: (filter?: DocListFilter) => Promise<unknown> };
-      tree: {
-        invalidate: (filter?: DocTreeFilter) => Promise<unknown>;
-        refetch: (filter?: DocTreeFilter) => Promise<unknown>;
-      };
-    };
-  };
-  docId: string;
-  matterId: MatterId;
-  billingRunId: BillingRunId;
-  fileName: string;
-  storagePath: string;
-  bytes: Uint8Array;
-  totalInclVat: number;
-  huvudforhandlingMinutes: number;
-}
-
-async function recordDocument(opts: RecordDocOpts): Promise<void> {
-  // Steg 1 MÅSTE lyckas. Om mutationen kastar propagerar vi felet så att
-  // generate() visar en RIKTIG felruta istället för en falsk "sparad"-banner.
-  // (Tidigare svaldes ALLT här → server-mutationen kunde rejekta på read-only
-  // event-log utan att dokumentet skapades, men UI:t sa ändå "sparad".)
-  await opts.recordKostn.mutateAsync({
-    id: opts.docId, matterId: opts.matterId, fileName: opts.fileName,
-    mimeType: "application/pdf", sizeBytes: opts.bytes.byteLength,
-    storagePath: opts.storagePath, totalInclVat: opts.totalInclVat,
-    huvudforhandlingMinutes: opts.huvudforhandlingMinutes,
-    billingRunId: opts.billingRunId,
-  });
-  // Steg 2 (invalidering) är best-effort — dokumentet är redan registrerat,
-  // så ett invaliderings-hicka ska inte blockera success. DocumentBrowser
-  // använder document.tree; faktura-panelen document.list. Invalidera båda +
-  // tvinga explicit refetch på tree (R-Q v5 + tRPC v11 håller annars ibland
-  // cached data tills nästa mount).
-  try {
-    await opts.utils.document.tree.invalidate({ matterId: opts.matterId });
-    await opts.utils.document.tree.refetch({ matterId: opts.matterId });
-    await opts.utils.document.list.invalidate({ matterId: opts.matterId });
-    await opts.utils.document.list.invalidate();
-  } catch (e) {
-    console.warn("[kostnadsrakning] dokument-invalidering misslyckades (best-effort):", e);
-  }
-}
-
-interface MailOpts {
-  helperAvailable: boolean;
-  fileName: string;
-  bytes: Uint8Array;
-  matterNumber: string;
-  matterTitle: string;
-  clientName: string;
-  huvudforhandlingFormatted: string;
-  totalInclFormatted: string;
-}
-
-async function maybeComposeMail(opts: MailOpts): Promise<boolean> {
-  if (!opts.helperAvailable) return false;
-  const body = [
-    `Mål: ${opts.matterNumber} (${opts.matterTitle})`,
-    `Klient: ${opts.clientName}`,
-    `Förhandlingstid: ${opts.huvudforhandlingFormatted}`,
-    `Totalt att fakturera: ${opts.totalInclFormatted}`,
-    "",
-    "Kostnadsräkning bifogas.",
-  ].join("\n");
-  return composeMailViaHelper({
-    fileName: opts.fileName,
-    contentBase64: bytesToBase64(opts.bytes),
-    mimeType: "application/pdf",
-    subject: `Kostnadsräkning Mål ${opts.matterNumber}`,
-    body,
-  });
 }
 
 /**
@@ -214,13 +132,14 @@ function useKostnadsrakningModal(props: Props) {
   const matterUpdate = trpc.matter.update.useMutation();
   const utils = trpc.useUtils();
   const recordKostn = trpc.kostnadsrakning.record.useMutation();
-  // Tidsregistreringar — billable rader inkluderas i kostnadsräkningen.
+  // De valda posterna (#1889) — billable rader inkluderas i kostnadsräkningen.
   // För icke-taxa-ärenden räknas de in i arvodes-summan; för taxa-ärenden
-  // visas de bara som specifikation (beloppet styrs av taxa).
-  const timeEntries = trpc.timeEntry.list.useQuery({ matterId: props.matterId, pageSize: 100 });
-  // Förhandlingsklockan bara när ärendet haft en förhandling (en "Deltagit i
-  // förhandling"-post). Annars: bara ärendets poster, utan klocka och taxa.
-  const hearing = hasHearingEntry(timeEntries.data?.entries ?? []);
+  // visas de bara som specifikation (beloppet styrs av taxa). Dokumentet och
+  // servern får exakt samma poster.
+  const posts = useKrPosts(props.matterId, props.expenses);
+  // Förhandlingsklockan bara när en vald post är "Deltagit i förhandling".
+  // Annars: bara de valda posterna, utan klocka och taxa.
+  const hearing = hasHearingEntry(posts.entries);
   const choice = useErsattning({ initialIsTaxe: props.initialIsTaxe, isOffentligtUppdrag: props.isOffentligtUppdrag ?? false, hearing });
   const { ersattning, avslut } = choice;
   const claim = effectiveHearing(hearing, hufStart, hufEnd, ersattning === "taxa");
@@ -245,11 +164,11 @@ function useKostnadsrakningModal(props: Props) {
     hasFTax,
     isTaxeArende: ersattning !== "lopande",
     // Förordnandemålet (#1858): förhören ur posterna i stället för klockan.
-    ...forordnandeInputOf(ersattning, timeEntries.data?.entries ?? [], avslut),
-    expenses: props.expenses,
+    ...forordnandeInputOf(ersattning, posts.entries, avslut),
+    expenses: posts.expenses,
     // Låsta (redan fakturerade/redovisade) poster utelämnas av byggaren (#1205).
-    timeEntries: timeEntries.data?.entries ?? [],
-  }, props)), [hufStart, claim.hufEnd, yrkandeDate, level, ersattning, avslut, hasFTax, props, timeEntries.data]);
+    timeEntries: posts.entries,
+  }, props)), [hufStart, claim.hufEnd, yrkandeDate, level, ersattning, avslut, hasFTax, props, posts.entries, posts.expenses]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };
@@ -282,7 +201,7 @@ function useKostnadsrakningModal(props: Props) {
         },
       });
       const storagePath = `documents/content/${docId}.pdf`;
-      const billingRunId = await props.createRun(runClaim);
+      const billingRunId = await props.createRun(runClaim, posts.selection.ids);
       // Innehåll: in-memory blob-cache (öppna nu) + FSA (self-hosted) + demo-slab
       // (överlever reload). Metadata-raden skapas separat av recordDocument.
       await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });
@@ -311,8 +230,8 @@ function useKostnadsrakningModal(props: Props) {
   return {
     hufStart, setHufStart, hufEnd, setHufEnd, level, setLevel,
     generating, error, done, helper, ctx, stoppaNu, generate,
-    hearing, showHuf, entriesLoading: timeEntries.isLoading,
-    ...choice, entries: timeEntries.data?.entries ?? [], ready: runClaim !== null,
+    hearing, showHuf, entriesLoading: posts.loading, selection: posts.selection,
+    ...choice, entries: posts.entries, ready: runClaim !== null,
   };
 }
 
@@ -335,6 +254,7 @@ export function KostnadsrakningModal(props: Props) {
 
         <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
           <BasisSections k={k} />
+          <UnbilledPosts selection={k.selection} loading={k.entriesLoading} />
           <TimeSpecSection ctx={ctx} isTaxe={k.ersattning !== "lopande"} />
           <PreviewSection ctx={ctx} />
           <HelperStatusNote helper={k.helper} />

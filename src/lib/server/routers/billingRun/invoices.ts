@@ -26,7 +26,6 @@ import {
   timeEntryIdSchema,
   expenseIdSchema,
   asId,
-  type BillingRunId,
   type ExpenseId,
   type InvoiceId,
   type MatterId,
@@ -42,55 +41,31 @@ import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../../
 import type { Repositories } from "../../repositories/repositories";
 import { orgProcedure } from "../../trpc";
 import {
-  assertFlowAction, fetchDeductedAccontoRuns, fetchUnfrozenWork,
-  freezeWork, invoiceNumbering, linkFinalInvoice, priorAccontoDeductions, sumPriorAccontos,
+  assertFlowAction, fetchDeductedAccontoRuns, fetchSelectedWork, fetchUnfrozenWork, freezeSelectedWork,
+  invoiceNumbering, linkFinalInvoice, priorAccontoDeductions, sumPriorAccontos, type SelectedWork,
 } from "./shared";
 
 /**
  * Vilket arbete ska slutfaktureras (#734)? Anges `timeEntryIds`/`expenseIds`
- * fakturerar vi ENBART dem (per-post-val, validerade som ofakturerade i ärendet);
- * utelämnas båda tar vi allt ofryst (modellens default). PRUTNING-utlägg utesluts
- * (de länkas separat i kostnadsräknings-flödet).
+ * fakturerar vi ENBART dem (`fetchSelectedWork`); utelämnas båda tar vi allt
+ * ofryst (modellens default).
  */
 async function resolveFinalWork(
   repos: Repositories,
   matterId: MatterId,
-  timeEntryIds: TimeEntryId[] | undefined,
-  expenseIds: ExpenseId[] | undefined,
-): Promise<{ work: UnfrozenWork; selected: boolean }> {
-  if (timeEntryIds === undefined && expenseIds === undefined) {
-    return { work: await fetchUnfrozenWork(repos, matterId), selected: false };
-  }
-  const teIds = timeEntryIds ?? [];
-  const exIds = expenseIds ?? [];
-  const selTime = await repos.timeEntries.listUnbilled(matterId, teIds);
-  const selExp = await repos.expenses.listUnbilled(matterId, exIds);
-  if (selTime.length !== teIds.length || selExp.length !== exIds.length) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Någon vald post är redan fakturerad eller tillhör annat ärende." });
-  }
+  ids: { timeEntryIds?: TimeEntryId[] | undefined; expenseIds?: ExpenseId[] | undefined },
+): Promise<{ work: UnfrozenWork; selected: SelectedWork | null }> {
+  const selected = await fetchSelectedWork(repos, matterId, ids);
+  if (!selected) return { work: await fetchUnfrozenWork(repos, matterId), selected };
   return {
     work: {
       // Postens eget á-pris — samma som ovalda poster (fetchUnfrozenWork): priset
       // sparades på posten vid registrering/kategoribyte (#1206).
-      timeEntries: selTime,
-      expenses: selExp.filter((e) => e.kind !== "PRUTNING").map((e) => ({ id: e.id, amount: e.amount, billable: e.billable, vatRate: e.vatRate, vatIncluded: e.vatIncluded })),
+      timeEntries: selected.timeEntries,
+      expenses: selected.expenses.map((e) => ({ id: e.id, amount: e.amount, billable: e.billable, vatRate: e.vatRate, vatIncluded: e.vatIncluded })),
     },
-    selected: true,
+    selected,
   };
-}
-
-/** Frys valda poster (per-post) eller hela ärendet (default). */
-async function freezeSelectedWork(
-  repos: Repositories,
-  a: { matterId: MatterId; work: UnfrozenWork; selected: boolean; runId: BillingRunId; now: Date },
-): Promise<void> {
-  const { matterId, work, runId, now } = a;
-  if (!a.selected) {
-    await freezeWork(repos, matterId, runId, now);
-    return;
-  }
-  await repos.timeEntries.freezeByIds(work.timeEntries.map((t) => t.id), runId, now);
-  await repos.expenses.freezeByIds(work.expenses.map((e) => e.id), runId, now);
 }
 
 /**
@@ -204,7 +179,7 @@ export const invoiceProcedures = {
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
         await assertFlowAction(tx, ctx.orgId, input.matterId, "FINAL");
-        const { work, selected } = await resolveFinalWork(tx, input.matterId, input.timeEntryIds, input.expenseIds);
+        const { work, selected } = await resolveFinalWork(tx, input.matterId, input);
         // Brutto = arvode inkl. 25 % moms + utlägg (#782).
         const grossValue = invoiceGrossOre(work);
         const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, input.deductedBillingRunIds);
@@ -230,7 +205,7 @@ export const invoiceProcedures = {
           invoiceId: invoice.id, deductedBillingRunIds: input.deductedBillingRunIds,
           periodTo: at, notes: input.notes,
         });
-        await freezeSelectedWork(tx, { matterId: input.matterId, work, selected, runId: run.id, now: at });
+        await freezeSelectedWork(tx, { matterId: input.matterId, selected, runId: run.id, now: at });
         // Länka posterna + acconto-avdrag → slutfaktura-vyn visar rätt arvode/utlägg (#728).
         await linkFinalInvoice(tx, invoice.id, work, accontoInvoiceIds(deductedRuns), ctx);
         await logMatterNote(tx, ctx, input.matterId, invoiceCreatedNote(invoice.invoiceNumber, "FINAL", invoice.amount), invoiceDate);

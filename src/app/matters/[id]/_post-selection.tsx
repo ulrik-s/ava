@@ -111,6 +111,19 @@ function DateField({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
+/** De valda posterna ur en lista (#1889): `te` för tidsposter, `ex` för utlägg. */
+export function selectedPosts<T extends { id: string }>(items: ReadonlyArray<T>, prefix: "te" | "ex", selected: ReadonlyArray<string>): T[] {
+  return items.filter((p) => selected.includes(`${prefix}-${p.id}`));
+}
+
+/** Valt värde för tidsposterna och utläggen var för sig (#1889). */
+export function selectedTotals(selection: Pick<PostSelection, "rows" | "selected">): { timeOre: number; expenseOre: number } {
+  const sum = (prefix: string): number => selection.rows
+    .filter((p) => p.id.startsWith(prefix) && selection.selected.includes(p.id))
+    .reduce((s, p) => s + p.valueOre, 0);
+  return { timeOre: sum("te-"), expenseOre: sum("ex-") };
+}
+
 /** Dela upp valda post-nycklar (`te-…`/`ex-…`) i id-listor för createFinal. `null` → utelämna (allt). */
 function splitSelectedPosts(posts: string[] | null): SelectedPostIds {
   if (posts === null) return {};

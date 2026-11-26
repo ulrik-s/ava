@@ -35,7 +35,6 @@ let radgivningError: { message: string } | null = null;
 const krMutate = vi.fn();
 const krMutateAsync = vi.fn(async () => ({ run: { id: "run-new" } }));
 let createdRunId: string | null = null;
-let krOpts: { onSuccess?: (res: { run: { id: string } }) => Promise<void> } | undefined;
 const generateKrDocFn = vi.fn(async () => {});
 const voidMutate = vi.fn();
 let voidOpts: { onSuccess?: () => void } | undefined;
@@ -61,7 +60,7 @@ vi.mock("@/lib/client/trpc", () => ({
       list: { useQuery: () => ({ data: runsData, isLoading: runsLoading, refetch }) },
       proposal: { useQuery: () => ({ data: proposalData, isLoading: false }) },
       createKostnadsrakning: {
-        useMutation: (opts?: typeof krOpts) => { krOpts = opts; return { mutate: krMutate, mutateAsync: krMutateAsync, isPending: false }; },
+        useMutation: () => ({ mutate: krMutate, mutateAsync: krMutateAsync, isPending: false }),
       },
       appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       voidKostnadsrakning: { useMutation: (opts?: typeof voidOpts) => { voidOpts = opts; return { mutate: voidMutate, isPending: false, error: null }; } },
@@ -404,9 +403,9 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     fireEvent.click(screen.getByRole("button", { name: "Skapa kostnadsräkning" }));
-    await krOpts?.onSuccess?.({ run: { id: "kr-1" } });
+    await waitFor(() => expect(generateKrDocFn).toHaveBeenCalled());
     expect(generateKrDocFn).toHaveBeenCalledWith(expect.objectContaining({
-      ownBillingRunId: "kr-1", timeEntries: [],
+      ownBillingRunId: "run-new", timeEntries: [],
       meta: expect.objectContaining({ radgivningPaid: true }),
     }));
   });
