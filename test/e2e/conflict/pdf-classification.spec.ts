@@ -30,8 +30,13 @@ const PDF = Buffer.from(flatePdf([
 
 type Admin = ReturnType<typeof clientFor>;
 
+/**
+ * Dokumentets klassning, var i ärendet det än ligger: namnrutan föreslår en
+ * mapp ur namnet (#1975), så `skanning-….pdf` hamnar i Övrigt och inte i roten
+ * som `document.list` listar.
+ */
 async function classification(admin: Admin, matterId: string, fileName: string): Promise<string> {
-  const { documents } = await admin.document.list.query({ matterId: asId<"MatterId">(matterId) });
+  const { documents } = await admin.document.tree.query({ matterId: asId<"MatterId">(matterId) });
   const doc = documents.find((d) => d.fileName === fileName);
   return doc ? `${doc.analysisStatus}:${doc.documentType ?? ""}` : "saknas";
 }
@@ -49,7 +54,8 @@ test("uppladdad PDF klassas ur texten i server-binären — också när servern 
 
   const upload = async (name: string): Promise<void> => {
     await page.locator('input[type="file"]').first().setInputFiles({ name, mimeType: "application/pdf", buffer: PDF });
-    // + Ladda upp går genom namnrutan (#1976); det förifyllda namnet behålls.
+    // + Ladda upp går genom namnrutan (#1976); det förifyllda namnet och den
+    // föreslagna mappen behålls.
     await page.getByRole("dialog", { name: "Namnge dokumentet" }).getByRole("button", { name: "Spara" }).click();
     await expect(page.getByText(name).first()).toBeVisible({ timeout: 30_000 });
   };
