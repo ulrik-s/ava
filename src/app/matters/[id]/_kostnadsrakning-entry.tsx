@@ -15,7 +15,8 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { OrgImage } from "@/lib/shared/org-image";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
-import { type KrRunClaim, KostnadsrakningModal } from "./_kostnadsrakning-modal";
+import type { KrRunClaim } from "./_ersattning-section";
+import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 
 export interface MatterContext {
   matterNumber: string;
@@ -141,6 +142,7 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
       initialHufStart={matter.taxaHufStart ?? undefined}
       initialIsTaxe={matter.isTaxeArende ?? undefined}
       radgivningPaid={!!matter.radgivningBetaldAt}
+      isOffentligtUppdrag={matter.paymentMethod === "OFFENTLIGT_UPPDRAG"}
       onClose={onClose}
       createRun={createRun}
     />
