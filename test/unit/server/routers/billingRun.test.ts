@@ -15,6 +15,7 @@ import { appRouter } from "@/lib/server/routers/_app";
 import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { asId } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
+import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 
 const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
@@ -123,8 +124,8 @@ describe("billingRun.proposal (#397)", () => {
     const { caller } = makeCaller({ workMinutes: 450, paymentMethod: "RATTSHJALP", hourlyRate: 0 });
     const p = await caller.billingRun.proposal({ matterId: "m-1" });
     const norm = timkostnadsnormFtaxForDate(new Date());
-    expect(p.workValueOre).toBe(Math.round((450 / 60) * norm));
-    expect(p.timeEntries[0]?.valueOre).toBe(Math.round((450 / 60) * norm));
+    expect(p.workValueOre).toBe(timeEntryValueOre(450, norm));
+    expect(p.timeEntries[0]?.valueOre).toBe(timeEntryValueOre(450, norm));
   });
 
   it("rättsskydd: normen, ingen rådgivningstimme", async () => {

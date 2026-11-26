@@ -7,6 +7,7 @@
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
 import { isInvoicedOutsideCoverage, unlockedMatch } from "@/lib/shared/time-entry-lock";
+import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository, withDateObject } from "./in-memory-repository";
 import type {
@@ -124,7 +125,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     for (const t of rows) {
       if (!t.billable || isInvoicedOutsideCoverage(t)) continue;
       billableMinutes += t.minutes;
-      billableValueOre += Math.round((t.minutes / 60) * (t.hourlyRate ?? 0));
+      billableValueOre += timeEntryValueOre(t.minutes, t.hourlyRate ?? 0);
     }
     return { billableMinutes, billableValueOre };
   }
@@ -138,7 +139,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
       if (!t.billable || !wanted.has(t.matterId) || isInvoicedOutsideCoverage(t)) continue;
       const acc = out[t.matterId] ?? { billableMinutes: 0, billableValueOre: 0 };
       acc.billableMinutes += t.minutes;
-      acc.billableValueOre += Math.round((t.minutes / 60) * (t.hourlyRate ?? 0));
+      acc.billableValueOre += timeEntryValueOre(t.minutes, t.hourlyRate ?? 0);
       out[t.matterId] = acc;
     }
     return out;

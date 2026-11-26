@@ -27,6 +27,7 @@
  *   bun run e2e:billing-scenarios     # startar docker, migrerar, kör, river
  */
 
+import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import {
   assert, clientFor, kr, seedUser, waitForServer, type Ava,
 } from "./e2e-harness";
@@ -142,7 +143,7 @@ export async function runCoverageScenario(c: Ava, userId: string, sc: Scenario, 
   // Rättshjälp (#1205): den låsta rådgivningsposten ligger UTANFÖR anspråket, och
   // ingen registrerad tid dras av i dess ställe → hela 10 h, varken 9 eller 11.
   if (sc.paymentMethod === "RATTSHJALP") {
-    const helaArbetet = Math.round((WORK_MINUTES / 60) * NORM_ORE * VAT);
+    const helaArbetet = Math.round(timeEntryValueOre(WORK_MINUTES, NORM_ORE) * VAT);
     assert(Math.abs(sum - helaArbetet) <= ROUNDING_TOLERANCE_ORE,
       `anspråket ≠ registrerat arbete: ${kr(sum)} ≠ ${kr(helaArbetet)}`);
     console.log("  ✓ Rådgivningstimmen ligger utanför anspråket, registrerad tid är orörd (#1205)");

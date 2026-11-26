@@ -90,6 +90,24 @@ const RESTRICTED_TZLESS_FORMAT = [
   },
 ];
 
+/**
+ * Arvodesformeln har EN plats (#2174): `timeEntryValueOre(minuter, taxa)` i
+ * `src/lib/shared/whole-kronor.ts`. Inline-formeln `(minuter / 60) * taxa`
+ * fälls överallt annars, så avrundningen inte glider isär mellan fakturan,
+ * rapporterna och kostnadsräkningen. Träffar en multiplikation där ena
+ * operanden är en division med 60 — oavsett ordning.
+ */
+const RESTRICTED_FEE_FORMULA = [
+  {
+    selector: "BinaryExpression[operator='*'] > BinaryExpression[operator='/'][right.type='Literal'][right.value=60]",
+    message:
+      "Arvodesformeln `(minuter / 60) * taxa` skrivs inte inline — använd timeEntryValueOre(minuter, taxa) från @/lib/shared/whole-kronor (#2174). Är det tid och inte pengar: ge omräkningen ett eget namn.",
+  },
+];
+
+/** Formelns hem: den enda filen som får skriva den. */
+const FEE_FORMULA_HOME = "src/lib/shared/whole-kronor.ts";
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -119,7 +137,8 @@ const eslintConfig = defineConfig([
       // next/typescript:s `warn` → `error` så NYA `any` blockerar CI.
       "@typescript-eslint/no-explicit-any": "error",
       // Dubbel-castar + rå JSON.parse — se RESTRICTED_SYNTAX_BASE ovan.
-      "no-restricted-syntax": ["error", ...RESTRICTED_SYNTAX_BASE],
+      // Arvodesformeln inline — se RESTRICTED_FEE_FORMULA ovan.
+      "no-restricted-syntax": ["error", ...RESTRICTED_SYNTAX_BASE, ...RESTRICTED_FEE_FORMULA],
       // Promise-säkerhet: oavsiktligt obevakade promises, async-callbacks i
       // synkron/void-kontext, och `await` på icke-thenables är vanliga
       // buggkällor som bara typinfo kan upptäcka (#9).
@@ -200,12 +219,21 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unsafe-return": "error",
       "@typescript-eslint/no-unsafe-argument": "error",
       // Kalenderdagen är Stockholmsdagen (#1677) — se RESTRICTED_UTC_DAY ovan.
-      "no-restricted-syntax": ["error", ...RESTRICTED_SYNTAX_BASE, ...RESTRICTED_UTC_DAY],
+      "no-restricted-syntax": ["error", ...RESTRICTED_SYNTAX_BASE, ...RESTRICTED_FEE_FORMULA, ...RESTRICTED_UTC_DAY],
     },
   },
   {
     // Server- och delad kod formaterar inte datum i processens tidszon (#1677).
     files: ["src/lib/server/**/*.ts", "src/lib/shared/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error", ...RESTRICTED_SYNTAX_BASE, ...RESTRICTED_FEE_FORMULA, ...RESTRICTED_UTC_DAY, ...RESTRICTED_TZLESS_FORMAT,
+      ],
+    },
+  },
+  {
+    // Arvodesformelns hem (#2174) — samma lista som ovan, utan formelförbudet.
+    files: [FEE_FORMULA_HOME],
     rules: {
       "no-restricted-syntax": ["error", ...RESTRICTED_SYNTAX_BASE, ...RESTRICTED_UTC_DAY, ...RESTRICTED_TZLESS_FORMAT],
     },

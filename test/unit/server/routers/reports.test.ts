@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { reportsRouter } from "@/lib/server/routers/reports";
+import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {
@@ -72,7 +73,7 @@ describe("reports.perLawyer", () => {
     expect(res!.matters).toHaveLength(1);
     expect(res!.matters[0]!.totalMinutes).toBe(90);
     expect(res!.matters[0]!.billableMinutes).toBe(60);
-    expect(res!.matters[0]!.workValueOre).toBe(60 / 60 * 3000); // 60 min × 3000 öre/h (hourlyRate ÄR öre)
+    expect(res!.matters[0]!.workValueOre).toBe(timeEntryValueOre(60, 3000)); // 60 min × 3000 öre/h (hourlyRate ÄR öre)
     expect(res!.matters[0]!.expenseOre).toBe(50000);
   });
 
@@ -114,7 +115,7 @@ describe("reports.perLawyer", () => {
       from: "2026-01-01", to: "2026-12-31", userId: "u1",
     });
     expect(res!.unbilled.rows).toHaveLength(1);
-    expect(res!.unbilled.rows[0]!.timeOre).toBe(30 / 60 * 1000); // hourlyRate ÄR öre
+    expect(res!.unbilled.rows[0]!.timeOre).toBe(timeEntryValueOre(30, 1000)); // hourlyRate ÄR öre
   });
 
   it("ignorerar non-billable i workValueOre och unbilled", async () => {

@@ -24,7 +24,6 @@ import { isTidsspillanKind } from "./hourly-rate";
 import { ARVODE_VAT_BIPS } from "./invoice-calc";
 import { toIsoDate, toLocalTime } from "./iso-date";
 import { buildKrDocument, krArvodePart, type KrArvodeBasis, type KrArvodePart, type KrDocumentView, type KrHuvudforhandling } from "./kostnadsrakning-document";
-import { timeAmountOre } from "./kostnadsrakning-document-rows";
 import { krClaim, type KrClaim } from "./kr-claim";
 import { formatDecimalHoursWithUnit, formatOreAsKr } from "./kr-format";
 import { omitUndefined } from "./omit-undefined";
@@ -33,7 +32,7 @@ import { radgivningTextRad } from "./rattshjalp";
 import type { ForordnandeAvslut, TimeEntryKind } from "./schemas/enums";
 import type { BillingRunId } from "./schemas/ids";
 import { isLockedEntry, type LockableEntry } from "./time-entry-lock";
-import { roundToKronor, vatOnRow } from "./whole-kronor";
+import { roundToKronor, timeEntryValueOre, vatOnRow } from "./whole-kronor";
 
 export interface ExpenseInput {
   id: string;
@@ -565,7 +564,7 @@ export function buildKostnadsrakningContext(original: BuildInput): Kostnadsrakni
   // Yrkandet avrundas per rad till hela kronor och momsen på summan (#1218).
   const huf: KrHuvudforhandling = {
     start, end, minutes: huvudforhandlingMinutes, rateOrePerH: arvodeNorm,
-    amountOre: Math.round((huvudforhandlingMinutes / 60) * arvodeNorm),
+    amountOre: timeEntryValueOre(huvudforhandlingMinutes, arvodeNorm),
   };
   const basis = arvodeBasis({ input, ford, level, taxa, billable: billableTimeEntries, yrkandeDate, avslut: input.forordnande?.avslut });
   const claim = claimOf(krArvodePart(basis, huf, timeLines), expenseLines);
@@ -633,7 +632,7 @@ const UTANFOR_TEXT = {
 /** Rad för överskjutande tidsspillan, eller null när inget ersätts i kategorin. */
 function tidsspillanRad(label: string, minutes: number, rateOre: number): Record<string, string> | null {
   if (minutes <= 0) return null;
-  return { label, minutesFormatted: formatDecimalHoursWithUnit(minutes), rateFormatted: `${formatOreAsKr(rateOre)}/h`, amountFormatted: formatOreAsKr(timeAmountOre(minutes, rateOre)) };
+  return { label, minutesFormatted: formatDecimalHoursWithUnit(minutes), rateFormatted: `${formatOreAsKr(rateOre)}/h`, amountFormatted: formatOreAsKr(timeEntryValueOre(minutes, rateOre)) };
 }
 
 /** Kostnadsräkningens förordnande-avsnitt: förhören, taxan och tidsspillan. */
