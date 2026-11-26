@@ -516,6 +516,13 @@ komplexitet < 8, jscpd, knip, täckning, Agentvakten).
   krympa men aldrig växa. Krymper en fil måste baslinjen skärpas (`--update`
   kan bara skärpa). Agentvakten låter en agent-PR ändra baslinjen bara åt
   det strängare hållet.
+- **Routertaket** (#2176, samma skript): en tRPC-router
+  (`src/lib/server/routers/`, även undermapparna) får ha högst **250 rader**.
+  Routern validerar indata, väljer procedur och anropar en tjänst under
+  `src/lib/server/<domän>/` (förebild: `loadPeriodWork` i
+  `src/lib/server/reports/period-work.ts`). Routrarna som redan var större
+  står i `tooling/config/router-size-baseline.json`, med samma ratchet och
+  samma undantag i Agentvakten.
 - **ADR:er blir regler:** varje vecka går genomgången igenom nästa ADR:er och
   föreslår högst en ny regel i `dependency-cruiser.cjs` för en gräns som ADR:en
   beskriver men som inte kontrolleras. Regel-PR:en rör `tooling/config/` och

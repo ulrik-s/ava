@@ -110,6 +110,10 @@ Finns ingen: avsluta.
    - Har du krympt en fil i baslinjen säger spärren att baslinjen är för
      generös. Kör då `bun run file-size --update`, som bara kan skärpa, och ta
      med ändringen i PR:en. Agentvakten tillåter just den ändringen.
+   - Routrarna (`src/lib/server/routers/`) har ett lägre tak, 250 rader
+     (`tooling/config/router-size-baseline.json`, samma regler). Lägg
+     domänlogik i en tjänst under `src/lib/server/<domän>/` som tar repona
+     explicit, inte i routern.
 6. Commit (Conventional Commits, svenska, body-rader ≤ 100 tecken; en
    refaktorisering är `refactor(...)`). Rubriken efter `typ(scope): ` börjar
    med **gemen** ("fix(reports): exportera …", inte "Exportera") och är högst
