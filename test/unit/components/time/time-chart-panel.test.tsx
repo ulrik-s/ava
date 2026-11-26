@@ -8,7 +8,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { buildTimeChart, type TimeChartEntry, type TimeChartGranularity } from "@/lib/shared/time-chart";
 
-interface ChartInput { userId: string; from: string; to: string; granularity: TimeChartGranularity }
+interface ChartInput { userId?: string; from: string; to: string; granularity: TimeChartGranularity }
 
 const calls: ChartInput[] = [];
 const state = { entries: [] as TimeChartEntry[], loading: false, pref: undefined as unknown };
@@ -183,6 +183,14 @@ describe("TimeChartPanel", () => {
     state.pref = { view: "fortnight" };
     render(<TimeChartPanel userId={USER} anchorDay="2026-11-24" />);
     expect(screen.getByRole("button", { name: "Vecka" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("utan userId går frågan utan userId och visar hela byråns tid (#2115)", () => {
+    render(<TimeChartPanel anchorDay="2026-11-24" />);
+    expect(lastCall()).toEqual({ from: "2026-11-23", to: "2026-11-29", granularity: "day" });
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Vecka 48 2026 · Totalt 11 h · Debiterbart 8 h");
+    fireEvent.click(screen.getByRole("button", { name: "Månad" }));
+    expect(lastCall()).toEqual({ from: "2026-11-01", to: "2026-11-30", granularity: "week" });
   });
 
   it("ett byte av vy sparas under chart.time", () => {
