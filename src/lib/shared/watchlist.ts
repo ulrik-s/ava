@@ -24,14 +24,17 @@
 
 import { BILLING_SHORTCUT_PARAM } from "./billing-flow";
 import { coverageStatus, type CoverageCapInput } from "./coverage-cap";
+import type { Organization } from "./schemas/organization";
 import { stockholmDay } from "./stockholm-time";
 
 // ─── Trösklar ──────────────────────────────────────────────────────────────
 
-/** Ofakturerat över detta belopp (öre) är värt en påminnelse. Byrå-överstyrbart. */
+/** Ofakturerat över detta belopp (öre) är värt en påminnelse. Byrån överstyr det
+ *  med `organizations.unbilled_threshold_ore` (#1911); se `thresholdsForOrg`. */
 export const DEFAULT_UNBILLED_THRESHOLD_ORE = 2_500_000; // 25 000 kr
 
-/** …liksom arbete som legat ofakturerat längre än så här många dagar. */
+/** …liksom arbete som legat ofakturerat längre än så här många dagar. Byrån
+ *  överstyr det med `organizations.unbilled_age_days` (#1911). */
 export const DEFAULT_UNBILLED_AGE_DAYS = 60;
 
 /** Tidsfrister inom så här många dagar räknas som "närmar sig". */
@@ -48,6 +51,21 @@ export const DEFAULT_THRESHOLDS: WatchlistThresholds = {
   unbilledAgeDays: DEFAULT_UNBILLED_AGE_DAYS,
   deadlineHorizonDays: DEADLINE_HORIZON_DAYS,
 };
+
+/** Byråns sparade trösklar (#1911); `null`/saknas = kodens standard. */
+type OrgThresholds = Pick<Organization, "unbilledThresholdOre" | "unbilledAgeDays">;
+
+/**
+ * Trösklarna för en byrå (#1911): byråns värde där det finns (0 räknas som ett
+ * värde), annars standard. Horisonten för tidsfrister är alltid standard.
+ */
+export function thresholdsForOrg(org: OrgThresholds | null): WatchlistThresholds {
+  return {
+    unbilledThresholdOre: org?.unbilledThresholdOre ?? DEFAULT_UNBILLED_THRESHOLD_ORE,
+    unbilledAgeDays: org?.unbilledAgeDays ?? DEFAULT_UNBILLED_AGE_DAYS,
+    deadlineHorizonDays: DEADLINE_HORIZON_DAYS,
+  };
+}
 
 // ─── Poster ────────────────────────────────────────────────────────────────
 

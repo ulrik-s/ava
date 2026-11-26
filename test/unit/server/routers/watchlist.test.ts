@@ -16,7 +16,7 @@ function caller(
   extraTasks: Array<Record<string, unknown>> = [],
   invoices: Array<Record<string, unknown>> = [],
   payments: Array<Record<string, unknown>> = [],
-  more: { matters?: Array<Record<string, unknown>>; timeEntries?: Array<Record<string, unknown>> } = {},
+  more: { matters?: Array<Record<string, unknown>>; timeEntries?: Array<Record<string, unknown>>; organizations?: Array<Record<string, unknown>> } = {},
 ) {
   const source: DemoSource = {
     matters: [
@@ -33,6 +33,7 @@ function caller(
     payments,
     timeEntries: more.timeEntries ?? [],
     expenses: [],
+    ...(more.organizations ? { organizations: more.organizations } : {}),
   };
   const ds = new DemoDataStore(source, () => {});
   return watchlistRouter.createCaller({
@@ -130,5 +131,42 @@ describe("watchlist.actionItems (#1734)", () => {
     const { items, generatedAt } = await caller([], [], [], more).actionItems();
     expect(titles(items)).toEqual(["conflictCheck:2026-hits", "coverageCap:2026-cap"]);
     expect(typeof generatedAt).toBe("string");
+  });
+});
+
+/**
+ * Byråns trösklar för "Bör faktureras" (#1911): beloppet och åldern läses ur
+ * byråns inställningar; utan byrårad eller sparade värden gäller standarden
+ * (25 000 kr, 60 dagar).
+ */
+describe("watchlist.list — byråns trösklar (#1911)", () => {
+  /** Ärendet "u" med `kr` kronor ofakturerat, äldsta posten `daysAgo` dagar gammal. */
+  const unbilled = (kr: number, daysAgo: number, org?: Record<string, unknown>) =>
+    caller([], [], [], {
+      matters: [{ id: "u", organizationId: "o1", matterNumber: "2026-u", title: "U", responsibleLawyerId: "u1" }],
+      timeEntries: [{ id: "teu", organizationId: "o1", matterId: "u", userId: "u1", minutes: 60, hourlyRate: kr * 100, billable: true, date: inDays(-daysAgo) }],
+      ...(org ? { organizations: [{ id: "o1", name: "Byrå", ...org }] } : {}),
+    }).list({ mine: false }).then(({ items }) => items.some((i) => i.kind === "unbilled" && i.matterId === "u"));
+
+  it("utan byrårad eller sparade värden: som i dag", async () => {
+    expect(await unbilled(10_000, 1)).toBe(false);
+    expect(await unbilled(30_000, 1)).toBe(true);
+    expect(await unbilled(10_000, 1, {})).toBe(false);
+    expect(await unbilled(30_000, 1, { unbilledThresholdOre: null, unbilledAgeDays: null })).toBe(true);
+  });
+
+  it("en lägre beloppströskel tar med ett ärende under standardbeloppet", async () => {
+    expect(await unbilled(10_000, 1, { unbilledThresholdOre: 500_000 })).toBe(true);
+  });
+
+  it("en högre beloppströskel tar inte med ett ärende över standardbeloppet", async () => {
+    expect(await unbilled(30_000, 1, { unbilledThresholdOre: 5_000_000 })).toBe(false);
+  });
+
+  it("åldern: en kortare ålder tar med ett litet ärende, en längre utesluter ett gammalt", async () => {
+    expect(await unbilled(100, 20, { unbilledAgeDays: 10 })).toBe(true);
+    expect(await unbilled(100, 20)).toBe(false);
+    expect(await unbilled(100, 70)).toBe(true);
+    expect(await unbilled(100, 70, { unbilledAgeDays: 90 })).toBe(false);
   });
 });

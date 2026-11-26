@@ -84,4 +84,15 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
     expect(await repos.organizations.getById(asId<"OrganizationId">(a))).toMatchObject({ id: a });
     expect(await repos.organizations.getById(asId<"OrganizationId">(b))).toMatchObject({ id: b });
   });
+
+  it("byråns trösklar för Bör faktureras sparas och läses tillbaka, också null (#1911)", async () => {
+    const repos = buildDrizzleRepositories(handle.db);
+    const id = asId<"OrganizationId">(uuidv7());
+    await repos.organizations.create(org(id));
+    expect(await repos.organizations.getById(id)).toMatchObject({ unbilledThresholdOre: null, unbilledAgeDays: null });
+    await repos.organizations.update(id, { unbilledThresholdOre: 1_000_000, unbilledAgeDays: 0 });
+    expect(await repos.organizations.getById(id)).toMatchObject({ unbilledThresholdOre: 1_000_000, unbilledAgeDays: 0 });
+    await repos.organizations.update(id, { unbilledThresholdOre: null, unbilledAgeDays: null });
+    expect(await repos.organizations.getById(id)).toMatchObject({ unbilledThresholdOre: null, unbilledAgeDays: null });
+  });
 });
