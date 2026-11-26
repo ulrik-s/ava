@@ -494,6 +494,15 @@ describe("InvoiceDetailPage", () => {
     expect(screen.getByText("Summa").closest("tr")?.textContent).toContain("1,75 h");
   });
 
+  it("acontofakturan visar nedbrytningen ur sin egen kolumn (#2180)", async () => {
+    const accontoBreakdown = { timeLines: [{ date: "2026-03-01", description: "Samtal", minutes: 60, amountOre: 100_000 }],
+      rows: [], totalLabel: "Att betala", totalOre: 100_000 };
+    invoiceQuery.data = { ...baseInvoice, invoiceType: "ACCONTO", accontoBreakdown };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Samtal")).toBeInTheDocument());
+    expect(screen.getByText("Samtal").closest("tr")?.textContent).toContain("1 h");
+  });
+
   it("tabellernas datarader är toppjusterade; summaraden i specifikationen är det inte (#1753)", async () => {
     const settlementBreakdown = { timeLines: [{ date: "2026-03-01", description: "Möte", minutes: 90, amountOre: 150_000 }],
       rows: [], totalLabel: "Att betala", totalOre: 150_000 };

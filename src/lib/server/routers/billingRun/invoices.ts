@@ -168,7 +168,8 @@ export const invoiceProcedures = {
           matterId: input.matterId, amount: amountOre, vatOre: accontoVatOre, amountRounding: CURRENT_ROUNDING,
           vatBreakdown: [{ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: accontoNetOre, vatOre: accontoVatOre }],
           // Nedbrytning (#878/#880/#1940): vad acontot avser och hur beloppet räknats.
-          settlementBreakdown,
+          // Egen kolumn (#2180); settlementBreakdown skrivs tills vidare också (expand).
+          accontoBreakdown: settlementBreakdown, settlementBreakdown,
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
           ...invoiceMeta(ctx, input), notes: input.notes,

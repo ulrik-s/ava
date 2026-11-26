@@ -22,7 +22,7 @@ import {
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { CURRENT_ROUNDING, splitGross } from "@/lib/shared/whole-kronor";
-import { krRunGrossOre, krRunNotes, valueKrRun } from "../../billing/kr-run-valuation";
+import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, valueKrRun } from "../../billing/kr-run-valuation";
 import { logMatterNote } from "../../billing/matter-note";
 import { removeVoidedKrDocuments } from "../../billing/void-kr-documents";
 import { emit } from "../../events/emit";
@@ -95,7 +95,8 @@ export const kostnadsrakningProcedures = {
           reference: await tx.billingRuns.nextKrReference(ctx.orgId, stockholmYear(now)),
           proposedAmountOre: grossValue, amountOre: grossValue,
           invoiceId: null, deductedBillingRunIds: [],
-          periodTo: now, notes: krRunNotes(input.notes, input),
+          // Avslutet i egen kolumn (#2180) och, tills vidare, i anteckningen (expand).
+          periodTo: now, notes: krRunNotes(input.notes, input), forordnandeAvslut: krRunForordnandeAvslut(input),
         });
         // Kostnadsräkningen ÄR inskicket — frys arbetet direkt (#806) så det
         // lämnar "Upparbetat ofakturerat". Dom/slutreglering läser raderna via
