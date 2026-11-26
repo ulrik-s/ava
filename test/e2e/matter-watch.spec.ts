@@ -4,7 +4,16 @@
  * ändringar i minnet, så vi går till startsidan via menyn (klient-navigering).
  */
 
-import { DEMO_BASE_URL, fetchDemoSeed, matterIdWith, seedDemoLogin, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL, type DemoSeed, fetchDemoSeed, matterIdWith, seedDemoLogin, test, expect } from "./_demo-test";
+
+/** Ärendets första KLIENT-part ur seeden (#1965), i kopplingarnas ordning. */
+function klientOf(seed: DemoSeed, matterId: string): string {
+  const name = seed.matterContacts
+    .filter((l) => l.matterId === matterId && l.role === "KLIENT")
+    .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""))[0]?.contact?.name;
+  if (!name) throw new Error(`seedens ärende ${matterId} saknar klient`);
+  return name;
+}
 
 test("frist idag: röd i ärendet och i Frister på startsidan", async ({ page, baseURL }) => {
   const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
@@ -26,11 +35,17 @@ test("frist idag: röd i ärendet och i Frister på startsidan", async ({ page, 
 
   const row = section.locator("li", { hasText: "E2E-frist: överklagandefrist" });
   await expect(row.getByRole("alert")).toHaveText("FRIST IDAG");
+  // Ärendets egen flik visar inte klienten (#1965).
+  const klient = klientOf(seed, matterId);
+  await expect(row).not.toContainText(klient);
 
   await page.getByRole("link", { name: /Startsida/ }).first().click();
   const watchRow = page.locator("li", { hasText: "E2E-frist: överklagandefrist" });
   await expect(watchRow).toBeVisible({ timeout: 15_000 });
   await expect(watchRow.getByRole("alert")).toHaveText("FRIST IDAG");
+  // Startsidan: klientens namn och ärendenumret överst på raden (#1965).
+  const matterNumber = seed.matters.find((m) => m.id === matterId)?.matterNumber ?? "";
+  await expect(watchRow).toContainText(`${klient} · ${matterNumber}`);
   await expect(page.getByRole("heading", { name: /Tidrapportering/ })).toBeVisible();
   await expect(page.getByText("Att göra", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /🔔 Frister/ })).toBeVisible();

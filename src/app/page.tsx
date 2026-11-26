@@ -105,7 +105,7 @@ function WatchlistCard() {
         </Link>
       </div>
       <div className="p-2">
-        <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" onComplete={complete} />
+        <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" onComplete={complete} showClient />
       </div>
     </div>
   );
