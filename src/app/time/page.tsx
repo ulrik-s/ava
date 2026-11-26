@@ -133,9 +133,12 @@ function TimeEntryForm({ form, setForm, mattersData, isPending, onSubmit }: Time
         </div>
         <div>
           <label htmlFor={dateFieldId} className="block text-sm text-gray-500 mb-1">Datum *</label>
-          <input id={dateFieldId} type="date" required value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          {/* Pilarna stegar formulärets datum, inte listans dag (#2097). */}
+          <DayStepper ymd={form.date} onChange={(date) => setForm({ ...form, date })}>
+            <input id={dateFieldId} type="date" required value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </DayStepper>
         </div>
         <div>
           <label htmlFor={minutesFieldId} className="block text-sm text-gray-500 mb-1">Tid (h) *</label>

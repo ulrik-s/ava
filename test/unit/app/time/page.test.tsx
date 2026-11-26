@@ -571,3 +571,58 @@ describe("TimePage — en dag i taget (#2096)", () => {
     expect(screen.getByText("Inga tidsposter.")).toBeInTheDocument();
   });
 });
+
+describe("TimePage — pilarna vid formulärets Datum * (#2097)", () => {
+  /** Öppnar + Registrera tid och ger formuläret, där pilarna avgränsas. */
+  function openForm(): HTMLElement {
+    const { container } = render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    const form = container.querySelector("form");
+    if (!form) throw new Error("formuläret saknas");
+    return form;
+  }
+  const dateOf = (form: HTMLElement) => within(form).getByLabelText<HTMLInputElement>(/Datum \*/).value;
+
+  it("stegar formulärets datum utan att skicka formuläret eller byta listans dag", () => {
+    const form = openForm();
+    expect(dateOf(form)).toBe("2026-11-24");
+    fireEvent.click(within(form).getByRole("button", { name: "Föregående dag" }));
+    expect(dateOf(form)).toBe("2026-11-23");
+    fireEvent.click(within(form).getByRole("button", { name: "Nästa dag" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Nästa dag" }));
+    expect(dateOf(form)).toBe("2026-11-25");
+    expect(screen.getByText("Idag")).toBeInTheDocument();
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("Spara skickar det stegade datumet", () => {
+    const form = openForm();
+    fireEvent.click(within(form).getByRole("button", { name: "Föregående dag" }));
+    fireEvent.change(within(form).getByLabelText<HTMLInputElement>(/Beskrivning/i), { target: { value: "Möte" } });
+    fireEvent.click(within(form).getByRole("button", { name: /^Spara$/i }));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-11-23" }));
+  });
+
+  it("formuläret börjar på idag fast listan visar igår", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Föregående dag" }));
+    expect(screen.getByText("Igår")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    expect(screen.getByLabelText<HTMLInputElement>(/Datum \*/).value).toBe("2026-11-24");
+  });
+
+  it("efter Spara börjar formuläret åter på idag", () => {
+    const form = openForm();
+    fireEvent.click(within(form).getByRole("button", { name: "Föregående dag" }));
+    act(() => succeeded.create?.());
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    expect(screen.getByLabelText<HTMLInputElement>(/Datum \*/).value).toBe("2026-11-24");
+  });
+
+  it("ett tömt datumfält stänger av formulärets pilar", () => {
+    const form = openForm();
+    fireEvent.change(within(form).getByLabelText(/Datum \*/), { target: { value: "" } });
+    expect(within(form).getByRole("button", { name: "Föregående dag" })).toBeDisabled();
+    expect(within(form).getByRole("button", { name: "Nästa dag" })).toBeDisabled();
+  });
+});
