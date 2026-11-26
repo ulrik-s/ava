@@ -27,7 +27,7 @@
 import { conflictClassOf } from "@/lib/shared/conflict-policy";
 import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
 import { isUuid } from "@/lib/shared/uuid";
-import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
+import type { QueuedMutation } from "../data-store/in-memory/queue-entry";
 import type { PushResult } from "../data-store/in-memory/sync-transport";
 import { deterministicPgCause, isUniqueViolation } from "../db/pg-error";
 import type { Savepoint } from "../repositories/drizzle-repositories";

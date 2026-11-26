@@ -4,7 +4,7 @@
  * fakturadokument) använder den i stället för att öppna IndexedDB själva.
  */
 
-import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
+import { IdbKv } from "@/lib/client/local-store/idb-kv";
 
 /** En persistent lista: läs allt, skriv allt. */
 export interface ListStore<T> {

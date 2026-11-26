@@ -9,7 +9,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest-compat";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import type { QueuedMutation } from "@/lib/client/local-store/mutation-queue";
 import { changeLog, syncReplays } from "@/lib/server/db/schema";
 import type { AppDb } from "@/lib/server/db/types";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";

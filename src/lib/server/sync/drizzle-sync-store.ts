@@ -21,7 +21,7 @@
 
 import { and, asc, eq, gt, lte } from "drizzle-orm";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
-import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
+import type { QueuedMutation } from "../data-store/in-memory/queue-entry";
 import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store/in-memory/sync-transport";
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";

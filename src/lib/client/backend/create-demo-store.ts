@@ -25,10 +25,10 @@
 import { loadBundledSeed } from "@/lib/client/demo/bundled-seed-loader";
 import { demoCacheKey } from "@/lib/client/demo/demo-cache-key";
 import type { FirmaConfig } from "@/lib/client/firma/firma-config";
-import { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
-import { IndexedDbPersistence } from "@/lib/server/data-store/in-memory/indexeddb-persistence";
-import { IndexedDbMutationQueuePersistence } from "@/lib/server/data-store/in-memory/mutation-queue";
-import { StaticSyncSource } from "@/lib/server/data-store/in-memory/static-sync-source";
+import { CachingSyncDataStore } from "@/lib/client/local-store/caching-sync-data-store";
+import { IndexedDbPersistence } from "@/lib/client/local-store/indexeddb-persistence";
+import { IndexedDbMutationQueuePersistence } from "@/lib/client/local-store/mutation-queue";
+import { StaticSyncSource } from "@/lib/client/local-store/static-sync-source";
 import type { DemoSource } from "@/lib/shared/demo-source";
 
 export interface CreateDemoStoreDeps {

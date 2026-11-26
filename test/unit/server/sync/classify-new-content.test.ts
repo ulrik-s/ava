@@ -9,7 +9,7 @@
  * servern köar klassificeringen själv.
  */
 import { describe, expect, it } from "vitest-compat";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import type { QueuedMutation } from "@/lib/client/local-store/mutation-queue";
 import type { PushResult } from "@/lib/server/data-store/in-memory/sync-transport";
 import { analyzeIfNewContent, type DocumentPathReader, storagePathBefore } from "@/lib/server/sync/classify-new-content";
 

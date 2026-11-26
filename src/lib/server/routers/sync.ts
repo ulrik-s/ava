@@ -17,10 +17,10 @@ import { syncDeviceReportSchema } from "@/lib/shared/sync/device-health";
 import { serverSyncInfo } from "@/lib/shared/sync/protocol";
 import { FOREIGN_ENTRY_REFUSAL, SyncRefusal } from "@/lib/shared/sync/sync-error";
 import { assertAdmin } from "../auth/assert-admin";
+import { rowRefSchema } from "../data-store/in-memory/procedure-touches";
 import {
   type QueuedMutation, queuedMutationSchema as queuedRowShape, queuedProcedureCallSchema as queuedCallShape, type QueueOwner, queueOwnerSchema,
-} from "../data-store/in-memory/mutation-queue";
-import { rowRefSchema } from "../data-store/in-memory/procedure-touches";
+} from "../data-store/in-memory/queue-entry";
 import { MAX_ROW_REFS } from "../data-store/in-memory/sync-transport";
 import { analyzeIfNewContent, storagePathBefore } from "../sync/classify-new-content";
 import type { SyncDeviceStore } from "../sync/sync-device-store";

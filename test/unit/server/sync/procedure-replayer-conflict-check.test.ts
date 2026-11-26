@@ -7,9 +7,9 @@
  * ärende som den offline-klienten aldrig sett.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
+import type { QueuedProcedureCall } from "@/lib/client/local-store/mutation-queue";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildContext } from "@/lib/server/build-context";
-import type { QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { users } from "@/lib/server/db/schema";
 import { serverFirstEventLog } from "@/lib/server/http/server-context";
 import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";

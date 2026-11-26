@@ -15,7 +15,7 @@ import { z } from "zod";
 import { buildDeviceReport } from "@/lib/client/backend/sync-device-report";
 import {
   InMemoryMutationQueuePersistence, isProcedureCall, MutationQueue, queueOwnerSchema, type QueueEntry, type QueueOwner,
-} from "@/lib/server/data-store/in-memory/mutation-queue";
+} from "@/lib/client/local-store/mutation-queue";
 import { MAX_PROCEDURE_TOUCHES } from "@/lib/server/data-store/in-memory/procedure-touches";
 import { appRouter } from "@/lib/server/routers/_app";
 import { ROW_PUSH_POLICY } from "@/lib/server/sync/row-push-policy";
