@@ -227,7 +227,9 @@ men påverkar inte routing.
 4. Länka med `<EntityLink route id [sub]>` / `router.push(shellPath(...))`.
 
 Kontraktet vaktas i CI av `test/unit/lib/client/demo/no-detail-link-regression.test.ts`
-(failar om en `<Link>`/`router.push` mot `/<route>/<id>` smyger tillbaka) och e2e
+(läser alla `.ts`- och `.tsx`-filer under `src/` och failar om en sökväg till
+`/<route>/<id>` byggs med mallsträng eller `+`, var den än står: i `<Link>`,
+`router.push`, en variabel eller ett fält i en DTO, #1871) och e2e
 `test/e2e/demo-invoice-document.spec.ts` (asserterar soft-nav utan omladdning).
 
 ## App-skalet offline (service worker, #1240)
