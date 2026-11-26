@@ -5,15 +5,18 @@ import { ListPage } from "@/components/layout/list-page";
 import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
 import { MoveTimeEntriesButton, useTimeEntrySelection } from "@/components/time/move-time-entries";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { DayStepper } from "@/components/ui/day-stepper";
 import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
 import { EntityLink } from "@/lib/client/demo/entity-link";
-import { periodFrom, periodTo } from "@/lib/client/time-filter";
+import { hasPeriod } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
+import { dayLabel } from "@/lib/shared/iso-date";
 import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import type { LockableEntry } from "@/lib/shared/time-entry-lock";
 import { TimeEntryEditModal, timeActionsColumn, useTimeEntryEditing } from "./_time-entry-editing";
+import { useTimeList } from "./_use-time-list";
 
 /** En rad på /time, med låsfälten som avgör om den får ändras (#1863). */
 interface TimeRow extends LockableEntry {
@@ -49,18 +52,32 @@ const timeColumns: Column<TimeRow>[] = [
 ];
 
 interface PeriodFilterProps {
+  /** Dagen som visas utan period, "YYYY-MM-DD" (#2096). */
+  day: string;
   from: string;
   to: string;
+  onDay: (v: string) => void;
   onFrom: (v: string) => void;
   onTo: (v: string) => void;
   onClear: () => void;
 }
 
-function PeriodFilter({ from, to, onFrom, onTo, onClear }: PeriodFilterProps) {
+/** Dagens namn mellan pilarna, i en ruta med fast bredd så att **›** står still. */
+function DayPicker({ day, onDay }: Pick<PeriodFilterProps, "day" | "onDay">) {
+  return (
+    <DayStepper ymd={day} onChange={onDay}>
+      <span className="w-56 py-2 text-center text-sm font-medium text-gray-900">{dayLabel(day, new Date())}</span>
+    </DayStepper>
+  );
+}
+
+function PeriodFilter({ day, from, to, onDay, onFrom, onTo, onClear }: PeriodFilterProps) {
   const fromId = useId();
   const toId = useId();
+  const period = hasPeriod(from, to);
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 flex flex-wrap items-end gap-4">
+      {!period && <DayPicker day={day} onDay={onDay} />}
       <div>
         <label htmlFor={fromId} className="block text-sm text-gray-500 mb-1">Från</label>
         <input id={fromId} type="date" value={from} max={to || undefined}
@@ -73,7 +90,7 @@ function PeriodFilter({ from, to, onFrom, onTo, onClear }: PeriodFilterProps) {
           onChange={(e) => onTo(e.target.value)}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
       </div>
-      {(from || to) && (
+      {period && (
         <button onClick={onClear}
           className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
           Rensa
@@ -157,15 +174,8 @@ function TimeEntryForm({ form, setForm, mattersData, isPending, onSubmit }: Time
 }
 
 export default function TimePage() {
-  const [page, setPage] = useState(1);
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const timeEntries = trpc.timeEntry.list.useQuery({
-    page,
-    pageSize: 50,
-    from: periodFrom(fromDate),
-    to: periodTo(toDate),
-  });
+  const list = useTimeList();
+  const { query: timeEntries, page, setPage } = list;
   // Hämta alla ACTIVE matters (cap 500 räcker för en advokatbyrå). Tidigare
   // skickades 200 men routern cappade på 100 → Zod-fail → tom dropdown.
   const matters = trpc.matter.list.useQuery({ pageSize: 500, status: "ACTIVE" });
@@ -222,13 +232,8 @@ export default function TimePage() {
         />
       )}
 
-      <PeriodFilter
-        from={fromDate}
-        to={toDate}
-        onFrom={(v) => { setFromDate(v); setPage(1); }}
-        onTo={(v) => { setToDate(v); setPage(1); }}
-        onClear={() => { setFromDate(""); setToDate(""); setPage(1); }}
-      />
+      <PeriodFilter day={list.day} from={list.from} to={list.to}
+        onDay={list.onDay} onFrom={list.onFrom} onTo={list.onTo} onClear={list.onClear} />
 
       {/* /time listar alla ärendens poster: en omläsning täcker båda ärendena. */}
       <MoveTimeEntriesButton selected={marking.selection.selected} onMoved={marking.clear}

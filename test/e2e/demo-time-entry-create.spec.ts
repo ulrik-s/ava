@@ -269,3 +269,39 @@ test("två markerade tidsposter flyttas till ett annat ärende", async ({ page, 
   await expect(tid.getByText(first)).toBeVisible();
   await expect(tid.getByText(second)).toBeVisible();
 });
+
+/*
+ * #2096: Tidregistrering visar en dag i taget, med pilar som byter dag. En
+ * vald period (Från/Till) går före dagen, och Rensa ger tillbaka samma dag.
+ */
+test("tidslistan visar en dag i taget och bläddrar med pilarna", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const matter = seed.matters.find((m) => m.status === "ACTIVE" && m.matterNumber);
+  if (!matter) throw new Error("demon saknar ett aktivt ärende");
+  const description = "E2E: dagsbläddring (#2096)";
+  const row = page.getByRole("row").filter({ hasText: description });
+  const dayName = (name: string) => page.getByText(name, { exact: true });
+
+  await page.goto(`${base}/time/`, { waitUntil: "load" });
+  await expect(dayName("Idag")).toBeVisible({ timeout: 30_000 });
+  await register(page, `${matter.matterNumber ?? ""} — ${matter.title}`, description);
+
+  await page.getByRole("button", { name: "Föregående dag" }).click();
+  await expect(dayName("Igår")).toBeVisible();
+  await expect(row).toHaveCount(0);
+
+  await page.getByLabel("Från").fill("2000-01-01");
+  await expect(dayName("Igår")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Nästa dag" })).toHaveCount(0);
+  await expect(row).toBeVisible();
+
+  await page.getByRole("button", { name: "Rensa" }).click();
+  await expect(dayName("Igår")).toBeVisible();
+  await expect(row).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Nästa dag" }).click();
+  await expect(dayName("Idag")).toBeVisible();
+  await expect(row).toBeVisible();
+});
