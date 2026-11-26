@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { ReportSubject } from "@/lib/shared/report-subject";
 import { type TimeEntry } from "@/lib/shared/schemas/billing";
 import { isoDayInput } from "@/lib/shared/schemas/common";
 import { timeEntryKindSchema } from "@/lib/shared/schemas/enums";
@@ -12,6 +13,7 @@ import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
 import { loadRadgivningStatus, markEntryAsRadgivning, type MarkRadgivningCall } from "../billing/radgivning-entry";
 import { emit } from "../events/emit";
 import { callTime, newRowId } from "../queued-call";
+import { loadPeriodWork } from "../reports/period-work";
 import { assertEditable, assertMinutes, rateOnCreate, rateOnKindChange } from "../time-entries/entry-rules";
 import { moveEntries } from "../time-entries/move-entries";
 import { loadTimeReport } from "../time-entries/time-report";
@@ -44,24 +46,24 @@ export const timeEntryRouter = router({
     }),
 
   /**
-   * En persons registrerade tid per dag, vecka eller månad i ett intervall
-   * (#2109), för stapeldiagrammen. Samma åtkomst som `reports.perLawyer`:
-   * byrån ur sessionen och läsning via repot, så en person i en annan byrå
-   * ger tomma staplar. Indelningen är `buildTimeChart`.
+   * En persons, eller utan `userId` hela byråns (#2115), registrerade tid per
+   * dag, vecka eller månad i ett intervall (#2109), för stapeldiagrammen.
+   * Samma åtkomst och hämtning som rapporterna (`loadPeriodWork`): byrån ur
+   * sessionen och läsning via repona, så en person i en annan byrå ger tomma
+   * staplar. Indelningen är `buildTimeChart`.
    */
   chart: protectedProcedure
     .input(z.object({
       from: isoDayInput,
       to: isoDayInput,
-      userId: userIdSchema,
+      userId: userIdSchema.optional(),
       granularity: z.enum(["day", "week", "month"]),
     }))
     .query(async ({ ctx, input }) => {
       const period = stockholmPeriod(input.from, input.to);
-      const entries = await ctx.repos.timeEntries.listForLawyerInPeriod(
-        ctx.user.organizationId, input.userId, period.from, period.to,
-      );
-      return buildTimeChart({ entries, from: input.from, to: input.to, granularity: input.granularity });
+      const subject: ReportSubject = input.userId ? { kind: "lawyer", userId: input.userId } : { kind: "firm" };
+      const { timeEntries } = await loadPeriodWork(ctx.repos, ctx.user.organizationId, subject, period.from, period.to);
+      return buildTimeChart({ entries: timeEntries, from: input.from, to: input.to, granularity: input.granularity });
     }),
 
   create: orgProcedure

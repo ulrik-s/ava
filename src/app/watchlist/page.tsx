@@ -88,6 +88,7 @@ export default function WatchlistPage() {
       <WatchlistList
         items={items}
         onComplete={complete}
+        showClient
         emptyText={kind === "all" ? "Inga frister just nu." : "Inga frister i den kategorin."}
       />
     </ListPage>
