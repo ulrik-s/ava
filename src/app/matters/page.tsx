@@ -9,15 +9,19 @@ import { ConflictMatchBadge } from "@/components/matter/conflict-match-badge";
 import { MatterTypeSelect } from "@/components/matter/matter-type-select";
 import { DataTable } from "@/components/ui/data-table";
 import { Pager } from "@/components/ui/pager";
+import { TabBar, type TabBarTab } from "@/components/ui/tab-bar";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
 import { trpc } from "@/lib/client/trpc";
 import { MatterFilters, type NamedOption, type StatusFilter } from "./_matter-filters";
 import { EMPTY_MATTER_FORM, matterCreateArgs, withPickedClient, type MatterForm } from "./_matter-form";
 import { type MatterSearch, useMatterSearch } from "./_use-matter-search";
+import { type MattersTab, useMattersTab, usePageForTab } from "./_use-matters-tab";
+
+type ListParams = { search: string; status: StatusFilter; employeeId: string; page: number };
 
 /** Bygg query-args för matter.list (flyttar `|| undefined`-grenarna ut ur
  *  MattersContent → håller den under complexity@8). */
-function matterListArgs(p: { search: string; status: StatusFilter; employeeId: string; page: number }) {
+function matterListArgs(p: ListParams) {
   return {
     search: p.search,
     status: p.status || undefined,
@@ -25,6 +29,35 @@ function matterListArgs(p: { search: string; status: StatusFilter; employeeId: s
     page: p.page,
     pageSize: 20,
   };
+}
+
+/** Mitt aktskåp (#1968): aktiva ärenden där den inloggade är ansvarig, senast hänt överst. */
+function mineListArgs(p: ListParams) {
+  return { search: p.search, mine: true, status: "ACTIVE" as const, orderBy: "lastActivity" as const, page: p.page, pageSize: 20 };
+}
+
+/**
+ * `matter.list`-frågan per flik (#1968). Mitt aktskåp läses om varje gång
+ * fliken visas (`staleTime: 0`): tidsposter, utlägg och dokument invaliderar
+ * inte `matter.list`, så appens standard skulle visa en gammal ordning.
+ */
+function mattersTabQuery(tab: MattersTab, p: ListParams) {
+  return tab === "mine"
+    ? { args: mineListArgs(p), opts: { staleTime: 0 } }
+    : { args: matterListArgs(p), opts: undefined };
+}
+
+/** Flikarnas namn, tabellinställningar och tomtext (#1968). */
+const TAB_VIEW: Readonly<Record<MattersTab, { label: string; prefKey: string; empty: string }>> = {
+  mine: { label: "Mitt aktskåp", prefKey: "list.matters-mine", empty: "Du är inte ansvarig för något aktivt ärende." },
+  all: { label: "Alla ärenden på byrån", prefKey: "list.matters", empty: "Inga ärenden." },
+};
+
+const MATTERS_TABS: readonly TabBarTab<MattersTab>[] = (["mine", "all"] as const).map((id) => ({ id, label: TAB_VIEW[id].label }));
+
+/** Tomtexten: med söktext alltid "Inga ärenden.", annars flikens egen. */
+function mattersEmptyMessage(tab: MattersTab, search: string): string {
+  return search.trim() ? "Inga ärenden." : TAB_VIEW[tab].empty;
 }
 
 interface NewMatterFormProps {
@@ -146,18 +179,51 @@ function MatterSearchStatus({ search }: { search: MatterSearch }) {
   );
 }
 
+interface MattersHeaderProps {
+  showForm: boolean;
+  onToggleForm: () => void;
+  readOnly: boolean;
+  tab: MattersTab;
+  onTab: (tab: MattersTab) => void;
+  filters: React.ComponentProps<typeof MatterFilters>;
+}
+
+/** Sidrubriken, flikraden (#1968) och sökraden. */
+function MattersHeader({ showForm, onToggleForm, readOnly, tab, onTab, filters }: MattersHeaderProps) {
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-gray-900">Ärenden / jävskontroll</h1>
+        <button
+          onClick={onToggleForm}
+          disabled={readOnly}
+          title={readOnly ? "Inte tillgängligt i demo-läget" : undefined}
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+          {showForm ? "Avbryt" : "+ Nytt ärende"}
+        </button>
+      </div>
+      <div className="mb-4 flex">
+        <TabBar ariaLabel="Ärendelistor" tabs={MATTERS_TABS} active={tab} onSelect={onTab} />
+      </div>
+      <MatterFilters {...filters} />
+    </>
+  );
+}
+
 function MattersContent() {
   const searchParams = useSearchParams();
+  const { tab, select: selectTab } = useMattersTab();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [employeeId, setEmployeeId] = useState("");
-  const [page, setPage] = useState(1);
+  const [page, setPage] = usePageForTab(tab);
   const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
   const readOnly = useIsReadOnly();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [client, setClient] = useState<PickedClient | null>(null);
 
-  const matters = trpc.matter.list.useQuery(matterListArgs({ search, status: statusFilter, employeeId, page }));
+  const listQuery = mattersTabQuery(tab, { search, status: statusFilter, employeeId, page });
+  const matters = trpc.matter.list.useQuery(listQuery.args, listQuery.opts);
   const matterSearch = useMatterSearch(matters.data?.matters);
 
   const employees = trpc.user.list.useQuery();
@@ -182,29 +248,25 @@ function MattersContent() {
     <ListPage
       footer={<Pager data={matters.data} page={page} onPage={setPage} />}
       header={(
-        <>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Ärenden / jävskontroll</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          disabled={readOnly}
-          title={readOnly ? "Inte tillgängligt i demo-läget" : undefined}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
-          {showForm ? "Avbryt" : "+ Nytt ärende"}
-        </button>
-      </div>
-      <MatterFilters
-        search={search}
-        status={statusFilter}
-        employeeId={employeeId}
-        employeesData={employees.data}
-        onSearch={(v) => { setSearch(v); setPage(1); matterSearch.reset(); }}
-        onStatus={(v) => { setStatusFilter(v); setPage(1); }}
-        onEmployee={(v) => { setEmployeeId(v); setPage(1); }}
-        onSubmit={() => matterSearch.run(search)}
-        searching={matterSearch.searching}
-      />
-        </>
+        <MattersHeader
+          showForm={showForm}
+          onToggleForm={() => setShowForm(!showForm)}
+          readOnly={readOnly}
+          tab={tab}
+          onTab={selectTab}
+          filters={{
+            search,
+            status: statusFilter,
+            employeeId,
+            employeesData: employees.data,
+            onSearch: (v) => { setSearch(v); setPage(1); matterSearch.reset(); },
+            onStatus: (v) => { setStatusFilter(v); setPage(1); },
+            onEmployee: (v) => { setEmployeeId(v); setPage(1); },
+            onSubmit: () => matterSearch.run(search),
+            searching: matterSearch.searching,
+            showSelects: tab === "all",
+          }}
+        />
       )}
     >
       {showForm && (
@@ -234,15 +296,18 @@ function MattersContent() {
         />
       )}
 
-      <MatterSearchStatus search={matterSearch} />
+      <div role="tabpanel" aria-label={TAB_VIEW[tab].label}>
+        <MatterSearchStatus search={matterSearch} />
 
-      <DataTable
-        prefKey="list.matters"
-        columns={matterSearch.columns}
-        data={matterSearch.rows}
-        rowKey={(m) => m.id}
-        emptyMessage="Inga ärenden."
-      />
+        <DataTable
+          key={tab}
+          prefKey={TAB_VIEW[tab].prefKey}
+          columns={matterSearch.columns}
+          data={matterSearch.rows}
+          rowKey={(m) => m.id}
+          emptyMessage={mattersEmptyMessage(tab, search)}
+        />
+      </div>
     </ListPage>
   );
 }

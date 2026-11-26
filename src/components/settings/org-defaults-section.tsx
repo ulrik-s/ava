@@ -13,6 +13,7 @@ import { trpc } from "@/lib/client/trpc";
 const KEY_LABELS: Record<string, string> = {
   "list.contacts": "Parter",
   "list.matters": "Ärenden",
+  "list.matters-mine": "Ärenden – Mitt aktskåp",
   "list.invoices": "Fakturor",
   "list.time-entries": "Tidregistrering",
   "list.users": "Användare",

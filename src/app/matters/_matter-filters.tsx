@@ -3,7 +3,8 @@
 /**
  * Ärendelistans sökruta + status- och medarbetarfilter (utbrutet ur
  * `page.tsx`). Sökrutan filtrerar live medan man skriver; Sök eller Enter
- * kör dessutom jävskontrollen (#1642).
+ * kör dessutom jävskontrollen (#1642). I Mitt aktskåp (#1968) syns bara
+ * sökrutan: fliken väljer redan status och ansvarig.
  */
 
 import type { MatterStatus } from "@/lib/shared/schemas/enums";
@@ -23,9 +24,11 @@ interface MatterFiltersProps {
   onSubmit: () => void;
   /** Jävskontrollen pågår. */
   searching: boolean;
+  /** Visa valrutorna för status och medarbetare (Alla ärenden på byrån, #1968). */
+  showSelects: boolean;
 }
 
-export function MatterFilters({ search, status, employeeId, employeesData, onSearch, onStatus, onEmployee, onSubmit, searching }: MatterFiltersProps) {
+export function MatterFilters({ search, status, employeeId, employeesData, onSearch, onStatus, onEmployee, onSubmit, searching, showSelects }: MatterFiltersProps) {
   return (
     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
       <form role="search" className="flex flex-1 sm:max-w-md gap-2"
@@ -38,6 +41,20 @@ export function MatterFilters({ search, status, employeeId, employeesData, onSea
           {searching ? "Söker..." : "Sök"}
         </button>
       </form>
+      {showSelects && (
+        <StatusAndEmployeeSelects status={status} employeeId={employeeId} employeesData={employeesData}
+          onStatus={onStatus} onEmployee={onEmployee} />
+      )}
+    </div>
+  );
+}
+
+type SelectsProps = Pick<MatterFiltersProps, "status" | "employeeId" | "employeesData" | "onStatus" | "onEmployee">;
+
+/** Valrutorna för status och medarbetare. */
+function StatusAndEmployeeSelects({ status, employeeId, employeesData, onStatus, onEmployee }: SelectsProps) {
+  return (
+    <>
       <select value={status}
         onChange={(e) => onStatus(e.target.value as StatusFilter)}
         className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
@@ -55,6 +72,6 @@ export function MatterFilters({ search, status, employeeId, employeesData, onSea
           <option key={u.id} value={u.id}>{u.name}</option>
         ))}
       </select>
-    </div>
+    </>
   );
 }

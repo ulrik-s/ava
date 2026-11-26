@@ -75,7 +75,7 @@ test("startsida, ärendelista och ett ärende via shell-rewriten — utan 404 p�
 
   // Listan är paginerad: ärendet från pull:en behöver inte stå på sida 1 —
   // kräv bara att listan renderat ärenden från servern.
-  await page.goto("/matters/");
+  await page.goto("/matters/?flik=alla");
   await expectAppShell(page);
   await expect(page.locator('main a[href*="/matters/__shell__"]').first()).toBeVisible();
 
