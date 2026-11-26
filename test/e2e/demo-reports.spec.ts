@@ -105,3 +105,35 @@ test("Stapeldiagram: veckans staplar, och en stapel med tid visar ärenden som l
   await matterLink.click();
   await expect(page).toHaveURL(/\/matters\//);
 });
+
+test("Stapeldiagram: pilarna stegar en stapel, och rutan minns personens vy (#2111)", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/reports/`);
+  await expect(page.getByLabel("Advokat", { exact: true })).not.toHaveValue("", { timeout: 30_000 });
+  await page.getByLabel("Till", { exact: true }).fill(daysBeforeToday(3));
+  await showPanel(page, "Stapeldiagram");
+
+  // Vecka: "Föregående dag" flyttar den valda stapeln en dag bakåt.
+  const dayBars = page.getByRole("button", { name: /^\p{L}+ \d{1,2} \p{L}+: [\d,]+ h$/u });
+  await expect(dayBars).toHaveCount(7, { timeout: 30_000 });
+  const pressedIndex = (): Promise<number> =>
+    dayBars.evaluateAll((els) => els.findIndex((e) => e.getAttribute("aria-pressed") === "true"));
+  const before = await pressedIndex();
+  await page.getByRole("button", { name: "Föregående dag" }).click();
+  await expect.poll(pressedIndex).toBe(before === 0 ? 6 : before - 1);
+
+  // Månad: veckostaplar, och pilarna stegar en vecka.
+  await page.getByRole("button", { name: "Månad", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^Vecka \d+: [\d,]+ h$/ }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Föregående vecka" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Nästa vecka" })).toBeVisible();
+
+  // Lämna Rapporter och kom tillbaka utan att ladda om: Månad är kvar.
+  const sidebar = page.locator("[data-desktop-sidebar]");
+  await sidebar.getByRole("link", { name: "Ärenden / jävskontroll" }).click();
+  await expect(page).toHaveURL(/\/matters\/?$/, { timeout: 30_000 });
+  await sidebar.getByRole("link", { name: "Rapporter" }).click();
+  await showPanel(page, "Stapeldiagram");
+  await expect(page.getByRole("button", { name: "Månad", exact: true })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+});

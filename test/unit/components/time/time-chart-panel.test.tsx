@@ -1,7 +1,8 @@
 /**
  * `TimeChartPanel` (#2110) — rutan Stapeldiagram: vyval, period, staplar och
  * den valda stapelns ärenden. `timeEntry.chart` mockas och sparar sina indata;
- * svaret byggs med den riktiga `buildTimeChart`.
+ * svaret byggs med den riktiga `buildTimeChart`. Pilarna och den sparade vyn
+ * (`prefs`, `chart.time`) kom i #2111.
  */
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
@@ -10,10 +11,16 @@ import { buildTimeChart, type TimeChartEntry, type TimeChartGranularity } from "
 interface ChartInput { userId: string; from: string; to: string; granularity: TimeChartGranularity }
 
 const calls: ChartInput[] = [];
-const state = { entries: [] as TimeChartEntry[], loading: false };
+const state = { entries: [] as TimeChartEntry[], loading: false, pref: undefined as unknown };
+const save = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
+    useUtils: () => ({ prefs: { get: { invalidate: () => Promise.resolve() } } }),
+    prefs: {
+      get: { useQuery: () => ({ data: state.pref === undefined ? undefined : { user: state.pref, org: null } }) },
+      save: { useMutation: () => ({ mutate: save }) },
+    },
     timeEntry: {
       chart: {
         useQuery: (input: ChartInput) => {
@@ -42,7 +49,9 @@ function lastCall(): ChartInput | undefined {
 
 beforeEach(() => {
   calls.length = 0;
+  save.mockClear();
   state.loading = false;
+  state.pref = undefined;
   state.entries = [
     entry("2026-11-23", 390, true, M1),
     entry("2026-11-24", 180, false, M2),
@@ -128,5 +137,57 @@ describe("TimeChartPanel", () => {
     rerender(<TimeChartPanel userId={USER} anchorDay="2026-12-02" />);
     expect(lastCall()).toMatchObject({ from: "2026-11-30", to: "2026-12-06" });
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(/^Vecka 49 2026/);
+  });
+
+  it("Vecka: Föregående dag från måndag visar förra veckan med söndagen vald", () => {
+    state.entries.push(entry("2026-11-18", 60, true, M1));
+    render(<TimeChartPanel userId={USER} anchorDay="2026-11-23" />);
+    fireEvent.click(screen.getByRole("button", { name: "Föregående dag" }));
+    expect(lastCall()).toEqual({ userId: "u1", from: "2026-11-16", to: "2026-11-22", granularity: "day" });
+    expect(screen.getByRole("button", { name: "Söndag 22 november: 0 h" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("Vecka: Nästa dag flyttar den valda stapeln inom veckan", () => {
+    render(<TimeChartPanel userId={USER} anchorDay="2026-11-23" />);
+    fireEvent.click(screen.getByRole("button", { name: "Nästa dag" }));
+    expect(screen.getByRole("button", { name: "Tisdag 24 november: 4,5 h" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("Månad: Nästa vecka från den sista veckan ger nästa månad", () => {
+    render(<TimeChartPanel userId={USER} anchorDay="2026-11-30" />);
+    fireEvent.click(screen.getByRole("button", { name: "Månad" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nästa vecka" }));
+    expect(lastCall()).toEqual({ userId: "u1", from: "2026-12-01", to: "2026-12-31", granularity: "week" });
+  });
+
+  it("År: Föregående månad från januari ger förra året", () => {
+    render(<TimeChartPanel userId={USER} anchorDay="2026-01-15" />);
+    fireEvent.click(screen.getByRole("button", { name: "År" }));
+    fireEvent.click(screen.getByRole("button", { name: "Föregående månad" }));
+    expect(lastCall()).toEqual({ userId: "u1", from: "2025-01-01", to: "2025-12-31", granularity: "month" });
+  });
+
+  it("Dag: pilarna stegar en dag", () => {
+    render(<TimeChartPanel userId={USER} anchorDay="2026-11-24" />);
+    fireEvent.click(screen.getByRole("button", { name: "Dag" }));
+    fireEvent.click(screen.getByRole("button", { name: "Föregående dag" }));
+    expect(lastCall()).toMatchObject({ from: "2026-11-23", to: "2026-11-23" });
+  });
+
+  it("en sparad vy Månad öppnar rutan i Månad, och ett ogiltigt värde ger Vecka", () => {
+    state.pref = { view: "month" };
+    const { unmount } = render(<TimeChartPanel userId={USER} anchorDay="2026-11-24" />);
+    expect(screen.getByRole("button", { name: "Månad" })).toHaveAttribute("aria-pressed", "true");
+    expect(lastCall()).toMatchObject({ from: "2026-11-01", to: "2026-11-30", granularity: "week" });
+    unmount();
+    state.pref = { view: "fortnight" };
+    render(<TimeChartPanel userId={USER} anchorDay="2026-11-24" />);
+    expect(screen.getByRole("button", { name: "Vecka" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("ett byte av vy sparas under chart.time", () => {
+    render(<TimeChartPanel userId={USER} anchorDay="2026-11-24" />);
+    fireEvent.click(screen.getByRole("button", { name: "År" }));
+    expect(save).toHaveBeenCalledWith({ key: "chart.time", prefs: { view: "year" } }, expect.anything());
   });
 });

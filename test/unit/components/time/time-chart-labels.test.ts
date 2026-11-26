@@ -1,7 +1,7 @@
 /** Texterna i rutan Stapeldiagram (#2110). */
 import { describe, it, expect } from "vitest-compat";
 import {
-  TIME_CHART_GRANULARITY, timeChartBarAriaLabel, timeChartBarPeriod, timeChartPeriodTitle,
+  parseTimeChartView, TIME_CHART_GRANULARITY, TIME_CHART_STEP, timeChartBarAriaLabel, timeChartBarPeriod, timeChartPeriodTitle,
 } from "@/components/time/time-chart-labels";
 
 const NOW = new Date("2026-11-26T12:00:00Z");
@@ -12,6 +12,19 @@ const bar = (from: string, to: string, totalMinutes: number) => ({
 describe("time-chart-labels", () => {
   it("staplarna är nivån under perioden", () => {
     expect(TIME_CHART_GRANULARITY).toEqual({ day: "day", week: "day", month: "week", year: "month" });
+  });
+
+  it("pilarna stegar en stapel: Dag och Vecka en dag, Månad en vecka, År en månad (#2111)", () => {
+    expect(TIME_CHART_STEP).toEqual({ day: "day", week: "day", month: "week", year: "month" });
+  });
+
+  it("den sparade vyn tolkas, och saknad eller ogiltig ger Vecka (#2111)", () => {
+    expect(parseTimeChartView({ view: "month" })).toBe("month");
+    expect(parseTimeChartView({ view: "year" })).toBe("year");
+    expect(parseTimeChartView(null)).toBe("week");
+    expect(parseTimeChartView(undefined)).toBe("week");
+    expect(parseTimeChartView({ view: "decade" })).toBe("week");
+    expect(parseTimeChartView("month")).toBe("week");
   });
 
   it("periodens namn per vy", () => {
