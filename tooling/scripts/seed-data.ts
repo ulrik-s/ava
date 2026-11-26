@@ -1125,7 +1125,7 @@ function buildDeadlineTasks(orgId: string, ASSIGN_USERS: string[]): SeedDataset[
       id: `task-frist-${String(i + 1).padStart(3, "0")}`,
       userId, organizationId: orgId,
       title: `${tpl.deadline} — ${matter.matterNumber}`, description: null,
-      status: "TODO", priority: "HIGH", dueAt: start, completedAt: null,
+      status: "TODO", priority: "MEDIUM", dueAt: start, completedAt: null,
       matterId: matter.id, createdAt: isoDate(-30), updatedAt: isoDate(-30),
     });
   }
