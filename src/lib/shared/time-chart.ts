@@ -95,7 +95,10 @@ function barFor(bars: readonly BarAcc[], day: string): BarAcc | undefined {
 function addEntry(bar: BarAcc, entry: TimeChartEntry): void {
   bar.totalMinutes += entry.minutes;
   if (entry.billable) bar.billableMinutes += entry.minutes;
-  if (entry.matter) bar.matters.set(entry.matter.id, entry.matter);
+  if (!entry.matter) return;
+  // Bara de tre fälten: repots ärende-ref bär även klient och betalningssätt.
+  const { id, matterNumber, title } = entry.matter;
+  bar.matters.set(id, { id, matterNumber, title });
 }
 
 /** Den färdiga stapeln, med ärendena sorterade på ärendenummer. */

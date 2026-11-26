@@ -64,6 +64,15 @@ describe("buildTimeChart — staplarna", () => {
     expect(chart.bars[1]?.matters).toEqual([c]);
   });
 
+  it("ärendet i stapeln har bara id, ärendenummer och rubrik", () => {
+    const extra = { ...m("m9", "2026-0009"), paymentMethod: "PENDING", contacts: [{ name: "Klient" }] };
+    const chart = buildTimeChart({
+      entries: [entry("2026-11-24T10:00:00Z", 10, extra)],
+      from: "2026-11-24", to: "2026-11-24", granularity: "day",
+    });
+    expect(chart.bars[0]?.matters).toEqual([{ id: "m9", matterNumber: "2026-0009", title: "Ärende m9" }]);
+  });
+
   it("en post räknas på sin svenska kalenderdag", () => {
     const chart = buildTimeChart({
       entries: [{ date: "2026-11-23T23:30:00Z", minutes: 60, billable: true, matter: null }],

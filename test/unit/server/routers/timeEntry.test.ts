@@ -499,7 +499,9 @@ describe("timeEntry.chart (#2109)", () => {
     const chart = await makeCaller().chart(input);
     expect(chart).toMatchObject({ totalMinutes: 90, billableMinutes: 60 });
     expect(chart.bars[0]).toMatchObject({ key: "2026-11-01", label: "v. 44", totalMinutes: 0 });
-    expect(chart.bars.find((b) => b.key === "2026-11-02")).toMatchObject({ totalMinutes: 60, matters: [{ id: "m1", matterNumber: "2026-0001", title: "A" }] });
+    const bar = chart.bars.find((b) => b.key === "2026-11-02");
+    expect(bar?.totalMinutes).toBe(60);
+    expect(bar?.matters).toEqual([{ id: "m1", matterNumber: "2026-0001", title: "A" }]);
   });
 
   it("totalen är densamma som reports.perLawyer för samma person och period", async () => {
