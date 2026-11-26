@@ -20,6 +20,8 @@ export interface HealthItem {
   mergeState?: string;
   /** Nedbruten förfrågan utan öppna implementations-issues: klar, väntar bara på nästa release. */
   awaitingRelease?: boolean;
+  /** Nedbruten förfrågan vars arbetsordrar fortfarande är öppna: väntar på kön i ava, inte på en agent. */
+  awaitingWork?: boolean;
   /** Öppna GitHub-beroenden: blockerare den väntar på, och saker som väntar på den. */
   blockedBy?: number;
   blocking?: number;
@@ -43,7 +45,9 @@ export interface HealthReport {
   moving: string[];
 }
 
-const ref = (i: HealthItem): string => `${i.repo.split("/")[1] ?? i.repo}#${i.number}`;
+const HOUR = 3_600_000;
+const repoName = (repo: string): string => repo.split("/")[1] ?? repo;
+const ref = (i: HealthItem): string => `${repoName(i.repo)}#${i.number}`;
 /** En grund som andra väntar på säger hur många. */
 const waitedOn = (i: HealthItem): string => {
   const n = i.blocking ?? 0;
@@ -52,7 +56,7 @@ const waitedOn = (i: HealthItem): string => {
 const line = (i: HealthItem, what: string): string => `${ref(i)} ${i.title} — ${what}${waitedOn(i)}`;
 const isBlocked = (i: HealthItem): boolean => (i.blockedBy ?? 0) > 0;
 const hoursSince = (iso: string | undefined, now: number): number =>
-  iso === undefined ? 0 : (now - new Date(iso).getTime()) / 3_600_000;
+  iso === undefined ? 0 : (now - new Date(iso).getTime()) / HOUR;
 
 function machineOf(flow: Flow, item: HealthItem): Machine | undefined {
   return Object.values(flow.machines).find((m) => m.repo === item.repo && (m.items === "pulls") === item.isPr);
@@ -64,25 +68,62 @@ function currentStates(flow: Flow, item: HealthItem): string[] {
   return machine ? stateLabels(machine).filter((l) => item.labels.includes(l)) : [];
 }
 
-/** Väntar saken på något annat än en agent (en människa, ett beroende eller nästa release)? */
+/** Väntar saken på något annat än en agent (en människa, ett beroende, sina arbetsordrar eller nästa release)? */
 const waitsOnSomeoneElse = (flow: Flow, item: HealthItem): boolean =>
-  item.awaitingRelease === true || isBlocked(item) || item.labels.some((l) => flow.nudge.skip_flags.includes(l));
+  item.awaitingRelease === true || item.awaitingWork === true || isBlocked(item) ||
+  item.labels.some((l) => flow.nudge.skip_flags.includes(l));
 
 /** Vad som händer med en sak som rör sig. */
 function movingText(flow: Flow, i: HealthItem): string {
   if (i.awaitingRelease) return "klar — väntar på nästa release";
   const states = currentStates(flow, i).join(", ");
+  if (i.awaitingWork) return `${states} — arbetsordrarna byggs`;
   return isBlocked(i) ? `${states} — väntar på ${i.blockedBy ?? 0} beroende(n)` : states;
 }
 
-function stuckAlarm(flow: Flow, item: HealthItem, now: number): Alarm[] {
+/** Tillståndet som en agent ska driva vidare för just den här saken (inte en kö), annars undefined. */
+function agentState(flow: Flow, item: HealthItem): string | undefined {
   const label = currentStates(flow, item)[0];
   const state = Object.values(machineOf(flow, item)?.states ?? {}).find((s) => s.label === label);
-  if (!label || !state?.agent || waitsOnSomeoneElse(flow, item)) return [];
+  return state?.agent && !state.queue && !waitsOnSomeoneElse(flow, item) ? label : undefined;
+}
+
+function stuckAlarm(flow: Flow, item: HealthItem, now: number): Alarm[] {
+  const label = agentState(flow, item);
+  if (!label) return [];
   const age = hoursSince(item.labeledAt[label], now);
-  if (age * 3_600_000 < parseDuration(flow.health.stuck_after)) return [];
+  if (age * HOUR < parseDuration(flow.health.stuck_after)) return [];
   return [{ key: `stuck:${ref(item)}`, text: line(item, `har stått i ${label} i ${Math.floor(age)} h trots knuffar`) }];
 }
+
+type State = Machine["states"][string];
+
+/** Senaste gången något lämnade kön (ISO), bland de öppna sakerna. */
+function lastExit(machine: Machine, queue: State, items: readonly HealthItem[]): string | undefined {
+  const exits = queue.transitions.flatMap((t) => machine.states[t.to]?.label ?? []);
+  return items.flatMap((i) => exits.flatMap((l) => i.labeledAt[l] ?? [])).sort().at(-1);
+}
+
+/**
+ * En kö (`queue: true`) larmar en gång, när den har saker som väntar men inget
+ * har lämnat den på `stuck_after` — inte för varje sak som väntar på sin tur.
+ */
+function queueAlarm(flow: Flow, machine: Machine, queue: State, snap: HealthSnapshot): Alarm[] {
+  const own = snap.items.filter((i) => machineOf(flow, i) === machine);
+  const waiting = own.filter((i) => queue.label !== null && i.labels.includes(queue.label) && !waitsOnSomeoneElse(flow, i));
+  const last = lastExit(machine, queue, own);
+  const idle = last === undefined ? Infinity : hoursSince(last, snap.now);
+  if (waiting.length === 0 || idle * HOUR < parseDuration(flow.health.stuck_after)) return [];
+  const since = last === undefined ? `på över ${flow.health.stuck_after}` : `på ${Math.floor(idle)} h`;
+  return [{
+    key: `queue:${repoName(machine.repo)}:${queue.label ?? ""}`,
+    text: `Kön i ${queue.label ?? ""} (${repoName(machine.repo)}) står still: inget har lämnat den ${since}, ${waiting.length} väntar. Dygnstaket, eller startar inte ${queue.agent ?? "agenten"}?`,
+  }];
+}
+
+const queueAlarms = (flow: Flow, snap: HealthSnapshot): Alarm[] =>
+  Object.values(flow.machines).flatMap((m) =>
+    Object.values(m.states).filter((s) => s.queue).flatMap((s) => queueAlarm(flow, m, s, snap)));
 
 function itemAlarms(flow: Flow, item: HealthItem, now: number): Alarm[] {
   const states = currentStates(flow, item);
@@ -125,7 +166,7 @@ function waitingByPrio(items: readonly HealthItem[], order: readonly string[]): 
 
 /** Hela kedjans hälsa. */
 export function healthReport(flow: Flow, snap: HealthSnapshot): HealthReport {
-  const alarms = snap.items.flatMap((i) => itemAlarms(flow, i, snap.now));
+  const alarms = [...snap.items.flatMap((i) => itemAlarms(flow, i, snap.now)), ...queueAlarms(flow, snap)];
   if (snap.lastClockRun === null || hoursSince(snap.lastClockRun, snap.now) > 3) {
     alarms.push({ key: "clock", text: "Flödesvaktens klocka har inte gått på över 3 timmar (PR-vakten/verifieringen startar den)." });
   }
