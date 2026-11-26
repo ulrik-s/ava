@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
+import { TimeChartPanel } from "@/components/time/time-chart-panel";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -135,6 +136,7 @@ export default function ReportsPage() {
     { id: "matters", title: "Ärenden", render: () => (r ? <MattersTable report={r} /> : loading) },
     { id: "weekly", title: "Veckor", render: () => (r ? <WeeklyTable report={r} /> : loading) },
     { id: "unbilled", title: "Ofakturerat", render: () => (r ? <UnbilledTable report={r} /> : loading) },
+    { id: "chart", title: "Stapeldiagram", render: () => (userId ? <TimeChartPanel userId={userId} anchorDay={to} /> : loading) },
   ];
 
   return (
