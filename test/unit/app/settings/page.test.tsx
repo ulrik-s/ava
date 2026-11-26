@@ -178,7 +178,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     expect(screen.getByLabelText(/^Timarvode \(kr/)).toHaveProperty("value", "2500");
     expect(screen.getByLabelText(/^Tidsspillan \(kr/)).toHaveProperty("value", "1500");
-    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan helg\/kväll/).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan helg\/kväll/).placeholder).toMatch(/^ärvs: 2\s500\skr\/h$/);
   });
 
   it("timpriser: kr/h i fältet, hela kartan sparas i öre; tömt fält tar bort kategorin", async () => {

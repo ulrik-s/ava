@@ -4,7 +4,7 @@
  * = 25 %. Returnerar null för 0/negativa belopp.
  */
 
-import { formatCurrency } from "@/lib/client/utils";
+import { formatKr } from "@/lib/shared/kr-format";
 import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { splitGross } from "@/lib/shared/whole-kronor";
 
@@ -14,8 +14,8 @@ export function VatBreakdown({ inclOre }: { inclOre: number }) {
   const { netOre: exclVat, vatOre: vat } = splitGross(inclOre, DEFAULT_VAT_RATE);
   return (
     <p className="mt-1 text-[11px] text-gray-500">
-      Varav moms (25 %): <span className="font-mono">{formatCurrency(vat)}</span>
-      {" · "}exkl. moms: <span className="font-mono">{formatCurrency(exclVat)}</span>
+      Varav moms (25 %): <span className="font-mono">{formatKr(vat)}</span>
+      {" · "}exkl. moms: <span className="font-mono">{formatKr(exclVat)}</span>
     </p>
   );
 }

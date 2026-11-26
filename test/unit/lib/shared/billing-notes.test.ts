@@ -8,7 +8,7 @@ import {
   insurerPruningNote, kostnadsrakningSubmittedNote, krAppealedNote, krVoidedNote, noteTimestamp,
   paymentMethodNote, radgivningInvoicedNote, rattsskyddNekadNote, settledNote,
 } from "@/lib/shared/billing-notes";
-import { formatKr } from "@/lib/shared/format-kr";
+import { formatKr } from "@/lib/shared/kr-format";
 
 /** Intl sv-SE använder hårda mellanslag — jämför på normaliserad text. */
 const norm = (s: string): string => s.replace(/\s/g, " ");

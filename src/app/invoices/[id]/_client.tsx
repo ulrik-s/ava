@@ -14,10 +14,9 @@ import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-bi
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { specCardTotals, specLineOre } from "@/lib/shared/invoice-specification";
-import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
+import { formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
 import { INVOICE_STATUS_LABELS, type AmountRounding } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -201,9 +200,9 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
               <tr key={i} className="align-top">
                 <td className="py-1.5 whitespace-nowrap">{new Date(l.date).toLocaleDateString("sv-SE")}</td>
                 <td className="py-1.5">{l.description}</td>
-                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(aPrisOre(l))}/h</td>
+                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatKr(aPrisOre(l))}/h</td>
                 <td className="py-1.5 text-right whitespace-nowrap">{formatDecimalHoursWithUnit(l.minutes)}</td>
-                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(l.amountOre)}</td>
+                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatKr(l.amountOre)}</td>
               </tr>
             ))}
           </tbody>
@@ -212,7 +211,7 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
               <td className="py-1.5" colSpan={2}>Summa</td>
               <td></td>
               <td className="py-1.5 text-right whitespace-nowrap">{formatDecimalHoursWithUnit(totalMinutes)}</td>
-              <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(totalAmount)}</td>
+              <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatKr(totalAmount)}</td>
             </tr>
           </tfoot>
         </table>
@@ -222,13 +221,13 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
           <div key={i} className="flex items-center justify-between py-1.5">
             <dt className={`text-sm ${r.kind === "info" ? "text-gray-400" : "text-gray-600"}`}>{r.label}</dt>
             <dd className={`text-sm font-mono ${r.kind === "deduct" ? "text-amber-700" : r.kind === "info" ? "text-gray-400" : "text-gray-700"}`}>
-              {r.kind === "deduct" ? "−" : r.kind === "info" ? "(" : ""}{formatCurrency(r.amountOre)}{r.kind === "info" ? ")" : ""}
+              {r.kind === "deduct" ? "−" : r.kind === "info" ? "(" : ""}{formatKr(r.amountOre)}{r.kind === "info" ? ")" : ""}
             </dd>
           </div>
         ))}
         <div className="flex items-center justify-between border-t border-gray-300 mt-1 pt-2">
           <dt className="text-sm font-semibold text-gray-900">{view.totalLabel}</dt>
-          <dd className="text-sm font-mono font-semibold text-gray-900">{formatCurrency(view.totalOre)}</dd>
+          <dd className="text-sm font-mono font-semibold text-gray-900">{formatKr(view.totalOre)}</dd>
         </div>
       </dl>
     </div>
@@ -527,7 +526,7 @@ function SpecificationCard({ timeEntries, expenses, rounding }: { timeEntries: S
           </table>
           <div className="flex justify-between text-xs text-gray-500 mt-1">
             <span>Moms på arvodet (25 %)</span>
-            <span className="font-mono">{formatCurrency(arvodeMomsOre)}</span>
+            <span className="font-mono">{formatKr(arvodeMomsOre)}</span>
           </div>
         </div>
       )}

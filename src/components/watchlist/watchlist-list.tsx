@@ -11,8 +11,8 @@
 
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
 import { EntityLink } from "@/lib/client/demo/entity-link";
-import { formatCurrency } from "@/lib/client/utils";
 import { deadlineOf } from "@/lib/shared/deadline";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { WatchlistItem, WatchlistKind } from "@/lib/shared/watchlist";
 
 /** Ikon + etikett per signaltyp. Etiketten behövs för att raden ska gå att
@@ -87,7 +87,7 @@ export function WatchlistRow({ item, onComplete }: { item: WatchlistItem; onComp
             <span className="text-xs opacity-80">{item.matterNumber}</span>
           )}
           {item.amountOre !== null && (
-            <span className="ml-auto font-mono text-xs">{formatCurrency(item.amountOre)}</span>
+            <span className="ml-auto font-mono text-xs">{formatKr(item.amountOre)}</span>
           )}
         </div>
         <p className="mt-0.5 text-xs opacity-90">

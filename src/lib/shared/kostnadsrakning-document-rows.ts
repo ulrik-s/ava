@@ -8,7 +8,7 @@
  * yrkar (Σ radbelopp i öre) — formateringen avrundar ingenting.
  */
 
-import { formatDecimalHours, formatOreAsKr, formatPlainKr, formatQuantity, formatRateKr } from "./kr-format";
+import { formatDecimalHours, formatKr, formatPlainKr, formatQuantity, formatRateKr } from "./kr-format";
 import { type TimeEntryKind } from "./schemas/enums";
 
 /** En tidsrad som dokumentet behöver (struktur-kompatibel med `TimeLine`). */
@@ -158,12 +158,12 @@ export function timeAmountOre(minutes: number, rateOre: number): number {
 
 /** Formatera en sammanställningsrad med sitt (avrundade) belopp. */
 export function formatRow(spec: KrRowSpec, amountOre: number): KrSummaryRow {
-  return { label: spec.label, quantity: spec.quantity, amount: formatOreAsKr(amountOre) };
+  return { label: spec.label, quantity: spec.quantity, amount: formatKr(amountOre) };
 }
 
 /** Utläggsraden i sammanställningen (exkl moms), eller ingen rad utan utlägg. */
 export function expenseSummaryRows(lines: readonly KrExpenseLineLike[], exclVatOre: number): KrSummaryRow[] {
-  return lines.length === 0 ? [] : [{ label: "UTLÄGG", quantity: "", amount: formatOreAsKr(exclVatOre) }];
+  return lines.length === 0 ? [] : [{ label: "UTLÄGG", quantity: "", amount: formatKr(exclVatOre) }];
 }
 
 function specQuantity(l: KrTimeLineLike): string {

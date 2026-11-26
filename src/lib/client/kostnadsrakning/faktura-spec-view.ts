@@ -16,7 +16,7 @@ import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from 
 import { svd as svDate } from "@/lib/shared/settlement-view"; // svensk kalenderdag (#1677)
 import { roundingOf } from "@/lib/shared/whole-kronor";
 
-/** Formaterar öre till text (`formatCurrency` i appen). */
+/** Formaterar öre till text (`formatKr` i appen). */
 export type Fc = (ore: number) => string;
 
 /** En post i nedbrytningens upparbetade arbete (#880). */

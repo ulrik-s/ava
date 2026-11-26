@@ -11,7 +11,7 @@
  * Beloppen är fakturornas egna (brutto för fakturor, netto där det sägs).
  */
 
-import { formatKr } from "./format-kr";
+import { formatKr } from "./kr-format";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, PAYMENT_METHOD_LABELS, type InvoiceStatus, type InvoiceType, type PaymentMethod } from "./schemas/enums";
 import { stockholmDay, stockholmTime } from "./stockholm-time";
 

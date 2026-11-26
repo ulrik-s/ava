@@ -82,16 +82,16 @@ describe("förordnandemål: FU nedlagd efter två förhör", () => {
     expect(html).toContain("1,42 tim");
     // Taxan
     expect(html).toContain("Taxa, förhörstid 1 tim 15 min - 1 tim 29 min");
-    expect(html).toMatch(/5\s106,00 kr/);
+    expect(html).toMatch(/5\s106,00\skr/);
     // Tidsspillan med avdrag för den timme som ingår
     expect(html).toContain("Tidsspillan totalt 3 h, varav 1 h ingår i taxan");
-    expect(html).toMatch(/TIDSSPILLAN UTÖVER TAXAN<\/td><td class="num">2 á 1\s487 kr/);
-    expect(html).toMatch(/2\s974,00 kr/);
+    expect(html).toMatch(/TIDSSPILLAN UTÖVER TAXAN<\/td><td class="num">2 á 1\s487\skr/);
+    expect(html).toMatch(/2\s974,00\skr/);
     // Arbetet som utförts (ingår i taxan) + utlägg + totalen
     expect(html).toContain("Arvode (ingår i taxan)");
     expect(html).toContain("Genomgång av förundersökningsmaterial");
     expect(html).toContain("Parkering polishuset");
-    expect(html).toMatch(/10\s225,00 kr/);
+    expect(html).toMatch(/10\s225,00\skr/);
     // Ingen huvudförhandling i ett förordnandemål
     expect(html).not.toContain("Huvudförhandling");
     expect(html).not.toContain("Brottmålstaxa");
@@ -110,7 +110,7 @@ describe("förordnandemål som inte ryms i taxan", () => {
     const html = renderHandlebars(KOSTNADSRAKNING_DEFAULT_HTML, kr.templateContext);
     expect(html).toContain("utanför vardagar 07.00–18.00");
     // Löpande: arvodet per kategori och á-pris i sammanställningen (#1218).
-    expect(html).toMatch(/ARVODE<\/td><td class="num">3,42 á 1\s626 kr/);
+    expect(html).toMatch(/ARVODE<\/td><td class="num">3,42 á 1\s626\skr/);
     expect(html).not.toMatch(/\{\{/);
   });
 
@@ -135,8 +135,8 @@ const FORHOR_LINES = [
   { date: "2026-03-02", start: "09:00", end: "09:50", minutesFormatted: "0,83 h" },
   { date: "2026-03-04", start: "13:00", end: "13:55", minutesFormatted: "0,58 h" },
 ];
-/** Beloppet som `formatOreAsKr` skriver det: sv-SE grupperar tusental med hårt blanksteg. */
-const kr = (s: string): string => s.replace(/(?<=\d) (?=\d)/g, "\u00a0");
+/** Beloppet som `formatKr` skriver det: sv-SE grupperar tusental med hårt blanksteg. */
+const kr = (s: string): string => s.replace(/(?<=\d) (?=\d|kr)/g, "\u00a0");
 const TAXA_85_MIN = { intervalLabel: "1 tim 15 min - 1 tim 29 min", taxaAmountFormatted: kr("5 106,00 kr") };
 const forordnandeOf = (input: BuildInput): unknown => buildKostnadsrakningContext(input).templateContext.forordnande;
 
@@ -167,7 +167,7 @@ describe("förordnandemål: mallens förordnandeavsnitt", () => {
       tidsspillanTotalFormatted: "2,5 h", tidsspillanIngarFormatted: "1 h",
       tidsspillanRader: [
         { label: "Tidsspillan vardag 08–18", minutesFormatted: "1 h", rateFormatted: kr("1 487,00 kr/h"), amountFormatted: kr("1 487,00 kr") },
-        { label: "Tidsspillan annan tid", minutesFormatted: "0,5 h", rateFormatted: "975,00 kr/h", amountFormatted: "487,50 kr" },
+        { label: "Tidsspillan annan tid", minutesFormatted: "0,5 h", rateFormatted: kr("975,00 kr/h"), amountFormatted: kr("487,50 kr") },
       ],
       tidsspillanAmountFormatted: kr("1 974,50 kr"), gransvardeOverskrids: false,
     });

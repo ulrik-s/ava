@@ -11,6 +11,7 @@
 import { useId } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { inheritedHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
+import { formatRateKr } from "@/lib/shared/kr-format";
 import {
   HOURLY_TIME_ENTRY_KINDS, TIME_ENTRY_KIND_LABELS, type HourlyTimeEntryKind,
 } from "@/lib/shared/schemas/enums";
@@ -23,9 +24,9 @@ const KIND_SCOPE: Partial<Record<HourlyTimeEntryKind, string>> = {
   TIDSSPILLAN_OVRIG_TID: "Annan tid — ersätts bara 07–22.",
 };
 
-/** Öre/h → "1 626 kr/h". */
+/** Öre/h → "1 626 kr/h", eller "975,50 kr/h" när öre finns. */
 export function formatKrPerHour(ore: number): string {
-  return `${new Intl.NumberFormat("sv-SE").format(ore / 100)} kr/h`;
+  return `${formatRateKr(ore)}/h`;
 }
 
 /** Kartan med `kind` satt till `kr` (i öre), eller borttagen när fältet töms. */

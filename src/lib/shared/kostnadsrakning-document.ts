@@ -26,7 +26,7 @@ import {
   type KrExpenseLineLike, type KrExpenseSpec, type KrRowSpec, type KrSpecSection, type KrSummaryRow, type KrTimeLineLike,
 } from "./kostnadsrakning-document-rows";
 import type { KrClaim } from "./kr-claim";
-import { formatDecimalHours, formatDecimalHoursWithUnit, formatOreAsKr } from "./kr-format";
+import { formatDecimalHours, formatDecimalHoursWithUnit, formatKr } from "./kr-format";
 import type { OrgImage } from "./org-image";
 import { FORORDNANDE_AVSLUT_LABELS, type ForordnandeAvslut } from "./schemas/enums";
 
@@ -301,7 +301,7 @@ export function buildKrDocument(input: KrDocumentInput): KrDocumentView {
     footerLines: footerLines(org, input.hasFTax),
     summaryRows: summaryRows(arvode, input),
     notes: arvode.notes,
-    totals: { exclVat: formatOreAsKr(claim.exclVat), vatLabel: vatLabel(input.expenseLines), vat: formatOreAsKr(claim.vat), inclVat: formatOreAsKr(claim.inclVat) },
+    totals: { exclVat: formatKr(claim.exclVat), vatLabel: vatLabel(input.expenseLines), vat: formatKr(claim.vat), inclVat: formatKr(claim.inclVat) },
     radgivningNotice: input.radgivningNotice,
     placeDate: placeDate(org, input.yrkandeDate),
     signatureName: input.defenderName,

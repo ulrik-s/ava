@@ -10,7 +10,7 @@ import { buildKostnadsrakningContext, withDocumentFields, type BuildInput } from
 import { buildKrDocument, cityFromAddress, displayWebsite, vatNumberFromOrgNumber, type KrDocumentInput } from "@/lib/shared/kostnadsrakning-document";
 import { expenseSpec, hourlyRowSpecs, timeSpecSections, type KrTimeLineLike } from "@/lib/shared/kostnadsrakning-document-rows";
 import { krClaim, type KrClaim } from "@/lib/shared/kr-claim";
-import { formatDecimalHours, formatDecimalHoursWithUnit, formatOreAsKr, formatPlainKr, formatQuantity, formatRateKr } from "@/lib/shared/kr-format";
+import { formatDecimalHours, formatDecimalHoursWithUnit, formatKr, formatPlainKr, formatQuantity, formatRateKr } from "@/lib/shared/kr-format";
 import { roundToKronor } from "@/lib/shared/whole-kronor";
 import { TINY_JPEG, TINY_PNG } from "../../../helpers/tiny-images";
 
@@ -40,7 +40,7 @@ const BASE: KrDocumentInput = {
 
 describe("kr-format", () => {
   it("belopp, timmar, á-pris och antal i svensk form", () => {
-    expect(nb(formatOreAsKr(5_097_510))).toBe("50 975,10 kr");
+    expect(nb(formatKr(5_097_510))).toBe("50 975,10 kr");
     expect(formatDecimalHours(1881)).toBe("31,35");
     expect(formatPlainKr(15_200)).toBe("152");
     expect(formatPlainKr(950)).toBe("9,50");

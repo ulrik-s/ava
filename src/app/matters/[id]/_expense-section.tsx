@@ -6,10 +6,10 @@ import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import { netOreOf, vatOreOf } from "@/lib/shared/billing-work-value";
 import { chargedExpenseLines, expenseNetOre } from "@/lib/shared/expense-vat";
 import { toIsoDate } from "@/lib/shared/iso-date";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { MileageExpensePayload } from "@/lib/shared/mileage-rate";
 import type { ExpenseId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
@@ -131,13 +131,13 @@ function expenseColumns({ onEdit, onDelete }: { onEdit: (e: Expense) => void; on
       render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
     { key: "exclVat", label: "Exkl moms", sortable: true, align: "right",
       sortValue: (e) => vatOf(e).exclVat,
-      render: (e) => <span className="text-sm font-mono text-gray-900 whitespace-nowrap">{formatCurrency(vatOf(e).exclVat)}</span> },
+      render: (e) => <span className="text-sm font-mono text-gray-900 whitespace-nowrap">{formatKr(vatOf(e).exclVat)}</span> },
     { key: "vat", label: "Moms", sortable: true, align: "right",
       sortValue: (e) => vatOf(e).vat,
-      render: (e) => <span className="text-sm font-mono text-gray-500 whitespace-nowrap">{formatCurrency(vatOf(e).vat)}</span> },
+      render: (e) => <span className="text-sm font-mono text-gray-500 whitespace-nowrap">{formatKr(vatOf(e).vat)}</span> },
     { key: "inclVat", label: "Inkl moms", sortable: true, align: "right",
       sortValue: (e) => vatOf(e).inclVat,
-      render: (e) => <span className="text-sm font-mono text-gray-900 whitespace-nowrap">{formatCurrency(vatOf(e).inclVat)}</span> },
+      render: (e) => <span className="text-sm font-mono text-gray-900 whitespace-nowrap">{formatKr(vatOf(e).inclVat)}</span> },
     { key: "billable", label: "Deb.", sortable: true, filterable: true,
       sortValue: (e) => (e.billable ? 1 : 0), filterValue: (e) => (e.billable ? "Ja" : "Nej"),
       render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
@@ -167,9 +167,9 @@ function expenseFooter(rows: Expense[]): Partial<Record<string, React.ReactNode>
   const t = chargedTotals(rows);
   return {
     description: <span className="text-gray-700">Summa</span>,
-    exclVat: <span className="font-mono text-gray-900">{formatCurrency(t.exclVat)}</span>,
-    vat: <span className="font-mono text-gray-700">{formatCurrency(t.vat)}</span>,
-    inclVat: <span className="font-mono text-gray-900">{formatCurrency(t.inclVat)}</span>,
+    exclVat: <span className="font-mono text-gray-900">{formatKr(t.exclVat)}</span>,
+    vat: <span className="font-mono text-gray-700">{formatKr(t.vat)}</span>,
+    inclVat: <span className="font-mono text-gray-900">{formatKr(t.inclVat)}</span>,
   };
 }
 
@@ -214,7 +214,7 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
         <h2 className="font-semibold text-gray-900">
           Utlägg
           {expenses.data && expenses.data.totalAmount > 0 && (
-            <span className="ml-2 text-sm font-normal text-gray-600">(totalt {formatCurrency(expenses.data.totalAmount)})</span>
+            <span className="ml-2 text-sm font-normal text-gray-600">(totalt {formatKr(expenses.data.totalAmount)})</span>
           )}
         </h2>
         <span className="flex gap-4">

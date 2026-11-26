@@ -8,8 +8,8 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import { coverageStatus, type CoverageStatus } from "@/lib/shared/coverage-cap";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
@@ -36,7 +36,7 @@ function usesCap(method: PaymentMethod | null | undefined): boolean {
 
 /** Upparbetat/tak som text (belopp resp. timmar). */
 function usageText(s: CoverageStatus): { used: string; cap: string } {
-  if (s.kind === "amount") return { used: formatCurrency(s.usedOre), cap: formatCurrency(s.capOre) };
+  if (s.kind === "amount") return { used: formatKr(s.usedOre), cap: formatKr(s.capOre) };
   return { used: `${Math.round((s.usedOre / 60) * 10) / 10} tim`, cap: `${s.capOre / 60} tim` };
 }
 

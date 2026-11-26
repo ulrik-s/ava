@@ -22,12 +22,12 @@
  * — den är en myndighetsblankett, inte en faktura, och berörs inte här.
  */
 
-import { formatCurrency } from "@/lib/client/utils";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
 import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
 import type { InvoiceSpecification, SpecExpenseLine } from "@/lib/shared/invoice-specification";
 import { invoiceVatOre } from "@/lib/shared/invoice-vat";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
@@ -322,7 +322,7 @@ function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "fo
  * Bygg den färdigformaterade vy-modellen (#938) — enda stället där öre blir
  * text. PDF-renderaren (`renderFakturaPdf`) ritar den rakt av.
  */
-export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatCurrency): FakturaView {
+export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatKr): FakturaView {
   const spec = resolveSpec(a);
   const showTimeAmounts = !isAcconto(a.invoice);
   return {

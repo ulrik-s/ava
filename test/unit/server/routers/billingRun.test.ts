@@ -937,6 +937,8 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.clientInvoice.invoiceType).toBe("CREDIT");
     expect(res.clientInvoice.amount).toBe(-29_700);      // negativ = kreditering
     expect(res.creditInvoice).toBe(res.clientInvoice);   // krediten ÄR klientfakturan
+    // #1946: anteckningen skriver de betalda acontona med formatKr (två decimaler, hårt mellanslag).
+    expect(res.clientInvoice.notes).toContain("betalda aconton (500,00 kr)");
     // #895: kreditfakturan visar FULLA specifikationen (tidsspec + avdragna aconton) →
     // netto = kredit (negativt), inte den gamla minimala 2-rads-vyn.
     const bd = res.clientInvoice.settlementBreakdown!;

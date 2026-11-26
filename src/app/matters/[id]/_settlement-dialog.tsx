@@ -19,10 +19,10 @@ import { fakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate, type DocUtils, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import type { SettlementView } from "@/lib/shared/settlement-view";
@@ -56,7 +56,7 @@ function Row({ label, netOre, grossOre, dim }: { label: string; netOre: number; 
       <span>{label}</span>
       <button type="button" onClick={toggle} title={`Visar ${mode === "incl" ? "inkl." : "exkl."} moms — klicka för att växla`}
         className="font-mono underline decoration-dotted decoration-gray-300 underline-offset-2 hover:decoration-gray-500">
-        {formatCurrency(shown)}
+        {formatKr(shown)}
       </button>
     </div>
   );
