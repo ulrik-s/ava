@@ -51,7 +51,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "calendar.listForMatter": "Alla kalenderhändelser kopplade till ett visst ärende, kronologiskt.",
   "calendar.listForUsers": "Kalenderhändelser för flera medarbetare i en enda fråga — underlag för gemensamma vyer.",
   "calendar.getById": "Hämta en enskild kalenderhändelse.",
-  "calendar.create": "Skapa en kalenderhändelse (möte, förhandling, frist), valfritt kopplad till ett ärende.",
+  "calendar.create": "Skapa en kalenderhändelse (möte eller förhandling), valfritt kopplad till ett ärende. En frist är en uppgift: skapa den med task.create.",
   "calendar.update": "Uppdatera en kalenderhändelse.",
   "calendar.delete": "Radera en kalenderhändelse.",
 
