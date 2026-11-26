@@ -2,7 +2,7 @@
  * Tester för `GenerateModal` (#27) — klientsidig dokument-generering per ärende.
  *
  * Täcker mall-/mottagar-/format-väljarna + hela generera-orkestreringen
- * (handleGenerate → runGenerate → buildDocCtx → generateOneDoc → register):
+ * (handleGenerate → runGenerate → buildTemplateContext → generateOneDoc → register):
  * ett dokument per vald mottagare (eller ett generellt utan val), fel-
  * hantering (mall utan innehåll) och laddnings-/tom-tillstånd. DOM-globaler
  * som happy-dom saknar (URL.createObjectURL, window.open) och FSA-skrivningen
@@ -19,6 +19,10 @@ let templatesData: Tpl[] | undefined;
 let templatesLoading = false;
 let matterData: unknown;
 let orgData: unknown;
+let officesData: unknown;
+let userData: unknown;
+/** Renderingen: en fast HTML-sträng, eller (i kontexttestet) riktig Handlebars. */
+let renderImpl: (tpl: string, ctx: Record<string, unknown>) => string = () => "<!doctype html><html><body>dokument</body></html>";
 const registerMutateAsync = vi.fn(async () => ({}));
 const treeInvalidate = vi.fn();
 
@@ -27,12 +31,16 @@ vi.mock("@/lib/client/trpc", () => ({
     useUtils: () => ({ document: { tree: { invalidate: treeInvalidate } } }),
     documentTemplate: { list: { useQuery: () => ({ data: templatesData, isLoading: templatesLoading }) } },
     matter: { getById: { useQuery: () => ({ data: matterData }) } },
-    organization: { getSettings: { useQuery: () => ({ data: orgData }) } },
+    organization: {
+      getSettings: { useQuery: () => ({ data: orgData }) },
+      listOffices: { useQuery: () => ({ data: officesData }) },
+    },
+    user: { current: { useQuery: () => ({ data: userData }) } },
     document: { register: { useMutation: () => ({ mutateAsync: registerMutateAsync }) } },
   },
 }));
 vi.mock("@/lib/client/kostnadsrakning/render-handlebars", () => ({
-  renderHandlebars: () => "<!doctype html><html><body>dokument</body></html>",
+  renderHandlebars: (tpl: string, ctx: Record<string, unknown>) => renderImpl(tpl, ctx),
 }));
 vi.mock("@/lib/client/fsa/handle-store", () => ({ loadHandle: async () => null }));
 vi.mock("@/lib/client/fsa/fs-adapter", () => ({
@@ -51,11 +59,19 @@ beforeEach(() => {
     { id: "t1", name: "Fullmakt", category: "Avtal", content: "<body>{{matter.matterNumber}}</body>" },
     { id: "t-empty", name: "Tom mall", category: null, content: null },
   ];
+  renderImpl = () => "<!doctype html><html><body>dokument</body></html>";
   matterData = {
-    matterNumber: "2026-0001", title: "Tvist mot motpart", matterType: "Brottmål",
-    contacts: [{ role: "KLIENT", contact: { name: "Anna Klient" } }],
+    id: "m1", matterNumber: "2026-0001", title: "Tvist mot motpart", matterType: "Brottmål",
+    status: "ACTIVE", createdAt: "2026-01-10T09:00:00Z",
+    contacts: [
+      { contactId: "c0", role: "KLIENT", notes: null, contact: { name: "Anna Klient", email: "anna@klient.se" } },
+      { contactId: "c1", role: "MOTPART", notes: null, contact: { name: "Bob Motpart", email: "bob@x.se", address: "Motpartsvägen 9" } },
+      { contactId: "c2", role: "VITTNE", notes: null, contact: { name: "Cilla Vittne" } },
+    ],
   };
-  orgData = { name: "Byrå AB", orgNumber: "556677-8899", address: "Storgatan 1", email: "info@byra.se" };
+  orgData = { name: "Byrå AB", orgNumber: "556677-8899", address: "Storgatan 1", email: "info@byra.se", phone: "08-555 00" };
+  officesData = [];
+  userData = { name: "Karin Advokat", title: "Advokat" };
 
   globalThis.URL.createObjectURL = vi.fn(() => "blob:fake");
   globalThis.URL.revokeObjectURL = vi.fn();
@@ -131,6 +147,21 @@ describe("GenerateModal — generering", () => {
     await waitFor(() => expect(screen.getByText("Mallen saknar innehåll.")).toBeInTheDocument());
     expect(registerMutateAsync).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("en vald mottagare: byråns telefon, klientens e-post och mottagarens adress finns i dokumentet (#2118)", async () => {
+    const Handlebars = (await import("handlebars")).default;
+    renderImpl = (tpl, ctx) => Handlebars.compile(tpl)(ctx);
+    const blobs: Blob[] = [];
+    globalThis.URL.createObjectURL = vi.fn((b: Blob) => { blobs.push(b); return "blob:fake"; });
+    templatesData = [{ id: "t1", name: "Brev", category: null, content: "<body>{{organization.phone}}|{{klient.email}}|{{recipient.address}}</body>" }];
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={() => {}} />);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "t1" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Bob Motpart/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
+    await waitFor(() => expect(registerMutateAsync).toHaveBeenCalledTimes(1));
+    expect(await blobs[0]?.text()).toContain("08-555 00|anna@klient.se|Motpartsvägen 9");
+    expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ fileName: expect.stringContaining("Brev Bob Motpart") }));
   });
 
   it("format docx går att välja", () => {

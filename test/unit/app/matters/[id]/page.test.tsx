@@ -102,6 +102,8 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     organization: {
       getSettings: { useQuery: () => ({ data: undefined }) },
+      // Mallkontextens kontor (#2118).
+      listOffices: { useQuery: () => ({ data: [] }) },
     },
     kostnadsrakning: {
       record: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },

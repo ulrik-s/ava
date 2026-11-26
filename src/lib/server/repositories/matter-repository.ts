@@ -19,6 +19,8 @@ export interface MatterContactContactView {
   orgNumber?: string | null;
   email?: string | null;
   phone?: string | null;
+  /** Kontaktens adress (mallarnas mottagare, #2118); repona returnerar hela kontaktraden. */
+  address?: string | null;
 }
 
 /** En part på listraden (#1869): kopplingens roll och kontaktens namn. */

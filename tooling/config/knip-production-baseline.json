@@ -9,7 +9,6 @@
   "src/lib/client/github/push.ts",
   "src/lib/client/github/sync-state.ts",
   "src/lib/client/sync/external-actions.ts",
-  "src/lib/client/template-recipients.ts",
   "src/lib/client/todo/todo-views.ts",
   "src/lib/client/working-set/lru-budget.ts",
   "src/lib/client/working-set/working-set-cache.ts",
