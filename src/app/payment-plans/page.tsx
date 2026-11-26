@@ -84,7 +84,7 @@ export interface ScanResult {
 /** Mänsklig sammanfattning av en påminnelse-skanning. Ren → unit-testbar. */
 export function formatScanResult(r: ScanResult): string {
   if (r.planned === 0) return `Inga nya påminnelser (skannade ${r.scanned} aktiva planer).`;
-  return `${r.planned} påminnelser skickade — ${r.due} förfaller, ${r.overdue} försenade (av ${r.scanned} planer).`;
+  return `${r.planned} påminnelser registrerade — ${r.due} förfaller, ${r.overdue} försenade (av ${r.scanned} planer).`;
 }
 
 const planColumns: Column<PlanRow>[] = [
@@ -135,8 +135,8 @@ export default function PaymentPlansPage() {
   const list = trpc.paymentPlan.list.useQuery({ status, search: search || undefined });
 
   // #71: manuell väg att köra scanDueReminders (förfallo-/försenings-
-  // påminnelser) utan ett separat tRPC-anrop. Den automatiska job-vägen
-  // väntar på regelmotorn (#80).
+  // påminnelser). Knappen registrerar bara påminnelserna i planens logg;
+  // AVA skickar ingenting till klienten (#2135).
   const scan = trpc.paymentPlan.scanDueReminders.useMutation({
     onSuccess: (r) => {
       setScanMsg(formatScanResult(r));
@@ -169,7 +169,7 @@ export default function PaymentPlansPage() {
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
         >
           <BellRing size={14} />
-          {scan.isPending ? "Skickar…" : "Skicka påminnelser nu"}
+          {scan.isPending ? "Registrerar…" : "Registrera påminnelser"}
         </button>
         {scanMsg && (
           <span data-testid="scan-result" className="text-sm text-gray-600">
@@ -177,7 +177,7 @@ export default function PaymentPlansPage() {
           </span>
         )}
         {scan.error && (
-          <span className="text-sm text-red-600">Kunde inte skicka: {scan.error.message}</span>
+          <span className="text-sm text-red-600">Kunde inte registrera: {scan.error.message}</span>
         )}
       </div>
 

@@ -10,6 +10,7 @@
  * - Rutornas rubrikrader: ett steg starkare färg i ljust läge, mörkt läge oförändrat (#1636).
  * - Startsidan: tidsumman i Tidrapportering ser ut som rubriken (#1673).
  * - Fakturor: förfallna fakturor markeras röda och knappen visar bara dem (#1731).
+ * - Avbetalningar: påminnelser registreras, AVA säger inte att de skickas (#2135).
  */
 import type { Locator, Page } from "@playwright/test";
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
@@ -47,6 +48,25 @@ test("Fakturor, Avbetalningar och Användare visar svenska etiketter", async ({ 
   await page.goto(`${BASE}/users/`);
   await expect(page.getByText(/^\d+,\d{2}\s?kr\/mil$/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/\d\.\d{2}\s?kr\/mil|kr\/km/)).toHaveCount(0);
+});
+
+test("Avbetalningar: påminnelserna registreras, ingenting sägs vara skickat (#2135)", async ({ page }) => {
+  const seed = await fetchDemoSeed(page, BASE);
+  await page.goto(`${BASE}/payment-plans/`);
+  await expect(page.getByRole("button", { name: "Registrera påminnelser" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Skicka påminnelser/)).toHaveCount(0);
+
+  // Demons aktiva planer med påminnelser (seedens withReminders): minst en visar "Registrerad".
+  let registered = 0;
+  for (const plan of seed.paymentPlans.filter((p) => p.status === "ACTIVE")) {
+    await page.goto(`${BASE}/payment-plans/${plan.id}/`);
+    await showPanel(page, "Påminnelser");
+    const panel = page.getByRole("region", { name: "Påminnelser" }).last();
+    await expect(panel.getByText(/Registrerad |Inga påminnelser registrerade än\./).first()).toBeVisible({ timeout: 30_000 });
+    await expect(panel.getByText(/Skickad|skickade/)).toHaveCount(0);
+    registered += await panel.getByText(/^Registrerad /).count();
+  }
+  expect(registered).toBeGreaterThan(0);
 });
 
 test("fakturalistan markerar förfallna fakturor och knappen visar bara de markerade (#1731)", async ({ page }) => {
