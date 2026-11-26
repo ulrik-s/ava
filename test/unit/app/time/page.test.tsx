@@ -30,8 +30,12 @@ const moveMutate = vi.fn();
 /** Serverfel från flytten (#2042). */
 let moveError: { message: string } | null = null;
 const deleteMutate = vi.fn();
-/** Det listan senast frågades efter: sida och period. */
-const listInput = vi.fn((_input: { page: number; from?: Date; to?: Date }) => timeQuery);
+/** Listans indata: sida, period och person (#2114). */
+interface ListInput { page: number; from?: Date; to?: Date; userId?: string }
+/** Det listan senast frågades efter, och om frågan var påslagen. */
+const listInput = vi.fn((_input: ListInput, _opts?: { enabled: boolean }) => timeQuery);
+/** Den inloggade (`user.current`); `undefined` = har inte svarat än. */
+let currentUser: { id: string; role: string } | undefined = { id: "u1", role: "LAWYER" };
 /** onSuccess från create/delete — testet anropar dem som servern hade gjort. */
 const succeeded: Record<"create" | "remove", (() => void) | undefined> = {
   create: undefined, remove: undefined,
@@ -44,7 +48,7 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     timeEntry: {
-      list: { useQuery: (input: { page: number; from?: Date; to?: Date }) => listInput(input) },
+      list: { useQuery: (input: ListInput, opts?: { enabled: boolean }) => listInput(input, opts) },
       create: {
         useMutation: (opts: MutationOpts) => {
           succeeded.create = opts?.onSuccess;
@@ -73,7 +77,7 @@ vi.mock("@/lib/client/trpc", () => ({
       clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     user: {
-      current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
+      current: { useQuery: () => ({ data: currentUser }) },
     },
   },
 }));
@@ -85,6 +89,7 @@ beforeEach(() => {
   timeQuery.data = { entries: [], total: 0, pages: 0, totalMinutes: 0 };
   updateError = null;
   moveError = null;
+  currentUser = { id: "u1", role: "LAWYER" };
 });
 
 afterEach(() => {
@@ -624,5 +629,41 @@ describe("TimePage — pilarna vid formulärets Datum * (#2097)", () => {
     fireEvent.change(within(form).getByLabelText(/Datum \*/), { target: { value: "" } });
     expect(within(form).getByRole("button", { name: "Föregående dag" })).toBeDisabled();
     expect(within(form).getByRole("button", { name: "Nästa dag" })).toBeDisabled();
+  });
+});
+
+describe("TimePage — egna tider för den som inte är Admin (#2114)", () => {
+  const lastCall = () => listInput.mock.calls.at(-1);
+
+  it("en Advokat frågar bara efter sina egna poster", () => {
+    render(<TimePage />);
+    expect(lastCall()?.[0]).toMatchObject({ userId: "u1" });
+    expect(lastCall()?.[1]).toEqual({ enabled: true });
+  });
+
+  it("en Assistent frågar bara efter sina egna poster", () => {
+    currentUser = { id: "u7", role: "ASSISTANT" };
+    render(<TimePage />);
+    expect(lastCall()?.[0]).toMatchObject({ userId: "u7" });
+  });
+
+  it("en Admin frågar efter allas poster, som förut", () => {
+    currentUser = { id: "u2", role: "ADMIN" };
+    render(<TimePage />);
+    expect(lastCall()?.[0]).not.toHaveProperty("userId");
+    expect(lastCall()?.[1]).toEqual({ enabled: true });
+  });
+
+  it("innan user.current har svarat går ingen fråga iväg", () => {
+    currentUser = undefined;
+    render(<TimePage />);
+    expect(lastCall()?.[1]).toEqual({ enabled: false });
+    expect(lastCall()?.[0]).not.toHaveProperty("userId");
+  });
+
+  it("dagbläddringen behåller personen i frågan", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Föregående dag" }));
+    expect(lastCall()?.[0]).toMatchObject({ userId: "u1", from: periodFrom("2026-11-23") });
   });
 });

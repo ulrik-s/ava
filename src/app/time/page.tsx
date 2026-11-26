@@ -10,6 +10,7 @@ import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasPeriod } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
+import { useTimeViewer } from "@/lib/client/use-time-viewer";
 import { dayLabel } from "@/lib/shared/iso-date";
 import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
@@ -169,7 +170,8 @@ function TimeEntryForm({ form, setForm, mattersData, isPending, onSubmit }: Time
 }
 
 export default function TimePage() {
-  const list = useTimeList();
+  // Den som inte är Admin ser bara sina egna poster (#2114).
+  const list = useTimeList(useTimeViewer());
   const { query: timeEntries, page, setPage } = list;
   // Hämta alla ACTIVE matters (cap 500 räcker för en advokatbyrå). Tidigare
   // skickades 200 men routern cappade på 100 → Zod-fail → tom dropdown.
