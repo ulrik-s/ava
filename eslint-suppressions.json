@@ -823,7 +823,7 @@
   },
   "src/lib/server/routers/sync.ts": {
     "@typescript-eslint/no-deprecated": {
-      "count": 4
+      "count": 3
     }
   },
   "src/lib/server/routers/todo.ts": {
