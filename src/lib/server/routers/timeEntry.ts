@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { type TimeEntry } from "@/lib/shared/schemas/billing";
+import { isoDayInput } from "@/lib/shared/schemas/common";
 import { timeEntryKindSchema, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import {
   asId,
@@ -13,6 +14,8 @@ import {
   type OrganizationId,
   type TimeEntryId,
 } from "@/lib/shared/schemas/ids";
+import { stockholmPeriod } from "@/lib/shared/stockholm-time";
+import { buildTimeChart } from "@/lib/shared/time-chart";
 import { isLockedEntry, type LockableEntry } from "@/lib/shared/time-entry-lock";
 import { isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE } from "@/lib/shared/time-hours";
 import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
@@ -132,6 +135,27 @@ export const timeEntryRouter = router({
         pageSize: input.pageSize,
       });
       return { entries, total, totalMinutes, pages: Math.ceil(total / input.pageSize) };
+    }),
+
+  /**
+   * En persons registrerade tid per dag, vecka eller månad i ett intervall
+   * (#2109), för stapeldiagrammen. Samma åtkomst som `reports.perLawyer`:
+   * byrån ur sessionen och läsning via repot, så en person i en annan byrå
+   * ger tomma staplar. Indelningen är `buildTimeChart`.
+   */
+  chart: protectedProcedure
+    .input(z.object({
+      from: isoDayInput,
+      to: isoDayInput,
+      userId: userIdSchema,
+      granularity: z.enum(["day", "week", "month"]),
+    }))
+    .query(async ({ ctx, input }) => {
+      const period = stockholmPeriod(input.from, input.to);
+      const entries = await ctx.repos.timeEntries.listForLawyerInPeriod(
+        ctx.user.organizationId, input.userId, period.from, period.to,
+      );
+      return buildTimeChart({ entries, from: input.from, to: input.to, granularity: input.granularity });
     }),
 
   create: orgProcedure

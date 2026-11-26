@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { reportsRouter } from "@/lib/server/routers/reports";
 import { timeEntryRouter } from "@/lib/server/routers/timeEntry";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
@@ -19,6 +20,8 @@ const mockPrisma = {
   user: {
     findFirst: vi.fn(),
   },
+  // reports.perLawyer läser utläggen (jämförelsen i timeEntry.chart, #2109).
+  expense: { findMany: vi.fn() },
   // Timpris-upplösningen (ärende → jurist → byrå) läser ärendet och byrån.
   matter: { findFirst: vi.fn() },
   organization: { findFirst: vi.fn() },
@@ -42,6 +45,7 @@ beforeEach(() => {
   mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a" });
   mockPrisma.organization.findFirst.mockResolvedValue(null);
   mockPrisma.timeEntry.findMany.mockResolvedValue([]);
+  mockPrisma.expense.findMany.mockResolvedValue([]);
   mockPrisma.timeEntry.count.mockResolvedValue(0);
   mockPrisma.timeEntry.aggregate.mockResolvedValue({ _sum: { minutes: 0 } });
   // Default: posten tillhör anropande org (happy path för update/delete, #60).
@@ -469,5 +473,52 @@ describe("timeEntry — låsta poster (faktura, slutfaktura, kostnadsräkning; #
     mockPrisma.timeEntry.update.mockResolvedValue({ id: "t1", matterId: "m1" });
     await makeCaller().update({ id: "t1", minutes: 60 });
     expect(mockPrisma.timeEntry.update).toHaveBeenCalled();
+  });
+});
+
+describe("timeEntry.chart (#2109)", () => {
+  type Where = { matter?: { organizationId?: string }; userId?: string; date?: { gte: Date; lte: Date } };
+  const matterA = { id: "m1", matterNumber: "2026-0001", title: "A", organizationId: "org-a", paymentMethod: "PENDING", paymentMethodNote: null, paymentMethodDecidedAt: null, contacts: [] };
+  const rows = [
+    { id: "t1", userId: "u1", date: new Date("2026-11-02T10:00:00Z"), minutes: 60, billable: true, hourlyRate: 0, matter: matterA },
+    { id: "t2", userId: "u1", date: new Date("2026-11-20T10:00:00Z"), minutes: 30, billable: false, hourlyRate: 0, matter: matterA },
+    { id: "t3", userId: "u2", date: new Date("2026-11-03T10:00:00Z"), minutes: 45, billable: true, hourlyRate: 0, matter: matterA },
+    { id: "t4", userId: "u1", date: new Date("2026-12-02T10:00:00Z"), minutes: 15, billable: true, hourlyRate: 0, matter: matterA },
+  ];
+  /** Repots fråga mot raderna ovan: byrå, person och period som databasen hade filtrerat. */
+  const filtered = ({ where }: { where: Where }) => rows.filter((r) =>
+    r.matter.organizationId === where.matter?.organizationId && r.userId === where.userId
+    && where.date !== undefined && r.date >= where.date.gte && r.date <= where.date.lte);
+  const input = { from: "2026-11-01", to: "2026-11-30", userId: "u1", granularity: "week" as const };
+
+  beforeEach(() => {
+    mockPrisma.timeEntry.findMany.mockImplementation((args: { where: Where }) => Promise.resolve(filtered(args)));
+  });
+
+  it("ger bara den valda personens poster i perioden", async () => {
+    const chart = await makeCaller().chart(input);
+    expect(chart).toMatchObject({ totalMinutes: 90, billableMinutes: 60 });
+    expect(chart.bars[0]).toMatchObject({ key: "2026-11-01", label: "v. 44", totalMinutes: 0 });
+    expect(chart.bars.find((b) => b.key === "2026-11-02")).toMatchObject({ totalMinutes: 60, matters: [{ id: "m1", matterNumber: "2026-0001", title: "A" }] });
+  });
+
+  it("totalen är densamma som reports.perLawyer för samma person och period", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "Anna", hourlyRates: {} });
+    const chart = await makeCaller().chart(input);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reports = reportsRouter.createCaller({ user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: "org-a" }, prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma), get repos() { return reposFromMockDataStore(this.dataStore); } } as any);
+    const report = await reports.perLawyer({ from: input.from, to: input.to, userId: "u1" });
+    expect(chart.totalMinutes).toBe(report?.totals.totalMinutes);
+  });
+
+  it("en person i en annan byrå ger tomma staplar och totalen 0", async () => {
+    const chart = await makeCaller("org-b").chart(input);
+    expect(chart.totalMinutes).toBe(0);
+    expect(chart.bars.every((b) => b.totalMinutes === 0 && b.matters.length === 0)).toBe(true);
+    expect(chart.bars).toHaveLength(6); // v. 44–49
+  });
+
+  it("avvisar en dag som inte finns", async () => {
+    await expect(makeCaller().chart({ ...input, to: "2026-11-31" })).rejects.toThrow();
   });
 });
