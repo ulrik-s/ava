@@ -68,3 +68,40 @@ test("Exportera Excel laddar ner rapporten som CSV med de tre avsnitten (#1793)"
   expect(lines).toContain("Timdebitering per vecka");
   expect(lines).toContain("Upparbetat, icke fakturerat");
 });
+
+/** Kalenderdagen `n` dagar före i dag ("YYYY-MM-DD", svensk tid). */
+function daysBeforeToday(n: number): string {
+  const day = new Date(Date.now() - n * 86_400_000);
+  return day.toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
+}
+
+test("Stapeldiagram: veckans staplar, och en stapel med tid visar ärenden som länkar (#2110)", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/reports/`);
+  await expect(page.getByLabel("Advokat", { exact: true })).not.toHaveValue("", { timeout: 30_000 });
+  await showPanel(page, "Stapeldiagram");
+
+  // Vecka är förvald: sju dagsstaplar för veckan som innehåller Till (i dag).
+  const dayBars = page.getByRole("button", { name: /^\p{L}+ \d{1,2} \p{L}+: [\d,]+ h$/u });
+  await expect(dayBars).toHaveCount(7, { timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /^Vecka \d+ \d{4}/ })).toBeVisible();
+
+  // Seeden lägger tid varannan dag bakåt från byggdagen, fördelat mellan
+  // användarna: en månad bakåt från Till har säkert tid för vald advokat.
+  await page.getByLabel("Till", { exact: true }).fill(daysBeforeToday(3));
+  await page.getByRole("button", { name: "Månad", exact: true }).click();
+  const withTime = page.getByRole("button", { name: /^Vecka \d+: (?!0 h$)[\d,]+ h$/ }).first();
+  await expect(withTime).toBeVisible({ timeout: 30_000 });
+  await withTime.click();
+  await expect(withTime).toHaveAttribute("aria-pressed", "true");
+
+  const matterLink = page.getByRole("link", { name: /^\d{4}-\d{4} — / }).first();
+  await expect(matterLink).toBeVisible();
+
+  const scroll = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+  expect(scroll.width).toBeLessThanOrEqual(scroll.client);
+
+  await matterLink.click();
+  await expect(page).toHaveURL(/\/matters\//);
+});

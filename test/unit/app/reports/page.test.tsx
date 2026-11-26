@@ -14,6 +14,7 @@ const reportQuery = {
   isLoading: false,
   error: null as { message: string } | null,
 };
+const chartCalls: Array<{ userId: string; from: string; to: string; granularity: string }> = [];
 const billedQuery = {
   data: undefined as Record<string, unknown> | undefined,
   isLoading: false,
@@ -34,6 +35,14 @@ vi.mock("@/lib/client/trpc", () => ({
       list: { useQuery: () => usersQuery },
       current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
     },
+    timeEntry: {
+      chart: {
+        useQuery: (input: (typeof chartCalls)[number]) => {
+          chartCalls.push(input);
+          return { data: { totalMinutes: 0, billableMinutes: 0, bars: [] } };
+        },
+      },
+    },
     reports: {
       perLawyer: { useQuery: () => reportQuery },
       billed: { useQuery: () => billedQuery },
@@ -51,6 +60,7 @@ vi.mock("@/lib/client/trpc", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  chartCalls.length = 0;
   usersQuery.data = { users: [{ id: "u1", name: "Anna" }, { id: "u2", name: "Bo" }] };
   reportQuery.data = undefined;
   reportQuery.isLoading = false;
@@ -154,7 +164,9 @@ describe("ReportsPage", () => {
   it("ingen advokat att välja → \"Välj jurist och period.\"", () => {
     usersQuery.data = { users: [] };
     render(<ReportsPage />);
-    expect(screen.getAllByText("Välj jurist och period.").length).toBe(4);
+    // Stapeldiagrammet (#2110) visar samma text utan vald advokat.
+    expect(screen.getAllByText("Välj jurist och period.").length).toBe(5);
+    expect(chartCalls).toHaveLength(0);
   });
 
   it("renderar SummaryCard, MattersTable, WeeklyTable och UnbilledTable när data finns", () => {
@@ -246,4 +258,14 @@ describe("ReportsPage", () => {
     click.mockRestore();
   });
 
+  it("rutan Stapeldiagram visar veckan som innehåller Till för vald advokat, och ett nytt Till flyttar den (#2110)", () => {
+    const { container } = render(<ReportsPage />);
+    expect(container.querySelector('[data-panel="chart"]')).not.toBeNull();
+    fireEvent.change(screen.getByLabelText("Till"), { target: { value: "2026-04-01" } });
+    expect(chartCalls[chartCalls.length - 1]).toEqual({ userId: "u1", from: "2026-03-30", to: "2026-04-05", granularity: "day" });
+    expect(screen.getByRole("heading", { name: /^Vecka 14 2026/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole<HTMLSelectElement>("combobox"), { target: { value: "u2" } });
+    expect(chartCalls[chartCalls.length - 1]).toMatchObject({ userId: "u2", from: "2026-03-30" });
+  });
 });
