@@ -4,12 +4,15 @@
  * Rutan Stapeldiagram (#2110): en persons registrerade tid som staplar för en
  * dag, vecka, månad eller ett år. Knapparna Dag / Vecka / Månad / År väljer
  * perioden, och staplarna är nivån under. Ett klick på en stapel visar dess
- * summor och ärendena med tid där. Frågan `timeEntry.chart` körs mot den
+ * summor och ärendena med tid där. Pilarna runt knapparna stegar den valda
+ * dagen en stapel i taget, och vyn är personens egen (`chart.time`, #2111).
+ * Frågan `timeEntry.chart` körs mot den
  * lokala storen (ADR 0016), så rutan fungerar offline.
  */
 
 import { useState } from "react";
 import { BarChart } from "@/components/ui/bar-chart";
+import { DayStepper } from "@/components/ui/day-stepper";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
@@ -18,9 +21,10 @@ import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import type { UserId } from "@/lib/shared/schemas/ids";
 import type { TimeChart, TimeChartBar, TimeChartGranularity } from "@/lib/shared/time-chart";
 import {
-  TIME_CHART_GRANULARITY, TIME_CHART_VIEW_OPTIONS, timeChartBarAriaLabel, timeChartBarPeriod,
-  timeChartPeriodTitle, type TimeChartView,
+  TIME_CHART_GRANULARITY, TIME_CHART_STEP, TIME_CHART_VIEW_OPTIONS, timeChartBarAriaLabel,
+  timeChartBarPeriod, timeChartPeriodTitle,
 } from "./time-chart-labels";
+import { useTimeChartView } from "./use-time-chart-view";
 
 /** Props för {@link TimeChartPanel}. */
 export interface TimeChartPanelProps {
@@ -90,7 +94,7 @@ function ChartBody({ chart, granularity, selectedDay, onSelect }: ChartBodyProps
 
 /** Stapeldiagrammet över `userId`:s tid, med vyval och den valda stapelns ärenden. */
 export function TimeChartPanel({ userId, anchorDay }: TimeChartPanelProps) {
-  const [view, setView] = useState<TimeChartView>("week");
+  const [view, setView] = useTimeChartView();
   const [selectedDay, setSelectedDay] = useSelectedDay(anchorDay);
   const period = periodContaining(selectedDay, view);
   const granularity = TIME_CHART_GRANULARITY[view];
@@ -99,7 +103,9 @@ export function TimeChartPanel({ userId, anchorDay }: TimeChartPanelProps) {
 
   return (
     <div className="p-2">
-      <SegmentedControl options={TIME_CHART_VIEW_OPTIONS} value={view} onChange={setView} ariaLabel="Period" />
+      <DayStepper ymd={selectedDay} onChange={setSelectedDay} unit={TIME_CHART_STEP[view]}>
+        <SegmentedControl options={TIME_CHART_VIEW_OPTIONS} value={view} onChange={setView} ariaLabel="Period" />
+      </DayStepper>
       <h2 className="mt-2 mb-2 font-semibold text-gray-900">
         {chart.data ? `${title} · ${totalsText(chart.data)}` : title}
       </h2>

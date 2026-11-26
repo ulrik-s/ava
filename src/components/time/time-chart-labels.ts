@@ -4,7 +4,10 @@
  * ("YYYY-MM-DD"), så att de inte beror på processens tidszon.
  */
 
-import { calendarDate, isoWeekOfDay, type CalendarUnit } from "@/lib/shared/calendar-periods";
+import { z } from "zod";
+import {
+  calendarDate, isoWeekOfDay, type CalendarUnit, type DayStepUnit,
+} from "@/lib/shared/calendar-periods";
 import { dayLabel } from "@/lib/shared/iso-date";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import type { TimeChartBar, TimeChartGranularity } from "@/lib/shared/time-chart";
@@ -27,6 +30,31 @@ export const TIME_CHART_GRANULARITY: Readonly<Record<TimeChartView, TimeChartGra
   month: "week",
   year: "month",
 };
+
+/**
+ * Pilarnas steg per vy (#2111): Dag och Vecka stegar en dag, Månad en vecka
+ * och År en månad, alltså en stapel i taget (Dag: en dag).
+ */
+export const TIME_CHART_STEP: Readonly<Record<TimeChartView, DayStepUnit>> = {
+  day: "day",
+  week: "day",
+  month: "week",
+  year: "month",
+};
+
+/** Nyckeln för personens förvalda vy (`prefs`), samma för rutan överallt. */
+export const TIME_CHART_PREF_KEY = "chart.time";
+
+/** Den vy rutan öppnar i när inget giltigt är sparat. */
+export const TIME_CHART_DEFAULT_VIEW: TimeChartView = "week";
+
+const timeChartPrefSchema = z.object({ view: z.enum(["day", "week", "month", "year"]) });
+
+/** Den sparade vyn ur `prefs`; saknas den eller är den ogiltig: {@link TIME_CHART_DEFAULT_VIEW}. */
+export function parseTimeChartView(prefs: unknown): TimeChartView {
+  const r = timeChartPrefSchema.safeParse(prefs);
+  return r.success ? r.data.view : TIME_CHART_DEFAULT_VIEW;
+}
 
 // `calendarDate` ger UTC-midnatt, så formaterarna läser i UTC: dagen ändras inte.
 const MONTH_YEAR_FMT = new Intl.DateTimeFormat("sv-SE", { timeZone: "UTC", month: "long", year: "numeric" });
