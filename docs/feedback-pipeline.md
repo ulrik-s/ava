@@ -211,13 +211,13 @@ förfrågan i inkorgen, medan en grund kan höra till flera.
   - rör skyddade sökvägar (CI, deploy, auth, agentpromptarna …),
     och sedan #1873 också pengalogiken, de delade schemana och migrationerna:
     `src/lib/shared/schemas/`, `tooling/db/migrations/` (alla filer, även
-    additiva), `src/lib/server/billing/`, `src/lib/shared/billing-*.ts`,
-    `src/lib/shared/kostnadsrakning*.ts`, `src/lib/shared/coverage-billing.ts`,
-    `src/lib/shared/invoice-calc.ts`, `src/lib/server/routers/invoice.ts`,
+    additiva), `src/lib/server/billing/`, `src/lib/shared/billing/billing-*.ts`,
+    `src/lib/shared/billing/kostnadsrakning*.ts`, `src/lib/shared/billing/coverage-billing.ts`,
+    `src/lib/shared/billing/invoice-calc.ts`, `src/lib/server/routers/invoice.ts`,
     billingRun-routern (`src/lib/server/routers/billingRun.ts` och
-    `src/lib/server/routers/billingRun/`), momsen (`src/lib/shared/vat.ts`,
+    `src/lib/server/routers/billingRun/`), momsen (`src/lib/shared/billing/vat.ts`,
     `invoice-vat.ts`, `expense-vat.ts`, `acconto-vat.ts`), taxorna
-    (`src/lib/shared/brottmalstaxa.ts`, `forordnandetaxa.ts`) och bokföringen
+    (`src/lib/shared/billing/brottmalstaxa.ts`, `forordnandetaxa.ts`) och bokföringen
     (`src/lib/shared/accounting/`). Samma lista står i `.github/CODEOWNERS`.
   - innehåller en destruktiv migration,
   - är fler än 30 på ett dygn,

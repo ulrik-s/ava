@@ -4,9 +4,9 @@
  * = 25 %. Returnerar null för 0/negativa belopp.
  */
 
+import { DEFAULT_VAT_RATE } from "@/lib/shared/billing/vat";
+import { splitGross } from "@/lib/shared/billing/whole-kronor";
 import { formatKr } from "@/lib/shared/kr-format";
-import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
-import { splitGross } from "@/lib/shared/whole-kronor";
 
 export function VatBreakdown({ inclOre }: { inclOre: number }) {
   if (inclOre <= 0) return null;

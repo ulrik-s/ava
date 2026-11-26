@@ -21,11 +21,11 @@ import { generateFakturaFromTemplate, type DocUtils, type RegisterMut } from "@/
 import { trpc } from "@/lib/client/trpc";
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
+import type { SettlementView } from "@/lib/shared/billing/settlement-view";
 import { formatKr } from "@/lib/shared/kr-format";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
-import type { SettlementView } from "@/lib/shared/settlement-view";
 
 interface SplitData {
   /** Klientens och betalarens del, netto och brutto — exakt som fakturorna (#1438). */

@@ -9,8 +9,8 @@
  */
 
 import { useState } from "react";
-import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
-import { forhorFromTimeEntries, forhorMinutes, type Forhor, type ForhorTimeEntry } from "@/lib/shared/forordnandetaxa";
+import type { TaxaLevel } from "@/lib/shared/billing/brottmalstaxa";
+import { forhorFromTimeEntries, forhorMinutes, type Forhor, type ForhorTimeEntry } from "@/lib/shared/billing/forordnandetaxa";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { forordnandeAvslutSchema, type ForordnandeAvslut } from "@/lib/shared/schemas/enums";
 import { isLockedEntry, type LockableEntry } from "@/lib/shared/time-entry-lock";

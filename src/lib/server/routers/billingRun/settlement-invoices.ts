@@ -5,20 +5,20 @@
  *
  * Importerar aldrig `./settlement` (ingen cykel).
  */
-import { deductAcconto } from "@/lib/shared/acconto-vat";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
-import { vatOreOf, type UnfrozenWork } from "@/lib/shared/billing-work-value";
-import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { deductAcconto } from "@/lib/shared/billing/acconto-vat";
+import { vatOreOf, type UnfrozenWork } from "@/lib/shared/billing/billing-work-value";
+import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
+import { settlementAmounts, type SettlementAllocation } from "@/lib/shared/billing/settlement-allocation";
+import {
+  buildClientArvodeLines, buildCreditView, creditPayload, radgivningOre,
+  type SettlementBreakdown, type SettlementView,
+} from "@/lib/shared/billing/settlement-view";
+import { CURRENT_ROUNDING } from "@/lib/shared/billing/whole-kronor";
 import { formatKr } from "@/lib/shared/kr-format";
 import type { BillingRun, Invoice } from "@/lib/shared/schemas/billing";
 import type { BillingRunRecipient, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
-import { settlementAmounts, type SettlementAllocation } from "@/lib/shared/settlement-allocation";
-import {
-  buildClientArvodeLines, buildCreditView, creditPayload, radgivningOre,
-  type SettlementBreakdown, type SettlementView,
-} from "@/lib/shared/settlement-view";
-import { CURRENT_ROUNDING } from "@/lib/shared/whole-kronor";
 import { emit, type EmitCtx } from "../../events/emit";
 import { callTime, newRowId, type QueuedCallScope } from "../../queued-call";
 import type { BillingRunListRow } from "../../repositories/billing-run-repository";

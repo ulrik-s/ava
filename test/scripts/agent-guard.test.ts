@@ -69,20 +69,20 @@ const MONEY_FILES = [
   "tooling/db/migrations/0042_x.sql",
   "tooling/db/migrations/meta/_journal.json",
   "src/lib/server/billing/x.ts",
-  "src/lib/shared/billing-flow.ts",
-  "src/lib/shared/kostnadsrakning.ts",
-  "src/lib/shared/kostnadsrakning-flow.ts",
-  "src/lib/shared/coverage-billing.ts",
-  "src/lib/shared/invoice-calc.ts",
+  "src/lib/shared/billing/billing-flow.ts",
+  "src/lib/shared/billing/kostnadsrakning.ts",
+  "src/lib/shared/billing/kostnadsrakning-flow.ts",
+  "src/lib/shared/billing/coverage-billing.ts",
+  "src/lib/shared/billing/invoice-calc.ts",
   "src/lib/server/routers/invoice.ts",
   "src/lib/server/routers/billingRun.ts",
   "src/lib/server/routers/billingRun/x.ts",
-  "src/lib/shared/vat.ts",
-  "src/lib/shared/invoice-vat.ts",
-  "src/lib/shared/expense-vat.ts",
-  "src/lib/shared/acconto-vat.ts",
-  "src/lib/shared/brottmalstaxa.ts",
-  "src/lib/shared/forordnandetaxa.ts",
+  "src/lib/shared/billing/vat.ts",
+  "src/lib/shared/billing/invoice-vat.ts",
+  "src/lib/shared/billing/expense-vat.ts",
+  "src/lib/shared/billing/acconto-vat.ts",
+  "src/lib/shared/billing/brottmalstaxa.ts",
+  "src/lib/shared/billing/forordnandetaxa.ts",
   "src/lib/shared/accounting/voucher.ts",
 ];
 
@@ -112,11 +112,11 @@ describe("pengalogik, delade scheman och migrationer (#1873)", () => {
     const owners = readFileSync(join(process.cwd(), ".github/CODEOWNERS"), "utf8");
     const entries = [
       "/src/lib/shared/schemas/", "/tooling/db/migrations/", "/src/lib/server/billing/",
-      "/src/lib/shared/billing-*.ts", "/src/lib/shared/kostnadsrakning*.ts", "/src/lib/shared/coverage-billing.ts",
-      "/src/lib/shared/invoice-calc.ts", "/src/lib/server/routers/invoice.ts", "/src/lib/server/routers/billingRun.ts",
-      "/src/lib/server/routers/billingRun/", "/src/lib/shared/vat.ts", "/src/lib/shared/invoice-vat.ts",
-      "/src/lib/shared/expense-vat.ts", "/src/lib/shared/acconto-vat.ts", "/src/lib/shared/brottmalstaxa.ts",
-      "/src/lib/shared/forordnandetaxa.ts", "/src/lib/shared/accounting/",
+      "/src/lib/shared/billing/billing-*.ts", "/src/lib/shared/billing/kostnadsrakning*.ts", "/src/lib/shared/billing/coverage-billing.ts",
+      "/src/lib/shared/billing/invoice-calc.ts", "/src/lib/server/routers/invoice.ts", "/src/lib/server/routers/billingRun.ts",
+      "/src/lib/server/routers/billingRun/", "/src/lib/shared/billing/vat.ts", "/src/lib/shared/billing/invoice-vat.ts",
+      "/src/lib/shared/billing/expense-vat.ts", "/src/lib/shared/billing/acconto-vat.ts", "/src/lib/shared/billing/brottmalstaxa.ts",
+      "/src/lib/shared/billing/forordnandetaxa.ts", "/src/lib/shared/accounting/",
     ];
     const rows = owners.split("\n").map((line) => line.trim().split(/\s+/));
     for (const entry of entries) {

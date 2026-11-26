@@ -18,12 +18,12 @@ import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsraknin
 import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
-import { DEFAULT_ACCONTO_SHARE_BIPS, proposedAccontoOre } from "@/lib/shared/billing-proposal";
-import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { DEFAULT_ACCONTO_SHARE_BIPS, proposedAccontoOre } from "@/lib/shared/billing/billing-proposal";
+import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
+import { roundToKronor } from "@/lib/shared/billing/whole-kronor";
 import { toIsoDate } from "@/lib/shared/iso-date";
 import { formatKr } from "@/lib/shared/kr-format";
 import type { MatterId } from "@/lib/shared/schemas/ids";
-import { roundToKronor } from "@/lib/shared/whole-kronor";
 import { UnbilledPosts, usePostSelection } from "./_post-selection";
 
 interface AccontoRow { id: string; amountOre: number; recipient: string }

@@ -22,9 +22,9 @@
  * (eller annan presentation) sker först i renderaren.
  */
 
-import { hasVatBreakdown, invoiceVatOre } from "@/lib/shared/invoice-vat";
+import { hasVatBreakdown, invoiceVatOre } from "@/lib/shared/billing/invoice-vat";
+import type { VatRate } from "@/lib/shared/billing/vat";
 import { formatKr } from "@/lib/shared/kr-format";
-import type { VatRate } from "@/lib/shared/vat";
 
 /** Bokföringsroller som faktura-domänen känner till (systemoberoende).
  *  Utgående moms är uppdelad per sats (#790) så SIE/verifikat bokför på rätt

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
+import { isPerDayKind } from "@/lib/shared/billing/brottmalstaxa";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { type TimeEntry } from "@/lib/shared/schemas/billing";
 import { isoDayInput } from "@/lib/shared/schemas/common";

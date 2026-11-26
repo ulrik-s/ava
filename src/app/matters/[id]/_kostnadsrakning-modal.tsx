@@ -25,8 +25,8 @@ import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper"
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
-import { buildKostnadsrakningContext, hasHearingEntry, withDocumentFields, type KrDocumentFields } from "@/lib/shared/kostnadsrakning";
+import type { TaxaLevel } from "@/lib/shared/billing/brottmalstaxa";
+import { buildKostnadsrakningContext, hasHearingEntry, withDocumentFields, type KrDocumentFields } from "@/lib/shared/billing/kostnadsrakning";
 import { formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { primitiveText } from "@/lib/shared/primitive-text";

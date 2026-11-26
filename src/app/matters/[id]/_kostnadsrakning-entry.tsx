@@ -9,7 +9,7 @@
 import { Modal } from "@/components/ui/modal";
 import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
-import type { KrDocumentFields } from "@/lib/shared/kostnadsrakning";
+import type { KrDocumentFields } from "@/lib/shared/billing/kostnadsrakning";
 import { formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { OrgImage } from "@/lib/shared/org-image";

@@ -3,12 +3,12 @@
 /**
  * Fakturalistans röda markeringar (#1731): "Förfallen N dagar" och "Kom inte
  * fram", och knappen som visar bara de fakturorna. Regeln för förfallen är den
- * delade (`@/lib/shared/invoice-overdue`), samma som "Att bevaka" använder.
+ * delade (`@/lib/shared/billing/invoice-overdue`), samma som "Att bevaka" använder.
  */
 
 import { useMemo } from "react";
 import { trpc } from "@/lib/client/trpc";
-import { invoiceAttention, type InvoiceAttention, type OverdueCandidate } from "@/lib/shared/invoice-overdue";
+import { invoiceAttention, type InvoiceAttention, type OverdueCandidate } from "@/lib/shared/billing/invoice-overdue";
 import { dagar } from "@/lib/shared/watchlist";
 
 const MARK_CLASS = "text-[10px] rounded-full px-2 py-0.5 font-medium bg-red-100 text-red-700";

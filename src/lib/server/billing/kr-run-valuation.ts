@@ -13,9 +13,9 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { TAXA_MAX_MINUTES, type TaxaLevel } from "@/lib/shared/brottmalstaxa";
-import { forhorFromTimeEntries } from "@/lib/shared/forordnandetaxa";
-import { type ExpenseInput, kostnadsrakningClaimInclVat, type TimeEntryInput } from "@/lib/shared/kostnadsrakning";
+import { TAXA_MAX_MINUTES, type TaxaLevel } from "@/lib/shared/billing/brottmalstaxa";
+import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
+import { type ExpenseInput, kostnadsrakningClaimInclVat, type TimeEntryInput } from "@/lib/shared/billing/kostnadsrakning";
 import { FORORDNANDE_AVSLUT_LABELS, type ForordnandeAvslut } from "@/lib/shared/schemas/enums";
 
 /** Det dialogen skickar med inskicket (allt valfritt: skript/demo saknar dialog). */

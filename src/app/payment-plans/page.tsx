@@ -14,7 +14,7 @@ import { Money } from "@/components/ui/money";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control";
 import { shellPath } from "@/lib/client/demo/entity-href";
 import { trpc } from "@/lib/client/trpc";
-import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
+import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
 
 type Status = "ACTIVE" | "COMPLETED" | "CANCELLED";
 

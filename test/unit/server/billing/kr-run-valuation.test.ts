@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { krRunGrossOre, krRunNotes, valueKrRun, type KrRunMatter } from "@/lib/server/billing/kr-run-valuation";
-import { forhorFromTimeEntries } from "@/lib/shared/forordnandetaxa";
-import { kostnadsrakningClaimInclVat } from "@/lib/shared/kostnadsrakning";
+import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
+import { kostnadsrakningClaimInclVat } from "@/lib/shared/billing/kostnadsrakning";
 
 const NOW = new Date("2026-09-29T12:00:00.000Z");
 const NO_WORK = { timeEntries: [], expenses: [] };

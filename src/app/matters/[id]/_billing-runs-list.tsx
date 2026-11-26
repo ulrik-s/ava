@@ -17,9 +17,9 @@ import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-d
 import { useMatterDocuments, type MatterDocument } from "@/lib/client/documents/use-matter-documents";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
-import { isHiddenBillingRun, isHiddenInvoice } from "@/lib/shared/hidden-billing-rows";
-import { KOSTNADSRAKNING_STATUS_LABELS, krStateOf, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
-import { pickKrDocForRun } from "@/lib/shared/kr-document";
+import { isHiddenBillingRun, isHiddenInvoice } from "@/lib/shared/billing/hidden-billing-rows";
+import { KOSTNADSRAKNING_STATUS_LABELS, krStateOf, type KostnadsrakningStatus } from "@/lib/shared/billing/kostnadsrakning-flow";
+import { pickKrDocForRun } from "@/lib/shared/billing/kr-document";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type InvoiceStatus, type InvoiceType } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";

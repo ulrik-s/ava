@@ -11,11 +11,11 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { isCoverageMethod, type BillingAction } from "@/lib/shared/billing-flow";
-import { DEFAULT_ACCONTO_SHARE_BIPS } from "@/lib/shared/billing-proposal";
-import { sjalvriskAccontoDue, unbilledClientShareNetOre } from "@/lib/shared/billing-todo";
+import { isCoverageMethod, type BillingAction } from "@/lib/shared/billing/billing-flow";
+import { DEFAULT_ACCONTO_SHARE_BIPS } from "@/lib/shared/billing/billing-proposal";
+import { sjalvriskAccontoDue, unbilledClientShareNetOre } from "@/lib/shared/billing/billing-todo";
+import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/billing/rattshjalp";
 import { formatKr } from "@/lib/shared/kr-format";
-import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 

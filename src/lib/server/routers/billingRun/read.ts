@@ -7,16 +7,16 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { buildProposal } from "@/lib/shared/billing-proposal";
+import { buildProposal } from "@/lib/shared/billing/billing-proposal";
 import {
   buildInvoiceSpecification, specExpenseLines, specTimeLines,
   type InvoiceSpecification, type SpecDeduction,
-} from "@/lib/shared/invoice-specification";
+} from "@/lib/shared/billing/invoice-specification";
+import { roundingOf } from "@/lib/shared/billing/whole-kronor";
 import {
   billingRunIdSchema, invoiceIdSchema, matterIdSchema,
   type InvoiceId, type OrganizationId,
 } from "@/lib/shared/schemas/ids";
-import { roundingOf } from "@/lib/shared/whole-kronor";
 import type { Repositories } from "../../repositories/repositories";
 import { orgProcedure } from "../../trpc";
 import { accontoDeductionsByInvoiceIds, sumPriorAccontos } from "./shared";

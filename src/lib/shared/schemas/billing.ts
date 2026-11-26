@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { kostnadsrakningStatusSchema } from "../kostnadsrakning-flow";
+import { kostnadsrakningStatusSchema } from "../billing/kostnadsrakning-flow";
 import { baseFields, orgScopedFields, dateLike, optionalDateLike } from "./common";
 import {
   amountRoundingSchema,

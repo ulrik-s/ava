@@ -10,7 +10,7 @@
  * gjorde bor i scenariomallarna.
  */
 
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/billing/brottmalstaxa";
 import type { Parties, SimMatter } from "./events";
 import type { RunCtx } from "./runner";
 import { runScenario } from "./runner";

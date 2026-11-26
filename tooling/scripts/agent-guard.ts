@@ -50,11 +50,11 @@ export const PROTECTED_PATHS: readonly RegExp[] = [
   /^src\/lib\/shared\/schemas\//,
   /^tooling\/db\/migrations\//,
   /^src\/lib\/server\/billing\//,
-  /^src\/lib\/shared\/(billing-[^/]*|kostnadsrakning[^/]*|coverage-billing|invoice-calc)\.ts$/,
+  /^src\/lib\/shared\/billing\/(billing-[^/]*|kostnadsrakning[^/]*|coverage-billing|invoice-calc)\.ts$/,
   /^src\/lib\/server\/routers\/(invoice|billingRun)\.ts$/,
   /^src\/lib\/server\/routers\/billingRun\//,
-  /^src\/lib\/shared\/(vat|invoice-vat|expense-vat|acconto-vat)\.ts$/,
-  /^src\/lib\/shared\/(brottmalstaxa|forordnandetaxa)\.ts$/,
+  /^src\/lib\/shared\/billing\/(vat|invoice-vat|expense-vat|acconto-vat)\.ts$/,
+  /^src\/lib\/shared\/billing\/(brottmalstaxa|forordnandetaxa)\.ts$/,
   /^src\/lib\/shared\/accounting\//,
 ];
 

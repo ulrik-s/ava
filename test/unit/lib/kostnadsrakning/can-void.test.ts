@@ -2,7 +2,7 @@
  * När får en kostnadsräkning ångras (#1121)? Bara före domstolens beslut.
  */
 import { describe, expect, it } from "bun:test";
-import { canVoidKostnadsrakning, type KostnadsrakningStatus, type VoidableKostnadsrakning } from "@/lib/shared/kostnadsrakning-flow";
+import { canVoidKostnadsrakning, type KostnadsrakningStatus, type VoidableKostnadsrakning } from "@/lib/shared/billing/kostnadsrakning-flow";
 
 const inskickad: VoidableKostnadsrakning = { status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", awardedOre: null, invoiceId: null };
 

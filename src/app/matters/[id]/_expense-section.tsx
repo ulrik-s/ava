@@ -6,13 +6,13 @@ import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { netOreOf, vatOreOf } from "@/lib/shared/billing-work-value";
-import { chargedExpenseLines, expenseNetOre } from "@/lib/shared/expense-vat";
+import { netOreOf, vatOreOf } from "@/lib/shared/billing/billing-work-value";
+import { chargedExpenseLines, expenseNetOre } from "@/lib/shared/billing/expense-vat";
+import { VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/billing/vat";
 import { toIsoDate } from "@/lib/shared/iso-date";
 import { formatKr } from "@/lib/shared/kr-format";
 import type { MileageExpensePayload } from "@/lib/shared/mileage-rate";
 import type { ExpenseId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
-import { VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
 import { MileageForm } from "./_mileage-form";
 import { VatPreview } from "./_vat-preview";
 

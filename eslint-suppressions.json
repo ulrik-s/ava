@@ -914,12 +914,12 @@
       "count": 4
     }
   },
-  "src/lib/shared/hourly-rate.ts": {
+  "src/lib/shared/billing/hourly-rate.ts": {
     "@typescript-eslint/no-dynamic-delete": {
       "count": 1
     }
   },
-  "src/lib/shared/kostnadsrakning-document.ts": {
+  "src/lib/shared/billing/kostnadsrakning-document.ts": {
     "@typescript-eslint/restrict-template-expressions": {
       "count": 1
     }
@@ -1988,7 +1988,7 @@
       "count": 1
     }
   },
-  "test/unit/lib/advokatberedskap.test.ts": {
+  "test/unit/lib/shared/billing/advokatberedskap.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
@@ -2399,17 +2399,17 @@
       "count": 2
     }
   },
-  "test/unit/lib/shared/coverage-billing.test.ts": {
+  "test/unit/lib/shared/billing/coverage-billing.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
-  "test/unit/lib/shared/coverage-cap.test.ts": {
+  "test/unit/lib/shared/billing/coverage-cap.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 5
     }
   },
-  "test/unit/lib/shared/kostnadsrakning-tidsspillan.test.ts": {
+  "test/unit/lib/shared/billing/kostnadsrakning-tidsspillan.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     }
@@ -2424,7 +2424,7 @@
       "count": 1
     }
   },
-  "test/unit/lib/shared/settlement-view-build.test.ts": {
+  "test/unit/lib/shared/billing/settlement-view-build.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
@@ -2472,7 +2472,7 @@
       "count": 2
     }
   },
-  "test/unit/lib/write-off-migration.test.ts": {
+  "test/unit/lib/shared/billing/write-off-migration.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
     }
@@ -3347,7 +3347,7 @@
       "count": 1
     }
   },
-  "test/unit/shared/brottmalstaxa.test.ts": {
+  "test/unit/lib/shared/billing/brottmalstaxa.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 7
     }
@@ -3370,7 +3370,7 @@
       "count": 6
     }
   },
-  "test/unit/shared/kostnadsrakning.test.ts": {
+  "test/unit/lib/shared/billing/kostnadsrakning.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     }

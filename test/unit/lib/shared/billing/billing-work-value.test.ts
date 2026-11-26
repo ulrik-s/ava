@@ -1,0 +1,222 @@
+/**
+ * `billing-work-value` — arbetets värde och momsens fördelning (#1100).
+ *
+ * Funktionerna låg i `routers/billingRun.ts` och kunde bara nås genom en
+ * tRPC-caller. Router-testerna bevisar att FLÖDENA fungerar; de här bevisar
+ * att RÄKNINGEN gör det, och kommer åt kanter som ett flödestest inte når:
+ * ett tomt ärende, en post utan kategori, ett årsskifte mitt i.
+ *
+ * Beloppen är i öre genomgående. Där en siffra ser godtycklig ut är den hämtad
+ * ur Domstolsverkets föreskrifter, inte påhittad.
+ */
+
+import { describe, it, expect } from "vitest-compat";
+import {
+  arvodeLine, arvodeNetOre, entryOwnValueOre,
+  expenseGrossOre, expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown,
+  krGrossOre, matterKrArvodeRows, minutesByKind, netOreOf, settlementArvodeNet, sumKindValueOre,
+  timeEntryValueOre, vatOreOf, workValueOre, type UnfrozenWork,
+} from "@/lib/shared/billing/billing-work-value";
+import { asId } from "@/lib/shared/schemas/ids";
+
+const te = (o: Partial<UnfrozenWork["timeEntries"][number]> = {}): UnfrozenWork["timeEntries"][number] => ({
+  id: asId<"TimeEntryId">("te-1"), minutes: 60, hourlyRate: 250_000, billable: true,
+  date: "2026-03-01", description: "Arbete", ...o,
+});
+const ex = (o: Partial<UnfrozenWork["expenses"][number]> = {}): UnfrozenWork["expenses"][number] => ({
+  id: asId<"ExpenseId">("ex-1"), amount: 10_000, billable: true, ...o,
+});
+const work = (t: UnfrozenWork["timeEntries"] = [], e: UnfrozenWork["expenses"] = []): UnfrozenWork =>
+  ({ timeEntries: t, expenses: e });
+
+describe("timeEntryValueOre", () => {
+  it("minuter × taxa, avrundat en gång", () => {
+    expect(timeEntryValueOre(60, 250_000)).toBe(250_000);
+    expect(timeEntryValueOre(90, 250_000)).toBe(375_000);
+  });
+
+  // Avrundning i mellansummor ackumulerar ören tills fakturan slutar stämma
+  // med sin egen specifikation. Därför avrundas EN gång, per post.
+  it("avrundar obekväma kvoter i stället för att tappa ören", () => {
+    expect(timeEntryValueOre(1, 100_000)).toBe(1_667); // 1/60 × 100 000
+    expect(timeEntryValueOre(7, 162_600)).toBe(18_970);
+  });
+
+  it("noll minuter ger noll", () => {
+    expect(timeEntryValueOre(0, 250_000)).toBe(0);
+  });
+});
+
+describe("entryOwnValueOre", () => {
+  it("vanlig post värderas på sin egen taxa", () => {
+    expect(entryOwnValueOre({ minutes: 120, hourlyRate: 200_000, date: "2026-03-01" })).toBe(400_000);
+  });
+
+  // Per-dygns-kategorierna har inga minuter. Utan undantaget blir de
+  // `0 × taxa = 0` och försvinner tyst ur både kostnadsräkning och
+  // "Upparbetat ofakturerat" — ett bortfall som inte syns någonstans.
+  it("per-dygns-post värderas på DVFS-dagbeloppet, inte på minuter", () => {
+    const advokatberedskap = entryOwnValueOre({ minutes: 0, hourlyRate: 250_000, date: "2026-03-01", kind: "ADVOKATBEREDSKAP" });
+    expect(advokatberedskap).toBeGreaterThan(0);
+  });
+});
+
+describe("arvodeNetOre", () => {
+  it("summerar bara debiterbara poster", () => {
+    expect(arvodeNetOre(work([te({ minutes: 60 }), te({ minutes: 60, billable: false })]))).toBe(250_000);
+  });
+
+  it("tomt ärende ger noll, inte NaN", () => {
+    expect(arvodeNetOre(work())).toBe(0);
+  });
+});
+
+describe("utlägg och moms", () => {
+  it("netto och brutto skiljer sig med momsen", () => {
+    const w = work([], [ex({ amount: 10_000 })]);
+    expect(expenseGrossOre(w)).toBeGreaterThanOrEqual(expenseNetOre(w));
+  });
+
+  it("ej debiterbara utlägg räknas inte", () => {
+    expect(expenseNetOre(work([], [ex({ billable: false })]))).toBe(0);
+  });
+
+  it("arvodeLine är null vid noll arvode — en tom rad ljuger om innehåll", () => {
+    expect(arvodeLine(0)).toBeNull();
+    expect(arvodeLine(-1)).toBeNull();
+  });
+
+  it("arvodeLine bär netto och moms var för sig", () => {
+    const line = arvodeLine(100_000);
+    expect({ net: line?.netOre, vat: line?.vatOre }).toEqual({ net: 100_000, vat: 25_000 });
+  });
+});
+
+describe("breakdown-summorna hänger ihop", () => {
+  const w = work([te({ minutes: 120 })], [ex({ amount: 50_000 })]);
+
+  it("brutto = netto + moms", () => {
+    const lines = invoiceVatBreakdown(w);
+    expect(grossOreOf(lines)).toBe(netOreOf(lines) + vatOreOf(lines));
+  });
+
+  // Den här likheten är hela poängen: fakturans belopp måste gå att härleda
+  // ur samma rader som bokförs i verifikatet (#790).
+  it("invoiceGrossOre = breakdownens brutto", () => {
+    expect(invoiceGrossOre(w)).toBe(grossOreOf(invoiceVatBreakdown(w)));
+  });
+
+  it("workValueOre är NETTO — inte fakturabeloppet", () => {
+    expect(workValueOre(w)).toBe(arvodeNetOre(w) + expenseNetOre(w));
+    expect(workValueOre(w)).toBeLessThan(invoiceGrossOre(w));
+  });
+
+  it("tomt ärende ger tomma rader, inte en nollrad", () => {
+    expect(invoiceVatBreakdown(work())).toEqual([]);
+  });
+});
+
+describe("minutesByKind", () => {
+  it("grupperar per kategori och defaultar till ARBETE", () => {
+    const m = minutesByKind([{ minutes: 60 }, { minutes: 30, kind: "TIDSSPILLAN" }, { minutes: 30 }]);
+    expect({ arbete: m.get("ARBETE"), spillan: m.get("TIDSSPILLAN") }).toEqual({ arbete: 90, spillan: 30 });
+  });
+
+  // Per-dygns-poster har inga minuter att gruppera. Räknades de in skulle de
+  // belasta timbaserade tak och carve-outs de inte hör hemma i.
+  it("hoppar över per-dygns-kategorier", () => {
+    expect(minutesByKind([{ minutes: 0, kind: "ADVOKATBEREDSKAP" }]).size).toBe(0);
+  });
+});
+
+describe("sumKindValueOre", () => {
+  it("värderar varje kategori på SIN norm", () => {
+    const arbete = sumKindValueOre(new Map([["ARBETE", 60]]), "2026-06-01");
+    const spillan = sumKindValueOre(new Map([["TIDSSPILLAN", 60]]), "2026-06-01");
+    expect(arbete).toBeGreaterThan(spillan); // tidsspillan har lägre norm
+  });
+
+  it("tom karta ger noll", () => {
+    expect(sumKindValueOre(new Map(), "2026-06-01")).toBe(0);
+  });
+});
+
+describe("settlementArvodeNet", () => {
+  const w = work([te({ minutes: 60, hourlyRate: 300_000, date: "2026-03-01" })]);
+
+  // Bara klientbetalda (PRIVAT/MIX, och PENDING medan beslut väntar, #1730)
+  // debiterar byråns egen taxa. Domstolen betalar normen, inte vad byrån råkar ta (#950/#1003).
+  it.each(["PRIVAT", "MIX", "PENDING"] as const)("%s behåller postens egen taxa", (m) => {
+    expect(settlementArvodeNet(m, w, "2026-06-01")).toBe(300_000);
+  });
+
+  it.each(["RATTSHJALP", "RATTSSKYDD", "OFFENTLIGT_UPPDRAG"] as const)(
+    "%s värderas på Domstolsverkets norm, inte byråns taxa",
+    (m) => {
+      expect(settlementArvodeNet(m, w, "2026-06-01")).not.toBe(300_000);
+    },
+  );
+
+  // Den retroaktiva höjningen: arbete utfört 2025 räknas om på 2026 års norm
+  // när ärendet slutregleras 2026 (#891).
+  it("samma arbete värderas högre när det slutregleras ett senare år", () => {
+    const arbete2025 = work([te({ minutes: 120, date: "2025-11-15" })]);
+    const pa2025 = settlementArvodeNet("RATTSHJALP", arbete2025, "2025-12-01");
+    const pa2026 = settlementArvodeNet("RATTSHJALP", arbete2025, "2026-06-01");
+    expect(pa2026).toBeGreaterThan(pa2025);
+  });
+
+  // #1205: rådgivningstimmen är en låst post som aldrig når underlaget — ingen
+  // registrerad tid (varken arbete eller tidsspillan) dras av i dess ställe.
+  it("rättshjälp drar inte av någon timme från det registrerade arbetet", () => {
+    const tioTimmar = work([te({ minutes: 600, date: "2026-03-01" })]);
+    expect(settlementArvodeNet("RATTSHJALP", tioTimmar, "2026-06-01"))
+      .toBe(settlementArvodeNet("RATTSSKYDD", tioTimmar, "2026-06-01"));
+    expect(settlementArvodeNet("RATTSHJALP", tioTimmar, "2026-06-01")).toBe(10 * 162_600);
+  });
+
+  it("tomt ärende ger noll för alla betalningssätt", () => {
+    for (const m of ["PRIVAT", "RATTSHJALP", "RATTSSKYDD", "OFFENTLIGT_UPPDRAG", "MIX"] as const) {
+      expect(settlementArvodeNet(m, work(), "2026-06-01"), m).toBe(0);
+    }
+  });
+});
+
+describe("krGrossOre", () => {
+  // Kostnadsräkningen går ALLTID till domstol, så utläggen värderas med 25 %
+  // moms oavsett vad byrån själv betalade (#945). Yrkandet avrundas som på
+  // kostnadsräkningen (#1218): varje rad till hela kronor, moms på summan.
+  it("raderna avrundas till hela kronor, moms 25 % på summan avrundad till hela kronor", () => {
+    // 5 097 510 → 5 097 500; 2 096 670 → 2 096 700; utlägg 60 800.
+    // exkl 7 255 000; moms 1 813 750 → 1 813 800; inkl 9 068 800.
+    const w = work([], [ex({ amount: 60_800 })]);
+    expect(krGrossOre(w, [5_097_510, 2_096_670])).toBe(9_068_800);
+  });
+
+  it("äkta utlägg bär ingen moms", () => {
+    // UnfrozenWork-typen bär inte passThrough, men raderna från repot gör det (#975).
+    const akta = Object.assign(ex({ id: asId<"ExpenseId">("ex-2"), amount: 5_000 }), { passThrough: true });
+    const w = work([], [ex({ amount: 10_000 }), akta]);
+    // arvode 100 000 + utlägg 15 000 = 115 000; moms 25 % av 110 000 = 27 500.
+    expect(krGrossOre(w, [100_000])).toBe(142_500);
+  });
+
+  it("noll arvode och inga utlägg ger noll", () => {
+    expect(krGrossOre(work(), [])).toBe(0);
+  });
+});
+
+describe("matterKrArvodeRows", () => {
+  it("egna á-priser (taxeärende) → en rad; domstolsnormer → en rad per kategori + beredskap", () => {
+    const own = matterKrArvodeRows({ paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: true }, work([te({ minutes: 60 })]), "2026-06-01");
+    expect(own).toEqual([250_000]);
+    const norm = matterKrArvodeRows(
+      { paymentMethod: "RATTSHJALP" },
+      work([te({ minutes: 60 }), te({ id: asId<"TimeEntryId">("te-2"), minutes: 30, kind: "TIDSSPILLAN" }), te({ id: asId<"TimeEntryId">("te-3"), minutes: 0, kind: "ADVOKATBEREDSKAP", date: "2026-06-02" })]),
+      "2026-06-01",
+    );
+    expect(norm).toHaveLength(3);
+    expect(norm.reduce((s, r) => s + r, 0)).toBe(settlementArvodeNet("RATTSHJALP", work([te({ minutes: 60 }), te({ id: asId<"TimeEntryId">("te-2"), minutes: 30, kind: "TIDSSPILLAN" }), te({ id: asId<"TimeEntryId">("te-3"), minutes: 0, kind: "ADVOKATBEREDSKAP", date: "2026-06-02" })]), "2026-06-01"));
+  });
+});
+

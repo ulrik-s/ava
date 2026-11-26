@@ -1,6 +1,6 @@
 "use client";
 
-import { chargedVatOre, expenseNetOre } from "@/lib/shared/expense-vat";
+import { chargedVatOre, expenseNetOre } from "@/lib/shared/billing/expense-vat";
 import { formatKr } from "@/lib/shared/kr-format";
 
 /**

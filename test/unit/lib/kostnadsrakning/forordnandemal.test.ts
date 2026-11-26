@@ -9,9 +9,9 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
-import type { Forhor } from "@/lib/shared/forordnandetaxa";
-import { buildKostnadsrakningContext, type BuildInput } from "@/lib/shared/kostnadsrakning";
-import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/kostnadsrakning-template";
+import type { Forhor } from "@/lib/shared/billing/forordnandetaxa";
+import { buildKostnadsrakningContext, type BuildInput } from "@/lib/shared/billing/kostnadsrakning";
+import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/billing/kostnadsrakning-template";
 
 const at = (day: string, hm: string): string => `2026-03-${day}T${hm}:00+01:00`;
 

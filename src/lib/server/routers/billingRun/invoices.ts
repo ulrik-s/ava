@@ -7,14 +7,17 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
-import { buildAccontoView, type AccontoWork } from "@/lib/shared/acconto-view";
-import { invoiceCreatedNote } from "@/lib/shared/billing-notes";
-import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { accontoSplit, deductAcconto } from "@/lib/shared/billing/acconto-vat";
+import { buildAccontoView, type AccontoWork } from "@/lib/shared/billing/acconto-view";
+import { invoiceCreatedNote } from "@/lib/shared/billing/billing-notes";
+import { proposedAccontoOre } from "@/lib/shared/billing/billing-proposal";
 import {
   expenseNetOre, invoiceGrossOre, invoiceVatBreakdown, matterArvodeNet, vatOreOf,
   type UnfrozenWork, type ValuationMatter,
-} from "@/lib/shared/billing-work-value";
+} from "@/lib/shared/billing/billing-work-value";
+import type { SettlementView } from "@/lib/shared/billing/settlement-view";
+import { DEFAULT_VAT_RATE } from "@/lib/shared/billing/vat";
+import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/billing/whole-kronor";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { settlementBreakdownSchema, type BillingRun } from "@/lib/shared/schemas/billing";
 import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
@@ -33,9 +36,6 @@ import {
   type OrganizationId,
   type TimeEntryId,
 } from "@/lib/shared/schemas/ids";
-import type { SettlementView } from "@/lib/shared/settlement-view";
-import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
-import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/whole-kronor";
 import { logMatterNote } from "../../billing/matter-note";
 import { emit } from "../../events/emit";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../../queued-call";

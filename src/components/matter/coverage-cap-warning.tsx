@@ -8,7 +8,7 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { coverageStatus, type CoverageStatus } from "@/lib/shared/coverage-cap";
+import { coverageStatus, type CoverageStatus } from "@/lib/shared/billing/coverage-cap";
 import { formatKr } from "@/lib/shared/kr-format";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";

@@ -11,7 +11,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { postsInDateRange } from "@/lib/shared/billing-post-selection";
+import { postsInDateRange } from "@/lib/shared/billing/billing-post-selection";
 import { formatKr } from "@/lib/shared/kr-format";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 

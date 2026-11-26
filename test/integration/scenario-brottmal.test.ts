@@ -35,9 +35,9 @@ import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { appRouter } from "@/lib/server/routers/_app";
-import { computeBrottmalstaxa, BROTTMALSTAXA_TABLE } from "@/lib/shared/brottmalstaxa";
+import { computeBrottmalstaxa, BROTTMALSTAXA_TABLE } from "@/lib/shared/billing/brottmalstaxa";
+import { buildKostnadsrakningContext } from "@/lib/shared/billing/kostnadsrakning";
 import { prebakeJoins } from "@/lib/shared/demo-source";
-import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import { roundToAllowedMinutes } from "@/lib/shared/time-hours";
 
 const ORG_ID = "firma-ab";

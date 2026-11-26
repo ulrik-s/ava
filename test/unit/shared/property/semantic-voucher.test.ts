@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest-compat";
 import {
   buildPaymentVoucher, buildSemanticVoucher, type SemanticVoucher, type VatBreakdownLine, type VoucherRole,
 } from "@/lib/shared/accounting/semantic-voucher";
-import { VAT_RATES } from "@/lib/shared/vat";
+import { VAT_RATES } from "@/lib/shared/billing/vat";
 import { signedOre, sum, vatRate } from "../../helpers/arbitraries";
 
 const debit = (v: SemanticVoucher): number => sum(v.rows.map((r) => r.debit));

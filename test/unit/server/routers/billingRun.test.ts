@@ -12,7 +12,7 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
-import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { timkostnadsnormFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
 import { asId } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 

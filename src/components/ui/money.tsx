@@ -13,8 +13,8 @@
  */
 
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
+import { DEFAULT_VAT_RATE, splitVat } from "@/lib/shared/billing/vat";
 import { formatKr } from "@/lib/shared/kr-format";
-import { DEFAULT_VAT_RATE, splitVat } from "@/lib/shared/vat";
 
 interface Props {
   /** Beloppet i öre, tolkat enligt `basis`. */

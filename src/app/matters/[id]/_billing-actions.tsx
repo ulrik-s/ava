@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import { billingShortcut, type BillingAction, type BillingShortcut, type FlowMatter, type FlowRun } from "@/lib/shared/billing-flow";
+import { billingShortcut, type BillingAction, type BillingShortcut, type FlowMatter, type FlowRun } from "@/lib/shared/billing/billing-flow";
 
 interface BillingActionsProps {
   actions: readonly BillingAction[];

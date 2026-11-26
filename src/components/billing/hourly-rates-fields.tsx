@@ -10,7 +10,7 @@
 
 import { useId } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
-import { inheritedHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
+import { inheritedHourlyRate, type LevelRates } from "@/lib/shared/billing/hourly-rate";
 import { formatRateKr } from "@/lib/shared/kr-format";
 import {
   HOURLY_TIME_ENTRY_KINDS, TIME_ENTRY_KIND_LABELS, type HourlyTimeEntryKind,
