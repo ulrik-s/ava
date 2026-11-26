@@ -62,20 +62,49 @@ describe("hälsokontrollen", () => {
     expect(prioOrder(flow)).toEqual(["prio-hög", "prio-medel", "prio-låg"]);
   });
 
-  it("nedbruten och klar (väntar på release) larmar inte; den som fortfarande byggs gör det", () => {
+  it("nedbruten larmar inte när den väntar på release eller på sina arbetsordrar; utan någondera gör den det", () => {
+    const fb = (number: number, over: Partial<HealthItem>) =>
+      item({ repo: "ulrik-s/ava-feedback", number, labels: ["user-request", "nedbruten"], labeledAt: { nedbruten: ago(20) }, ...over });
     const report = healthReport(flow, {
       now,
       lastClockRun: ago(0.5),
-      items: [
-        item({ repo: "ulrik-s/ava-feedback", number: 16, labels: ["user-request", "nedbruten"], labeledAt: { nedbruten: ago(20) }, awaitingRelease: true }),
-        item({ repo: "ulrik-s/ava-feedback", number: 17, labels: ["user-request", "nedbruten"], labeledAt: { nedbruten: ago(20) } }),
-      ],
+      items: [fb(16, { awaitingRelease: true }), fb(17, { awaitingWork: true }), fb(18, {})],
     });
-    expect(report.alarms.map((a) => a.key)).toEqual(["stuck:ava-feedback#17"]);
+    expect(report.alarms.map((a) => a.key)).toEqual(["stuck:ava-feedback#18"]);
     expect(report.moving).toEqual([
       "ava-feedback#16 En sak — klar — väntar på nästa release",
-      "ava-feedback#17 En sak — nedbruten",
+      "ava-feedback#17 En sak — nedbruten — arbetsordrarna byggs",
+      "ava-feedback#18 En sak — nedbruten",
     ]);
+  });
+
+  describe("kön (granskad, queue: true)", () => {
+    const queued = (number: number, h: number, over: Partial<HealthItem> = {}) =>
+      item({ number, labels: ["agent-task", "granskad"], labeledAt: { granskad: ago(h) }, ...over });
+    const report = (items: HealthItem[]) => healthReport(flow, { now, lastClockRun: ago(0.5), items });
+
+    it("arbetsordrar som väntar i dagar larmar inte var för sig när kön rör sig", () => {
+      const taken = item({ number: 9, labels: ["agent-task", "pågår"], labeledAt: { pågår: ago(2) } });
+      expect(report([queued(1, 90), queued(2, 40), taken]).alarms).toEqual([]);
+    });
+
+    it("står kön still larmar den en gång, med hur länge och hur många som väntar", () => {
+      const taken = item({ number: 9, labels: ["agent-task", "pågår", "blockerad"], labeledAt: { pågår: ago(8.5) } });
+      const alarms = report([queued(1, 90), queued(2, 40), queued(3, 30, { labels: ["agent-task", "granskad", "blockerad"] }), taken]).alarms;
+      expect(alarms.map((a) => a.key)).toEqual(["queue:ava:granskad"]);
+      expect(alarms[0]?.text).toBe("Kön i granskad (ava) står still: inget har lämnat den på 8 h, 2 väntar. Dygnstaket, eller startar inte L4?");
+    });
+
+    it("utan något som lämnat kön bland de öppna larmar den efter stuck_after", () => {
+      expect(report([queued(1, 90)]).alarms.map((a) => a.text)).toEqual([
+        "Kön i granskad (ava) står still: inget har lämnat den på över 6h, 1 väntar. Dygnstaket, eller startar inte L4?",
+      ]);
+    });
+
+    it("en tom kö larmar inte, och en arbetsorder som väntar på ett beroende räknas inte", () => {
+      expect(report([]).alarms).toEqual([]);
+      expect(report([queued(1, 90, { blockedBy: 1 })]).alarms).toEqual([]);
+    });
   });
 
   it("ingen klockkörning alls larmar", () => {
@@ -144,6 +173,8 @@ describe("hälsokontrollen mot GitHub", () => {
     const items = collectItems(flow, (repo) => gitHub(repo, gh.run));
     expect(items.find((i) => i.number === 16)?.awaitingRelease).toBe(true);
     expect(items.find((i) => i.number === 17)?.awaitingRelease).toBeUndefined();
+    expect(items.find((i) => i.number === 17)?.awaitingWork).toBe(true);
+    expect(items.find((i) => i.number === 16)?.awaitingWork).toBeUndefined();
     expect(gh.calls.filter((c) => c.includes("repos/ulrik-s/ava/issues?state=open"))).toHaveLength(1);
   });
 
