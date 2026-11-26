@@ -16,7 +16,7 @@ import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import type { LockableEntry } from "@/lib/shared/time-entry-lock";
 import { TimeEntryEditModal, timeActionsColumn, useTimeEntryEditing } from "./_time-entry-editing";
-import { useTimeList } from "./_use-time-list";
+import { useTimeList, type TimeList } from "./_use-time-list";
 
 /** En rad på /time, med låsfälten som avgör om den får ändras (#1863). */
 interface TimeRow extends LockableEntry {
@@ -51,16 +51,8 @@ const timeColumns: Column<TimeRow>[] = [
     render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
 ];
 
-interface PeriodFilterProps {
-  /** Dagen som visas utan period, "YYYY-MM-DD" (#2096). */
-  day: string;
-  from: string;
-  to: string;
-  onDay: (v: string) => void;
-  onFrom: (v: string) => void;
-  onTo: (v: string) => void;
-  onClear: () => void;
-}
+/** Filtrets fält: dagen (#2096) och perioden, ur {@link useTimeList}. */
+type PeriodFilterProps = Pick<TimeList, "day" | "from" | "to" | "onDay" | "onFrom" | "onTo" | "onClear">;
 
 /** Dagens namn mellan pilarna, i en ruta med fast bredd så att **›** står still. */
 function DayPicker({ day, onDay }: Pick<PeriodFilterProps, "day" | "onDay">) {
