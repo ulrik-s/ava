@@ -1,6 +1,6 @@
 # ADR 0002 — Git-konflikthantering i Backend A (local-first)
 
-- **Status:** Accepterad
+- **Status:** Ersatt av [ADR 0016](0016-server-first-med-offline-first-klient.md) och [ADR 0037](0037-harda-egen-synkmotor.md) (2026-11-26): git-vägen och git-konflikthanteringen är pensionerade; synken går mot servern
 - **Datum:** 2026-05-27
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** Backend A (git/local-first), sync-lagret, sync-UX
