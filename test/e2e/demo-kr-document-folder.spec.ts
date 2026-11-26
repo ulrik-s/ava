@@ -86,6 +86,19 @@ test.describe("släpp filer utifrån i dokumentvyn (#1615)", () => {
     await dialog.getByRole("button", { name: "Spara" }).click();
     await expect(page.getByText("Möte om förlikning.eml")).toBeVisible({ timeout: 30_000 });
   });
+
+  // #1975: utan släppmål föreslår rutan en mapp ur namnet (här mejlets ämnesrad).
+  test("ett mejl med en kallelse släppt på roten föreslår Domstol › Kallelse och sparas där", async ({ page }) => {
+    await dropFile(page, "Rot", "x7f3.eml", "message/rfc822", "Subject: Kallelse till huvudförhandling\r\n\r\nText");
+    const dialog = page.getByRole("dialog", { name: "Namnge dokumentet" });
+    await expect(dialog.getByRole("textbox")).toHaveValue("Kallelse till huvudförhandling");
+    await expect(dialog.getByLabel("Mapp").locator("option:checked")).toHaveText("Domstol › Kallelse");
+    await dialog.getByRole("button", { name: "Spara" }).click();
+    const saved = page.getByText("Kallelse till huvudförhandling.eml");
+    await expect(saved).toBeVisible({ timeout: 30_000 });
+    // Raden ligger under Domstol › Kallelse: djup 2.
+    await expect(page.locator("tr").filter({ has: saved }).locator("[style*='padding-left: 36px']").first()).toBeVisible();
+  });
 });
 
 // #1753: dokumentträdets rader är toppjusterade. Klassen sitter på <tr>, och

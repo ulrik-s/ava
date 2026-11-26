@@ -9,6 +9,7 @@
  */
 
 import { DEFAULT_MATTER_FOLDERS, type DefaultFolderNode } from "@/lib/shared/default-matter-folders";
+import { folderKey } from "@/lib/shared/document-folder-path";
 import type { DocumentFolder } from "@/lib/shared/schemas/document";
 import { asId, type DocumentFolderId, type MatterId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
@@ -23,10 +24,6 @@ interface FillCtx {
   index: Map<string, DocumentFolderId>;
   /** Id för en ny mapp ur dess nyckel (köat anrop, #1242), annars repots. */
   newId: ((key: string) => string) | undefined;
-}
-
-function folderKey(parentId: DocumentFolderId | null, name: string): string {
-  return `${parentId ?? ""}\u0000${name.toLocaleLowerCase("sv")}`;
 }
 
 /** Befintlig mapp med nodens namn under `parentId`, annars en nyskapad. */

@@ -4,6 +4,8 @@
  * till ett annat ärende räknar sökvägen på ett ställe.
  */
 
+import { OTHER_FOLDER } from "./default-matter-folders";
+
 /** En mapp i trädet: id, namn och förälder (`null`/utelämnad = roten). */
 export interface FolderNode<Id extends string = string> {
   id: Id;
@@ -57,4 +59,33 @@ export function folderChoices<Id extends string>(folders: readonly FolderNode<Id
   };
   visit(null, "");
   return out;
+}
+
+/**
+ * Nyckeln som matchar en mapp på namn under en förälder: skiftlägesokänsligt
+ * i svensk ordning. Delas av förslaget i namnrutan och serverns standardmappar.
+ */
+export function folderKey(parentId: string | null, name: string): string {
+  return `${parentId ?? ""}\u0000${name.toLocaleLowerCase("sv")}`;
+}
+
+/** Mappen på `path`, nivå för nivå från roten, eller null när en nivå saknas. */
+function findFolderPath<Id extends string>(folders: readonly FolderNode<Id>[], path: readonly string[]): Id | null {
+  const index = new Map(folders.map((f) => [folderKey(f.parentId ?? null, f.name), f.id]));
+  let current: Id | null = null;
+  for (const name of path) {
+    const id = index.get(folderKey(current, name));
+    if (id === undefined) return null;
+    current = id;
+  }
+  return current;
+}
+
+/**
+ * Mappen på sökvägen (#1975), nivå för nivå från roten med namnet
+ * skiftlägesokänsligt under samma förälder. Saknas den: Övrigt i roten.
+ * Saknas även den: `null` (Överst, utan mapp).
+ */
+export function resolveFolderPath<Id extends string>(folders: readonly FolderNode<Id>[], path: readonly string[]): Id | null {
+  return findFolderPath(folders, path) ?? findFolderPath(folders, [OTHER_FOLDER]);
 }
