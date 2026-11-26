@@ -27,7 +27,7 @@ const view = (over: Partial<FakturaView> = {}): FakturaView => ({
   summaryTotalLabel: "Summa inkl moms", summaryTotal: "8 130,00 kr",
   hasSplit: false, splitRows: [{ label: "Netto (exkl moms)", amount: "6 504,00 kr", style: "", muted: false }],
   totalLabel: "Att betala (inkl moms)", total: "8 130,00 kr",
-  hasSpec: false, timeLines: [], timeGroups: [], expenseLines: [], expenseNetTotal: "", expenseGrossTotal: "", ...over,
+  hasSpec: false, timeLines: [], timeGroups: [], showTimeAmounts: true, expenseLines: [], expenseNetTotal: "", expenseGrossTotal: "", ...over,
 });
 
 describe("toWinAnsi", () => {
@@ -308,5 +308,34 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
       // Summaraden (och därmed strecket ovanför) får inte hamna under sidans nedre marginal.
       expect(label?.y ?? 0).toBeGreaterThanOrEqual(PAGE_BOTTOM_MARGIN);
     }
+  });
+});
+
+describe("renderFakturaPdf — acontofakturan utan tidsbelopp (#1939)", () => {
+  const timeLines = [{ date: "2026-05-02", description: "Genomgång av handlingar", minutes: 90, amountOre: 243_900, kind: "ARBETE" as const }];
+  const viewFor = (invoiceType: string) => buildFakturaView({
+    invoice: { id: asId<"InvoiceId">("inv-3"), amount: 500_000, invoiceNumber: "F-2026-0009", invoiceDate: "2026-06-30", invoiceType },
+    recipient: "Klient AB",
+    meta: { matterNumber: "2026-0012", matterTitle: "Tvist" },
+    breakdown: { rows: [{ label: "Aconto", amountOre: 500_000, kind: "add" }], totalLabel: "Att betala (inkl moms)", totalOre: 500_000, timeLines },
+  });
+  /** Texten från specifikationens rubrik och framåt. */
+  const specTexts = async (invoiceType: string): Promise<string[]> => {
+    const texts = pdfTexts(await renderFakturaPdf(viewFor(invoiceType)));
+    return texts.slice(texts.indexOf("Tidsspecifikation"));
+  };
+
+  it("aconto: tidstabellen har Tim men inte rubriken Belopp, och inga tidsbelopp", async () => {
+    const texts = await specTexts("ACCONTO");
+    expect(texts).toContain("Tim");
+    expect(texts).not.toContain("Belopp");
+    expect(texts).toContain("1,5");
+    expect(texts.some((t) => t.includes("2 439"))).toBe(false);
+  });
+
+  it("slutfaktura: rubriken Belopp står kvar", async () => {
+    const texts = await specTexts("FINAL");
+    expect(texts).toContain("Belopp");
+    expect(texts.some((t) => t.includes("2 439"))).toBe(true);
   });
 });
