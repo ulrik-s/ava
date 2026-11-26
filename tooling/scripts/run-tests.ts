@@ -141,9 +141,13 @@ const FAST = process.argv.includes("--fast");
 // → 95.0 rader / 94.3 funktioner (#1905, steg 3 av 5: synk, filåtkomst, lokal
 // lagring och demons uppstart utlöser sina funktioner, lokalt 98.42% rader /
 // 94.82% funktioner. LINE oförändrat; FUNC = uppmätt avrundat nedåt till
-// tiondel minus 0.5).
+// tiondel minus 0.5)
+// → 95.0 rader / 95.0 funktioner (#1906, steg 4 av 5: fakturasidan och
+// Importera betalfil utlöser sina händelser → de 38 otäckta funktionerna
+// täckta, lokalt 98.67% rader / 95.53% funktioner. LINE oförändrat; FUNC =
+// uppmätt avrundat nedåt till tiondel minus 0.5 = 95.0, målet nått).
 const LINE_FLOOR = 0.950;
-const FUNC_FLOOR = 0.943;
+const FUNC_FLOOR = 0.950;
 
 /**
  * AI-ytans golv (#1025). `tooling/ava-cli/` — CLI:t + MCP-servern — mättes

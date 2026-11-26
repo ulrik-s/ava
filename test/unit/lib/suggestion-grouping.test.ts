@@ -181,3 +181,11 @@ describe("groupSuggestions — edge cases", () => {
     expect(groups).toHaveLength(1);
   });
 });
+
+describe("rollen är en MatterRole (#1908)", () => {
+  it("ett förslag med en roll som inte finns kompilerar inte", () => {
+    // @ts-expect-error — "KLIENTT" är ingen MatterRole
+    const typo = sug({ role: "KLIENTT" });
+    expect(groupSuggestions([typo])[0]?.roles).toEqual(["KLIENTT"]);
+  });
+});

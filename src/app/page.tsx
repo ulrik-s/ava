@@ -10,6 +10,9 @@
  * Dagsval: Igår / Idag / Imorgon / fritt datum, och pilarna ‹ › som stegar en
  * dag i taget från den valda dagen (#2095).
  *
+ * Stapeldiagram (#2112): den inloggades egen tid som staplar, från i dag.
+ * Dagväljaren i sidhuvudet styr bara Tidrapportering, inte diagrammet.
+ *
  * Användaren väljer själv vilka rutor som syns (#1612): alla kan tas bort
  * med × och läggas tillbaka med "Lägg till ruta". Kalendern är borttagen
  * (#1623) — byråerna använder en egen kalender.
@@ -19,6 +22,7 @@ import { Plus, Clock } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
+import { TimeChartPanel } from "@/components/time/time-chart-panel";
 import { DayStepper } from "@/components/ui/day-stepper";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -28,6 +32,8 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { dayLabel } from "@/lib/shared/iso-date";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
+import { asId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { DASHBOARD_CLOSABLE, dashboardLayout } from "./_dashboard-layout";
 
 function todayYmd(): string {
@@ -53,6 +59,7 @@ export default function Dashboard() {
     { id: "watch", title: "Frister", render: () => <WatchlistCard />, fill: true },
     { id: "time", title: "Tidrapportering", render: () => <TimeCard ymd={ymd} />, fill: true },
     { id: "recent", title: "Senaste ärenden", render: () => <RecentMattersCard />, fill: true },
+    { id: "chart", title: "Stapeldiagram", render: () => <ChartCard />, fill: true },
   ];
 
   return (
@@ -105,7 +112,7 @@ function WatchlistCard() {
         </Link>
       </div>
       <div className="p-2">
-        <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" onComplete={complete} />
+        <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" onComplete={complete} showClient />
       </div>
     </div>
   );
@@ -124,6 +131,13 @@ function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => 
         className="rounded-md border border-gray-200 px-2 py-1 text-xs" />
     </DayStepper>
   );
+}
+
+/** Stapeldiagrammet över den inloggades egen tid, från dagens svenska datum (#2112, #1677). */
+function ChartCard() {
+  const me = trpc.user.current.useQuery();
+  if (!me.data) return <p className="p-2 text-sm text-gray-500">Laddar...</p>;
+  return <TimeChartPanel userId={asId<"UserId">(me.data.id)} anchorDay={stockholmDay(new Date())} />;
 }
 
 interface TimeEntryRow { id: string; minutes: number; description: string; billable: boolean; matter: { id: string; matterNumber: string; title: string } }

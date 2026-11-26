@@ -242,7 +242,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
 
   // ── Tidsposter ───────────────────────────────────────────────────
   "timeEntry.list": "Lista tidsposter, valfritt filtrerat på ärende, medarbetare och datumintervall.",
-  "timeEntry.chart": "En medarbetares registrerade tid per dag, vecka eller månad i ett datumintervall: summa, debiterbar tid och ärendena per stapel.",
+  "timeEntry.chart": "En medarbetares registrerade tid per dag, vecka eller månad i ett datumintervall: summa, debiterbar tid och ärendena per stapel. Utan userId gäller diagrammet hela byrån.",
   "timeEntry.create": "Registrera arbetad tid på ett ärende. Kategorin styr ersättningen: arbete, tidsspillan, arbete på obekväm tid, eller advokatberedskap som ersätts per dygn med noll minuter.",
   "timeEntry.update": "Uppdatera en tidspost.",
   "timeEntry.moveToMatter": "Flytta en eller flera olåsta tidsposter till ett annat ärende. Timpriset räknas om mot målärendet; datum, tid och beskrivning ändras inte. Fakturerade eller frysta poster vägras.",

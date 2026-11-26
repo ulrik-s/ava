@@ -5,6 +5,7 @@
  */
 
 import type { Contact } from "@/lib/shared/schemas/contact";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import type { ContactId, MatterContactId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import { type MatterContact, matterSchema } from "@/lib/shared/schemas/matter";
 import type { IDataStore } from "../data-store/IDataStore";
@@ -73,7 +74,7 @@ export class InMemoryMatterContactRepository
     return row as MatterContactWithContact;
   }
 
-  async findLink(matterId: MatterId, contactId: ContactId, role: string): Promise<MatterContact | null> {
+  async findLink(matterId: MatterId, contactId: ContactId, role: MatterRole): Promise<MatterContact | null> {
     return (await this.delegate.findFirst({ where: { matterId, contactId, role } })) as MatterContact | null;
   }
 
