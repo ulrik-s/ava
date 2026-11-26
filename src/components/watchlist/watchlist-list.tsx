@@ -77,6 +77,7 @@ export function WatchlistRow({ item, onComplete }: { item: WatchlistItem; onComp
       <EntityLink
         route={item.link?.route ?? "matters"}
         id={item.link?.id}
+        query={item.link?.query}
         className={`block flex-1 rounded-lg border px-3 py-2 text-sm hover:brightness-95 ${due ? "border-2 border-red-600 bg-red-50 text-red-900" : severityClasses(item.severity)}`}
       >
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

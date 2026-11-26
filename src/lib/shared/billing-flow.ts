@@ -177,6 +177,14 @@ export function availableActions(matter: FlowMatter, runs: ReadonlyArray<FlowRun
 }
 
 /**
+ * Query-parametern som ber ärendesidan öppna faktureringen direkt (#1854):
+ * `?id=…&fakturera=1`. Frister-raden Bör faktureras sätter den; ärendesidan
+ * gör panelen Fakturering aktiv och låter {@link billingShortcut} avgöra vad
+ * som öppnas.
+ */
+export const BILLING_SHORTCUT_PARAM = "fakturera";
+
+/**
  * Vad en "fakturera nu"-genväg öppnar i faktureringspanelen (#1853, ADR 0034):
  * en dialog direkt (`dialog`, samma väg som menyvalet), menyn + Skapa faktura
  * (`menu`) eller ingenting (`none`, fasen har inga åtgärder).

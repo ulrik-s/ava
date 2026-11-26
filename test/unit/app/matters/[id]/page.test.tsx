@@ -161,9 +161,12 @@ vi.mock("@/lib/client/trpc", () => ({
 
 // Navigation: kalender-sektionen (tillagd denna session) använder
 // useRouter/Link → måste mockas annars "app router not mounted".
+// `?fakturera=1` (#1854): adressens parametrar och router.replace styrs per test.
+const navigation = { search: new URLSearchParams(), replace: vi.fn() };
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: navigation.replace, refresh: vi.fn() }),
   usePathname: () => "/matters/m1",
+  useSearchParams: () => navigation.search,
 }));
 vi.mock("@/lib/client/demo/use-route-id", () => ({ useRouteId: () => "m1" }));
 
@@ -171,10 +174,13 @@ vi.mock("@/lib/client/demo/use-route-id", () => ({ useRouteId: () => "m1" }));
 // paneler efter varandra så testerna kan granska innehållet.
 // Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
 // alla paneler efter varandra, synkront, så testerna kan granska innehållet.
+// Den aktiva panelen sidan ber om (#1851/#1854) sparas för testerna.
+const panelPage: { activePanel: string | null | undefined } = { activePanel: undefined };
 vi.mock("@/components/layout/panel-page", () => ({
-  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
-    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
-  ),
+  PanelPage: ({ header, panels, activePanel }: { header: React.ReactNode; activePanel?: string | null; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => {
+    panelPage.activePanel = activePanel;
+    return <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>;
+  },
 }));
 
 // Tunga barnkomponenter — mocka som platshållare
@@ -218,6 +224,8 @@ const renderPage = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  navigation.search = new URLSearchParams();
+  panelPage.activePanel = undefined;
   matterQuery.data = M;
   matterQuery.isLoading = false;
   matterQuery.error = null;
@@ -234,6 +242,26 @@ beforeEach(() => {
 });
 
 describe("MatterDetailPage", () => {
+  describe("?fakturera=1 öppnar faktureringen (#1854)", () => {
+    it("gör Fakturering aktiv, öppnar Aconto till klient och tar bort parametern en gång", async () => {
+      navigation.search = new URLSearchParams("id=m1&fakturera=1");
+      const { rerender } = renderPage();
+      await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/matters/__shell__/?id=m1"));
+      expect(panelPage.activePanel).toBe("billing");
+      expect(screen.getAllByText(/Aconto till klient/).length).toBeGreaterThan(0);
+      rerender(<Suspense fallback={<div>laddar</div>}><MatterDetailPage id="m1" /></Suspense>);
+      expect(navigation.replace).toHaveBeenCalledTimes(1);
+    });
+
+    it("utan parametern: ingen aktiv panel och adressen rörs inte", async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId("matter-header")).toBeInTheDocument());
+      expect(panelPage.activePanel).toBeNull();
+      expect(navigation.replace).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Aconto till klient/)).not.toBeInTheDocument();
+    });
+  });
+
   it("visar laddartext under loading", async () => {
     matterQuery.isLoading = true;
     matterQuery.data = undefined;
