@@ -33,6 +33,9 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { primitiveText } from "@/lib/shared/primitive-text";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
+import {
+  AvslutChoice, ErsattningSection, ForhorSection, forhorOf, forordnandeInputOf, krRunClaimOf, type KrRunClaim, useErsattning,
+} from "./_ersattning-section";
 
 /** Dokumentfälten (#1218) — målnummer, titel och byråns sidfot — ärvs från KrDocumentFields. */
 interface Props extends KrDocumentFields {
@@ -56,6 +59,8 @@ interface Props extends KrDocumentFields {
   /** Rättshjälp (#383): klienten har betalat rådgivningstimmen separat →
    *  text-rad på kostnadsräkningen. */
   radgivningPaid?: boolean | undefined;
+  /** Offentligt uppdrag (#1858): då kan förordnandetaxan väljas. */
+  isOffentligtUppdrag?: boolean | undefined;
   onClose: () => void;
   /** Skickar in kostnadsräkningen (skapar körningen) och ger dess id. Anropas
    *  EN gång när PDF:en faktiskt renderats — inte när modalen stängs (Avbryt/
@@ -64,15 +69,6 @@ interface Props extends KrDocumentFields {
    *  huvudförhandling, nivå och taxeval följer med: servern yrkar samma taxa som
    *  dokumentet (#1024). */
   createRun: (claim: KrRunClaim) => Promise<BillingRunId>;
-}
-
-/** Det dialogen yrkar på — servern räknar körningens belopp ur samma underlag. */
-export interface KrRunClaim {
-  hufStart: string;
-  hufEnd: string;
-  taxaLevel: TaxaLevel;
-  isTaxeArende: boolean;
-  hasFTax: boolean;
 }
 
 function toDatetimeLocalValue(d: Date): string {
@@ -178,6 +174,23 @@ export function effectiveHearing(hearing: boolean, hufStart: string, hufEnd: str
   return hearing ? { hufEnd, isTaxe } : { hufEnd: hufStart, isTaxe: false };
 }
 
+/** Ärendet, försvararen, byrån och domstolen till räkningens underlag. */
+function krPartiesOf(props: Props) {
+  return {
+    matter: { matterNumber: props.matterNumber, title: props.matterTitle, clientName: props.clientName, ...omitUndefined({ radgivningPaid: props.radgivningPaid }) },
+    defender: {
+      name: props.defenderName,
+      ...omitUndefined({ email: props.defenderEmail }),
+    },
+    organization: omitUndefined({
+      name: props.organizationName,
+      orgNumber: props.organizationOrgNumber,
+      address: props.organizationAddress,
+    }),
+    ...omitUndefined({ courtName: props.courtName }),
+  };
+}
+
 type KostnContext = ReturnType<typeof buildKostnadsrakningContext>;
 type HelperState = ReturnType<typeof useHelper>;
 
@@ -190,7 +203,6 @@ function useKostnadsrakningModal(props: Props) {
   // modalen öppnas så att beloppen inte kryper medan man skriver, och skilt från
   // `hufEnd` som är ett riktigt klockslag i rättssalen.
   const [yrkandeDate] = useState<Date>(() => new Date());
-  const [isTaxe, setIsTaxe] = useState<boolean>(props.initialIsTaxe ?? true);
   const [level, setLevel] = useState<TaxaLevel>(props.initialLevel ?? 1);
   // F-skatt antas alltid — alla advokater har F-skatt. Tidigare radio borttagen.
   const hasFTax = true;
@@ -209,7 +221,11 @@ function useKostnadsrakningModal(props: Props) {
   // Förhandlingsklockan bara när ärendet haft en förhandling (en "Deltagit i
   // förhandling"-post). Annars: bara ärendets poster, utan klocka och taxa.
   const hearing = hasHearingEntry(timeEntries.data?.entries ?? []);
-  const claim = effectiveHearing(hearing, hufStart, hufEnd, isTaxe);
+  const choice = useErsattning({ initialIsTaxe: props.initialIsTaxe, isOffentligtUppdrag: props.isOffentligtUppdrag ?? false, hearing });
+  const { ersattning, avslut } = choice;
+  const claim = effectiveHearing(hearing, hufStart, hufEnd, ersattning === "taxa");
+  const showHuf = hearing && ersattning !== "forordnande";
+  const runClaim = krRunClaimOf({ ersattning, avslut, hufStart, hufEnd: claim.hufEnd, taxaLevel: level, hasFTax });
 
   // Auto-spara HUF-start (debounced 600 ms)
   useEffect(() => {
@@ -221,27 +237,19 @@ function useKostnadsrakningModal(props: Props) {
   }, [hufStart]);
 
   const ctx = useMemo(() => buildKostnadsrakningContext(withDocumentFields({
-    matter: { matterNumber: props.matterNumber, title: props.matterTitle, clientName: props.clientName, ...omitUndefined({ radgivningPaid: props.radgivningPaid }) },
-    defender: {
-      name: props.defenderName,
-      ...omitUndefined({ email: props.defenderEmail }),
-    },
-    organization: omitUndefined({
-      name: props.organizationName,
-      orgNumber: props.organizationOrgNumber,
-      address: props.organizationAddress,
-    }),
-    ...omitUndefined({ courtName: props.courtName }),
+    ...krPartiesOf(props),
     hufStart: new Date(hufStart),
     hufEnd: new Date(claim.hufEnd),
     yrkandeDate,
     taxaLevel: level,
     hasFTax,
-    isTaxeArende: claim.isTaxe,
+    isTaxeArende: ersattning !== "lopande",
+    // Förordnandemålet (#1858): förhören ur posterna i stället för klockan.
+    ...forordnandeInputOf(ersattning, timeEntries.data?.entries ?? [], avslut),
     expenses: props.expenses,
     // Låsta (redan fakturerade/redovisade) poster utelämnas av byggaren (#1205).
     timeEntries: timeEntries.data?.entries ?? [],
-  }, props)), [hufStart, claim.hufEnd, yrkandeDate, level, claim.isTaxe, hasFTax, props, timeEntries.data]);
+  }, props)), [hufStart, claim.hufEnd, yrkandeDate, level, ersattning, avslut, hasFTax, props, timeEntries.data]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };
@@ -252,6 +260,7 @@ function useKostnadsrakningModal(props: Props) {
   const stoppaNu = () => setHufEnd(toDatetimeLocalValue(new Date()));
 
   const generate = async () => {
+    if (!runClaim) return;
     setError(null);
     setGenerating(true);
     try {
@@ -273,9 +282,7 @@ function useKostnadsrakningModal(props: Props) {
         },
       });
       const storagePath = `documents/content/${docId}.pdf`;
-      const billingRunId = await props.createRun({
-        hufStart: new Date(hufStart).toISOString(), hufEnd: new Date(claim.hufEnd).toISOString(), taxaLevel: level, isTaxeArende: claim.isTaxe, hasFTax,
-      });
+      const billingRunId = await props.createRun(runClaim);
       // Innehåll: in-memory blob-cache (öppna nu) + FSA (self-hosted) + demo-slab
       // (överlever reload). Metadata-raden skapas separat av recordDocument.
       await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });
@@ -289,7 +296,7 @@ function useKostnadsrakningModal(props: Props) {
         fileName, bytes,
         matterNumber: props.matterNumber, matterTitle: props.matterTitle,
         clientName: props.clientName,
-        huvudforhandlingFormatted: hearing ? primitiveText(ctx.templateContext.huvudforhandlingFormatted) : "Ingen förhandling",
+        huvudforhandlingFormatted: showHuf ? primitiveText(ctx.templateContext.huvudforhandlingFormatted) : "Ingen förhandling",
         totalInclFormatted: primitiveText(ctx.templateContext.totalInclFormatted),
       });
       setDone({ filename: fileName, mailOpened });
@@ -302,9 +309,10 @@ function useKostnadsrakningModal(props: Props) {
   };
 
   return {
-    hufStart, setHufStart, hufEnd, setHufEnd, isTaxe, setIsTaxe, level, setLevel,
+    hufStart, setHufStart, hufEnd, setHufEnd, level, setLevel,
     generating, error, done, helper, ctx, stoppaNu, generate,
-    hearing, entriesLoading: timeEntries.isLoading,
+    hearing, showHuf, entriesLoading: timeEntries.isLoading,
+    ...choice, entries: timeEntries.data?.entries ?? [], ready: runClaim !== null,
   };
 }
 
@@ -326,19 +334,8 @@ export function KostnadsrakningModal(props: Props) {
         </div>
 
         <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
-          {k.hearing ? (
-            <>
-              <HufSection
-                hufStart={k.hufStart} setHufStart={k.setHufStart}
-                hufEnd={k.hufEnd} setHufEnd={k.setHufEnd}
-                onStoppaNu={k.stoppaNu}
-                hufFormatted={ctx.templateContext.huvudforhandlingFormatted as string}
-                hufMin={ctx.huvudforhandlingMinutes}
-              />
-              <ErsattningSection isTaxe={k.isTaxe} setIsTaxe={k.setIsTaxe} level={k.level} setLevel={k.setLevel} />
-            </>
-          ) : <NoHearingNote loading={k.entriesLoading} />}
-          <TimeSpecSection ctx={ctx} isTaxe={k.hearing && k.isTaxe} />
+          <BasisSections k={k} />
+          <TimeSpecSection ctx={ctx} isTaxe={k.ersattning !== "lopande"} />
           <PreviewSection ctx={ctx} />
           <HelperStatusNote helper={k.helper} />
           <StatusMessages error={k.error} done={k.done} />
@@ -348,7 +345,7 @@ export function KostnadsrakningModal(props: Props) {
           done={k.done !== null}
           generating={k.generating}
           // Utan förhandling är 0 min rätt — bara med förhandling krävs en tid.
-          blocked={k.entriesLoading || (k.hearing && ctx.huvudforhandlingMinutes <= 0)}
+          blocked={k.entriesLoading || !k.ready || (k.showHuf && ctx.huvudforhandlingMinutes <= 0)}
           helperVersion={k.helper.version}
           onClose={props.onClose}
           onGenerate={() => void k.generate()}
@@ -356,6 +353,33 @@ export function KostnadsrakningModal(props: Props) {
       </div>
     </div>
   );
+}
+
+/**
+ * Grunden: förordnandetaxan med avslut och förhör, förhandlingsklockan med
+ * ersättningstypen, eller (utan förhandling) förklaringen — i ett offentligt
+ * uppdrag med valet av ersättningstyp ovanför.
+ */
+function BasisSections({ k }: { k: ReturnType<typeof useKostnadsrakningModal> }) {
+  const choice = <ErsattningSection options={k.options} ersattning={k.ersattning} onChange={k.onErsattning} level={k.level} setLevel={k.setLevel} />;
+  if (k.ersattning === "forordnande") {
+    return <>{choice}<AvslutChoice avslut={k.avslut} onChange={k.setAvslut} /><ForhorSection forhor={forhorOf(k.entries)} notes={k.ctx.document.notes} /></>;
+  }
+  if (k.hearing) {
+    return (
+      <>
+        <HufSection
+          hufStart={k.hufStart} setHufStart={k.setHufStart}
+          hufEnd={k.hufEnd} setHufEnd={k.setHufEnd}
+          onStoppaNu={k.stoppaNu}
+          hufFormatted={k.ctx.templateContext.huvudforhandlingFormatted as string}
+          hufMin={k.ctx.huvudforhandlingMinutes}
+        />
+        {choice}
+      </>
+    );
+  }
+  return <>{k.options.length > 1 && choice}<NoHearingNote loading={k.entriesLoading} /></>;
 }
 
 /** Ärendet har ingen förhandlingspost: förklara varför klockan saknas. */
@@ -418,42 +442,6 @@ function HufSection({ hufStart, setHufStart, hufEnd, setHufEnd, onStoppaNu, hufF
           <span className="text-xs text-gray-500 font-normal ml-2">({hufMin} min)</span>
         </p>
       </div>
-    </section>
-  );
-}
-
-/** Ersättningstyp (taxa/icke-taxa) + ev. taxa-nivå. */
-function ErsattningSection({ isTaxe, setIsTaxe, level, setLevel }: {
-  isTaxe: boolean; setIsTaxe: (v: boolean) => void;
-  level: TaxaLevel; setLevel: (v: TaxaLevel) => void;
-}) {
-  return (
-    <section className="space-y-3">
-      <div>
-        <span className="text-xs text-gray-700 mb-1 block">Ersättningstyp</span>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <label className="flex items-center gap-2 text-base">
-            <input type="radio" checked={isTaxe} onChange={() => setIsTaxe(true)} className="w-5 h-5" />
-            Taxa (brottmålstaxan DVFS 2025:6)
-          </label>
-          <label className="flex items-center gap-2 text-base">
-            <input type="radio" checked={!isTaxe} onChange={() => setIsTaxe(false)} className="w-5 h-5" />
-            Icke-taxa (timkostnadsnorm × all tid)
-          </label>
-        </div>
-      </div>
-      {isTaxe && (
-        <label className="block">
-          <span className="text-xs text-gray-700 mb-1 block">Ersättningsnivå (DVFS 2025:6)</span>
-          <select value={level} onChange={(e) => setLevel(Number(e.target.value) as TaxaLevel)}
-            className="w-full rounded border border-gray-300 px-3 py-2.5 text-base">
-            <option value={1}>1 — Grundersättning</option>
-            <option value={2}>2 — + häktningsförh. m.m.</option>
-            <option value={3}>3 — + RPU</option>
-            <option value={4}>4 — + häktning m.m. + RPU</option>
-          </select>
-        </label>
-      )}
     </section>
   );
 }

@@ -125,8 +125,8 @@ vi.mock("@/app/matters/[id]/_verdict-dialog", () => ({
 }));
 // Modalen själv testas separat — här bara skillnaden stänga vs faktiskt generera (#1121).
 vi.mock("@/app/matters/[id]/_kostnadsrakning-modal", () => ({
-  KostnadsrakningModal: (p: { onClose: () => void; createRun: () => Promise<string> }) => (
-    <div data-testid="kr-modal">
+  KostnadsrakningModal: (p: { onClose: () => void; createRun: () => Promise<string>; isOffentligtUppdrag?: boolean }) => (
+    <div data-testid="kr-modal" data-offentligt={String(p.isOffentligtUppdrag)}>
       <button type="button" onClick={p.onClose}>Avbryt modal</button>
       <button type="button" onClick={() => void p.createRun().then((id) => { createdRunId = id; })}>Generera</button>
     </div>
@@ -360,6 +360,8 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     expect(screen.getByTestId("kr-modal")).toBeInTheDocument();
+    // Förordnandetaxan kan väljas i ett offentligt uppdrag (#1858).
+    expect(screen.getByTestId("kr-modal")).toHaveAttribute("data-offentligt", "true");
   });
 
   it("att STÄNGA KR-modalen skapar ingen kostnadsräkning — bara att generera gör det (#1121)", async () => {
