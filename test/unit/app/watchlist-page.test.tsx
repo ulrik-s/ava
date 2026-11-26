@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import WatchlistPage from "@/app/watchlist/page";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import type { WatchlistItem } from "@/lib/shared/watchlist";
 
 const query: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
@@ -37,7 +38,8 @@ function item(p: Partial<WatchlistItem> = {}): WatchlistItem {
   };
 }
 
-const todayIso = (): string => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+/** I dag i svensk tid, som fristerna räknas (#1677); runnerns lokala dag var gårdagen 23–24 UTC. */
+const todayIso = (): string => stockholmDay(new Date());
 
 beforeEach(() => {
   vi.clearAllMocks();
