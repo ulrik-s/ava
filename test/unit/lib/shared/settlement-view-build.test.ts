@@ -14,9 +14,9 @@
 import { describe, it, expect } from "vitest-compat";
 import { asId } from "@/lib/shared/schemas/ids";
 import {
-  arvodeLadderRows, awardedBaseOre, buildClientArvodeLines, buildClientView, buildCreditView, buildPayerView, buildSettlementViews,
+  accontoDeductionRow, arvodeLadderRows, awardedBaseOre, buildClientArvodeLines, buildClientView, buildCreditView, buildPayerView, buildSettlementViews,
   creditPayload, feeBaseSuffix, ladderBaseOre, radgivningOre, shareLabel, svd,
-  toViewLine, totalPrutningNetOre, vatLabel, type SettlementBreakdown,
+  toViewLine, totalPrutningNetOre, vatLabel, workBaseRows, type SettlementBreakdown,
 } from "@/lib/shared/settlement-view";
 
 /** En nedbrytning där varje fält är satt — testerna varierar ett i taget. */
@@ -134,6 +134,34 @@ describe("buildClientArvodeLines (#1205)", () => {
 
   it("tomt underlag → inga rader", () => {
     expect(buildClientArvodeLines({ timeEntries: [], expenses: [] }, 0, "2026-06-01")).toEqual([]);
+  });
+
+  it("en egen värdering (acontofakturan, #1940) värderar varje rad, och avstämningen gäller ändå", () => {
+    const work = { timeEntries: [entry("a1", "2026-03-02", 60), entry("a2", "2026-03-03", 30)], expenses: [] };
+    const lines = buildClientArvodeLines(work, 30_100, "2026-06-01", (t) => t.minutes * 200);
+    expect(lines.map((l) => l.amountOre)).toEqual([12_000, 18_100]);
+  });
+});
+
+describe("delade rader för slutregleringen och acontofakturan (#1940)", () => {
+  it("workBaseRows: bara arvodet utan utlägg", () => {
+    expect(workBaseRows(100_000, 0)).toEqual([{ label: "Upparbetat arvode (exkl moms)", amountOre: 100_000, kind: "add" }]);
+  });
+
+  it("workBaseRows: med utlägg även utläggen och underlaget", () => {
+    expect(workBaseRows(100_000, 8_000).map((r) => [r.label, r.amountOre])).toEqual([
+      ["Upparbetat arvode (exkl moms)", 100_000], ["Utlägg (exkl moms)", 8_000], ["Underlag (exkl moms)", 108_000],
+    ]);
+  });
+
+  it("accontoDeductionRow: netto, med fakturanummer och datum", () => {
+    expect(accontoDeductionRow({ invoiceNumber: "F-2026-0007", date: "2026-02-03", amountOre: 50_000 })).toEqual({
+      label: "Avgår aconto — faktura F-2026-0007 (2026-02-03), exkl moms", amountOre: 40_000, kind: "deduct",
+    });
+  });
+
+  it("accontoDeductionRow: utan datum inget datum i etiketten", () => {
+    expect(accontoDeductionRow({ invoiceNumber: "—", date: null, amountOre: 50_000 }).label).toBe("Avgår aconto — faktura —, exkl moms");
   });
 });
 

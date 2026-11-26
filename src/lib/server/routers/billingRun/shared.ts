@@ -6,8 +6,10 @@
  * (dependency-cruiser: `billingRun-router-internals-private`).
  */
 import { TRPCError } from "@trpc/server";
+import type { AccontoWork } from "@/lib/shared/acconto-view";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import type { UnfrozenWork } from "@/lib/shared/billing-work-value";
+import type { SpecDeduction } from "@/lib/shared/invoice-specification";
 import { isKrWorkEntry } from "@/lib/shared/kostnadsrakning";
 import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
@@ -18,7 +20,9 @@ import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { newRowId, type QueuedCallScope } from "../../queued-call";
 import type { Repositories } from "../../repositories/repositories";
 
-export async function fetchUnfrozenWork(repos: Repositories, matterId: MatterId): Promise<UnfrozenWork> {
+/** Det ofrysta arbetet i ärendet. Utläggen har kvar datum och beskrivning, som
+ *  acontofakturans specifikation visar (#1940). */
+export async function fetchUnfrozenWork(repos: Repositories, matterId: MatterId): Promise<AccontoWork> {
   const te = await repos.timeEntries.listUnfrozenForMatter(matterId);
   const ex = await repos.expenses.listUnfrozenForMatter(matterId);
   return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
@@ -36,6 +40,31 @@ export async function fetchWorkByRun(repos: Repositories, billingRunId: BillingR
 export async function sumPriorAccontos(repos: Repositories, matterId: MatterId): Promise<number> {
   const runs = (await repos.billingRuns.listAccontoSent(matterId)) as ReadonlyArray<{ amountOre?: number }>;
   return runs.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
+}
+
+/**
+ * Tidigare acontofakturor som avdrag, ur deras faktura-id (#1940): nummer,
+ * datum och belopp, org-scopat. Ett id som saknas, eller en faktura i en annan
+ * byrå, hoppas över. Delas av fakturaspecifikationen, slutregleringen och
+ * acontofakturans nedbrytning.
+ */
+export async function accontoDeductionsByInvoiceIds(
+  repos: Repositories,
+  orgId: OrganizationId,
+  invoiceIds: ReadonlyArray<InvoiceId | null | undefined>,
+): Promise<SpecDeduction[]> {
+  const out: SpecDeduction[] = [];
+  for (const id of invoiceIds) {
+    const inv = id ? await repos.invoices.getByIdInOrg(id, orgId) : null;
+    if (inv) out.push({ invoiceNumber: inv.invoiceNumber ?? "—", date: inv.invoiceDate, amountOre: inv.amount });
+  }
+  return out;
+}
+
+/** De tidigare acontofakturorna som `sumPriorAccontos` summerar, som avdrag. */
+export async function priorAccontoDeductions(repos: Repositories, orgId: OrganizationId, matterId: MatterId): Promise<SpecDeduction[]> {
+  const runs = await repos.billingRuns.listAccontoSent(matterId);
+  return accontoDeductionsByInvoiceIds(repos, orgId, runs.map((r) => r.invoiceId));
 }
 
 export async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {

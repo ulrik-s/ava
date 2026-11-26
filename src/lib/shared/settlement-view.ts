@@ -112,18 +112,26 @@ export interface SettlementBreakdown {
   clientParts?: RattsskyddClientParts;
 }
 
+/** Värdet på en tidspost som en rad i tidsspecifikationen. */
+export type EntryRowValue = (t: UnfrozenWork["timeEntries"][number]) => number;
+
 /** Klientfakturans tidsspec (#876): det ofrysta arbetet, värderat på samma rate
  *  som arvodesbasen, varje rad i hela kronor (#1438), och AVSTÄMT så radernas
  *  summa exakt = `totalArvodeNet` (avrundningsresten läggs på sista raden). Rådgivningstimmen är en låst post och
- *  finns inte i `work` (#1205) — ingen registrerad tid dras av i dess ställe. */
-export function buildClientArvodeLines(work: UnfrozenWork, totalArvodeNet: number, settleDate: Date | string): SpecTimeLine[] {
+ *  finns inte i `work` (#1205) — ingen registrerad tid dras av i dess ställe.
+ *  `valueOf` värderar raden; standard är kategorins norm (slutregleringen), och
+ *  acontofakturan (#1940) skickar ärendets regel så privata ärenden får sina á-priser. */
+export function buildClientArvodeLines(
+  work: UnfrozenWork, totalArvodeNet: number, settleDate: Date | string,
+  valueOf: EntryRowValue = (t) => coverageEntryRowOre(t, settleDate),
+): SpecTimeLine[] {
   const entries = payableCoverageEntries(work.timeEntries.filter((t) => t.billable));
   // #891/#950: varje rad värderas på sin KATEGORIS norm för slutregleringsåret —
   // för alla betalningssätt, så raderna summerar till `totalArvodeNet`. Per-dygns-
   // kategorier (advokatberedskap) får sitt dagbelopp, inte minuter × norm.
   const lines: SpecTimeLine[] = entries.map((t) => ({
     date: t.date, description: t.description, minutes: t.minutes, kind: t.kind,
-    amountOre: coverageEntryRowOre(t, settleDate),
+    amountOre: valueOf(t),
   }));
   const sum = lines.reduce((s, l) => s + l.amountOre, 0);
   const last = lines[lines.length - 1];
@@ -182,15 +190,7 @@ export const shareLabel = (bips: number): string => (bips / 100).toLocaleString(
  * ett belopp, så rättsskydd (ingen byrå-buren prutning) får en enda rad.
  */
 export function arvodeLadderRows(b: SettlementBreakdown, payerNoun: string): SettlementRow[] {
-  const rows: SettlementRow[] = [
-    { label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" },
-  ];
-  // Utläggen tillhör BASEN — de prutas och delas precis som arvodet (#947), så de
-  // hör hemma ovanför avdragen och inte som en lös rad längst ned.
-  if (b.expensesBaseNetOre > 0) {
-    rows.push({ label: "Utlägg (exkl moms)", amountOre: b.expensesBaseNetOre, kind: "add" });
-    rows.push({ label: "Underlag (exkl moms)", amountOre: ladderBaseOre(b), kind: "add" });
-  }
+  const rows = workBaseRows(b.arvodeBaseNetOre, b.expensesBaseNetOre);
   const prutningOre = totalPrutningNetOre(b);
   if (prutningOre > 0) {
     rows.push({ label: `Avgår ${payerNoun.toLowerCase()} prutning — byrån bär (exkl moms)`, amountOre: prutningOre, kind: "deduct" });
@@ -200,6 +200,30 @@ export function arvodeLadderRows(b: SettlementBreakdown, payerNoun: string): Set
     rows.push({ label: radgivningTextRad("faktura"), amountOre: b.radgivningNetOre, kind: "info" });
   }
   return rows;
+}
+
+/**
+ * Underlaget överst i trappan: det upparbetade arvodet, och när det finns utlägg
+ * även utläggen och summan. Delas av slutregleringen och acontofakturan (#1940).
+ */
+export function workBaseRows(arvodeNetOre: number, expensesNetOre: number): SettlementRow[] {
+  const rows: SettlementRow[] = [
+    { label: "Upparbetat arvode (exkl moms)", amountOre: arvodeNetOre, kind: "add" },
+  ];
+  // Utläggen tillhör BASEN — de prutas och delas precis som arvodet (#947), så de
+  // hör hemma ovanför avdragen och inte som en lös rad längst ned.
+  if (expensesNetOre > 0) {
+    rows.push({ label: "Utlägg (exkl moms)", amountOre: expensesNetOre, kind: "add" });
+    rows.push({ label: "Underlag (exkl moms)", amountOre: arvodeNetOre + expensesNetOre, kind: "add" });
+  }
+  return rows;
+}
+
+/** En tidigare acontofaktura som dras av, netto: acontot har redan fakturerat sin
+ *  egen moms (#968). Delas av slutregleringen och acontofakturan (#1940). */
+export function accontoDeductionRow(d: SpecDeduction): SettlementRow {
+  const when = d.date ? ` (${svd(d.date)})` : "";
+  return { label: `Avgår aconto — faktura ${d.invoiceNumber}${when}, exkl moms`, amountOre: accontoSplit(d.amountOre).netOre, kind: "deduct" };
 }
 
 /** Basen trappan utgår från: allt upparbetat arvode + utlägg, netto. */
@@ -258,10 +282,8 @@ export function clientVatRows(b: SettlementBreakdown, feeCap: string): Settlemen
   const rows: SettlementRow[] = [];
   let restVatOre = fullVatOre;
   for (const d of b.deductedAccontos) {
-    const { netOre: accNet, vatOre: accVat } = accontoSplit(d.amountOre);
-    restVatOre -= accVat;
-    const when = d.date ? ` (${svd(d.date)})` : "";
-    rows.push({ label: `Avgår aconto — faktura ${d.invoiceNumber}${when}, exkl moms`, amountOre: accNet, kind: "deduct" });
+    restVatOre -= accontoSplit(d.amountOre).vatOre;
+    rows.push(accontoDeductionRow(d));
   }
   rows.push({ label: "Moms på återstående belopp", amountOre: restVatOre, kind: "add" });
   return rows;

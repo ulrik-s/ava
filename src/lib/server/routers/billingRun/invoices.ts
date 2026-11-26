@@ -8,11 +8,12 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
+import { buildAccontoView, type AccontoWork } from "@/lib/shared/acconto-view";
 import { invoiceCreatedNote } from "@/lib/shared/billing-notes";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import {
   expenseNetOre, invoiceGrossOre, invoiceVatBreakdown, matterArvodeNet, vatOreOf,
-  type UnfrozenWork,
+  type UnfrozenWork, type ValuationMatter,
 } from "@/lib/shared/billing-work-value";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { settlementBreakdownSchema, type BillingRun } from "@/lib/shared/schemas/billing";
@@ -29,8 +30,10 @@ import {
   type ExpenseId,
   type InvoiceId,
   type MatterId,
+  type OrganizationId,
   type TimeEntryId,
 } from "@/lib/shared/schemas/ids";
+import type { SettlementView } from "@/lib/shared/settlement-view";
 import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/whole-kronor";
 import { logMatterNote } from "../../billing/matter-note";
@@ -40,7 +43,7 @@ import type { Repositories } from "../../repositories/repositories";
 import { orgProcedure } from "../../trpc";
 import {
   assertFlowAction, fetchDeductedAccontoRuns, fetchUnfrozenWork,
-  freezeWork, invoiceNumbering, linkFinalInvoice, sumPriorAccontos,
+  freezeWork, invoiceNumbering, linkFinalInvoice, priorAccontoDeductions, sumPriorAccontos,
 } from "./shared";
 
 /**
@@ -106,6 +109,24 @@ function invoiceMeta(
   });
 }
 
+/**
+ * Acontofakturans nedbrytning (#1940). En nedbrytning som anroparen skickar
+ * (simuleringen, demon) gäller som den är. Annars byggs den ur underlaget och
+ * de tidigare acontofakturorna, så att dokumentet visar vad beloppet bygger på
+ * och blir detsamma när fakturan skickas senare.
+ */
+async function accontoBreakdown(repos: Repositories, orgId: OrganizationId, a: {
+  given: SettlementView | null | undefined; matterId: MatterId; matter: ValuationMatter;
+  work: AccontoWork; at: Date; clientShareBips: number; amountOre: number;
+}): Promise<SettlementView> {
+  if (a.given) return a.given;
+  const deductions = await priorAccontoDeductions(repos, orgId, a.matterId);
+  return buildAccontoView({
+    matter: a.matter, work: a.work, at: a.at,
+    clientShareBips: a.clientShareBips, amountOre: a.amountOre, deductions,
+  });
+}
+
 export const invoiceProcedures = {
   createAcconto: orgProcedure
     .input(z.object({
@@ -119,7 +140,7 @@ export const invoiceProcedures = {
       dueDate: isoDateOrDateTimeInput.optional(),
       notes: z.string().nullish(),
       /** Valfri nedbrytning (#880) — simuleringen skickar det upparbetade arbetet
-       *  (tidsspec) så klienten ser vad acontot avser. Utelämnas → default nedan. */
+       *  (tidsspec) så klienten ser vad acontot avser. Utelämnas → byggs (#1940). */
       settlementBreakdown: settlementBreakdownSchema.nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -139,19 +160,15 @@ export const invoiceProcedures = {
         // är fakturans enda rad → hela kronor (#1438), och nettot likaså.
         const amountOre = roundToKronor(input.amountOre);
         const { netOre: accontoNetOre, vatOre: accontoVatOre } = accontoSplit(amountOre);
+        const settlementBreakdown = await accontoBreakdown(tx, ctx.orgId, {
+          given: input.settlementBreakdown, matterId: input.matterId, matter, work, at,
+          clientShareBips: input.clientShareBips, amountOre,
+        });
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: amountOre, vatOre: accontoVatOre, amountRounding: CURRENT_ROUNDING,
           vatBreakdown: [{ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: accontoNetOre, vatOre: accontoVatOre }],
-          // Nedbrytning (#878/#880): anroparen (simuleringen) skickar en spec med det
-          // upparbetade arbetet så klienten ser vad acontot avser; annars en enkel default.
-          settlementBreakdown: input.settlementBreakdown ?? {
-            timeLines: [],
-            rows: [
-              { label: `Klientens andel ${input.clientShareBips / 100} % av upparbetat arbete (exkl moms)`, amountOre: accontoNetOre, kind: "add" },
-              { label: "Moms 25 %", amountOre: accontoVatOre, kind: "add" },
-            ],
-            totalLabel: "Att betala (inkl moms)", totalOre: amountOre,
-          },
+          // Nedbrytning (#878/#880/#1940): vad acontot avser och hur beloppet räknats.
+          settlementBreakdown,
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
           ...invoiceMeta(ctx, input), notes: input.notes,
