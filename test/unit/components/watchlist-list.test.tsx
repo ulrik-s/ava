@@ -33,6 +33,16 @@ describe("WatchlistList", () => {
     expect(screen.getByRole("link").getAttribute("href")).toContain("id=m1");
   });
 
+  it("Bör faktureras länkar med fakturera=1 efter id (#1854)", () => {
+    render(<WatchlistList items={[item({ kind: "unbilled", link: { route: "matters", id: "m1", query: { fakturera: "1" } } })]} emptyText="" />);
+    expect(screen.getByRole("link").getAttribute("href")).toMatch(/id=m1&fakturera=1$/);
+  });
+
+  it("en tidsfrist länkar utan fakturera (#1854)", () => {
+    render(<WatchlistList items={[item()]} emptyText="" />);
+    expect(screen.getByRole("link").getAttribute("href")).not.toContain("fakturera");
+  });
+
   it("visar belopp när posten har ett", () => {
     render(<WatchlistList items={[item({ amountOre: 2_500_000, kind: "unbilled" })]} emptyText="" />);
     expect(screen.getByText(/25 000,00/)).toBeInTheDocument();

@@ -22,6 +22,7 @@
  * för att de hör hemma i samma vy, inte för att de räknas ut.
  */
 
+import { BILLING_SHORTCUT_PARAM } from "./billing-flow";
 import { coverageStatus, type CoverageCapInput } from "./coverage-cap";
 import { stockholmDay } from "./stockholm-time";
 
@@ -75,6 +76,11 @@ export type WatchlistSeverity = "passed" | "approaching";
 export interface WatchlistLink {
   route: "matters" | "invoices";
   id: string;
+  /**
+   * Extra query-parametrar efter `?id=` (#1854), t.ex. att ärendesidan ska
+   * öppna faktureringen. Utelämnad = bara detaljsidan.
+   */
+  query?: Readonly<Record<string, string>>;
 }
 
 export interface WatchlistItem {
@@ -230,7 +236,8 @@ export function unbilledItems(
       detail: `Upparbetat ofakturerat ${skäl}.`,
       matterId: m.id, matterNumber: m.matterNumber,
       at: m.oldestEntryDate, amountOre: m.unbilledOre,
-      link: { route: "matters", id: m.id },
+      // Raden öppnar faktureringen direkt (#1854); ärendesidan avgör vad.
+      link: { route: "matters", id: m.id, query: { [BILLING_SHORTCUT_PARAM]: "1" } },
     });
   }
   return out;

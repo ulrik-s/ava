@@ -32,7 +32,7 @@ interface EntityLinkProps extends LinkProps {
   /** Valfritt svans-segment för nästlade routes, t.ex. "edit" (templates). */
   sub?: string;
   /** Valfria extra query-parametrar efter `?id=` (se `shellPath`). */
-  query?: ShellQuery;
+  query?: ShellQuery | undefined;
   children: ReactNode;
 }
 
