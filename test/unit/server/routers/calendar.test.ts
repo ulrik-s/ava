@@ -154,6 +154,23 @@ describe("calendar.create", () => {
     expect(arg.data.allDay).toBe(false);
     expect(arg.data.visibility).toBe("normal");
   });
+
+  it("kind=appointment fungerar som förut (#2120)", async () => {
+    mockPrisma.calendarEvent.create.mockResolvedValue({ id: "x" });
+    await makeCaller().create({ kind: "appointment", title: "Möte", startAt: new Date() });
+    const arg = mockPrisma.calendarEvent.create.mock.calls[0]?.[0] as { data: { kind: string } };
+    expect(arg.data.kind).toBe("appointment");
+  });
+
+  it("kind=deadline ger BAD_REQUEST och inget sparas — en frist är en uppgift (#2120)", async () => {
+    await expect(makeCaller().create({
+      // @ts-expect-error -- routern tar bara "appointment"; testet skickar det som en gammal klient kunde
+      kind: "deadline",
+      title: "Inlaga inlämnas",
+      startAt: new Date(),
+    })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.calendarEvent.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("calendar.update", () => {
@@ -177,6 +194,25 @@ describe("calendar.update", () => {
     expect(arg.where).toEqual({ id: "e1" });
     expect(arg.data).toMatchObject({ title: "Nytt namn" });
     for (const k of ["mirrorToOutlook", "mirrorStatus", "outlookEventId"]) expect(arg.data).not.toHaveProperty(k);
+  });
+
+  it("kind kan inte sättas till deadline (#2120)", async () => {
+    await expect(makeCaller().update({
+      id: "e1",
+      // @ts-expect-error -- routern tar bara "appointment"
+      kind: "deadline",
+    })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.calendarEvent.update).not.toHaveBeenCalled();
+  });
+
+  it("en befintlig händelse med kind=deadline kan få ny titel, och kind står kvar (#2120)", async () => {
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue({ id: "e1", kind: "deadline", title: "Gammal frist" });
+    mockPrisma.calendarEvent.update.mockResolvedValue({ id: "e1", kind: "deadline", title: "Ny titel" });
+    const res = await makeCaller().update({ id: "e1", title: "Ny titel" });
+    expect(res).toMatchObject({ id: "e1", kind: "deadline", title: "Ny titel" });
+    const arg = mockPrisma.calendarEvent.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(arg.data).toMatchObject({ title: "Ny titel" });
+    expect(arg.data).not.toHaveProperty("kind");
   });
 });
 
