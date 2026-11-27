@@ -135,7 +135,9 @@ function useKostnadsrakningModal(props: Props) {
   // För icke-taxa-ärenden räknas de in i arvodes-summan; för taxa-ärenden
   // visas de bara som specifikation (beloppet styrs av taxa). Dokumentet och
   // servern får exakt samma poster.
-  const posts = useKrPosts(props.matterId, props.expenses);
+  const proposal = trpc.billingRun.proposal.useQuery({ matterId: props.matterId });
+  const timeEntries = trpc.timeEntry.list.useQuery({ matterId: props.matterId, pageSize: 100 });
+  const posts = useKrPosts({ proposal, timeEntries }, props.expenses);
   // Förhandlingsklockan bara när en vald post är "Deltagit i förhandling".
   // Annars: bara de valda posterna, utan klocka och taxa.
   const hearing = hasHearingEntry(posts.entries);
