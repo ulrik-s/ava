@@ -6,6 +6,7 @@
  * "Välj jurist och period." fast både advokat och period var valda.
  */
 import { readFile } from "node:fs/promises";
+import type { Page } from "@playwright/test";
 import { DEMO_BASE_URL as BASE, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 test("förvald advokat och period → Sammanfattning och Veckor visar rapporten", async ({ page }) => {
@@ -27,6 +28,37 @@ test("förvald advokat och period → Sammanfattning och Veckor visar rapporten"
   await expect(page.getByText(/Timdebitering per vecka/)).toBeVisible();
 
   await expect(page.getByText("Välj jurist och period.")).toHaveCount(0);
+  await expect(page.getByText(/Rapporten kunde inte hämtas/)).toHaveCount(0);
+});
+
+/** Inloggade användarens namn ur demons `.ava/meta.json`, för rollen. */
+async function demoUserName(page: Page, role: string): Promise<string> {
+  const meta = await (await page.request.get(`${BASE}/.ava/meta.json`)).json() as { users: Array<{ name: string; role: string }> };
+  return meta.users.find((u) => u.role === role)?.name ?? "";
+}
+
+test("en Advokat ser bara sig själv i fältet Advokat (#2116)", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await seedDemoLogin(page, BASE, "LAWYER");
+  await page.goto(`${BASE}/reports/`);
+  const lawyer = page.getByLabel("Advokat", { exact: true });
+  await expect(lawyer).not.toHaveValue("", { timeout: 30_000 });
+  await expect(lawyer.locator("option")).toHaveText([await demoUserName(page, "LAWYER")]);
+});
+
+test("en Admin väljer Alla och ser Alla i Sammanfattning (#2116)", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/reports/`);
+  const lawyer = page.getByLabel("Advokat", { exact: true });
+  await expect(lawyer.locator("option:checked")).toHaveText(await demoUserName(page, "ADMIN"), { timeout: 30_000 });
+  await expect(lawyer.locator("option").first()).toHaveText("Alla");
+  await lawyer.selectOption({ label: "Alla" });
+
+  await expect(page.getByText("Totalt tid", { exact: true })).toBeVisible();
+  const summaryLawyer = page.locator("div.uppercase", { hasText: /^Advokat$/ }).locator("xpath=following-sibling::div[1]");
+  await expect(summaryLawyer).toHaveText("Alla");
+  await expect(page.getByText(/andel för/)).toHaveCount(0);
   await expect(page.getByText(/Rapporten kunde inte hämtas/)).toHaveCount(0);
 });
 
