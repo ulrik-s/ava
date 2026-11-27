@@ -59,12 +59,12 @@ function setup(opts: {
   const deps: MailDeps = { connector: () => connector, loadBytes, send };
   const onClose = vi.fn();
   const fake = fakeTrpcLink({ "matter.getById": () => opts.matter ?? MATTER });
-  render(
+  const { unmount } = render(
     <TrpcTestProvider link={fake.link}>
       <MailDocumentDialog doc={{ ...DOC, ...opts.doc }} onClose={onClose} deps={deps} />
     </TrpcTestProvider>,
   );
-  return { connector, send, loadBytes, onClose, fake };
+  return { connector, send, loadBytes, onClose, fake, unmount };
 }
 
 const field = (name: string): HTMLInputElement => screen.getByLabelText(name);
@@ -129,6 +129,26 @@ describe("MailDocumentDialog (#1951)", () => {
     });
     expect(send.mock.calls[0]?.[0]).not.toHaveProperty("asDraft");
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce(), { timeout: SENT_CLOSE_MS + 1_000 });
+  });
+
+  it("efter Skickat. är Skicka spärrad, och ett nytt klick skickar inte igen", async () => {
+    const { send } = setup();
+    await ready();
+    fireEvent.click(sendButton());
+    await screen.findByText("Skickat.", {}, SLOW);
+    expect(sendButton()).toBeDisabled();
+    fireEvent.click(sendButton());
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it("stängs dialogen före tidsgränsen efter Skickat. anropas onClose inte av timern", async () => {
+    const { onClose, unmount } = setup();
+    await ready();
+    fireEvent.click(sendButton());
+    await screen.findByText("Skickat.", {}, SLOW);
+    unmount();
+    await new Promise((r) => setTimeout(r, SENT_CLOSE_MS + 200));
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("ej ansluten: Skicka ansluter i klicket och skickar sedan", async () => {

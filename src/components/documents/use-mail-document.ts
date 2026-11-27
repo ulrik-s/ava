@@ -72,6 +72,16 @@ function tokenFor(c: IntegrationConnector, status: ConnectionStatus["kind"]): Pr
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+/** Skicka går bara att klicka före utskicket eller efter ett fel: aldrig två mejl. */
+const sendAllowed = (phase: MailPhase): boolean => phase.kind === "idle" || phase.kind === "error";
+
+/** Stängningen efter "Skickat.", rensad om dialogen stängs före den. */
+function useCloseTimer(onClose: () => void): () => void {
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => { clearTimeout(timer.current); }, []);
+  return () => { timer.current = setTimeout(onClose, SENT_CLOSE_MS); };
+}
+
 /** Connectorns status, följd medan dialogen är öppen; förladdad när den öppnas. */
 function useConnectorStatus(connector: IntegrationConnector | undefined): React.RefObject<ConnectionStatus["kind"]> {
   const status = useRef<ConnectionStatus["kind"]>("disconnected");
@@ -83,8 +93,23 @@ function useConnectorStatus(connector: IntegrationConnector | undefined): React.
   return status;
 }
 
+/** Det dialogen visar och kan göra. */
+export interface MailDocumentState {
+  to: string;
+  setTo: (to: string) => void;
+  subject: string;
+  setSubject: (subject: string) => void;
+  body: string;
+  setBody: (body: string) => void;
+  phase: MailPhase;
+  send: () => Promise<void>;
+  canSend: boolean;
+  fits: boolean;
+  noClientEmail: boolean;
+}
+
 /** Fälten, spärrarna och Skicka för ett dokument. */
-export function useMailDocument(doc: MailableDocument, onClose: () => void, deps: MailDeps = DEFAULT_DEPS) {
+export function useMailDocument(doc: MailableDocument, onClose: () => void, deps: MailDeps = DEFAULT_DEPS): MailDocumentState {
   const t = useTRPC();
   const matter = useQuery(t.matter.getById.queryOptions({ id: doc.matterId }));
   const [connector] = useState(deps.connector);
@@ -93,12 +118,13 @@ export function useMailDocument(doc: MailableDocument, onClose: () => void, deps
   const [subject, setSubject] = useState(() => mailSubject(doc));
   const [body, setBody] = useState("");
   const [phase, setPhase] = useState<MailPhase>({ kind: "idle" });
+  const closeLater = useCloseTimer(onClose);
 
   const clients = clientRecipients(matter.data?.contacts);
   const to = edited ?? clients.join(", ");
   const recipients = parseRecipients(to);
   const fits = fitsMailAttachment(doc.sizeBytes);
-  const canSend = fits && hasValidRecipients(recipients) && connector !== undefined && phase.kind !== "sending";
+  const canSend = fits && hasValidRecipients(recipients) && connector !== undefined && sendAllowed(phase);
 
   const send = async (): Promise<void> => {
     if (!canSend) return;
@@ -114,7 +140,7 @@ export function useMailDocument(doc: MailableDocument, onClose: () => void, deps
         doc: { fileName: doc.fileName, mimeType: doc.mimeType, bytes },
       });
       setPhase({ kind: "sent" });
-      setTimeout(onClose, SENT_CLOSE_MS);
+      closeLater();
     } catch (e: unknown) {
       setPhase({ kind: "error", message: errorText(e) });
     }
