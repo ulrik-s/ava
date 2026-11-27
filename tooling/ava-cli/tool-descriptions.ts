@@ -91,6 +91,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "document.renameFolder": "Byt namn på en mapp.",
   "document.deleteFolder": "Radera en mapp. Innehållet flyttas upp till föräldramappen — inget raderas med den.",
   "document.moveDocument": "Flytta ett dokument till en annan mapp.",
+  "document.moveToMatter": "Flytta ett eller flera dokument till ett annat ärende och en mapp där (null = överst). Fakturans och kostnadsräkningens egna dokument flyttas inte; allt eller inget.",
   "document.moveFolder": "Flytta en mapp. Cykler (mapp in i sig själv eller sin egen undermapp) blockeras.",
   "document.breadcrumb": "Sökvägen från roten till en viss mapp.",
   "document.acquireLease": "Ta redigeringslåset på ett dokument. Ledigt, utgånget eller redan ditt → du får det; annars returneras vem som håller det.",

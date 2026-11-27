@@ -27,7 +27,7 @@
 
 import { type DocumentKind, guessFromFilename } from "@/lib/shared/document-kind";
 import { kindsAreManual, kindsFields } from "@/lib/shared/document-kinds";
-import { type PartClassifier, type SegmentOptions, segmentPages } from "@/lib/shared/document-segmentation";
+import { type PartClassifier, type SegmentOptions, type SegmentPart, segmentPages } from "@/lib/shared/document-segmentation";
 import { joinPages } from "@/lib/shared/extract-text";
 import type { Document } from "@/lib/shared/schemas/document";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
@@ -87,6 +87,17 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
   });
 
   /**
+   * Skriver delarna med dokumentet som det ser ut nu: flyttas det till ett
+   * annat ärende medan klassningen pågår får delarna det nya ärendet (#2045).
+   * Är det borttaget skrivs inga delar.
+   */
+  async function writeParts(doc: Document, computed: SegmentPart[], pageCount: number): Promise<readonly SegmentPart[]> {
+    if (!deps.parts) return computed;
+    const current = await deps.documents.getById(doc.id);
+    return current ? replaceDocumentParts(deps.parts, current, computed, pageCount) : computed;
+  }
+
+  /**
    * Delarnas typer i sidordning. Utan sidor (ingen text) → inga delar, bara
    * klassificerarens typ för hela dokumentet.
    */
@@ -94,7 +105,7 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
     const fallback = await classify(fields, joinPages(pages));
     if (pages.length === 0) return [fallback];
     const computed = await segmentPages(pages, segmentOpts(fallback));
-    const parts = deps.parts ? await replaceDocumentParts(deps.parts, doc, computed, pages.length) : computed;
+    const parts = await writeParts(doc, computed, pages.length);
     return parts.length > 0 ? parts.map((p) => p.kind) : [fallback];
   }
 

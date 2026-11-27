@@ -34,13 +34,16 @@ export interface MoveToMatterDialogProps {
   error?: string | null | undefined;
   /** Fält under ärendet. */
   children?: React.ReactNode;
+  /** Det valda ärendet ändrades (`""` = inget valt), för fält som beror på ärendet. */
+  onMatterChange?: ((matterId: MatterId) => void) | undefined;
 }
 
 /** Dialogen "N <noun> flyttas till:" med ärendeväljaren och knapparna Flytta och Avbryt. */
 export function MoveToMatterDialog(props: MoveToMatterDialogProps): React.ReactElement | null {
-  const { open, onClose, count, noun, excludeMatterId, onMove, isPending, error, children } = props;
-  const [matterId, setMatterId] = useState<MatterId>(asId<"MatterId">(""));
+  const { open, onClose, count, noun, excludeMatterId, onMove, isPending, error, children, onMatterChange } = props;
+  const [matterId, setMatterIdState] = useState<MatterId>(asId<"MatterId">(""));
   const choices = useActiveMatterOptions().filter((m) => m.id !== excludeMatterId);
+  const setMatterId = (id: MatterId): void => { setMatterIdState(id); onMatterChange?.(id); };
   const close = (): void => { setMatterId(asId<"MatterId">("")); onClose(); };
   return (
     <Modal open={open} title="Flytta till ärende" onClose={close}>
