@@ -5,6 +5,7 @@
  */
 
 import { act, render, screen, fireEvent, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { ContactsSection } from "@/app/matters/[id]/_contacts-section";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -64,7 +65,7 @@ vi.mock("@/lib/client/trpc", () => ({
   },
 }));
 
-const contacts = [
+const contacts: ComponentProps<typeof ContactsSection>["contacts"] = [
   { id: "mc1", role: "KLIENT", contact: { id: "c1", name: "Klient Karlsson", personalNumber: "19800101-1234" } },
 ];
 

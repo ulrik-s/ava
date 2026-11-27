@@ -11,6 +11,7 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { BillingPanel } from "@/app/matters/[id]/_billing-panel";
+import type { MatterContext } from "@/app/matters/[id]/_kostnadsrakning-entry";
 import { asId } from "@/lib/shared/schemas/ids";
 
 interface BillingRunRow {
@@ -132,7 +133,7 @@ vi.mock("@/app/matters/[id]/_kostnadsrakning-modal", () => ({
   ),
 }));
 
-const baseMatter = {
+const baseMatter: MatterContext = {
   matterNumber: "2026-0001",
   title: "Tvist mot motpart",
   contacts: [

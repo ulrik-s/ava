@@ -334,7 +334,7 @@ function LinkedMattersSection({ matterLinks }: { matterLinks: ContactData["matte
         <h2 className="font-semibold text-gray-900">Ärenden</h2>
       </div>
       <div className="divide-y divide-gray-100">
-        {matterLinks.map((link: { id: string; role: string; matter: { id: string; matterNumber: string; title: string; status: string } }) => {
+        {matterLinks.map((link) => {
           const st = matterStatus(link.matter.status);
           return (
             <EntityLink key={link.id} route="matters" id={link.matter.id} className="block px-2 py-4 hover:bg-gray-50">

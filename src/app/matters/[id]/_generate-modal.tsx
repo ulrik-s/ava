@@ -10,10 +10,11 @@ import {
   type TemplateOrganizationData, type TemplateUserData,
 } from "@/lib/client/templates/build-template-context";
 import { trpc } from "@/lib/client/trpc";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 
 type Contact = { id: string; name: string; email?: string | null; phone?: string | null };
-type MatterContact = { id: string; role: string; contact: Contact };
+type MatterContact = { id: string; role: MatterRole; contact: Contact };
 
 interface Props {
   matterId: MatterId;

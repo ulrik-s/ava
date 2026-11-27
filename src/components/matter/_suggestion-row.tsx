@@ -1,12 +1,13 @@
 "use client";
 
-import { matterRoleLabels, contactTypeLabels } from "@/lib/client/labels";
+import { contactTypeLabels, labelForMatterRole } from "@/lib/client/labels";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 
 export interface SuggestionGroup {
   key: string;
   name: string;
   contactType: string;
-  roles: string[];
+  roles: MatterRole[];
   personalNumber: string | null;
   orgNumber: string | null;
   email: string | null;
@@ -37,7 +38,7 @@ export function SuggestionRow({ group: g, isBusy, onAccept, onReject }: Props) {
               key={role}
               className="inline-block rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-[10px] font-medium"
             >
-              {matterRoleLabels[role as keyof typeof matterRoleLabels] ?? role}
+              {labelForMatterRole(role)}
             </span>
           ))}
         </div>
