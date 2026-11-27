@@ -7,6 +7,9 @@ const query: { data: unknown; isLoading: boolean } = { data: undefined, isLoadin
 /** Senaste argumenten till useQuery — så "Bara mina ärenden" går att verifiera. */
 let lastArgs: unknown = null;
 
+/** Hookens åtgärder (#2100) — sidan ska skicka just dessa till listan. */
+const statusActions = { close: vi.fn(), reopen: vi.fn(), keepActive: vi.fn(), isPending: false };
+vi.mock("@/components/matter/use-matter-status-actions", () => ({ useMatterStatusActions: () => statusActions }));
 vi.mock("@/components/sync/stale-devices-notice", () => ({ StaleDevicesNotice: () => <p>stale-devices-stub</p> }));
 vi.mock("@/components/sync/rejected-changes-notice", () => ({ RejectedChangesNotice: () => <p>rejected-changes-stub</p> }));
 vi.mock("@/lib/client/trpc", () => ({
@@ -73,5 +76,19 @@ describe("Att åtgärda-sidan (#1734)", () => {
     expect(lastArgs).toEqual({ mine: true });
     fireEvent.click(screen.getByLabelText(/Bara mina ärenden/i));
     expect(lastArgs).toEqual({ mine: false });
+  });
+
+  it("Ska ärendet markeras som avslutat? har hookens knappar (#2100)", () => {
+    query.data = { items: [item({
+      kind: "closeSuggestion", severity: "approaching", title: "Ska ärendet markeras som avslutat?",
+      detail: "Ingen tid registrerad sedan 2026-09-25.",
+      closeSuggestion: { matterTitle: "Vårdnadstvist", noTimeSince: "2026-09-25" },
+    })] };
+    render(<ActionItemsPage />);
+    expect(screen.getByText("1 poster.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Avsluta ärendet" }));
+    expect(statusActions.close).toHaveBeenCalledWith({ id: "m1", title: "Vårdnadstvist" });
+    fireEvent.click(screen.getByRole("button", { name: "Behåll som aktivt" }));
+    expect(statusActions.keepActive).toHaveBeenCalledWith("m1");
   });
 });

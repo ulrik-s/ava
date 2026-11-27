@@ -8,6 +8,7 @@ import { PanelPage } from "@/components/layout/panel-page";
 import { CoverageCapWarning } from "@/components/matter/coverage-cap-warning";
 import { EventsPanel } from "@/components/matter/events-panel";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
+import { useMatterStatusActions } from "@/components/matter/use-matter-status-actions";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
@@ -187,18 +188,8 @@ function MatterHeaderActions({ m, isPending, onClose, onReopen, onGenerate }: {
 }
 
 function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderProps) {
-  const utils = trpc.useUtils();
-  const updateStatus = trpc.matter.update.useMutation({
-    onSuccess: () => utils.matter.getById.invalidate({ id: m.id }),
-  });
-
-  const onCloseMatter = () => {
-    if (!confirm(`Avsluta ärendet "${m.title}"? Det går att återöppna sen.`)) return;
-    updateStatus.mutate({ id: m.id, status: "CLOSED" });
-  };
-  const onReopenMatter = () => {
-    updateStatus.mutate({ id: m.id, status: "ACTIVE" });
-  };
+  // Avsluta och Återöppna delas med Att åtgärda (#2100).
+  const status = useMatterStatusActions();
 
   return (
     // Kompakt (#1185): panelerna ska få höjden, inte huvudet.
@@ -221,9 +212,9 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
         </div>
         <MatterHeaderActions
           m={m}
-          isPending={updateStatus.isPending}
-          onClose={onCloseMatter}
-          onReopen={onReopenMatter}
+          isPending={status.isPending}
+          onClose={() => status.close({ id: m.id, title: m.title })}
+          onReopen={() => status.reopen(m.id)}
           onGenerate={onOpenGenerate}
         />
       </div>
