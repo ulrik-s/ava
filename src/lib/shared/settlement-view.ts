@@ -372,3 +372,15 @@ export function creditPayload(clientLines: VatBreakdownLine[], deductionOre: num
     vatBreakdown: accontoCreditLines(clientLines, deductionOre),
   };
 }
+
+/**
+ * Fakturans sparade nedbrytning (#2180): acontofakturans egen kolumn
+ * (`accontoBreakdown`), annars `settlementBreakdown`, där slutfakturan och
+ * acontofakturor från före migration 0054 har den. Null utan nedbrytning.
+ */
+export function invoiceBreakdown<T>(inv: {
+  accontoBreakdown?: T | null | undefined;
+  settlementBreakdown?: T | null | undefined;
+}): T | null {
+  return inv.accontoBreakdown ?? inv.settlementBreakdown ?? null;
+}

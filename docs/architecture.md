@@ -74,6 +74,9 @@
 >   timexport (hela databasen + dokumenten som ändrats sedan den senaste fulla
 >   exporten) ovanpå den oförändrade nattliga fulla exporten; systemd-timer på
 >   hosten, hämtaren varje timme. Förlusten vid haveri blir högst ungefär en timme (#1895).
+> - [ADR 0040](./adr/0040-kalendern-som-api-utan-egen-vy.md) — **kalendern är ett API
+>   utan egen vy**: tidsbokningar via MCP/CLI, frister är uppgifter, `kind: "deadline"`
+>   avvecklas senast 2027-01-31 (#2178).
 
 ## Två lager
 

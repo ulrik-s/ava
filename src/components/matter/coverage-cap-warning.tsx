@@ -34,10 +34,18 @@ function usesCap(method: PaymentMethod | null | undefined): boolean {
   return method === "RATTSSKYDD" || method === "RATTSHJALP";
 }
 
-/** Upparbetat/tak som text (belopp resp. timmar). */
+/** Minuter → timmar med en decimal (90 → 1.5). Tid, inte pengar — därför inte
+ *  arvodesformeln `timeEntryValueOre`. */
+function hoursOneDecimal(minutes: number): number {
+  const hours = minutes / 60;
+  return Math.round(hours * 10) / 10;
+}
+
+/** Upparbetat/tak som text (belopp resp. timmar). I timläget bär `usedOre`/
+ *  `capOre` minuter, inte öre. */
 function usageText(s: CoverageStatus): { used: string; cap: string } {
   if (s.kind === "amount") return { used: formatCurrency(s.usedOre), cap: formatCurrency(s.capOre) };
-  return { used: `${Math.round((s.usedOre / 60) * 10) / 10} tim`, cap: `${s.capOre / 60} tim` };
+  return { used: `${hoursOneDecimal(s.usedOre)} tim`, cap: `${s.capOre / 60} tim` };
 }
 
 export function CoverageCapWarning({ matterId, paymentMethod, rattsskyddMaxOre, rattshjalpMaxTimmar, layout = "panel" }: Props) {

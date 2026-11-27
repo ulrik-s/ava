@@ -67,6 +67,25 @@ async function assertBreakdownExpenseLines(repo: InvoiceRepository): Promise<voi
   expect((await repo.getById(asId<"InvoiceId">(id)))?.settlementBreakdown).toEqual(settlementBreakdown);
 }
 
+/** Acontofakturans nedbrytning i egen kolumn (#2180) skrivs, uppdateras och läses tillbaka. */
+async function assertAccontoBreakdown(repo: InvoiceRepository): Promise<void> {
+  const id = asId<"InvoiceId">(uuidv7());
+  const accontoBreakdown = {
+    timeLines: [{ date: "2026-05-02", description: "Möte", minutes: 60, amountOre: 250_000 }],
+    rows: [{ label: "Klientens andel 20 % (exkl moms)", amountOre: 50_000, kind: "add" as const }],
+    totalLabel: "Att betala", totalOre: 62_500,
+  };
+  await repo.create(inv({ id, invoiceType: "ACCONTO", accontoBreakdown, settlementBreakdown: accontoBreakdown }));
+  expect(await repo.getById(id)).toMatchObject({ accontoBreakdown, settlementBreakdown: accontoBreakdown });
+  const changed = { ...accontoBreakdown, totalOre: 60_000 };
+  await repo.update(id, { accontoBreakdown: changed });
+  expect((await repo.getById(id))?.accontoBreakdown).toEqual(changed);
+  // En faktura utan nedbrytning har ingen i den nya kolumnen heller.
+  const plain = asId<"InvoiceId">(uuidv7());
+  await repo.create(inv({ id: plain }));
+  expect((await repo.getById(plain))?.accontoBreakdown ?? null).toBeNull();
+}
+
 describe("InvoiceRepository — in-memory", () => {
   it("uppfyller kontraktet", async () => {
     const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
@@ -76,6 +95,11 @@ describe("InvoiceRepository — in-memory", () => {
   it("nedbrytningens utläggsrader sparas och läses tillbaka (#1938)", async () => {
     const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
     await assertBreakdownExpenseLines(new InMemoryInvoiceRepository(store));
+  });
+
+  it("acontofakturans nedbrytning i egen kolumn sparas och läses tillbaka (#2180)", async () => {
+    const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
+    await assertAccontoBreakdown(new InMemoryInvoiceRepository(store));
   });
 
   it("lockForBooking är en no-op (#1453)", async () => {
@@ -277,6 +301,10 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
 
   it("nedbrytningens utläggsrader sparas och läses tillbaka (#1938)", async () => {
     await assertBreakdownExpenseLines(new DrizzleInvoiceRepository(handle.db));
+  });
+
+  it("acontofakturans nedbrytning i egen kolumn sparas och läses tillbaka (#2180)", async () => {
+    await assertAccontoBreakdown(new DrizzleInvoiceRepository(handle.db));
   });
 
   it("getByIdWithLedger hämtar betalningar", async () => {

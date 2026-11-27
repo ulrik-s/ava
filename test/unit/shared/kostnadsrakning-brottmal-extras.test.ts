@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest-compat";
 import { advokatberedskapFtaxForDate, applyNoFTaxFactorForDate, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { buildKostnadsrakningContext, kostnadsrakningClaimInclVat, type TimeEntryInput } from "@/lib/shared/kostnadsrakning";
-import { roundToKronor } from "@/lib/shared/whole-kronor";
+import { roundToKronor, timeEntryValueOre } from "@/lib/shared/whole-kronor";
 
 const DATE = "2026-05-25";
 const base = {
@@ -29,7 +29,7 @@ const base = {
 };
 const TAXA = 563_500;
 const entry = (id: string, kind: TimeEntryInput["kind"], minutes: number, date = DATE): TimeEntryInput => ({ id, date, description: id, minutes, kind });
-const at = (minutes: number, rate: number): number => Math.round((minutes / 60) * rate);
+const at = timeEntryValueOre;
 const labels = (r: ReturnType<typeof buildKostnadsrakningContext>): string[] => r.document.summaryRows.map((row) => row.label);
 
 describe("brottmålstaxa + tidsspillan utöver taxan (DVFS 2025:6 6 §, #1182)", () => {

@@ -10,6 +10,7 @@
 
 import { formatDecimalHours, formatOreAsKr, formatPlainKr, formatQuantity, formatRateKr } from "./kr-format";
 import { type TimeEntryKind } from "./schemas/enums";
+import { timeEntryValueOre } from "./whole-kronor";
 
 /** En tidsrad som dokumentet behöver (struktur-kompatibel med `TimeLine`). */
 export interface KrTimeLineLike {
@@ -126,7 +127,7 @@ function groupLines(lines: readonly KrTimeLineLike[]): Group[] {
     groups.set(key, { ...g, minutes: g.minutes + l.minutes, count: g.count + 1, amountOre: g.amountOre + l.amountOre });
   }
   return [...groups.values()]
-    .map((g) => (isPerDay(g.kind) ? g : { ...g, amountOre: timeAmountOre(g.minutes, g.unitOre) }))
+    .map((g) => (isPerDay(g.kind) ? g : { ...g, amountOre: timeEntryValueOre(g.minutes, g.unitOre) }))
     .sort((a, b) => byKindOrder(a.kind, b.kind));
 }
 
@@ -147,13 +148,7 @@ export function hourlyRowSpecs(lines: readonly KrTimeLineLike[]): KrRowSpec[] {
 
 /** En sammanställningsrad för tid à timpris (t.ex. tidsspillan utöver taxan). */
 export function timeRowSpec(label: string, minutes: number, rateOre: number): KrRowSpec {
-  return { label, quantity: `${formatDecimalHours(minutes)} á ${formatRateKr(rateOre)}`, amountOre: timeAmountOre(minutes, rateOre) };
-}
-
-/** Beloppet för minuter à timpris (öre), avrundat till helt öre — samma uttryck
- *  som `timeEntryValueOre`, så dokumentet och körningen räknar lika. */
-export function timeAmountOre(minutes: number, rateOre: number): number {
-  return Math.round((minutes / 60) * rateOre);
+  return { label, quantity: `${formatDecimalHours(minutes)} á ${formatRateKr(rateOre)}`, amountOre: timeEntryValueOre(minutes, rateOre) };
 }
 
 /** Formatera en sammanställningsrad med sitt (avrundade) belopp. */

@@ -34,7 +34,7 @@ import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingActions, useApplyBillingShortcut } from "./_billing-actions";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
-import { openKrDoc, pickKrDoc, runDateOf, RunsList, svDate, type BillingRunRow, type KrDocInfo, type StandaloneInvoiceRow } from "./_billing-runs-list";
+import { krCardSuffix, openKrDoc, pickKrDoc, runDateOf, RunsList, svDate, type BillingRunRow, type KrDocInfo, type StandaloneInvoiceRow } from "./_billing-runs-list";
 import { BillingSummary } from "./_billing-summary";
 import { clientOf, KostnadsrakningEntry, type MatterContext } from "./_kostnadsrakning-entry";
 import { RadgivningEntryWarning } from "./_radgivning-entry";
@@ -93,7 +93,7 @@ function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, o
       <div className="text-sm text-amber-900 space-y-1">
         {/* Status, dömt belopp och övriga händelser står i ärendets Anteckningar
             (#1221) — kortet bär bara dokumentet och nästa steg. */}
-        <div><strong>Kostnadsräkning</strong>{run.reference ? ` ${run.reference}` : ""}</div>
+        <div><strong>Kostnadsräkning</strong>{krCardSuffix(run)}</div>
         {doc && (
           <div className="text-xs text-amber-800">
             Dokument:{" "}

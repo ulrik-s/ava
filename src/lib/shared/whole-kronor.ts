@@ -70,6 +70,20 @@ export function shareOfRow(ore: number, bips: number): number {
   return kronorQuotient(ore * bips, 10_000);
 }
 
+/**
+ * Arvodesformeln (#2174): värdet på en tidspost i öre, avrundat till helt öre
+ * men inte till kronor — basen som raderna avrundas ifrån (äldre fakturors
+ * specifikation använder det rakt av). `hourlyRate` är öre/timme.
+ *
+ * EN plats för formeln: avrundningen sker per post, och en summa är summan av
+ * de avrundade posterna. ESLint fäller `(minuter / 60) * taxa` på alla andra
+ * ställen. Den bor här, i en lövmodul, så att även `brottmalstaxa` kan använda
+ * den utan en importcykel.
+ */
+export function timeEntryValueOre(minutes: number, hourlyRate: number): number {
+  return Math.round((minutes / 60) * hourlyRate);
+}
+
 /** Tid × timpris som en rad i hela kronor: minuter × öre/tim / 60, avrundat i
  *  en division (äldre fakturors rader räknas med `timeEntryValueOre`). */
 export function timeRowOre(minutes: number, hourlyRateOre: number): number {

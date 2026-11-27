@@ -49,12 +49,6 @@ export interface UnfrozenWork {
   expenses: Array<{ id: ExpenseId; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>;
 }
 
-/** Värdet på en (debiterbar) tidspost i öre, oavrundat till kronor — basen som
- *  raderna avrundas ifrån (äldre fakturors specifikation använder det rakt av). */
-export function timeEntryValueOre(minutes: number, hourlyRate: number): number {
-  return Math.round((minutes / 60) * hourlyRate);
-}
-
 /** Postens värde när det är postens EGEN taxa som gäller (privat/offentligt
  *  uppdrag, fakturaförslaget) — i motsats till täckningsärendenas årsnormer.
  *
