@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useId, useState } from "react";
 import { ClientPickerDialog } from "@/components/contacts/client-picker-dialog";
@@ -11,7 +12,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Pager } from "@/components/ui/pager";
 import { TabBar, type TabBarTab } from "@/components/ui/tab-bar";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { MatterFilters, type NamedOption, type StatusFilter } from "./_matter-filters";
 import { EMPTY_MATTER_FORM, matterCreateArgs, withPickedClient, type MatterForm } from "./_matter-form";
 import { type MatterSearch, useMatterSearch } from "./_use-matter-search";
@@ -223,19 +224,20 @@ function MattersContent() {
   const [client, setClient] = useState<PickedClient | null>(null);
 
   const listQuery = mattersTabQuery(tab, { search, status: statusFilter, employeeId, page });
-  const matters = trpc.matter.list.useQuery(listQuery.args, listQuery.opts);
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const matters = useQuery(t.matter.list.queryOptions(listQuery.args, listQuery.opts));
   const matterSearch = useMatterSearch(matters.data?.matters);
 
-  const employees = trpc.user.list.useQuery();
-  const orgSettings = trpc.organization.getSettings.useQuery();
-  const utils = trpc.useUtils();
+  const employees = useQuery(t.user.list.queryOptions());
+  const orgSettings = useQuery(t.organization.getSettings.queryOptions());
 
-  const createMatter = trpc.matter.create.useMutation({
+  const createMatter = useMutation(t.matter.create.mutationOptions({
     onSuccess: () => {
-      void utils.matter.list.invalidate();
+      void queryClient.invalidateQueries(t.matter.list.queryFilter());
       setShowForm(false);
     },
-  });
+  }));
 
   const [form, setForm] = useState<MatterForm>(EMPTY_MATTER_FORM);
 

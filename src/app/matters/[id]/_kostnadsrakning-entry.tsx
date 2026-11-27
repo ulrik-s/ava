@@ -6,9 +6,11 @@
  * inskicksdialog. Utbrutet ur `_billing-panel.tsx` (#1601), som importerar
  * härifrån tillsammans med `MatterContext` och `clientOf`.
  */
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Modal } from "@/components/ui/modal";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import type { KrDocumentFields } from "@/lib/shared/billing/kostnadsrakning";
 import { formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -18,7 +20,7 @@ import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 import type { KrRunClaim } from "./_ersattning-section";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { selectedTotals, UnbilledPosts, type SelectedPostIds } from "./_post-selection";
-import { useKrPosts } from "./_use-kr-posts";
+import { useMatterKrPosts } from "./_use-kr-posts";
 
 export interface MatterContext {
   matterNumber: string;
@@ -88,9 +90,10 @@ function krDocumentFieldsOf(d: KrModalData, matter: MatterContext): KrDocumentFi
 }
 
 function useKrModalData(matterId: MatterId): KrModalData {
-  const me = trpc.user.current.useQuery().data;
-  const org = orgProps(trpc.organization.getSettings.useQuery().data ?? undefined);
-  const expenses = trpc.expense.list.useQuery({ matterId }).data?.expenses ?? [];
+  const trpc = useTRPC();
+  const me = useQuery(trpc.user.current.queryOptions()).data;
+  const org = orgProps(useQuery(trpc.organization.getSettings.queryOptions()).data ?? undefined);
+  const expenses = useQuery(trpc.expense.list.queryOptions({ matterId })).data?.expenses ?? [];
   // omitUndefined samlar exactOptional-strippningen (#32) på ett ställe så
   // funktionen inte spräcker complexity-gränsen.
   return omitUndefined({
@@ -121,7 +124,7 @@ export function KostnadsrakningEntry({ matterId, matter, open, onClose, onRecord
 
 function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }: KrTriggerProps) {
   const data = useKrModalData(matterId);
-  const createKr = trpc.billingRun.createKostnadsrakning.useMutation();
+  const createKr = useMutation(useTRPC().billingRun.createKostnadsrakning.mutationOptions());
   if (!open) return null;
   // Skapa (och frys) först när PDF:en faktiskt genererats — att stänga modalen
   // (Avbryt/Escape/X) skapade förut en inskickad KR av misstag (#1121). Körningens
@@ -161,12 +164,11 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
  *  (#828 steg 4). Utbrutet ur dialogen så den håller sig under complexity 8. */
 function useRattshjalpKr(matterId: MatterId, matter: MatterContext, onClose: () => void, onRecorded: () => void) {
   const krData = useKrModalData(matterId);
-  const proposal = trpc.billingRun.proposal.useQuery({ matterId: matterId });
-  const timeEntries = trpc.timeEntry.list.useQuery({ matterId: matterId, pageSize: 100 });
-  const posts = useKrPosts({ proposal, timeEntries }, krData.expenses);
-  const register = trpc.document.register.useMutation();
-  const utils = trpc.useUtils();
-  const create = trpc.billingRun.createKostnadsrakning.useMutation();
+  const trpc = useTRPC();
+  const posts = useMatterKrPosts(matterId, krData.expenses);
+  const register = useMutation(trpc.document.register.mutationOptions());
+  const utils = useBillingQueryUtils();
+  const create = useMutation(trpc.billingRun.createKostnadsrakning.mutationOptions());
   const submit = async (): Promise<void> => {
     // Dokumentet byggs på exakt de poster som skickas (#1255, #1889) — fångade
     // före anropet, så att ett förslag som läses om efter frysningen inte ändrar dem.
