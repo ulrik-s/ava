@@ -14,6 +14,7 @@ import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type { InvoiceId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
 import { hasInvoice } from "@/lib/shared/time-entry-lock";
+import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import type { Repositories } from "../repositories/repositories";
 import { loadPeriodWork } from "./period-work";
 
@@ -65,11 +66,6 @@ function weekKey(isoYear: number, week: number): string {
   return `${isoYear}-W${String(week).padStart(2, "0")}`;
 }
 
-/** hourlyRate ÄR REDAN ÖRE (öre/h) → (min/60) × öre/h = öre. */
-function workValueOre(minutes: number, hourlyRate: number): number {
-  return Math.round((minutes / 60) * hourlyRate);
-}
-
 const clientName = (m: ReportMatterRef): string | null => m.contacts?.[0]?.contact?.name ?? null;
 
 /** Debiterbar och ännu inte knuten till en faktura. */
@@ -96,7 +92,7 @@ export function buildMatters(timeEntries: ReportTimeEntry[], expenses: ReportExp
     agg.totalMinutes += te.minutes;
     if (te.billable) {
       agg.billableMinutes += te.minutes;
-      agg.workValueOre += workValueOre(te.minutes, te.hourlyRate);
+      agg.workValueOre += timeEntryValueOre(te.minutes, te.hourlyRate);
     }
   }
   for (const ex of expenses) {
@@ -122,7 +118,7 @@ function buildWeeklyRows(timeEntries: ReportTimeEntry[], fromDay: string, toDay:
     cell.totalMinutes += te.minutes;
     if (te.billable) {
       cell.billableMinutes += te.minutes;
-      cell.workValueOre += workValueOre(te.minutes, te.hourlyRate);
+      cell.workValueOre += timeEntryValueOre(te.minutes, te.hourlyRate);
     }
   }
   return rows;
@@ -144,7 +140,7 @@ export function buildUnbilled(timeEntries: ReportTimeEntry[], expenses: ReportEx
   let total = 0;
   for (const te of timeEntries) {
     if (!te.matter || !isOpenBillable(te)) continue;
-    const ore = workValueOre(te.minutes, te.hourlyRate);
+    const ore = timeEntryValueOre(te.minutes, te.hourlyRate);
     const row = ensure(te.matter);
     row.timeOre += ore; row.total += ore; total += ore;
   }

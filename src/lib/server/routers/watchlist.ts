@@ -19,6 +19,7 @@ import {
   conflictCheckItems, coverageItems, deadlineItems, sortWatchlist, unbilledItems, withKlientNames,
   DEFAULT_THRESHOLDS, type CoverageMatter, type DeadlineTask, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";
+import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -90,7 +91,7 @@ function unbilledInput(matters: readonly MatterRow[], entries: readonly EntryRow
     const matterId = String(e.matterId);
     if (!known.has(matterId)) continue;
     const cur = acc.get(matterId) ?? { ore: 0, oldest: null };
-    cur.ore += Math.round((e.minutes / 60) * e.hourlyRate);
+    cur.ore += timeEntryValueOre(e.minutes, e.hourlyRate);
     const d = isoDate(e.date);
     if (d !== null && (cur.oldest === null || d < cur.oldest)) cur.oldest = d;
     acc.set(matterId, cur);
