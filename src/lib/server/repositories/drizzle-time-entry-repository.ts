@@ -180,6 +180,18 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     return out;
   }
 
+  async latestEntryAtForMatters(matterIds: MatterId[]): Promise<Record<string, Date>> {
+    const out: Record<string, Date> = {};
+    if (matterIds.length === 0) return out;
+    const rows = await this.db
+      .select({ matterId: timeEntries.matterId, latest: sql<Date | string>`max(greatest(${timeEntries.date}, ${timeEntries.createdAt}))` })
+      .from(timeEntries)
+      .where(and(inArray(timeEntries.matterId, matterIds), isNull(timeEntries.deletedAt)))
+      .groupBy(timeEntries.matterId);
+    for (const r of rows) out[r.matterId] = new Date(r.latest);
+    return out;
+  }
+
   async listForLawyerInPeriod(
     organizationId: OrganizationId, userId: UserId, from: Date, to: Date,
   ): Promise<LawyerReportTimeEntry[]> {

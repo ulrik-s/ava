@@ -9,6 +9,7 @@
  * `@/lib/shared/watchlist` och all hämtning i anropande vy.
  */
 
+import type { MatterStatusActions } from "@/components/matter/use-matter-status-actions";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { deadlineOf } from "@/lib/shared/deadline";
@@ -22,6 +23,7 @@ const KIND_META: Record<WatchlistKind, { icon: string; label: string }> = {
   unbilled: { icon: "💰", label: "Ofakturerat" },
   deadline: { icon: "⏳", label: "Tidsfrist" },
   conflictCheck: { icon: "⚖️", label: "Jävskontroll" },
+  closeSuggestion: { icon: "📁", label: "Avslut" },
 };
 
 /**
@@ -120,10 +122,56 @@ export function WatchlistRow({ item, onComplete, showClient = false }: RowProps)
   );
 }
 
-export function WatchlistList({ items, emptyText, onComplete, showClient = false }: {
+/** Knapparna på frågan om avslut (#2100), ur `useMatterStatusActions`. */
+export type CloseActions = Pick<MatterStatusActions, "close" | "keepActive" | "isPending">;
+
+const BUTTON = "rounded-full px-3 py-1 text-xs font-medium disabled:opacity-50";
+
+/**
+ * Ska ärendet markeras som avslutat? (#2100): rubriken och ärendenumret är en
+ * länk till ärendet, skälet under, och knapparna ligger utanför länken (som
+ * `CompleteBox`) så att ett klick inte också öppnar ärendet.
+ */
+function CloseSuggestionRow({ item, suggestion, actions }: {
+  item: WatchlistItem; suggestion: NonNullable<WatchlistItem["closeSuggestion"]>; actions: CloseActions;
+}) {
+  const id = item.matterId ?? "";
+  return (
+    <li className={`rounded-lg border px-3 py-2 text-sm ${severityClasses(item.severity)}`}>
+      <EntityLink route="matters" id={id} className="block hover:underline">
+        <RowHeader item={item} due={false} showClient={false} />
+      </EntityLink>
+      <p className="mt-0.5 text-xs opacity-90">
+        <span className="sr-only">{KIND_META[item.kind].label}: </span>
+        {item.detail}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" disabled={actions.isPending} className={`${BUTTON} bg-blue-600 text-white hover:bg-blue-700`}
+          onClick={() => actions.close({ id, title: suggestion.matterTitle })}>
+          Avsluta ärendet
+        </button>
+        <button type="button" disabled={actions.isPending} className={`${BUTTON} border border-gray-300 bg-white text-gray-700 hover:bg-gray-50`}
+          onClick={() => actions.keepActive(id)}>
+          Behåll som aktivt
+        </button>
+      </div>
+    </li>
+  );
+}
+
+/** En post: frågan om avslut med knappar när `closeActions` finns, annars en vanlig rad. */
+function ListRow({ item, onComplete, showClient, closeActions }: RowProps & { closeActions?: CloseActions | undefined }) {
+  const suggestion = item.closeSuggestion;
+  if (closeActions && suggestion) return <CloseSuggestionRow item={item} suggestion={suggestion} actions={closeActions} />;
+  return <WatchlistRow item={item} onComplete={onComplete} showClient={showClient} />;
+}
+
+export function WatchlistList({ items, emptyText, onComplete, showClient = false, closeActions }: {
   items: readonly WatchlistItem[]; emptyText: string; onComplete?: OnComplete | undefined;
   /** Klientens namn och ärendenumret överst på raden (#1965) — Startsidan och sidan Frister. */
   showClient?: boolean | undefined;
+  /** Knapparna Avsluta ärendet och Behåll som aktivt (#2100) — sidan Att åtgärda. */
+  closeActions?: CloseActions | undefined;
 }) {
   if (items.length === 0) {
     return <p className="text-sm text-gray-500">{emptyText}</p>;
@@ -135,7 +183,8 @@ export function WatchlistList({ items, emptyText, onComplete, showClient = false
           då den ena tyst. Listan räknas om i sin helhet vid varje hämtning och
           har ingen rad-lokal state, så indexet är stabilt nog. */}
       {items.map((item, i) => (
-        <WatchlistRow key={`${item.kind}-${item.matterId ?? "-"}-${i}`} item={item} onComplete={onComplete} showClient={showClient} />
+        <ListRow key={`${item.kind}-${item.matterId ?? "-"}-${i}`} item={item} onComplete={onComplete}
+          showClient={showClient} closeActions={closeActions} />
       ))}
     </ul>
   );

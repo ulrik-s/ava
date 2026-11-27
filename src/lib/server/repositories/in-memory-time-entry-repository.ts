@@ -145,6 +145,20 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     return out;
   }
 
+  async latestEntryAtForMatters(matterIds: MatterId[]): Promise<Record<string, Date>> {
+    const out: Record<string, Date> = {};
+    if (matterIds.length === 0) return out;
+    const wanted = new Set<string>(matterIds);
+    const rows = (await this.delegate.findMany({})) as TimeEntry[];
+    for (const t of rows) {
+      // Raden kan bära en tombstone som `TimeEntry`-typen inte har (som getByIdInOrg ovan).
+      if (!wanted.has(t.matterId) || (t as { deletedAt?: unknown }).deletedAt) continue;
+      const at = Math.max(new Date(t.date).getTime(), new Date(t.createdAt).getTime());
+      if (at > (out[t.matterId]?.getTime() ?? -Infinity)) out[t.matterId] = new Date(at);
+    }
+    return out;
+  }
+
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.delegate.updateMany({
       where: { matterId, ...unlockedMatch() },

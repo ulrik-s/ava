@@ -1,6 +1,7 @@
 /**
  * Frister-router (#1062, #1735): tidsfrister och "Bör faktureras" i `list`,
- * takvarningar och jävskontroller i `actionItems` (#1734).
+ * takvarningar, jävskontroller och frågan om ett aktivt ärende utan tid på två
+ * månader ska avslutas (#2100) i `actionItems` (#1734).
  *
  * Varje signal härleds ur data som redan finns; ingenting lagras. Se
  * `@/lib/shared/watchlist` för varför (kort: en härledd påminnelse städar sig
@@ -13,6 +14,7 @@
 
 import { z } from "zod";
 import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
+import { closeSuggestionItems, type CloseSuggestionCandidate } from "@/lib/shared/close-suggestion";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
@@ -39,7 +41,11 @@ function isoDate(v: unknown): string | null {
 interface MatterRow {
   id: string;
   matterNumber: string;
+  title?: string | null;
   status?: string | null;
+  createdAt?: Date | string | null;
+  /** Senast någon valde Behåll som aktivt (#2098). */
+  keptActiveAt?: Date | string | null;
   paymentMethod?: PaymentMethod | null;
   rattsskyddMaxOre?: number | null;
   rattshjalpMaxTimmar?: number | null;
@@ -102,6 +108,20 @@ function unbilledInput(matters: readonly MatterRow[], entries: readonly EntryRow
     matterNumber: known.get(matterId)?.matterNumber ?? matterId,
     unbilledOre: v.ore,
     oldestEntryDate: v.oldest,
+  }));
+}
+
+/**
+ * Kandidater till frågan om avslut (#2100): bara aktiva ärenden, med senaste
+ * tidsposten för alla i ETT repo-anrop. Inga aktiva ärenden → inget anrop.
+ */
+async function closeSuggestionInput(ctx: Ctx, matters: readonly MatterRow[]): Promise<CloseSuggestionCandidate[]> {
+  const active = matters.filter((m) => m.status === "ACTIVE");
+  if (active.length === 0) return [];
+  const latest = await ctx.repos.timeEntries.latestEntryAtForMatters(active.map((m) => asId<"MatterId">(m.id)));
+  return active.map((m) => ({
+    id: m.id, matterNumber: m.matterNumber, title: m.title ?? "",
+    createdAt: m.createdAt, keptActiveAt: m.keptActiveAt, latestEntryAt: latest[m.id],
   }));
 }
 
@@ -172,8 +192,9 @@ export const watchlistRouter = router({
     }),
 
   /**
-   * "Att åtgärda" (#1734): takvarningar och jävskontroller med träffar som
-   * ingen har bedömt. En kontroll som bara väntar (`PENDING`) hör inte hit.
+   * "Att åtgärda" (#1734): takvarningar, jävskontroller med träffar som
+   * ingen har bedömt, och aktiva ärenden utan tid på två månader som kanske
+   * ska avslutas (#2100). En kontroll som bara väntar (`PENDING`) hör inte hit.
    * Samma `mine`-urval och sortering som `list`.
    */
   actionItems: orgProcedure
@@ -181,9 +202,13 @@ export const watchlistRouter = router({
     .query(async ({ ctx, input }): Promise<{ items: WatchlistItem[]; generatedAt: string }> => {
       const now = new Date();
       const matters = await selectMatters(ctx, input?.userId ?? ctx.user.id, input?.mine ?? true);
+      const [coverage, closeCandidates] = await Promise.all([
+        coverageInput(ctx, matters), closeSuggestionInput(ctx, matters),
+      ]);
       const items = sortWatchlist([
-        ...coverageItems(await coverageInput(ctx, matters)),
+        ...coverageItems(coverage),
         ...conflictCheckItems(matters.filter((m) => m.conflictCheckStatus === "HITS")),
+        ...closeSuggestionItems(closeCandidates, now),
       ], stockholmDay(now));
       return { items, generatedAt: now.toISOString() };
     }),

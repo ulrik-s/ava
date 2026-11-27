@@ -20,6 +20,12 @@
  * Tidsfrister (dokument som ska in, överklagandetider) är INTE härledbara —
  * de är uppgifter någon skrivit in, alltså `Task` med `dueAt`. De tas med här
  * för att de hör hemma i samma vy, inte för att de räknas ut.
+ *
+ * Frågan om ett ärende ska avslutas (#2100, `close-suggestion.ts`) är också
+ * härledd: den försvinner när tid registreras eller ärendet stängs. Undantaget
+ * är **Behåll som aktivt**: det datumet är ett faktum på ärendet
+ * (`keptActiveAt`), inte en avfärdad påminnelse. Det säger att någon bedömde
+ * att ärendet fortsätter, och frågan räknas från den dagen.
  */
 
 import { BILLING_SHORTCUT_PARAM } from "./billing/billing-flow";
@@ -61,7 +67,8 @@ export type WatchlistKind =
   | "coverageCap"      // täckningstaket nås — arbete däröver ersätts inte
   | "unbilled"         // upparbetat som borde faktureras
   | "deadline"         // tidsfrist ur en uppgift (dokument, överklagande)
-  | "conflictCheck";   // jävskontrollen väntar eller har träffar (#1246)
+  | "conflictCheck"    // jävskontrollen väntar eller har träffar (#1246)
+  | "closeSuggestion"; // ska ärendet avslutas? ingen tid på länge (#2100)
 
 /**
  * `passed` = det har redan hänt (taket passerat, fristen ute, utskicket
@@ -101,6 +108,8 @@ export interface WatchlistItem {
   link: WatchlistLink | null;
   /** Uppgiften bakom en tidsfrist — så den kan bockas av direkt i listan (#1167). */
   taskId?: string;
+  /** Ska ärendet avslutas (#2100): titeln till frågan och dagen sedan dess ingen tid registrerats. */
+  closeSuggestion?: { matterTitle: string; noTimeSince: string };
   /**
    * Ärendets första KLIENT-part (#1965), som Frister på Startsidan och sidan
    * Frister visar överst på raden. Saknas när posten saknar ärende eller

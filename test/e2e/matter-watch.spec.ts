@@ -4,6 +4,7 @@
  * ändringar i minnet, så vi går till startsidan via menyn (klient-navigering).
  */
 
+import type { Page } from "@playwright/test";
 import { DEMO_BASE_URL, type DemoSeed, fetchDemoSeed, matterIdWith, seedDemoLogin, test, expect } from "./_demo-test";
 
 /** Ärendets första KLIENT-part ur seeden (#1965), i kopplingarnas ordning. */
@@ -71,4 +72,61 @@ test("Radera: fristen försvinner ur ärendets Frister efter bekräftelse (#1231
   page.once("dialog", (d) => { void d.accept(); });
   await row.getByRole("button", { name: `Radera: ${title}` }).click();
   await expect(row).toHaveCount(0);
+});
+
+// ─── Ska ärendet markeras som avslutat? (#2100) ─────────────────────────────
+
+/** Demoärendet utan tid sedan länge (rättsskydd, positivt besked), ur seeden. */
+function staleMatter(seed: DemoSeed): { id: string; title: string } {
+  const m = seed.matters.find((x) => x.matterNumber === "2026-0021");
+  if (!m) throw new Error("seeden saknar ärende 2026-0021");
+  return { id: m.id, title: m.title };
+}
+
+/** Sidan Att åtgärda med hela byrån, så att urvalet inte beror på vem demon loggar in som. */
+async function openActionItems(page: Page, base: string): Promise<void> {
+  await page.goto(`${base}/action-items/`, { waitUntil: "load" });
+  await expect(page.getByRole("heading", { name: "Att åtgärda" })).toBeVisible({ timeout: 25_000 });
+  const mine = page.getByLabel("Bara mina ärenden");
+  if (await mine.isChecked()) await mine.uncheck();
+}
+
+const closeRow = (page: Page) =>
+  page.locator("li", { hasText: "Ska ärendet markeras som avslutat?" }).filter({ hasText: "2026-0021" });
+
+test("Att åtgärda frågar om ett ärende utan tid ska avslutas; Avsluta, Återöppna och Behåll som aktivt (#2100)", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const matter = staleMatter(seed);
+
+  await openActionItems(page, base);
+  const row = closeRow(page);
+  await expect(row).toBeVisible({ timeout: 25_000 });
+  await expect(row).toContainText(/Ingen tid registrerad sedan \d{4}-\d{2}-\d{2}\./);
+
+  // Avsluta ärendet: samma fråga som i ärendet, med ärendets titel.
+  let question = "";
+  page.once("dialog", (d) => { question = d.message(); void d.accept(); });
+  await row.getByRole("button", { name: "Avsluta ärendet" }).click();
+  await expect(row).toHaveCount(0);
+  expect(question).toBe(`Avsluta ärendet "${matter.title}"? Det går att återöppna sen.`);
+
+  await page.goto(`${base}/matters/${matter.id}/`, { waitUntil: "load" });
+  const header = page.getByTestId("matter-header");
+  await expect(header.getByText("Stängt", { exact: true })).toBeVisible({ timeout: 25_000 });
+
+  // Återöppna: frågan finns igen.
+  await header.getByRole("button", { name: "Återöppna" }).click();
+  await expect(header.getByText("Aktivt", { exact: true })).toBeVisible();
+  await openActionItems(page, base);
+  await expect(closeRow(page)).toBeVisible({ timeout: 25_000 });
+
+  // Behåll som aktivt: posten är borta, också efter en omladdning.
+  await closeRow(page).getByRole("button", { name: "Behåll som aktivt" }).click();
+  await expect(closeRow(page)).toHaveCount(0);
+  await page.reload({ waitUntil: "load" });
+  await openActionItems(page, base);
+  await expect(page.getByText(/\d+ poster\./)).toBeVisible({ timeout: 25_000 });
+  await expect(closeRow(page)).toHaveCount(0);
 });

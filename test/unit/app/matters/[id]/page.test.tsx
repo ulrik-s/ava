@@ -171,6 +171,9 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => navigation.search,
 }));
 vi.mock("@/lib/client/demo/use-route-id", () => ({ useRouteId: () => "m1" }));
+// Avsluta och Återöppna går genom den delade hooken (#2100); frågan och anropen testas i dess test.
+const statusActions = { close: vi.fn(), reopen: vi.fn(), keepActive: vi.fn(), isPending: false };
+vi.mock("@/components/matter/use-matter-status-actions", () => ({ useMatterStatusActions: () => statusActions }));
 
 // Dockytan (#1185) kräver en riktig webbläsarlayout — här renderas alla
 // paneler efter varandra så testerna kan granska innehållet.
@@ -487,6 +490,29 @@ describe("MatterDetailPage", () => {
     matterQuery.data = { ...M, status: "CLOSED" };
     renderPage();
     await waitFor(() => expect(screen.getByText("Stängt")).toBeInTheDocument());
+  });
+
+  it("Avsluta ärende går genom hooken med ärendets id och titel (#2100)", async () => {
+    statusActions.close.mockClear();
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Avsluta ärende" }));
+    expect(statusActions.close).toHaveBeenCalledWith({ id: "m1", title: M.title });
+  });
+
+  it("Återöppna går genom hooken för ett stängt ärende, och knapparna är inaktiva medan ett anrop pågår (#2100)", async () => {
+    statusActions.reopen.mockClear();
+    matterQuery.data = { ...M, status: "CLOSED" };
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Återöppna" }));
+    expect(statusActions.reopen).toHaveBeenCalledWith("m1");
+    statusActions.isPending = true;
+    try {
+      renderPage();
+      const buttons = await screen.findAllByRole("button", { name: "Återöppna" });
+      expect(buttons.at(-1)).toBeDisabled();
+    } finally {
+      statusActions.isPending = false;
+    }
   });
 
   it("öppnar Generera dokument-modal", async () => {

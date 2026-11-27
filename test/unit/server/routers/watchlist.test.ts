@@ -206,3 +206,66 @@ describe("watchlist.list — klientens namn (#1965)", () => {
     expect(items.every((i) => !("klientName" in i))).toBe(true);
   });
 });
+
+describe("watchlist.actionItems — Ska ärendet markeras som avslutat? (#2100)", () => {
+  const matter = (id: string, p: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id, organizationId: "o1", matterNumber: `2026-${id}`, title: `Ärende ${id}`, status: "ACTIVE",
+    responsibleLawyerId: "u1", createdAt: inDays(-200), ...p,
+  });
+  const entry = (id: string, matterId: string, p: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id, organizationId: "o1", matterId, userId: "u1", minutes: 30, hourlyRate: 100_000, billable: true,
+    date: inDays(-100), createdAt: inDays(-100), ...p,
+  });
+  const close = (items: Array<{ kind: string; matterId: string | null }>): Array<string | null> =>
+    items.filter((i) => i.kind === "closeSuggestion").map((i) => i.matterId).sort();
+  const run = async (matters: Array<Record<string, unknown>>, timeEntries: Array<Record<string, unknown>>, mine = false) =>
+    close((await caller([], [], [], { matters, timeEntries }).actionItems({ mine })).items);
+
+  it("ett aktivt ärende med gammal tid ger en post med titeln och dagen", async () => {
+    const { items } = await caller([], [], [], { matters: [matter("old")], timeEntries: [entry("e1", "old")] }).actionItems({ mine: false });
+    const item = items.find((i) => i.kind === "closeSuggestion");
+    expect(item?.matterId).toBe("old");
+    expect(item?.closeSuggestion).toEqual({ matterTitle: "Ärende old", noTimeSince: stockholmDay(inDays(-100)) });
+  });
+
+  it("stängda och arkiverade ärenden ger ingen post", async () => {
+    const matters = [matter("closed", { status: "CLOSED" }), matter("archived", { status: "ARCHIVED" })];
+    expect(await run(matters, [entry("e1", "closed"), entry("e2", "archived")])).toEqual([]);
+  });
+
+  it("en ny tidspost som inte är debiterbar tar bort posten", async () => {
+    const fresh = entry("e2", "old", { billable: false, date: inDays(-3), createdAt: inDays(-3) });
+    expect(await run([matter("old")], [entry("e1", "old"), fresh])).toEqual([]);
+  });
+
+  it("en sent registrerad tidspost räknas från registreringen", async () => {
+    const late = entry("e2", "old", { date: inDays(-120), createdAt: inDays(-2) });
+    expect(await run([matter("old")], [entry("e1", "old"), late])).toEqual([]);
+  });
+
+  it("ett nytt Behåll som aktivt tar bort posten", async () => {
+    expect(await run([matter("old", { keptActiveAt: inDays(-1) })], [entry("e1", "old")])).toEqual([]);
+  });
+
+  it("mine begränsar som för de andra posterna", async () => {
+    const matters = [matter("own"), matter("other", { responsibleLawyerId: "u2" })];
+    expect(await run(matters, [], true)).toEqual(["own"]);
+    expect(await run(matters, [], false)).toEqual(["other", "own"]);
+  });
+
+  it("tidsposterna läses i ETT anrop för flera ärenden, och inte alls utan aktiva ärenden", async () => {
+    const ds = new DemoDataStore(prebakeJoins({
+      matters: [matter("a"), matter("b"), matter("c", { status: "CLOSED" })],
+      tasks: [], timeEntries: [], expenses: [], contacts: [], matterContacts: [],
+    }), () => {});
+    const repos = buildInMemoryRepositories(ds);
+    const spy = vi.spyOn(repos.timeEntries, "latestEntryAtForMatters");
+    await callerFor(ds, repos).actionItems({ mine: false });
+    expect(spy).toHaveBeenCalledOnce();
+    expect([...(spy.mock.calls[0]?.[0] ?? [])].sort()).toEqual(["a", "b"]);
+
+    spy.mockClear();
+    await callerFor(ds, repos).actionItems({ mine: true, userId: "u-utan-arenden" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+});

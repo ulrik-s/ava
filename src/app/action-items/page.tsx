@@ -3,12 +3,14 @@
 /**
  * "Att åtgärda" (#1734) — det som kräver ett beslut, inte en frist: takvarningar
  * för rättshjälp och rättsskydd, jävskontroller med träffar som ingen har bedömt,
+ * aktiva ärenden utan tid på två månader som kanske ska avslutas (#2100),
  * och synkrutorna. Posterna är härledda och försvinner när de är åtgärdade.
  * Samma uppbyggnad som sidan Att bevaka (`@/app/watchlist/page`).
  */
 
 import { useState } from "react";
 import { ListPage } from "@/components/layout/list-page";
+import { useMatterStatusActions } from "@/components/matter/use-matter-status-actions";
 import { RejectedChangesNotice } from "@/components/sync/rejected-changes-notice";
 import { StaleDevicesNotice } from "@/components/sync/stale-devices-notice";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
@@ -18,6 +20,7 @@ export default function ActionItemsPage() {
   const [mine, setMine] = useState(true);
   const q = trpc.watchlist.actionItems.useQuery({ mine });
   const items = q.data?.items ?? [];
+  const closeActions = useMatterStatusActions();
 
   return (
     <ListPage
@@ -43,7 +46,7 @@ export default function ActionItemsPage() {
     >
       <RejectedChangesNotice />
       <StaleDevicesNotice />
-      <WatchlistList items={items} emptyText="Inget att åtgärda just nu." />
+      <WatchlistList items={items} emptyText="Inget att åtgärda just nu." closeActions={closeActions} />
     </ListPage>
   );
 }
