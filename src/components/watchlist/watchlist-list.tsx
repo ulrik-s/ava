@@ -25,6 +25,7 @@ const KIND_META: Record<WatchlistKind, { icon: string; label: string }> = {
   deadline: { icon: "⏳", label: "Tidsfrist" },
   conflictCheck: { icon: "⚖️", label: "Jävskontroll" },
   closeSuggestion: { icon: "📁", label: "Avslut" },
+  paymentPlan: { icon: "💳", label: "Avbetalning" },
 };
 
 /**
