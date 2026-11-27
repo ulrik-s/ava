@@ -8,7 +8,7 @@ import type { Task } from "@/lib/shared/schemas/calendar";
 import type { MatterId, OrganizationId, TaskId, UserId } from "@/lib/shared/schemas/ids";
 import { matters, tasks } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, versionedTable } from "./drizzle-repository";
+import { DrizzleRepository, idsWhere, versionedTable } from "./drizzle-repository";
 import type { TaskListFilter, TaskListRow, TaskRepository } from "./task-repository";
 
 export class DrizzleTaskRepository extends DrizzleRepository<Task> implements TaskRepository {
@@ -52,5 +52,12 @@ export class DrizzleTaskRepository extends DrizzleRepository<Task> implements Ta
       .where(and(eq(tasks.id, id), eq(tasks.organizationId, organizationId), isNull(tasks.deletedAt)))
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  async existingIdsInOrg(ids: readonly TaskId[], organizationId: OrganizationId): Promise<Set<TaskId>> {
+    const rows = await this.db
+      .select({ id: tasks.id }).from(tasks)
+      .where(and(idsWhere(tasks.id, ids), eq(tasks.organizationId, organizationId)));
+    return new Set(rows.map((r) => r.id));
   }
 }

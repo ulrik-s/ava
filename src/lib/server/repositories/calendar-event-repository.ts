@@ -21,6 +21,11 @@ export interface CalendarEventRepository extends Repository<CalendarEvent> {
   listForUsers(userIds: UserId[], organizationId: OrganizationId): Promise<CalendarEventRow[]>;
   /** Alla händelser för ett ärende, kronologiskt (utan ärende-subset). */
   listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<CalendarEvent[]>;
+  /**
+   * Byråns ej raderade frister i kalendern (`kind = "deadline"`), alla ägares,
+   * kronologiskt (#2121). Bara för engångsflytten till uppgifter.
+   */
+  listDeadlinesForOrg(organizationId: OrganizationId): Promise<CalendarEvent[]>;
   /** Händelse by id, ägar-scopad (id + userId + org). Null om saknas/ej ägd/raderad. */
   getOwned(id: CalendarEventId, userId: UserId, organizationId: OrganizationId): Promise<CalendarEvent | null>;
   /** Som `getOwned` men med ärende-subset (detaljvyn). */
