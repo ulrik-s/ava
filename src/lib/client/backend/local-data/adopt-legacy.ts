@@ -12,8 +12,8 @@
  */
 
 import { z } from "zod";
-import { copyDatabase, type MergeValue } from "@/lib/server/data-store/in-memory/idb-copy";
-import { deleteDatabase } from "@/lib/server/data-store/in-memory/idb-open";
+import { copyDatabase, type MergeValue } from "@/lib/client/local-store/idb-copy";
+import { deleteDatabase } from "@/lib/client/local-store/idb-open";
 import { CONTENT_PENDING_KEY } from "../content-cache";
 import { LIST_STORE_KEY } from "../idb-list-store";
 import { dbNameIn, LOCAL_DB, userNamespace, type LocalDbBase, type LocalScope } from "./local-namespace";

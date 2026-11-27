@@ -18,8 +18,8 @@
  */
 
 import { z } from "zod";
-import { IdbEntryStore } from "@/lib/server/data-store/in-memory/idb-entry-store";
-import { deleteDatabase, openExistingDatabase } from "@/lib/server/data-store/in-memory/idb-open";
+import { IdbEntryStore } from "@/lib/client/local-store/idb-entry-store";
+import { deleteDatabase, openExistingDatabase } from "@/lib/client/local-store/idb-open";
 import { parseJsonWith } from "@/lib/shared/parse-json";
 import { DocumentContentCache } from "../content-cache";
 import { IndexedDbListStore } from "../idb-list-store";

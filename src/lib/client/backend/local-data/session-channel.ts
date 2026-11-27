@@ -4,7 +4,7 @@
  * arbeta — och skriva i — den utloggades lokala databaser.
  */
 
-import { broadcastChangeChannel, type ChangeChannel } from "@/lib/server/data-store/in-memory/change-channel";
+import { broadcastChangeChannel, type ChangeChannel } from "@/lib/client/local-store/change-channel";
 
 /** Kanalens namn. */
 export const SESSION_CHANNEL_NAME = "ava-session";

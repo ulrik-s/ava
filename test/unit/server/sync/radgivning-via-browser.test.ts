@@ -12,7 +12,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import { z } from "zod";
-import { isProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { isProcedureCall } from "@/lib/client/local-store/mutation-queue";
 import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/radgivning-entry";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";

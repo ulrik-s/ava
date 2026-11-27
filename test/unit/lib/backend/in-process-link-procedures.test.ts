@@ -11,11 +11,11 @@
 import { TRPCClientError } from "@trpc/client";
 import { describe, expect, it } from "vitest-compat";
 import { inProcessLink, type ProcedureRecorder } from "@/lib/client/demo/in-process-link";
+import { MutationQueue, QUEUE_WRITE_FAILED_MESSAGE } from "@/lib/client/local-store/mutation-queue";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
-import { MutationQueue, QUEUE_WRITE_FAILED_MESSAGE } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { asId } from "@/lib/shared/schemas/ids";
 import { derivedId } from "@/lib/shared/sync/derived-id";
 import { isUuid } from "@/lib/shared/uuid";

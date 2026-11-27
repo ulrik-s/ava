@@ -545,6 +545,37 @@
       "count": 2
     }
   },
+  "src/lib/client/local-store/cursor-store.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "src/lib/client/local-store/idb-kv.ts": {
+    "@typescript-eslint/no-unnecessary-type-parameters": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 1
+    }
+  },
+  "src/lib/client/local-store/legacy-list.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "src/lib/client/local-store/local-store-persistence.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/lib/client/local-store/mutation-queue.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
   "src/lib/client/sync/external-actions.ts": {
     "@typescript-eslint/no-redundant-type-constituents": {
       "count": 1
@@ -570,43 +601,12 @@
       "count": 1
     }
   },
-  "src/lib/server/data-store/in-memory/cursor-store.ts": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 4
-    }
-  },
-  "src/lib/server/data-store/in-memory/idb-kv.ts": {
-    "@typescript-eslint/no-unnecessary-type-parameters": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 1
-    }
-  },
-  "src/lib/server/data-store/in-memory/legacy-list.ts": {
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 1
-    }
-  },
-  "src/lib/server/data-store/in-memory/local-store-persistence.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 2
-    }
-  },
   "src/lib/server/data-store/in-memory/local-store.ts": {
     "@typescript-eslint/no-unnecessary-type-conversion": {
       "count": 1
     },
     "@typescript-eslint/require-await": {
       "count": 2
-    }
-  },
-  "src/lib/server/data-store/in-memory/mutation-queue.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 4
     }
   },
   "src/lib/server/data-store/in-memory/read-only-delegate.ts": {
@@ -1728,6 +1728,105 @@
       "count": 2
     }
   },
+  "test/unit/client/local-store/caching-sync-data-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 10
+    }
+  },
+  "test/unit/client/local-store/caching-sync-procedures.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/local-store/caching-sync-restore.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/local-store/canonical-restore.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "test/unit/client/local-store/idb-entry-store.test.ts": {
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 3
+    }
+  },
+  "test/unit/client/local-store/idb-open.test.ts": {
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 1
+    }
+  },
+  "test/unit/client/local-store/legacy-id-repair.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    }
+  },
+  "test/unit/client/local-store/local-data-migration.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/client/local-store/mutation-queue-multi-tab.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/client/local-store/mutation-queue-owner.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/local-store/mutation-queue-procedures.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "test/unit/client/local-store/pending-writes.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "test/unit/client/local-store/reconcile-engine-failures.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/local-store/reconcile-engine-procedures.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 9
+    }
+  },
+  "test/unit/client/local-store/reconcile-engine-restore.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "test/unit/client/local-store/reconcile-engine-resync.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
+  "test/unit/client/local-store/reconcile-engine.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
+  "test/unit/client/local-store/static-sync-source.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
   "test/unit/client/query-client.test.ts": {
     "@typescript-eslint/require-await": {
       "count": 3
@@ -2509,35 +2608,6 @@
       "count": 3
     }
   },
-  "test/unit/server/data-store/caching-sync-data-store.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 10
-    }
-  },
-  "test/unit/server/data-store/caching-sync-procedures.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 4
-    }
-  },
-  "test/unit/server/data-store/caching-sync-restore.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 4
-    }
-  },
-  "test/unit/server/data-store/canonical-restore.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
   "test/unit/server/data-store/count-without-include.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 7
@@ -2556,16 +2626,6 @@
       "count": 4
     }
   },
-  "test/unit/server/data-store/idb-entry-store.test.ts": {
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 3
-    }
-  },
-  "test/unit/server/data-store/idb-open.test.ts": {
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 1
-    }
-  },
   "test/unit/server/data-store/in-memory/query-engine.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
@@ -2576,69 +2636,9 @@
       "count": 4
     }
   },
-  "test/unit/server/data-store/legacy-id-repair.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 11
-    }
-  },
-  "test/unit/server/data-store/local-data-migration.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "test/unit/server/data-store/local-store.test.ts": {
     "@typescript-eslint/require-await": {
       "count": 2
-    }
-  },
-  "test/unit/server/data-store/mutation-queue-multi-tab.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/data-store/mutation-queue-owner.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 4
-    }
-  },
-  "test/unit/server/data-store/mutation-queue-procedures.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    }
-  },
-  "test/unit/server/data-store/pending-writes.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 2
-    }
-  },
-  "test/unit/server/data-store/reconcile-engine-failures.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 4
-    }
-  },
-  "test/unit/server/data-store/reconcile-engine-procedures.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 9
-    }
-  },
-  "test/unit/server/data-store/reconcile-engine-restore.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 4
-    }
-  },
-  "test/unit/server/data-store/reconcile-engine-resync.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 5
-    }
-  },
-  "test/unit/server/data-store/reconcile-engine.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 5
-    }
-  },
-  "test/unit/server/data-store/static-sync-source.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
     }
   },
   "test/unit/server/data-store/writable-delegate.test.ts": {

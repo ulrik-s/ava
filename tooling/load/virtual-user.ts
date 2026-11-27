@@ -22,11 +22,11 @@ import { InMemoryRejectedChangesPersistence, RejectedChanges } from "@/lib/clien
 import { createServerFirstStore } from "@/lib/client/backend/server-first-store";
 import { buildDeviceReport } from "@/lib/client/backend/sync-device-report";
 import { toLinkFetch } from "@/lib/client/link-fetch";
+import type { CachingSyncDataStore } from "@/lib/client/local-store/caching-sync-data-store";
+import { InMemoryPersistence } from "@/lib/client/local-store/local-store-persistence";
+import { InMemoryMutationQueuePersistence } from "@/lib/client/local-store/mutation-queue";
 import { SyncScheduler } from "@/lib/client/sync/sync-scheduler";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
-import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
-import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
-import { InMemoryMutationQueuePersistence } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { asId } from "@/lib/shared/schemas/ids";
 import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
