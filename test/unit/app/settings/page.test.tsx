@@ -2,7 +2,7 @@
  * Test för SettingsPage — logga/sidfotsmärke, WebDAV, kontor, kontaktuppgifter.
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import SettingsPage from "@/app/settings/page";
 import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
@@ -30,6 +30,15 @@ const addOfficeState = { isPending: false };
 const updateOfficeMutate = vi.fn();
 const updateOfficeState = { isPending: false };
 const deleteOfficeMutate = vi.fn();
+/**
+ * Mutationernas onSuccess, så att testerna kan svara som servern (#1907). Den
+ * första registreringen vinner: sidans egen `updateSettings` registreras före
+ * sektionernas (Standardåtgärder, ordlistorna), som delar samma mock.
+ */
+type OnSuccess = { onSuccess?: () => void } | undefined;
+const onSuccess: Record<"updateSettings" | "addOffice" | "updateOffice" | "deleteOffice", (() => void) | undefined> = {
+  updateSettings: undefined, addOffice: undefined, updateOffice: undefined, deleteOffice: undefined,
+};
 
 // DatasourceSection har egna tester (firma-settings-panel.test.tsx).
 // Stubba ut den här så vi inte krockar med dess Spara-knapp + checkbox.
@@ -76,21 +85,29 @@ vi.mock("@/lib/client/trpc", () => ({
     organization: {
       getSettings: { useQuery: () => settingsQuery },
       updateSettings: {
-        useMutation: () => ({
-          mutate: updateSettingsMutate,
-          isPending: updateSettingsState.isPending,
-          error: updateSettingsState.error,
-        }),
+        useMutation: (opts: OnSuccess) => {
+          onSuccess.updateSettings ??= opts?.onSuccess;
+          return { mutate: updateSettingsMutate, isPending: updateSettingsState.isPending, error: updateSettingsState.error };
+        },
       },
       listOffices: { useQuery: () => officesQuery },
       addOffice: {
-        useMutation: () => ({ mutate: addOfficeMutate, isPending: addOfficeState.isPending }),
+        useMutation: (opts: OnSuccess) => {
+          onSuccess.addOffice ??= opts?.onSuccess;
+          return { mutate: addOfficeMutate, isPending: addOfficeState.isPending };
+        },
       },
       updateOffice: {
-        useMutation: () => ({ mutate: updateOfficeMutate, isPending: updateOfficeState.isPending }),
+        useMutation: (opts: OnSuccess) => {
+          onSuccess.updateOffice ??= opts?.onSuccess;
+          return { mutate: updateOfficeMutate, isPending: updateOfficeState.isPending };
+        },
       },
       deleteOffice: {
-        useMutation: () => ({ mutate: deleteOfficeMutate }),
+        useMutation: (opts: OnSuccess) => {
+          onSuccess.deleteOffice ??= opts?.onSuccess;
+          return { mutate: deleteOfficeMutate };
+        },
       },
     },
   },
@@ -98,6 +115,10 @@ vi.mock("@/lib/client/trpc", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  onSuccess.updateSettings = undefined;
+  onSuccess.addOffice = undefined;
+  onSuccess.updateOffice = undefined;
+  onSuccess.deleteOffice = undefined;
   settingsQuery.data = {
     name: "Byrå AB",
     orgNumber: "556677-8899",
@@ -389,4 +410,58 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ website: "https://www.byra.se" }), { timeout: 2000 });
   });
 
+
+  // ── Mutationernas svar och de sista fälten (#1907) ──────────────────────
+
+  it("Organisationsnummer och Gränsbelopp aconto auto-sparas; aconto i kr blir öre", async () => {
+    render(<SettingsPage />);
+    fireEvent.change(screen.getByLabelText("Organisationsnummer"), { target: { value: "559999-0000" } });
+    fireEvent.change(screen.getByLabelText("Gränsbelopp aconto (kr)"), { target: { value: "2000" } });
+    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ orgNumber: "559999-0000", accontoThresholdOre: 200000 }), { timeout: 2000 });
+  });
+
+  it("när sparningen lyckas visas ✓ Sparat, som försvinner efter 2,5 s", () => {
+    vi.useFakeTimers();
+    try {
+      render(<SettingsPage />);
+      expect(screen.queryByText("✓ Sparat")).toBeNull();
+      act(() => onSuccess.updateSettings?.());
+      expect(screen.getByText("✓ Sparat")).toBeInTheDocument();
+      expect(utilsMock.organization.getSettings.invalidate).toHaveBeenCalled();
+      act(() => { vi.advanceTimersByTime(2500); });
+      expect(screen.queryByText("✓ Sparat")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ett sparat nytt kontor stänger formuläret och hämtar om kontoren", () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("button", { name: /Lägg till kontor/i }));
+    expect(screen.getByPlaceholderText(/t\.ex\. Stockholm/i)).toBeInTheDocument();
+    act(() => onSuccess.addOffice?.());
+    expect(screen.queryByPlaceholderText(/t\.ex\. Stockholm/i)).toBeNull();
+    expect(utilsMock.organization.listOffices.invalidate).toHaveBeenCalled();
+  });
+
+  it("ett ändrat kontor stänger redigeringen när det sparats, och Avbryt stänger den utan att spara", () => {
+    officesQuery.data = [{ id: "o1", name: "Stockholm", address: null, phone: null, email: null, isMain: false }];
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("button", { name: /Redigera/i }));
+    expect(screen.getByDisplayValue("Stockholm")).toBeInTheDocument();
+    act(() => onSuccess.updateOffice?.());
+    expect(screen.queryByDisplayValue("Stockholm")).toBeNull();
+    expect(utilsMock.organization.listOffices.invalidate).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Redigera/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Avbryt/i }));
+    expect(screen.queryByDisplayValue("Stockholm")).toBeNull();
+    expect(updateOfficeMutate).not.toHaveBeenCalled();
+  });
+
+  it("ett borttaget kontor hämtar om kontoren", () => {
+    render(<SettingsPage />);
+    act(() => onSuccess.deleteOffice?.());
+    expect(utilsMock.organization.listOffices.invalidate).toHaveBeenCalled();
+  });
 });

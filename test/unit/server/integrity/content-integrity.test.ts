@@ -7,7 +7,6 @@ import {
   checkContentIntegrity,
   DEFAULT_MIN_AGE_MS,
   runContentIntegrityCheck,
-  scheduleContentIntegrity,
 } from "@/lib/server/integrity/content-integrity";
 import type { StoredContentRow } from "@/lib/server/repositories/document-repository";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -66,36 +65,5 @@ describe("runContentIntegrityCheck", () => {
     await runContentIntegrityCheck(d, log, NOW);
     expect(log.info).toHaveBeenCalledWith("content.integrity.ok", { total: 1, count: 0 });
     expect(log.error).not.toHaveBeenCalled();
-  });
-});
-
-describe("scheduleContentIntegrity", () => {
-  it("kör direkt och sedan periodiskt; stopp rensar timern", async () => {
-    const run = vi.fn(async () => undefined);
-    let tick: () => void = () => {};
-    const clearTimer = vi.fn();
-    const stop = scheduleContentIntegrity({
-      run, intervalMs: 1000,
-      setTimer: (fn, ms) => { tick = fn; expect(ms).toBe(1000); return 7; },
-      clearTimer,
-    });
-    expect(run).toHaveBeenCalledTimes(1);
-    tick();
-    expect(run).toHaveBeenCalledTimes(2);
-    stop();
-    expect(clearTimer).toHaveBeenCalledWith(7);
-  });
-
-  it("en kontroll som kastar tar inte ned processen", async () => {
-    const run = vi.fn(async () => { throw new Error("db nere"); });
-    const stop = scheduleContentIntegrity({ run, intervalMs: 1000, setTimer: () => 1, clearTimer: () => {} });
-    await Promise.resolve();
-    expect(run).toHaveBeenCalledTimes(1);
-    stop();
-  });
-
-  it("standardtimern är setInterval/clearInterval", () => {
-    const stop = scheduleContentIntegrity({ run: async () => undefined, intervalMs: 60_000 });
-    stop();
   });
 });

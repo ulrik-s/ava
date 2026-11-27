@@ -12,6 +12,7 @@
  * - Fakturor: förfallna fakturor markeras röda och knappen visar bara dem (#1731).
  * - Avbetalningar: påminnelser registreras, AVA säger inte att de skickas (#2135).
  * - Avbetalningar: planer som ligger efter markeras "Förfallen N dagar" (#2136).
+ * - Att åtgärda: en rad per plan som ligger efter, som öppnar planen (#2137).
  */
 import type { Locator, Page } from "@playwright/test";
 import { paymentPlanOverdue, type PlanOverdueInput } from "../../src/lib/shared/payment-plan-overdue";
@@ -269,13 +270,13 @@ interface PlanSeed {
 }
 
 /** De aktiva planernas ärendenummer, och om planen ligger efter enligt den delade regeln. */
-function activePlans(seed: PlanSeed, now: Date): Array<{ matterNumber: string; behind: boolean }> {
+function activePlans(seed: PlanSeed, now: Date): Array<{ id: string; matterNumber: string; behind: boolean }> {
   const ledger = (rows: PlanSeed["payments"] | undefined, id: string) => (rows ?? []).filter((r) => r.invoiceId === id);
   return seed.paymentPlans.filter((p) => p.status === "ACTIVE").map((p) => {
     const inv = seed.invoices.find((i) => i.id === p.invoiceId);
     const invoice = { amount: inv?.amount ?? null, payments: ledger(seed.payments, p.invoiceId), writeOffs: ledger(seed.writeOffs, p.invoiceId) };
     const matterNumber = seed.matters.find((m) => m.id === inv?.matterId)?.matterNumber ?? "";
-    return { matterNumber, behind: paymentPlanOverdue({ ...p, invoice }, now) !== null };
+    return { id: p.id, matterNumber, behind: paymentPlanOverdue({ ...p, invoice }, now) !== null };
   });
 }
 
@@ -293,4 +294,24 @@ test("Avbetalningar: markeringen Förfallen N dagar följer den delade regeln (#
     const row = page.locator("tbody tr").filter({ hasText: p.matterNumber }).first();
     await expect(row.getByText(overdue), p.matterNumber).toHaveCount(p.behind ? 1 : 0);
   }
+});
+
+// Demons planer startar nära byggdagen (se ovan), så webbläsarens klocka ställs
+// 150 dagar fram: då ligger de aktiva planerna efter. Varje plan som ligger
+// efter enligt den delade regeln har sin rad, och ett klick öppnar planen (#2137).
+test("Att åtgärda: Delbetalning förfallen för planerna som ligger efter, och raden öppnar planen (#2137)", async ({ page }) => {
+  const later = new Date(Date.now() + 150 * 86_400_000);
+  const seed = await (await page.request.get(`${BASE}/demo-seed.json`)).json() as PlanSeed;
+  const plans = activePlans(seed, later).filter((p) => p.behind);
+  expect(plans.length).toBeGreaterThan(0);
+  await page.clock.setFixedTime(later);
+  await page.goto(`${BASE}/action-items/`);
+  await expect(page.getByRole("heading", { name: "Att åtgärda" })).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel("Bara mina ärenden").uncheck();
+  const rowFor = (matterNumber: string) =>
+    page.getByRole("link").filter({ hasText: /Delbetalning förfallen \d+ dag(ar)?/ }).filter({ hasText: matterNumber });
+  for (const p of plans) await expect(rowFor(p.matterNumber), p.matterNumber).toHaveCount(1, { timeout: 30_000 });
+  const first = plans[0];
+  await rowFor(first?.matterNumber ?? "").click();
+  await expect(page).toHaveURL(new RegExp(`/payment-plans/.*${first?.id ?? "-"}`), { timeout: 30_000 });
 });

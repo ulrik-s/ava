@@ -5,7 +5,8 @@
  *
  * Idag: e-postutskick (smtp-sender) när AVA_SMTP_* är satt; dokument-
  * klassificering + sidindexering (#518, #1215); bokföringens keepalive när
- * Fortnox är konfigurerat (#1815).
+ * Fortnox är konfigurerat (#1815); integritetskontrollen när innehållslagret
+ * finns (#1993).
  */
 
 import { preparePdfjsForServer } from "@/lib/server/documents/pdfjs-server-runtime";
@@ -17,6 +18,7 @@ import type { IContentStore, IDocumentPageIndex } from "@/lib/server/ports";
 import { extractPages } from "@/lib/shared/extract-text";
 import type { EmailDispatchLog } from "./email-dispatch-log";
 import { createClassifyDocumentHandler, type ClassifyDocumentDeps } from "./handlers/classify-document-handler";
+import { createContentIntegrityHandler, type ContentIntegrityJobDeps } from "./handlers/content-integrity-handler";
 import type { ClassifiableDoc, PageDeps } from "./handlers/document-text";
 import { createEmailDispatchHandler } from "./handlers/email-dispatch-handler";
 import { createIndexDocumentHandler } from "./handlers/index-document-handler";
@@ -53,6 +55,9 @@ export interface JobHandlerConfig {
   /** Bokföringsporten + byråns id (#1815), satta båda eller ingen. Satt →
    *  `ledger-keepalive` får en worker (och schemaläggs); saknas → inget jobb. */
   ledger?: { service: LedgerKeepAliveDeps["ledger"]; orgId: string };
+  /** Integritetskontrollens läsningar + byråns id (#1993). Satt (bara med ett
+   *  innehållslager) → `content-integrity` får en worker och schemaläggs. */
+  integrity?: ContentIntegrityJobDeps;
 }
 
 /**
@@ -135,6 +140,7 @@ export function buildServerFirstJobHandlers(cfg: JobHandlerConfig): JobHandlers 
   if (cfg.ledger) {
     handlers[JOB_QUEUES.ledgerKeepAlive] = createLedgerKeepAliveHandler({ ledger: cfg.ledger.service, orgId: cfg.ledger.orgId });
   }
+  if (cfg.integrity) handlers[JOB_QUEUES.contentIntegrity] = createContentIntegrityHandler(cfg.integrity);
   return handlers;
 }
 

@@ -42,9 +42,13 @@ const noop = (): Promise<void> => Promise.resolve();
 const handlers: JobHandlers = { [JOB_QUEUES.indexDocument]: noop, [JOB_QUEUES.classifyDocument]: noop };
 
 describe("JOB_SCHEDULES", () => {
-  it("schemalägger bokföringens keepalive måndag 03:00 (#1815)", () => {
-    expect(JOB_SCHEDULES).toEqual([{ queue: "ledger-keepalive", cron: "0 3 * * 1" }]);
+  it("schemalägger bokföringens keepalive måndag 03:00 (#1815) och integritetskontrollen varje natt 02:00 (#1993)", () => {
+    expect(JOB_SCHEDULES).toEqual([
+      { queue: "ledger-keepalive", cron: "0 3 * * 1" },
+      { queue: "content-integrity", cron: "0 2 * * *" },
+    ]);
     expect(Object.values(JOB_QUEUES)).toContain("ledger-keepalive");
+    expect(Object.values(JOB_QUEUES)).toContain("content-integrity");
   });
 });
 

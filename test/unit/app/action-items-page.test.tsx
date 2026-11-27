@@ -91,4 +91,16 @@ describe("Att åtgärda-sidan (#1734)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Behåll som aktivt" }));
     expect(statusActions.keepActive).toHaveBeenCalledWith("m1");
   });
+
+  it("en avbetalning som ligger efter visas, räknas och länkar till planen (#2137)", () => {
+    query.data = { items: [item(), item({
+      kind: "paymentPlan", title: "Delbetalning förfallen 3 dagar", detail: "Förföll 2026-11-24.",
+      at: "2026-11-24", amountOre: 100_000, link: { route: "payment-plans", id: "pp1" },
+    })] };
+    render(<ActionItemsPage />);
+    expect(screen.getByText("2 poster.")).toBeInTheDocument();
+    expect(screen.getByText(/Delbetalning förfallen 3 dagar/)).toBeInTheDocument();
+    const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href") ?? "");
+    expect(hrefs.some((h) => h.includes("/payment-plans/") && h.includes("id=pp1"))).toBe(true);
+  });
 });
