@@ -142,7 +142,11 @@ aldrig routrar, repositories, db eller server-synk).
   och frysning. Kontraktet genereras ur `ENTITY_REGISTRY` — en ny entitet utan
   fixtur fäller testet. Listorna prövas i `repository-list-contract.test.ts`
   (#1678): svensk namnordning, null sist, mjukt raderade rader och `%`/`_` i
-  söktermer. Kända avvikelser står med issue i en ratchet-lista.
+  söktermer. Kända avvikelser står med issue i en ratchet-lista. Drizzle
+  sorterar namn med Postgres ICU-kollation `sv-x-icu` (`swedishOrder`,
+  `src/lib/server/db/swedish-order.ts`, #1917); pglite i testerna saknar ICU-data
+  och får en ersättare i byteordning, så scenarier som kräver svensk ordning
+  körs mot minnesrepot och riktig Postgres.
 
 ### Self-hosted server (server-first, ADR 0016)
 - `src/bin/server-first.ts` → `buildServerFirstApi`: tRPC-over-HTTP (`appRouter`)
