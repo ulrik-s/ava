@@ -161,7 +161,9 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
  *  (#828 steg 4). Utbrutet ur dialogen så den håller sig under complexity 8. */
 function useRattshjalpKr(matterId: MatterId, matter: MatterContext, onClose: () => void, onRecorded: () => void) {
   const krData = useKrModalData(matterId);
-  const posts = useKrPosts(matterId, krData.expenses);
+  const proposal = trpc.billingRun.proposal.useQuery({ matterId: matterId });
+  const timeEntries = trpc.timeEntry.list.useQuery({ matterId: matterId, pageSize: 100 });
+  const posts = useKrPosts({ proposal, timeEntries }, krData.expenses);
   const register = trpc.document.register.useMutation();
   const utils = trpc.useUtils();
   const create = trpc.billingRun.createKostnadsrakning.useMutation();
