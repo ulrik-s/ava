@@ -26,7 +26,8 @@
 
 import type { Office365Config } from "@/lib/shared/office365-config";
 import {
-  authorityFor, OFFICE365_SCOPES, type Office365ConfigSource, resolveOffice365Config, serverOffice365Config,
+  authorityFor, loadStaticGraphToken, OFFICE365_SCOPES, type Office365ConfigSource, resolveOffice365Config,
+  serverOffice365Config,
 } from "./office365-config";
 import { registerConnector } from "./registry";
 import type { IntegrationConnector, ConnectionStatus } from "./types";
@@ -108,6 +109,16 @@ export function statusFromResult(result: MsalResult): ConnectionStatus {
   };
 }
 
+/** Den fasta token ur testsömmen (#1952); `null` = MSAL som vanligt. */
+export type StaticTokenSource = () => string | null;
+
+/** Statusen med den fasta token: ansluten, utan något Microsoft-konto. */
+const STATIC_TOKEN_STATUS: ConnectionStatus = {
+  kind: "connected",
+  account: { id: "static-token", displayName: "Fast token", email: "" },
+  scopes: [...OFFICE365_SCOPES],
+};
+
 export class Office365Connector implements IntegrationConnector {
   readonly id = "office365";
   readonly displayName = "Office 365";
@@ -123,6 +134,7 @@ export class Office365Connector implements IntegrationConnector {
   constructor(
     private readonly factory: MsalFactory = defaultFactory,
     private readonly fromServer: Office365ConfigSource = serverOffice365Config,
+    private readonly staticToken: StaticTokenSource = loadStaticGraphToken,
   ) {}
 
   async getStatus(): Promise<ConnectionStatus> {
@@ -134,12 +146,15 @@ export class Office365Connector implements IntegrationConnector {
    * `connect()` kan öppna popupen direkt i klicket. Ändrar inte statusen.
    */
   async preload(): Promise<void> {
+    if (this.staticToken()) return;
     const config = await resolveOffice365Config(this.fromServer);
     if (!config) throw new Error(NOT_CONFIGURED);
     this.preloaded = await this.create(config);
   }
 
   async connect(): Promise<void> {
+    // Testsömmen: ansluten direkt, MSAL laddas aldrig.
+    if (this.staticToken()) return this.setStatus(STATIC_TOKEN_STATUS);
     const ready = this.preloaded;
     // Förladdat: popupen anropas synkront, utan await före (iOS Safari).
     if (ready) return this.track(() => this.popup(ready));
@@ -194,6 +209,8 @@ export class Office365Connector implements IntegrationConnector {
    * en del av det normala flödet, inte en felhantering.
    */
   async getAccessToken(): Promise<string> {
+    const fixed = this.staticToken();
+    if (fixed) return fixed;
     if (!this.msal || !this.account || this.status.kind !== "connected") {
       throw new Error("Office 365 är inte ansluten");
     }
