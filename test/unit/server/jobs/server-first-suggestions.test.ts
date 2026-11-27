@@ -19,6 +19,7 @@ import type { SuggestionRepos } from "@/lib/server/documents/suggest-from-text";
 import { JOB_QUEUES } from "@/lib/server/jobs/job-queue";
 import { buildServerFirstJobHandlers } from "@/lib/server/jobs/server-first-handlers";
 import type { IContentStore } from "@/lib/server/ports";
+import { InMemoryDocumentRepository } from "@/lib/server/repositories/in-memory-document-repository";
 import { InMemoryDocumentSuggestionRepository } from "@/lib/server/repositories/in-memory-document-suggestion-repository";
 import { InMemoryMatterEventSuggestionRepository } from "@/lib/server/repositories/in-memory-matter-event-suggestion-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -60,6 +61,7 @@ function setup() {
   });
   const store = new LocalStore(source, async () => {});
   const suggestions: SuggestionRepos = {
+    documents: new InMemoryDocumentRepository(store),
     documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(store),
     matterEventSuggestions: new InMemoryMatterEventSuggestionRepository(store),
   };
@@ -99,6 +101,18 @@ describe("classify-document → kontakt-/händelseförslag (server-first)", () =
     expect(parties.map((p) => p.name).sort()).toEqual(["Anna Andersson", "Byggfirma Stenhammar AB"]);
     const events = await suggestions.matterEventSuggestions.listForDocument(documentId);
     expect(events.map((e) => e.title)).toEqual(["Muntlig förberedelse"]);
+  });
+
+  it("en HD-dom ger dokumentet finalRuling DOM_HD efter jobbet (#2099)", async () => {
+    const { documentId, suggestions, documents } = setup();
+    const dom = "HÖGSTA DOMSTOLENS\nDOM\nMål nr T 1247-23\nmeddelad i Stockholm den 14 mars 2024\nDOMSLUT";
+    const handlers = buildServerFirstJobHandlers({
+      documents: documents as never,
+      content: contentWith(new TextEncoder().encode(dom)),
+      suggestions,
+    });
+    await runClassify(handlers, documentId);
+    expect((await suggestions.documents.getByIdOrThrow(documentId)).finalRuling).toBe("DOM_HD");
   });
 
   it("omkörning av jobbet ger inga dubbletter", async () => {

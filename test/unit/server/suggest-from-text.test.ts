@@ -16,6 +16,7 @@ import { describe, it, expect } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { writeSuggestionsFromText } from "@/lib/server/documents/suggest-from-text";
 import type { SuggestionRepos } from "@/lib/server/documents/suggest-from-text";
+import { InMemoryDocumentRepository } from "@/lib/server/repositories/in-memory-document-repository";
 import { InMemoryDocumentSuggestionRepository } from "@/lib/server/repositories/in-memory-document-suggestion-repository";
 import { InMemoryMatterEventSuggestionRepository } from "@/lib/server/repositories/in-memory-matter-event-suggestion-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -32,6 +33,14 @@ const TEXT = [
   "Muntlig förberedelse har satts ut till 2026-09-15 kl. 09.30.",
 ].join("\n");
 
+/** Uppställningen i HD:s protokoll när prövningstillstånd inte meddelas (#2099). */
+const HD_PT = [
+  "HÖGSTA DOMSTOLEN PROTOKOLL",
+  "Mål nr T 2020-24",
+  "BESLUT",
+  "Högsta domstolen meddelar inte prövningstillstånd. Hovrättens avgörande står därmed fast.",
+].join("\n");
+
 function setup() {
   const matterId = asId<"MatterId">(uuidv7());
   const documentId = asId<"DocumentId">(uuidv7());
@@ -43,6 +52,7 @@ function setup() {
   });
   const store = new LocalStore(source, async () => {});
   const repos: SuggestionRepos = {
+    documents: new InMemoryDocumentRepository(store),
     documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(store),
     matterEventSuggestions: new InMemoryMatterEventSuggestionRepository(store),
   };
@@ -53,7 +63,7 @@ describe("writeSuggestionsFromText", () => {
   it("skapar kontakt- och händelseförslag ur texten", async () => {
     const { repos, documentId } = setup();
     const res = await writeSuggestionsFromText(repos, documentId, TEXT);
-    expect(res).toEqual({ parties: 2, events: 1 });
+    expect(res).toEqual({ parties: 2, events: 1, finalRuling: null });
 
     const parties = await repos.documentAnalysisSuggestions.listForDocument(documentId);
     expect(parties.map((p) => p.name).sort()).toEqual(["Anna Andersson", "Byggfirma Stenhammar AB"]);
@@ -68,7 +78,7 @@ describe("writeSuggestionsFromText", () => {
     await writeSuggestionsFromText(repos, documentId, TEXT);
     const second = await writeSuggestionsFromText(repos, documentId, TEXT);
 
-    expect(second, "andra körningen skapar noll nya").toEqual({ parties: 0, events: 0 });
+    expect(second, "andra körningen skapar noll nya").toEqual({ parties: 0, events: 0, finalRuling: null });
     expect(await repos.documentAnalysisSuggestions.listForDocument(documentId)).toHaveLength(2);
     expect(await repos.matterEventSuggestions.listForDocument(documentId)).toHaveLength(1);
   });
@@ -92,13 +102,57 @@ describe("writeSuggestionsFromText", () => {
     const { repos, documentId } = setup();
     await writeSuggestionsFromText(repos, documentId, TEXT);
     const res = await writeSuggestionsFromText(repos, documentId, `${TEXT}\nVittne: Karl Nilsson 720801-1234`);
-    expect(res).toEqual({ parties: 1, events: 0 });
+    expect(res).toEqual({ parties: 1, events: 0, finalRuling: null });
     expect(await repos.documentAnalysisSuggestions.listForDocument(documentId)).toHaveLength(3);
   });
 
   it("tom text är en no-op", async () => {
     const { repos, documentId } = setup();
-    expect(await writeSuggestionsFromText(repos, documentId, "   ")).toEqual({ parties: 0, events: 0 });
+    expect(await writeSuggestionsFromText(repos, documentId, "   ")).toEqual({ parties: 0, events: 0, finalRuling: null });
     expect(await repos.documentAnalysisSuggestions.listForDocument(documentId)).toHaveLength(0);
+  });
+});
+
+describe("writeSuggestionsFromText: slutligt avgörande (#2099)", () => {
+  it("HD:s protokoll sparas som PT_HD utan att versionen höjs, och står i svaret", async () => {
+    const { repos, documentId } = setup();
+    const before = await repos.documents.getByIdOrThrow(documentId);
+    const res = await writeSuggestionsFromText(repos, documentId, HD_PT);
+    expect(res.finalRuling).toBe("PT_HD");
+    const after = await repos.documents.getByIdOrThrow(documentId);
+    expect(after.finalRuling).toBe("PT_HD");
+    expect(after.version).toBe(before.version);
+  });
+
+  it("en andra körning skriver inget nytt", async () => {
+    const { repos, documentId } = setup();
+    await writeSuggestionsFromText(repos, documentId, HD_PT);
+    const first = await repos.documents.getByIdOrThrow(documentId);
+    await new Promise((r) => setTimeout(r, 5));
+    expect((await writeSuggestionsFromText(repos, documentId, HD_PT)).finalRuling).toBe("PT_HD");
+    expect((await repos.documents.getByIdOrThrow(documentId)).updatedAt).toEqual(first.updatedAt);
+  });
+
+  it("text utan markörer ger null och skriver inget", async () => {
+    const { repos, documentId } = setup();
+    const before = await repos.documents.getByIdOrThrow(documentId);
+    expect((await writeSuggestionsFromText(repos, documentId, TEXT)).finalRuling).toBeNull();
+    const after = await repos.documents.getByIdOrThrow(documentId);
+    expect(after.finalRuling ?? null).toBeNull();
+    expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it("ett sparat värde töms inte av en senare text utan markörer", async () => {
+    const { repos, documentId } = setup();
+    await writeSuggestionsFromText(repos, documentId, HD_PT);
+    await writeSuggestionsFromText(repos, documentId, TEXT);
+    expect((await repos.documents.getByIdOrThrow(documentId)).finalRuling).toBe("PT_HD");
+  });
+
+  it("ett saknat dokument ger inget fel", async () => {
+    const { repos } = setup();
+    const missing = asId<"DocumentId">(uuidv7());
+    expect((await writeSuggestionsFromText(repos, missing, HD_PT)).finalRuling).toBe("PT_HD");
+    expect(await repos.documents.getById(missing)).toBeNull();
   });
 });
