@@ -4,10 +4,10 @@
  * `flagBilled` bulk-uppdaterar invoiceId via delegaten.
  */
 
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
 import { isInvoicedOutsideCoverage, unlockedMatch } from "@/lib/shared/time-entry-lock";
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository, withDateObject } from "./in-memory-repository";
 import type {

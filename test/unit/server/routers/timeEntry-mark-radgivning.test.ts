@@ -13,7 +13,7 @@ import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import type { QueuedCallIdentity } from "@/lib/server/queued-call";
 import { appRouter } from "@/lib/server/routers/_app";
-import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/radgivning-entry";
+import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry";
 import { asId } from "@/lib/shared/schemas/ids";
 import { derivedId } from "@/lib/shared/sync/derived-id";
 

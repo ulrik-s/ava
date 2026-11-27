@@ -13,8 +13,8 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
-import { forhorFromTimeEntries } from "@/lib/shared/forordnandetaxa";
-import { kostnadsrakningClaimInclVat } from "@/lib/shared/kostnadsrakning";
+import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
+import { kostnadsrakningClaimInclVat } from "@/lib/shared/billing/kostnadsrakning";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {

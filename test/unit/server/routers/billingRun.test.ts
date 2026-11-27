@@ -12,10 +12,10 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
-import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { timkostnadsnormFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { asId } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 
 const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
@@ -947,6 +947,8 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.clientInvoice.invoiceType).toBe("CREDIT");
     expect(res.clientInvoice.amount).toBe(-29_700);      // negativ = kreditering
     expect(res.creditInvoice).toBe(res.clientInvoice);   // krediten ÄR klientfakturan
+    // #1946: anteckningen skriver de betalda acontona med formatKr (två decimaler, hårt mellanslag).
+    expect(res.clientInvoice.notes).toContain("betalda aconton (500,00 kr)");
     // #895: kreditfakturan visar FULLA specifikationen (tidsspec + avdragna aconton) →
     // netto = kredit (negativt), inte den gamla minimala 2-rads-vyn.
     const bd = res.clientInvoice.settlementBreakdown!;

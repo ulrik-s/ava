@@ -18,7 +18,7 @@ import { router, protectedProcedure } from "../trpc";
  *   - `Invoice.amount`       — öre
  *
  * Alla kronbelopp som returneras är i **öre** så UI kan använda
- * `formatCurrency()` rakt av.
+ * `formatKr()` rakt av.
  */
 
 /** Period (svenska kalenderdagar) och en advokat. */

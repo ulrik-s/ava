@@ -3,7 +3,7 @@
  * `settlementBreakdown`, som slutfakturan och äldre acontofakturor har.
  */
 import { describe, expect, it } from "vitest-compat";
-import { invoiceBreakdown } from "@/lib/shared/settlement-view";
+import { invoiceBreakdown } from "@/lib/shared/billing/settlement-view";
 
 const view = (totalOre: number) => ({ timeLines: [], rows: [], totalLabel: "Att betala", totalOre });
 

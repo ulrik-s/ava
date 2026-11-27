@@ -10,13 +10,13 @@
  * får två sourcer of truth.
  */
 
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
-import { kindsFields } from "@/lib/shared/document-kinds";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/billing/brottmalstaxa";
 import {
   KOSTNADSRAKNING_TEMPLATE_NAME,
   KOSTNADSRAKNING_TEMPLATE_CATEGORY,
   KOSTNADSRAKNING_DEFAULT_HTML,
-} from "@/lib/shared/kostnadsrakning-template";
+} from "@/lib/shared/billing/kostnadsrakning-template";
+import { kindsFields } from "@/lib/shared/document-kinds";
 import {
   ENTITY_REGISTRY,
   type ContactType,

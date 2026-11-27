@@ -29,7 +29,7 @@
  *     bun tooling/scripts/billing-pipeline-e2e.ts
  */
 
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { assert, clientFor, kr, SERVER_URL, seedUser, waitForServer, type Ava } from "./e2e-harness";
 
 const USER = "anna-billing@byra.se";

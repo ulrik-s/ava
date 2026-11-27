@@ -10,9 +10,9 @@
  */
 
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import { asId, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type TimeEntryId, type UserId } from "@/lib/shared/schemas/ids";
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import { matters, timeEntries, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { unlockedWhere } from "./billing-lock-sql";

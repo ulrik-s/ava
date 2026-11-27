@@ -9,8 +9,8 @@
  * på BAS-standard när ingen mappning är konfigurerad.
  */
 
-import { isIssued } from "../invoice-state-machine";
-import type { VatRate } from "../vat";
+import { isIssued } from "../billing/invoice-state-machine";
+import type { VatRate } from "../billing/vat";
 import { DEFAULT_LEDGER_ACCOUNT_MAP, toSieAccountMap } from "./account-map";
 import { buildSemanticVoucher, type SemanticVoucherInput } from "./semantic-voucher";
 import { renderSie, type SieAccountMap, type SieCompany } from "./sie";

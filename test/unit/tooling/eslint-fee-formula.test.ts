@@ -2,7 +2,7 @@
  * Lintregeln mot inline-arvodesformeln (#2174).
  *
  * Formeln `(minuter / 60) * taxa` har EN plats: `timeEntryValueOre` i
- * `src/lib/shared/whole-kronor.ts`. Testet läser regeln ur repots riktiga
+ * `src/lib/shared/billing/whole-kronor.ts`. Testet läser regeln ur repots riktiga
  * ESLint-konfiguration (som den räknas fram för en given fil) och kör den på
  * kodsnuttar — så det är selektorn och kopplingen till filerna som prövas, inte
  * en kopia av dem.
@@ -63,7 +63,7 @@ describe("lintregeln mot inline-arvodesformeln (#2174)", () => {
   });
 
   it("formelns hem får skriva den — och behåller övriga förbud", async () => {
-    const home = "src/lib/shared/whole-kronor.ts";
+    const home = "src/lib/shared/billing/whole-kronor.ts";
     expect(await feeHits(home, "const v = (minutes / 60) * rate;")).toBe(0);
     const messages = (await restrictedSyntaxFor(home)).slice(1).map((r) => (typeof r === "object" ? r.message : ""));
     expect(messages.some((m) => m.includes("JSON.parse"))).toBe(true);

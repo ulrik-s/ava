@@ -22,8 +22,8 @@
  * för att de hör hemma i samma vy, inte för att de räknas ut.
  */
 
-import { BILLING_SHORTCUT_PARAM } from "./billing-flow";
-import { coverageStatus, type CoverageCapInput } from "./coverage-cap";
+import { BILLING_SHORTCUT_PARAM } from "./billing/billing-flow";
+import { coverageStatus, type CoverageCapInput } from "./billing/coverage-cap";
 import type { MatterRole } from "./schemas/enums";
 import { stockholmDay } from "./stockholm-time";
 

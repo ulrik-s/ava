@@ -10,7 +10,7 @@ import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
-import { noteTimestamp } from "@/lib/shared/billing-notes";
+import { noteTimestamp } from "@/lib/shared/billing/billing-notes";
 import type { MatterId, ServiceNoteId } from "@/lib/shared/schemas/ids";
 
 interface ServiceNote {

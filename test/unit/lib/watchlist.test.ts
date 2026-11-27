@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest-compat";
-import { BILLING_SHORTCUT_PARAM } from "@/lib/shared/billing-flow";
+import { BILLING_SHORTCUT_PARAM } from "@/lib/shared/billing/billing-flow";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
   coverageItems, dagar, deadlineItems,

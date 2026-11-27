@@ -18,13 +18,13 @@ import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsraknin
 import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
-import { DEFAULT_ACCONTO_SHARE_BIPS, proposedAccontoOre } from "@/lib/shared/billing-proposal";
-import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { DEFAULT_ACCONTO_SHARE_BIPS, proposedAccontoOre } from "@/lib/shared/billing/billing-proposal";
+import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
+import { invoiceBreakdown } from "@/lib/shared/billing/settlement-view";
+import { roundToKronor } from "@/lib/shared/billing/whole-kronor";
 import { toIsoDate } from "@/lib/shared/iso-date";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { MatterId } from "@/lib/shared/schemas/ids";
-import { invoiceBreakdown } from "@/lib/shared/settlement-view";
-import { roundToKronor } from "@/lib/shared/whole-kronor";
 import { UnbilledPosts, usePostSelection } from "./_post-selection";
 
 interface AccontoRow { id: string; amountOre: number; recipient: string }
@@ -119,8 +119,8 @@ function RoundedNote({ fromOre, toOre }: { fromOre: number | null; toOre: number
   if (fromOre === null) return null;
   return (
     <p role="status" className="mt-1 text-[11px] text-amber-700">
-      Avrundat till hela kronor: <span className="font-mono">{formatCurrency(toOre)}</span>
-      {" "}(angivet <span className="font-mono">{formatCurrency(fromOre)}</span>) — fakturans rader är alltid hela kronor.
+      Avrundat till hela kronor: <span className="font-mono">{formatKr(toOre)}</span>
+      {" "}(angivet <span className="font-mono">{formatKr(fromOre)}</span>) — fakturans rader är alltid hela kronor.
     </p>
   );
 }
@@ -184,7 +184,7 @@ function Stat({ label, value, strong }: { label: string; value: number; strong?:
   return (
     <div>
       <div className="text-[10px] uppercase text-gray-500">{label}</div>
-      <div className={`font-mono text-sm ${strong ? "font-semibold text-gray-900" : "text-gray-700"}`}>{formatCurrency(value)}</div>
+      <div className={`font-mono text-sm ${strong ? "font-semibold text-gray-900" : "text-gray-700"}`}>{formatKr(value)}</div>
     </div>
   );
 }
@@ -225,7 +225,7 @@ function FinalForm({ matterId, meta, accontos, onDone }: { matterId: MatterId; m
               <label key={a.id} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={selected.includes(a.id)}
                   onChange={(e) => setSelected((s) => e.target.checked ? [...s, a.id] : s.filter((x) => x !== a.id))} />
-                <span className="font-mono">{formatCurrency(a.amountOre)}</span>
+                <span className="font-mono">{formatKr(a.amountOre)}</span>
                 <span className="text-gray-500 text-xs">({a.recipient})</span>
               </label>
             ))}

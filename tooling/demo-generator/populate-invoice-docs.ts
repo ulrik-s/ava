@@ -14,8 +14,8 @@
 import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import { buildFakturaView, fakturaHeading, type FakturaBreakdown } from "@/lib/client/kostnadsrakning/faktura-template";
 import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
+import { invoiceBreakdown } from "@/lib/shared/billing/settlement-view";
 import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
-import { invoiceBreakdown } from "@/lib/shared/settlement-view";
 import type { BinarySink, GeneratorCaller } from "./backend-target";
 import { ensureFolderPath, INVOICE_FOLDER, type FolderCache } from "./folder-filing";
 

@@ -10,12 +10,12 @@
 
 import fc from "fast-check";
 import { describe, expect, it } from "vitest-compat";
-import { accontoCreditAmounts, accontoCreditLines, accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
-import { computeFinalInvoiceBreakdown, isPaymentPlanSettled, type ExpenseForInvoice, type TimeEntryForInvoice } from "@/lib/shared/invoice-calc";
-import { krClaim } from "@/lib/shared/kr-claim";
+import { accontoCreditAmounts, accontoCreditLines, accontoSplit, deductAcconto } from "@/lib/shared/billing/acconto-vat";
+import { computeFinalInvoiceBreakdown, isPaymentPlanSettled, type ExpenseForInvoice, type TimeEntryForInvoice } from "@/lib/shared/billing/invoice-calc";
+import { krClaim } from "@/lib/shared/billing/kr-claim";
+import { vatOnRow } from "@/lib/shared/billing/whole-kronor";
 import type { AmountRounding } from "@/lib/shared/schemas/enums";
-import { vatOnRow } from "@/lib/shared/whole-kronor";
 import { isWholeKronor, oreAmount, rounding, signedOre, sum, vatRate, wholeKronor } from "../../helpers/arbitraries";
 
 const grossOf = (lines: readonly VatBreakdownLine[]): number => sum(lines.map((l) => l.netOre + l.vatOre));

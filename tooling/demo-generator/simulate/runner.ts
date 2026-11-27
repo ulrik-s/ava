@@ -5,14 +5,14 @@
  * arbete (aconto) härleds här ur `state`; dokumentbytes skrivs via `BinarySink`.
  */
 
-import { noteTimestamp } from "@/lib/shared/billing-notes";
-import { coverageEntryRateOre } from "@/lib/shared/brottmalstaxa";
+import { noteTimestamp } from "@/lib/shared/billing/billing-notes";
+import { coverageEntryRateOre } from "@/lib/shared/billing/brottmalstaxa";
+import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
+import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/billing/rattshjalp";
+import type { SettlementViewLine } from "@/lib/shared/billing/settlement-view";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { kindLabel } from "@/lib/shared/document-kind";
-import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
-import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
-import type { SettlementViewLine } from "@/lib/shared/settlement-view";
 import { AVA_NAMESPACE, uuidv5 } from "@/lib/shared/uuid-derive";
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import { demoPaymentPlanId } from "../../scripts/demo-billing-ids";
 import type { BinarySink } from "../backend-target";
 import { ensureFolderPath } from "../folder-filing";

@@ -9,7 +9,7 @@
 import { useMemo } from "react";
 import { MARK_CLASS, OverdueMark } from "@/components/billing/overdue-mark";
 import { trpc } from "@/lib/client/trpc";
-import { invoiceAttention, type InvoiceAttention, type OverdueCandidate } from "@/lib/shared/invoice-overdue";
+import { invoiceAttention, type InvoiceAttention, type OverdueCandidate } from "@/lib/shared/billing/invoice-overdue";
 
 /** De röda markeringarna efter statusmärket. En faktura kan ha båda. */
 export function AttentionMarks({ attention }: { attention: InvoiceAttention }) {

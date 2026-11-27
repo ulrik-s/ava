@@ -9,14 +9,14 @@
  * cirkel.
  */
 
-import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { buildInvoiceSpecification, type InvoiceSpecification, type SpecExpenseLine } from "@/lib/shared/invoice-specification";
+import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
+import { buildInvoiceSpecification, type InvoiceSpecification, type SpecExpenseLine } from "@/lib/shared/billing/invoice-specification";
+import { svd as svDate } from "@/lib/shared/billing/settlement-view"; // svensk kalenderdag (#1677)
+import { roundingOf } from "@/lib/shared/billing/whole-kronor";
 import { formatDecimalHours } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
-import { svd as svDate } from "@/lib/shared/settlement-view"; // svensk kalenderdag (#1677)
-import { roundingOf } from "@/lib/shared/whole-kronor";
 
-/** Formaterar öre till text (`formatCurrency` i appen). */
+/** Formaterar öre till text (`formatKr` i appen). */
 export type Fc = (ore: number) => string;
 
 /** En post i nedbrytningens upparbetade arbete (#880). */

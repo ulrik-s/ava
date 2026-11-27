@@ -8,11 +8,11 @@
  * belopp i öre.
  */
 import type { BilledInvoiceInput, FrozenWorkInput } from "@/lib/shared/billed-per-lawyer";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { calendarDate } from "@/lib/shared/calendar-periods";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { asId, type BillingRunId, type InvoiceId, type UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 
 /** Demo-projektionen lagrar datum som ISO-strängar → coerca till Date. */
 export function coerceDate(v: unknown): Date {

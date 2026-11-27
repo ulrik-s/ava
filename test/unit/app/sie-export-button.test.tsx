@@ -84,7 +84,7 @@ describe("SieExportButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /Exportera SIE/ }));
     expect(downloadMock).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toBe(
-      "Kunde inte exportera SIE: Faktura F-2026-0043: en rad i momsuppdelningen har 1,00 kr moms på satsen 0 %, " +
+      "Kunde inte exportera SIE: Faktura F-2026-0043: en rad i momsuppdelningen har 1,00\u00a0kr moms på satsen 0 %, " +
       "som saknar momskonto (bara 6, 12 och 25 % har ett). " +
       "Verifikatet skulle inte balansera, så fakturan kan inte bokföras förrän momsuppdelningen är rättad.",
     );

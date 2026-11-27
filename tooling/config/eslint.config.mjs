@@ -92,7 +92,7 @@ const RESTRICTED_TZLESS_FORMAT = [
 
 /**
  * Arvodesformeln har EN plats (#2174): `timeEntryValueOre(minuter, taxa)` i
- * `src/lib/shared/whole-kronor.ts`. Inline-formeln `(minuter / 60) * taxa`
+ * `src/lib/shared/billing/whole-kronor.ts`. Inline-formeln `(minuter / 60) * taxa`
  * fälls överallt annars, så avrundningen inte glider isär mellan fakturan,
  * rapporterna och kostnadsräkningen. Träffar en multiplikation där ena
  * operanden är en division med 60 — oavsett ordning.
@@ -101,12 +101,12 @@ const RESTRICTED_FEE_FORMULA = [
   {
     selector: "BinaryExpression[operator='*'] > BinaryExpression[operator='/'][right.type='Literal'][right.value=60]",
     message:
-      "Arvodesformeln `(minuter / 60) * taxa` skrivs inte inline — använd timeEntryValueOre(minuter, taxa) från @/lib/shared/whole-kronor (#2174). Är det tid och inte pengar: ge omräkningen ett eget namn.",
+      "Arvodesformeln `(minuter / 60) * taxa` skrivs inte inline — använd timeEntryValueOre(minuter, taxa) från @/lib/shared/billing/whole-kronor (#2174). Är det tid och inte pengar: ge omräkningen ett eget namn.",
   },
 ];
 
 /** Formelns hem: den enda filen som får skriva den. */
-const FEE_FORMULA_HOME = "src/lib/shared/whole-kronor.ts";
+const FEE_FORMULA_HOME = "src/lib/shared/billing/whole-kronor.ts";
 
 const eslintConfig = defineConfig([
   ...nextVitals,

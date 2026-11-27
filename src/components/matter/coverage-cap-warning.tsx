@@ -8,8 +8,8 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
-import { coverageStatus, type CoverageStatus } from "@/lib/shared/coverage-cap";
+import { coverageStatus, type CoverageStatus } from "@/lib/shared/billing/coverage-cap";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
@@ -44,7 +44,7 @@ function hoursOneDecimal(minutes: number): number {
 /** Upparbetat/tak som text (belopp resp. timmar). I timläget bär `usedOre`/
  *  `capOre` minuter, inte öre. */
 function usageText(s: CoverageStatus): { used: string; cap: string } {
-  if (s.kind === "amount") return { used: formatCurrency(s.usedOre), cap: formatCurrency(s.capOre) };
+  if (s.kind === "amount") return { used: formatKr(s.usedOre), cap: formatKr(s.capOre) };
   return { used: `${hoursOneDecimal(s.usedOre)} tim`, cap: `${s.capOre / 60} tim` };
 }
 

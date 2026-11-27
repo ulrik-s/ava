@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest-compat";
 import {
   buildKostnadsrakningContext, kostnadsrakningClaimInclVat, type BuildInput, type ExpenseInput,
   type KostnadsrakningResult, type TimeEntryInput,
-} from "@/lib/shared/kostnadsrakning";
+} from "@/lib/shared/billing/kostnadsrakning";
 import { timeEntryKindSchema, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import { forhor, isWholeKronor, sum, vatRate, yrkandeDate } from "../../helpers/arbitraries";
 

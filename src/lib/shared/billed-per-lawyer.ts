@@ -18,7 +18,7 @@
  * Ren och ramverks-agnostisk → enhetstestbar isolerat. Alla belopp i öre.
  */
 
-import { isIssued } from "@/lib/shared/invoice-state-machine";
+import { isIssued } from "@/lib/shared/billing/invoice-state-machine";
 import type { InvoiceId, UserId } from "@/lib/shared/schemas/ids";
 
 /** Utfärdade statusar som räknas som "gått ut" (fakturan har lämnat huset). */

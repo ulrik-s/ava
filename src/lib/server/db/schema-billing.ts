@@ -5,7 +5,8 @@
  */
 
 import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
+import type { KostnadsrakningStatus } from "@/lib/shared/billing/kostnadsrakning-flow";
+import type { SettlementView } from "@/lib/shared/billing/settlement-view";
 import type { DispatchChannel, DispatchStatus, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
 import type {
   AmountRounding, BillingRunRecipient, BillingRunStatus, BillingRunType, ExpenseKind, ForordnandeAvslut, InvoiceStatus,
@@ -15,7 +16,6 @@ import type {
   AccontoDeductionId, BillingRunId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterId, PaymentId, PaymentPlanId,
   PaymentPlanReminderId, TimeEntryId, UserId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
-import type { SettlementView } from "@/lib/shared/settlement-view";
 import { baseColumns, boolDefault, ore, orgScopedColumns } from "./columns";
 import { matters } from "./schema-core";
 

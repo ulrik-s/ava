@@ -15,7 +15,7 @@ import type { FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-me
 import type { FakturaDocInvoice } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
+import { formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
@@ -68,11 +68,11 @@ export function VerdictDialog(props: Props) {
           Domstolens beslut är registrerat på kostnadsräkningen. Fakturan skapas
           på det dömda beloppet — ev. prutning bokförs automatiskt.
         </p>
-        <Pair label="Föreslaget belopp" value={formatCurrency(workValueOre)} />
-        <Pair label="Dömt belopp — inkl. moms" value={formatCurrency(awardedOre)} />
+        <Pair label="Föreslaget belopp" value={formatKr(workValueOre)} />
+        <Pair label="Dömt belopp — inkl. moms" value={formatKr(awardedOre)} />
         <VatBreakdown inclOre={awardedOre} />
         {prutningOre < 0 && (
-          <Pair label="Prutning" value={formatCurrency(prutningOre)} dim />
+          <Pair label="Prutning" value={formatKr(prutningOre)} dim />
         )}
         {mut.error && <p className="text-sm text-red-700">{mut.error.message}</p>}
         <div className="flex justify-end gap-2 pt-2">

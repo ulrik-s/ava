@@ -16,9 +16,9 @@
  * [ADR 0007]: ../../../docs/adr/0007-kundfordringar-konstaterad-kundforlust.md
  */
 
-import { isIssued } from "./invoice-state-machine";
+import { isIssued } from "./billing/invoice-state-machine";
+import { computeInvoiceLedger } from "./billing/write-off-calc";
 import { primitiveText } from "./primitive-text";
-import { computeInvoiceLedger } from "./write-off-calc";
 
 type Row = Record<string, unknown>;
 

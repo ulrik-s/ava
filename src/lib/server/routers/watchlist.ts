@@ -12,6 +12,7 @@
  */
 
 import { z } from "zod";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
@@ -19,7 +20,6 @@ import {
   conflictCheckItems, coverageItems, deadlineItems, sortWatchlist, unbilledItems, withKlientNames,
   DEFAULT_THRESHOLDS, type CoverageMatter, type DeadlineTask, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 

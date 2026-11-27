@@ -4,7 +4,7 @@
  * ärende. Tar repona explicit, så reglerna är testbara utan en tRPC-kontext.
  */
 import { TRPCError } from "@trpc/server";
-import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
+import { isPerDayKind } from "@/lib/shared/billing/brottmalstaxa";
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { MatterId, OrganizationId } from "@/lib/shared/schemas/ids";

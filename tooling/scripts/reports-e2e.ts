@@ -38,7 +38,7 @@
  *   bun run e2e:reports     # startar docker, migrerar, kör, river
  */
 
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import {
   assert, clientFor, kr, seedUser, waitForServer, type Ava,
 } from "./e2e-harness";

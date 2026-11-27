@@ -21,7 +21,7 @@ INSTALLMENT_PLAN`.
 
 ## Beslut
 
-En **explicit tillståndsmaskin** i `src/lib/shared/invoice-state-machine.ts`
+En **explicit tillståndsmaskin** i `src/lib/shared/billing/invoice-state-machine.ts`
 (ren logik, delas av server + tester) är EN sanningskälla för tillåtna
 övergångar. Alla status-skrivande kodvägar går igenom `canTransition(from, to)`
 / `assertInvoiceTransition(from, to)`.

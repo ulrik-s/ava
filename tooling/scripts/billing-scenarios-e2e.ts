@@ -27,7 +27,7 @@
  *   bun run e2e:billing-scenarios     # startar docker, migrerar, kör, river
  */
 
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import {
   assert, clientFor, kr, seedUser, waitForServer, type Ava,
 } from "./e2e-harness";

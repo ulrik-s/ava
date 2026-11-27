@@ -171,9 +171,9 @@ describe("EditUserPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: /Redigera användare/i });
     // Byråns tidsspillan går före juristens eget timarvode …
-    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan \(kr/).placeholder).toMatch(/^ärvs: 1\s487 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan \(kr/).placeholder).toMatch(/^ärvs: 1\s487\skr\/h$/);
     // … men utan byråpris ärvs juristens timarvode.
-    expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode helg\/kväll/).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode helg\/kväll/).placeholder).toMatch(/^ärvs: 2\s500\skr\/h$/);
   });
 
   it("inkluderar lösenord i submit när matchande", async () => {

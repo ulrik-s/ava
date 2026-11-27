@@ -6,7 +6,7 @@
 import { MatterNumber } from "@/components/matter/matter-number";
 import type { Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
-import { coverageStatus } from "@/lib/shared/coverage-cap";
+import { coverageStatus } from "@/lib/shared/billing/coverage-cap";
 import { isTaxeMatter } from "@/lib/shared/public-assignment";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 

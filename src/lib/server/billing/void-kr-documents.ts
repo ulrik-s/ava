@@ -8,8 +8,8 @@
  * "Ta bort" (`removeDocument`).
  */
 
-import type { KrVoidedDocOutcome } from "@/lib/shared/billing-notes";
-import { selectKrDocsForRun, type KrRunLike } from "@/lib/shared/kr-document";
+import type { KrVoidedDocOutcome } from "@/lib/shared/billing/billing-notes";
+import { selectKrDocsForRun, type KrRunLike } from "@/lib/shared/billing/kr-document";
 import type { MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import { removeDocument } from "../documents/remove-document";
 import type { ISearchIndex } from "../ports";

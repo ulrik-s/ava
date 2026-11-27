@@ -22,7 +22,7 @@ import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/re
 import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleProcedureReplayer } from "@/lib/server/sync/procedure-replayer";
 import type { Context } from "@/lib/server/trpc-core";
-import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/radgivning-entry";
+import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry";
 import { asId } from "@/lib/shared/schemas/ids";
 import { derivedId } from "@/lib/shared/sync/derived-id";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";

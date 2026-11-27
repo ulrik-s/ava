@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { reportsRouter } from "@/lib/server/routers/reports";
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {

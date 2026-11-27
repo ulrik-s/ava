@@ -1,0 +1,535 @@
+/**
+ * `brottmalstaxa` — Domstolsverkets föreskrifter om brottmålstaxa för
+ * offentlig försvarare i tingsrätt och hovrätt.
+ *
+ * Tabellerna är fastställda av Domstolsverket och ersätts årligen av en NY
+ * föreskrift. Ett år raderar inte det föregående (#1004): varje årgång ligger
+ * kvar i `BROTTMALSTAXA_TABLE_BY_YEAR` och väljs på YRKANDEDATUMET, eftersom
+ * övergångsbestämmelserna knyter ersättningen dit:
+ *
+ *   "Äldre föreskrifter gäller fortfarande i fråga om yrkande om ersättning
+ *    till offentlig försvarare som framställs före den 1 januari 2026."
+ *    (DVFS 2025:6 p. 3 — samma lydelse i 2024:17)
+ *
+ * En kostnadsräkning som lämnas in efter ett årsskifte ska alltså värderas på
+ * det nya årets taxa, och en äldre räkning måste gå att räkna om i efterhand.
+ *
+ * Källor (avlästa ur föreskrifternas bilagor, inte ur minnet):
+ *   2025: https://www.domstol.se/globalassets/filer/gemensamt-innehall/for-
+ *         professionella-aktorer/dvfs/2024/dvfs_2024-17.pdf
+ *   2026: https://www.domstol.se/globalassets/filer/gemensamt-innehall/for-
+ *         professionella-aktorer/dvfs/2025/dvfs_2025-6.pdf
+ *
+ * Tillämpning:
+ *   - En tilltalad + en offentlig försvarare
+ *   - Sammanlagd förhandlingstid ≤ 3 tim 45 min (= 225 min)
+ *   - Vid hovrätt: försvararen måste ha biträtt redan i tingsrätten
+ *   - HUF > 225 min → taxan tillämpas INTE → faktisk tid × timkostnadsnorm
+ *
+ * Ersättningsnivåer:
+ *   1 = Bara huvudförhandling (grundersättning)
+ *   2 = HUF + häktningsförhandling / kvarstad / beslag / reseförbud
+ *   3 = HUF + RPU (rättspsykiatrisk undersökning)
+ *   4 = HUF + (häktning etc.) + RPU
+ *
+ * Belopp är **EXKL moms** (öre, dvs kr × 100).
+ *
+ * Vid F-skatt-saknad: belopp × 1237/1626 (timkostnadsnorm utan/med F-skatt).
+ */
+
+import type { TimeEntryKind } from "../schemas/enums";
+import { stockholmDay, stockholmYear } from "../stockholm-time";
+import { timeEntryValueOre } from "./whole-kronor";
+
+export type TaxaLevel = 1 | 2 | 3 | 4;
+
+/** Maxgräns för när taxan tillämpas (= 3 tim 45 min). */
+export const TAXA_MAX_MINUTES = 225;
+
+/** Kvot för advokat utan F-skatt: timkostnadsnorm 1237 / 1626 (DVFS 11 §). */
+export const NO_FTAX_FACTOR_NUMERATOR = 1237;
+export const NO_FTAX_FACTOR_DENOMINATOR = 1626;
+
+/**
+ * Timkostnadsnormen 2026 — regeringen fastställer den med stöd av förordningen
+ * (2009:1237) om timkostnadsnorm inom rättshjälpsområdet. Använd för
+ * statligt betalda ärenden som INTE är taxemål — t.ex. komplexa brottmål
+ * där HUF > 3 tim 45 min, eller rättshjälp i tvistemål, eller offentligt
+ * biträde i förvaltningsmål (LVU, LPT, asyl, m.m.).
+ *
+ * Belopp i öre per timme, exkl moms.
+ */
+export const TIMKOSTNADSNORM_FTAX_ORE_PER_H = 162_600; // 1 626 kr/h (senaste = 2026)
+export const TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H = 123_700; // 1 237 kr/h
+
+/**
+ * Timkostnadsnormen (F-skatt) per år, öre/tim exkl moms (#891). Domstolsverket
+ * fastställer den årligen; ett ärende som sträcker sig över ett årsskifte får en
+ * RETROAKTIV HÖJNING → hela ärendet värderas om på det år normen gäller när
+ * slutregleringen sker (se `timkostnadsnormFtaxForDate`).
+ */
+const TIMKOSTNADSNORM_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 158_600, // 1 586 kr/h (DVFS 2024:14)
+  2026: 162_600, // 1 626 kr/h (förordningen (2009:1237), +40 kr)
+};
+
+/**
+ * Tidsspillan-ersättning (F-skatt) per år, öre/tim exkl moms (#891/#901). Egen, lägre
+ * norm än arvodet — Domstolsverkets tidsspillan-föreskrift, vardag 08–18 (dagtid).
+ */
+const TIDSSPILLAN_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 145_000, // 1 450 kr/h (DVFS 2024:15 § 4)
+  2026: 148_700, // 1 487 kr/h (DVFS 2025:4 § 4)
+};
+
+/**
+ * Tidsspillan ANNAN TID (F-skatt), öre/tim exkl moms (#950) — all tid utanför
+ * vardag 08–18. Egen, lägre norm än dagtaxan (DVFS 2025:4 § 4).
+ *
+ * OBS: vid helgförhandling och polisförhör utom kontorstid ersätts tidsspillan
+ * ändå med DAGTAXAN, även mellan 22.00 och 07.00 (DVFS 2025:7 § 1, 2025:8 § 3).
+ */
+const TIDSSPILLAN_OVRIG_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 95_100,  //   951 kr/h (DVFS 2024:15 § 4)
+  2026: 97_500,  //   975 kr/h (DVFS 2025:4 § 4)
+};
+
+/**
+ * Arbete på OBEKVÄM TID (F-skatt), öre/tim exkl moms (#950): häktningsförhandling
+ * under helg (DVFS 2025:7 § 1) och polisförhör utanför ordinarie kontorstid
+ * (DVFS 2025:8 § 1) — söndag, allmän helgdag, lördag, midsommar-/jul-/nyårsafton,
+ * samt vardagar 00–07 och 18–24. Samma belopp i båda föreskrifterna.
+ */
+const ARBETE_OBEKVAM_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 317_500, // 3 175 kr/h (DVFS 2024:18 § 1, 2024:19 § 1)
+  2026: 325_600, // 3 256 kr/h (DVFS 2025:7 § 1, 2025:8 § 1)
+};
+
+/**
+ * Advokatberedskap — garantiersättning per DAG (ej per timme), öre exkl moms.
+ *
+ * Tingsrätten får tillerkänna den som åtagit sig att vid behov delta i
+ * häktningsförhandling under *söndag, annan allmän helgdag, lördag,
+ * midsommarafton, julafton eller nyårsafton* ersättning "för varje dag som
+ * beredskapen upprätthålls" (DVFS 2024:20 § 1 resp. DVFS 2025:9 § 1).
+ *
+ * § 2 i samma föreskrifter: garantiersättning utgår INTE för dag när biträdet
+ * är berättigat ersättning för arbete på grund av att en helgförhandling
+ * (DVFS 2025:7) eller ett polisförhör utanför ordinarie kontorstid
+ * (DVFS 2025:8) ägt rum — se {@link payableCoverageEntries}.
+ */
+const ADVOKATBEREDSKAP_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 248_700, // 2 487 kr/dag (DVFS 2024:20 § 1)
+  2026: 255_000, // 2 550 kr/dag (DVFS 2025:9 § 1)
+};
+
+/**
+ * Kvoten för biträde UTAN F-skatt är ÅRSBEROENDE (#950): timkostnadsnormen utan
+ * F-skatt delat med den med F-skatt, för samma år. Tidigare hårdkodades 2026-
+ * kvoten för alla år, vilket gav fel belopp på 2025-arbete.
+ */
+const NO_FTAX_QUOTIENT_BY_YEAR: Readonly<Record<number, { num: number; den: number }>> = {
+  2025: { num: 1207, den: 1586 },
+  2026: { num: 1237, den: 1626 },
+};
+
+/**
+ * Året ur ett datum (ISO-sträng eller Date), i svensk tid (#1350): ett yrkande
+ * 00.30 på nyårsdagen följer det nya årets norm även på en server i UTC.
+ * Ogiltigt → senaste kända året.
+ */
+function yearOf(date: Date | string): number {
+  const d = new Date(date);
+  return Number.isNaN(d.getTime()) ? 2026 : stockholmYear(d);
+}
+
+/** Timkostnadsnormen (F-skatt) som gäller ett givet datum (#891). Okänt år →
+ *  senaste kända normen (den retroaktiva höjningen landar alltid på senaste). */
+export function timkostnadsnormFtaxForDate(date: Date | string): number {
+  return TIMKOSTNADSNORM_FTAX_BY_YEAR[yearOf(date)] ?? TIMKOSTNADSNORM_FTAX_ORE_PER_H;
+}
+
+/** Tidsspillan-normen (F-skatt) som gäller ett givet datum (#891). */
+export function tidsspillanFtaxForDate(date: Date | string): number {
+  return TIDSSPILLAN_FTAX_BY_YEAR[yearOf(date)] ?? TIDSSPILLAN_FTAX_BY_YEAR[2026] ?? TIMKOSTNADSNORM_FTAX_ORE_PER_H;
+}
+
+/** Tidsspillan ANNAN TID (F-skatt) som gäller ett givet datum (#950). */
+export function tidsspillanOvrigFtaxForDate(date: Date | string): number {
+  return TIDSSPILLAN_OVRIG_FTAX_BY_YEAR[yearOf(date)] ?? TIDSSPILLAN_OVRIG_FTAX_BY_YEAR[2026] ?? 0;
+}
+
+/** Arvode för arbete på OBEKVÄM TID (F-skatt) ett givet datum (#950). */
+export function arbeteObekvamFtaxForDate(date: Date | string): number {
+  return ARBETE_OBEKVAM_FTAX_BY_YEAR[yearOf(date)] ?? ARBETE_OBEKVAM_FTAX_BY_YEAR[2026] ?? 0;
+}
+
+/** Advokatberedskapens garantiersättning per DAG (F-skatt) ett givet datum (#950). */
+export function advokatberedskapFtaxForDate(date: Date | string): number {
+  return ADVOKATBEREDSKAP_FTAX_BY_YEAR[yearOf(date)] ?? ADVOKATBEREDSKAP_FTAX_BY_YEAR[2026] ?? 0;
+}
+
+/**
+ * Ersätts kategorin per DAG i stället för per timme (#950)? Advokatberedskapens
+ * garantiersättning utgår "för varje dag som beredskapen upprätthålls"
+ * (DVFS 2025:9 § 1) — den har ingen timnorm, och en post är ett dygn.
+ *
+ * Egen predikat-funktion i st.f. en jämförelse på anropsplatsen: varje ställe
+ * som värderar tid måste veta skillnaden, och en bortglömd plats blir ett
+ * belopp som tyst räknas som noll (minuter × ingen norm).
+ */
+export function isPerDayKind(kind: TimeEntryKind | null | undefined): boolean {
+  return kind === "ADVOKATBEREDSKAP";
+}
+
+/** Det en tidspost behöver bära för att kunna värderas. */
+export interface CoverageEntryLike {
+  date: Date | string;
+  minutes: number;
+  kind?: TimeEntryKind | null | undefined;
+  /** Utelämnad → debiterbar (posterna som når hit är oftast redan filtrerade). */
+  billable?: boolean | undefined;
+}
+
+/**
+ * Värdet (öre, netto) av EN post i ett täckningsärende, på normerna som gäller
+ * `date` — postens eget datum när den registreras, slutregleringsdatumet när
+ * arbetet värderas om retroaktivt (#891). Den ENDA vägen att värdera en
+ * tidspost: per-dygns-kategorier har ingen timnorm, så `minuter × norm` ger noll.
+ */
+export function coverageEntryValueOre(entry: CoverageEntryLike, date: Date | string): number {
+  if (isPerDayKind(entry.kind)) return advokatberedskapFtaxForDate(date);
+  return timeEntryValueOre(entry.minutes, coverageEntryRateOre(entry.kind, date));
+}
+
+/** Dagnyckel (YYYY-MM-DD, svensk dag #1677) — jämförelsen i § 2 gäller DAG, inte tidpunkt. */
+function dayKey(date: Date | string): string {
+  const d = new Date(date);
+  return Number.isNaN(d.getTime()) ? String(date) : stockholmDay(d);
+}
+
+/**
+ * Posterna som faktiskt ersätts (#950, DVFS 2025:9 § 2).
+ *
+ * Garantiersättning för advokatberedskap utgår inte för en dag då biträdet är
+ * berättigat ersättning för ARBETE till följd av att en helgförhandling eller
+ * ett polisförhör utanför ordinarie kontorstid ägt rum — i AVA:s modell en
+ * debiterbar `ARBETE_OBEKVAM_TID`-post samma dag. Beredskapen ersätter att man
+ * stått till förfogande; blev man faktiskt inkallad betalas arbetet i stället.
+ *
+ * Icke-debiterbart arbete räknas inte: då är biträdet inte "berättigat
+ * ersättning", och garantin står kvar.
+ *
+ * Övriga poster passerar orörda, så funktionen kan läggas först i varje
+ * värderingsväg utan att förändra något annat.
+ */
+export function payableCoverageEntries<T extends CoverageEntryLike>(entries: readonly T[]): T[] {
+  const workedDays = new Set(
+    entries
+      .filter((e) => e.kind === "ARBETE_OBEKVAM_TID" && e.billable !== false)
+      .map((e) => dayKey(e.date)),
+  );
+  if (workedDays.size === 0) return [...entries];
+  return entries.filter((e) => !isPerDayKind(e.kind) || !workedDays.has(dayKey(e.date)));
+}
+
+/**
+ * Normen (öre/tim) en tidspost i ett TÄCKNINGSÄRENDE (rättshjälp/rättsskydd)
+ * ersätts på ett givet datum (#950/#953). Varje arvodeskategori har sin egen
+ * årsnorm; anropas med SLUTREGLERINGSDATUMET vid slutreglering (retroaktiv
+ * höjning) och med postens eget datum när den registreras.
+ *
+ * Delad av slutregleringen (`billingRun`) och demo-simuleringen så att
+ * tidsposternas snapshot-taxa och slutregleringens omvärdering aldrig glider
+ * ifrån varandra.
+ */
+export function coverageEntryRateOre(kind: TimeEntryKind | null | undefined, date: Date | string): number {
+  return (kind ? OWN_COVERAGE_NORM[kind] : undefined)?.(date) ?? timkostnadsnormFtaxForDate(date);
+}
+
+/**
+ * Kategorier med en EGEN årsnorm. Alla andra — timarvode, förhandling (som är
+ * arbete) och beredskap (värderas per dag, aldrig via den här) — ersätts på
+ * timkostnadsnormen.
+ */
+const OWN_COVERAGE_NORM: Readonly<Partial<Record<TimeEntryKind, (date: Date | string) => number>>> = {
+  TIDSSPILLAN: tidsspillanFtaxForDate,
+  TIDSSPILLAN_OVRIG_TID: tidsspillanOvrigFtaxForDate,
+  ARBETE_OBEKVAM_TID: arbeteObekvamFtaxForDate,
+};
+
+/** Kvoten utan F-skatt för ett givet datum (#950) — årsberoende. */
+function noFTaxQuotientForDate(date: Date | string): { num: number; den: number } {
+  return NO_FTAX_QUOTIENT_BY_YEAR[yearOf(date)]
+    ?? { num: NO_FTAX_FACTOR_NUMERATOR, den: NO_FTAX_FACTOR_DENOMINATOR };
+}
+
+/** Justera ett belopp för biträde utan F-skatt med det ÅRETS kvot (#950). */
+export function applyNoFTaxFactorForDate(ersattningOre: number, date: Date | string): number {
+  const q = noFTaxQuotientForDate(date);
+  return Math.round((ersattningOre * q.num) / q.den);
+}
+
+/**
+ * Beräkna ersättning enligt timkostnadsnorm × tid (öre, exkl moms).
+ *
+ * Vanligast användningsfall:
+ *   - HUF > 225 min (taxan tillämpas inte → ersättning enligt
+ *     timkostnadsnorm × hela arbetstiden)
+ *   - Rättshjälp i tvistemål (LRF; non-taxemål)
+ *   - Offentligt biträde i förvaltningsmål
+ *
+ * `tidsspillanMinutes` ersätts med samma timkostnadsnorm (DV-praxis).
+ */
+export function computeTimkostnadsnorm(opts: {
+  arbetsMinutes: number;
+  tidsspillanMinutes?: number;
+  hasFTax?: boolean;
+}): { arbete: number; tidsspillan: number; total: number; rateOrePerH: number } {
+  const hasFTax = opts.hasFTax ?? true;
+  const rate = hasFTax ? TIMKOSTNADSNORM_FTAX_ORE_PER_H : TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H;
+  const arbete = Math.round((opts.arbetsMinutes * rate) / 60);
+  const tidsspillan = Math.round(((opts.tidsspillanMinutes ?? 0) * rate) / 60);
+  return { arbete, tidsspillan, total: arbete + tidsspillan, rateOrePerH: rate };
+}
+
+interface TaxaRow {
+  /** Start av intervallet i minuter (inklusivt). */
+  fromMin: number;
+  /** Slut av intervallet i minuter (inklusivt). */
+  toMin: number;
+  /** Mänsklig label, t.ex. "1 tim 30 min - 1 tim 44 min". */
+  label: string;
+  /** Ersättning i öre per nivå (1-4), exkl moms, F-skatt. */
+  ersattning: readonly [number, number, number, number];
+  /** Gränsvärde i öre per nivå — om skälig ersättning överstiger
+   *  detta får taxan frångås (= avsevärt mer arbete). */
+  gransvarde: readonly [number, number, number, number];
+}
+
+/**
+ * DVFS 2024:17 Bilaga — gäller yrkanden som framställs under 2025. Belopp i öre
+ * (kr × 100); gränsvärdena står inom parentes i källan.
+ */
+const BROTTMALSTAXA_TABLE_2025: readonly TaxaRow[] = [
+  { fromMin:   0, toMin:  14, label: "0-14 min",
+    ersattning: [273900, 408100, 533400, 667600], gransvarde: [411500, 612300, 800300, 985100] },
+  { fromMin:  15, toMin:  29, label: "15-29 min",
+    ersattning: [290600, 424800, 550100, 684300], gransvarde: [435600, 636500, 824500, 1000200] },
+  { fromMin:  30, toMin:  44, label: "30-44 min",
+    ersattning: [342200, 476400, 601700, 735900], gransvarde: [514000, 714400, 919100, 1051700] },
+  { fromMin:  45, toMin:  59, label: "45-59 min",
+    ersattning: [394800, 529000, 654300, 788500], gransvarde: [591400, 791800, 970600, 1104900] },
+  { fromMin:  60, toMin:  74, label: "1 tim - 1 tim 14 min",
+    ersattning: [446900, 581100, 706400, 840600], gransvarde: [668700, 870700, 1022700, 1155900] },
+  { fromMin:  75, toMin:  89, label: "1 tim 15 min - 1 tim 29 min",
+    ersattning: [497900, 632100, 757400, 891600], gransvarde: [747200, 949700, 1074800, 1209100] },
+  { fromMin:  90, toMin: 104, label: "1 tim 30 min - 1 tim 44 min",
+    ersattning: [549500, 683700, 809000, 943200], gransvarde: [825100, 1000200, 1125900, 1259600] },
+  { fromMin: 105, toMin: 119, label: "1 tim 45 min - 1 tim 59 min",
+    ersattning: [601100, 735300, 860600, 994800], gransvarde: [919100, 1051700, 1178500, 1311200] },
+  { fromMin: 120, toMin: 134, label: "2 tim - 2 tim 14 min",
+    ersattning: [653700, 787900, 913200, 1047400], gransvarde: [970600, 1104900, 1229500, 1364300] },
+  { fromMin: 135, toMin: 149, label: "2 tim 15 min - 2 tim 29 min",
+    ersattning: [704700, 838900, 964200, 1098400], gransvarde: [1022700, 1155900, 1281600, 1415400] },
+  { fromMin: 150, toMin: 164, label: "2 tim 30 min - 2 tim 44 min",
+    ersattning: [757400, 891600, 1016900, 1151100], gransvarde: [1074800, 1209100, 1333700, 1467500] },
+  { fromMin: 165, toMin: 179, label: "2 tim 45 min - 2 tim 59 min",
+    ersattning: [809500, 943700, 1069000, 1203200], gransvarde: [1126400, 1260100, 1385300, 1519000] },
+  { fromMin: 180, toMin: 194, label: "3 tim - 3 tim 14 min",
+    ersattning: [860500, 994700, 1120000, 1254200], gransvarde: [1179000, 1311700, 1438500, 1571700] },
+  { fromMin: 195, toMin: 209, label: "3 tim 15 min - 3 tim 29 min",
+    ersattning: [913100, 1047300, 1172600, 1306800], gransvarde: [1229500, 1364300, 1489000, 1622700] },
+  { fromMin: 210, toMin: 225, label: "3 tim 30 min - 3 tim 45 min",
+    ersattning: [964200, 1098400, 1223700, 1357900], gransvarde: [1281600, 1415400, 1541100, 1674800] },
+];
+
+/**
+ * DVFS 2025:6 Bilaga — gäller yrkanden som framställs från 2026-01-01. Källans
+ * tabell:
+ *
+ *   Förhandlingstid | Nivå 1 | Nivå 2 | Nivå 3 | Nivå 4
+ *   (gränsvärden inom parentes nedanför nivåbeloppen i källan)
+ */
+const BROTTMALSTAXA_TABLE_2026: readonly TaxaRow[] = [
+  { fromMin:   0, toMin:  14, label: "0-14 min",
+    ersattning: [280900, 418500, 547000, 684600], gransvarde: [421900, 627900, 820700, 1010200] },
+  { fromMin:  15, toMin:  29, label: "15-29 min",
+    ersattning: [298000, 435600, 564100, 701700], gransvarde: [446700, 652700, 845500, 1025600] },
+  { fromMin:  30, toMin:  44, label: "30-44 min",
+    ersattning: [350900, 488500, 617000, 754600], gransvarde: [527100, 732600, 942500, 1078500] },
+  { fromMin:  45, toMin:  59, label: "45-59 min",
+    ersattning: [404900, 542500, 671000, 808600], gransvarde: [606500, 811900, 995400, 1133100] },
+  { fromMin:  60, toMin:  74, label: "1 tim - 1 tim 14 min",
+    ersattning: [458300, 595900, 724400, 862000], gransvarde: [685800, 892900, 1048800, 1185400] },
+  { fromMin:  75, toMin:  89, label: "1 tim 15 min - 1 tim 29 min",
+    ersattning: [510600, 648200, 776700, 914300], gransvarde: [766200, 973900, 1102200, 1239900] },
+  { fromMin:  90, toMin: 104, label: "1 tim 30 min - 1 tim 44 min",
+    ersattning: [563500, 701100, 829600, 967200], gransvarde: [846100, 1025600, 1154500, 1291700] },
+  { fromMin: 105, toMin: 119, label: "1 tim 45 min - 1 tim 59 min",
+    ersattning: [616400, 754000, 882500, 1020100], gransvarde: [942500, 1078500, 1208500, 1344600] },
+  { fromMin: 120, toMin: 134, label: "2 tim - 2 tim 14 min",
+    ersattning: [670400, 808000, 936500, 1074100], gransvarde: [995400, 1133100, 1260900, 1399100] },
+  { fromMin: 135, toMin: 149, label: "2 tim 15 min - 2 tim 29 min",
+    ersattning: [722700, 860300, 988800, 1126400], gransvarde: [1048800, 1185400, 1314300, 1451400] },
+  { fromMin: 150, toMin: 164, label: "2 tim 30 min - 2 tim 44 min",
+    ersattning: [776700, 914300, 1042800, 1180400], gransvarde: [1102200, 1239900, 1367700, 1504900] },
+  { fromMin: 165, toMin: 179, label: "2 tim 45 min - 2 tim 59 min",
+    ersattning: [830100, 967700, 1096200, 1233800], gransvarde: [1155100, 1292200, 1420600, 1557700] },
+  { fromMin: 180, toMin: 194, label: "3 tim - 3 tim 14 min",
+    ersattning: [882400, 1020000, 1148500, 1286100], gransvarde: [1209100, 1345100, 1475100, 1611700] },
+  { fromMin: 195, toMin: 209, label: "3 tim 15 min - 3 tim 29 min",
+    ersattning: [936400, 1074000, 1202500, 1340100], gransvarde: [1260900, 1399100, 1526900, 1664100] },
+  { fromMin: 210, toMin: 225, label: "3 tim 30 min - 3 tim 45 min",
+    ersattning: [988700, 1126300, 1254800, 1392400], gransvarde: [1314300, 1451400, 1580300, 1717500] },
+];
+
+/** Brottmålstaxans årgångar. Nytt år → lägg till en rad; ta ALDRIG bort en. */
+export const BROTTMALSTAXA_TABLE_BY_YEAR: Readonly<Record<number, readonly TaxaRow[]>> = {
+  2025: BROTTMALSTAXA_TABLE_2025,
+  2026: BROTTMALSTAXA_TABLE_2026,
+};
+
+/** Senast kända årgången — fallback när yrkandedatumet saknas eller ligger
+ *  bortom tabellen (samma konvention som timkostnadsnormen, #891). */
+export const BROTTMALSTAXA_TABLE: readonly TaxaRow[] = BROTTMALSTAXA_TABLE_2026;
+
+/** Taxetabellen som gäller för ett yrkande framställt `date` (#1004). */
+export function brottmalstaxaTableForDate(date: Date | string | undefined): readonly TaxaRow[] {
+  if (date === undefined) return BROTTMALSTAXA_TABLE;
+  return BROTTMALSTAXA_TABLE_BY_YEAR[yearOf(date)] ?? BROTTMALSTAXA_TABLE;
+}
+
+export interface ComputeOpts {
+  /** Sammanlagd förhandlingstid (minuter) — räknas från målets påropas. */
+  huvudforhandlingMinutes: number;
+  /** Ersättningsnivå (1-4). Se nivåförklaringarna i fil-toppen. */
+  level: TaxaLevel;
+  /** Default true. False → multiplicera med årets kvot (1207/1586 för 2025,
+   *  1237/1626 för 2026). */
+  hasFTax?: boolean;
+  /**
+   * När yrkandet framställs (#1004) — avgör vilken ÅRGÅNG av taxan som gäller,
+   * och vilken F-skatte-kvot som tillämpas. Utelämnad → senast kända året.
+   *
+   * Samma parameternamn och samma regel som `kostnadsrakning.ts` (#980):
+   * övergångsbestämmelserna knyter ersättningen till inlämningen, inte till
+   * förhandlingen.
+   */
+  yrkandeDate?: Date | string;
+}
+
+export type TaxaResultKind = "taxa-applies" | "exceeds-max" | "invalid-input";
+
+export interface TaxaResult {
+  kind: TaxaResultKind;
+  /** Intervall-label, t.ex. "1 tim 30 min - 1 tim 44 min". Tom om exceeds-max. */
+  intervalLabel: string;
+  /** Vald nivå. */
+  level: TaxaLevel;
+  /** Ersättning i öre, EXKL moms (efter F-skatt-justering). */
+  ersattningExclVat: number;
+  /** Gränsvärde i öre, EXKL moms (efter F-skatt-justering). */
+  gransvardeExclVat: number;
+  /** Användbart anteckning till UI:n. */
+  notes: string[];
+}
+
+/**
+ * Beräkna ersättning enligt brottmålstaxan. Returnerar alltid ett objekt;
+ * `kind` säger om taxan tillämpas eller om man måste falla tillbaka på
+ * löpande räkning (HUF > 225 min) eller om input var ogiltigt.
+ */
+type CellResult =
+  | { ok: true; row: TaxaRow; e: number; g: number }
+  | { ok: false; note: string };
+
+/** Tidiga input-guards (ogiltigt input / över maxgräns) → TaxaResult, annars null. */
+function validateTaxaInput(huf: number, level: number): TaxaResult | null {
+  if (!Number.isFinite(huf) || huf < 0 || !isLevel(level)) {
+    return {
+      kind: "invalid-input", intervalLabel: "", level: 1,
+      ersattningExclVat: 0, gransvardeExclVat: 0,
+      notes: ["Ogiltigt input. HUF-minuter måste vara ≥ 0 och nivå 1-4."],
+    };
+  }
+  if (huf > TAXA_MAX_MINUTES) {
+    return {
+      kind: "exceeds-max", intervalLabel: "", level: level,
+      ersattningExclVat: 0, gransvardeExclVat: 0,
+      notes: [
+        `Förhandlingstiden överstiger taxans maxgräns (${TAXA_MAX_MINUTES} min = 3 tim 45 min).`,
+        "Taxan tillämpas inte — ersättning beräknas enligt timkostnadsnorm × faktisk tid.",
+      ],
+    };
+  }
+  return null;
+}
+
+/** Slå upp taxa-rad + ersättning/gränsvärde för nivån (defensiva not-found-fall). */
+function findTaxaCell(huf: number, level: TaxaLevel, table: readonly TaxaRow[]): CellResult {
+  const row = table.find((r) => huf >= r.fromMin && huf <= r.toMin);
+  if (!row) return { ok: false, note: "Hittade inget matchande intervall i tabellen." };
+  const idx = level - 1;
+  const e = row.ersattning[idx];
+  const g = row.gransvarde[idx];
+  if (e === undefined || g === undefined) return { ok: false, note: "Hittade ingen taxa-rad för angiven nivå." };
+  return { ok: true, row, e, g };
+}
+
+/** F-skatt-justering: oförändrat belopp med F-skatt, annars nedjusterat med
+ *  YRKANDEÅRETS kvot (#1004) — den står i samma föreskrift som taxan. */
+function adjustForFTax(value: number, hasFTax: boolean, date: Date | string | undefined): number {
+  if (hasFTax) return value;
+  return date === undefined ? applyNoFTaxFactor(value) : applyNoFTaxFactorForDate(value, date);
+}
+
+function buildNotes(hasFTax: boolean, huf: number, row: TaxaRow, date: Date | string | undefined): string[] {
+  const notes: string[] = [];
+  if (!hasFTax) {
+    const q = date === undefined
+      ? { num: NO_FTAX_FACTOR_NUMERATOR, den: NO_FTAX_FACTOR_DENOMINATOR }
+      : noFTaxQuotientForDate(date);
+    notes.push(`Justerat för advokat utan F-skatt (× ${q.num}/${q.den}).`);
+  }
+  notes.push("Belopp exkl moms. För advokat med F-skatt lägger Domstolsverket 25 % moms ovanpå.");
+  if (huf > row.toMin - 5) {
+    notes.push("Nära intervallets övre gräns — verifiera faktiskt avslutsklockslag.");
+  }
+  return notes;
+}
+
+export function computeBrottmalstaxa(opts: ComputeOpts): TaxaResult {
+  const { huvudforhandlingMinutes: huf, level } = opts;
+  const hasFTax = opts.hasFTax ?? true;
+
+  const invalid = validateTaxaInput(huf, level);
+  if (invalid) return invalid;
+
+  const cell = findTaxaCell(huf, level, brottmalstaxaTableForDate(opts.yrkandeDate));
+  if (!cell.ok) {
+    return {
+      kind: "invalid-input", intervalLabel: "", level,
+      ersattningExclVat: 0, gransvardeExclVat: 0,
+      notes: [cell.note],
+    };
+  }
+
+  return {
+    kind: "taxa-applies",
+    intervalLabel: cell.row.label,
+    level,
+    ersattningExclVat: adjustForFTax(cell.e, hasFTax, opts.yrkandeDate),
+    gransvardeExclVat: adjustForFTax(cell.g, hasFTax, opts.yrkandeDate),
+    notes: buildNotes(hasFTax, huf, cell.row, opts.yrkandeDate),
+  };
+}
+
+/** Justera ett ersättningsbelopp för advokat utan F-skatt. */
+export function applyNoFTaxFactor(ersattningOre: number): number {
+  return Math.round((ersattningOre * NO_FTAX_FACTOR_NUMERATOR) / NO_FTAX_FACTOR_DENOMINATOR);
+}
+
+function isLevel(v: unknown): v is TaxaLevel {
+  return v === 1 || v === 2 || v === 3 || v === 4;
+}

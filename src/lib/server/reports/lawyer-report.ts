@@ -8,13 +8,13 @@
  * Enheter: `minutes` i heltal minuter, `hourlyRate` i öre/timme och alla
  * belopp i öre, så UI kan använda `formatCurrency()` rakt av.
  */
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { calendarDate, isoWeek, weeksInRange } from "@/lib/shared/calendar-periods";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type { InvoiceId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
 import { hasInvoice } from "@/lib/shared/time-entry-lock";
-import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import type { Repositories } from "../repositories/repositories";
 import { loadPeriodWork } from "./period-work";
 

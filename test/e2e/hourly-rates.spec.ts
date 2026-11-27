@@ -17,12 +17,12 @@ test("byrån och juristen har ett timprisfält per kategori; tomma fält visar d
 
   await page.goto(`${base}/users/`, { waitUntil: "load" });
   // Demojuristerna debiterar timkostnadsnormen som eget timarvode.
-  await expect(page.getByText(/^1\s626 kr\/h$/).first()).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByText(/^1\s626\skr\/h$/).first()).toBeVisible({ timeout: 25_000 });
   await page.getByRole("link", { name: "Björn Bauer" }).click();
 
   await expect(page.getByLabel(/^Timarvode \(kr/)).toHaveValue("1626", { timeout: 25_000 });
   // Ingen kategori utöver timarvodet är satt → de ärver juristens timarvode.
-  await expect(page.getByLabel(/^Tidsspillan helg\/kväll/)).toHaveAttribute("placeholder", /^ärvs: 1\s626 kr\/h$/);
+  await expect(page.getByLabel(/^Tidsspillan helg\/kväll/)).toHaveAttribute("placeholder", /^ärvs: 1\s626\skr\/h$/);
 });
 
 // #1528: juristen väljer biltyp under Min profil → Skatteverkets nivå fylls i,
