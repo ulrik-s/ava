@@ -165,6 +165,8 @@ test("markerade dokument flyttas tillsammans till en mapp i ett annat ärende", 
   for (const doc of docs) await page.getByRole("row").filter({ hasText: doc.title }).getByLabel("Markera rad").check();
   await page.getByRole("button", { name: "Flytta till ärende… (2)" }).click();
   await moveToKorrespondens(page, "2 dokument flyttas till:", to);
+  // Markeringen töms efter flytten: knappen med antalet försvinner.
+  await expect(page.getByRole("button", { name: /^Flytta till ärende…/ })).toHaveCount(0);
   await expectMovedToKorrespondens(page, docs, to);
 });
 

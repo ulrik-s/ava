@@ -10,6 +10,7 @@
 import { useCallback, useState } from "react";
 import type { RowSelection } from "@/components/ui/data-table";
 import { toggleRow } from "@/components/ui/data-table-logic";
+import { useRowSelection, type RowSelectionState } from "@/components/ui/data-table-selection";
 import type { MovableDocumentFields } from "@/lib/shared/document-move";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { documentMoveDisabledReason, MoveDocumentsDialog } from "./move-documents-dialog";
@@ -23,16 +24,11 @@ export function isMovableDocument(doc: MovableDocumentFields, isUploading: boole
 }
 
 /** Dokumentvyns markering: tabellens `selection` och en tömning (vybyte, efter flytten). */
-export function useDocumentSelection<T extends SelectableDocument>(uploadingIds: ReadonlySet<string>): {
-  selection: RowSelection<T>;
-  clear: () => void;
-} {
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+export function useDocumentSelection<T extends SelectableDocument>(
+  uploadingIds: ReadonlySet<string>,
+): RowSelectionState<T> {
   const isSelectable = useCallback((doc: T) => isMovableDocument(doc, uploadingIds.has(doc.id)), [uploadingIds]);
-  return {
-    selection: { selected, onChange: setSelected, isSelectable },
-    clear: () => setSelected(new Set()),
-  };
+  return useRowSelection<T>(isSelectable);
 }
 
 /** Trädradens kryssruta: markerad och av/på. */
