@@ -17,6 +17,7 @@
 
 import { computeTimkostnadsnorm, timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
+import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 
 /** Rådgivning enligt rättshjälpslagen = 1 timme. */
 export const RADGIVNING_MINUTES = 60;
@@ -52,7 +53,7 @@ export function computeRadgivningsavgift(opts: { hasFTax?: boolean; date?: Date 
   const rateOrePerH = opts.date && hasFTax
     ? timkostnadsnormFtaxForDate(opts.date)
     : computeTimkostnadsnorm({ arbetsMinutes: RADGIVNING_MINUTES, hasFTax }).rateOrePerH;
-  return { minutes: RADGIVNING_MINUTES, rateOrePerH, beloppExclVatOre: Math.round((RADGIVNING_MINUTES / 60) * rateOrePerH) };
+  return { minutes: RADGIVNING_MINUTES, rateOrePerH, beloppExclVatOre: timeEntryValueOre(RADGIVNING_MINUTES, rateOrePerH) };
 }
 
 /**

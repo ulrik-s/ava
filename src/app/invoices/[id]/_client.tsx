@@ -22,7 +22,7 @@ import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlemen
 import { INVOICE_STATUS_LABELS, type AmountRounding } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { invoiceBreakdown, type SettlementView } from "@/lib/shared/settlement-view";
-import { roundingOf } from "@/lib/shared/whole-kronor";
+import { roundingOf, timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { AmountHeading } from "./_amount-heading";
 import { CreditModal } from "./_credit-modal";
@@ -430,7 +430,7 @@ type SpecExpenseRow = Inv["expenses"][number];
 function buildSettlement(inv: Inv, ledger: LedgerView): MatterSettlement {
   const times = inv.timeEntries ?? [];
   const exps = inv.expenses ?? [];
-  const arvodeOre = times.reduce((s, t) => s + Math.round((t.minutes / 60) * (t.hourlyRate ?? 0)), 0);
+  const arvodeOre = times.reduce((s, t) => s + timeEntryValueOre(t.minutes, t.hourlyRate ?? 0), 0);
   const utlaggOre = exps.reduce((s, e) => s + e.amount, 0);
   const m = inv.matter as { paymentMethod?: string | null; taxaHasFTax?: boolean | null } | null;
   const radgivningOre = m?.paymentMethod === "RATTSHJALP"

@@ -10,6 +10,7 @@ import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
 import { hasInvoice } from "@/lib/shared/time-entry-lock";
+import { timeEntryValueOre } from "@/lib/shared/whole-kronor";
 import { loadPeriodWork } from "../reports/period-work";
 import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
@@ -61,7 +62,7 @@ function buildFrozenWork(
     out.push({
       invoiceId: asId<"InvoiceId">(invoiceId),
       userId: asId<"UserId">(te.userId),
-      workOre: Math.round((te.minutes / 60) * te.hourlyRate),
+      workOre: timeEntryValueOre(te.minutes, te.hourlyRate),
     });
   }
   return out;
@@ -177,11 +178,6 @@ interface UnbilledRow {
   paymentMethod: PaymentMethod; timeOre: number; expenseOre: number; total: number;
 }
 
-/** hourlyRate ÄR REDAN ÖRE (öre/h) → (min/60) × öre/h = öre. */
-function workValueOre(minutes: number, hourlyRate: number): number {
-  return Math.round((minutes / 60) * hourlyRate);
-}
-
 const clientName = (m: ReportMatterRef): string | null => m.contacts?.[0]?.contact?.name ?? null;
 
 /** Debiterbar och ännu inte knuten till en faktura. */
@@ -208,7 +204,7 @@ function buildMatters(timeEntries: ReportTimeEntry[], expenses: ReportExpense[])
     agg.totalMinutes += te.minutes;
     if (te.billable) {
       agg.billableMinutes += te.minutes;
-      agg.workValueOre += workValueOre(te.minutes, te.hourlyRate);
+      agg.workValueOre += timeEntryValueOre(te.minutes, te.hourlyRate);
     }
   }
   for (const ex of expenses) {
@@ -231,7 +227,7 @@ function buildWeeklyRows(timeEntries: ReportTimeEntry[], fromDay: string, toDay:
     cell.totalMinutes += te.minutes;
     if (te.billable) {
       cell.billableMinutes += te.minutes;
-      cell.workValueOre += workValueOre(te.minutes, te.hourlyRate);
+      cell.workValueOre += timeEntryValueOre(te.minutes, te.hourlyRate);
     }
   }
   return weeks.map((w) => {
@@ -260,7 +256,7 @@ function buildUnbilled(timeEntries: ReportTimeEntry[], expenses: ReportExpense[]
   let total = 0;
   for (const te of timeEntries) {
     if (!te.matter || !isOpenBillable(te)) continue;
-    const ore = workValueOre(te.minutes, te.hourlyRate);
+    const ore = timeEntryValueOre(te.minutes, te.hourlyRate);
     const row = ensure(te.matter);
     row.timeOre += ore; row.total += ore; total += ore;
   }

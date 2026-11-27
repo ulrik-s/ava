@@ -7,11 +7,8 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-
-// Pure helpers — extrahera samma formel som routern kör för att enhetstesta isolerat.
-function workValueOre(minutes: number, hourlyRateOre: number): number {
-  return Math.round((minutes / 60) * hourlyRateOre);
-}
+// Routern värderar med arvodesformeln — testa den, inte en kopia av den (#2174).
+import { timeEntryValueOre as workValueOre } from "@/lib/shared/whole-kronor";
 
 describe("workValueOre", () => {
   it("30 min @ 2 500 kr/h = 1 250 kr (125 000 öre)", () => {
