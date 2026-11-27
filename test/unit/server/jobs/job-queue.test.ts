@@ -29,6 +29,10 @@ describe("job-queue — konfig", () => {
     expect(names).toContain("classify-document-v2");
   });
 
+  it("har ingen kö fortnox-sync: ingen skickar dit och ingen konsumerar den (#1992)", () => {
+    expect(Object.values(JOB_QUEUES)).not.toContain("fortnox-sync");
+  });
+
   it("de gamla köerna finns inte i JOB_QUEUES men pekar på en kö där", () => {
     const names: string[] = Object.values(JOB_QUEUES);
     for (const [old, next] of Object.entries(RETIRED_JOB_QUEUES)) {

@@ -54,9 +54,9 @@ describe("job-worker-runtime (PG_TEST_URL)", () => {
       const sender = createJobQueue({ connectionString: url!, schema });
       sender.on("error", () => {});
       await startJobQueue(sender);
-      const id = await sender.send(JOB_QUEUES.fortnoxSync, { x: 1 });
+      const id = await sender.send(JOB_QUEUES.indexDocument, { x: 1 });
       await new Promise((r) => setTimeout(r, 1500));
-      const job = id ? await sender.getJobById(JOB_QUEUES.fortnoxSync, id) : null;
+      const job = id ? await sender.getJobById(JOB_QUEUES.indexDocument, id) : null;
       // Ingen worker → jobbet är inte completed (created/retry, ej done).
       expect(job?.state).not.toBe("completed");
       await sender.stop({ graceful: false });
