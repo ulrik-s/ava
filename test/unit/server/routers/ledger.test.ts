@@ -143,6 +143,14 @@ describe("ledger.bookInvoice", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("bokförd under det nya namnet (bara ledgerRef) → samma verifikat, ingen ny push (#1931)", async () => {
+    const { caller, push, update, updatePayment } = setup({ invoice: { id: INV_ID, ledgerRef: "A/3", status: "SENT", payments: [{ id: "p0", ledgerRef: "A/4" }] } });
+    expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/3", payments: [] });
+    expect(push).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(updatePayment).not.toHaveBeenCalled();
+  });
+
   it("okänd faktura → NOT_FOUND", async () => {
     await expect(setup({ invoice: null }).caller.bookInvoice({ invoiceId: INV_ID })).rejects.toThrow(/NOT_FOUND/);
   });

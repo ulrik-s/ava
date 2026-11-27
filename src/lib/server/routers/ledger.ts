@@ -9,6 +9,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ledgerAccountMapSchema, type LedgerAccountMap } from "@/lib/shared/accounting/account-map";
+import { ledgerRefOf } from "@/lib/shared/ledger-ref";
 import { log } from "@/lib/shared/observability/logger";
 import { errorMessage } from "@/lib/shared/observability/redact";
 import { invoiceIdSchema, type OrganizationId } from "@/lib/shared/schemas/ids";
@@ -42,7 +43,7 @@ function toBookable(inv: FullInvoice): BookableInvoice {
   return {
     id: inv.id, amount: inv.amount, vatOre: inv.vatOre ?? null, vatBreakdown: inv.vatBreakdown ?? null,
     invoiceDate: inv.invoiceDate, invoiceNumber: inv.invoiceNumber ?? null, status: inv.status,
-    fortnoxId: inv.fortnoxId ?? null, matter: { matterNumber: inv.matter?.matterNumber ?? null },
+    fortnoxId: ledgerRefOf(inv), matter: { matterNumber: inv.matter?.matterNumber ?? null },
   };
 }
 
@@ -77,7 +78,7 @@ async function bookTheInvoice(ctx: Ctx, inv: FullInvoice, connector: Connector):
 
 /** Inbetalningarnas verifikat (bank D / kundfordran K). Kräver bankkonto i mappningen. */
 async function bookPaymentsOf(ctx: Ctx, inv: FullInvoice, map: LedgerAccountMap, connector: Connector): Promise<string[]> {
-  const pending = inv.payments.filter((p) => !p.fortnoxId);
+  const pending = inv.payments.filter((p) => ledgerRefOf(p) === null);
   if (pending.length === 0) return [];
   if (!map.bank) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Fakturan är bokförd, men betalningarna kräver ett bankkonto i kontomappningen (Inställningar → Bokföring)." });
@@ -128,7 +129,7 @@ export const ledgerRouter = router({
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
         const map = await requireAccountMap(locked);
         const connector = connectorOrThrow(locked, map);
-        const externalId = inv.fortnoxId ?? await bookTheInvoice(locked, inv, connector);
+        const externalId = ledgerRefOf(inv) ?? await bookTheInvoice(locked, inv, connector);
         const payments = await bookPaymentsOf(locked, inv, map, connector);
         return { externalId, payments };
       }),

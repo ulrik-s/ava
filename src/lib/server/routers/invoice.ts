@@ -22,6 +22,7 @@ import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry"
 import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/billing/rattshjalp";
 import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/billing/whole-kronor";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/billing/write-off-calc";
+import { ledgerRefOf } from "@/lib/shared/ledger-ref";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { pageEnvelope } from "@/lib/shared/paginate";
@@ -529,10 +530,9 @@ export const invoiceRouter = router({
     .input(z.object({ invoiceId: invoiceIdSchema, fortnoxId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx);
-      // Migrerad till repository-sömmen (ADR 0020). Org-scope via getByIdInOrg.
-      const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
+      const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId); // org-scope (ADR 0020)
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-      if (inv.fortnoxId) return inv; // redan bokförd → no-op (idempotens)
+      if (ledgerRefOf(inv) !== null) return inv; // redan bokförd → no-op (idempotens)
       return ctx.repos.invoices.update(input.invoiceId, { fortnoxId: input.fortnoxId });
     }),
 });
