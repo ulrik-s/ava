@@ -96,3 +96,42 @@ test("Bör faktureras öppnar faktureringen direkt (#1854)", async ({ page, base
   await expect(page.getByRole("button", { name: "Faktura till klient" })).toBeVisible({ timeout: 25_000 });
   await expect(page).not.toHaveURL(/fakturera=/);
 });
+
+// ── #1912: byråns trösklar i Inställningar → Frister ───────────────────────
+// Demon sparar bara i minnet, så testet byter sida med menyn (klientnavigering),
+// aldrig med en omladdning.
+
+/** Inställningar → Frister: sätt beloppet (kr) och åldern (dagar) och spara. */
+async function setThresholds(page: Page, kr: string, days: string): Promise<void> {
+  await page.getByRole("link", { name: /Inställningar/ }).first().click();
+  await expect(page).toHaveURL(/\/settings\/?$/);
+  await showPanel(page, "Frister");
+  const amount = page.getByLabel("Ofakturerat belopp (kr)");
+  await expect(amount).toBeVisible({ timeout: 25_000 });
+  await amount.fill(kr);
+  await page.getByLabel("Äldsta ofakturerade (dagar)").fill(days);
+  const panel = page.locator("div", { has: amount }).filter({ has: page.getByRole("button", { name: "Spara", exact: true }) }).last();
+  await panel.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(panel.getByText("Sparat ✓")).toBeVisible();
+}
+
+/** Frister för hela byrån: raderna Bör faktureras. */
+async function billNowRows(page: Page) {
+  await page.getByRole("link", { name: /Frister/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Frister" })).toBeVisible({ timeout: 25_000 });
+  await page.getByLabel("Bara mina ärenden").uncheck();
+  await expect(page.getByText(/poster, varav|Inget behöver din uppmärksamhet/)).toBeVisible();
+  return page.getByRole("link").filter({ hasText: "Bör faktureras" });
+}
+
+test("Inställningar → Frister: låga trösklar ger Bör faktureras, höga tar bort det (#1912)", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  await page.goto(`${base}/`, { waitUntil: "load" });
+
+  await setThresholds(page, "1", "0");
+  await expect((await billNowRows(page)).first()).toBeVisible({ timeout: 25_000 });
+
+  await setThresholds(page, "20000000", "100000");
+  await expect(await billNowRows(page)).toHaveCount(0, { timeout: 25_000 });
+});

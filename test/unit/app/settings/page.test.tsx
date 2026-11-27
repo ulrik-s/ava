@@ -41,6 +41,12 @@ vi.mock("@/components/layout/panel-page", () => ({
   ),
 }));
 
+// Frister (#1912) skriver den nya tRPC-bindningen och har egna tester
+// (watchlist-thresholds-section.test.tsx); här räcker att panelen finns.
+vi.mock("@/app/settings/_watchlist-thresholds-section", () => ({
+  WatchlistThresholdsSection: () => <div data-testid="watchlist-thresholds" />,
+}));
+
 vi.mock("@/components/settings/datasource-section", () => ({
   DatasourceSection: () => null,
 }));
@@ -124,6 +130,14 @@ describe("SettingsPage", () => {
     settingsQuery.data = undefined;
     render(<SettingsPage />);
     expect(screen.getByText(/Laddar inställningar/i)).toBeInTheDocument();
+  });
+
+  it("panelen Frister har sin inledning och tröskelsektionen (#1912)", () => {
+    const { container } = render(<SettingsPage />);
+    const panel = container.querySelector('[data-panel="watchlist"]');
+    expect(panel).not.toBeNull();
+    expect(panel?.textContent).toContain("När ett ärende hamnar under Bör faktureras i Frister (admin).");
+    expect(screen.getByTestId("watchlist-thresholds")).toBeInTheDocument();
   });
 
   it("Backup-panelen bara för den som får se den (#1431)", () => {

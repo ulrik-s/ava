@@ -12,16 +12,16 @@ import { FortnoxSection } from "@/components/settings/fortnox-section";
 import { HelperSection } from "@/components/settings/helper-section";
 import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-section";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
-import { OrgImageSection } from "@/components/settings/org-image-section";
+import { OrgImagesSection } from "@/components/settings/org-image-section";
 import { SyncDevicesSection } from "@/components/sync/sync-devices-section";
 import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { useCanSeeBackup } from "@/lib/client/backend/server-backup";
 import { trpc } from "@/lib/client/trpc";
-import type { OrgImage } from "@/lib/shared/org-image";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { settingsLayout } from "./_settings-layout";
 import { StandardAtgarderSection } from "./_standard-atgarder-section";
 import { DocumentKindsSection, MatterTypesSection } from "./_vocabulary-sections";
+import { WatchlistThresholdsSection } from "./_watchlist-thresholds-section";
 
 // ─── Offices sub-component ───────────────────────────────────────
 
@@ -310,22 +310,6 @@ function useOrgSettings() {
   return { settings, form, setForm, saved, updateSettings };
 }
 
-/** Byråns bilder i genererade dokument (#1218): logga och sidfotsmärke. Sparas
- *  direkt (inte via formulärets debounce) — en bild är ett helt värde. */
-function OrgImagesSection({ logo, footerSeal, save }: {
-  logo: OrgImage | null; footerSeal: OrgImage | null;
-  save: (patch: { logo?: OrgImage | null; footerSeal?: OrgImage | null }) => void;
-}) {
-  return (
-    <>
-      <OrgImageSection title="Logotyp" description="Visas centrerad överst på kostnadsräkningar och andra genererade dokument (annars byråns namn)."
-        value={logo} onChange={(v) => save({ logo: v })} />
-      <OrgImageSection title="Sidfotsmärke" description="Visas till vänster i sidfoten, t.ex. märket för ledamot av Sveriges advokatsamfund."
-        value={footerSeal} onChange={(v) => save({ footerSeal: v })} />
-    </>
-  );
-}
-
 interface OrgFieldsProps {
   form: OrgForm;
   setForm: (f: OrgForm) => void;
@@ -482,6 +466,7 @@ export default function SettingsPage() {
     { id: "tags", title: "Dokumenttyper", render: () => <><PanelIntro text="Byråns egna dokumenttyper utöver de inbyggda — ett dokument kan ha flera." /><DocumentKindsSection /></> },
     { id: "matter-types", title: "Ärendetyper", render: () => <><PanelIntro text="Typerna ett ärende kategoriseras efter när det läggs upp (admin)." /><MatterTypesSection /></> },
     { id: "atgarder", title: "Standardåtgärder", render: () => <><PanelIntro text="Åtgärder som förekommer i varje ärende — samma beskrivning och tidsåtgång för alla (admin)." /><StandardAtgarderSection /></> },
+    { id: "watchlist", title: "Frister", render: () => <><PanelIntro text="När ett ärende hamnar under Bör faktureras i Frister (admin)." /><WatchlistThresholdsSection /></> },
     ...(canSeeBackup ? [BACKUP_PANEL] : []),
   ];
 
