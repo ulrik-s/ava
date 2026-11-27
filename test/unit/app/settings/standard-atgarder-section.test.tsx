@@ -8,6 +8,7 @@
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { StandardAtgarderSection } from "@/app/settings/_standard-atgarder-section";
+import { columnHeader, rowOrder, sortColumn } from "../../../helpers/data-table";
 
 const settingsQuery = {
   data: {
@@ -19,6 +20,9 @@ const settingsQuery = {
   isLoading: false,
 };
 const updateMutate = vi.fn();
+const invalidateSettings = vi.fn();
+/** Mutationens onSuccess, så att testet kan svara som servern (#1907). */
+let onUpdateSuccess: (() => void) | undefined;
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -31,10 +35,15 @@ vi.mock("@/lib/client/trpc", () => ({
       clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
-    useUtils: () => ({ organization: { getSettings: { invalidate: vi.fn() } } }),
+    useUtils: () => ({ organization: { getSettings: { invalidate: invalidateSettings } } }),
     organization: {
       getSettings: { useQuery: () => settingsQuery },
-      updateSettings: { useMutation: () => ({ mutate: updateMutate, isPending: false, error: null }) },
+      updateSettings: {
+        useMutation: (opts?: { onSuccess?: () => void }) => {
+          onUpdateSuccess = opts?.onSuccess;
+          return { mutate: updateMutate, isPending: false, error: null };
+        },
+      },
     },
   },
 }));
@@ -123,5 +132,39 @@ describe("StandardAtgarderSection", () => {
     expect(updateMutate).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Tid (h)"), { target: { value: "0,75" } });
     expect(screen.getByText("Lägg till")).toBeEnabled();
+  });
+
+  it("kategorin väljs i formuläret och följer med den nya åtgärden (#1907)", () => {
+    render(<StandardAtgarderSection />);
+    fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Restid till tingsrätten" } });
+    fireEvent.change(screen.getByLabelText("Kategori"), { target: { value: "TIDSSPILLAN" } });
+    fireEvent.keyDown(screen.getByLabelText("Beskrivning"), { key: "Enter" });
+    expect(updateMutate.mock.calls[0]?.[0]).toMatchObject({
+      standardAtgarder: [{ id: "inledande-atgarder" }, { id: "gammal" }, { id: "restid-till-tingsratten", kind: "TIDSSPILLAN" }],
+    });
+  });
+
+  it("sparade åtgärder hämtar om byråns inställningar (#1907)", () => {
+    render(<StandardAtgarderSection />);
+    onUpdateSuccess?.();
+    expect(invalidateSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("tabellen sorterar på beskrivning, tid, skede och kategori (#1907)", () => {
+    render(<StandardAtgarderSection />);
+    const inledande = "Inledande åtgärder och genomgång av handlingar";
+    const order = (): string[] => rowOrder([inledande, "Gammal åtgärd"]);
+    sortColumn("Beskrivning", "asc");
+    expect(order()).toEqual(["Gammal åtgärd", inledande]);
+    sortColumn("Tid (h)", "desc");
+    expect(order()).toEqual([inledande, "Gammal åtgärd"]);
+    // Skedet sorterar på etiketten: "Inledande …" före "Löpande …".
+    sortColumn("Skede", "desc");
+    expect(order()).toEqual(["Gammal åtgärd", inledande]);
+    sortColumn("Skede", "asc");
+    expect(order()).toEqual([inledande, "Gammal åtgärd"]);
+    // Båda är Arbete: kolumnen markeras som sorterad.
+    sortColumn("Kategori", "desc");
+    expect(columnHeader("Kategori").textContent).toContain("↓");
   });
 });
