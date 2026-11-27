@@ -611,6 +611,16 @@ describe("invoice.markFortnoxBooked", () => {
     expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
   });
 
+  it("idempotent: en faktura med bara ledgerRef skrivs inte över (#1931)", async () => {
+    const row = { id: "inv-1", ledgerRef: "A/7", fortnoxId: null };
+    mockPrisma.invoice.findFirst.mockResolvedValue(row);
+
+    const res = await makeCaller("org-a", "user-1", ADMIN).markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/99" });
+
+    expect(res).toEqual(row); // oförändrad
+    expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
+  });
+
   it("NOT_FOUND cross-org", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue(null);
 

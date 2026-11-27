@@ -27,6 +27,18 @@ describe("bookUnbookedPayments", () => {
     expect(markBooked).toHaveBeenCalledWith(payments[2], "A/1");
   });
 
+  it("en betalning med bara ledgerRef räknas som bokförd (#1931)", async () => {
+    const pushVoucher = vi.fn(() => Promise.resolve({ externalId: "A/1" }));
+    const markBooked = vi.fn(() => Promise.resolve(undefined));
+    const out = await bookUnbookedPayments({
+      payments: [{ id: "a", amount: 1, paidAt: "2026-09-01", ledgerRef: "A/7", fortnoxId: null }],
+      invoice, connector: { capabilities: () => caps(true), pushVoucher }, markBooked,
+    });
+    expect(out).toEqual([]);
+    expect(pushVoucher).not.toHaveBeenCalled();
+    expect(markBooked).not.toHaveBeenCalled();
+  });
+
   it("fel per betalning i st.f. att kasta; övriga fortsätter", async () => {
     let first = true;
     const connector = {
