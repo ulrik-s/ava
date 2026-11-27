@@ -228,6 +228,18 @@ describe("FeedbackButton — dialogen", () => {
     expect(replyMutate).toHaveBeenCalledWith({ number: 1, body: "Faktura 2026-17", attachments: [] }, expect.anything());
   });
 
+  it("tråden visar hur långt förfrågan kommit ovanför dialogen (#2216), men bara när det finns delar", () => {
+    const progress = { parts: [{ title: "Flytta ett dokument", state: "pagar" as const }], done: 0, total: 1, approvedAt: "2026-11-10T10:00:00Z", eta: { kind: "next_release" as const } };
+    items = [item({ state: "pagar", progress }), item({ number: 2, title: "Annat fel" })];
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: /Fel summa/ }));
+    expect(screen.getByRole("list", { name: "Tidslinje" })).toBeInTheDocument();
+    expect(screen.getByText(/Flytta ett dokument/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Alla förfrågningar/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Annat fel/ }));
+    expect(screen.queryByRole("list", { name: "Tidslinje" })).not.toBeInTheDocument();
+  });
+
   it("en avslutad förfrågan går inte att svara på; tillbaka till listan", () => {
     items = [item({ state: "avslutad", canReply: false })];
     openDialog();
