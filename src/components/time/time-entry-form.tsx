@@ -3,7 +3,7 @@
 import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
 import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
 import { trpc } from "@/lib/client/trpc";
-import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
+import { isPerDayKind } from "@/lib/shared/billing/brottmalstaxa";
 import { toIsoDate, toLocalTime } from "@/lib/shared/iso-date";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";

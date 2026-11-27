@@ -146,6 +146,12 @@ describe("MatterContactRepository — läs-/skriv-metoder (in-memory)", () => {
     expect(await mc.findLink(mId, cKli, "MOTPART")).toBeNull();
   });
 
+  it("findLink tar bara en roll som finns (MatterRole, #1908)", async () => {
+    const mc = repo(buildStore());
+    // @ts-expect-error — "KLIENTT" är ingen MatterRole
+    expect(await mc.findLink(mId, cKli, "KLIENTT")).toBeNull();
+  });
+
   it("listContactsForMatter: returnerar ärendets kopplade kontakter", async () => {
     const mc = repo(buildStore());
     const list = await mc.listContactsForMatter(mId);
@@ -194,6 +200,8 @@ describe("MatterContactRepository — läs-/skriv-metoder (Drizzle/pglite)", () 
     // findLink
     expect((await mc.findLink(mId, cKli, "KLIENT"))?.id).toBe(linkKli);
     expect(await mc.findLink(mId, cKli, "MOTPART")).toBeNull();
+    // @ts-expect-error — "KLIENTT" är ingen MatterRole (#1908)
+    expect(await mc.findLink(mId, cKli, "KLIENTT")).toBeNull();
 
     // listContactsForMatter
     const list = await mc.listContactsForMatter(mId);

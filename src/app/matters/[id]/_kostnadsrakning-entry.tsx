@@ -9,8 +9,8 @@
 import { Modal } from "@/components/ui/modal";
 import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
-import type { KrDocumentFields } from "@/lib/shared/kostnadsrakning";
+import type { KrDocumentFields } from "@/lib/shared/billing/kostnadsrakning";
+import { formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { OrgImage } from "@/lib/shared/org-image";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
@@ -210,8 +210,8 @@ function RattshjalpKrDialog({ matterId, matter, onClose, onRecorded }: { matterI
         </p>
         <UnbilledPosts selection={posts.selection} loading={posts.loading} />
         <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 space-y-1 text-sm">
-          <div className="flex justify-between text-gray-700"><span>Arvode (exkl moms)</span><span className="font-mono">{formatCurrency(timeOre)}</span></div>
-          <div className="flex justify-between text-gray-700"><span>Utlägg</span><span className="font-mono">{formatCurrency(expenseOre)}</span></div>
+          <div className="flex justify-between text-gray-700"><span>Arvode (exkl moms)</span><span className="font-mono">{formatKr(timeOre)}</span></div>
+          <div className="flex justify-between text-gray-700"><span>Utlägg</span><span className="font-mono">{formatKr(expenseOre)}</span></div>
         </div>
         {create.error && <p className="text-sm text-red-700">{create.error.message}</p>}
         <div className="flex justify-end gap-2 pt-2">

@@ -10,7 +10,7 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
-import { TAXA_MAX_MINUTES, type TaxaLevel } from "@/lib/shared/brottmalstaxa";
+import { TAXA_MAX_MINUTES, type TaxaLevel } from "@/lib/shared/billing/brottmalstaxa";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { STOCKHOLM_TZ } from "@/lib/shared/stockholm-time";
 import { rng, type Rng } from "../../../helpers/seeded-rng";

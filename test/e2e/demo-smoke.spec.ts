@@ -245,15 +245,37 @@ test("Startsidan: pilarna stegar en dag bakåt och framåt", async ({ page }) =>
   await expect(label).toHaveText("Idag", { timeout: 30_000 });
   const day = (name: string) => page.getByRole("group", { name: "Dag" }).getByRole("button", { name });
   const pressed = page.getByRole("group", { name: "Dag" }).locator('button[aria-pressed="true"]');
-  await page.getByRole("button", { name: "Föregående dag" }).click();
+  // Sidhuvudets pilar: Stapeldiagrammet (#2112) har egna med samma namn.
+  const stepper = page.getByRole("group", { name: "Dag" }).locator("xpath=..");
+  const arrow = (name: string) => stepper.getByRole("button", { name });
+  await arrow("Föregående dag").click();
   await expect(label).toHaveText("Igår");
   await expect(day("Igår")).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Föregående dag" }).click();
+  await arrow("Föregående dag").click();
   await expect(pressed).toHaveCount(0);
-  await page.getByRole("button", { name: "Nästa dag" }).click();
-  await page.getByRole("button", { name: "Nästa dag" }).click();
+  await arrow("Nästa dag").click();
+  await arrow("Nästa dag").click();
   await expect(label).toHaveText("Idag");
   await expect(day("Idag")).toHaveAttribute("aria-pressed", "true");
+});
+
+// #2112: Stapeldiagram på Startsidan, med den inloggades tid från i dag.
+test("Startsidan: Stapeldiagram visar dagens stapel vald, tas bort med × och kommer tillbaka", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/`);
+  const chartTab = page.getByRole("tab", { name: /^Stapeldiagram/ });
+  await expect(chartTab).toBeVisible({ timeout: 30_000 });
+  const today = new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "long", timeZone: "Europe/Stockholm" }).format(new Date());
+  const selected = page.getByRole("button", { name: /^\p{L}+ \d{1,2} \p{L}+: [\d,]+ h$/u, pressed: true });
+  await expect(selected).toHaveCount(1, { timeout: 30_000 });
+  await expect(selected).toHaveAttribute("aria-label", new RegExp(` ${today}: `));
+
+  await chartTab.locator(".dv-default-tab-action").click();
+  await expect(chartTab).toHaveCount(0);
+  await page.getByRole("button", { name: "Lägg till ruta" }).click();
+  await page.getByRole("menuitem", { name: "Stapeldiagram" }).click();
+  await expect(chartTab).toBeVisible();
 });
 
 test("tidssidan visar registrerad tid i decimaltimmar", async ({ page }) => {

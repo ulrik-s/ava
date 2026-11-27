@@ -15,10 +15,10 @@ import { describe, expect, it } from "vitest-compat";
 import {
   applyNoFTaxFactorForDate, computeBrottmalstaxa, computeTimkostnadsnorm, coverageEntryValueOre,
   payableCoverageEntries, TAXA_MAX_MINUTES, type TaxaLevel, type TaxaResult,
-} from "@/lib/shared/brottmalstaxa";
+} from "@/lib/shared/billing/brottmalstaxa";
 import {
   computeForordnandeErsattning, forhorMinutes, isWithinTaxaHours, tidsspillanUtover, type Forhor,
-} from "@/lib/shared/forordnandetaxa";
+} from "@/lib/shared/billing/forordnandetaxa";
 import { timeEntryKindSchema } from "@/lib/shared/schemas/enums";
 import { stockholmDay, stockholmYear } from "@/lib/shared/stockholm-time";
 import { forhor, nearStockholmNewYear, oreAmount, yrkandeDate } from "../../helpers/arbitraries";

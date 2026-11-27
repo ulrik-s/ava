@@ -13,7 +13,7 @@
  * `generateFakturaFromTemplate`, så det funkar i både demo- och git/server-backend.
  */
 
-import type { KrDocumentFields, TimeEntryInput } from "@/lib/shared/kostnadsrakning";
+import type { KrDocumentFields, TimeEntryInput } from "@/lib/shared/billing/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { asId, type BillingRunId, type MatterId } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
@@ -57,7 +57,7 @@ export interface GenerateKrDocArgs {
 
 export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
   const { matterId, meta, expenses, timeEntries, ownBillingRunId, register, utils } = args;
-  const { buildKostnadsrakningContext, withDocumentFields } = await import("@/lib/shared/kostnadsrakning");
+  const { buildKostnadsrakningContext, withDocumentFields } = await import("@/lib/shared/billing/kostnadsrakning");
   const { renderKostnadsrakningPdf } = await import("@/lib/client/kostnadsrakning/render-pdf");
   const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
 

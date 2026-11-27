@@ -91,8 +91,8 @@ describe("job-worker-runtime (PG_TEST_URL)", () => {
 
   itPg("schemat registreras i svensk tid, tål en andra start och tas bort ur listan", async () => {
     schema = `pgboss_test_${uuidv7().replace(/-/g, "")}`;
-    const handlers = { [JOB_QUEUES.rulesTick]: async () => {} };
-    const schedules = [{ queue: JOB_QUEUES.rulesTick, cron: "0 3 * * *" }] as const;
+    const handlers = { [JOB_QUEUES.indexDocument]: async () => {} };
+    const schedules = [{ queue: JOB_QUEUES.indexDocument, cron: "0 3 * * *" }] as const;
     const start = (list: typeof schedules | []) =>
       startJobRuntime({ connectionString: url ?? "", schema, handlers, schedules: list });
     const names = async (rt: Awaited<ReturnType<typeof start>>) =>
@@ -100,7 +100,7 @@ describe("job-worker-runtime (PG_TEST_URL)", () => {
     for (let i = 0; i < 2; i++) {
       const rt = await start(schedules);
       try {
-        expect(await names(rt)).toEqual([["rules-tick", "Europe/Stockholm"]]);
+        expect(await names(rt)).toEqual([["index-document", "Europe/Stockholm"]]);
       } finally {
         await rt.stop();
       }

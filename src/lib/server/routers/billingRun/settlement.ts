@@ -8,27 +8,27 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { settledNote } from "@/lib/shared/billing-notes";
-import { krCanCreateInvoice } from "@/lib/shared/billing-todo";
+import { settledNote } from "@/lib/shared/billing/billing-notes";
+import { krCanCreateInvoice } from "@/lib/shared/billing/billing-todo";
 import {
   expenseGrossOre, expenseNetOre, settlementArvodeNet, vatOreOf,
   type UnfrozenWork,
-} from "@/lib/shared/billing-work-value";
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
-import { rattsskyddCoverage } from "@/lib/shared/coverage-billing";
-import { resolveHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
-import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
-import { isActiveKr, krStateOf } from "@/lib/shared/kostnadsrakning-flow";
-import { isRadgivningInvoiced } from "@/lib/shared/rattshjalp";
+} from "@/lib/shared/billing/billing-work-value";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/billing/brottmalstaxa";
+import { rattsskyddCoverage } from "@/lib/shared/billing/coverage-billing";
+import { resolveHourlyRate, type LevelRates } from "@/lib/shared/billing/hourly-rate";
+import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
+import { isActiveKr, krStateOf } from "@/lib/shared/billing/kostnadsrakning-flow";
+import { isRadgivningInvoiced } from "@/lib/shared/billing/rattshjalp";
+import { allocateSettlement, type SettlementAllocation } from "@/lib/shared/billing/settlement-allocation";
+import { buildSettlementViews } from "@/lib/shared/billing/settlement-view";
+import { CURRENT_ROUNDING } from "@/lib/shared/billing/whole-kronor";
 import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
 import { BILLING_RUN_RECIPIENT_LABELS, billingRunRecipientSchema, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
   asId, billingRunIdSchema, matterIdSchema,
   type MatterId, type OrganizationId, type UserId,
 } from "@/lib/shared/schemas/ids";
-import { allocateSettlement, type SettlementAllocation } from "@/lib/shared/settlement-allocation";
-import { buildSettlementViews } from "@/lib/shared/settlement-view";
-import { CURRENT_ROUNDING } from "@/lib/shared/whole-kronor";
 import { logMatterNote } from "../../billing/matter-note";
 import { emit } from "../../events/emit";
 import { callTime, dateOrCallTime, newRowId } from "../../queued-call";

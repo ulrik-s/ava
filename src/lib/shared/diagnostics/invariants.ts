@@ -12,8 +12,8 @@
  * webbläsaren och i node-tester (och i framtiden server-side).
  */
 
+import { isActiveKr, type KostnadsrakningStatus } from "@/lib/shared/billing/kostnadsrakning-flow";
 import { hasKind, type KindsCarrier } from "@/lib/shared/document-kinds";
-import { isActiveKr, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import type { BillingRunStatus, BillingRunType } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 

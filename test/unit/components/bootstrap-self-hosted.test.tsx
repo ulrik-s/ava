@@ -16,7 +16,7 @@ import { bootstrapSelfHosted } from "@/components/shell/demo-bootstrap";
 import { sessionNotice, setSessionNotice } from "@/lib/client/auth/session-notice";
 import { activeLocalScope, bindLocalNamespace, SHARED_NAMESPACE } from "@/lib/client/backend/local-data/local-namespace";
 import { loadFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
-import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
+import { CachingSyncDataStore, noSyncTransport } from "@/lib/client/local-store/caching-sync-data-store";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 
 const baseConfig: FirmaConfig = {

@@ -192,7 +192,7 @@ const noGoneEnumDrift: [GoneEnumDrift] extends [never] ? true : GoneEnumDrift = 
 
 /** Kända reservvärden som motsäger databasen: `fil: fält ?? värde (antal)`. */
 const KNOWN_FALLBACKS: Readonly<Record<string, KnownDeviation>> = {
-  "src/lib/shared/kostnadsrakning.ts: isTaxeArende ?? true (4)": {
+  "src/lib/shared/billing/kostnadsrakning.ts: isTaxeArende ?? true (4)": {
     why: "Kostnadsräkningen antar taxa när uppgiften saknas; ärendets standardvärde är false.",
     issue: 1695,
   },
@@ -271,8 +271,8 @@ describe("Drizzle ↔ zod-paritet (#1678)", () => {
     expect(defaultDeviates(isTaxeArende, matterSchema.shape.taxaHasFTax)).toBe(true);
     expect(nullDeviates(isTaxeArende, matterSchema.shape.taxaHasFTax)).toBe(true);
     expect(fieldDeviations("matters.isTaxeArende", isTaxeArende, matterSchema.shape.isTaxeArende)).toEqual([]);
-    expect(fileFallbacks("src/lib/shared/kostnadsrakning.ts", new Map([["isTaxeArende", false]]))).toContain(
-      "src/lib/shared/kostnadsrakning.ts: isTaxeArende ?? true (4)",
+    expect(fileFallbacks("src/lib/shared/billing/kostnadsrakning.ts", new Map([["isTaxeArende", false]]))).toContain(
+      "src/lib/shared/billing/kostnadsrakning.ts: isTaxeArende ?? true (4)",
     );
   });
 });

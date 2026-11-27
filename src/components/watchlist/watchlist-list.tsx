@@ -11,8 +11,8 @@
 
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
 import { EntityLink } from "@/lib/client/demo/entity-link";
-import { formatCurrency } from "@/lib/client/utils";
 import { deadlineOf } from "@/lib/shared/deadline";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { WatchlistItem, WatchlistKind } from "@/lib/shared/watchlist";
 
 /** Ikon + etikett per signaltyp. Etiketten behövs för att raden ska gå att
@@ -68,7 +68,36 @@ function RowTitle({ item, due }: { item: WatchlistItem; due: boolean }) {
   );
 }
 
-export function WatchlistRow({ item, onComplete }: { item: WatchlistItem; onComplete?: OnComplete | undefined }) {
+/**
+ * Klientens namn och ärendenumret överst på raden (#1965), t.ex. "Klient A ·
+ * 2026-0001"; utan klient bara numret. Inget för en post utan ärende.
+ */
+function ClientLine({ item }: { item: WatchlistItem }) {
+  if (item.matterNumber === null) return null;
+  const text = item.klientName === undefined ? item.matterNumber : `${item.klientName} · ${item.matterNumber}`;
+  return <div className="text-xs font-medium opacity-80">{text}</div>;
+}
+
+/** Ikon, rubrik, ärendenumret (utan `showClient`) och beloppet. */
+function RowHeader({ item, due, showClient }: { item: WatchlistItem; due: boolean; showClient: boolean }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <span aria-hidden="true">{KIND_META[item.kind].icon}</span>
+      <RowTitle item={item} due={due} />
+      {!showClient && item.matterNumber !== null && (
+        <span className="text-xs opacity-80">{item.matterNumber}</span>
+      )}
+      {item.amountOre !== null && (
+        <span className="ml-auto font-mono text-xs">{formatKr(item.amountOre)}</span>
+      )}
+    </div>
+  );
+}
+
+/** Radens props. `showClient` (#1965): klient och ärendenummer överst i stället för numret efter rubriken. */
+interface RowProps { item: WatchlistItem; onComplete?: OnComplete | undefined; showClient?: boolean | undefined }
+
+export function WatchlistRow({ item, onComplete, showClient = false }: RowProps) {
   const meta = KIND_META[item.kind];
   const due = isDue(item);
   return (
@@ -80,16 +109,8 @@ export function WatchlistRow({ item, onComplete }: { item: WatchlistItem; onComp
         query={item.link?.query}
         className={`block flex-1 rounded-lg border px-3 py-2 text-sm hover:brightness-95 ${due ? "border-2 border-red-600 bg-red-50 text-red-900" : severityClasses(item.severity)}`}
       >
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span aria-hidden="true">{meta.icon}</span>
-          <RowTitle item={item} due={due} />
-          {item.matterNumber !== null && (
-            <span className="text-xs opacity-80">{item.matterNumber}</span>
-          )}
-          {item.amountOre !== null && (
-            <span className="ml-auto font-mono text-xs">{formatCurrency(item.amountOre)}</span>
-          )}
-        </div>
+        {showClient && <ClientLine item={item} />}
+        <RowHeader item={item} due={due} showClient={showClient} />
         <p className="mt-0.5 text-xs opacity-90">
           <span className="sr-only">{meta.label}: </span>
           {item.detail}
@@ -99,8 +120,10 @@ export function WatchlistRow({ item, onComplete }: { item: WatchlistItem; onComp
   );
 }
 
-export function WatchlistList({ items, emptyText, onComplete }: {
+export function WatchlistList({ items, emptyText, onComplete, showClient = false }: {
   items: readonly WatchlistItem[]; emptyText: string; onComplete?: OnComplete | undefined;
+  /** Klientens namn och ärendenumret överst på raden (#1965) — Startsidan och sidan Frister. */
+  showClient?: boolean | undefined;
 }) {
   if (items.length === 0) {
     return <p className="text-sm text-gray-500">{emptyText}</p>;
@@ -112,7 +135,7 @@ export function WatchlistList({ items, emptyText, onComplete }: {
           då den ena tyst. Listan räknas om i sin helhet vid varje hämtning och
           har ingen rad-lokal state, så indexet är stabilt nog. */}
       {items.map((item, i) => (
-        <WatchlistRow key={`${item.kind}-${item.matterId ?? "-"}-${i}`} item={item} onComplete={onComplete} />
+        <WatchlistRow key={`${item.kind}-${item.matterId ?? "-"}-${i}`} item={item} onComplete={onComplete} showClient={showClient} />
       ))}
     </ul>
   );

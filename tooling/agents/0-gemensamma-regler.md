@@ -138,8 +138,9 @@ sätt `blockerad` så att Ulrik ser det.
   övrigt är godkänd sätter loop 3 `blockerad` på arbetsordern med
   `PR #N väntar på din människa-godkänd (skyddad sökväg: …)`; Ulrik flyttar
   kortet till Godkänd på tavlan, och synken sätter etiketten på PR:en.
-  **Undantag:** att skärpa `tooling/config/file-size-baseline.json` med
-  `bun run file-size --update` är tillåtet. Agentvakten släpper igenom just
+  **Undantag:** att skärpa `tooling/config/file-size-baseline.json` eller
+  `tooling/config/router-size-baseline.json` med `bun run file-size --update`
+  är tillåtet. Agentvakten släpper igenom just
   det. Blockera aldrig för det. Domaren är Agentvaktens logg: säger den bara
   att `granskad` saknas, är sökvägarna i ordning.
 - Migrationer är **additiva**: `ADD COLUMN IF NOT EXISTS`, nya tabeller, nya

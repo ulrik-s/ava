@@ -5,9 +5,9 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { createServerFirstStore } from "@/lib/client/backend/server-first-store";
+import { InMemoryPersistence } from "@/lib/client/local-store/local-store-persistence";
+import { InMemoryMutationQueuePersistence } from "@/lib/client/local-store/mutation-queue";
 import { SYNC_LOCK_NAME } from "@/lib/client/sync/sync-lock";
-import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
-import { InMemoryMutationQueuePersistence } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { fakeLocks, type FakeLocks } from "../../../helpers/fake-locks";
 
 /** Ett tomt pull-svar från servern. */

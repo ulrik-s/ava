@@ -12,11 +12,12 @@
  */
 
 import { z } from "zod";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
-  conflictCheckItems, coverageItems, deadlineItems, sortWatchlist, unbilledItems,
+  conflictCheckItems, coverageItems, deadlineItems, sortWatchlist, unbilledItems, withKlientNames,
   DEFAULT_THRESHOLDS, type CoverageMatter, type DeadlineTask, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";
 import type { Repositories } from "../repositories/repositories";
@@ -45,6 +46,17 @@ interface MatterRow {
   responsibleLawyerId?: string | null;
   conflictCheckStatus?: string | null;
   conflictCheckHits?: number | null;
+}
+
+/**
+ * Klientens namn på posterna (#1965): parterna för ärendena i posterna, lästa i
+ * ETT repo-anrop oavsett antal ärenden. Inga ärenden → inget anrop.
+ */
+async function withClients(ctx: Ctx, items: readonly WatchlistItem[]): Promise<WatchlistItem[]> {
+  const ids = [...new Set(items.flatMap((i) => (i.matterId === null ? [] : [i.matterId])))];
+  if (ids.length === 0) return [...items];
+  const parties = await ctx.repos.matters.listPartiesFor(ctx.orgId, ids.map((id) => asId<"MatterId">(id)));
+  return withKlientNames(items, parties);
 }
 
 /** Täckningsunderlag: ärendets tak + upparbetat, batchat i ETT repo-anrop. */
@@ -79,7 +91,7 @@ function unbilledInput(matters: readonly MatterRow[], entries: readonly EntryRow
     const matterId = String(e.matterId);
     if (!known.has(matterId)) continue;
     const cur = acc.get(matterId) ?? { ore: 0, oldest: null };
-    cur.ore += Math.round((e.minutes / 60) * e.hourlyRate);
+    cur.ore += timeEntryValueOre(e.minutes, e.hourlyRate);
     const d = isoDate(e.date);
     if (d !== null && (cur.oldest === null || d < cur.oldest)) cur.oldest = d;
     acc.set(matterId, cur);
@@ -156,7 +168,7 @@ export const watchlistRouter = router({
       ], stockholmDay(now));
 
       const scoped = input?.matterId ? items.filter((i) => i.matterId === String(input.matterId)) : items;
-      return { items: scoped, generatedAt: now.toISOString() };
+      return { items: await withClients(ctx, scoped), generatedAt: now.toISOString() };
     }),
 
   /**

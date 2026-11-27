@@ -10,7 +10,7 @@
  */
 import { IDBFactory } from "fake-indexeddb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
-import { isProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { isProcedureCall } from "@/lib/client/local-store/mutation-queue";
 import { asId } from "@/lib/shared/schemas/ids";
 import { PROCEDURE_OWNED_REASON } from "@/lib/shared/sync/procedure-owned";
 import { SimBrowser, SimTab } from "./simulation/sim-browser";

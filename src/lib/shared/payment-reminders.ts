@@ -61,7 +61,7 @@ export interface PlannedReminder {
   eventType: "payment.due" | "payment.overdue";
   idempotencyKey: string;
   remainingOre: number;
-  /** Payload-kontraktet som starter-rules 1b/1c läser. */
+  /** Payloaden som följer med händelsen `payment.due`/`payment.overdue`. */
   payload: Record<string, unknown>;
 }
 

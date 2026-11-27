@@ -10,8 +10,8 @@
 
 import { describe, it, expect } from "vitest-compat";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
-import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
-import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/kostnadsrakning-template";
+import { buildKostnadsrakningContext } from "@/lib/shared/billing/kostnadsrakning";
+import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/billing/kostnadsrakning-template";
 
 const BASE = {
   matter: { matterNumber: "2026-0017", title: "Brottmål – omfattande utredning Davidsson", clientName: "David Davidsson" },

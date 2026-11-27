@@ -22,16 +22,16 @@
  * — den är en myndighetsblankett, inte en faktura, och berörs inte här.
  */
 
-import { formatCurrency } from "@/lib/client/utils";
-import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
-import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
-import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
-import type { InvoiceSpecification, SpecExpenseLine } from "@/lib/shared/invoice-specification";
-import { invoiceVatOre } from "@/lib/shared/invoice-vat";
+import { isPerDayKind } from "@/lib/shared/billing/brottmalstaxa";
+import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/billing/expense-vat";
+import { ARVODE_VAT_BIPS } from "@/lib/shared/billing/invoice-calc";
+import type { InvoiceSpecification, SpecExpenseLine } from "@/lib/shared/billing/invoice-specification";
+import { invoiceVatOre } from "@/lib/shared/billing/invoice-vat";
+import { svd as svDate } from "@/lib/shared/billing/settlement-view"; // svensk kalenderdag (#1677)
+import { formatKr } from "@/lib/shared/kr-format";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
-import { svd as svDate } from "@/lib/shared/settlement-view"; // svensk kalenderdag (#1677)
 import {
   expenseTotals, groupByKind, quantityLabel, resolveSpec, specTables, sumOf, unitRateOre,
   type CarriedWorkLine, type Fc, type FakturaExpenseRow, type FakturaTimeGroup, type FakturaTimeRow, type SpecLine,
@@ -322,7 +322,7 @@ function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "fo
  * Bygg den färdigformaterade vy-modellen (#938) — enda stället där öre blir
  * text. PDF-renderaren (`renderFakturaPdf`) ritar den rakt av.
  */
-export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatCurrency): FakturaView {
+export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatKr): FakturaView {
   const spec = resolveSpec(a);
   const showTimeAmounts = !isAcconto(a.invoice);
   return {

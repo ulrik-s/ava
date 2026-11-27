@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
-import { formatCurrency } from "@/lib/client/utils";
+import { formatKr } from "@/lib/shared/kr-format";
 import { asId } from "@/lib/shared/schemas/ids";
 import { isUuid } from "@/lib/shared/uuid";
 import { pdfPageTexts } from "../../../helpers/pdf-text";
@@ -25,7 +25,7 @@ const utils = {
 beforeEach(() => { vi.clearAllMocks(); });
 
 /** Belopp som de står i PDF:en (hårda mellanslag → vanliga, som i `pdfPageTexts`). */
-const kr = (ore: number): string => formatCurrency(ore).replace(/[\u00A0\u202F]/g, " ");
+const kr = (ore: number): string => formatKr(ore).replace(/[\u00A0\u202F]/g, " ");
 
 /** Texten i det persisterade dokumentet (alla sidor, en ritad sträng per rad). */
 async function persistedText(): Promise<string> {

@@ -12,7 +12,7 @@ import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import type { IEventLog } from "@/lib/server/data-store/IDataStore";
 import type { EmitInput } from "@/lib/server/events/schema";
 import { appRouter } from "@/lib/server/routers/_app";
-import { advokatberedskapFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { advokatberedskapFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {

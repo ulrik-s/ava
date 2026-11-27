@@ -6,9 +6,9 @@
 import { MatterNumber } from "@/components/matter/matter-number";
 import type { Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
-import { coverageStatus } from "@/lib/shared/coverage-cap";
+import { coverageStatus } from "@/lib/shared/billing/coverage-cap";
 import { isTaxeMatter } from "@/lib/shared/public-assignment";
-import type { MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
+import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 
 /** En rad i ärendelistan (`matter.list`); `hits` = texterna för "Träff" (#1642). */
 export interface MatterRow {
@@ -29,7 +29,7 @@ export interface MatterRow {
   insuranceReference?: string | null | undefined;
   contacts: Array<{ contact: { name: string } }>;
   /** Ärendets parter, KLIENT först (#1869); "Träff" visar de som matchar (#1870). */
-  parties: Array<{ role: string; name: string }>;
+  parties: Array<{ role: MatterRole; name: string }>;
   _count: { contacts: number };
   hits?: string[] | undefined;
 }

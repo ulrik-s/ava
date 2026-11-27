@@ -7,7 +7,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { SjalvriskAccontoHint } from "@/app/matters/[id]/_sjalvrisk-aconto-hint";
-import { availableActions, type BillingAction } from "@/lib/shared/billing-flow";
+import { availableActions, type BillingAction } from "@/lib/shared/billing/billing-flow";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 

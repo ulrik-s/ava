@@ -32,9 +32,9 @@ import {
   TIMKOSTNADSNORM_FTAX_ORE_PER_H,
   TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H,
   TAXA_MAX_MINUTES,
-} from "@/lib/shared/brottmalstaxa";
+} from "@/lib/shared/billing/brottmalstaxa";
+import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
 import { prebakeJoins } from "@/lib/shared/demo-source";
-import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 
 const ORG_ID = "firma-ab";
 const ADMIN_USER = {

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { noteTimestamp } from "../../src/lib/shared/billing-notes";
+import { noteTimestamp } from "../../src/lib/shared/billing/billing-notes";
 import type { SimMatter } from "../../tooling/demo-generator/simulate/events";
 import { emptyRunResult, runScenario, type RunCtx } from "../../tooling/demo-generator/simulate/runner";
 import { buildRattshjalpScenario } from "../../tooling/demo-generator/simulate/scenarios/rattshjalp";

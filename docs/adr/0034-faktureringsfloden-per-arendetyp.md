@@ -11,7 +11,7 @@
   betalningssätts-kortet.
 - **Knyter an:** [ADR 0015](0015-faktura-tillstandsmaskin.md) (fakturans
   status-maskin — samma mönster, separat maskin) och
-  `src/lib/shared/kostnadsrakning-flow.ts` (kostnadsräkningens livscykel, #828).
+  `src/lib/shared/billing/kostnadsrakning-flow.ts` (kostnadsräkningens livscykel, #828).
 
 ## Kontext
 
@@ -30,7 +30,7 @@ flexibla** (ingen generisk regelmotor, inga användardefinierade flöden).
 
 ## Beslut
 
-En **enda deklarativ sanningskälla**: `src/lib/shared/billing-flow.ts`.
+En **enda deklarativ sanningskälla**: `src/lib/shared/billing/billing-flow.ts`.
 
 - `BILLING_FLOWS: Record<PaymentMethod, BillingFlow>` — per flöde: **faser** och
   **lagliga actions per fas** (state-maskinens kanter; varje action har `toPhase`,
@@ -180,7 +180,7 @@ Fakturor och kostnadsräkningar avrundar varje rad till hela kronor med svensk
 öresavrundning (1–49 öre nedåt, 50–99 öre uppåt; negativa belopp speglas).
 Summa exkl moms är summan av de avrundade raderna, momsen 25 % av den summan
 avrundad till hela kronor, och brutto = netto + moms. Reglerna finns på ett
-ställe, `src/lib/shared/whole-kronor.ts`, och används av värderingen
+ställe, `src/lib/shared/billing/whole-kronor.ts`, och används av värderingen
 (`billing-work-value`), utläggen (`expense-vat`), delningen klient/betalare
 (`coverage-billing`), acontot (`acconto-vat`) och kostnadsräkningen
 (`kr-claim`, `kostnadsrakning`). Därmed är det lagrade beloppet, dokumentet,
@@ -200,7 +200,7 @@ accepterat (Ulrik, #1438).
 ### Delningsmodellen: klient och betalare (#1438)
 
 Gäller rättshjälp och rättsskydd, varje delning mellan klient och betalare
-(`src/lib/shared/settlement-allocation.ts`):
+(`src/lib/shared/billing/settlement-allocation.ts`):
 
 1. **Totalen räknas en gång, brutto.** Rättshjälp med domstolens beslut: beslutet
    som det är. Annars fakturans uträkning — netto = summan av de avrundade

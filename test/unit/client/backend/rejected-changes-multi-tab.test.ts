@@ -7,9 +7,9 @@ import { describe, expect, it } from "vitest-compat";
 import {
   IndexedDbRejectedChangesPersistence, InMemoryRejectedChangesPersistence, RejectedChanges, type RejectedChange,
 } from "@/lib/client/backend/rejected-changes";
-import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
-import type { ConflictRecord } from "@/lib/server/data-store/in-memory/reconcile-engine";
+import { IdbKv } from "@/lib/client/local-store/idb-kv";
+import type { QueuedMutation } from "@/lib/client/local-store/mutation-queue";
+import type { ConflictRecord } from "@/lib/client/local-store/reconcile-engine";
 import { changeChannelHub, settle } from "../../../helpers/change-channel-hub";
 
 const conflict = (mutationId: string): ConflictRecord => {

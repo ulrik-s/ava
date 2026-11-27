@@ -6,12 +6,12 @@
  * (dependency-cruiser: `billingRun-router-internals-private`).
  */
 import { TRPCError } from "@trpc/server";
-import type { AccontoWork } from "@/lib/shared/acconto-view";
-import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
-import type { UnfrozenWork } from "@/lib/shared/billing-work-value";
-import type { SpecDeduction } from "@/lib/shared/invoice-specification";
-import { isKrWorkEntry } from "@/lib/shared/kostnadsrakning";
-import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
+import type { AccontoWork } from "@/lib/shared/billing/acconto-view";
+import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing/billing-flow";
+import type { UnfrozenWork } from "@/lib/shared/billing/billing-work-value";
+import type { SpecDeduction } from "@/lib/shared/billing/invoice-specification";
+import { isKrWorkEntry } from "@/lib/shared/billing/kostnadsrakning";
+import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState } from "@/lib/shared/billing/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import type { BillingRun, Expense, TimeEntry } from "@/lib/shared/schemas/billing";
 import type { BillingRunRecipient } from "@/lib/shared/schemas/enums";

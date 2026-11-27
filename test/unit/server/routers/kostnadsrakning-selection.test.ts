@@ -14,7 +14,7 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
-import { kostnadsrakningClaimInclVat, type KrClaimInput } from "@/lib/shared/kostnadsrakning";
+import { kostnadsrakningClaimInclVat, type KrClaimInput } from "@/lib/shared/billing/kostnadsrakning";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {

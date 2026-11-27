@@ -11,7 +11,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
-import { computeBrottmalstaxa } from "@/lib/shared/brottmalstaxa";
+import { computeBrottmalstaxa } from "@/lib/shared/billing/brottmalstaxa";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { rng, type Rng } from "../../../helpers/seeded-rng";
 import { nowFor, type Scenario, taxeScenarioFor, worldFor } from "./billing-world";

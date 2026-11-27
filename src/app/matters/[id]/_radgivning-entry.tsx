@@ -10,7 +10,7 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { entryMarkBlocker, needsRadgivningEntry, type MarkableEntry } from "@/lib/shared/radgivning-entry";
+import { entryMarkBlocker, needsRadgivningEntry, type MarkableEntry } from "@/lib/shared/billing/radgivning-entry";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 

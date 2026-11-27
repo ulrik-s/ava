@@ -24,7 +24,7 @@
 import type { SessionProbe } from "@/lib/client/auth/session-probe";
 import { FEEDBACK_DRAFTS_KEY } from "@/lib/client/feedback/feedback-drafts";
 import { forgetSignedInIdentity, type FirmaTier } from "@/lib/client/firma/firma-config";
-import { reportIdbProblem } from "@/lib/server/data-store/in-memory/idb-open";
+import { reportIdbProblem } from "@/lib/client/local-store/idb-open";
 import { activeLocalScope, unbindLocalNamespace, userNamespace } from "./local-namespace";
 import { purgeLocalData, type PurgeEnv } from "./purge-local-data";
 

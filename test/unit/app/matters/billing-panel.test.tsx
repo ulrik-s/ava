@@ -19,7 +19,7 @@ interface BillingRunRow {
   invoiceId?: string | null; invoice?: { id: string; invoiceNumber?: string | null; status?: string } | null;
   reference?: string | null;
   kostnadsrakningStatus?: string | null; awardedOre?: number | null; beslutSlutgiltigt?: boolean | null;
-  clientShareBips?: number | null;
+  clientShareBips?: number | null; forordnandeAvslut?: string | null;
 }
 
 let runsData: { runs: BillingRunRow[] } = { runs: [] };
@@ -244,6 +244,12 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
     expect(screen.queryByText(/Inskickad — väntar på beslut/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Registrera beslut" }));
     expect(screen.getByText(/Registrera domstolens beslut/)).toBeInTheDocument();
+  });
+
+  it("förordnandemålets avslut står på KR-kortet (#2180)", () => {
+    runsData = { runs: runsData.runs.map((r) => ({ ...r, reference: "KR-2026-0004", forordnandeAvslut: "NEDLAGD" })) };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    expect(screen.getByText("KR-2026-0004 · Förundersökningen lades ned", { exact: false })).toBeInTheDocument();
   });
 
   it("inskickad KR kan ångras — efter bekräftelse (#1121)", () => {

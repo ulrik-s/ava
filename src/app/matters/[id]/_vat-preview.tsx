@@ -1,7 +1,7 @@
 "use client";
 
-import { formatCurrency } from "@/lib/client/utils";
-import { chargedVatOre, expenseNetOre } from "@/lib/shared/expense-vat";
+import { chargedVatOre, expenseNetOre } from "@/lib/shared/billing/expense-vat";
+import { formatKr } from "@/lib/shared/kr-format";
 
 /**
  * Vad KLIENTEN kommer att debiteras (#975) — inte vad byrån betalade. Ett utlägg
@@ -15,8 +15,8 @@ export function VatPreview({ amount, vatRate, passThrough }: { amount: number; v
   const vatOre = passThrough ? 0 : chargedVatOre(netOre);
   return (
     <span className="text-xs text-gray-600 font-mono">
-      Debiteras: {formatCurrency(netOre)} · moms {passThrough ? "0 %" : "25 %"}: {formatCurrency(vatOre)}
-      {" · inkl: "}{formatCurrency(netOre + vatOre)}
+      Debiteras: {formatKr(netOre)} · moms {passThrough ? "0 %" : "25 %"}: {formatKr(vatOre)}
+      {" · inkl: "}{formatKr(netOre + vatOre)}
     </span>
   );
 }

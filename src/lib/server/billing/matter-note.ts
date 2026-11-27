@@ -4,10 +4,10 @@
  * Anropas INNE i händelsens transaktion (samma `repos`), så anteckningen och
  * händelsen antingen båda finns eller ingen av dem. Författare = den som
  * utförde händelsen; datum/klockslag = när den skedde, i svensk tid.
- * Texterna byggs i `@/lib/shared/billing-notes`.
+ * Texterna byggs i `@/lib/shared/billing/billing-notes`.
  */
 
-import { noteTimestamp } from "@/lib/shared/billing-notes";
+import { noteTimestamp } from "@/lib/shared/billing/billing-notes";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import type { ServiceNote } from "@/lib/shared/schemas/service-note";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";

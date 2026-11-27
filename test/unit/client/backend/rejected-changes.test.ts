@@ -12,8 +12,8 @@ import {
   type RejectedChange,
   type RejectedChangeHandlers,
 } from "@/lib/client/backend/rejected-changes";
-import type { QueuedMutation, QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
-import type { ConflictRecord } from "@/lib/server/data-store/in-memory/reconcile-engine";
+import type { QueuedMutation, QueuedProcedureCall } from "@/lib/client/local-store/mutation-queue";
+import type { ConflictRecord } from "@/lib/client/local-store/reconcile-engine";
 import { QUEUED_PROCEDURES } from "@/lib/shared/sync/queued-procedures";
 
 const row: QueuedMutation = { mutationId: "r1", entity: "invoice", kind: "update", row: { id: "i1" }, baseVersion: 2, enqueuedAt: 0 };

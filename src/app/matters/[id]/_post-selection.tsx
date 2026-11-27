@@ -11,8 +11,8 @@
  */
 
 import { useMemo, useState } from "react";
-import { formatCurrency } from "@/lib/client/utils";
-import { postsInDateRange } from "@/lib/shared/billing-post-selection";
+import { postsInDateRange } from "@/lib/shared/billing/billing-post-selection";
+import { formatKr } from "@/lib/shared/kr-format";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 /** Det ur fakturaförslaget (`billingRun.proposal`) som postlistan läser. */
@@ -80,12 +80,12 @@ export function UnbilledPosts({ selection, loading }: { selection: PostSelection
               <span className="font-mono text-gray-500">{stockholmDay(new Date(p.date))}</span>
               <span className="truncate text-gray-700">{p.label}</span>
             </span>
-            <span className="font-mono text-gray-900">{formatCurrency(p.valueOre)}</span>
+            <span className="font-mono text-gray-900">{formatKr(p.valueOre)}</span>
           </label>
         ))}
         <div className="flex items-center justify-between border-t border-gray-300 pt-1 text-xs font-semibold">
           <span>Valt värde</span>
-          <span className="font-mono">{formatCurrency(chosenOre)}</span>
+          <span className="font-mono">{formatKr(chosenOre)}</span>
         </div>
       </div>
     </div>
