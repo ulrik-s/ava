@@ -25,6 +25,8 @@ import {
   type ContactType,
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
+  PAYMENT_PLAN_STATUS_LABELS,
+  type PaymentPlanStatus,
   type TimeEntryKind,
 } from "@/lib/shared/schemas/enums";
 
@@ -101,6 +103,18 @@ export const paymentMethodOptions: ReadonlyArray<PaymentMethodOption> = paymentM
 
 export function labelForPaymentMethod(v: PaymentMethod): string {
   return PAYMENT_METHOD_LABELS[v];
+}
+
+// ─── Avbetalningsplanens status (UI-derivation, #1991) ───────────
+// PAYMENT_PLAN_STATUS_LABELS i shared/schemas/enums.ts är enda källan.
+
+/**
+ * Avbetalningsplanens status som text (singular: "Aktiv", "Slutförd",
+ * "Avbruten"). En okänd status i rå data visas som den är, via `?? status`.
+ */
+export function labelForPaymentPlanStatus(status: PaymentPlanStatus): string {
+  const labels: Readonly<Record<string, string>> = PAYMENT_PLAN_STATUS_LABELS;
+  return labels[status] ?? status;
 }
 
 /**
