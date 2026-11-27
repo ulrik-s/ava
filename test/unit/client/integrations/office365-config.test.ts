@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest-compat";
 import {
-  authorityFor, loadOffice365Config, OFFICE365_CONFIG_KEY, OFFICE365_SCOPES,
+  authorityFor, loadOffice365Config, loadStaticGraphToken, OFFICE365_CONFIG_KEY, OFFICE365_SCOPES,
   onceWithin, resolveOffice365Config, serverOffice365Config,
 } from "@/lib/client/integrations/office365-config";
+import { office365ConfigSchema } from "@/lib/shared/office365-config";
 
 /**
  * Konfigurationen avgör VILKEN app-registrering byrån autentiserar mot. Blir
@@ -38,6 +39,30 @@ describe("loadOffice365Config", () => {
   it("ger null när värdena är tomma strängar", () => {
     localStorage.setItem(OFFICE365_CONFIG_KEY, JSON.stringify({ clientId: "", tenantId: "" }));
     expect(loadOffice365Config()).toBeNull();
+  });
+});
+
+/** Testsömmen (#1952): den fasta Graph-token bredvid konfigurationen. */
+describe("loadStaticGraphToken", () => {
+  it("läser fältet ur samma localStorage-post", () => {
+    localStorage.setItem(OFFICE365_CONFIG_KEY, JSON.stringify({ clientId: "c", tenantId: "t", staticGraphToken: "fast" }));
+    expect(loadStaticGraphToken()).toBe("fast");
+  });
+
+  it("ger null utan fältet, med ett tomt fält och utan post", () => {
+    localStorage.setItem(OFFICE365_CONFIG_KEY, JSON.stringify({ clientId: "c", tenantId: "t" }));
+    expect(loadStaticGraphToken()).toBeNull();
+    localStorage.setItem(OFFICE365_CONFIG_KEY, JSON.stringify({ staticGraphToken: "" }));
+    expect(loadStaticGraphToken()).toBeNull();
+    localStorage.removeItem(OFFICE365_CONFIG_KEY);
+    expect(loadStaticGraphToken()).toBeNull();
+  });
+
+  it("fältet hör inte till konfigurationen: varken schemat eller loadOffice365Config bär det", () => {
+    const stored = { clientId: "c", tenantId: "t", staticGraphToken: "fast" };
+    localStorage.setItem(OFFICE365_CONFIG_KEY, JSON.stringify(stored));
+    expect(loadOffice365Config()).toEqual({ clientId: "c", tenantId: "t" });
+    expect(office365ConfigSchema.parse(stored)).toEqual({ clientId: "c", tenantId: "t" });
   });
 });
 
