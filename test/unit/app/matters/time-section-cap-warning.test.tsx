@@ -28,6 +28,7 @@ vi.mock("@/lib/client/trpc", () => ({
     useUtils: () => ({
       timeEntry: { list: { invalidate: listInvalidate } },
       matter: { coverageUsage: { invalidate: usageInvalidate } },
+      billingRun: { proposal: { invalidate: async () => {} } },
     }),
     matter: { coverageUsage: { useQuery: () => usage }, list: { useQuery: () => ({ data: { matters: [] } }) } },
     timeEntry: {

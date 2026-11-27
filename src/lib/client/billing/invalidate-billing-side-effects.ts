@@ -5,6 +5,8 @@
  * sidan laddas om.
  */
 
+import type { MatterId } from "@/lib/shared/schemas/ids";
+
 type Invalidate = () => Promise<void>;
 
 /** Den del av `trpc.useUtils()` som behövs — smal söm, testbar utan hela klienten. */
@@ -30,4 +32,22 @@ export interface DocumentListUtils {
 export function invalidateDocumentLists(utils: DocumentListUtils): void {
   void utils.document.list.invalidate();
   void utils.document.tree.invalidate();
+}
+
+/** Fakturaförslagsdelen av `trpc.useUtils()` — utan indata gäller den alla ärenden. */
+export interface UnbilledWorkUtils {
+  billingRun: { proposal: { invalidate(input?: { matterId: MatterId }): Promise<void> } };
+}
+
+/**
+ * Tid eller utlägg har ändrats (#2201): hämta om fakturaförslaget, så att
+ * Upparbetat ofakturerat och Aconto till klient räknar med den nya posten.
+ * Utan ärenden hämtas alla ärendens förslag om (/time listar alla ärenden).
+ */
+export function invalidateUnbilledWork(utils: UnbilledWorkUtils, matterIds?: readonly MatterId[]): void {
+  if (!matterIds) {
+    void utils.billingRun.proposal.invalidate();
+    return;
+  }
+  for (const matterId of matterIds) void utils.billingRun.proposal.invalidate({ matterId });
 }

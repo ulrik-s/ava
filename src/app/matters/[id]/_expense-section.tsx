@@ -4,6 +4,7 @@ import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
+import { invalidateUnbilledWork } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { netOreOf, vatOreOf } from "@/lib/shared/billing/billing-work-value";
@@ -188,9 +189,15 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
     setForm(initialForm());
   }
 
-  const createExpense = trpc.expense.create.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
-  const updateExpense = trpc.expense.update.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
-  const deleteExpense = trpc.expense.delete.useMutation({ onSuccess: () => void utils.expense.list.invalidate({ matterId }) });
+  /** Utläggslistan + fakturaförslaget (#2201). */
+  function refreshExpenses(): void {
+    void utils.expense.list.invalidate({ matterId });
+    invalidateUnbilledWork(utils, [matterId]);
+  }
+
+  const createExpense = trpc.expense.create.useMutation({ onSuccess: () => { refreshExpenses(); resetClose(); } });
+  const updateExpense = trpc.expense.update.useMutation({ onSuccess: () => { refreshExpenses(); resetClose(); } });
+  const deleteExpense = trpc.expense.delete.useMutation({ onSuccess: refreshExpenses });
 
   function startEdit(e: Expense): void {
     setEditingId(e.id);
