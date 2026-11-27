@@ -102,8 +102,9 @@ login model.
 
 ## Two deploy modes (selected by `firma-config.tier`)
 
-- **`demo`** — GH Pages. The same offline-first core with no sync target,
-  seeded from `manifest.json`/CDN JSON into IndexedDB (ADR 0025).
+- **`demo`** — GH Pages. The same offline-first core with no real sync target:
+  a `StaticSyncSource` loopback serves the bundled `demo-seed.json`, which
+  hydrates IndexedDB through the normal reconcile/pull path (ADR 0025).
 - **`self-hosted`** — server-first (ADR 0016): Postgres + tRPC-over-HTTP behind
   oauth2-proxy; the production stack is
   `tooling/docker/docker-compose.production.yml`. The client is built with
