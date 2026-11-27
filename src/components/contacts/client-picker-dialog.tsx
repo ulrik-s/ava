@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { labelForContactType } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
+import type { ContactType } from "@/lib/shared/schemas/enums";
 import { NewClientDialog, type PickedClient } from "./new-client-dialog";
 
 interface Props {
@@ -19,6 +20,11 @@ interface Props {
    * skrivs aldrig över, och ett tomt värde rensar inget.
    */
   initialTerm?: string;
+  /**
+   * Bara kontakter av den här typen, t.ex. Domstol i kostnadsräkningen (#1891).
+   * Då finns inget "+ Ny …": en ny kontakt härifrån blir inte av den typen.
+   */
+  contactType?: ContactType | undefined;
 }
 
 interface Hit {
@@ -36,7 +42,7 @@ interface Hit {
  * klienten skapar man den härifrån ("Ny klient…"). Samma dialog väljer
  * part i ett ärende (`noun="part"`, #1136).
  */
-export function ClientPickerDialog({ onPick, onClose, noun = "klient", children, initialTerm = "" }: Props) {
+export function ClientPickerDialog({ onPick, onClose, noun = "klient", children, initialTerm = "", contactType }: Props) {
   const [term, setTerm] = useTermFrom(initialTerm);
   const [creating, setCreating] = useState(false);
   if (creating) {
@@ -49,12 +55,14 @@ export function ClientPickerDialog({ onPick, onClose, noun = "klient", children,
       <input id="client-search" type="search" autoFocus value={term} onChange={(e) => setTerm(e.target.value)}
         placeholder="Namn, personnummer eller organisationsnummer"
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-      <ClientHits term={term} noun={noun} onPick={onPick} />
+      <ClientHits term={term} noun={noun} contactType={contactType} onPick={onPick} />
       <div className="mt-4 flex justify-between gap-2">
-        <button type="button" onClick={() => setCreating(true)}
-          className="px-4 py-2 text-sm font-medium text-blue-600 hover:underline">
-          {`+ Ny ${noun}…`}
-        </button>
+        {contactType ? <span /> : (
+          <button type="button" onClick={() => setCreating(true)}
+            className="px-4 py-2 text-sm font-medium text-blue-600 hover:underline">
+            {`+ Ny ${noun}…`}
+          </button>
+        )}
         <button type="button" onClick={onClose}
           className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
           Avbryt
@@ -80,14 +88,26 @@ function useTermFrom(initialTerm: string): [string, (term: string) => void] {
   return [term, setTerm];
 }
 
+/** Texten när sökningen inte ger någon träff — med "Ny …" bara när den knappen finns. */
+function noHitsText(noun: string, contactType: ContactType | undefined): string {
+  return contactType ? "Ingen träff." : `Ingen träff — skapa ${noun}en med "Ny ${noun}…".`;
+}
+
+interface HitsProps {
+  term: string;
+  noun: string;
+  contactType: ContactType | undefined;
+  onPick: (c: PickedClient) => void;
+}
+
 /** Träfflistan — bäst först. Tom sökning visar en ledtråd i st.f. alla kontakter. */
-function ClientHits({ term, noun, onPick }: { term: string; noun: string; onPick: (c: PickedClient) => void }) {
+function ClientHits({ term, noun, contactType, onPick }: HitsProps) {
   const trimmed = term.trim();
-  const search = trpc.contacts.search.useQuery({ term: trimmed }, { enabled: trimmed.length > 0 });
+  const search = trpc.contacts.search.useQuery({ term: trimmed, ...(contactType ? { contactType } : {}) }, { enabled: trimmed.length > 0 });
   if (trimmed.length === 0) return <p className="mt-3 text-sm text-gray-500">Skriv för att söka.</p>;
   const hits = (search.data?.contacts ?? []) as Hit[];
   if (search.isLoading) return <p className="mt-3 text-sm text-gray-500">Söker…</p>;
-  if (hits.length === 0) return <p className="mt-3 text-sm text-gray-500">{`Ingen träff — skapa ${noun}en med "Ny ${noun}…".`}</p>;
+  if (hits.length === 0) return <p className="mt-3 text-sm text-gray-500">{noHitsText(noun, contactType)}</p>;
   return (
     <ul className="mt-3 max-h-80 overflow-y-auto divide-y divide-gray-100 rounded border border-gray-200" aria-label="Träffar">
       {hits.map((c) => (

@@ -12,6 +12,7 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { effectiveHearing } from "@/app/matters/[id]/_hearing-time";
 import { KostnadsrakningModal } from "@/app/matters/[id]/_kostnadsrakning-modal";
+import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/helper/use-helper", () => ({
@@ -52,6 +53,8 @@ vi.mock("@/lib/client/trpc", () => ({
     timeEntry: { list: { useQuery: () => (entriesLoading ? { data: undefined, isLoading: true } : { data: { entries }, isLoading: false }) } },
     // Postlistan (#1889) läser fakturaförslaget: de ofrysta posterna.
     billingRun: { proposal: { useQuery: () => ({ data: proposalOf(entries, unbilledExpenses), isLoading: false }) } },
+    // Välj domstol (#1891).
+    contacts: { search: { useQuery: () => ({ data: { contacts: [{ id: "c-hov", name: "Svea hovrätt", contactType: "COURT" }] }, isLoading: false }) } },
   },
 }));
 
@@ -151,7 +154,7 @@ describe("KostnadsrakningModal — förordnandemål (#1858)", () => {
     fireEvent.click(screen.getByLabelText(/Förordnandetaxa/));
     fireEvent.click(screen.getByLabelText("Strafföreläggande godkändes"));
     fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
-    await waitFor(() => expect(createRun).toHaveBeenCalledWith({ forordnande: { avslut: "STRAFFORELAGGANDE" }, hasFTax: true }, {}));
+    await waitFor(() => expect(createRun).toHaveBeenCalledWith({ forordnande: { avslut: "STRAFFORELAGGANDE" }, hasFTax: true }, {}, {}));
     await waitFor(() => expect(recordMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ huvudforhandlingMinutes: 0 })));
   });
 
@@ -287,5 +290,39 @@ describe("KostnadsrakningModal — postlistan (#1889)", () => {
     fireEvent.click(box("Huvudförhandling"));
     expect(screen.queryByText(/STOPPA NU/)).not.toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent("Ingen förhandling");
+  });
+});
+
+/** Dokumentet och domstolen som skickades till PDF-renderingen vid Generera. */
+function renderedPdf(): { title: string; courtName: string } {
+  const arg = vi.mocked(renderKostnadsrakningPdf).mock.calls[0]?.[0];
+  if (!arg) throw new Error("ingen PDF renderad");
+  return { title: arg.result.document.title, courtName: arg.meta.courtName };
+}
+
+describe("KostnadsrakningModal — domstol och målnummer (#1891)", () => {
+  const withCourt = { ...baseProps, courtName: "Stockholms tingsrätt", courtCaseNumber: "B 123-26" };
+
+  it("förvalt: ärendets domstol och målnummer i dokumentet, och ingen vald kontakt till servern", async () => {
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-1"));
+    render(<KostnadsrakningModal {...withCourt} createRun={createRun} />);
+    expect(screen.getByTestId("kr-court-name")).toHaveTextContent("Stockholms tingsrätt");
+    fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
+    await waitFor(() => expect(createRun).toHaveBeenCalledOnce());
+    expect(createRun.mock.calls[0]?.[2]).toEqual({});
+    expect(renderedPdf()).toEqual({ title: "KOSTNADSRÄKNING i mål B 123-26", courtName: "Stockholms tingsrätt" });
+  });
+
+  it("byt domstol: tomt målnummer ger rubriken utan 'i mål', och domstolen följer med", async () => {
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-1"));
+    render(<KostnadsrakningModal {...withCourt} createRun={createRun} />);
+    fireEvent.click(screen.getByRole("button", { name: "Byt domstol…" }));
+    fireEvent.change(screen.getByLabelText("Sök domstol"), { target: { value: "hov" } });
+    fireEvent.click(screen.getByRole("button", { name: /Svea hovrätt/ }));
+    expect(screen.getByLabelText("Målnummer")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
+    await waitFor(() => expect(createRun).toHaveBeenCalledOnce());
+    expect(createRun.mock.calls[0]?.[2]).toEqual({ courtContactId: "c-hov" });
+    expect(renderedPdf()).toEqual({ title: "KOSTNADSRÄKNING", courtName: "Svea hovrätt" });
   });
 });

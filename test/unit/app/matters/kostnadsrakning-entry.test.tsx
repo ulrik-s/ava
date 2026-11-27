@@ -16,7 +16,7 @@ const E1 = { id: "e1", date: "2026-09-02", description: "Resa", amount: 40_000, 
 const FROZEN = { id: "e-old", date: "2026-08-02", description: "Fryst", amount: 9_900, billable: true };
 
 const mutateAsync = vi.fn((): Promise<{ run: { id: string } }> => Promise.resolve({ run: { id: "run-1" } }));
-const generateKrDoc = vi.fn((): Promise<void> => Promise.resolve());
+const generateKrDoc = vi.fn((_opts: { meta: Record<string, unknown> }): Promise<void> => Promise.resolve());
 let createError: { message: string } | null = null;
 
 vi.mock("@/lib/client/trpc", () => ({
@@ -31,6 +31,8 @@ vi.mock("@/lib/client/trpc", () => ({
     user: { current: { useQuery: () => ({ data: { name: "Adv. Anna", email: "anna@byra.se" } }) } },
     organization: { getSettings: { useQuery: () => ({ data: { name: "Byrå AB" } }) } },
     document: { register: { useMutation: () => ({ mutateAsync: vi.fn() }) } },
+    // Välj domstol (#1891).
+    contacts: { search: { useQuery: () => ({ data: { contacts: [{ id: "c-hov", name: "Svea hovrätt", contactType: "COURT" }] }, isLoading: false }) } },
   },
 }));
 vi.mock("@/lib/client/kostnadsrakning/generate-kr-doc", () => ({ generateKrDoc }));
@@ -116,5 +118,38 @@ describe("RattshjalpKrDialog — postlistan (#1889)", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe("RattshjalpKrDialog — domstol och målnummer (#1891)", () => {
+  const WITH_COURT: MatterContext = {
+    ...MATTER, courtCaseNumber: "T 55-26",
+    contacts: [{ role: "DOMSTOL", contact: { name: "Stockholms tingsrätt" } }],
+  };
+  const renderWithCourt = () =>
+    render(<KostnadsrakningEntry matterId={asId<"MatterId">("m1")} matter={WITH_COURT} open onClose={onClose} onRecorded={onRecorded} />);
+
+  it("förvalt: ärendets domstol och målnummer i dokumentet, ingen vald kontakt till servern", async () => {
+    renderWithCourt();
+    expect(screen.getByLabelText("Målnummer")).toHaveValue("T 55-26");
+    fireEvent.click(screen.getByRole("button", { name: "Skapa kostnadsräkning" }));
+    await waitFor(() => expect(generateKrDoc).toHaveBeenCalled());
+    expect(mutateAsync).toHaveBeenCalledWith({ matterId: "m1" });
+    expect(generateKrDoc).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({ courtName: "Stockholms tingsrätt", courtCaseNumber: "T 55-26" }),
+    }));
+  });
+
+  it("byt domstol: kontakten skickas, dokumentet får den nya domstolen och inget målnummer", async () => {
+    renderWithCourt();
+    fireEvent.click(screen.getByRole("button", { name: "Byt domstol…" }));
+    fireEvent.change(screen.getByLabelText("Sök domstol"), { target: { value: "hov" } });
+    fireEvent.click(screen.getByRole("button", { name: /Svea hovrätt/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Skapa kostnadsräkning" }));
+    await waitFor(() => expect(generateKrDoc).toHaveBeenCalled());
+    expect(mutateAsync).toHaveBeenCalledWith({ matterId: "m1", courtContactId: "c-hov" });
+    const meta = generateKrDoc.mock.calls[0]?.[0].meta;
+    expect(meta.courtName).toBe("Svea hovrätt");
+    expect(meta).not.toHaveProperty("courtCaseNumber");
   });
 });
