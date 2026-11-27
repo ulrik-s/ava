@@ -17,7 +17,7 @@ import { NewFolderForm } from "./_new-folder-form";
 import type { SyncStatus } from "./_sync-badge";
 import { UploadNameDialog, useUploadNameQueue } from "./_upload-name-dialog";
 import { useDragHandlers } from "./_use-drag-handlers";
-import { useFileUpload, type RegisterInput } from "./_use-file-upload";
+import { useFileUpload, withPendingUploads, type RegisterInput } from "./_use-file-upload";
 
 type ViewMode = "tree" | "list";
 
@@ -88,7 +88,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
 
   const foldersByParent = useMemo(() => groupBy(folders, (f) => f.parentId ?? null), [folders]);
   // Pågående uppladdningar syns i båda vyerna, även med filter; i trädet i sin målmapp.
-  const shownDocuments = useMemo(() => [...visibleDocuments, ...upload.pendingUploads], [visibleDocuments, upload.pendingUploads]);
+  const shownDocuments = useMemo(() => withPendingUploads(visibleDocuments, upload.pendingUploads), [visibleDocuments, upload.pendingUploads]);
   const docsByFolder = useMemo(() => groupBy(shownDocuments, (d) => d.folderId ?? null), [shownDocuments]);
 
   const toggleFolder = useCallback((folderId: DocumentFolderId) => {

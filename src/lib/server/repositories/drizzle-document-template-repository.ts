@@ -7,6 +7,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import type { DocumentTemplateId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { DocumentTemplate } from "@/lib/shared/schemas/misc";
 import { documentTemplates, users } from "../db/schema";
+import { swedishOrder } from "../db/swedish-order";
 import type { AppDb } from "../db/types";
 import type {
   DocumentTemplateListRow, DocumentTemplateRepository, DocumentTemplateRow,
@@ -31,7 +32,7 @@ export class DrizzleDocumentTemplateRepository
       .from(documentTemplates)
       .leftJoin(users, eq(documentTemplates.createdById, users.id))
       .where(and(eq(documentTemplates.organizationId, organizationId), isNull(documentTemplates.deletedAt)))
-      .orderBy(asc(documentTemplates.category), asc(documentTemplates.name));
+      .orderBy(asc(swedishOrder(documentTemplates.category)), asc(swedishOrder(documentTemplates.name)));
     return rows.map((r): DocumentTemplateListRow => ({
       id: r.id, name: r.name,
       description: r.description ?? null, category: r.category ?? null,
