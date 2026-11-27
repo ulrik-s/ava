@@ -1,5 +1,5 @@
 /**
- * Migration 0054 (#1911) mot en in-process Postgres (PGlite): byråns trösklar
+ * Migration 0056 (#1911) mot en in-process Postgres (PGlite): byråns trösklar
  * för "Bör faktureras" är nullbara `integer`-kolumner utan standardvärde, en
  * befintlig byrå får NULL (= kodens standard), och migreringen går att köra
  * igen. Drizzle-schemat speglar kolumnerna.
@@ -11,13 +11,13 @@ import { getTableColumns } from "drizzle-orm";
 import { organizations } from "@/lib/server/db/schema";
 
 const DIR = "tooling/db/migrations";
-const TARGET = "0054_org_unbilled_thresholds.sql";
+const TARGET = "0056_org_unbilled_thresholds.sql";
 const ORG = "11111111-1111-4111-8111-111111111111";
 
 const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
 const sqlOf = (f: string): string => readFileSync(`${DIR}/${f}`, "utf8");
 
-describe("migration 0054 — byråns trösklar för Bör faktureras", () => {
+describe("migration 0056 — byråns trösklar för Bör faktureras", () => {
   let pg: PGlite;
 
   beforeAll(async () => {
