@@ -47,7 +47,7 @@ describe("mätområden", () => {
   it("områdena överlappar inte — en fil hör hemma i exakt ett", () => {
     // Överlapp vore värre än en lucka: AI-ytans dipp skulle delvis absorberas
     // av app-golvet och delvis fälla det, utan att någon förstod varför.
-    for (const path of ["src/lib/shared/kostnadsrakning.ts", "tooling/ava-cli/cli.ts", "tooling/scripts/seed-data.ts", "src/lib/client/addin/addin-client.ts", "office-addin/taskpane/taskpane.ts"]) {
+    for (const path of ["src/lib/shared/billing/kostnadsrakning.ts", "tooling/ava-cli/cli.ts", "tooling/scripts/seed-data.ts", "src/lib/client/addin/addin-client.ts", "office-addin/taskpane/taskpane.ts"]) {
       expect(COVERAGE_SCOPES.filter((s) => s.match(path)).map((s) => s.label), path).toHaveLength(1);
     }
   });

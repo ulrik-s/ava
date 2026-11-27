@@ -17,11 +17,14 @@ import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-d
 import { useMatterDocuments, type MatterDocument } from "@/lib/client/documents/use-matter-documents";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
-import { isHiddenBillingRun, isHiddenInvoice } from "@/lib/shared/hidden-billing-rows";
-import { KOSTNADSRAKNING_STATUS_LABELS, krStateOf, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
-import { pickKrDocForRun } from "@/lib/shared/kr-document";
+import { isHiddenBillingRun, isHiddenInvoice } from "@/lib/shared/billing/hidden-billing-rows";
+import { KOSTNADSRAKNING_STATUS_LABELS, krStateOf, type KostnadsrakningStatus } from "@/lib/shared/billing/kostnadsrakning-flow";
+import { pickKrDocForRun } from "@/lib/shared/billing/kr-document";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type InvoiceStatus, type InvoiceType } from "@/lib/shared/schemas/enums";
+import {
+  BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, FORORDNANDE_AVSLUT_LABELS, INVOICE_STATUS_LABELS,
+  type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type ForordnandeAvslut, type InvoiceStatus, type InvoiceType,
+} from "@/lib/shared/schemas/enums";
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 
 /** En faktureringshändelse (billing-run) som panelen och listan visar. */
@@ -44,6 +47,15 @@ export interface BillingRunRow {
   /** Registrerad prutning (negativt, netto). På rättsskyddets FORSAKRING-körning
    *  betyder den att bolagets prutning omfördelats till klientfakturan (#952). */
   prutningOre?: number | null;
+  /** Förordnandemålets avslut (#2180) — visas på kostnadsräkningens kort. */
+  forordnandeAvslut?: ForordnandeAvslut | null;
+}
+
+/** Kortrubrikens tillägg efter "Kostnadsräkning": referensen och förordnandemålets avslut (#2180). */
+export function krCardSuffix(run: Pick<BillingRunRow, "reference" | "forordnandeAvslut">): string {
+  const parts = [run.reference, run.forordnandeAvslut ? FORORDNANDE_AVSLUT_LABELS[run.forordnandeAvslut] : null];
+  const shown = parts.filter((p): p is string => Boolean(p));
+  return shown.length > 0 ? ` ${shown.join(" · ")}` : "";
 }
 
 /** Fristående klientfaktura (utan billing-run) som visas i faktura-listan (#853). */

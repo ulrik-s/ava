@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { INVOICE_TRANSITIONS } from "@/lib/shared/invoice-state-machine";
+import { INVOICE_TRANSITIONS } from "@/lib/shared/billing/invoice-state-machine";
 import { buildSeed } from "@/../tooling/scripts/seed-data";
 
 type Inv = { id: string; status: string; amount?: number; amountInclVat?: number };

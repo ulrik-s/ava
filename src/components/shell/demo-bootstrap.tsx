@@ -16,9 +16,9 @@
  * /demo-routen kör sin egen runtime (DemoClient → useDemoSeed).
  */
 
-import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { createTRPCClient, type TRPCClient } from "@trpc/client";
 import { useEffect, useState, type ReactNode } from "react";
-import superjson from "superjson";
 import { AnalyzeDispatcherRegistrar } from "@/components/documents/analyze-dispatcher-registrar";
 import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-text-dispatcher-registrar";
 import { HelperAutoConfig } from "@/components/shell/helper-auto-config";
@@ -44,13 +44,13 @@ import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import type { ProcedureRecorder } from "@/lib/client/demo/in-process-link";
 import { loadFirmaConfig, patchFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import type { CachingSyncDataStore } from "@/lib/client/local-store/caching-sync-data-store";
 import { makeAppQueryClient } from "@/lib/client/query-client";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
-import { trpc } from "@/lib/client/trpc";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import type { Principal } from "@/lib/server/auth/principal";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
-import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
+import type { AppRouter } from "@/lib/server/routers/_app";
 import { ActiveMatterPrefetch } from "./active-matter-prefetch";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
@@ -61,6 +61,7 @@ import { ReauthBanner } from "./reauth-banner";
 import { ServerFirstSync } from "./server-first-sync";
 import { ServerInvoiceNumbering } from "./server-invoice-numbering";
 import { SessionKeepalive } from "./session-keepalive";
+import { TrpcProviders } from "./trpc-providers";
 import { UnsavedWritesGuard } from "./unsaved-writes-guard";
 import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
@@ -108,7 +109,7 @@ async function rehydrateGeneratedDocs(): Promise<void> {
 function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, principal: Principal, recordProcedure?: ProcedureRecorder) {
   const ports = inProcessPorts(dataStore, firmaConfig);
 
-  return trpc.createClient({
+  return createTRPCClient<AppRouter>({
     links: [
       new GitBackendRuntime({
         dataStore,
@@ -118,8 +119,7 @@ function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig, p
         authProvider: new GitAuthProvider(principal),
       }).createLink(),
     ],
-    transformer: superjson,
-  } as never);
+  });
 }
 
 interface BootstrapArgs {
@@ -265,7 +265,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
 
 interface TreeProps {
   firmaConfig: FirmaConfig;
-  trpcClient: ReturnType<typeof trpc.createClient>;
+  trpcClient: TRPCClient<AppRouter>;
   queryClient: QueryClient;
   status: Status;
   errorMsg: string | null;
@@ -298,8 +298,7 @@ function AuthGatedDemoTree(props: TreeProps) {
 
   return (
     <DemoModeProvider readOnly={readOnly}>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
+      <TrpcProviders trpcClient={trpcClient} queryClient={queryClient}>
           <CapabilitiesProvider>
           <SyncProviderRoot token={firmaConfig.token}>
           <AnalyzeDispatcherRegistrar />
@@ -359,8 +358,7 @@ function AuthGatedDemoTree(props: TreeProps) {
           </div>
           </SyncProviderRoot>
           </CapabilitiesProvider>
-        </QueryClientProvider>
-      </trpc.Provider>
+      </TrpcProviders>
     </DemoModeProvider>
   );
 }

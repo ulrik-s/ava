@@ -12,9 +12,9 @@
  * Komponenten räknar fram motsvarande inkl/exkl via `splitVat`.
  */
 
-import { formatCurrency } from "@/lib/client/utils";
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
-import { DEFAULT_VAT_RATE, splitVat } from "@/lib/shared/vat";
+import { DEFAULT_VAT_RATE, splitVat } from "@/lib/shared/billing/vat";
+import { formatKr } from "@/lib/shared/kr-format";
 
 interface Props {
   /** Beloppet i öre, tolkat enligt `basis`. */
@@ -37,7 +37,7 @@ export function Money({ ore, basis = "net", vatRate = DEFAULT_VAT_RATE, classNam
       title={`Visar ${mode === "incl" ? "inkl." : "exkl."} moms — klicka för att växla`}
       className={`cursor-pointer underline decoration-dotted decoration-gray-300 underline-offset-2 hover:decoration-gray-500 ${className ?? ""}`}
     >
-      {formatCurrency(shown)}
+      {formatKr(shown)}
     </button>
   );
 }

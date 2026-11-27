@@ -103,8 +103,10 @@ test("dagspilarna: Startsidans ‹ och › syns inom fönstret, och sidan scroll
   await seedDemoLogin(page, BASE);
   await page.goto(`${BASE}/`);
   await expect(page.getByRole("heading", { name: "Startsida", level: 1 })).toBeVisible({ timeout: 30_000 });
+  // Sidhuvudets pilar: Stapeldiagrammet (#2112) har egna med samma namn.
+  const stepper = page.getByRole("group", { name: "Dag" }).locator("xpath=..");
   for (const name of ["Föregående dag", "Nästa dag"]) {
-    await expect(page.getByRole("button", { name }), name).toBeInViewport({ ratio: 1 });
+    await expect(stepper.getByRole("button", { name }), name).toBeInViewport({ ratio: 1 });
   }
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(sideways, "sidledsscroll").toBe(0);

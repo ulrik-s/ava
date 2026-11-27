@@ -13,7 +13,7 @@
  * `shared-must-be-framework-agnostic`.
  */
 
-import { synthesizeBadDebtWriteOffs } from "./write-off-migration";
+import { synthesizeBadDebtWriteOffs } from "./billing/write-off-migration";
 
 /** Demo-data per entitet. Saknade entiteter får tom array. */
 export interface DemoSource {

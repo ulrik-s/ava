@@ -15,14 +15,16 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { creditCreatedNote, invoiceStatusNote, radgivningInvoicedNote } from "@/lib/shared/billing-notes";
-import { arvodeInclVatOre, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
-import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-state-machine";
+import { creditCreatedNote, invoiceStatusNote, radgivningInvoicedNote } from "@/lib/shared/billing/billing-notes";
+import { arvodeInclVatOre, isPaymentPlanSettled } from "@/lib/shared/billing/invoice-calc";
+import { canTransition, transitionErrorMessage } from "@/lib/shared/billing/invoice-state-machine";
+import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry";
+import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/billing/rattshjalp";
+import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/billing/whole-kronor";
+import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/billing/write-off-calc";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { pageEnvelope } from "@/lib/shared/paginate";
-import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/radgivning-entry";
-import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/rattshjalp";
 import type { Invoice, Payment, PaymentPlan, TimeEntry, WriteOff } from "@/lib/shared/schemas/billing";
 import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
 import { invoiceStatusSchema, invoiceTypeSchema } from "@/lib/shared/schemas/enums";
@@ -39,8 +41,6 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
-import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/whole-kronor";
-import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
 import { assertAdmin } from "../auth/assert-admin";
 import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";

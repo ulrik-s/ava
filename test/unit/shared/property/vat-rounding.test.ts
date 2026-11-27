@@ -13,10 +13,10 @@
 
 import fc from "fast-check";
 import { describe, expect, it } from "vitest-compat";
-import { chargedExpenseLines, expenseNetOre, type ChargeableExpense } from "@/lib/shared/expense-vat";
+import { chargedExpenseLines, expenseNetOre, type ChargeableExpense } from "@/lib/shared/billing/expense-vat";
+import { splitVat } from "@/lib/shared/billing/vat";
+import { kronorQuotient, roundRow, roundToKronor, splitGross, timeRowOre, vatOnRow } from "@/lib/shared/billing/whole-kronor";
 import type { AmountRounding } from "@/lib/shared/schemas/enums";
-import { splitVat } from "@/lib/shared/vat";
-import { kronorQuotient, roundRow, roundToKronor, splitGross, timeRowOre, vatOnRow } from "@/lib/shared/whole-kronor";
 import { isWholeKronor, oreAmount, rounding, signedOre, sum, vatRate, wholeKronor } from "../../helpers/arbitraries";
 
 /**

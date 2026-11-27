@@ -10,8 +10,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { buildSemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
+import { vatOnRow } from "@/lib/shared/billing/whole-kronor";
 import type { Invoice } from "@/lib/shared/schemas/billing";
-import { vatOnRow } from "@/lib/shared/whole-kronor";
 import { rng, type Rng } from "../../../helpers/seeded-rng";
 import { nowFor, scenarioFor, worldFor } from "./billing-world";
 

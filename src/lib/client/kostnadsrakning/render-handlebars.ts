@@ -14,9 +14,8 @@
  */
 
 import Handlebars from "handlebars";
-import { formatKr } from "@/lib/shared/format-kr";
 import { toIsoDate, toSwedishLongDate } from "@/lib/shared/iso-date";
-import { formatDecimalHours } from "@/lib/shared/kr-format";
+import { formatDecimalHours, formatKr } from "@/lib/shared/kr-format";
 
 /**
  * Ett giltigt datum ur ett mallvärde, annars `undefined`: tomt, ogiltigt eller

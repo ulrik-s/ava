@@ -32,6 +32,7 @@ import { recheckIfParty, recheckMatterConflicts } from "../conflict/matter-confl
 import { conflictReviewInput, reviewMatterConflicts } from "../conflict/matter-conflict-review";
 import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
 import { emit } from "../events/emit";
+import { applyOptionalDate, keepMatterActive, toDateOrNull } from "../matters/matter-dates";
 import { matterListInput, toMatterListFilter } from "../matters/matter-list-input";
 import { formatSeriesNumber } from "../number-series";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
@@ -126,18 +127,6 @@ async function nextMatterNumber(ctx: MatterCtx, responsibleLawyerId?: string): P
 
   const seq = Math.max(maxSeq(ownMatters, year), maxSeq(prefixMatters, year)) + 1;
   return formatSeriesNumber(`${prefix}${year}-`, seq);
-}
-
-function toDateOrNull(v: string | null | undefined): Date | null | undefined {
-  if (v === undefined) return undefined;
-  return v ? new Date(v) : null;
-}
-
-/** Sätter ett datumfält (sträng → Date | null) på update-datat, men bara om
- *  det skickades med (undefined = rör ej). Håller update-mutationen ≤8. */
-function applyOptionalDate(data: Record<string, unknown>, key: string, value: string | null | undefined): void {
-  const d = toDateOrNull(value);
-  if (d !== undefined) data[key] = d;
 }
 
 /** Byts målnumret från ett ifyllt värde till ett annat sparas det gamla som
@@ -261,6 +250,11 @@ export const matterRouter = router({
   markConflictsReviewed: orgProcedure
     .input(conflictReviewInput)
     .mutation(({ ctx, input }) => reviewMatterConflicts(ctx, input)),
+
+  /** Behåll som aktivt (#2098): sätter ärendets keptActiveAt till anropets tid. Köat. */
+  keepActive: orgProcedure
+    .input(z.object({ id: matterIdSchema }))
+    .mutation(({ ctx, input }) => keepMatterActive(ctx, input.id)),
 
   update: orgProcedure
     .input(

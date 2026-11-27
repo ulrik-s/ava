@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
+import { IdbKv } from "@/lib/client/local-store/idb-kv";
 import { LOCAL_DB, localDbName } from "./local-data/local-namespace";
 
 const STORE = "kv";

@@ -7,7 +7,7 @@ import {
   type SemanticVoucher,
   type SemanticVoucherInput,
 } from "@/lib/shared/accounting/semantic-voucher";
-import type { VatRate } from "@/lib/shared/vat";
+import type { VatRate } from "@/lib/shared/billing/vat";
 
 const mapping: FortnoxKontoMappning = {
   voucherSeries: "A",

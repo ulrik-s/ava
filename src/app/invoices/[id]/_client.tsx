@@ -14,16 +14,15 @@ import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-bi
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { specCardTotals, specLineOre } from "@/lib/shared/invoice-specification";
-import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
-import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
+import { specCardTotals, specLineOre } from "@/lib/shared/billing/invoice-specification";
+import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/billing/rattshjalp";
+import { invoiceBreakdown, type SettlementView } from "@/lib/shared/billing/settlement-view";
+import { roundingOf, timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
+import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
+import { formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
 import { INVOICE_STATUS_LABELS, type AmountRounding } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
-import type { SettlementView } from "@/lib/shared/settlement-view";
-import { roundingOf } from "@/lib/shared/whole-kronor";
-import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { AmountHeading } from "./_amount-heading";
 import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
@@ -35,7 +34,7 @@ import { LedgerBooking } from "./_ledger-booking";
 import { PaymentModal } from "./_payment-modal";
 import { PaymentsTable } from "./_payments-table";
 import { PlanModal } from "./_plan-modal";
-import { SendInvoiceModal, type SendInvoiceModalProps } from "./_send-invoice-modal";
+import { SendInvoiceModal } from "./_send-invoice-modal";
 import { WriteOffModal } from "./_write-off-modal";
 
 
@@ -169,8 +168,8 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
 /** Primär specifikation: slutregleringsfakturor (#876) visar den PERSISTERADE vyn
  *  (identisk med faktura-dokumentet), övriga fakturor den vanliga tids-/utläggsspecen. */
 function PrimarySpecCard({ inv }: { inv: Inv }) {
-  if (inv.settlementBreakdown) return <SettlementBreakdownCard view={inv.settlementBreakdown} />;
-  return <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} rounding={roundingOf(inv)} />;
+  const view = invoiceBreakdown(inv);
+  return view ? <SettlementBreakdownCard view={view} /> : <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} rounding={roundingOf(inv)} />;
 }
 
 /** Slutregleringens persisterade vy (#876): tidsspec-tabell + beloppstrappa + total,
@@ -201,9 +200,9 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
               <tr key={i} className="align-top">
                 <td className="py-1.5 whitespace-nowrap">{new Date(l.date).toLocaleDateString("sv-SE")}</td>
                 <td className="py-1.5">{l.description}</td>
-                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(aPrisOre(l))}/h</td>
+                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatKr(aPrisOre(l))}/h</td>
                 <td className="py-1.5 text-right whitespace-nowrap">{formatDecimalHoursWithUnit(l.minutes)}</td>
-                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(l.amountOre)}</td>
+                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatKr(l.amountOre)}</td>
               </tr>
             ))}
           </tbody>
@@ -212,7 +211,7 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
               <td className="py-1.5" colSpan={2}>Summa</td>
               <td></td>
               <td className="py-1.5 text-right whitespace-nowrap">{formatDecimalHoursWithUnit(totalMinutes)}</td>
-              <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(totalAmount)}</td>
+              <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatKr(totalAmount)}</td>
             </tr>
           </tfoot>
         </table>
@@ -222,13 +221,13 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
           <div key={i} className="flex items-center justify-between py-1.5">
             <dt className={`text-sm ${r.kind === "info" ? "text-gray-400" : "text-gray-600"}`}>{r.label}</dt>
             <dd className={`text-sm font-mono ${r.kind === "deduct" ? "text-amber-700" : r.kind === "info" ? "text-gray-400" : "text-gray-700"}`}>
-              {r.kind === "deduct" ? "−" : r.kind === "info" ? "(" : ""}{formatCurrency(r.amountOre)}{r.kind === "info" ? ")" : ""}
+              {r.kind === "deduct" ? "−" : r.kind === "info" ? "(" : ""}{formatKr(r.amountOre)}{r.kind === "info" ? ")" : ""}
             </dd>
           </div>
         ))}
         <div className="flex items-center justify-between border-t border-gray-300 mt-1 pt-2">
           <dt className="text-sm font-semibold text-gray-900">{view.totalLabel}</dt>
-          <dd className="text-sm font-mono font-semibold text-gray-900">{formatCurrency(view.totalOre)}</dd>
+          <dd className="text-sm font-mono font-semibold text-gray-900">{formatKr(view.totalOre)}</dd>
         </div>
       </dl>
     </div>
@@ -268,7 +267,7 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
           invoiceType={inv.invoiceType}
           notes={inv.notes}
           amountRounding={roundingOf(inv)}
-          settlementBreakdown={(inv as { settlementBreakdown?: SendInvoiceModalProps["settlementBreakdown"] }).settlementBreakdown}
+          settlementBreakdown={invoiceBreakdown(inv)}
           matterNumber={inv.matter.matterNumber}
           matterTitle={inv.matter.title}
           onRecorded={() => {
@@ -430,7 +429,7 @@ type SpecExpenseRow = Inv["expenses"][number];
 function buildSettlement(inv: Inv, ledger: LedgerView): MatterSettlement {
   const times = inv.timeEntries ?? [];
   const exps = inv.expenses ?? [];
-  const arvodeOre = times.reduce((s, t) => s + Math.round((t.minutes / 60) * (t.hourlyRate ?? 0)), 0);
+  const arvodeOre = times.reduce((s, t) => s + timeEntryValueOre(t.minutes, t.hourlyRate ?? 0), 0);
   const utlaggOre = exps.reduce((s, e) => s + e.amount, 0);
   const m = inv.matter as { paymentMethod?: string | null; taxaHasFTax?: boolean | null } | null;
   const radgivningOre = m?.paymentMethod === "RATTSHJALP"
@@ -527,7 +526,7 @@ function SpecificationCard({ timeEntries, expenses, rounding }: { timeEntries: S
           </table>
           <div className="flex justify-between text-xs text-gray-500 mt-1">
             <span>Moms på arvodet (25 %)</span>
-            <span className="font-mono">{formatCurrency(arvodeMomsOre)}</span>
+            <span className="font-mono">{formatKr(arvodeMomsOre)}</span>
           </div>
         </div>
       )}

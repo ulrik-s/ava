@@ -5,8 +5,8 @@
  *
  * Idag: e-postutskick (smtp-sender) när AVA_SMTP_* är satt; dokument-
  * klassificering + sidindexering (#518, #1215); bokföringens keepalive när
- * Fortnox är konfigurerat (#1815). Fortnox-sync +
- * regelmotor-handlers slotas in här i takt med att deras config/triggers byggs.
+ * Fortnox är konfigurerat (#1815). Fortnox-sync slotas in här när dess
+ * config/triggers byggs.
  */
 
 import { preparePdfjsForServer } from "@/lib/server/documents/pdfjs-server-runtime";

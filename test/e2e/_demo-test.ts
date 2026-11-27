@@ -108,6 +108,8 @@ export async function seedDemoLogin(page: Page, baseUrl: string = DEMO_BASE_URL,
 export interface DemoSeed {
   matters: Array<{ id: string; title: string; createdAt?: string; matterNumber?: string; paymentMethod?: string; status?: string }>;
   contacts: Array<{ id: string; name: string }>;
+  /** Ärendenas parter, med kontakten förbakad (#1965). */
+  matterContacts: Array<{ matterId: string; role: string; createdAt?: string; contact?: { name: string } }>;
   invoices: Array<{ id: string; matterId: string; status?: string; invoiceNumber?: string | null }>;
   documents: Array<{ id: string; matterId: string; title: string; fileName?: string; billingRunId?: string | null }>;
   timeEntries: Array<{ id: string; matterId: string; description: string; frozenAt?: string | null; invoiceId?: string | null; minutes?: number }>;

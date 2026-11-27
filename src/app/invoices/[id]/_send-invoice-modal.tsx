@@ -17,7 +17,7 @@ import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper"
 import { fakturaOrgMeta, type FakturaOrgMeta, type FakturaOrgSettings } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaBreakdown, InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { AmountRounding } from "@/lib/shared/schemas/enums";
 import type { InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 
@@ -46,7 +46,7 @@ export interface SendInvoiceModalProps {
 function mailBody(p: SendInvoiceModalProps): string {
   const lines = [
     `Faktura ${p.invoiceNumber ?? ""}`.trim(),
-    `Belopp: ${formatCurrency(p.amount)}`,
+    `Belopp: ${formatKr(p.amount)}`,
   ];
   if (p.ocrReference) lines.push(`OCR-referens: ${p.ocrReference}`);
   lines.push("", "Fakturan bifogas som PDF.");

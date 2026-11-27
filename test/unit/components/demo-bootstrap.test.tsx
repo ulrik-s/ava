@@ -24,7 +24,8 @@ const loadAllGeneratedDocBlobs = vi.fn((): Promise<Array<{ id: string; bytes: Ui
 const stashGeneratedDoc = vi.fn();
 const probeSession = vi.fn((): Promise<unknown> => Promise.resolve({ kind: "signed-out" }));
 const offSignedOut = vi.fn();
-const createLink = vi.fn(() => "länk");
+// En tRPC-länk: createTRPCClient anropar den med runtime när klienten byggs.
+const createLink = vi.fn(() => () => () => ({ subscribe: () => ({ unsubscribe: () => {} }) }));
 const authMode = { mode: "identified-write" };
 
 vi.mock("@/lib/client/backend/create-demo-store", () => ({ createDemoStore: (...a: unknown[]) => createDemoStore(...a) }));
@@ -43,7 +44,7 @@ vi.mock("@/lib/client/backend/server-first-store", () => ({ createServerFirstSto
 vi.mock("@/lib/client/demo/document-content-cache", () => ({ preloadDocumentContents: (...a: unknown[]) => preloadDocumentContents(...(a as [])) }));
 vi.mock("@/lib/client/demo/generated-doc-idb", () => ({ loadAllGeneratedDocBlobs: () => loadAllGeneratedDocBlobs() }));
 vi.mock("@/lib/client/demo/generated-doc-cache", () => ({ stashGeneratedDoc: (...a: unknown[]) => stashGeneratedDoc(...(a as [])) }));
-vi.mock("@/lib/client/trpc", () => ({ trpc: { createClient: (opts: unknown) => ({ opts }), Provider: passThrough } }));
+vi.mock("@/components/shell/trpc-providers", () => ({ TrpcProviders: passThrough }));
 vi.mock("@/lib/client/auth/use-auth-mode", () => ({ AuthProvider: passThrough, useAuthMode: () => authMode }));
 vi.mock("@/lib/client/capabilities/use-capabilities", () => ({ CapabilitiesProvider: passThrough }));
 vi.mock("@/lib/client/sync/sync-context", () => ({ SyncProviderRoot: passThrough }));

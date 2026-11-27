@@ -1,23 +1,15 @@
 import { z } from "zod";
-import { computeArBridge, computeAging, scopeArToPeriod, attributeArToLawyer, perInvoiceRows } from "@/lib/shared/ar-summary";
-import {
-  billedPerLawyer,
-  type BilledInvoiceInput,
-  type FrozenWorkInput,
-} from "@/lib/shared/billed-per-lawyer";
-import { calendarDate, isoWeek, weeksInRange } from "@/lib/shared/calendar-periods";
-import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
-import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
-import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
-import { hasInvoice } from "@/lib/shared/time-entry-lock";
-import { loadPeriodWork } from "../reports/period-work";
-import type { Repositories } from "../repositories/repositories";
+import { userIdSchema } from "@/lib/shared/schemas/ids";
+import { loadArReport } from "../reports/ar-report";
+import { loadBilledReport } from "../reports/billed-report";
+import { loadFirmOverview } from "../reports/firm-overview";
+import { loadLawyerReport } from "../reports/lawyer-report";
 import { router, protectedProcedure } from "../trpc";
 
 /**
  * Advokat-fokuserade rapporter: användaren väljer period (from/to) och
- * en advokat; en enda procedure hämtar alla tre delrapporter så sidan
- * kan visa dem konsistent.
+ * en advokat. Routern validerar indata och anropar rapporttjänsterna i
+ * `src/lib/server/reports/` (#2176) med byrån ur sessionen.
  *
  * Enheter (samma som resten av kodbasen):
  *   - `TimeEntry.minutes`    — heltal minuter
@@ -26,345 +18,15 @@ import { router, protectedProcedure } from "../trpc";
  *   - `Invoice.amount`       — öre
  *
  * Alla kronbelopp som returneras är i **öre** så UI kan använda
- * `formatCurrency()` rakt av.
+ * `formatKr()` rakt av.
  */
 
-// ─── ISO-vecka ───────────────────────────────────────────────────────
-
-function weekKey(isoYear: number, week: number): string {
-  return `${isoYear}-W${String(week).padStart(2, "0")}`;
-}
-
-// ─── Hjälpare för "Fakturerat per advokat" (#90) ─────────────────────
-
-/** Demo-projektionen lagrar datum som ISO-strängar → coerca till Date. */
-function coerceDate(v: unknown): Date {
-  return v instanceof Date ? v : new Date(v as string);
-}
-
-interface RawTimeEntry {
-  userId: UserId; minutes: number; hourlyRate: number;
-  invoiceId: InvoiceId | null | undefined; frozenByBillingRunId: BillingRunId | null | undefined;
-}
-interface RawInvoice { id: string; amount: number; status: InvoiceStatus; invoiceDate: unknown; updatedAt: unknown }
-
-/** Karta frozen tidsposter → arbetsvärde per (faktura, advokat). En post knyts
- *  till sin faktura via direkt `invoiceId` (legacy) eller via BillingRun. */
-function buildFrozenWork(
-  timeEntries: RawTimeEntry[],
-  runToInvoice: Map<string, string>,
-): FrozenWorkInput[] {
-  const out: FrozenWorkInput[] = [];
-  for (const te of timeEntries) {
-    const invoiceId = te.invoiceId ?? (te.frozenByBillingRunId ? runToInvoice.get(te.frozenByBillingRunId) : undefined);
-    if (!invoiceId) continue;
-    out.push({
-      invoiceId: asId<"InvoiceId">(invoiceId),
-      userId: asId<"UserId">(te.userId),
-      workOre: Math.round((te.minutes / 60) * te.hourlyRate),
-    });
-  }
-  return out;
-}
-
-/** invoiceId → advokatens andel (userWork/totalWork ∈ [0,1]) ur frysta tidsposter. */
-function lawyerShareRatios(frozenWork: FrozenWorkInput[], userId: UserId): Map<string, number> {
-  const total = new Map<string, number>();
-  const user = new Map<string, number>();
-  for (const fw of frozenWork) {
-    total.set(fw.invoiceId, (total.get(fw.invoiceId) ?? 0) + fw.workOre);
-    if (fw.userId === userId) user.set(fw.invoiceId, (user.get(fw.invoiceId) ?? 0) + fw.workOre);
-  }
-  const ratio = new Map<string, number>();
-  for (const [inv, t] of total) if (t > 0) ratio.set(inv, (user.get(inv) ?? 0) / t);
-  return ratio;
-}
-
-/** invoiceId → senaste avskrivnings-tidpunkt ur WriteOff-posterna (ADR 0007). */
-function writtenOffDates(writeOffs: Array<{ invoiceId?: string; writtenOffAt?: unknown }>): Map<string, Date> {
-  const m = new Map<string, Date>();
-  for (const w of writeOffs) {
-    if (!w.invoiceId) continue;
-    const d = coerceDate(w.writtenOffAt);
-    const cur = m.get(w.invoiceId);
-    if (!cur || d.getTime() > cur.getTime()) m.set(w.invoiceId, d);
-  }
-  return m;
-}
-
-function toInvoiceInputs(invoices: RawInvoice[], writtenOff: Map<string, Date>): BilledInvoiceInput[] {
-  return invoices.map((i) => ({
-    id: asId<"InvoiceId">(i.id),
-    amountOre: i.amount,
-    invoiceDate: coerceDate(i.invoiceDate),
-    status: i.status,
-    // Avskrivnings-tidpunkt från WriteOff-posten (ADR 0007); fallback till
-    // updatedAt-heuristiken (#90) för ev. BAD_DEBT-faktura utan post.
-    writtenOffAt: writtenOff.get(i.id) ?? (i.status === "BAD_DEBT" ? coerceDate(i.updatedAt) : null),
-  }));
-}
-
-/** Föregående kalendermånad relativt periodstarten, på den svenska dagen (#1677): gränserna är
- *  svensk midnatt den första till sista millisekunden den sista dagen i månaden. */
-function previousCalendarMonth(periodStart: Date): { from: Date; to: Date } {
-  const first = calendarDate(`${stockholmDay(periodStart).slice(0, 7)}-01`);
-  const y = first.getUTCFullYear();
-  const m = first.getUTCMonth();
-  // Dag 0 i denna månad = sista dagen i föregående. UTC-midnatt → samma svenska dag.
-  return stockholmPeriod(stockholmDay(new Date(Date.UTC(y, m - 1, 1))), stockholmDay(new Date(Date.UTC(y, m, 0))));
-}
-
-// ─── Router ──────────────────────────────────────────────────────────
-
-/** Per-faktura-rader för Kundfordrings-tabellen (slår ihop "Fakturerat"-tabellen). */
-interface ArRowMeta { invoiceNumber: string; invoiceDate: string; matterId: MatterId; matterNumber: string; title: string }
-const EMPTY_AR_META: ArRowMeta = { invoiceNumber: "", invoiceDate: "", matterId: asId<"MatterId">(""), matterNumber: "", title: "" };
-
-/** Förresolva faktura-metadata (nummer + datum + ärende) per id — håller rad-mappningen trivial. */
-function arMetaById(invoices: Record<string, unknown>[]): Map<string, ArRowMeta> {
-  const m = new Map<string, ArRowMeta>();
-  for (const inv of invoices as Array<{ id?: string; invoiceNumber?: string | null; invoiceDate?: unknown; matter?: { id?: string; matterNumber?: string; title?: string } | null }>) {
-    const mt = inv.matter ?? {};
-    m.set(String(inv.id ?? ""), {
-      invoiceNumber: inv.invoiceNumber ?? "",
-      invoiceDate: coerceDate(inv.invoiceDate).toISOString(),
-      matterId: asId<"MatterId">(mt.id ?? ""),
-      matterNumber: mt.matterNumber ?? "",
-      title: mt.title ?? "",
-    });
-  }
-  return m;
-}
-
-function arRowsFrom(scoped: { invoices: Record<string, unknown>[]; payments: Record<string, unknown>[]; writeOffs: Record<string, unknown>[] }) {
-  const meta = arMetaById(scoped.invoices);
-  return perInvoiceRows(scoped.invoices, scoped.payments, scoped.writeOffs).map((r) => {
-    const m = meta.get(r.invoiceId) ?? EMPTY_AR_META;
-    return { id: r.invoiceId, ...m, fakturerat: r.amount, inbetalt: r.paid, avskrivet: r.writtenOff, utestaende: r.outstanding };
-  });
-}
-
-// ─── perLawyer-delrapporter (#6: utbrutna ur query-arrowen → testbara) ──
-
-/** Den delmängd av matter-selecten delrapporterna läser. */
-interface ReportMatterRef {
-  id: MatterId;
-  matterNumber: string;
-  title: string;
-  paymentMethod: PaymentMethod;
-  paymentMethodNote: string | null;
-  paymentMethodDecidedAt: Date | null;
-  contacts: { contact: { name: string } }[];
-}
-interface ReportTimeEntry {
-  date: Date; minutes: number; billable: boolean; hourlyRate: number;
-  invoiceId?: InvoiceId | null | undefined; matter?: ReportMatterRef | null | undefined;
-}
-interface ReportExpense {
-  date: Date; amount: number; billable: boolean;
-  invoiceId?: InvoiceId | null | undefined; matter?: ReportMatterRef | null | undefined;
-}
-
-interface MatterAgg {
-  matterId: MatterId; matterNumber: string; title: string; client: string | null;
-  paymentMethod: PaymentMethod; paymentMethodNote: string | null; paymentMethodDecidedAt: Date | null;
-  totalMinutes: number; billableMinutes: number;
-  workValueOre: number; // tid × timpris (öre)
-  expenseOre: number;   // utlägg totalt (öre, bara billable)
-}
-interface UnbilledRow {
-  matterId: MatterId; matterNumber: string; title: string; client: string | null;
-  paymentMethod: PaymentMethod; timeOre: number; expenseOre: number; total: number;
-}
-
-/** hourlyRate ÄR REDAN ÖRE (öre/h) → (min/60) × öre/h = öre. */
-function workValueOre(minutes: number, hourlyRate: number): number {
-  return Math.round((minutes / 60) * hourlyRate);
-}
-
-const clientName = (m: ReportMatterRef): string | null => m.contacts?.[0]?.contact?.name ?? null;
-
-/** Debiterbar och ännu inte knuten till en faktura. */
-const isOpenBillable = (x: { billable: boolean; invoiceId?: string | null | undefined }): boolean => x.billable && !hasInvoice(x);
-
-/** 1. Ärenden advokaten jobbat i under perioden. */
-function buildMatters(timeEntries: ReportTimeEntry[], expenses: ReportExpense[]): MatterAgg[] {
-  const map = new Map<string, MatterAgg>();
-  const ensure = (m: ReportMatterRef): MatterAgg => {
-    const existing = map.get(m.id);
-    if (existing) return existing;
-    const agg: MatterAgg = {
-      matterId: m.id, matterNumber: m.matterNumber, title: m.title, client: clientName(m),
-      paymentMethod: m.paymentMethod, paymentMethodNote: m.paymentMethodNote,
-      paymentMethodDecidedAt: m.paymentMethodDecidedAt,
-      totalMinutes: 0, billableMinutes: 0, workValueOre: 0, expenseOre: 0,
-    };
-    map.set(m.id, agg);
-    return agg;
-  };
-  for (const te of timeEntries) {
-    if (!te.matter) continue;
-    const agg = ensure(te.matter);
-    agg.totalMinutes += te.minutes;
-    if (te.billable) {
-      agg.billableMinutes += te.minutes;
-      agg.workValueOre += workValueOre(te.minutes, te.hourlyRate);
-    }
-  }
-  for (const ex of expenses) {
-    if (!ex.matter) continue;
-    const agg = ensure(ex.matter);
-    if (ex.billable) agg.expenseOre += ex.amount;
-  }
-  return Array.from(map.values()).sort((a, b) => a.matterNumber.localeCompare(b.matterNumber, "sv"));
-}
-
-/** 2. Timdebitering per vecka (alla veckor i perioden, även tomma). */
-function buildWeeklyRows(timeEntries: ReportTimeEntry[], fromDay: string, toDay: string) {
-  const weeks = weeksInRange(calendarDate(fromDay), calendarDate(toDay));
-  const grid = new Map<string, { totalMinutes: number; billableMinutes: number; workValueOre: number }>();
-  for (const w of weeks) grid.set(weekKey(w.isoYear, w.week), { totalMinutes: 0, billableMinutes: 0, workValueOre: 0 });
-  for (const te of timeEntries) {
-    const { year, week } = isoWeek(calendarDate(stockholmDay(te.date)));
-    const cell = grid.get(weekKey(year, week));
-    if (!cell) continue;
-    cell.totalMinutes += te.minutes;
-    if (te.billable) {
-      cell.billableMinutes += te.minutes;
-      cell.workValueOre += workValueOre(te.minutes, te.hourlyRate);
-    }
-  }
-  return weeks.map((w) => {
-    const cell = grid.get(weekKey(w.isoYear, w.week))!;
-    return {
-      isoYear: w.isoYear, week: w.week,
-      start: stockholmDay(w.start), end: stockholmDay(w.end), // UTC-midnatt → samma svenska dag
-      ...cell,
-    };
-  });
-}
-
-/** 3. Upparbetat, icke fakturerat: debiterbar tid+utlägg utan invoiceId. */
-function buildUnbilled(timeEntries: ReportTimeEntry[], expenses: ReportExpense[]): { rows: UnbilledRow[]; total: number } {
-  const map = new Map<string, UnbilledRow>();
-  const ensure = (m: ReportMatterRef): UnbilledRow => {
-    const existing = map.get(m.id);
-    if (existing) return existing;
-    const row: UnbilledRow = {
-      matterId: m.id, matterNumber: m.matterNumber, title: m.title, client: clientName(m),
-      paymentMethod: m.paymentMethod, timeOre: 0, expenseOre: 0, total: 0,
-    };
-    map.set(m.id, row);
-    return row;
-  };
-  let total = 0;
-  for (const te of timeEntries) {
-    if (!te.matter || !isOpenBillable(te)) continue;
-    const ore = workValueOre(te.minutes, te.hourlyRate);
-    const row = ensure(te.matter);
-    row.timeOre += ore; row.total += ore; total += ore;
-  }
-  for (const ex of expenses) {
-    if (!ex.matter || !isOpenBillable(ex)) continue;
-    const row = ensure(ex.matter);
-    row.expenseOre += ex.amount; row.total += ex.amount; total += ex.amount;
-  }
-  const rows = Array.from(map.values())
-    .filter((r) => r.total > 0)
-    .sort((a, b) => a.matterNumber.localeCompare(b.matterNumber, "sv"));
-  return { rows, total };
-}
-
-/** Summera matter-aggregaten till period-totaler. */
-function sumMatterTotals(matters: MatterAgg[]) {
-  return matters.reduce(
-    (acc, m) => ({
-      totalMinutes: acc.totalMinutes + m.totalMinutes,
-      billableMinutes: acc.billableMinutes + m.billableMinutes,
-      workValueOre: acc.workValueOre + m.workValueOre,
-      expenseOre: acc.expenseOre + m.expenseOre,
-    }),
-    { totalMinutes: 0, billableMinutes: 0, workValueOre: 0, expenseOre: 0 },
-  );
-}
-
-// ─── Byråöversikt (#1016) ────────────────────────────────────────────
-
-/** En jurists rad i byråöversikten. Alla kronbelopp i öre. */
-interface FirmLawyerRow {
-  userId: string;
-  name: string;
-  title: string | null;
-  totalMinutes: number;
-  billableMinutes: number;
-  workValueOre: number;
-  expenseOre: number;
-  /** Upparbetat, ännu inte fakturerat (debiterbar tid + utlägg utan faktura). */
-  unbilledOre: number;
-  /** Fakturerat i perioden, attribuerat mot juristens andel av fryst arbete (#90). */
-  billedOre: number;
-  writeOffOre: number;
-  netOre: number;
-}
-
-/** Org-datat som hämtas EN gång och delas mellan jurist-raderna. */
-interface FirmShared {
-  invoiceInputs: BilledInvoiceInput[];
-  frozenWork: FrozenWorkInput[];
-  period: { from: Date; to: Date };
-  prevPeriod: { from: Date; to: Date };
-}
-
-/** En jurists rad: periodens arbete (samma delrapporter som perLawyer) + fakturerat. */
-async function firmLawyerRow(
-  repos: Repositories,
-  org: OrganizationId,
-  user: { id: UserId; name: string; title?: string | null | undefined },
-  shared: FirmShared,
-): Promise<FirmLawyerRow> {
-  const [timeEntries, expenses] = await Promise.all([
-    repos.timeEntries.listForLawyerInPeriod(org, user.id, shared.period.from, shared.period.to),
-    repos.expenses.listForLawyerInPeriod(org, user.id, shared.period.from, shared.period.to),
-  ]);
-  const totals = sumMatterTotals(buildMatters(timeEntries, expenses));
-  const billed = billedPerLawyer({
-    userId: user.id,
-    invoices: shared.invoiceInputs,
-    frozenWork: shared.frozenWork,
-    period: shared.period,
-    prevPeriod: shared.prevPeriod,
-  });
-  return {
-    userId: String(user.id),
-    name: user.name,
-    title: user.title ?? null,
-    ...totals,
-    unbilledOre: buildUnbilled(timeEntries, expenses).total,
-    billedOre: billed.billedOre,
-    writeOffOre: billed.writeOffOre,
-    netOre: billed.netOre,
-  };
-}
-
-type FirmTotals = Omit<FirmLawyerRow, "userId" | "name" | "title">;
-
-/** Byråtotalerna = summan av raderna, fält för fält. */
-function firmTotals(rows: readonly FirmLawyerRow[]): FirmTotals {
-  const zero: FirmTotals = {
-    totalMinutes: 0, billableMinutes: 0, workValueOre: 0, expenseOre: 0,
-    unbilledOre: 0, billedOre: 0, writeOffOre: 0, netOre: 0,
-  };
-  return rows.reduce<FirmTotals>((acc, r) => ({
-    totalMinutes: acc.totalMinutes + r.totalMinutes,
-    billableMinutes: acc.billableMinutes + r.billableMinutes,
-    workValueOre: acc.workValueOre + r.workValueOre,
-    expenseOre: acc.expenseOre + r.expenseOre,
-    unbilledOre: acc.unbilledOre + r.unbilledOre,
-    billedOre: acc.billedOre + r.billedOre,
-    writeOffOre: acc.writeOffOre + r.writeOffOre,
-    netOre: acc.netOre + r.netOre,
-  }), zero);
-}
+/** Period (svenska kalenderdagar) och en advokat. */
+const lawyerPeriodInput = z.object({
+  from: z.string(),
+  to: z.string(),
+  userId: userIdSchema,
+});
 
 export const reportsRouter = router({
   /**
@@ -375,37 +37,8 @@ export const reportsRouter = router({
    *      utan invoiceId för den advokaten inom perioden)
    */
   perLawyer: protectedProcedure
-    .input(z.object({
-      from: z.string(),
-      to: z.string(),
-      userId: userIdSchema,
-    }))
-    .query(async ({ ctx, input }) => {
-      const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
-
-      const org = ctx.user.organizationId;
-
-      const [user, { timeEntries, expenses }] = await Promise.all([
-        ctx.repos.users.getByIdInOrg(input.userId, org),
-        loadPeriodWork(ctx.repos, org, { kind: "lawyer", userId: input.userId }, fromDate, toDate),
-      ]);
-
-      if (!user) {
-        return null;
-      }
-
-      // Tre rena delrapporter över redan-hämtad data (utbrutna till
-      // modul-nivå → query-arrowen hålls kort + delrapporterna testbara).
-      const matters = buildMatters(timeEntries, expenses);
-      return {
-        user: { id: user.id, name: user.name, hourlyRates: user.hourlyRates },
-        period: { from: input.from, to: input.to },
-        matters,
-        weeklyRows: buildWeeklyRows(timeEntries, stockholmDay(fromDate), stockholmDay(toDate)),
-        unbilled: buildUnbilled(timeEntries, expenses),
-        totals: sumMatterTotals(matters),
-      };
-    }),
+    .input(lawyerPeriodInput)
+    .query(({ ctx, input }) => loadLawyerReport(ctx.repos, ctx.user.organizationId, input)),
 
   /**
    * "Fakturerat per advokat och period" (#90). För vald advokat + period:
@@ -414,63 +47,8 @@ export const reportsRouter = router({
    * för fakturor avskrivna i FÖREGÅENDE kalendermånad.
    */
   billed: protectedProcedure
-    .input(z.object({
-      from: z.string(),
-      to: z.string(),
-      userId: userIdSchema,
-    }))
-    .query(async ({ ctx, input }) => {
-      const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
-      const prevPeriod = previousCalendarMonth(fromDate);
-      const org = ctx.user.organizationId;
-
-      const [user, invoices, billingRuns, timeEntries] = await Promise.all([
-        ctx.repos.users.getByIdInOrg(input.userId, org),
-        ctx.repos.invoices.listForOrg(asId<"OrganizationId">(org)),
-        ctx.repos.billingRuns.listForOrg(org),
-        ctx.repos.timeEntries.listBillableForOrg(org),
-      ]);
-      // Avskrivningar org-scopas via fakturornas id:n (tidigare global findMany).
-      const writeOffs = await ctx.repos.writeOffs.listByInvoiceIds(
-        (invoices as Array<{ id: InvoiceId }>).map((i) => i.id),
-      );
-
-      if (!user) return null;
-
-      const runToInvoice = new Map<string, string>();
-      for (const r of billingRuns) if (r.invoiceId) runToInvoice.set(r.id, r.invoiceId);
-
-      const result = billedPerLawyer({
-        userId: input.userId,
-        invoices: toInvoiceInputs(invoices, writtenOffDates(writeOffs)),
-        frozenWork: buildFrozenWork(timeEntries as RawTimeEntry[], runToInvoice),
-        period: { from: fromDate, to: toDate },
-        prevPeriod,
-      });
-
-      const matterByInvoice = new Map(
-        (invoices as Array<{ id: string; matter?: { matterNumber?: string; title?: string } | null }>)
-          .map((i) => [i.id, i.matter]),
-      );
-      const rows = result.invoices.map((r) => ({
-        id: r.id,
-        invoiceDate: r.invoiceDate.toISOString(),
-        amountOre: r.amountOre,
-        shareOre: r.shareOre,
-        matterNumber: matterByInvoice.get(r.id)?.matterNumber ?? "",
-        title: matterByInvoice.get(r.id)?.title ?? "",
-      }));
-
-      return {
-        user: { id: user.id, name: user.name },
-        period: { from: input.from, to: input.to },
-        prevPeriod: { from: stockholmDay(prevPeriod.from), to: stockholmDay(prevPeriod.to) },
-        invoices: rows,
-        billedOre: result.billedOre,
-        writeOffOre: result.writeOffOre,
-        netOre: result.netOre,
-      };
-    }),
+    .input(lawyerPeriodInput)
+    .query(({ ctx, input }) => loadBilledReport(ctx.repos, ctx.user.organizationId, input)),
 
   /**
    * Byråöversikt (#1016): en rad per jurist + byråtotaler + fordringsläge,
@@ -482,97 +60,15 @@ export const reportsRouter = router({
    */
   firmOverview: protectedProcedure
     .input(z.object({ from: z.string(), to: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
-      const org = ctx.user.organizationId;
-
-      const [users, invoices, billingRuns, frozenTime] = await Promise.all([
-        ctx.repos.users.listByOrg(asId<"OrganizationId">(org)),
-        ctx.repos.invoices.listForOrg(asId<"OrganizationId">(org)),
-        ctx.repos.billingRuns.listForOrg(org),
-        ctx.repos.timeEntries.listBillableForOrg(org),
-      ]);
-      const ids = (invoices as Array<{ id: InvoiceId }>).map((i) => i.id);
-      const [payments, writeOffs] = await Promise.all([
-        ctx.repos.payments.listByInvoiceIds(ids),
-        ctx.repos.writeOffs.listByInvoiceIds(ids),
-      ]);
-
-      const runToInvoice = new Map<string, string>();
-      for (const r of billingRuns as Array<{ id: string; invoiceId?: string | null }>) {
-        if (r.invoiceId) runToInvoice.set(r.id, r.invoiceId);
-      }
-      const shared: FirmShared = {
-        invoiceInputs: toInvoiceInputs(
-          invoices,
-          writtenOffDates(writeOffs),
-        ),
-        frozenWork: buildFrozenWork(frozenTime as RawTimeEntry[], runToInvoice),
-        period: { from: fromDate, to: toDate },
-        prevPeriod: previousCalendarMonth(fromDate),
-      };
-
-      const lawyers = await Promise.all(users.map((u) => firmLawyerRow(ctx.repos, org, u, shared)));
-      const scoped = scopeArToPeriod(
-        invoices,
-        payments,
-        writeOffs,
-        { from: fromDate, to: toDate },
-      );
-      return {
-        period: { from: input.from, to: input.to },
-        lawyers,
-        totals: firmTotals(lawyers),
-        ar: computeArBridge(scoped.invoices, scoped.payments, scoped.writeOffs, new Date()),
-      };
-    }),
+    .query(({ ctx, input }) => loadFirmOverview(ctx.repos, ctx.user.organizationId, input)),
 
   /**
    * Kundfordrings-sammanställning (ADR 0007), LIVSTID: brygga + åldersanalys.
    * Bygger på WriteOff-posterna (#136–139) → konstaterad kundförlust är en
-   * daterad sanning, inte en härledd updatedAt-gissning.
+   * daterad sanning, inte en härledd updatedAt-gissning. Med `userId`
+   * attribueras fordringarna mot advokatens andel av det frysta arbetet.
    */
   arSummary: protectedProcedure
     .input(z.object({ from: z.string(), to: z.string(), userId: userIdSchema.optional() }))
-    .query(async ({ ctx, input }) => {
-      const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
-      const org = ctx.user.organizationId;
-      const invoices = await ctx.repos.invoices.listForOrg(asId<"OrganizationId">(org));
-      const ids = (invoices as Array<{ id: InvoiceId }>).map((i) => i.id);
-      const [payments, writeOffs] = await Promise.all([
-        ctx.repos.payments.listByInvoiceIds(ids),
-        ctx.repos.writeOffs.listByInvoiceIds(ids),
-      ]);
-
-      // Scopa till fakturor utställda i perioden (ADR 0007 #4, uppdaterat) så
-      // panelen följer rapport-filtret som de övriga rapporterna.
-      let scoped = scopeArToPeriod(
-        invoices,
-        payments,
-        writeOffs,
-        { from: fromDate, to: toDate },
-      );
-
-      // Filtrera på vald advokat: attribuera proportionellt mot advokatens
-      // frysta arbetsvärde per faktura (samma modell som "Fakturerat per advokat").
-      if (input.userId) {
-        const [billingRuns, timeEntries] = await Promise.all([
-          ctx.repos.billingRuns.listForOrg(org),
-          ctx.repos.timeEntries.listBillableForOrg(org),
-        ]);
-        const runToInvoice = new Map<string, string>();
-        for (const r of billingRuns as Array<{ id: string; invoiceId?: string | null }>) {
-          if (r.invoiceId) runToInvoice.set(r.id, r.invoiceId);
-        }
-        const ratios = lawyerShareRatios(buildFrozenWork(timeEntries as RawTimeEntry[], runToInvoice), input.userId);
-        scoped = attributeArToLawyer(scoped.invoices, scoped.payments, scoped.writeOffs, ratios);
-      }
-
-      const now = new Date();
-      return {
-        bridge: computeArBridge(scoped.invoices, scoped.payments, scoped.writeOffs, now),
-        aging: computeAging(scoped.invoices, scoped.payments, scoped.writeOffs, now),
-        rows: arRowsFrom(scoped),
-      };
-    }),
+    .query(({ ctx, input }) => loadArReport(ctx.repos, ctx.user.organizationId, input)),
 });

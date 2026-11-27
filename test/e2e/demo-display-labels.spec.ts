@@ -11,8 +11,10 @@
  * - Startsidan: tidsumman i Tidrapportering ser ut som rubriken (#1673).
  * - Fakturor: förfallna fakturor markeras röda och knappen visar bara dem (#1731).
  * - Avbetalningar: påminnelser registreras, AVA säger inte att de skickas (#2135).
+ * - Avbetalningar: planer som ligger efter markeras "Förfallen N dagar" (#2136).
  */
 import type { Locator, Page } from "@playwright/test";
+import { paymentPlanOverdue, type PlanOverdueInput } from "../../src/lib/shared/payment-plan-overdue";
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 const ISO_TIMESTAMP = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
@@ -255,4 +257,40 @@ test.describe("mörkt läge", () => {
     const [bg, border] = await probeColors(page, ["bg-gray-200", "border-gray-300", "border-l-gray-500"]);
     expect([bg, border]).toEqual(["rgb(71, 85, 105)", "rgb(71, 85, 105)"]);
   });
+});
+
+/** Seedens fält som Avbetalningars markering räknar på (#2136). */
+interface PlanSeed {
+  matters: Array<{ id: string; matterNumber?: string }>;
+  invoices: Array<{ id: string; matterId: string; amount?: number }>;
+  payments: Array<{ invoiceId: string; amount: number }>;
+  writeOffs?: Array<{ invoiceId: string; amount: number }>;
+  paymentPlans: Array<PlanOverdueInput & { id: string; invoiceId: string }>;
+}
+
+/** De aktiva planernas ärendenummer, och om planen ligger efter enligt den delade regeln. */
+function activePlans(seed: PlanSeed, now: Date): Array<{ matterNumber: string; behind: boolean }> {
+  const ledger = (rows: PlanSeed["payments"] | undefined, id: string) => (rows ?? []).filter((r) => r.invoiceId === id);
+  return seed.paymentPlans.filter((p) => p.status === "ACTIVE").map((p) => {
+    const inv = seed.invoices.find((i) => i.id === p.invoiceId);
+    const invoice = { amount: inv?.amount ?? null, payments: ledger(seed.payments, p.invoiceId), writeOffs: ledger(seed.writeOffs, p.invoiceId) };
+    const matterNumber = seed.matters.find((m) => m.id === inv?.matterId)?.matterNumber ?? "";
+    return { matterNumber, behind: paymentPlanOverdue({ ...p, invoice }, now) !== null };
+  });
+}
+
+// Demons planer kommer ur demogeneratorn och startar nära byggdagen, så ingen
+// behöver ligga efter. Testet håller sidan och regeln ihop åt båda hållen:
+// en plan som ligger efter har markeringen, en som är ikapp har den inte.
+test("Avbetalningar: markeringen Förfallen N dagar följer den delade regeln (#2136)", async ({ page }) => {
+  const res = await page.request.get(`${BASE}/demo-seed.json`);
+  const plans = activePlans(await res.json() as PlanSeed, new Date());
+  expect(plans.length).toBeGreaterThan(0);
+  await page.goto(`${BASE}/payment-plans/`);
+  await expect(page.getByRole("cell", { name: "Aktiv", exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  const overdue = /^Förfallen \d+ dag(ar)?$/;
+  for (const p of plans) {
+    const row = page.locator("tbody tr").filter({ hasText: p.matterNumber }).first();
+    await expect(row.getByText(overdue), p.matterNumber).toHaveCount(p.behind ? 1 : 0);
+  }
 });

@@ -10,7 +10,8 @@
  *      och deployens automatiska rollback, lib/migration-kind.ts, #1770) — en
  *      rollback backar koden men aldrig databasen, så migrationer från agenter
  *      måste vara additiva (expand),
- *   3. är fler än AGENT_PR_PER_DAY agent-PR:er på 24 timmar,
+ *   3. är fler än AGENT_PR_PER_DAY agent-PR:er på 24 timmar (bara de som kan
+ *      mergas räknas: mergade, och öppna utan `blockerad`, `countsTowardCap`),
  *   4. inte är godkänd av granskningsloopen (`granskad`) eller är `blockerad` —
  *      så auto-merge aldrig kan släppa igenom en ogranskad agent-PR.
  * (1) och (2) släpps igenom när Ulrik satt `människa-godkänd`. (3)–(4) gäller alltid.
@@ -22,6 +23,7 @@
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
+import { BASELINE_PATH, ROUTER_BASELINE_PATH } from "./file-size-ratchet";
 import { destructiveStatements } from "./lib/migration-kind";
 
 export const AGENT_PR_PER_DAY = 30;
@@ -50,11 +52,11 @@ export const PROTECTED_PATHS: readonly RegExp[] = [
   /^src\/lib\/shared\/schemas\//,
   /^tooling\/db\/migrations\//,
   /^src\/lib\/server\/billing\//,
-  /^src\/lib\/shared\/(billing-[^/]*|kostnadsrakning[^/]*|coverage-billing|invoice-calc)\.ts$/,
+  /^src\/lib\/shared\/billing\/(billing-[^/]*|kostnadsrakning[^/]*|coverage-billing|invoice-calc)\.ts$/,
   /^src\/lib\/server\/routers\/(invoice|billingRun)\.ts$/,
   /^src\/lib\/server\/routers\/billingRun\//,
-  /^src\/lib\/shared\/(vat|invoice-vat|expense-vat|acconto-vat)\.ts$/,
-  /^src\/lib\/shared\/(brottmalstaxa|forordnandetaxa)\.ts$/,
+  /^src\/lib\/shared\/billing\/(vat|invoice-vat|expense-vat|acconto-vat)\.ts$/,
+  /^src\/lib\/shared\/billing\/(brottmalstaxa|forordnandetaxa)\.ts$/,
   /^src\/lib\/shared\/accounting\//,
 ];
 
@@ -67,7 +69,7 @@ export interface GuardInput {
   addedMigrationLines: readonly string[];
   /** Agent-PR:er skapade de senaste 24 h fram till och med den här. */
   agentPrsLast24h: number;
-  /** Ändrar PR:en filstorleksbaslinjen bara åt det strängare hållet? */
+  /** Ändrar PR:en storleksbaslinjerna bara åt det strängare hållet? */
   baselineOnlyTightens?: boolean;
 }
 
@@ -77,10 +79,16 @@ export interface GuardInput {
  * bara åt det strängare hållet (lägre radantal, borttagna rader). Aldrig nya
  * filer, aldrig högre.
  */
-export const FILE_SIZE_BASELINE = "tooling/config/file-size-baseline.json";
+export const FILE_SIZE_BASELINE = BASELINE_PATH;
+
+/** Routertakets baslinje (#2176) — samma regel som filstorleksbaslinjen. */
+export const ROUTER_SIZE_BASELINE = ROUTER_BASELINE_PATH;
+
+/** Baslinjerna en agent-PR får skärpa (men aldrig luckra upp). */
+const SIZE_BASELINES: readonly string[] = [FILE_SIZE_BASELINE, ROUTER_SIZE_BASELINE];
 
 function isProtectedChange(file: string, input: GuardInput): boolean {
-  if (file === FILE_SIZE_BASELINE && input.baselineOnlyTightens === true) return false;
+  if (SIZE_BASELINES.includes(file) && input.baselineOnlyTightens === true) return false;
   return PROTECTED_PATHS.some((p) => p.test(file));
 }
 
@@ -105,11 +113,16 @@ function baselineEntries(lines: readonly string[], sign: "+" | "-"): Map<string,
   }));
 }
 
-/** Ändrar diffen baslinjen bara åt det strängare hållet? (Ingen ändring = sant.) */
-export function baselineDiffTightens(diff: string): boolean {
-  const lines = diffLinesOf(diff, FILE_SIZE_BASELINE);
+/** Ändrar diffen just den här baslinjen bara åt det strängare hållet? */
+function fileDiffTightens(diff: string, file: string): boolean {
+  const lines = diffLinesOf(diff, file);
   const removed = baselineEntries(lines, "-");
   return [...baselineEntries(lines, "+")].every(([path, n]) => (removed.get(path) ?? -1) >= n);
+}
+
+/** Ändrar diffen storleksbaslinjerna bara åt det strängare hållet? (Ingen ändring = sant.) */
+export function baselineDiffTightens(diff: string): boolean {
+  return SIZE_BASELINES.every((file) => fileDiffTightens(diff, file));
 }
 
 const DAY_MS = 24 * 3_600_000;
@@ -155,6 +168,25 @@ export function addedMigrationLines(diff: string): string[] {
   return out;
 }
 
+/** En agent-PR som taket ser den: läge, etiketter och om den mergats. */
+export interface CapPull { number: number; createdAt: string; state: string; merged: boolean; labels: readonly string[] }
+
+/**
+ * Räknas PR:en mot dygnstaket? Bara det som kan mergas (Ulrik, 2026-11-27): en
+ * mergad PR, eller en öppen utan `blockerad`. En PR som väntar på Ulriks
+ * `människa-godkänd` (`blockerad`) eller stängts utan merge levererar inget och
+ * ska inte äta upp dygnets kvot; den 26/11 band sju sådana en fjärdedel av den.
+ */
+export function countsTowardCap(p: Omit<CapPull, "number" | "createdAt">): boolean {
+  if (p.merged) return true;
+  return p.state.toUpperCase() === "OPEN" && !p.labels.includes("blockerad");
+}
+
+/** Skapelsetiderna som räknas mot taket. PR:en som prövas räknas alltid själv. */
+export function cappedCreatedAts(pulls: readonly CapPull[], self: number): string[] {
+  return pulls.filter((p) => p.number === self || countsTowardCap(p)).map((p) => p.createdAt);
+}
+
 function gh(args: string[]): string {
   const r = spawnSync("gh", args, { encoding: "utf8" });
   if (r.status !== 0) throw new Error(`gh ${args.join(" ")}: ${r.stderr}`);
@@ -166,7 +198,10 @@ const prViewSchema = z.object({
   files: z.array(z.object({ path: z.string() })),
   createdAt: z.string(),
 });
-const prListSchema = z.array(z.object({ createdAt: z.string() }));
+const prListSchema = z.array(z.object({
+  number: z.number(), createdAt: z.string(), state: z.string(), mergedAt: z.string().nullable().optional(),
+  labels: z.array(z.object({ name: z.string() })),
+}));
 const labelEventsSchema = z.array(z.array(z.object({
   event: z.string(),
   label: z.object({ name: z.string() }).optional(),
@@ -206,14 +241,16 @@ function main(pr: string): number {
   const created = new Date(view.createdAt).getTime();
   const now = Date.now();
   const since = new Date(now - DAY_MS).toISOString();
-  const recent = parseJsonWith(prListSchema, gh(["pr", "list", "--state", "all", "--label", "agent-pr", "--limit", "100", "--search", `created:>=${since}`, "--json", "number,createdAt"]));
+  const recent = parseJsonWith(prListSchema, gh(["pr", "list", "--state", "all", "--label", "agent-pr", "--limit", "100", "--search", `created:>=${since}`, "--json", "number,createdAt,state,mergedAt,labels"]));
   const diff = gh(["pr", "diff", pr]);
   const violations = guardViolations({
     labels: trustedLabels(view.labels.map((l) => l.name), () => labelEvents(pr)),
     files: view.files.map((f) => f.path),
     addedMigrationLines: addedMigrationLines(diff),
     baselineOnlyTightens: baselineDiffTightens(diff),
-    agentPrsLast24h: rankInLast24h(recent.map((p) => p.createdAt), created, now),
+    agentPrsLast24h: rankInLast24h(cappedCreatedAts(recent.map((p) => ({
+      number: p.number, createdAt: p.createdAt, state: p.state, merged: p.mergedAt != null, labels: p.labels.map((l) => l.name),
+    })), Number(pr)), created, now),
   });
   for (const v of violations) console.error(`✗ ${v}`);
   if (violations.length === 0) console.log("✓ agentvakten: inget att invända");

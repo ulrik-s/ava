@@ -10,9 +10,9 @@
 import { describe, it, expect, vi } from "vitest-compat";
 import { buildFakturaView, fakturaHeading, type FakturaBreakdown, type FakturaTemplateArgs, type InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
 import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
-import { formatCurrency } from "@/lib/client/utils";
-import { tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { buildInvoiceSpecification } from "@/lib/shared/invoice-specification";
+import { tidsspillanOvrigFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
+import { buildInvoiceSpecification } from "@/lib/shared/billing/invoice-specification";
+import { formatKr } from "@/lib/shared/kr-format";
 import { orgImageSchema } from "@/lib/shared/org-image";
 import { asId } from "@/lib/shared/schemas/ids";
 import { pdfPageTexts } from "../../../helpers/pdf-text";
@@ -30,7 +30,7 @@ const spec = (over: Partial<InvoiceSpecification> = {}): InvoiceSpecification =>
 });
 
 /** Beloppen som de står i PDF:en (hårda mellanslag → vanliga, som i `pdfPageTexts`). */
-const kr = (ore: number): string => formatCurrency(ore).replace(/[  ]/g, " ");
+const kr = (ore: number): string => formatKr(ore).replace(/[  ]/g, " ");
 
 /** Fakturan renderad till PDF → texten per sida, i ritordning. */
 async function rendered(args: FakturaTemplateArgs): Promise<string[][]> {

@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { billingRuns, invoices, matters } from "@/lib/server/db/schema";
+import type { BillingRunRepository } from "@/lib/server/repositories/billing-run-repository";
 import { DrizzleBillingRunRepository } from "@/lib/server/repositories/drizzle-billing-run-repository";
 import { InMemoryBillingRunRepository } from "@/lib/server/repositories/in-memory-billing-run-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -19,6 +20,22 @@ const run = (o: Record<string, unknown>) => ({
   type: "ACCONTO", recipient: "KLIENT", status: "SENT", workValueOreAtRun: 1000,
   proposedAmountOre: 500, amountOre: 500, deductedBillingRunIds: [], periodTo: new Date("2026-06-01"), ...o,
 });
+
+/**
+ * Förordnandemålets avslut i egen kolumn (#2180): skrivs vid create, läses av
+ * listForOrg och getByIdInOrg, och en körning utan avslut har null.
+ */
+async function assertForordnandeAvslut(repo: BillingRunRepository, org: string, mId: string): Promise<void> {
+  const kr = asId<"BillingRunId">(uuidv7());
+  const plain = asId<"BillingRunId">(uuidv7());
+  const krRun = { type: "KOSTNADSRAKNING", recipient: "DOMSTOL", status: "PENDING_VERDICT", invoiceId: null };
+  await repo.create(run({ ...krRun, id: kr, matterId: mId, forordnandeAvslut: "STRAFFORELAGGANDE" }) as never);
+  await repo.create(run({ ...krRun, id: plain, matterId: mId }) as never);
+  expect((await repo.getByIdInOrg(kr, asId<"OrganizationId">(org)))?.forordnandeAvslut).toBe("STRAFFORELAGGANDE");
+  const list = await repo.listForOrg(asId<"OrganizationId">(org), asId<"MatterId">(mId));
+  expect(list.find((r) => r.id === kr)?.forordnandeAvslut).toBe("STRAFFORELAGGANDE");
+  expect(list.find((r) => r.id === plain)?.forordnandeAvslut ?? null).toBeNull();
+}
 
 describe("BillingRunRepository — in-memory", () => {
   it("listForOrg/getByIdInOrg/listAcconto*", async () => {
@@ -50,6 +67,15 @@ describe("BillingRunRepository — in-memory", () => {
     expect((await repo.listAccontoSent(asId<"MatterId">(mId))).map((r) => r.id)).toEqual([r1]);
     expect((await repo.listAccontoByIds(asId<"MatterId">(mId), [asId<"BillingRunId">(r1), asId<"BillingRunId">(r2)])).map((r) => r.id)).toEqual([r1]); // r2 = FINAL filtreras
     expect(await repo.listAccontoByIds(asId<"MatterId">(mId), [])).toHaveLength(0);
+  });
+
+  it("förordnandemålets avslut skrivs och läses tillbaka (#2180)", async () => {
+    const mId = uuidv7();
+    const source = prebakeJoins({
+      matters: [{ id: mId, organizationId: ORG, matterNumber: "2026-2", title: "F", paymentMethod: "OFFENTLIGT_UPPDRAG" }],
+      invoices: [], billingRuns: [],
+    });
+    await assertForordnandeAvslut(new InMemoryBillingRunRepository(new LocalStore(source, async () => {})), ORG, mId);
   });
 });
 
@@ -87,5 +113,12 @@ describe("BillingRunRepository — Drizzle (pglite)", () => {
     expect((await repo.listAccontoSent(asId<"MatterId">(mId))).map((r) => r.id)).toEqual([r1]);
     expect((await repo.listAccontoByIds(asId<"MatterId">(mId), [asId<"BillingRunId">(r1), asId<"BillingRunId">(r2)])).map((r) => r.id)).toEqual([r1]);
     expect(await repo.listAccontoByIds(asId<"MatterId">(mId), [])).toHaveLength(0);
+  });
+
+  it("förordnandemålets avslut skrivs och läses tillbaka (#2180)", async () => {
+    const org = uuidv7();
+    const mId = uuidv7();
+    await handle.db.insert(matters).values({ id: asId<"MatterId">(mId), organizationId: asId<"OrganizationId">(org), matterNumber: "2026-2", title: "F", paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    await assertForordnandeAvslut(new DrizzleBillingRunRepository(handle.db), org, mId);
   });
 });

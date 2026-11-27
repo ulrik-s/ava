@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Rutan Stapeldiagram (#2110): en persons registrerade tid som staplar för en
- * dag, vecka, månad eller ett år. Knapparna Dag / Vecka / Månad / År väljer
+ * Rutan Stapeldiagram (#2110): en persons, eller utan `userId` hela byråns
+ * (#2115), registrerade tid som staplar för en dag, vecka, månad eller ett år. Knapparna Dag / Vecka / Månad / År väljer
  * perioden, och staplarna är nivån under. Ett klick på en stapel visar dess
  * summor och ärendena med tid där. Pilarna runt knapparna stegar den valda
  * dagen en stapel i taget, och vyn är personens egen (`chart.time`, #2111).
@@ -28,8 +28,8 @@ import { useTimeChartView } from "./use-time-chart-view";
 
 /** Props för {@link TimeChartPanel}. */
 export interface TimeChartPanelProps {
-  /** Personen vars tid diagrammet visar. */
-  userId: UserId;
+  /** Personen vars tid diagrammet visar; utan den visas hela byråns tid (#2115). */
+  userId?: UserId;
   /** Dagen rutan utgår från ("YYYY-MM-DD"); ett nytt värde flyttar den valda dagen dit. */
   anchorDay: string;
 }
@@ -92,13 +92,13 @@ function ChartBody({ chart, granularity, selectedDay, onSelect }: ChartBodyProps
   );
 }
 
-/** Stapeldiagrammet över `userId`:s tid, med vyval och den valda stapelns ärenden. */
+/** Stapeldiagrammet över `userId`:s (eller hela byråns) tid, med vyval och den valda stapelns ärenden. */
 export function TimeChartPanel({ userId, anchorDay }: TimeChartPanelProps) {
   const [view, setView] = useTimeChartView();
   const [selectedDay, setSelectedDay] = useSelectedDay(anchorDay);
   const period = periodContaining(selectedDay, view);
   const granularity = TIME_CHART_GRANULARITY[view];
-  const chart = trpc.timeEntry.chart.useQuery({ userId, from: period.from, to: period.to, granularity });
+  const chart = trpc.timeEntry.chart.useQuery({ ...(userId !== undefined ? { userId } : {}), from: period.from, to: period.to, granularity });
   const title = timeChartPeriodTitle(view, selectedDay, new Date());
 
   return (

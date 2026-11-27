@@ -6,8 +6,8 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { BillingSummary } from "@/app/matters/[id]/_billing-summary";
-import type { SummaryInvoice, SummaryRun } from "@/lib/shared/billing-summary";
-import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
+import type { SummaryInvoice, SummaryRun } from "@/lib/shared/billing/billing-summary";
+import type { KostnadsrakningStatus } from "@/lib/shared/billing/kostnadsrakning-flow";
 import type { BillingRunStatus } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 

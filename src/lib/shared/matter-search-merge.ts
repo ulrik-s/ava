@@ -10,11 +10,13 @@
  * `matter.list`).
  */
 
+import type { MatterRole } from "@/lib/shared/schemas/enums";
+
 /** En jävsträff så som sammanslagningen behöver den (ur `conflict.check`). */
 export interface MergeConflictHit {
   matterId: string;
   contactName: string;
-  role: string;
+  role: MatterRole;
   personalNumber?: string | null | undefined;
   orgNumber?: string | null | undefined;
 }
@@ -33,7 +35,7 @@ export interface MergeableMatter {
 
 /** En part i ärendet så som "Träff" visar den: roll och namn (#1870). */
 export interface MatterSearchParty {
-  role: string;
+  role: MatterRole;
   name: string;
 }
 
@@ -50,7 +52,7 @@ export interface MatterSearchMergeInput<M extends MergeableMatter> {
   /** Ärendelistans aktuella sida (sökning, filter och sidbläddring som i dag). */
   listMatters: readonly M[];
   /** Rollens visningsnamn ("Motpart"). */
-  roleLabel: (role: string) => string;
+  roleLabel: (role: MatterRole) => string;
 }
 
 type FieldReader = (m: MergeableMatter) => string | null | undefined;
@@ -67,7 +69,7 @@ const OWN_FIELDS: ReadonlyArray<readonly [string, FieldReader]> = [
 const fold = (s: string): string => s.toLocaleLowerCase("sv");
 
 /** Nyckeln för en part på raden (roll + namn), för att inte visa den två gånger. */
-function partyKey(role: string, name: string): string {
+function partyKey(role: MatterRole, name: string): string {
   return `${role}\u0000${name}`;
 }
 
@@ -78,7 +80,7 @@ function partyKey(role: string, name: string): string {
  * de står redan som jävsträff på raden.
  */
 export function ownFieldHits(
-  m: MergeableMatter, term: string, roleLabel: (role: string) => string, skip: ReadonlySet<string> = new Set(),
+  m: MergeableMatter, term: string, roleLabel: (role: MatterRole) => string, skip: ReadonlySet<string> = new Set(),
 ): string[] {
   const needle = fold(term.trim());
   if (!needle) return [];
@@ -90,13 +92,13 @@ export function ownFieldHits(
 }
 
 /** "Motpart: <namn> (<person-/orgnummer>)" — numret bara när det finns. */
-export function conflictHitText(hit: MergeConflictHit, roleLabel: (role: string) => string): string {
+export function conflictHitText(hit: MergeConflictHit, roleLabel: (role: MatterRole) => string): string {
   const number = hit.personalNumber || hit.orgNumber;
   return `${roleLabel(hit.role)}: ${hit.contactName}${number ? ` (${number})` : ""}`;
 }
 
 /** Jävsträffarnas texter per ärende, i träffarnas ordning (bäst först). */
-function hitTextsByMatter(hits: readonly MergeConflictHit[], roleLabel: (role: string) => string): Map<string, string[]> {
+function hitTextsByMatter(hits: readonly MergeConflictHit[], roleLabel: (role: MatterRole) => string): Map<string, string[]> {
   const out = new Map<string, string[]>();
   for (const hit of hits) {
     const texts = out.get(hit.matterId) ?? [];

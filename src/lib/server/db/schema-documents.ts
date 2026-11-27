@@ -9,7 +9,7 @@ import {
   bigint, boolean, customType, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid,
 } from "drizzle-orm/pg-core";
 import type { DocumentKind } from "@/lib/shared/document-kind";
-import type { DocumentPartSource } from "@/lib/shared/schemas/document";
+import type { DocumentPartSource, FinalRuling } from "@/lib/shared/schemas/document";
 import type { ContactType, MatterRole, SuggestionStatus } from "@/lib/shared/schemas/enums";
 import type {
   BillingRunId, ContactId, DocumentAnalysisSuggestionId, DocumentFolderId, DocumentId, DocumentPartId, InvoiceId,
@@ -50,6 +50,8 @@ export const documents = pgTable("documents", {
   direction: text("direction").$type<"INKOMMANDE" | "UTGAENDE">(),
   /** Motpart/mottagare (#901) — driver "dok skickade till domstol"-filtret. */
   recipient: text("recipient").$type<"DOMSTOL" | "MOTPART" | "KLIENT" | "FORSAKRING" | "MYNDIGHET" | "OVRIGT">(),
+  /** Igenkänt slutligt avgörande (#2098) — null = inget igenkänt. */
+  finalRuling: text("final_ruling").$type<FinalRuling>(),
   tags: jsonb("tags").notNull().default([]).$type<string[]>(), // föråldrad: ersatt av kinds (ADR 0038)
   summary: text("summary"),
   analyzedAt: timestamp("analyzed_at", { withTimezone: true }),

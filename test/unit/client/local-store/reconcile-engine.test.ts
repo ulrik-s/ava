@@ -1,0 +1,191 @@
+/**
+ * ReconcileEngine (ADR 0017, #414) — pull→apply→replay→advance:
+ * applicering av kanoniska rader, hopp över pending-rader, replay
+ * (accepted/rebased/conflict), konflikt-låda och cursor-advance.
+ */
+
+import { describe, it, expect } from "vitest-compat";
+import { InMemoryCursorStore } from "@/lib/client/local-store/cursor-store";
+import { MutationQueue, InMemoryMutationQueuePersistence } from "@/lib/client/local-store/mutation-queue";
+import { ReconcileEngine, type ApplyCanonical } from "@/lib/client/local-store/reconcile-engine";
+import type { PulledChange, PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
+import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
+
+const ev = (entity: string, id: string, extra: Record<string, unknown> = {}): MutationEvent<Record<string, unknown>> => ({
+  entity, kind: "create", row: { id, ...extra },
+});
+
+class FakeTransport implements SyncTransport {
+  pulls: PullResult = { changes: [], cursor: 0 };
+  pushResults = new Map<string, PushResult>();
+  pushed: string[] = [];
+  rowRequests: string[][] = [];
+  async rows(refs: readonly { entity: string; id: string }[]): Promise<PulledChange[]> {
+    this.rowRequests.push(refs.map((r) => `${r.entity}:${r.id}`));
+    return refs.map((r) => ({ entity: r.entity, row: { id: r.id }, deleted: true }));
+  }
+  async pushProcedure(): Promise<{ status: "accepted"; rows: [] }> {
+    return { status: "accepted", rows: [] };
+  }
+  async pull(): Promise<PullResult> {
+    return this.pulls;
+  }
+  async push(m: { mutationId: string; row: Record<string, unknown> }): Promise<PushResult> {
+    this.pushed.push(m.mutationId);
+    return this.pushResults.get(m.mutationId) ?? { status: "accepted", row: m.row };
+  }
+}
+
+function harness() {
+  const applied: Array<{ entity: string; row: Record<string, unknown>; deleted: boolean }> = [];
+  const apply: ApplyCanonical = (entity, row, deleted) => { applied.push({ entity, row, deleted }); };
+  const transport = new FakeTransport();
+  const cursor = new InMemoryCursorStore();
+  return { applied, apply, transport, cursor };
+}
+
+describe("ReconcileEngine — pull", () => {
+  it("applicerar kanoniska rader och avancerar cursor", async () => {
+    const h = harness();
+    h.transport.pulls = { changes: [{ entity: "matter", row: { id: "m1", title: "T" } }], cursor: 12 };
+    const queue = await MutationQueue.hydrate();
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(res.pulled).toBe(1);
+    expect(h.applied[0]).toMatchObject({ entity: "matter", row: { id: "m1" }, deleted: false });
+    expect(res.cursor).toBe(12);
+    expect(await h.cursor.get()).toBe(12);
+  });
+
+  it("hoppar över en pull-rad som har en ej-uppspelad lokal mutation", async () => {
+    const h = harness();
+    const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
+    await queue.enqueue(ev("invoice", "i1"), { mutationId: "m1" });
+    // En matchande server-rad för invoice:i1 ska INTE klottra över den lokala.
+    h.transport.pulls = {
+      changes: [{ entity: "invoice", row: { id: "i1", v: 9 } }, { entity: "matter", row: { id: "m9" } }],
+      cursor: 5,
+    };
+    h.transport.pushResults.set("m1", { status: "accepted", row: { id: "i1", v: 10 } });
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(res.pulled).toBe(1); // bara matter:m9
+    expect(h.applied.some((a) => a.entity === "invoice" && (a.row as { v?: number }).v === 9)).toBe(false);
+  });
+});
+
+describe("ReconcileEngine — sidindelad pull (#1388)", () => {
+  /** En transport som svarar med sidorna i tur och ordning och minns varifrån den pullades. */
+  function paged(h: ReturnType<typeof harness>, pages: PullResult[]): number[] {
+    const from: number[] = [];
+    h.transport.pull = async (since?: number) => {
+      from.push(since ?? -1);
+      return pages.shift() ?? { changes: [], cursor: since ?? 0 };
+    };
+    return from;
+  }
+
+  it("pullar sida efter sida så länge hasMore, från varje sidas cursor", async () => {
+    const h = harness();
+    const from = paged(h, [
+      { changes: [{ entity: "matter", row: { id: "m1" } }], cursor: 10, hasMore: true },
+      { changes: [{ entity: "matter", row: { id: "m2" } }], cursor: 20, hasMore: true },
+      { changes: [{ entity: "matter", row: { id: "m3" } }], cursor: 25 },
+    ]);
+    const queue = await MutationQueue.hydrate();
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(from).toEqual([0, 10, 20]);
+    expect(res).toMatchObject({ pulled: 3, cursor: 25 });
+    expect(h.applied.map((a) => a.row.id)).toEqual(["m1", "m2", "m3"]);
+    expect(await h.cursor.get()).toBe(25);
+  });
+
+  it("slutar när cursorn inte går framåt, i stället för att snurra", async () => {
+    const h = harness();
+    await h.cursor.set(7);
+    const from = paged(h, [
+      { changes: [], cursor: 7, hasMore: true },
+      { changes: [{ entity: "matter", row: { id: "aldrig" } }], cursor: 99 },
+    ]);
+    const queue = await MutationQueue.hydrate();
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(from).toEqual([7]);
+    expect(res.cursor).toBe(7);
+  });
+});
+
+describe("ReconcileEngine — replay", () => {
+  it("accepted → applicerar kanonisk rad, ack:ar kön, räknar pushed", async () => {
+    const h = harness();
+    const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
+    await queue.enqueue(ev("timeEntry", "t1"), { mutationId: "m1" });
+    h.transport.pushResults.set("m1", { status: "accepted", row: { id: "t1", version: 1 } });
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(res.pushed).toBe(1);
+    expect(queue.size()).toBe(0);
+    expect(h.applied.find((a) => a.entity === "timeEntry")?.row).toMatchObject({ version: 1 });
+  });
+
+  it("accepted radering → tombstone lokalt, också när servern svarar med en rad (#1397)", async () => {
+    const h = harness();
+    const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
+    await queue.enqueue({ entity: "document", kind: "delete", row: { id: "d1", title: "Borta" } }, { mutationId: "md" });
+    // Äldre server: svarar `{ id }` utan markering — får inte bli en stomrad.
+    h.transport.pushResults.set("md", { status: "accepted", row: { id: "d1" } });
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(h.applied).toEqual([{ entity: "document", row: { id: "d1" }, deleted: true }]);
+    expect(res.pushed).toBe(1);
+    expect(queue.size()).toBe(0);
+  });
+
+  it("accepted med serverns tombstone-markering → raden tas bort lokalt (#1397)", async () => {
+    const h = harness();
+    const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
+    await queue.enqueue({ entity: "document", kind: "update", row: { id: "d2" } }, { mutationId: "mu" });
+    h.transport.pushResults.set("mu", { status: "accepted", row: { id: "d2" }, deleted: true });
+    await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(h.applied).toEqual([{ entity: "document", row: { id: "d2" }, deleted: true }]);
+  });
+
+  it("rebased (LWW) → applicerar serverns kanoniska rad, räknar rebased", async () => {
+    const h = harness();
+    const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
+    await queue.enqueue(ev("matter", "m1", { title: "lokal" }), { mutationId: "mm" });
+    h.transport.pushResults.set("mm", { status: "rebased", row: { id: "m1", title: "server-vinner" } });
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(res.rebased).toBe(1);
+    expect(res.pushed).toBe(0);
+    expect(h.applied.at(-1)?.row).toMatchObject({ title: "server-vinner" });
+    expect(queue.size()).toBe(0);
+  });
+
+  it("conflict (surface) → ytläggs med conflictClass, serverns current återställs lokalt (#1348), ack:as ur kön", async () => {
+    const h = harness();
+    const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
+    await queue.enqueue({ entity: "invoice", kind: "update", row: { id: "i1", status: "SENT" } }, { mutationId: "mc" });
+    h.transport.pushResults.set("mc", { status: "conflict", reason: "redan annullerad", current: { id: "i1", status: "CANCELLED" } });
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(res.conflicts).toHaveLength(1);
+    expect(res.conflicts[0]).toMatchObject({ conflictClass: "surface", reason: "redan annullerad" });
+    expect(res.conflicts[0]?.current).toMatchObject({ status: "CANCELLED" });
+    // Ingen spökrad (#1348): serverns läge ersätter den optimistiska raden.
+    expect(h.applied.filter((a) => a.entity === "invoice")).toEqual([{ entity: "invoice", row: { id: "i1", status: "CANCELLED" }, deleted: false }]);
+    expect(res.restored).toBe(1);
+    expect(h.transport.rowRequests).toEqual([]); // läget följde med — inget att hämta
+    expect(queue.size()).toBe(0); // ut ur huvudkön (konflikt-låda i resultatet)
+  });
+
+  it("blandat: accepted + conflict i FIFO, kön töms, cursor avanceras", async () => {
+    const h = harness();
+    const queue = await MutationQueue.hydrate(new InMemoryMutationQueuePersistence());
+    await queue.enqueue(ev("timeEntry", "t1"), { mutationId: "a" });
+    await queue.enqueue({ entity: "invoice", kind: "update", row: { id: "i1" } }, { mutationId: "b" });
+    h.transport.pushResults.set("b", { status: "conflict", reason: "stale" });
+    h.transport.pulls = { changes: [], cursor: 99 };
+    const res = await new ReconcileEngine({ transport: h.transport, queue, cursor: h.cursor, apply: h.apply }).reconcile();
+    expect(h.transport.pushed).toEqual(["a", "b"]); // FIFO
+    expect(res.pushed).toBe(1);
+    expect(res.conflicts).toHaveLength(1);
+    expect(h.transport.rowRequests).toEqual([["invoice:i1"]]); // utan current → hämtas
+    expect(queue.size()).toBe(0);
+    expect(res.cursor).toBe(99);
+  });
+});

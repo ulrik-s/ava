@@ -113,7 +113,7 @@ describe("bookUnbookedInvoices", () => {
       connector: c, markBooked: (id) => { marked.push(id); return Promise.resolve(); },
     });
     expect(res[1]?.externalId).toBeNull();
-    expect(res[1]?.error).toContain("Ärende 2026-0001 - Faktura F-2026-0002: en rad i momsuppdelningen har 1,00 kr moms på satsen 0 %");
+    expect(res[1]?.error).toContain("Ärende 2026-0001 - Faktura F-2026-0002: en rad i momsuppdelningen har 1,00\u00a0kr moms på satsen 0 %");
     expect(c.pushed.map((p) => p.key)).toEqual(["inv-1", "inv-3"]);
     expect(marked).toEqual(["inv-1", "inv-3"]);
   });

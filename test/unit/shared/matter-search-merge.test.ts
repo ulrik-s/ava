@@ -127,3 +127,16 @@ describe("mergeMatterSearch", () => {
     expect(rows.map((r) => r.id)).toEqual(["1"]);
   });
 });
+
+describe("rollen är en MatterRole (#1908)", () => {
+  it("en jävsträff och en part med en roll som inte finns kompilerar inte", () => {
+    // @ts-expect-error — "MOTPARTT" är ingen MatterRole
+    const typo = hit("1", { role: "MOTPARTT" });
+    // @ts-expect-error — en MatterRole kan aldrig vara "MOTPARTT"
+    expect(hit("1").role === "MOTPARTT").toBe(false);
+    // @ts-expect-error — "KLIENTT" är ingen MatterRole
+    const parties: MergeableMatter["parties"] = [{ role: "KLIENTT", name: "x" }];
+    expect(typo.role).toBe("MOTPARTT");
+    expect(parties).toHaveLength(1);
+  });
+});

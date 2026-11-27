@@ -489,3 +489,20 @@ describe("offentligt uppdrag per ärendetyp (#1639)", () => {
     expect(notes(ds)).toHaveLength(0);
   });
 });
+
+describe("matter.keepActive (#2098)", () => {
+  it("sätter datumet för Behåll som aktivt, och getById returnerar det", async () => {
+    const { caller } = makeCaller({ matters: [matter()] });
+    const before = Math.floor(Date.now() / 1000) * 1000; // lagras i hela sekunder
+    const res = await caller.keepActive({ id: asId<"MatterId">("matter-1") });
+    expect(new Date(String(res.keptActiveAt)).getTime()).toBeGreaterThanOrEqual(before);
+    const got = await caller.getById({ id: asId<"MatterId">("matter-1") });
+    expect(new Date(String(got.keptActiveAt)).getTime()).toBe(new Date(String(res.keptActiveAt)).getTime());
+    expect(got.status).toBe("ACTIVE");
+  });
+
+  it("ett ärende i en annan byrå ger NOT_FOUND", async () => {
+    const { caller } = makeCaller({ matters: [matter({ organizationId: "org-b" })] });
+    await expect(caller.keepActive({ id: asId<"MatterId">("matter-1") })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
