@@ -486,30 +486,6 @@
       "count": 2
     }
   },
-  "src/lib/client/github/api.ts": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-spread": {
-      "count": 1
-    },
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 5
-    }
-  },
-  "src/lib/client/github/fsa-walker.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    }
-  },
-  "src/lib/client/github/push.ts": {
-    "@typescript-eslint/no-dynamic-delete": {
-      "count": 1
-    },
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
-    }
-  },
   "src/lib/client/integrations/office365-connector.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
