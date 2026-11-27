@@ -13,7 +13,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
-import { isTaxeMatter } from "@/lib/shared/public-assignment";
+import { isTaxeMatter, PUBLIC_ASSIGNMENT_METHOD } from "@/lib/shared/public-assignment";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { BillingPanel } from "./_billing-panel";
@@ -39,12 +39,14 @@ function referenceOf(m: unknown, key: ReferenceKey = "courtCaseNumber"): string 
 }
 
 /**
- * Domstolsärende = domstolen betalar dig utan AVA-faktura (offentligt uppdrag
- * eller taxeärende). Styr om Domstolsbetalnings-panelen visas — i andra ärenden
- * är den bara förvirrande.
+ * Domstolsärende = domstolen betalar dig utan AVA-faktura: offentligt uppdrag.
+ * Ett taxeärende är alltid ett offentligt uppdrag (ADR 0034, `isTaxeMatter`),
+ * så taxeflaggan ensam styr inget: ett ärende som bytt betalningssätt behåller
+ * den (#1972). Styr om Domstolsbetalnings-panelen visas — i andra ärenden är
+ * den bara förvirrande, utom när fordringar redan registrerats (#1213).
  */
-function isCourtMatter(m: { paymentMethod?: PaymentMethod | null; isTaxeArende?: boolean | null }): boolean {
-  return m.paymentMethod === "OFFENTLIGT_UPPDRAG" || m.isTaxeArende === true;
+function isCourtMatter(m: { paymentMethod?: PaymentMethod | null }): boolean {
+  return m.paymentMethod === PUBLIC_ASSIGNMENT_METHOD;
 }
 
 export default function MatterDetailClient({ id: paramId }: { id: string }) {
@@ -66,7 +68,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   if (!matter.data) return null;
 
   const m = matter.data;
-  const klient = m.contacts.filter((c: { role: string }) => c.role === "KLIENT");
+  const klient = m.contacts.filter((c) => c.role === "KLIENT");
 
   const panels = matterPanels({
     time: () => <TimeSection matterId={id} isTaxeArende={isTaxeMatter(m)} paymentMethod={m.paymentMethod}

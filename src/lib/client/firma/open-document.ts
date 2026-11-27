@@ -22,7 +22,8 @@ export interface OpenDocumentDeps {
    * `#page=N` på URL:en (PDF-visarnas öppningsparameter, även för blob:-URL:er).
    */
   page?: number;
-  /** Demo-flagga från env. Bygg-tid: NEXT_PUBLIC_DEMO_BUILD === "1". */
+  /** Runtime-tiern från `isDemoTier()` (#651) — inte byggflaggan, som är sann
+   *  även i den statiska self-hosted-builden. */
   isDemo: boolean;
   /** "user/repo" för demo. Ignoreras i självhostad. */
   demoRepo?: string;

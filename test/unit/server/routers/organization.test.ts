@@ -348,6 +348,49 @@ describe("organization.getSettings — timpriser", () => {
   });
 });
 
+describe("organization — trösklar för Bör faktureras (#1911)", () => {
+  it("getSettings: inga sparade värden → null; sparade → värdena (0 är ett värde)", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB" });
+    expect(await makeCaller("org-a").getSettings()).toMatchObject({ unbilledThresholdOre: null, unbilledAgeDays: null });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB", unbilledThresholdOre: 0, unbilledAgeDays: 30 });
+    expect(await makeCaller("org-a").getSettings()).toMatchObject({ unbilledThresholdOre: 0, unbilledAgeDays: 30 });
+  });
+
+  it("updateSettings sparar värdena och null nollställer", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
+    await makeCaller("org-a").updateSettings({ unbilledThresholdOre: 1_000_000, unbilledAgeDays: 30 });
+    expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ unbilledThresholdOre: 1_000_000, unbilledAgeDays: 30 }) }),
+    );
+    await makeCaller("org-a").updateSettings({ unbilledThresholdOre: null, unbilledAgeDays: null });
+    expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ unbilledThresholdOre: null, unbilledAgeDays: null }) }),
+    );
+  });
+
+  it("updateSettings utan fälten ändrar dem inte", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", unbilledThresholdOre: 5, unbilledAgeDays: 7 });
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
+    await makeCaller("org-a").updateSettings({ bankgiro: "999-8888" });
+    const data = (mockPrisma.organization.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> }).data;
+    expect("unbilledThresholdOre" in data).toBe(false);
+    expect("unbilledAgeDays" in data).toBe(false);
+  });
+
+  it.each([
+    ["negativt belopp", { unbilledThresholdOre: -1 }],
+    ["decimalbelopp", { unbilledThresholdOre: 1.5 }],
+    ["belopp över int4", { unbilledThresholdOre: 2_147_483_648 }],
+    ["negativ ålder", { unbilledAgeDays: -1 }],
+    ["decimalålder", { unbilledAgeDays: 0.5 }],
+    ["ålder över int4", { unbilledAgeDays: 2_147_483_648 }],
+  ])("updateSettings nekar %s (BAD_REQUEST)", async (_label, patch) => {
+    await expect(makeCaller("org-a").updateSettings(patch)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("organization.updateSettings", () => {
   it("ersätter hela kartan med byråns timpriser (öre/h) — en borttagen kategori försvinner", async () => {
     mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
@@ -493,6 +536,8 @@ describe("organization — behörighet för icke-admin (#1370)", () => {
     ["organisationsnumret", { orgNumber: "556999-9999" }],
     ["timpriserna", { hourlyRates: { ARBETE: 1 } }],
     ["aconto-gränsen", { accontoThresholdOre: 1 }],
+    ["beloppet för Bör faktureras", { unbilledThresholdOre: 1 }],
+    ["åldern för Bör faktureras", { unbilledAgeDays: 1 }],
     ["standardåtgärderna", { standardAtgarder: [] as never[] }],
     ["ärendetyperna", { matterTypes: ["Bodelning"] }],
     ["offentligt uppdrag", { publicAssignmentMatterTypes: ["Bodelning"] }],

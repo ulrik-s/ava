@@ -10,6 +10,7 @@
  */
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { GenerateModal } from "@/app/matters/[id]/_generate-modal";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -47,7 +48,7 @@ vi.mock("@/lib/client/fsa/fs-adapter", () => ({
   FsaIsoGitAdapter: class { writeFile = async (): Promise<void> => {}; },
 }));
 
-const contacts = [
+const contacts: ComponentProps<typeof GenerateModal>["contacts"] = [
   { id: "mc1", role: "MOTPART", contact: { id: "c1", name: "Bob Motpart", email: "bob@x.se" } },
   { id: "mc2", role: "VITTNE", contact: { id: "c2", name: "Cilla Vittne" } },
 ];

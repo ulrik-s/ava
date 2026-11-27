@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { trpc } from "@/lib/client/trpc";
-import { EMPTY_CONTACT_FORM, NewContactForm, type ContactForm } from "./new-contact-form";
+import { contactInput, EMPTY_CONTACT_FORM, type ContactForm } from "./contact-fields";
+import { NewContactForm } from "./new-contact-form";
 
 /** En vald eller nyskapad klient — det nytt ärende behöver. */
 export interface PickedClient {
@@ -38,7 +39,7 @@ export function NewClientDialog({ initialName = "", onCreated, onClose, noun = "
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    createContact.mutate(form as Parameters<typeof createContact.mutate>[0]);
+    createContact.mutate(contactInput(form));
   }
 
   return (

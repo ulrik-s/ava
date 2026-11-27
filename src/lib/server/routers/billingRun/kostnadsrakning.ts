@@ -16,7 +16,7 @@ import { isKrWorkEntry } from "@/lib/shared/billing/kostnadsrakning";
 import { canVoidKostnadsrakning, krStateOf, type KostnadsrakningAction } from "@/lib/shared/billing/kostnadsrakning-flow";
 import { DEFAULT_VAT_RATE } from "@/lib/shared/billing/vat";
 import { CURRENT_ROUNDING, splitGross } from "@/lib/shared/billing/whole-kronor";
-import { forordnandeAvslutSchema } from "@/lib/shared/schemas/enums";
+import { forordnandeAvslutSchema, type MatterRole } from "@/lib/shared/schemas/enums";
 import {
   asId, billingRunIdSchema, expenseIdSchema, matterIdSchema, timeEntryIdSchema,
   type BillingRunId, type ExpenseId, type MatterId, type OrganizationId,
@@ -60,7 +60,7 @@ async function courtNameOf(repos: Repositories, orgId: OrganizationId, matterId:
   const detail = await repos.matters.getByIdWithContacts(matterId, orgId);
   // In-memory-lagret bakar bara in kontakt-joinen när seeden gjort det (demo-
   // prebake) — rå rader ger inga `contacts`. Saknas de: "domstolen" i texten.
-  const contacts: ReadonlyArray<{ role: string; contact?: { name: string } | undefined }> = detail?.contacts ?? [];
+  const contacts: ReadonlyArray<{ role: MatterRole; contact?: { name: string } | undefined }> = detail?.contacts ?? [];
   return contacts.find((c) => c.role === "DOMSTOL")?.contact?.name ?? null;
 }
 

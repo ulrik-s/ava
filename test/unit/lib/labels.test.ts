@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest-compat";
-import { matterRoleLabels, matterRoleOptions, contactTypeLabels, contactTypeOptions } from "@/lib/client/labels";
+import { matterRoleLabels, matterRoleOptions, contactTypeLabels, contactTypeOptions, labelForMatterRole } from "@/lib/client/labels";
 
 describe("matterRoleLabels", () => {
   it("använder 'Klient' (inte 'Huvudman') som label för KLIENT", () => {
@@ -21,6 +21,17 @@ describe("matterRoleLabels", () => {
     expect(matterRoleLabels.VITTNE).toBe("Vittne");
     expect(matterRoleLabels.OMBUD).toBe("Ombud");
     expect(matterRoleLabels.OVRIG).toBe("Övrig");
+  });
+});
+
+describe("labelForMatterRole (#1909)", () => {
+  it("ger rollens text", () => {
+    expect(labelForMatterRole("KLIENT")).toBe("Klient");
+  });
+
+  it("tar bara MatterRole, men visar en okänd roll i rå data som den är", () => {
+    // @ts-expect-error -- ett stavfel i rollen kompilerar inte längre
+    expect(labelForMatterRole("KLIENTT")).toBe("KLIENTT");
   });
 });
 

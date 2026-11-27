@@ -109,6 +109,38 @@ describe("DocumentRow — kebab-meny + isUploading-guard", () => {
     }
   });
 
+  it("demo-tier utan byggflaggan: Visa pekar på demons fil, inte på /api/ (#1913)", () => {
+    const prev = process.env.NEXT_PUBLIC_DEMO_BUILD;
+    delete process.env.NEXT_PUBLIC_DEMO_BUILD;
+    window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "u/r" }));
+    try {
+      renderRow({ isUploading: false });
+      openMenu();
+      const href = screen.getByText("Visa").closest("a")?.getAttribute("href") ?? "";
+      expect(href.endsWith("/documents/content/d-1.pdf")).toBe(true);
+      expect(href.startsWith("/api/")).toBe(false);
+    } finally {
+      window.localStorage.removeItem("ava.firma");
+      if (prev !== undefined) process.env.NEXT_PUBLIC_DEMO_BUILD = prev;
+    }
+  });
+
+  it("self-hosted med byggflaggan satt: Visa och Ladda ner är inte länkar (#651, #1913)", () => {
+    const prev = process.env.NEXT_PUBLIC_DEMO_BUILD;
+    process.env.NEXT_PUBLIC_DEMO_BUILD = "1";
+    window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "self-hosted", repo: "u/r" }));
+    try {
+      renderRow({ isUploading: false });
+      openMenu();
+      expect(screen.getByText("Visa").closest("a")).toBeNull();
+      expect(screen.getByText("Ladda ner").closest("a")).toBeNull();
+    } finally {
+      window.localStorage.removeItem("ava.firma");
+      if (prev === undefined) delete process.env.NEXT_PUBLIC_DEMO_BUILD;
+      else process.env.NEXT_PUBLIC_DEMO_BUILD = prev;
+    }
+  });
+
   it("isUploading=true: kebab-trigger är disabled → menyn kan inte öppnas", () => {
     const { onReanalyze, onDelete } = renderRow({ isUploading: true });
     const trigger = screen.getByLabelText("Dokumentåtgärder");

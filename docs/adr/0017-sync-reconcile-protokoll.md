@@ -1,6 +1,6 @@
 # ADR 0017 — Sync/reconcile-protokoll + konfliktpolicy (offline-first klient)
 
-- **Status:** Accepterad
+- **Status:** Accepterad. §3 reviderad 2026-11-27 (ulrik-s/ava#1916): konfliktklassen följer skrivsättet, efter ADR 0037.
 - **Datum:** 2026-06-16 (accepterad 2026-06-18)
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** offline-sync, datalager, konflikthantering, DB-schema, statemaskin
@@ -46,16 +46,17 @@ sällsynta, vilket gör en server-auktoritativ modell tillräcklig (ingen 3-väg
 Servern validerar **alltid** invarianter/statemaskin mot sitt *aktuella* tillstånd
 (inte mot klientens `baseVersion`). Utfallet styrs av entitetens klass:
 
-| Klass | Beteende vid stale skrivning | Entiteter |
-|---|---|---|
-| **Append** | Ingen konflikt möjlig — `create` på unikt id, idempotent upsert. | TimeEntry, Expense, Payment, PaymentPlanReminder, BillingRun, WriteOff, AccontoDeduction, Document (register), CalendarEvent |
-| **LWW** (sista-skrivning-vinner) | Servern accepterar skrivningen, bumpar `version`, returnerar kanoniskt värde; klienten rebasar. | Matter (beskrivande fält), Contact, MatterContact, DocumentFolder, Task, ServiceNote (redigering), User/Org-preferenser |
-| **Surface** (validera, avvisa stale) | Servern kör invariant/statemaskin mot *aktuellt* tillstånd; ogiltig övergång → **avvisa** mutationen med konflikt → klienten ytlägger för omval. | Invoice.status (ADR 0015), PaymentPlan.status, Invoice-belopp/poster efter SENT, Matter.status |
+| Skrivsätt | Klass | Vid inaktuell skrivning | Register |
+|---|---|---|---|
+| Procedurägd (ADR 0037): ärende, tid, utlägg, fakturering, administration … | surface | Servern kör om proceduren mot aktuellt läge. Ogiltig → avvisas och visas för användaren. Radkön tar inte emot raden. | `procedure-owned.ts` |
+| Radkö, bara läggas till (`appendOnly`): jävskontrollens logg | append | `create` på unikt id, idempotent | `row-push-policy.ts` |
+| Radkö, får ändras: kontakter, uppgifter, kalender, dokumentens metadata … | lww (eller surface där tyst överskrivning vore fel) | lww: servern skriver, bumpar `version` och svarar kanoniskt. surface: en ändring kräver basversion. | `conflict-policy.ts` |
 
-Princip: **append > LWW > surface** i fallande frekvens. De allra flesta offline-
-skrivningar är append (tid/utlägg) → noll konflikt. LWW täcker beskrivande
-redigeringar. Surface reserveras för det fåtal fält där en tyst överskrivning vore
-fel (pengar, tillståndsövergångar).
+En entitet utan klassning är **surface** (säkrast: avvisar hellre än skriver över tyst).
+
+Princip: pengar och tillstånd går som procedur-anrop, som servern kör om mot
+aktuellt läge (surface). Ren data som radkön tar emot är **lww**. **append** gäller
+loggar som bara får läggas till.
 
 ### 4. Reconcile-sekvens (vid reconnect)
 
@@ -90,7 +91,9 @@ konflikt. Detta håller [ADR 0015] som enda auktoritet utan att låsa offline-ar
 - Kräver `version`/`updatedAt` + en change-log/cursor server-side (#408) — schemakostnad.
 - Tombstones måste städas (retention) annars växer change-loggen.
 - Entitets-matrisen måste underhållas: en ny entitet utan klassning defaultar till
-  **surface** (säkrast — avvisar hellre än överskriver tyst). Lint/review-vakt.
+  **surface** (säkrast — avvisar hellre än överskriver tyst). Grinden
+  `test/unit/server/sync/sync-registry-coverage.test.ts` (regel 4) håller registren
+  och matrisen överens.
 - LWW kan tappa en samtidig redigering av samma beskrivande fält (accepterat —
   en-ägare-modellen gör det sällsynt; surface-klassa fält där det vore oacceptabelt).
 

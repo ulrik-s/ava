@@ -13,7 +13,7 @@ import type { KrDocumentFields } from "@/lib/shared/billing/kostnadsrakning";
 import { formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { OrgImage } from "@/lib/shared/org-image";
-import type { PaymentMethod } from "@/lib/shared/schemas/enums";
+import type { MatterRole, PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 import type { KrRunClaim } from "./_ersattning-section";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
@@ -33,7 +33,7 @@ export interface MatterContext {
   /** Domstolens målnummer — kostnadsräkningens rubrik (#1218). */
   courtCaseNumber?: string | null | undefined;
   rattsskyddNekadAt?: string | Date | null | undefined;
-  contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null | undefined; email?: string | null | undefined } | null | undefined }> | undefined;
+  contacts?: ReadonlyArray<{ role: MatterRole; contact?: { name?: string | null | undefined; email?: string | null | undefined } | null | undefined }> | undefined;
 }
 
 export function clientOf(matter: MatterContext): string {

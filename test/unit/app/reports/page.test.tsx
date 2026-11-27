@@ -1,5 +1,6 @@
 /**
- * Test för ReportsPage.
+ * Test för ReportsPage. Fältet Advokat följer rollen (#2116): förvald är den
+ * inloggade, en Advokat har bara sig själv, en Admin har Alla överst.
  */
 
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -14,7 +15,10 @@ const reportQuery = {
   isLoading: false,
   error: null as { message: string } | null,
 };
-const chartCalls: Array<{ userId: string; from: string; to: string; granularity: string }> = [];
+const chartCalls: Array<{ userId?: string; from: string; to: string; granularity: string }> = [];
+const currentUser = { data: undefined as { id: string; role: string } | undefined };
+const reportCalls: Array<{ input: Record<string, unknown>; enabled: boolean }> = [];
+const arCalls: Array<Record<string, unknown>> = [];
 const billedQuery = {
   data: undefined as Record<string, unknown> | undefined,
   isLoading: false,
@@ -33,7 +37,7 @@ vi.mock("@/lib/client/trpc", () => ({
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     user: {
       list: { useQuery: () => usersQuery },
-      current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
+      current: { useQuery: () => currentUser },
     },
     timeEntry: {
       chart: {
@@ -44,9 +48,19 @@ vi.mock("@/lib/client/trpc", () => ({
       },
     },
     reports: {
-      perLawyer: { useQuery: () => reportQuery },
+      perLawyer: {
+        useQuery: (input: Record<string, unknown>, opts: { enabled: boolean }) => {
+          reportCalls.push({ input, enabled: opts.enabled });
+          return reportQuery;
+        },
+      },
       billed: { useQuery: () => billedQuery },
-      arSummary: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      arSummary: {
+        useQuery: (input: Record<string, unknown>) => {
+          arCalls.push(input);
+          return { data: undefined, isLoading: false };
+        },
+      },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
@@ -61,6 +75,9 @@ vi.mock("@/lib/client/trpc", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   chartCalls.length = 0;
+  reportCalls.length = 0;
+  arCalls.length = 0;
+  currentUser.data = { id: "u1", role: "ADMIN" };
   usersQuery.data = { users: [{ id: "u1", name: "Anna" }, { id: "u2", name: "Bo" }] };
   reportQuery.data = undefined;
   reportQuery.isLoading = false;
@@ -70,6 +87,7 @@ beforeEach(() => {
 });
 
 const sampleReport = {
+  scope: "lawyer",
   user: { id: "u1", name: "Anna" },
   totals: {
     totalMinutes: 600,
@@ -161,12 +179,54 @@ describe("ReportsPage", () => {
     expect(screen.queryByText("Välj jurist och period.")).toBeNull();
   });
 
-  it("ingen advokat att välja → \"Välj jurist och period.\"", () => {
-    usersQuery.data = { users: [] };
+  it("innan rollen är känd: Laddar... och ingen rapport, inga kundfordringar och inget diagram (#2116)", () => {
+    currentUser.data = undefined;
     render(<ReportsPage />);
-    // Stapeldiagrammet (#2110) visar samma text utan vald advokat.
-    expect(screen.getAllByText("Välj jurist och period.").length).toBe(5);
+    expect(screen.getByRole("option", { name: "Laddar..." })).toBeInTheDocument();
+    expect(reportCalls.every((c) => !c.enabled)).toBe(true);
+    expect(arCalls).toHaveLength(0);
     expect(chartCalls).toHaveLength(0);
+    // Rapportpanelerna, kundfordringarna och diagrammet väntar.
+    expect(screen.getAllByText("Välj jurist och period.").length).toBe(6);
+  });
+
+  it("förvald är den inloggade, också när den inte står först i listan (#2116)", () => {
+    currentUser.data = { id: "u2", role: "ADMIN" };
+    render(<ReportsPage />);
+    expect(screen.getByRole<HTMLSelectElement>("combobox").value).toBe("u2");
+    expect(reportCalls[reportCalls.length - 1]).toMatchObject({ input: { userId: "u2" }, enabled: true });
+  });
+
+  it("en Advokat har bara sig själv i listan (#2116)", () => {
+    currentUser.data = { id: "u2", role: "LAWYER" };
+    render(<ReportsPage />);
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Bo"]);
+    expect(reportCalls[reportCalls.length - 1]?.input).toMatchObject({ userId: "u2" });
+  });
+
+  it("en Admin har Alla överst; med Alla gäller allt hela byrån (#2116)", () => {
+    reportQuery.data = {
+      ...sampleReport, scope: "firm", user: null,
+    };
+    render(<ReportsPage />);
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Alla", "Anna", "Bo"]);
+    fireEvent.change(screen.getByRole<HTMLSelectElement>("combobox"), { target: { value: "ALLA" } });
+
+    expect(reportCalls[reportCalls.length - 1]?.input).not.toHaveProperty("userId");
+    expect(arCalls[arCalls.length - 1]).not.toHaveProperty("userId");
+    expect(chartCalls[chartCalls.length - 1]).not.toHaveProperty("userId");
+    expect(screen.queryByText(/andel för/)).toBeNull();
+    expect(screen.getByText("Alla", { selector: "div" })).toBeInTheDocument();
+    expect(screen.getByText("Ärenden där någon på byrån har registrerat tid eller utlägg.")).toBeInTheDocument();
+    expect(screen.getByText(/Debiterbar tid och utlägg för hela byrån inom perioden som/)).toBeInTheDocument();
+  });
+
+  it("för en vald advokat: namnet i texterna och kundfordringarna för advokaten", () => {
+    reportQuery.data = sampleReport;
+    render(<ReportsPage />);
+    expect(screen.getByText("Ärenden där Anna har registrerat tid eller utlägg.")).toBeInTheDocument();
+    expect(screen.getByText(/Debiterbar tid och utlägg för Anna inom perioden/)).toBeInTheDocument();
+    expect(arCalls[arCalls.length - 1]).toMatchObject({ userId: "u1" });
   });
 
   it("renderar SummaryCard, MattersTable, WeeklyTable och UnbilledTable när data finns", () => {

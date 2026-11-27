@@ -35,29 +35,8 @@ import { PROCEDURE_OWNED_ENTITIES } from "@/lib/shared/sync/procedure-owned";
 import { QUEUED_PROCEDURES, type QueuedProcedureSpec } from "@/lib/shared/sync/queued-procedures";
 import { type KnownDeviation, ratchetDiff } from "../../../../tooling/scripts/ratchet";
 
-const STALE_MATRIX: KnownDeviation = {
-  why: "ADR 0017:s konfliktmatris från före procedurkön (ADR 0037). Klassen används inte för procedurägda rader, som avvisas före konfliktprövningen.",
-  issue: 1696,
-};
-const EDITABLE_APPEND: KnownDeviation = {
-  why: "Raden ändras via radkön men klassas som append. Servern behandlar append och lww lika, så bara etiketten i konfliktvyn är fel.",
-  issue: 1696,
-};
-
-/** Kända avvikelser: `entitet: regel`. */
-const KNOWN: Readonly<Record<string, KnownDeviation>> = {
-  "timeEntry: procedurägd men konfliktklass append": STALE_MATRIX,
-  "expense: procedurägd men konfliktklass append": STALE_MATRIX,
-  "payment: procedurägd men konfliktklass append": STALE_MATRIX,
-  "paymentPlanReminder: procedurägd men konfliktklass append": STALE_MATRIX,
-  "billingRun: procedurägd men konfliktklass append": STALE_MATRIX,
-  "writeOff: procedurägd men konfliktklass append": STALE_MATRIX,
-  "accontoDeduction: procedurägd men konfliktklass append": STALE_MATRIX,
-  "matter: procedurägd men konfliktklass lww": STALE_MATRIX,
-  "orgPreference: procedurägd men konfliktklass lww": STALE_MATRIX,
-  "document: får ändras via radkön men konfliktklass append": EDITABLE_APPEND,
-  "calendarEvent: får ändras via radkön men konfliktklass append": EDITABLE_APPEND,
-};
+/** Kända avvikelser: `entitet: regel`. Tom sedan konfliktklassen följer skrivsättet (#1916). */
+const KNOWN: Readonly<Record<string, KnownDeviation>> = {};
 
 /** Registren grinden läser — ett värde, så att testet kan pröva grinden mot ett ändrat register. */
 interface Registers {

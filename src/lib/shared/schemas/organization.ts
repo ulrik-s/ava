@@ -7,6 +7,12 @@ import { hourlyRatesSchema } from "./hourly-rates";
 import { organizationIdSchema, officeIdSchema } from "./ids";
 
 /**
+ * En byråtröskel som heltal ≥ 0 inom Postgres `integer` (int4), t.ex. öre eller
+ * dagar för "Bör faktureras" (#1911). Gränsen står här och ingen annanstans.
+ */
+export const orgThresholdSchema = z.number().int().nonnegative().max(2_147_483_647);
+
+/**
  * Organisation = byrå. En per git-repo (vanligen). Lagras i
  * `.ava/organizations/<id>.json`.
  */
@@ -43,6 +49,10 @@ export const organizationSchema = z.object({
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: z.number().int().nonnegative().nullish(),
+  /** Tröskel (öre) för "Bör faktureras" i Frister (#1911). NULL = kodens standard. */
+  unbilledThresholdOre: orgThresholdSchema.nullish(),
+  /** Ålder (dagar) för "Bör faktureras" i Frister (#1911). NULL = kodens standard. */
+  unbilledAgeDays: orgThresholdSchema.nullish(),
   /** Byråns timpris per kategori (öre/h, exkl moms) — minst specifika nivån,
    *  gäller när varken ärendet eller juristen har ett eget (#1206). */
   hourlyRates: hourlyRatesSchema.default({}),

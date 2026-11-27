@@ -4,7 +4,7 @@ import { Trash2 } from "lucide-react";
 import { Fragment, useState } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
-import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
+import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import { DocumentDetailsDialog } from "./_document-details-dialog";
@@ -134,21 +134,13 @@ export function DocumentRow({
  * på små skärmar. Nu en touch-vänlig overflow-meny som funkar på alla
  * skärmstorlekar (se [[ActionMenu]]).
  *
- * Länk-vägar:
- *   - demo-build → GH Pages-URL (Visa/Ladda ner).
- *   - server-build → /api/documents/<id>/download.
+ * Länk-vägar: runtime-tiern (`isDemoTier()`) avgör i `DocumentActions` om
+ * Visa/Ladda ner är länkar (demo → GH Pages) eller öppnar via servern.
  */
-/** Bygg Visa/Ladda-ner-URL:erna (demo → GH Pages, server → /api). Utbruten
- *  ur DocumentActions så komplexiteten (demo vs server + repo-parsning) bor
- *  i en egen funktion. */
+/** Bygg demons Visa/Ladda-ner-URL:er (GH Pages). Används bara när runtime-
+ *  tiern är demo (#1913); self-hosted öppnar via servern och ignorerar dem.
+ *  Utbruten ur DocumentActions så repo-parsningen bor i en egen funktion. */
 function buildDocHrefs(doc: DocumentRecord): { viewHref: string; downloadHref: string } {
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
-  if (!isDemo) {
-    return {
-      viewHref: `/api/documents/${doc.id}/download`,
-      downloadHref: `/api/documents/${doc.id}/download?download=1`,
-    };
-  }
   const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
   const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
   const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
@@ -234,7 +226,7 @@ export function DocumentActions({
   // Runtime-tier (#651): self-hosted öppnar via servern (cache-medveten), demo
   // via GH-Pages-href. Bygg-tids-NEXT_PUBLIC_DEMO_BUILD duger inte — den är sann
   // även i den lokala self-hosted-builden (→ tidigare GH-länkar i self-hosted).
-  const serverMode = loadFirmaConfig().tier !== "demo";
+  const serverMode = !isDemoTier();
 
   const openViaServerOrGh = async () => {
     const rec = doc as DocumentRecord & { storagePath?: string };
