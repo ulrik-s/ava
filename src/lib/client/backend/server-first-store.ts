@@ -15,18 +15,18 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import { toLinkFetch, type InjectableFetch } from "@/lib/client/link-fetch";
-import { withSyncLock, type SyncLocks } from "@/lib/client/sync/sync-lock";
-import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
-import { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
-import { InMemoryCursorStore, type CursorStore } from "@/lib/server/data-store/in-memory/cursor-store";
-import { IndexedDbPersistence } from "@/lib/server/data-store/in-memory/indexeddb-persistence";
-import { LEGACY_ID_NAMESPACE } from "@/lib/server/data-store/in-memory/legacy-id-repair";
-import type { LocalStorePersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
+import { CachingSyncDataStore } from "@/lib/client/local-store/caching-sync-data-store";
+import { InMemoryCursorStore, type CursorStore } from "@/lib/client/local-store/cursor-store";
+import { IndexedDbPersistence } from "@/lib/client/local-store/indexeddb-persistence";
+import { LEGACY_ID_NAMESPACE } from "@/lib/client/local-store/legacy-id-repair";
+import type { LocalStorePersistence } from "@/lib/client/local-store/local-store-persistence";
 import {
   IndexedDbMutationQueuePersistence,
   type MutationQueuePersistence,
   type QueueOwner,
-} from "@/lib/server/data-store/in-memory/mutation-queue";
+} from "@/lib/client/local-store/mutation-queue";
+import { withSyncLock, type SyncLocks } from "@/lib/client/sync/sync-lock";
+import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { asId, type DocumentId } from "@/lib/shared/schemas/ids";

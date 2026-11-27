@@ -5,7 +5,7 @@
  */
 
 import type { ServerSyncInfo } from "@/lib/shared/sync/protocol";
-import type { QueuedMutation, QueuedProcedureCall } from "./mutation-queue";
+import type { QueuedMutation, QueuedProcedureCall } from "./queue-entry";
 
 /** En kanonisk ändring servern returnerar i en delta-pull (tombstone via `deleted`). */
 export interface PulledChange {

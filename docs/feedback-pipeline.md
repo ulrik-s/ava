@@ -211,16 +211,19 @@ förfrågan i inkorgen, medan en grund kan höra till flera.
   - rör skyddade sökvägar (CI, deploy, auth, agentpromptarna …),
     och sedan #1873 också pengalogiken, de delade schemana och migrationerna:
     `src/lib/shared/schemas/`, `tooling/db/migrations/` (alla filer, även
-    additiva), `src/lib/server/billing/`, `src/lib/shared/billing-*.ts`,
-    `src/lib/shared/kostnadsrakning*.ts`, `src/lib/shared/coverage-billing.ts`,
-    `src/lib/shared/invoice-calc.ts`, `src/lib/server/routers/invoice.ts`,
+    additiva), `src/lib/server/billing/`, `src/lib/shared/billing/billing-*.ts`,
+    `src/lib/shared/billing/kostnadsrakning*.ts`, `src/lib/shared/billing/coverage-billing.ts`,
+    `src/lib/shared/billing/invoice-calc.ts`, `src/lib/server/routers/invoice.ts`,
     billingRun-routern (`src/lib/server/routers/billingRun.ts` och
-    `src/lib/server/routers/billingRun/`), momsen (`src/lib/shared/vat.ts`,
+    `src/lib/server/routers/billingRun/`), momsen (`src/lib/shared/billing/vat.ts`,
     `invoice-vat.ts`, `expense-vat.ts`, `acconto-vat.ts`), taxorna
-    (`src/lib/shared/brottmalstaxa.ts`, `forordnandetaxa.ts`) och bokföringen
+    (`src/lib/shared/billing/brottmalstaxa.ts`, `forordnandetaxa.ts`) och bokföringen
     (`src/lib/shared/accounting/`). Samma lista står i `.github/CODEOWNERS`.
   - innehåller en destruktiv migration,
-  - är fler än 30 på ett dygn,
+  - är fler än 30 på ett dygn. Bara det som kan mergas räknas: mergade PR:er
+    och öppna utan `blockerad`. En PR som väntar på Ulriks `människa-godkänd`
+    eller stängts utan merge räknas inte (2026-11-27; den 26/11 band sju
+    väntande PR:er en fjärdedel av dygnets kvot),
   - eller inte har `granskad`.
 
   `människa-godkänd` (bara Ulrik) släpper de två första. Granskningsloopen
@@ -516,6 +519,13 @@ komplexitet < 8, jscpd, knip, täckning, Agentvakten).
   krympa men aldrig växa. Krymper en fil måste baslinjen skärpas (`--update`
   kan bara skärpa). Agentvakten låter en agent-PR ändra baslinjen bara åt
   det strängare hållet.
+- **Routertaket** (#2176, samma skript): en tRPC-router
+  (`src/lib/server/routers/`, även undermapparna) får ha högst **250 rader**.
+  Routern validerar indata, väljer procedur och anropar en tjänst under
+  `src/lib/server/<domän>/` (förebild: `loadPeriodWork` i
+  `src/lib/server/reports/period-work.ts`). Routrarna som redan var större
+  står i `tooling/config/router-size-baseline.json`, med samma ratchet och
+  samma undantag i Agentvakten.
 - **ADR:er blir regler:** varje vecka går genomgången igenom nästa ADR:er och
   föreslår högst en ny regel i `dependency-cruiser.cjs` för en gräns som ADR:en
   beskriver men som inte kontrolleras. Regel-PR:en rör `tooling/config/` och

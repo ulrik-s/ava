@@ -7,7 +7,7 @@
 import { IndexedDbListStore, type ListStore } from "@/lib/client/backend/idb-list-store";
 import { LOCAL_DB, localDbName } from "@/lib/client/backend/local-data/local-namespace";
 import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
-import type { InvoiceSpecification } from "@/lib/shared/invoice-specification";
+import type { InvoiceSpecification } from "@/lib/shared/billing/invoice-specification";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
 /** Ett uppskjutet dokument — bara data (register/utils ges när det skapas). */

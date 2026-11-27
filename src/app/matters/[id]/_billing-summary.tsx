@@ -12,14 +12,14 @@
  *   - Betalt: Σ registrerade betalningar. BRUTTO.
  *
  * `basis` säger bara vad det lagrade talet är; `<Money>` visar alla kort i
- * samma globala inkl/exkl-läge. Beräkningen bor i `lib/shared/billing-summary`.
+ * samma globala inkl/exkl-läge. Beräkningen bor i `lib/shared/billing/billing-summary`.
  *
  * Panelen ligger i en dockpanel som kan vara smal → container query: 2×2 som
  * standard, 4 i rad först när panelen själv är bred (ingen horisontell scroll).
  */
 import { Money } from "@/components/ui/money";
 import { trpc } from "@/lib/client/trpc";
-import { invoicedTotals, krClaimedOre, paidOre, type SummaryRun } from "@/lib/shared/billing-summary";
+import { invoicedTotals, krClaimedOre, paidOre, type SummaryRun } from "@/lib/shared/billing/billing-summary";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
 export function BillingSummary({ matterId, runs }: { matterId: MatterId; runs: readonly SummaryRun[] }) {

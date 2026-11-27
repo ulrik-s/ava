@@ -24,11 +24,10 @@ import { persistGeneratedDoc } from "@/lib/client/demo/persist-generated-doc";
 import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
-import { buildKostnadsrakningContext, hasHearingEntry, withDocumentFields, type KrDocumentFields } from "@/lib/shared/kostnadsrakning";
-import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
+import type { TaxaLevel } from "@/lib/shared/billing/brottmalstaxa";
+import { buildKostnadsrakningContext, hasHearingEntry, withDocumentFields, type KrDocumentFields } from "@/lib/shared/billing/kostnadsrakning";
+import { formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { primitiveText } from "@/lib/shared/primitive-text";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
@@ -476,11 +475,11 @@ function PreviewSection({ ctx }: { ctx: KostnContext }) {
       )}
       <dl className="grid grid-cols-2 gap-y-1 text-sm">
         <dt className="text-gray-600">Arvode inkl moms</dt>
-        <dd className="font-mono text-right">{formatCurrency(ctx.arvodeInclVat)}</dd>
+        <dd className="font-mono text-right">{formatKr(ctx.arvodeInclVat)}</dd>
         <dt className="text-gray-600">Utlägg inkl moms ({ctx.expenseLines.length} st)</dt>
-        <dd className="font-mono text-right">{formatCurrency(ctx.expenseSummary.inclVat)}</dd>
+        <dd className="font-mono text-right">{formatKr(ctx.expenseSummary.inclVat)}</dd>
         <dt className="text-gray-900 font-bold pt-1 border-t border-gray-200">Total</dt>
-        <dd className="font-mono text-right font-bold text-gray-900 pt-1 border-t border-gray-200">{formatCurrency(ctx.totalInclVat)}</dd>
+        <dd className="font-mono text-right font-bold text-gray-900 pt-1 border-t border-gray-200">{formatKr(ctx.totalInclVat)}</dd>
       </dl>
     </section>
   );

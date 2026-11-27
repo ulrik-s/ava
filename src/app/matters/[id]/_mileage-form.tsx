@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
+import { formatKr } from "@/lib/shared/kr-format";
 import {
   mileageAmountOre, mileageExpensePayload, mileageRateKrPerMil, type MileageExpensePayload, type MileageTrip,
 } from "@/lib/shared/mileage-rate";
@@ -80,7 +80,7 @@ export function MileageForm({ isPending, onSubmit, onCancel }: Props) {
             onChange={(v) => setState({ ...state, krPerMil: v })} />
         </div>
       </div>
-      <p className="text-sm text-gray-700">Summa: <span className="font-mono">{formatCurrency(amountOre)}</span></p>
+      <p className="text-sm text-gray-700">Summa: <span className="font-mono">{formatKr(amountOre)}</span></p>
       <VatPreview amount={amountOre / 100} vatRate={0} passThrough={false} />
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" onClick={onCancel}

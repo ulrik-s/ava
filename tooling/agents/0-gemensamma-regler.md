@@ -138,15 +138,17 @@ sätt `blockerad` så att Ulrik ser det.
   övrigt är godkänd sätter loop 3 `blockerad` på arbetsordern med
   `PR #N väntar på din människa-godkänd (skyddad sökväg: …)`; Ulrik flyttar
   kortet till Godkänd på tavlan, och synken sätter etiketten på PR:en.
-  **Undantag:** att skärpa `tooling/config/file-size-baseline.json` med
-  `bun run file-size --update` är tillåtet. Agentvakten släpper igenom just
+  **Undantag:** att skärpa `tooling/config/file-size-baseline.json` eller
+  `tooling/config/router-size-baseline.json` med `bun run file-size --update`
+  är tillåtet. Agentvakten släpper igenom just
   det. Blockera aldrig för det. Domaren är Agentvaktens logg: säger den bara
   att `granskad` saknas, är sökvägarna i ordning.
 - Migrationer är **additiva**: `ADD COLUMN IF NOT EXISTS`, nya tabeller, nya
   index. Aldrig DROP, RENAME, typbyte, TRUNCATE eller DELETE. En release kan
   backas med en äldre tagg men databasen backas inte, så gammal kod måste
   fungera mot det nya schemat.
-- Högst 30 agent-PR:er per dygn.
+- Högst 30 agent-PR:er per dygn. Bara de som kan mergas räknas: mergade, och
+  öppna utan `blockerad` (en PR som väntar på Ulriks `människa-godkänd` räknas inte).
 - En agent-PR kan bara mergas med `granskad` och utan `blockerad`.
 
 ## 4b. Arkitekturen — passa in, uppfinn inte

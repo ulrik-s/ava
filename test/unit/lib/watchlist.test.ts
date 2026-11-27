@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest-compat";
-import { BILLING_SHORTCUT_PARAM } from "@/lib/shared/billing-flow";
+import { BILLING_SHORTCUT_PARAM } from "@/lib/shared/billing/billing-flow";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
   coverageItems, dagar, deadlineItems,
-  sortWatchlist, unbilledItems, daysBetween,
+  sortWatchlist, unbilledItems, daysBetween, klientNameOf, withKlientNames,
   thresholdsForOrg, DEFAULT_THRESHOLDS, DEFAULT_UNBILLED_AGE_DAYS, DEFAULT_UNBILLED_THRESHOLD_ORE,
   type WatchlistItem,
 } from "@/lib/shared/watchlist";
@@ -270,5 +270,36 @@ describe("svensk böjning", () => {
       [{ id: "t", title: "Ge in", dueAt: "2026-09-05", matterId: null, matterNumber: null }], NOW2,
     );
     expect(item?.title).toContain("idag");
+  });
+});
+
+describe("klientens namn (#1965)", () => {
+  const post = (matterId: string | null): WatchlistItem => ({
+    kind: "deadline", severity: "approaching", title: "Frist", detail: "", matterId,
+    matterNumber: matterId === null ? null : `2026-${matterId}`, at: "2026-09-08", amountOre: null, link: null,
+  });
+
+  it("klientNameOf ger första KLIENT-partens namn; andra roller före klienten påverkar inte", () => {
+    expect(klientNameOf([
+      { role: "MOTPART", name: "Motpart AB" },
+      { role: "KLIENT", name: "Klient A" },
+      { role: "KLIENT", name: "Klient B" },
+    ])).toBe("Klient A");
+  });
+
+  it("klientNameOf: utan klient eller utan parter → undefined", () => {
+    expect(klientNameOf([{ role: "MOTPART", name: "Motpart AB" }])).toBeUndefined();
+    expect(klientNameOf(undefined)).toBeUndefined();
+  });
+
+  it("withKlientNames lägger namnet på posterna i ärenden med klient, och lämnar övriga orörda", () => {
+    const parties = new Map([
+      ["m1", [{ role: "KLIENT" as const, name: "Klient A" }]],
+      ["m2", [{ role: "MOTPART" as const, name: "Motpart AB" }]],
+    ]);
+    const [a, b, c] = withKlientNames([post("m1"), post("m2"), post(null)], parties);
+    expect(a?.klientName).toBe("Klient A");
+    expect(b).not.toHaveProperty("klientName");
+    expect(c).not.toHaveProperty("klientName");
   });
 });

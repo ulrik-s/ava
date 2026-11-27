@@ -10,8 +10,8 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { invoiceQueuedNote, invoiceSentNote } from "@/lib/shared/billing-notes";
-import { canTransition } from "@/lib/shared/invoice-state-machine";
+import { invoiceQueuedNote, invoiceSentNote } from "@/lib/shared/billing/billing-notes";
+import { canTransition } from "@/lib/shared/billing/invoice-state-machine";
 import { dispatchChannelSchema, dispatchStatusSchema, type DispatchStatus, type InvoiceDispatch } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { asId, type InvoiceId, invoiceDispatchIdSchema, invoiceIdSchema, type MatterId } from "@/lib/shared/schemas/ids";

@@ -12,7 +12,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest-compat";
 import {
   assertInvoiceTransition, canTransition, isIssued, REQUIRES_SENT, transitionErrorMessage,
-} from "@/lib/shared/invoice-state-machine";
+} from "@/lib/shared/billing/invoice-state-machine";
 import { invoiceStatusSchema, type InvoiceStatus } from "@/lib/shared/schemas/enums";
 
 const statuses = invoiceStatusSchema.options;

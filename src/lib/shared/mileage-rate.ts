@@ -24,7 +24,7 @@ export const MILEAGE_RATE_ORE_PER_MIL_BY_VEHICLE = {
   COMPANY_CAR_OTHER: 1200,
 } as const satisfies Record<VehicleType, number>;
 
-/** Lagrat värde (öre/km) → öre/mil, för beloppsvisning med `formatCurrency`. */
+/** Lagrat värde (öre/km) → öre/mil, för beloppsvisning med `formatKr`. */
 export function mileageRateOrePerMil(orePerKm: number): number {
   return orePerKm * KM_PER_MIL;
 }

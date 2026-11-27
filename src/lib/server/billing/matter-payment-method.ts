@@ -9,7 +9,7 @@
  * faktureringsflödena följer av betalningssättet som förut (ADR 0034).
  */
 
-import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
+import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing/billing-notes";
 import { lockedPaymentMethod, type PublicAssignmentSettings } from "@/lib/shared/public-assignment";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";

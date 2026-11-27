@@ -10,6 +10,7 @@
  */
 
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import { asId, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type TimeEntryId, type UserId } from "@/lib/shared/schemas/ids";
 import { matters, timeEntries, users } from "../db/schema";
@@ -158,7 +159,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     let billableValueOre = 0;
     for (const r of rows) {
       billableMinutes += r.minutes;
-      billableValueOre += Math.round((r.minutes / 60) * (r.hourlyRate ?? 0));
+      billableValueOre += timeEntryValueOre(r.minutes, r.hourlyRate ?? 0);
     }
     return { billableMinutes, billableValueOre };
   }
@@ -173,7 +174,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     for (const r of rows) {
       const acc = out[r.matterId] ?? { billableMinutes: 0, billableValueOre: 0 };
       acc.billableMinutes += r.minutes;
-      acc.billableValueOre += Math.round((r.minutes / 60) * (r.hourlyRate ?? 0));
+      acc.billableValueOre += timeEntryValueOre(r.minutes, r.hourlyRate ?? 0);
       out[r.matterId] = acc;
     }
     return out;

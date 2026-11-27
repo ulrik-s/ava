@@ -12,7 +12,7 @@
  * pglite/Postgres via createTestDb — samma repos och change_log som servern.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import type { QueuedMutation } from "@/lib/client/local-store/mutation-queue";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";

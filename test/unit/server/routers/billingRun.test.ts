@@ -12,7 +12,8 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
-import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { timkostnadsnormFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { asId } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 
@@ -113,6 +114,15 @@ describe("billingRun.createAcconto — nedbrytningen (#1940)", () => {
     const res = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 125_000, settlementBreakdown: given });
     expect(res.invoice.settlementBreakdown).toEqual(given);
   });
+
+  it("nedbrytningen sparas i acontots egen kolumn och, tills vidare, i settlementBreakdown (#2180)", async () => {
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" });
+    const { invoice } = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 100_000 });
+    expect(invoice.accontoBreakdown?.totalOre).toBe(100_000);
+    expect(invoice.settlementBreakdown).toEqual(invoice.accontoBreakdown);
+    const read = await caller.invoice.getById({ id: invoice.id });
+    expect(read.accontoBreakdown).toEqual(invoice.accontoBreakdown);
+  });
 });
 
 describe("billingRun.proposal (#397)", () => {
@@ -123,8 +133,8 @@ describe("billingRun.proposal (#397)", () => {
     const { caller } = makeCaller({ workMinutes: 450, paymentMethod: "RATTSHJALP", hourlyRate: 0 });
     const p = await caller.billingRun.proposal({ matterId: "m-1" });
     const norm = timkostnadsnormFtaxForDate(new Date());
-    expect(p.workValueOre).toBe(Math.round((450 / 60) * norm));
-    expect(p.timeEntries[0]?.valueOre).toBe(Math.round((450 / 60) * norm));
+    expect(p.workValueOre).toBe(timeEntryValueOre(450, norm));
+    expect(p.timeEntries[0]?.valueOre).toBe(timeEntryValueOre(450, norm));
   });
 
   it("rättsskydd: normen, ingen rådgivningstimme", async () => {
@@ -937,6 +947,8 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.clientInvoice.invoiceType).toBe("CREDIT");
     expect(res.clientInvoice.amount).toBe(-29_700);      // negativ = kreditering
     expect(res.creditInvoice).toBe(res.clientInvoice);   // krediten ÄR klientfakturan
+    // #1946: anteckningen skriver de betalda acontona med formatKr (två decimaler, hårt mellanslag).
+    expect(res.clientInvoice.notes).toContain("betalda aconton (500,00 kr)");
     // #895: kreditfakturan visar FULLA specifikationen (tidsspec + avdragna aconton) →
     // netto = kredit (negativt), inte den gamla minimala 2-rads-vyn.
     const bd = res.clientInvoice.settlementBreakdown!;

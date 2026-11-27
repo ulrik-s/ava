@@ -37,7 +37,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "billingRun.invoiceSpecification": "Fakturaspecifikation: de tids- och utläggsrader som är kopplade till en viss faktura, plus avdragna aconton och summering. Driver fakturadokumentet. En ren aconto-faktura får tomma rader.",
   "billingRun.createAcconto": "Skapa en aconto-faktura (à conto) på ett ärende. Fryser inte arbetet — posterna kan faktureras igen på slutfakturan, med aconto-beloppet avdraget.",
   "billingRun.createFinal": "Skapa slutfaktura på ett ärende: fakturerar allt ofakturerat arbete, drar av tidigare aconton och fryser posterna.",
-  "billingRun.createKostnadsrakning": "Skapa en kostnadsräkning till domstolen (offentligt uppdrag och rättshjälp). Status INSKICKAD — domstolens beslut registreras separat. I ett förordnandemål anges forordnande.avslut (NEDLAGD, STRAFFORELAGGANDE eller INGET_ATAL): yrkandet räknas då på förordnandetaxan och ärendets förhör, och avslutet sparas i anteckningen.",
+  "billingRun.createKostnadsrakning": "Skapa en kostnadsräkning till domstolen (offentligt uppdrag och rättshjälp). Status INSKICKAD — domstolens beslut registreras separat. I ett förordnandemål anges forordnande.avslut (NEDLAGD, STRAFFORELAGGANDE eller INGET_ATAL): yrkandet räknas då på förordnandetaxan och ärendets förhör, och avslutet sparas på körningen (forordnandeAvslut) och i anteckningen.",
   "billingRun.recordKostnadsrakningBeslut": "Registrera domstolens beslut på en kostnadsräkning: dömt belopp och eventuell prutning. INSKICKAD → BESLUTAD (tingsrätten), ÖVERKLAGAD → BESLUTAD slutgiltigt (hovrätten). Skapar ingen faktura — det är ett eget steg.",
   "billingRun.appealKostnadsrakning": "Överklaga domstolens prutning på en kostnadsräkning till hovrätten: BESLUTAD → ÖVERKLAGAD. Ingen ny kostnadsräkning skapas; hovrättens beslut registreras på samma körning.",
   "billingRun.voidKostnadsrakning": "Ångra en kostnadsräkning innan domstolen beslutat (INSKICKAD, inget dömt belopp, ingen faktura): låser upp de tidposter och utlägg den frös och annullerar körningen, så ärendet kan kompletteras och en ny kostnadsräkning skapas.",
@@ -167,6 +167,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "matter.update": "Uppdatera ett ärendes uppgifter.",
   "matter.checkConflicts": "Kör jävskontrollen för ärendets parter (klient, motpart, motpartsombud) mot byråns alla ärenden igen.",
   "matter.markConflictsReviewed": "Markera jävskontrollens träffar i ett ärende som bedömda, med motivering (bara advokat eller admin).",
+  "matter.keepActive": "Behåll ett ärende som aktivt: sparar dagens datum som den dag någon bedömde att ärendet fortsätter. Status och övriga fält ändras inte.",
   "matter.coverageUsage": "Hur mycket debiterbart arbete som är upparbetat i ärendet — underlag för varningen när täckningstaket närmar sig.",
   "matter.addContact": "Koppla en befintlig kontakt till ärendet i en roll (klient, motpart, ombud, domstol).",
   "matter.addNewContact": "Skapa en ny kontakt och koppla den till ärendet i ett steg.",
@@ -242,7 +243,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
 
   // ── Tidsposter ───────────────────────────────────────────────────
   "timeEntry.list": "Lista tidsposter, valfritt filtrerat på ärende, medarbetare och datumintervall.",
-  "timeEntry.chart": "En medarbetares registrerade tid per dag, vecka eller månad i ett datumintervall: summa, debiterbar tid och ärendena per stapel.",
+  "timeEntry.chart": "En medarbetares registrerade tid per dag, vecka eller månad i ett datumintervall: summa, debiterbar tid och ärendena per stapel. Utan userId gäller diagrammet hela byrån.",
   "timeEntry.create": "Registrera arbetad tid på ett ärende. Kategorin styr ersättningen: arbete, tidsspillan, arbete på obekväm tid, eller advokatberedskap som ersätts per dygn med noll minuter.",
   "timeEntry.update": "Uppdatera en tidspost.",
   "timeEntry.moveToMatter": "Flytta en eller flera olåsta tidsposter till ett annat ärende. Timpriset räknas om mot målärendet; datum, tid och beskrivning ändras inte. Fakturerade eller frysta poster vägras.",

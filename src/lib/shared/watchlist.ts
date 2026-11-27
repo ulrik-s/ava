@@ -22,8 +22,9 @@
  * för att de hör hemma i samma vy, inte för att de räknas ut.
  */
 
-import { BILLING_SHORTCUT_PARAM } from "./billing-flow";
-import { coverageStatus, type CoverageCapInput } from "./coverage-cap";
+import { BILLING_SHORTCUT_PARAM } from "./billing/billing-flow";
+import { coverageStatus, type CoverageCapInput } from "./billing/coverage-cap";
+import type { MatterRole } from "./schemas/enums";
 import type { Organization } from "./schemas/organization";
 import { stockholmDay } from "./stockholm-time";
 
@@ -118,6 +119,34 @@ export interface WatchlistItem {
   link: WatchlistLink | null;
   /** Uppgiften bakom en tidsfrist — så den kan bockas av direkt i listan (#1167). */
   taskId?: string;
+  /**
+   * Ärendets första KLIENT-part (#1965), som Frister på Startsidan och sidan
+   * Frister visar överst på raden. Saknas när posten saknar ärende eller
+   * ärendet saknar klient.
+   */
+  klientName?: string;
+}
+
+/** En part i ett ärende — strukturellt samma som `matters.listPartiesFor` ger. */
+export interface WatchlistParty { role: MatterRole; name: string }
+
+/** Ärendenas parter per ärende-id, i ärendets ordning (KLIENT först). */
+export type WatchlistPartiesByMatter = ReadonlyMap<string, readonly WatchlistParty[]>;
+
+/** Namnet på ärendets första KLIENT-part, eller undefined. */
+export function klientNameOf(parties: readonly WatchlistParty[] | undefined): string | undefined {
+  return parties?.find((p) => p.role === "KLIENT")?.name;
+}
+
+/**
+ * Lägg klientens namn på posterna (#1965). En post utan ärende, eller i ett
+ * ärende utan klient, lämnas som den är. Ren logik: parterna läses i routern.
+ */
+export function withKlientNames(items: readonly WatchlistItem[], parties: WatchlistPartiesByMatter): WatchlistItem[] {
+  return items.map((item) => {
+    const klientName = item.matterId === null ? undefined : klientNameOf(parties.get(item.matterId));
+    return klientName === undefined ? item : { ...item, klientName };
+  });
 }
 
 /** Passerat före annalkande; inom samma grupp: äldst datum först. */

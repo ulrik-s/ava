@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { formatOreAsKr } from "@/lib/shared/kr-format";
+import { formatKr } from "@/lib/shared/kr-format";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
@@ -114,7 +114,7 @@ describe("populateKostnadsrakningDocs", () => {
     for (const r of krRuns) {
       const doc = textByPath.get(`documents/content/krdoc-${String(r.id)}.pdf`);
       expect(doc, `dokument för ${String(r.id)}`).toBeDefined();
-      expect(doc, `yrkat i dokumentet = körningens ${String(r.workValueOreAtRun)} öre`).toContain(asDrawn(formatOreAsKr(r.workValueOreAtRun)));
+      expect(doc, `yrkat i dokumentet = körningens ${String(r.workValueOreAtRun)} öre`).toContain(asDrawn(formatKr(r.workValueOreAtRun)));
     }
     const taxe = [];
     for (const r of krRuns) {

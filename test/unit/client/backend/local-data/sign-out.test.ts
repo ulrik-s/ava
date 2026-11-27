@@ -16,7 +16,7 @@ import {
   type SignOutEnv,
 } from "@/lib/client/backend/local-data/sign-out";
 import { LocalDocumentTextStore } from "@/lib/client/backend/local-document-text";
-import { IndexedDbPersistence } from "@/lib/server/data-store/in-memory/indexeddb-persistence";
+import { IndexedDbPersistence } from "@/lib/client/local-store/indexeddb-persistence";
 
 /** Är någon namnrymd bunden just nu? */
 function isBound(): boolean {

@@ -10,9 +10,9 @@ import { adoptLegacyDatabases } from "@/lib/client/backend/local-data/adopt-lega
 import { dbNameIn, LOCAL_DB, localScopeSchema, userNamespace } from "@/lib/client/backend/local-data/local-namespace";
 import { InMemoryRejectedChangesPersistence, RejectedChanges } from "@/lib/client/backend/rejected-changes";
 import { createServerFirstStore } from "@/lib/client/backend/server-first-store";
-import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
-import { LOCAL_DATA_VERSION } from "@/lib/server/data-store/in-memory/local-data-format";
-import { InMemoryMutationQueuePersistence } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { IdbKv } from "@/lib/client/local-store/idb-kv";
+import { LOCAL_DATA_VERSION } from "@/lib/client/local-store/local-data-format";
+import { InMemoryMutationQueuePersistence } from "@/lib/client/local-store/mutation-queue";
 
 const anna = localScopeSchema.parse({ organizationId: "org-1", principalId: "u-anna" });
 const contact = { id: "0199a0cf-d42b-7c09-a5cc-535a9dc76aa7", organizationId: "org-1", name: "Klient", contactType: "PERSON" };

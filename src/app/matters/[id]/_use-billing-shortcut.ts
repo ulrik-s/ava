@@ -11,7 +11,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import { shellPath } from "@/lib/client/demo/entity-href";
-import { BILLING_SHORTCUT_PARAM } from "@/lib/shared/billing-flow";
+import { BILLING_SHORTCUT_PARAM } from "@/lib/shared/billing/billing-flow";
 
 /** Det {@link useBillingShortcut} ger ärendesidan. */
 export interface BillingShortcutState {

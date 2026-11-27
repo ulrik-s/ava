@@ -1,9 +1,9 @@
 /**
- * Test för utils.ts — cn() för class-merging, formatCurrency.
+ * Test för utils.ts — cn() för class-merging.
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { cn, formatCurrency } from "@/lib/client/utils";
+import { cn } from "@/lib/client/utils";
 
 describe("cn()", () => {
   it("kombinerar klasser till en sträng", () => {
@@ -25,31 +25,5 @@ describe("cn()", () => {
 
   it("returnerar tom sträng utan input", () => {
     expect(cn()).toBe("");
-  });
-});
-
-describe("formatCurrency()", () => {
-  it("formaterar öre till SEK", () => {
-    const v = formatCurrency(100000); // 1000 kr
-    expect(v).toContain("1");
-    expect(v).toContain("000");
-    expect(v).toContain("kr");
-  });
-
-  it("hanterar 0", () => {
-    expect(formatCurrency(0)).toContain("0");
-  });
-
-  it("hanterar negativa belopp (kreditfaktura)", () => {
-    const v = formatCurrency(-500000);
-    expect(v).toContain("−"); // svensk minus eller -
-    expect(v).toContain("5");
-  });
-
-  it("hanterar decimaler från ojämna ören", () => {
-    const v = formatCurrency(123450); // 1234.50
-    expect(v).toContain("1");
-    expect(v).toContain("234");
-    expect(v).toContain("50");
   });
 });

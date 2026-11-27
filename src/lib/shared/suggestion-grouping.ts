@@ -14,10 +14,12 @@
  *   - documents: varje källdokument listas en gång
  */
 
+import type { MatterRole } from "@/lib/shared/schemas/enums";
+
 export interface RawSuggestion {
   id: string;
   name: string;
-  role: string;
+  role: MatterRole;
   contactType: string;
   email?: string | null | undefined;
   phone?: string | null | undefined;
@@ -37,7 +39,7 @@ export interface GroupedSuggestion {
   /** En entitetstyp — första icke-tomma (bör vara konsekvent inom en grupp). */
   contactType: string;
   /** Distinkta roller, ordnade efter första förekomst. */
-  roles: string[];
+  roles: MatterRole[];
   email: string | null;
   phone: string | null;
   orgNumber: string | null;

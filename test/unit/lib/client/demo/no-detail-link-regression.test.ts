@@ -17,9 +17,10 @@
  * en sökväg byggd med `.join`, `.concat` eller `new URL`, fälls inte.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest-compat";
+import { sourceFiles } from "../../../../helpers/source-files";
 
 const ROUTES = "matters|contacts|invoices|payment-plans|users|templates";
 
@@ -35,13 +36,6 @@ const isComment = (line: string): boolean => /^\s*(\/\/|\*)/.test(line);
 function detailLinkOffenders(file: string, source: string): string[] {
   return source.split("\n").flatMap((line, i) =>
     !isComment(line) && (TEMPLATE.test(line) || CONCAT.test(line)) ? [`${file}:${i + 1}  ${line.trim()}`] : []);
-}
-
-/** Alla `.ts`- och `.tsx`-filer under `dir`. */
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { recursive: true, encoding: "utf8" })
-    .filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"))
-    .map((f) => join(dir, f));
 }
 
 describe("detailLinkOffenders — mönstren (#1871)", () => {
@@ -76,7 +70,7 @@ describe("detailLinkOffenders — mönstren (#1871)", () => {
 });
 
 describe("inga detalj-route-sökvägar som strängar (EntityLink-kontraktet)", () => {
-  const files = sourceFiles("src");
+  const files = sourceFiles("src", /\.tsx?$/);
 
   it("säkerhetsgrind: fillistan har .ts-filer utanför src/app och src/components", () => {
     // Ett fel i fillistan skulle annars få vakten att passera tyst.

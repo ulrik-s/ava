@@ -26,7 +26,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 import { syncRefusalFromCause } from "@/lib/shared/sync/sync-error";
 import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
-import type { QueuedProcedureCall } from "./data-store/in-memory/mutation-queue";
+import type { QueuedProcedureCall } from "./data-store/in-memory/queue-entry";
 import type { ProcedureReplayResult } from "./data-store/in-memory/sync-transport";
 import { reportError } from "./observability/error-reporter";
 import type { IPorts } from "./ports";

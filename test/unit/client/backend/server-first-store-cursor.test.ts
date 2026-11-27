@@ -21,8 +21,8 @@ import { z } from "zod";
 import { dbNameIn, LOCAL_DB, localScopeSchema, userNamespace, type LocalScope } from "@/lib/client/backend/local-data/local-namespace";
 import { InMemoryRejectedChangesPersistence, RejectedChanges } from "@/lib/client/backend/rejected-changes";
 import { createServerFirstStore, type ServerFirstStoreDeps } from "@/lib/client/backend/server-first-store";
-import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
-import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
+import type { CachingSyncDataStore } from "@/lib/client/local-store/caching-sync-data-store";
+import { IdbKv } from "@/lib/client/local-store/idb-kv";
 import type { PulledChange, PullResult } from "@/lib/server/data-store/in-memory/sync-transport";
 import { parseJsonWith } from "@/lib/shared/parse-json";
 

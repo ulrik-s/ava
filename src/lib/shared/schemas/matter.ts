@@ -153,6 +153,8 @@ export const matterSchema = z.object({
   conflictReviewedById: userIdSchema.nullish(),
   conflictReviewedAt: optionalDateLike,
   conflictReviewNote: z.string().nullish(),
+  /** När någon senast valde Behåll som aktivt (#2098). Null = aldrig. */
+  keptActiveAt: optionalDateLike,
 }).passthrough();
 
 export type Matter = z.infer<typeof matterSchema>;

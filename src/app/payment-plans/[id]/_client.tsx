@@ -8,7 +8,7 @@ import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
-import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
+import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
 import { paymentPlanLayout } from "./_payment-plan-layout";
 
 const STATUS_LABEL: Record<string, string> = {

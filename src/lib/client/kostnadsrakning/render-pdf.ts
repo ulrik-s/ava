@@ -16,9 +16,9 @@
  */
 
 import type { PDFDocument, StandardFonts } from "pdf-lib";
-import type { KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
-import { FOOTER_SEPARATOR, type KrDocumentView } from "@/lib/shared/kostnadsrakning-document";
-import type { KrExpenseSpec, KrSpecSection } from "@/lib/shared/kostnadsrakning-document-rows";
+import type { KostnadsrakningResult } from "@/lib/shared/billing/kostnadsrakning";
+import { FOOTER_SEPARATOR, type KrDocumentView } from "@/lib/shared/billing/kostnadsrakning-document";
+import type { KrExpenseSpec, KrSpecSection } from "@/lib/shared/billing/kostnadsrakning-document-rows";
 import { PAGE_WIDTH, PdfWriter, type PdfFonts } from "./pdf-writer";
 
 export interface RenderInput {

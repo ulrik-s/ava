@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest-compat";
 import {
   DOC_TEXT_BUDGET_BYTES, LocalDocumentTextStore, overBudget, textBytes,
 } from "@/lib/client/backend/local-document-text";
-import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
+import { IdbKv } from "@/lib/client/local-store/idb-kv";
 
 let factory: IDBFactory;
 beforeEach(() => { factory = new IDBFactory(); });

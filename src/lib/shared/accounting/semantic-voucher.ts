@@ -22,9 +22,9 @@
  * (eller annan presentation) sker först i renderaren.
  */
 
-import { hasVatBreakdown, invoiceVatOre } from "@/lib/shared/invoice-vat";
-import { formatOreAsKr } from "@/lib/shared/kr-format";
-import type { VatRate } from "@/lib/shared/vat";
+import { hasVatBreakdown, invoiceVatOre } from "@/lib/shared/billing/invoice-vat";
+import type { VatRate } from "@/lib/shared/billing/vat";
+import { formatKr } from "@/lib/shared/kr-format";
 
 /** Bokföringsroller som faktura-domänen känner till (systemoberoende).
  *  Utgående moms är uppdelad per sats (#790) så SIE/verifikat bokför på rätt
@@ -76,7 +76,7 @@ function momsRoleOf(line: VatBreakdownLine, description: string): VoucherRole {
   if (role) return role;
   const sats = String(line.vatRate / 100).replace(".", ",");
   throw new Error(
-    `${description}: en rad i momsuppdelningen har ${formatOreAsKr(line.vatOre)} moms på satsen ${sats} %, ` +
+    `${description}: en rad i momsuppdelningen har ${formatKr(line.vatOre)} moms på satsen ${sats} %, ` +
     "som saknar momskonto (bara 6, 12 och 25 % har ett). " +
     "Verifikatet skulle inte balansera, så fakturan kan inte bokföras förrän momsuppdelningen är rättad.",
   );

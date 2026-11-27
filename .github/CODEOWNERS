@@ -17,17 +17,17 @@
 # schemana (src/lib/shared/schemas/) står ovan.
 /tooling/db/migrations/                    @ulrik-s
 /src/lib/server/billing/                   @ulrik-s
-/src/lib/shared/billing-*.ts               @ulrik-s
-/src/lib/shared/kostnadsrakning*.ts        @ulrik-s
-/src/lib/shared/coverage-billing.ts        @ulrik-s
-/src/lib/shared/invoice-calc.ts            @ulrik-s
+/src/lib/shared/billing/billing-*.ts       @ulrik-s
+/src/lib/shared/billing/kostnadsrakning*.ts @ulrik-s
+/src/lib/shared/billing/coverage-billing.ts @ulrik-s
+/src/lib/shared/billing/invoice-calc.ts    @ulrik-s
 /src/lib/server/routers/invoice.ts         @ulrik-s
 /src/lib/server/routers/billingRun.ts      @ulrik-s
 /src/lib/server/routers/billingRun/        @ulrik-s
-/src/lib/shared/vat.ts                     @ulrik-s
-/src/lib/shared/invoice-vat.ts             @ulrik-s
-/src/lib/shared/expense-vat.ts             @ulrik-s
-/src/lib/shared/acconto-vat.ts             @ulrik-s
-/src/lib/shared/brottmalstaxa.ts           @ulrik-s
-/src/lib/shared/forordnandetaxa.ts         @ulrik-s
+/src/lib/shared/billing/vat.ts             @ulrik-s
+/src/lib/shared/billing/invoice-vat.ts     @ulrik-s
+/src/lib/shared/billing/expense-vat.ts     @ulrik-s
+/src/lib/shared/billing/acconto-vat.ts     @ulrik-s
+/src/lib/shared/billing/brottmalstaxa.ts   @ulrik-s
+/src/lib/shared/billing/forordnandetaxa.ts @ulrik-s
 /src/lib/shared/accounting/                @ulrik-s

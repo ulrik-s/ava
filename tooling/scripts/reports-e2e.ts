@@ -38,6 +38,7 @@
  *   bun run e2e:reports     # startar docker, migrerar, kör, river
  */
 
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import {
   assert, clientFor, kr, seedUser, waitForServer, type Ava,
 } from "./e2e-harness";
@@ -50,7 +51,7 @@ const VAT = 1.25;
 
 /** 10 h @ 2 500 kr = 25 000 kr netto → 31 250 kr inkl moms. */
 const MINUTES = 600;
-const NET_PER_MATTER = (MINUTES / 60) * RATE_ORE;
+const NET_PER_MATTER = timeEntryValueOre(MINUTES, RATE_ORE);
 const GROSS_PER_MATTER = Math.round(NET_PER_MATTER * VAT);
 
 // ─── Uppsättning ───────────────────────────────────────────────────────────

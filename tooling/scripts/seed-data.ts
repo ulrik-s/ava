@@ -10,13 +10,13 @@
  * får två sourcer of truth.
  */
 
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
-import { kindsFields } from "@/lib/shared/document-kinds";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/billing/brottmalstaxa";
 import {
   KOSTNADSRAKNING_TEMPLATE_NAME,
   KOSTNADSRAKNING_TEMPLATE_CATEGORY,
   KOSTNADSRAKNING_DEFAULT_HTML,
-} from "@/lib/shared/kostnadsrakning-template";
+} from "@/lib/shared/billing/kostnadsrakning-template";
+import { kindsFields } from "@/lib/shared/document-kinds";
 import {
   ENTITY_REGISTRY,
   type ContactType,
@@ -765,7 +765,8 @@ const PLAN_TARGETS: PlanTarget[] = [
   { invoiceId: "inv-004", status: "ACTIVE", monthlyAmount: 25_000, dayOfMonth: 15, startsDaysAgo: 90, paymentsMade: 3, withReminders: true },
   { invoiceId: "inv-005", status: "ACTIVE", monthlyAmount: 15_000, dayOfMonth: 1, startsDaysAgo: 120, paymentsMade: 4, withReminders: true },
   { invoiceId: "inv-009", status: "ACTIVE", monthlyAmount: 35_000, dayOfMonth: 25, startsDaysAgo: 60, paymentsMade: 2, withReminders: true },
-  { invoiceId: "inv-010", status: "ACTIVE", monthlyAmount: 22_000, dayOfMonth: 10, startsDaysAgo: 45, paymentsMade: 1, withReminders: false },
+  // inv-010 ligger efter (#2136): den första förfallodagen är minst 15 dagar före byggdagen.
+  { invoiceId: "inv-010", status: "ACTIVE", monthlyAmount: 22_000, dayOfMonth: 10, startsDaysAgo: 45, paymentsMade: 0, withReminders: false },
   { invoiceId: "inv-008", status: "COMPLETED", monthlyAmount: 18_000, dayOfMonth: 1, startsDaysAgo: 365, paymentsMade: 6, withReminders: true },
   { invoiceId: "inv-012", status: "CANCELLED", monthlyAmount: 30_000, dayOfMonth: 28, startsDaysAgo: 60, paymentsMade: 0, withReminders: false },
 ];
@@ -1212,7 +1213,7 @@ function buildTemplates(orgId: string, currentUserId: string): SeedDataset["docu
   const out: SeedDataset["documentTemplates"] = [];
   // templates
   const templates = [
-    { id: "tpl-fullmakt", name: "Fullmakt", category: "Allmänt", body: "<h1>Fullmakt</h1><p>{{contact.name}} ger härmed {{user.name}} rätt att företräda mig i ärende {{matter.matterNumber}}.</p>" },
+    { id: "tpl-fullmakt", name: "Fullmakt", category: "Allmänt", body: "<h1>Fullmakt</h1><p>{{klient.name}} ger härmed {{generatedBy.name}} rätt att företräda mig i ärende {{matter.matterNumber}}.</p>" },
     { id: "tpl-stamning", name: "Stämningsansökan", category: "Tvist", body: "<h1>Stämningsansökan</h1><p>Mål nr: {{matter.matterNumber}}</p>" },
     { id: "tpl-avtal", name: "Avtal", category: "Avtal", body: "<h1>Avtal</h1>" },
     { id: "tpl-forlikning", name: "Förlikningsavtal", category: "Tvist", body: "<h1>Förlikningsavtal</h1>" },
