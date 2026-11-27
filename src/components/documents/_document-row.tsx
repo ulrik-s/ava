@@ -10,9 +10,11 @@ import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/share
 import { DocumentDetailsDialog } from "./_document-details-dialog";
 import { DocumentNameCell } from "./_document-name-cell";
 import type { DocumentPartView } from "./_document-parts";
+import { MailDocumentDialog } from "./_mail-document-dialog";
 import type { SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 import { useLeaseAwareOpen } from "./use-lease-aware-open";
+import { useOffice365Configured } from "./use-office365-configured";
 
 export interface DocumentRecord {
   id: DocumentId;
@@ -167,6 +169,15 @@ interface ActionItemsOpts {
   onReanalyze: () => void;
   onDelete: () => void;
   onEditDetails: () => void;
+  /** Office 365 är konfigurerad (#1951): raden Maila… finns. */
+  mail: boolean;
+  onMail: () => void;
+}
+
+/** "Maila…" (#1951): bara med en Office 365-konfiguration, inte i demon (ADR 0027). */
+function mailItems(o: ActionItemsOpts): ActionMenuItem[] {
+  if (!o.mail) return [];
+  return [{ key: "mail", label: "Maila…", icon: <span aria-hidden>✉️</span>, onSelect: o.onMail, disabled: o.isDisabled, title: o.uploadingTitle ?? "Skicka dokumentet med e-post till klienten" }];
 }
 
 /** "Visa"/"Ladda ner": demo → direkt GH-href; self-hosted → hämta via servern
@@ -191,6 +202,7 @@ function buildActionItems(o: ActionItemsOpts): ActionMenuItem[] {
     { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: o.onOpenInEditor, disabled: o.isDisabled, title: o.uploadingTitle ?? "Öppna i din browser" },
     { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: o.onExternal, disabled: o.isDisabled, title: o.uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
     ...viewDownloadItems(o),
+    ...mailItems(o),
     { key: "details", label: "Redigera uppgifter…", icon: <span aria-hidden>✏️</span>, onSelect: o.onEditDetails, disabled: o.isDisabled, title: o.uploadingTitle ?? "Ändra titel, filnamn, dokumenttyp, riktning och mottagare" },
     // ADR 0027: LLM-analys är en server-förmåga → dölj affordansen utan den.
     ...(o.llm
@@ -238,8 +250,11 @@ export function DocumentActions({
   const uploadingTitle = isDisabled ? "Vänta tills uppladdningen är klar" : undefined;
   const { llm } = useCapabilities();
   const [editing, setEditing] = useState(false);
+  const mail = useOffice365Configured();
+  const [mailing, setMailing] = useState(false);
   const items = buildActionItems({
-    isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle, llm, serverMode,
+    isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle, llm, serverMode, mail,
+    onMail: () => setMailing(true),
     onOpenInEditor: () => void openViaServerOrGh(),
     onView: () => void openViaServerOrGh(),
     onExternal: () => void onExternalEdit(),
@@ -251,6 +266,7 @@ export function DocumentActions({
     <>
       <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" title={uploadingTitle} />
       <DocumentDetailsDialog docId={doc.id} doc={doc} open={editing} onClose={() => setEditing(false)} />
+      {mailing && <MailDocumentDialog doc={doc} onClose={() => setMailing(false)} />}
     </>
   );
 }

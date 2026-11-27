@@ -11,6 +11,13 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { DocumentRow, type DocumentRecord } from "@/components/documents/_document-row";
 
+// Office 365-konfigurationen (#1951): av som standard, så att Maila… inte syns.
+let mailConfigured = false;
+vi.mock("@/components/documents/use-office365-configured", () => ({ useOffice365Configured: () => mailConfigured }));
+vi.mock("@/components/documents/_mail-document-dialog", () => ({
+  MailDocumentDialog: ({ onClose }: { onClose: () => void }) => <button onClick={onClose}>mail-dialog-stub</button>,
+}));
+
 // "Redigera uppgifter…" (ADR 0038) läser byråns egna dokumenttyper när dialogen
 // öppnas; stubben påverkar inte guard-assertionerna.
 vi.mock("@/lib/client/trpc", () => ({
@@ -164,5 +171,38 @@ describe("DocumentRow — kebab-meny + isUploading-guard", () => {
     expect(nameBtn).toBeDisabled();
     expect(nameBtn).toHaveAttribute("title", "Laddar upp — vänta tills filen är registrerad");
     expect(screen.getByText("Laddar upp")).toBeInTheDocument();
+  });
+
+  it("Maila… (#1951): direkt efter Ladda ner med Office 365, och öppnar dialogen", () => {
+    mailConfigured = true;
+    try {
+      renderRow();
+      openMenu();
+      const labels = screen.getAllByRole("menuitem").map((el) => el.textContent);
+      const download = labels.findIndex((l) => l.includes("Ladda ner"));
+      expect(labels[download + 1]).toContain("Maila…");
+      fireEvent.click(screen.getByText("Maila…"));
+      fireEvent.click(screen.getByText("mail-dialog-stub"));
+      expect(screen.queryByText("mail-dialog-stub")).not.toBeInTheDocument();
+    } finally {
+      mailConfigured = false;
+    }
+  });
+
+  it("Maila… (#1951): finns inte utan Office 365-konfiguration", () => {
+    renderRow();
+    openMenu();
+    expect(screen.queryByText("Maila…")).not.toBeInTheDocument();
+  });
+
+  it("Maila… (#1951): spärrad under uppladdning, som de andra raderna", () => {
+    mailConfigured = true;
+    try {
+      renderRow({ isUploading: true });
+      expect(screen.getByLabelText("Dokumentåtgärder")).toBeDisabled();
+      expect(screen.getByLabelText("Dokumentåtgärder")).toHaveAttribute("title", "Vänta tills uppladdningen är klar");
+    } finally {
+      mailConfigured = false;
+    }
   });
 });
