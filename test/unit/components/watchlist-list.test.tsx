@@ -1,7 +1,11 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
-import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import type { WatchlistItem } from "@/lib/shared/watchlist";
+
+const openMatterDocument = vi.fn(() => Promise.resolve());
+vi.mock("@/lib/client/firma/open-matter-document", () => ({ openMatterDocument }));
+
+const { WatchlistList } = await import("@/components/watchlist/watchlist-list");
 
 function item(p: Partial<WatchlistItem> = {}): WatchlistItem {
   return {
@@ -112,7 +116,7 @@ describe("WatchlistList — Ska ärendet markeras som avslutat? (#2100)", () => 
   const suggestion = (): WatchlistItem => item({
     kind: "closeSuggestion", title: "Ska ärendet markeras som avslutat?",
     detail: "Ingen tid registrerad sedan 2026-09-25.", at: null,
-    closeSuggestion: { matterTitle: "Vårdnadstvist", noTimeSince: "2026-09-25" },
+    closeSuggestion: { matterTitle: "Vårdnadstvist", noTimeSince: "2026-09-25", documents: [] },
   });
   const actions = (isPending = false) => ({ close: vi.fn(), keepActive: vi.fn(), isPending });
 
@@ -149,5 +153,39 @@ describe("WatchlistList — Ska ärendet markeras som avslutat? (#2100)", () => 
     render(<WatchlistList items={[item()]} emptyText="" closeActions={actions()} />);
     expect(screen.getByRole("link").textContent).toContain("Förfaller 2026-09-08.");
     expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("ett dokument som skäl (#2101): filnamnet är en knapp utanför länken som öppnar dokumentet", async () => {
+    const doc = { id: "d1", fileName: "protokoll.pdf", storagePath: "documents/content/d1.pdf", ruling: "PT_HD" as const };
+    const withDoc = item({
+      kind: "closeSuggestion", title: "Ska ärendet markeras som avslutat?", at: null,
+      detail: "protokoll.pdf ser ut att vara …",
+      closeSuggestion: { matterTitle: "Vårdnadstvist", noTimeSince: null, documents: [doc] },
+    });
+    render(<WatchlistList items={[withDoc]} emptyText="" closeActions={actions()} />);
+    expect(screen.queryByText(/Ingen tid registrerad/)).toBeNull();
+    const button = screen.getByRole("button", { name: "protokoll.pdf" });
+    expect(within(screen.getByRole("link")).queryByRole("button")).toBeNull();
+    expect(button.parentElement?.textContent).toBe(
+      "protokoll.pdf ser ut att vara ett beslut från Högsta domstolen att inte meddela prövningstillstånd.",
+    );
+    fireEvent.click(button);
+    await waitFor(() => expect(openMatterDocument).toHaveBeenCalledWith(
+      { id: "d1", storagePath: "documents/content/d1.pdf", fileName: "protokoll.pdf" },
+    ));
+  });
+
+  it("tidsskälet först, sedan dokumenten i den ordning de kommer", () => {
+    const doc = (id: string, ruling: "DOM_HD" | "AVSKRIVNING") => ({ id, fileName: `${id}.pdf`, storagePath: id, ruling });
+    const both = suggestion();
+    render(<WatchlistList items={[{ ...both, closeSuggestion: {
+      matterTitle: "Vårdnadstvist", noTimeSince: "2026-09-25", documents: [doc("b", "DOM_HD"), doc("a", "AVSKRIVNING")],
+    } }]} emptyText="" closeActions={actions()} />);
+    const texts = [...screen.getByRole("listitem").querySelectorAll("p")].map((p) => p.textContent);
+    expect(texts).toEqual([
+      "Ingen tid registrerad sedan 2026-09-25.",
+      "b.pdf ser ut att vara en dom från Högsta domstolen.",
+      "a.pdf ser ut att vara ett slutligt beslut om avskrivning.",
+    ]);
   });
 });

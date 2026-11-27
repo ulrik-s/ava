@@ -255,7 +255,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   // ── Att göra-vy ──────────────────────────────────────────────────
   "todo.list": "Sammanställd att göra-lista: uppgifter, frister och kalenderhändelser som kräver åtgärd.",
   "watchlist.list": "Att bevaka: härledda påminnelser över alla ärenden — täckningstak som nås, ofakturerat arbete över tröskel, tidsfrister, förfallna fakturor och misslyckade fakturautskick. Sorterat efter hur brådskande.",
-  "watchlist.actionItems": "Att åtgärda: takvarningar för rättshjälp och rättsskydd och jävskontroller med träffar som ingen advokat bedömt, och aktiva ärenden utan registrerad tid på två kalendermånader (\"Ska ärendet markeras som avslutat?\", räknat från senaste tidspost, skapande eller Behåll som aktivt). `mine` (förvalt) begränsar till ärenden där användaren är ansvarig.",
+  "watchlist.actionItems": "Att åtgärda: takvarningar för rättshjälp och rättsskydd och jävskontroller med träffar som ingen advokat bedömt, och aktiva ärenden utan registrerad tid på två kalendermånader (\"Ska ärendet markeras som avslutat?\", räknat från senaste tidspost, skapande eller Behåll som aktivt). Samma fråga ställs när ett dokument som ser ut att vara ett slutligt avgörande (avskrivning, dom från HD eller HFD, eller nekat prövningstillstånd i HD eller HFD) lagts in efter senaste Behåll som aktivt; `detail` nämner då dokumentet, och `closeSuggestion.noTimeSince` är null om bara dokument ger skäl. `mine` (förvalt) begränsar till ärenden där användaren är ansvarig.",
 
   // ── Användare ────────────────────────────────────────────────────
   "user.list": "Byråns medarbetare.",

@@ -12,9 +12,10 @@
 import type { MatterStatusActions } from "@/components/matter/use-matter-status-actions";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
 import { EntityLink } from "@/lib/client/demo/entity-link";
+import { finalRulingReason, noTimeReason } from "@/lib/shared/close-suggestion";
 import { deadlineOf } from "@/lib/shared/deadline";
 import { formatKr } from "@/lib/shared/kr-format";
-import type { WatchlistItem, WatchlistKind } from "@/lib/shared/watchlist";
+import type { CloseSuggestionDocument, WatchlistItem, WatchlistKind } from "@/lib/shared/watchlist";
 
 /** Ikon + etikett per signaltyp. Etiketten behövs för att raden ska gå att
  *  förstå utan att läsa hela texten när listan är lång. */
@@ -128,9 +129,41 @@ export type CloseActions = Pick<MatterStatusActions, "close" | "keepActive" | "i
 const BUTTON = "rounded-full px-3 py-1 text-xs font-medium disabled:opacity-50";
 
 /**
+ * Öppna dokumentet bakom ett skäl i ny flik (#2101), som en träff i
+ * Dokumentsökning: tier-beslutet tas vid körning (`openMatterDocument`).
+ */
+async function openRulingDocument(doc: CloseSuggestionDocument): Promise<void> {
+  const { openMatterDocument } = await import("@/lib/client/firma/open-matter-document");
+  await openMatterDocument({ id: doc.id, storagePath: doc.storagePath, fileName: doc.fileName });
+}
+
+/**
+ * Skälen till frågan om avslut: tidsskälet först, sedan ett per dokument
+ * (#2101). Filnamnet är en knapp som öppnar dokumentet.
+ */
+function CloseReasons({ suggestion }: { suggestion: NonNullable<WatchlistItem["closeSuggestion"]> }) {
+  return (
+    <div className="mt-0.5 space-y-0.5 text-xs opacity-90">
+      <span className="sr-only">{KIND_META.closeSuggestion.label}: </span>
+      {suggestion.noTimeSince !== null && <p>{noTimeReason(suggestion.noTimeSince)}</p>}
+      {suggestion.documents.map((d) => (
+        <p key={d.id}>
+          <button type="button" className="font-medium underline hover:no-underline"
+            onClick={() => void openRulingDocument(d)}>
+            {d.fileName}
+          </button>{" "}
+          {finalRulingReason(d.ruling)}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Ska ärendet markeras som avslutat? (#2100): rubriken och ärendenumret är en
- * länk till ärendet, skälet under, och knapparna ligger utanför länken (som
- * `CompleteBox`) så att ett klick inte också öppnar ärendet.
+ * länk till ärendet, skälen under, och knapparna (också dokumentens, #2101)
+ * ligger utanför länken (som `CompleteBox`) så att ett klick inte också öppnar
+ * ärendet.
  */
 function CloseSuggestionRow({ item, suggestion, actions }: {
   item: WatchlistItem; suggestion: NonNullable<WatchlistItem["closeSuggestion"]>; actions: CloseActions;
@@ -141,10 +174,7 @@ function CloseSuggestionRow({ item, suggestion, actions }: {
       <EntityLink route="matters" id={id} className="block hover:underline">
         <RowHeader item={item} due={false} showClient={false} />
       </EntityLink>
-      <p className="mt-0.5 text-xs opacity-90">
-        <span className="sr-only">{KIND_META[item.kind].label}: </span>
-        {item.detail}
-      </p>
+      <CloseReasons suggestion={suggestion} />
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" disabled={actions.isPending} className={`${BUTTON} bg-blue-600 text-white hover:bg-blue-700`}
           onClick={() => actions.close({ id, title: suggestion.matterTitle })}>

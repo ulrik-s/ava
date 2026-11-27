@@ -5,7 +5,7 @@
  */
 
 import type { Page } from "@playwright/test";
-import { DEMO_BASE_URL, type DemoSeed, fetchDemoSeed, matterIdWith, seedDemoLogin, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL, type DemoSeed, fetchDemoSeed, matterIdWith, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 /** Ärendets första KLIENT-part ur seeden (#1965), i kopplingarnas ordning. */
 function klientOf(seed: DemoSeed, matterId: string): string {
@@ -129,4 +129,62 @@ test("Att åtgärda frågar om ett ärende utan tid ska avslutas; Avsluta, Åter
   await openActionItems(page, base);
   await expect(page.getByText(/\d+ poster\./)).toBeVisible({ timeout: 25_000 });
   await expect(closeRow(page)).toHaveCount(0);
+});
+
+// ─── Ett slutligt avgörande ger samma fråga (#2101) ─────────────────────────
+
+/** HD:s protokoll som inte meddelar prövningstillstånd (känns igen av #2099). */
+const HD_PROTOKOLL = [
+  "HÖGSTA DOMSTOLEN PROTOKOLL",
+  "Mål nr B 2020-24",
+  "BESLUT",
+  "Högsta domstolen meddelar inte prövningstillstånd. Hovrättens avgörande står därmed fast.",
+].join("\n");
+
+const rulingRow = (page: Page) =>
+  page.locator("li", { hasText: "Ska ärendet markeras som avslutat?" }).filter({ hasText: "2026-0012" });
+
+test("ett uppladdat beslut från HD ger frågan om avslut med dokumentet som skäl (#2101)", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  // Aktivt och skapat 5 dagar före bygget: tidsregeln kan inte ge det en post.
+  const matter = seed.matters.find((m) => m.matterNumber === "2026-0012");
+  if (!matter) throw new Error("seeden saknar ärende 2026-0012");
+
+  await openActionItems(page, base);
+  await expect(page.getByText(/\d+ poster\./)).toBeVisible({ timeout: 25_000 });
+  await expect(rulingRow(page)).toHaveCount(0);
+
+  await page.goto(`${base}/matters/${matter.id}/`, { waitUntil: "load" });
+  await showPanel(page, "Dokument");
+  await page.locator("input[type=file]").setInputFiles({
+    name: "hd-protokoll.txt", mimeType: "text/plain", buffer: Buffer.from(HD_PROTOKOLL, "utf8"),
+  });
+  const dialog = page.getByRole("dialog", { name: "Namnge dokumentet" });
+  await expect(dialog.getByRole("textbox")).toHaveValue("hd-protokoll");
+  await dialog.getByRole("button", { name: "Spara" }).click();
+  await expect(page.getByText("hd-protokoll.txt").first()).toBeVisible({ timeout: 30_000 });
+
+  // Igenkänningen körs i fliken efter uppladdningen. Via menyn (klient-navigering),
+  // inte en omladdning, som skulle avbryta den; listan läses om tills posten finns.
+  await page.getByRole("link", { name: /Att åtgärda/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Att åtgärda" })).toBeVisible({ timeout: 25_000 });
+  const mine = page.getByLabel("Bara mina ärenden");
+  if (await mine.isChecked()) await mine.uncheck();
+  await expect(rulingRow(page)).toContainText(
+    "hd-protokoll.txt ser ut att vara ett beslut från Högsta domstolen att inte meddela prövningstillstånd.",
+    { timeout: 30_000 },
+  );
+  await expect(rulingRow(page)).not.toContainText("Ingen tid registrerad sedan");
+  await expect(rulingRow(page).getByRole("button", { name: "hd-protokoll.txt" })).toBeVisible();
+
+  // Behåll som aktivt: dokumentet ger inget nytt skäl.
+  await rulingRow(page).getByRole("button", { name: "Behåll som aktivt" }).click();
+  await expect(rulingRow(page)).toHaveCount(0);
+  await page.reload({ waitUntil: "load" });
+  await openActionItems(page, base);
+  await expect(page.getByText(/\d+ poster\./)).toBeVisible({ timeout: 25_000 });
+  await expect(rulingRow(page)).toHaveCount(0);
 });
