@@ -32,4 +32,11 @@ export interface TaskRepository extends Repository<Task> {
   listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<TaskListRow[]>;
   /** Uppgift by id i org:en (vem som helst på byrån). Null om saknas/annan byrå/raderad. */
   getByIdInOrg(id: TaskId, organizationId: OrganizationId): Promise<Task | null>;
+  /**
+   * De id bland `ids` som finns i byrån, OCKSÅ mjukraderade (#2121). Skiljer sig
+   * medvetet från `getByIds`, som utelämnar mjukraderade rader: den här är bara
+   * till för idempotenta skrivningar med härledda id, där en raderad rad betyder
+   * att skrivningen redan är gjord. En annan byrås rader räknas inte.
+   */
+  existingIdsInOrg(ids: readonly TaskId[], organizationId: OrganizationId): Promise<Set<TaskId>>;
 }

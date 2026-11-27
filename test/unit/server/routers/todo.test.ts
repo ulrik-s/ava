@@ -83,13 +83,25 @@ describe("todo.list", () => {
   it("event utan endAt + allDay → endAt null, allDay true", async () => {
     mockPrisma.task.findMany.mockResolvedValue([]);
     mockPrisma.calendarEvent.findMany.mockResolvedValue([
-      { id: "e1", title: "Heldag", startAt: new Date("2026-05-28T08:00:00Z"), endAt: null, description: null, kind: "deadline", allDay: true, location: null, userId: "u1", matter: null },
+      { id: "e1", title: "Heldag", startAt: new Date("2026-05-28T08:00:00Z"), endAt: null, description: null, kind: "appointment", allDay: true, location: null, userId: "u1", matter: null },
     ]);
     const items = await makeCaller().list({ from: FROM, to: TO });
     expect(items).toHaveLength(1);
     expect(items[0]!.endAt).toBeNull();
     expect(items[0]!.allDay).toBe(true);
     expect(items[0]!.location).toBeNull();
+  });
+
+  it("en flyttad frist visas en gång, som uppgift, och inte som kalenderhändelse (#2121)", async () => {
+    mockPrisma.task.findMany.mockResolvedValue([
+      { id: "t-frist", title: "Överklagande", dueAt: new Date("2026-05-28T09:00:00Z"), description: null, status: "TODO", priority: "MEDIUM", userId: "u1", matter: null },
+    ]);
+    mockPrisma.calendarEvent.findMany.mockResolvedValue([
+      { id: "e-frist", title: "Överklagande", startAt: new Date("2026-05-28T09:00:00Z"), endAt: null, description: null, kind: "deadline", allDay: false, location: null, userId: "u1", matter: null },
+      { id: "e-möte", title: "Möte", startAt: new Date("2026-05-28T10:00:00Z"), endAt: null, description: null, kind: "appointment", allDay: false, location: null, userId: "u1", matter: null },
+    ]);
+    const items = await makeCaller().list({ from: FROM, to: TO });
+    expect(items.map((i) => [i.id, i.source])).toEqual([["t-frist", "task"], ["e-möte", "event"]]);
   });
 
   it("filtrerar bort poster utanför [from,to] + ogiltiga (saknad) datum", async () => {
