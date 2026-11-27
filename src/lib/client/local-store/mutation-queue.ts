@@ -33,7 +33,7 @@ import { reportIdbProblem } from "./idb-open";
 
 export type { ProcedureTouch } from "@/lib/server/data-store/in-memory/procedure-touches";
 export {
-  isOwnedBy, isProcedureCall, queueEntrySchema, queuedMutationSchema, queuedProcedureCallSchema, queueOwnerSchema,
+  isOwnedBy, isProcedureCall, queueEntrySchema, queueOwnerSchema,
   type QueuedMutation, type QueuedProcedureCall, type QueueEntry, type QueueOwner,
 } from "@/lib/server/data-store/in-memory/queue-entry";
 
