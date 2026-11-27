@@ -10,6 +10,7 @@ import { useSaveTimeEntry } from "@/components/time/use-save-time-entry";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
+import { invalidateUnbilledWork } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { isCoverageMethod } from "@/lib/shared/billing/billing-flow";
@@ -80,12 +81,13 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   const matterOptions = useActiveMatterOptions();
   const marking = useTimeEntrySelection<TimeEntryRow>();
 
-  /** Tidslistan + upparbetat mot taket (#1520) — takvarningen följer med direkt. */
+  /** Tidslistan + upparbetat mot taket (#1520) + fakturaförslaget (#2201). */
   function refreshMatters(matterIds: MatterId[]): void {
     for (const id of matterIds) {
       void utils.timeEntry.list.invalidate({ matterId: id });
       void utils.matter.coverageUsage.invalidate({ matterId: id });
     }
+    invalidateUnbilledWork(utils, matterIds);
   }
   const refreshTime = (): void => refreshMatters([matterId]);
 

@@ -4,7 +4,7 @@
  * och "Nytt utlägg"-modalen.
  */
 
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest-compat";
 import { ExpenseSection } from "@/app/matters/[id]/_expense-section";
 import { expenseBreakdownLines, grossOreOf, netOreOf, vatOreOf } from "@/lib/shared/billing/billing-work-value";
@@ -26,15 +26,30 @@ const createMutate = vi.fn();
 const updateMutate = vi.fn();
 const deleteMutate = vi.fn();
 const noopMut = () => ({ mutate: vi.fn(), isPending: false });
+const listInvalidate = vi.fn();
+/** Fakturaförslaget (#2201). */
+const proposalInvalidate = vi.fn();
+/** onSuccess som varje mutation registrerat (#2201). */
+const onSuccessOf: Record<"create" | "update" | "delete", (() => void) | undefined> = { create: undefined, update: undefined, delete: undefined };
+type MutOpts = { onSuccess?: () => void } | undefined;
+function mutation(name: "create" | "update" | "delete", mutate: ReturnType<typeof vi.fn>) {
+  return (opts?: MutOpts) => {
+    onSuccessOf[name] = opts?.onSuccess;
+    return { mutate, isPending: false };
+  };
+}
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ expense: { list: { invalidate: vi.fn() } } }),
+    useUtils: () => ({
+      expense: { list: { invalidate: listInvalidate } },
+      billingRun: { proposal: { invalidate: proposalInvalidate } },
+    }),
     expense: {
       list: { useQuery: () => expenseQuery },
-      create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
-      update: { useMutation: () => ({ mutate: updateMutate, isPending: false }) },
-      delete: { useMutation: () => ({ mutate: deleteMutate, isPending: false }) },
+      create: { useMutation: mutation("create", createMutate) },
+      update: { useMutation: mutation("update", updateMutate) },
+      delete: { useMutation: mutation("delete", deleteMutate) },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
@@ -199,4 +214,16 @@ describe("ExpenseSection — summorna som på fakturan (#1826)", () => {
     fireEvent.click(within(rowOf("Tåg")).getByText("Ändra"));
     expect(screen.getByDisplayValue("450")).toBeInTheDocument();
   });
+});
+
+describe("ExpenseSection — fakturaförslaget hämtas om (#2201)", () => {
+  for (const name of ["create", "update", "delete"] as const) {
+    it(`${name}: listan och ärendets förslag hämtas om när ändringen lyckats`, () => {
+      render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+      expect(proposalInvalidate).not.toHaveBeenCalled();
+      act(() => onSuccessOf[name]?.());
+      expect(listInvalidate).toHaveBeenCalledWith({ matterId: "m1" });
+      expect(proposalInvalidate).toHaveBeenCalledWith({ matterId: "m1" });
+    });
+  }
 });

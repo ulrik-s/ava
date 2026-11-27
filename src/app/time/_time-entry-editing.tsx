@@ -12,6 +12,7 @@ import {
 import { useSaveTimeEntry } from "@/components/time/use-save-time-entry";
 import type { Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { invalidateUnbilledWork } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { trpc } from "@/lib/client/trpc";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { isLockedEntry, LOCKED_ENTRY_HINT, type LockableEntry } from "@/lib/shared/time-entry-lock";
@@ -37,9 +38,10 @@ export function useTimeEntryEditing() {
   const utils = trpc.useUtils();
   const [editing, setEditing] = useState<Editing | null>(null);
   // /time listar alla ärendens poster: en omläsning täcker båda ärendena vid en flytt.
-  const refresh = () => { void utils.timeEntry.list.invalidate(); };
+  // Fakturaförslaget hämtas om för alla ärenden (#2201), som listan.
+  const refresh = () => { void utils.timeEntry.list.invalidate(); invalidateUnbilledWork(utils); };
   const saver = useSaveTimeEntry({ refresh, done: () => setEditing(null) });
-  const remove = trpc.timeEntry.delete.useMutation({ onSuccess: () => utils.timeEntry.list.invalidate() });
+  const remove = trpc.timeEntry.delete.useMutation({ onSuccess: refresh });
 
   return {
     editing,

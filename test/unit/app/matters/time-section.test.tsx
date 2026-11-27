@@ -42,6 +42,10 @@ const moveMutate = vi.fn();
 const moveOnError: Array<(e: { message: string }) => void> = [];
 const listInvalidate = vi.fn();
 const usageInvalidate = vi.fn();
+/** Fakturaförslaget (#2201). */
+const proposalInvalidate = vi.fn();
+/** onSuccess som skapa och ta bort registrerat (#2201). */
+const mutationOnSuccess: Record<"create" | "delete", (() => void) | undefined> = { create: undefined, delete: undefined };
 const MATTERS = [
   { id: "m1", matterNumber: "2026-0001", title: "Vårdnad" },
   { id: "m2", matterNumber: "2026-0002", title: "Arvskifte" },
@@ -53,7 +57,11 @@ const noopMut = () => ({ mutate: vi.fn(), isPending: false });
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ timeEntry: { list: { invalidate: listInvalidate } }, matter: { coverageUsage: { invalidate: usageInvalidate } } }),
+    useUtils: () => ({
+      timeEntry: { list: { invalidate: listInvalidate } },
+      matter: { coverageUsage: { invalidate: usageInvalidate } },
+      billingRun: { proposal: { invalidate: proposalInvalidate } },
+    }),
     // Takvarningen i tidssektionen (#1520) — under taket här.
     matter: {
       coverageUsage: { useQuery: () => ({ data: { billableMinutes: 0, billableValueOre: 0 } }) },
@@ -62,7 +70,12 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     timeEntry: {
       list: { useQuery: () => timeQuery },
-      create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
+      create: {
+        useMutation: (opts?: { onSuccess?: () => void }) => {
+          mutationOnSuccess.create = opts?.onSuccess;
+          return { mutate: createMutate, isPending: false };
+        },
+      },
       update: { useMutation: () => ({ mutate: updateMutate, isPending: false }) },
       moveToMatter: {
         useMutation: (opts?: { onError?: (e: { message: string }) => void }) => {
@@ -70,7 +83,12 @@ vi.mock("@/lib/client/trpc", () => ({
           return { mutate: moveMutate, isPending: false };
         },
       },
-      delete: { useMutation: noopMut },
+      delete: {
+        useMutation: (opts?: { onSuccess?: () => void }) => {
+          mutationOnSuccess.delete = opts?.onSuccess;
+          return { mutate: vi.fn(), isPending: false };
+        },
+      },
       radgivningStatus: { useQuery: () => radgivningStatusQuery },
       markAsRadgivning: { useMutation: () => ({ mutate: markMutate, isPending: false }) },
     },
@@ -614,5 +632,43 @@ describe("TimeSection — markera flera poster och flytta dem (#2043)", () => {
     for (const onError of moveOnError) onError({ message: "låst" });
     expect(log).toHaveBeenCalledWith("[timeEntry.moveToMatter] misslyckades:", { message: "låst" });
     log.mockRestore();
+  });
+});
+
+describe("TimeSection — fakturaförslaget hämtas om (#2201)", () => {
+  type CallOpts = { onSuccess?: () => void } | undefined;
+  const succeedLast = (mutate: ReturnType<typeof vi.fn>): void => (mutate.mock.calls.at(-1)?.[1] as CallOpts)?.onSuccess?.();
+
+  it("att skapa tid hämtar om ärendets förslag", () => {
+    render(<TimeSection matterId={matterId} />);
+    expect(proposalInvalidate).not.toHaveBeenCalled();
+    act(() => mutationOnSuccess.create?.());
+    expect(proposalInvalidate).toHaveBeenCalledWith({ matterId });
+  });
+
+  it("att ta bort tid hämtar om ärendets förslag", () => {
+    render(<TimeSection matterId={matterId} />);
+    act(() => mutationOnSuccess.delete?.());
+    expect(proposalInvalidate).toHaveBeenCalledWith({ matterId });
+  });
+
+  it("att ändra tid hämtar om förslaget först när ändringen lyckats", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(nthText("Ändra", 0));
+    fireEvent.click(screen.getByText("Spara"));
+    expect(proposalInvalidate).not.toHaveBeenCalled();
+    act(() => succeedLast(updateMutate));
+    expect(proposalInvalidate).toHaveBeenCalledWith({ matterId });
+  });
+
+  it("en flytt hämtar om båda ärendenas förslag", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(nthText("Ändra", 0));
+    fireEvent.change(screen.getByLabelText("Ärende"), { target: { value: "2026-0002 — Arvskifte" } });
+    fireEvent.click(screen.getByText("Spara"));
+    act(() => succeedLast(updateMutate));
+    act(() => succeedLast(moveMutate));
+    expect(proposalInvalidate).toHaveBeenCalledWith({ matterId: "m1" });
+    expect(proposalInvalidate).toHaveBeenCalledWith({ matterId: "m2" });
   });
 });

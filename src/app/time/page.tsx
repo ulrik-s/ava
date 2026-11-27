@@ -7,6 +7,7 @@ import { MoveTimeEntriesButton, useTimeEntrySelection } from "@/components/time/
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { DayStepper } from "@/components/ui/day-stepper";
 import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
+import { invalidateUnbilledWork } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasPeriod } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
@@ -194,6 +195,7 @@ export default function TimePage() {
   const createTimeEntry = trpc.timeEntry.create.useMutation({
     onSuccess: () => {
       void utils.timeEntry.list.invalidate();
+      invalidateUnbilledWork(utils);
       setShowForm(false);
       setForm({ matterId: asId<"MatterId">(""), date: stockholmDay(new Date()), minutes: 30, description: "", billable: true });
     },
@@ -234,7 +236,7 @@ export default function TimePage() {
 
       {/* /time listar alla ärendens poster: en omläsning täcker båda ärendena. */}
       <MoveTimeEntriesButton selected={marking.selection.selected} onMoved={marking.clear}
-        refresh={() => { void utils.timeEntry.list.invalidate(); }} />
+        refresh={() => { void utils.timeEntry.list.invalidate(); invalidateUnbilledWork(utils); }} />
       <DataTable
         prefKey="list.time-entries"
         columns={columns}
