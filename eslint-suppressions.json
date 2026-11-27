@@ -805,17 +805,6 @@
       "count": 2
     }
   },
-  "src/lib/server/routers/reports.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 1
-    }
-  },
   "src/lib/server/routers/sync.ts": {
     "@typescript-eslint/no-deprecated": {
       "count": 3
