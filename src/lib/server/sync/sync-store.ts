@@ -9,7 +9,7 @@
  * (#1344): radvägens policy prövar vem som skapar och äger raden.
  */
 
-import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
+import type { QueuedMutation } from "../data-store/in-memory/queue-entry";
 import type { PullResult, PulledChange, PushResult, RowRef } from "../data-store/in-memory/sync-transport";
 import type { RowPusher } from "./row-push-policy";
 

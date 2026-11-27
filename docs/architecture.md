@@ -98,6 +98,24 @@
 └────────────────────────────────────────────────────────────┘
 ```
 
+### Klientens lokala lager (`src/lib/client/local-store/`, #2179)
+
+Webbläsarens persistens och synk — `CachingSyncDataStore`, mutations-kön,
+reconcile-motorn, IndexedDB (`idb-*`, `indexeddb-persistence`, `cursor-store`),
+BroadcastChannel (`change-channel`) och flik-ögonblicksbilderna
+(`snapshot-*`) — ligger i `src/lib/client/local-store/`. Den koden kör aldrig
+på servern. Den rena in-memory-kärnan som både klient, server och tester
+använder ligger kvar i `src/lib/server/data-store/in-memory/`: `LocalStore`,
+delegaterna, `query-engine`, `entity-source-keys`, köpostens schema
+(`queue-entry`, som `sync.push` validerar mot) och synkprotokollets typer
+(`sync-transport`, `procedure-touches`).
+
+Gränsen vaktas av dependency-cruiser eftersom webbläsar-API:er inte syns som
+importer: `server-must-not-import-local-store` (inget i `src/lib/server/` eller
+`src/bin/` importerar lagret) och `local-store-imports-only-in-memory-core`
+(lagret importerar från `server/` bara in-memory-kärnan och `queued-call.ts`,
+aldrig routrar, repositories, db eller server-synk).
+
 ## Komponenter
 
 ### Frontend (klient, oavsett tier)
@@ -331,7 +349,7 @@ Köbara procedurer (`src/lib/shared/sync/queued-procedures.ts`, i dag
   `/sync-conflicts` (länkas från synkpillret och Att bevaka) med orsak på
   svenska. Ingen avvisad ändring försvinner tyst.
 - **Ingen spökrad efter en avvisning** (#1348,
-  `src/lib/server/data-store/in-memory/canonical-restore.ts`). Raderna en
+  `src/lib/client/local-store/canonical-restore.ts`). Raderna en
   avvisad post ändrade lokalt återställs till serverns läge sist i reconcilen:
   radkonfliktens `current` när servern skickade det, procedur-svarets rader,
   och annars hämtade med `sync.rows` (org-scopat, tombstone när raden inte

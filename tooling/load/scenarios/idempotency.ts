@@ -11,8 +11,8 @@
 
 import { TRPCClientError } from "@trpc/client";
 import { z } from "zod";
+import { isProcedureCall, type QueueEntry } from "@/lib/client/local-store/mutation-queue";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
-import { isProcedureCall, type QueueEntry } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { addContact, logTime } from "../actions";
 import { ActionTally, dbFor, type LoadContext, type ScenarioResult } from "../context";
 import { timedFetch } from "../http-metrics";

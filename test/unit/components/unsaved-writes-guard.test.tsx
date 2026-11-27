@@ -5,7 +5,7 @@
 import { act, render } from "@testing-library/react";
 import { describe, expect, it } from "vitest-compat";
 import { UnsavedWritesGuard } from "@/components/shell/unsaved-writes-guard";
-import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
+import { CachingSyncDataStore, noSyncTransport } from "@/lib/client/local-store/caching-sync-data-store";
 import { uuidv7 } from "@/lib/shared/uuid";
 
 /** Försöker ladda om: true om sidan bad webbläsaren att fråga först. */

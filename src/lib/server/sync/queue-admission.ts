@@ -20,7 +20,7 @@ import {
   type QueuePayload,
   type QueuePolicy,
 } from "@/lib/shared/sync/queue-format";
-import type { QueuedMutation, QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
+import type { QueuedMutation, QueuedProcedureCall } from "../data-store/in-memory/queue-entry";
 
 /** Kör posten (i dagens format) — eller avvisa den med ett besked. */
 export type Admission<T> = { kind: "run"; entry: T } | { kind: "reject"; reason: string };

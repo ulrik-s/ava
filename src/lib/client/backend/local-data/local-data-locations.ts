@@ -12,8 +12,8 @@
 import { z } from "zod";
 import {
   EntryStoreLegacy, IdbEntryStore, v2Location, type EntryStoreLocation, type LegacyListPlace,
-} from "@/lib/server/data-store/in-memory/idb-entry-store";
-import { QUEUE_LEGACY_LIST } from "@/lib/server/data-store/in-memory/mutation-queue";
+} from "@/lib/client/local-store/idb-entry-store";
+import { QUEUE_LEGACY_LIST } from "@/lib/client/local-store/mutation-queue";
 import { REJECTED_LEGACY_LIST } from "../rejected-changes";
 import { dbNameIn, LOCAL_DB, type LocalDbBase, type LocalNamespace } from "./local-namespace";
 

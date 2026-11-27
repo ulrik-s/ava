@@ -14,8 +14,8 @@
  * kod) och i vilken ordning den accepterade dem. Det är vad invarianterna
  * prövas mot.
  */
+import type { QueuedMutation, QueuedProcedureCall } from "@/lib/client/local-store/mutation-queue";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
-import type { QueuedMutation, QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";

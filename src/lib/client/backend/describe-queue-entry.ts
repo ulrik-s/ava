@@ -3,7 +3,7 @@
  * servern avvisade: "Ny tidspost", "Ändring av faktura".
  */
 
-import { isProcedureCall, type QueueEntry } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { isProcedureCall, type QueueEntry } from "@/lib/client/local-store/mutation-queue";
 
 /** Köbara procedurer (`QUEUED_PROCEDURES`) med egna namn. */
 const PROCEDURES: Readonly<Record<string, string>> = {

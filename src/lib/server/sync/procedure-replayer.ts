@@ -37,7 +37,7 @@ import type { OrganizationId } from "@/lib/shared/schemas/ids";
 import { QUEUE_POLICY, type QueuePolicy } from "@/lib/shared/sync/queue-format";
 import { isQueuedProcedure } from "@/lib/shared/sync/queued-procedures";
 import { syncErrorMessage } from "@/lib/shared/sync/sync-error";
-import type { QueuedProcedureCall } from "../data-store/in-memory/mutation-queue";
+import type { QueuedProcedureCall } from "../data-store/in-memory/queue-entry";
 import type { ProcedureReplayResult } from "../data-store/in-memory/sync-transport";
 import { causeChain, isDeterministicSqlState } from "../db/pg-error";
 import { syncReplays } from "../db/schema";

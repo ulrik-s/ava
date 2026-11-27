@@ -13,7 +13,7 @@
  */
 
 import { useEffect } from "react";
-import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
+import type { CachingSyncDataStore } from "@/lib/client/local-store/caching-sync-data-store";
 
 function warnBeforeUnload(e: Event): void {
   e.preventDefault();

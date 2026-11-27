@@ -3,7 +3,7 @@
  * meddelande från en kanal når de ANDRA kanalernas lyssnare direkt (synkront),
  * precis som `BroadcastChannel` men utan väntan.
  */
-import type { ChangeChannel } from "@/lib/server/data-store/in-memory/change-channel";
+import type { ChangeChannel } from "@/lib/client/local-store/change-channel";
 
 export function changeChannelHub(): () => ChangeChannel {
   const channels: Set<() => void>[] = [];

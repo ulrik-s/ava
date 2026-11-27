@@ -14,9 +14,9 @@
  *     igen, en redan registrerad rådgivningstimme registreras inte igen.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
+import type { QueuedProcedureCall } from "@/lib/client/local-store/mutation-queue";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildContext } from "@/lib/server/build-context";
-import type { QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { changeLog, users } from "@/lib/server/db/schema";
 import { serverFirstEventLog } from "@/lib/server/http/server-context";
 import { MAX_CALL_AGE_MS } from "@/lib/server/queued-call";
