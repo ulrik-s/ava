@@ -429,6 +429,31 @@ describe("MatterDetailPage", () => {
     receivablesQuery.data = [];
   });
 
+  it("Domstolsbetalningar följer betalningssättet, inte taxeflaggan ensam (#1972)", async () => {
+    const panel = (c: HTMLElement) => c.querySelector('[data-panel="receivables"]');
+    const shows = async (data: Record<string, unknown>, rows: unknown[] = []): Promise<boolean> => {
+      matterQuery.data = { ...M, ...data };
+      receivablesQuery.data = rows;
+      const r = renderPage();
+      await waitFor(() => expect(screen.getByText("2026-0001")).toBeInTheDocument());
+      const shown = panel(r.container) !== null;
+      r.unmount();
+      return shown;
+    };
+
+    // Bytt från offentligt uppdrag men behållit flaggan: ingen panel utan fordringar.
+    expect(await shows({ paymentMethod: "PRIVAT", isTaxeArende: true })).toBe(false);
+    expect(await shows({ paymentMethod: "RATTSHJALP", isTaxeArende: true })).toBe(false);
+    // …men en registrerad fordran döljs aldrig.
+    expect(await shows({ paymentMethod: "PRIVAT", isTaxeArende: true }, [{ id: "r1" }])).toBe(true);
+    expect(await shows({ paymentMethod: "RATTSHJALP", isTaxeArende: true }, [{ id: "r1" }])).toBe(true);
+    // Offentligt uppdrag, med och utan flaggan: som i dag.
+    expect(await shows({ paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: true })).toBe(true);
+    expect(await shows({ paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: false })).toBe(true);
+    matterQuery.data = M;
+    receivablesQuery.data = [];
+  });
+
   it("märket Taxa och taxetexterna följer isTaxeMatter, inte flaggan ensam (#1971)", async () => {
     const taxeTexts = async (): Promise<{ badge: boolean; time: boolean; expense: boolean }> => {
       const header = await waitFor(() => screen.getByTestId("matter-header"));
