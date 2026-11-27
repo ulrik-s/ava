@@ -3,7 +3,7 @@
  * mot matters; left-joinar uppladdaren (users) för namn.
  */
 
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { kindCountsByName } from "@/lib/shared/document-part-kinds";
 import type { Document } from "@/lib/shared/schemas/document";
 import type {
@@ -12,7 +12,7 @@ import type {
 import { documentPages, documentParts, documents, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
-  DocumentAccessRow, DocumentListRow, DocumentRepository, StoredContentRow,
+  DocumentAccessRow, DocumentListRow, DocumentRepository, FinalRulingDocument, StoredContentRow,
 } from "./document-repository";
 import { DrizzleRepository, versionedTable, withNextVersion } from "./drizzle-repository";
 import { matterOrg } from "./matter-org";
@@ -89,6 +89,18 @@ export class DrizzleDocumentRepository
     return await this.db
       .select({ id: documents.id, storagePath: documents.storagePath, createdAt: documents.createdAt })
       .from(documents).where(isNull(documents.deletedAt));
+  }
+
+  async listFinalRulingsForMatters(matterIds: MatterId[]): Promise<FinalRulingDocument[]> {
+    if (matterIds.length === 0) return [];
+    const rows = await this.db
+      .select({
+        id: documents.id, matterId: documents.matterId, fileName: documents.fileName,
+        storagePath: documents.storagePath, createdAt: documents.createdAt, finalRuling: documents.finalRuling,
+      })
+      .from(documents)
+      .where(and(inArray(documents.matterId, matterIds), isNotNull(documents.finalRuling), isNull(documents.deletedAt)));
+    return rows.flatMap((r) => (r.finalRuling === null ? [] : [{ ...r, finalRuling: r.finalRuling }]));
   }
 
   async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {

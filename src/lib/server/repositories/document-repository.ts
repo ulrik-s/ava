@@ -4,7 +4,7 @@
  * list-metoderna tar med uppladdarens namn (`uploadedBy`).
  */
 
-import type { Document } from "@/lib/shared/schemas/document";
+import type { Document, FinalRuling } from "@/lib/shared/schemas/document";
 import type { DocumentFolderId, DocumentId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
@@ -26,6 +26,16 @@ export interface StoredContentRow {
   createdAt: Date;
 }
 
+/** Ett dokument som ser ut att vara ett slutligt avgörande (#2101). */
+export interface FinalRulingDocument {
+  id: DocumentId;
+  matterId: MatterId;
+  fileName: string;
+  storagePath: string;
+  createdAt: Date;
+  finalRuling: FinalRuling;
+}
+
 export interface DocumentRepository extends Repository<Document> {
   /** Paginerad lista i ett ärende/folder (createdAt desc) + total. */
   listInFolder(
@@ -42,6 +52,11 @@ export interface DocumentRepository extends Repository<Document> {
    * integritetskontrollen som letar metadata utan innehåll.
    */
   listStoredContent(): Promise<StoredContentRow[]>;
+  /**
+   * Ej raderade dokument med ett slutligt avgörande (`finalRuling`, #2099) i de
+   * angivna ärendena, i ETT anrop (#2101) — underlaget för Att åtgärda.
+   */
+  listFinalRulingsForMatters(matterIds: MatterId[]): Promise<FinalRulingDocument[]>;
   /**
    * Ej raderade dokument som har typer bara i de äldre fälten (`documentType`/
    * `tags`) — underlaget för serverns backfill (ADR 0038).

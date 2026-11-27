@@ -1,7 +1,8 @@
 /**
  * Frister-router (#1062, #1735): tidsfrister och "Bör faktureras" i `list`,
  * takvarningar, jävskontroller och frågan om ett aktivt ärende utan tid på två
- * månader ska avslutas (#2100) i `actionItems` (#1734).
+ * månader, eller med ett slutligt avgörande (#2101), ska avslutas (#2100) i
+ * `actionItems` (#1734).
  *
  * Varje signal härleds ur data som redan finns; ingenting lagras. Se
  * `@/lib/shared/watchlist` för varför (kort: en härledd påminnelse städar sig
@@ -111,17 +112,30 @@ function unbilledInput(matters: readonly MatterRow[], entries: readonly EntryRow
   }));
 }
 
+/** Raderna grupperade per ärende (#2101). */
+function byMatter<T extends { matterId: string }>(rows: readonly T[]): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const r of rows) out.set(r.matterId, [...(out.get(r.matterId) ?? []), r]);
+  return out;
+}
+
 /**
- * Kandidater till frågan om avslut (#2100): bara aktiva ärenden, med senaste
- * tidsposten för alla i ETT repo-anrop. Inga aktiva ärenden → inget anrop.
+ * Kandidater till frågan om avslut (#2100, #2101): bara aktiva ärenden, med
+ * senaste tidsposten och dokumenten med ett slutligt avgörande för alla i ETT
+ * repo-anrop var. Inga aktiva ärenden → inga anrop.
  */
 async function closeSuggestionInput(ctx: Ctx, matters: readonly MatterRow[]): Promise<CloseSuggestionCandidate[]> {
   const active = matters.filter((m) => m.status === "ACTIVE");
   if (active.length === 0) return [];
-  const latest = await ctx.repos.timeEntries.latestEntryAtForMatters(active.map((m) => asId<"MatterId">(m.id)));
+  const ids = active.map((m) => asId<"MatterId">(m.id));
+  const [latest, rulings] = await Promise.all([
+    ctx.repos.timeEntries.latestEntryAtForMatters(ids),
+    ctx.repos.documents.listFinalRulingsForMatters(ids).then(byMatter),
+  ]);
   return active.map((m) => ({
     id: m.id, matterNumber: m.matterNumber, title: m.title ?? "",
     createdAt: m.createdAt, keptActiveAt: m.keptActiveAt, latestEntryAt: latest[m.id],
+    finalRulings: rulings.get(m.id) ?? [],
   }));
 }
 
@@ -193,8 +207,8 @@ export const watchlistRouter = router({
 
   /**
    * "Att åtgärda" (#1734): takvarningar, jävskontroller med träffar som
-   * ingen har bedömt, och aktiva ärenden utan tid på två månader som kanske
-   * ska avslutas (#2100). En kontroll som bara väntar (`PENDING`) hör inte hit.
+   * ingen har bedömt, och aktiva ärenden utan tid på två månader eller med
+   * ett slutligt avgörande (#2101) som kanske ska avslutas (#2100). En kontroll som bara väntar (`PENDING`) hör inte hit.
    * Samma `mine`-urval och sortering som `list`.
    */
   actionItems: orgProcedure

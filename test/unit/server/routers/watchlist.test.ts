@@ -20,6 +20,7 @@ function caller(
   more: {
     matters?: Array<Record<string, unknown>>; timeEntries?: Array<Record<string, unknown>>;
     contacts?: Array<Record<string, unknown>>; matterContacts?: Array<Record<string, unknown>>;
+    documents?: Array<Record<string, unknown>>;
   } = {},
 ) {
   const source: DemoSource = {
@@ -39,6 +40,7 @@ function caller(
     expenses: [],
     contacts: more.contacts ?? [],
     matterContacts: more.matterContacts ?? [],
+    documents: more.documents ?? [],
   };
   const ds = new DemoDataStore(prebakeJoins(source), () => {});
   return callerFor(ds);
@@ -225,7 +227,7 @@ describe("watchlist.actionItems — Ska ärendet markeras som avslutat? (#2100)"
     const { items } = await caller([], [], [], { matters: [matter("old")], timeEntries: [entry("e1", "old")] }).actionItems({ mine: false });
     const item = items.find((i) => i.kind === "closeSuggestion");
     expect(item?.matterId).toBe("old");
-    expect(item?.closeSuggestion).toEqual({ matterTitle: "Ärende old", noTimeSince: stockholmDay(inDays(-100)) });
+    expect(item?.closeSuggestion).toEqual({ matterTitle: "Ärende old", noTimeSince: stockholmDay(inDays(-100)), documents: [] });
   });
 
   it("stängda och arkiverade ärenden ger ingen post", async () => {
@@ -260,6 +262,49 @@ describe("watchlist.actionItems — Ska ärendet markeras som avslutat? (#2100)"
     }), () => {});
     const repos = buildInMemoryRepositories(ds);
     const spy = vi.spyOn(repos.timeEntries, "latestEntryAtForMatters");
+    await callerFor(ds, repos).actionItems({ mine: false });
+    expect(spy).toHaveBeenCalledOnce();
+    expect([...(spy.mock.calls[0]?.[0] ?? [])].sort()).toEqual(["a", "b"]);
+
+    spy.mockClear();
+    await callerFor(ds, repos).actionItems({ mine: true, userId: "u-utan-arenden" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("watchlist.actionItems — slutligt avgörande (#2101)", () => {
+  const matter = (id: string, p: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id, organizationId: "o1", matterNumber: `2026-${id}`, title: `Ärende ${id}`, status: "ACTIVE",
+    responsibleLawyerId: "u1", createdAt: inDays(-5), ...p,
+  });
+  const doc = (id: string, matterId: string, p: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id, matterId, fileName: `${id}.pdf`, storagePath: `documents/content/${id}.pdf`, mimeType: "application/pdf",
+    sizeBytes: 1, uploadedById: "u1", createdAt: inDays(-1), finalRuling: "DOM_HD", ...p,
+  });
+  const closeItems = async (matters: Array<Record<string, unknown>>, documents: Array<Record<string, unknown>>) =>
+    (await caller([], [], [], { matters, documents }).actionItems({ mine: false })).items
+      .filter((i) => i.kind === "closeSuggestion");
+
+  it("ett dokument i ett aktivt ärende ger en post, i ett stängt ingen", async () => {
+    const items = await closeItems(
+      [matter("open"), matter("closed", { status: "CLOSED" })],
+      [doc("d1", "open"), doc("d2", "closed"), doc("d3", "open", { finalRuling: null })],
+    );
+    expect(items.map((i) => i.matterId)).toEqual(["open"]);
+    expect(items[0]?.closeSuggestion).toEqual({
+      matterTitle: "Ärende open", noTimeSince: null,
+      documents: [{ id: "d1", fileName: "d1.pdf", storagePath: "documents/content/d1.pdf", ruling: "DOM_HD" }],
+    });
+    expect(items[0]?.detail).toBe("d1.pdf ser ut att vara en dom från Högsta domstolen.");
+  });
+
+  it("dokumenten läses i ETT anrop för flera ärenden, och inte alls utan aktiva ärenden", async () => {
+    const ds = new DemoDataStore(prebakeJoins({
+      matters: [matter("a"), matter("b"), matter("c", { status: "CLOSED" })],
+      tasks: [], timeEntries: [], expenses: [], contacts: [], matterContacts: [], documents: [],
+    }), () => {});
+    const repos = buildInMemoryRepositories(ds);
+    const spy = vi.spyOn(repos.documents, "listFinalRulingsForMatters");
     await callerFor(ds, repos).actionItems({ mine: false });
     expect(spy).toHaveBeenCalledOnce();
     expect([...(spy.mock.calls[0]?.[0] ?? [])].sort()).toEqual(["a", "b"]);

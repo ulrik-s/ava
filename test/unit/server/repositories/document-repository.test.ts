@@ -82,6 +82,30 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
   });
 });
 
+/** Skapelsetiden på dokumenten i testerna av listFinalRulingsForMatters (#2101). */
+const RULINGS_AT = new Date("2026-11-01T10:00:00Z");
+
+describe("DocumentRepository.listFinalRulingsForMatters (#2101) — in-memory", () => {
+  it("bara dokument med ett avgörande i de angivna ärendena, inte raderade, med fälten", async () => {
+    const d = (id: string, matterId: string, extra: Record<string, unknown> = {}) => ({
+      id, matterId, fileName: `${id}.pdf`, storagePath: `documents/content/${id}`, createdAt: RULINGS_AT, finalRuling: "PT_HD", ...extra,
+    });
+    const source = prebakeJoins({
+      documents: [
+        d("hit", "m1"), d("none", "m1", { finalRuling: null }), d("gone", "m1", { deletedAt: new Date() }),
+        d("other", "m3"), d("hit2", "m2", { finalRuling: "AVSKRIVNING", createdAt: RULINGS_AT.toISOString() }),
+      ],
+    });
+    const docs = new InMemoryDocumentRepository(new LocalStore(source, async () => {}));
+    const rows = await docs.listFinalRulingsForMatters([asId<"MatterId">("m1"), asId<"MatterId">("m2")]);
+    expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      { id: "hit", matterId: "m1", fileName: "hit.pdf", storagePath: "documents/content/hit", createdAt: RULINGS_AT, finalRuling: "PT_HD" },
+      { id: "hit2", matterId: "m2", fileName: "hit2.pdf", storagePath: "documents/content/hit2", createdAt: RULINGS_AT, finalRuling: "AVSKRIVNING" },
+    ]);
+    expect(await docs.listFinalRulingsForMatters([])).toEqual([]);
+  });
+});
+
 describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", () => {
   let handle: TestDbHandle;
   beforeAll(async () => { handle = await createTestDb(); });
@@ -146,5 +170,29 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
     const rows = await new DrizzleDocumentRepository(db).listStoredContent();
     expect(rows.find((r) => r.id === kept)).toMatchObject({ storagePath: "documents/content/kvar", createdAt: expect.any(Date) });
     expect(rows.find((r) => r.id === gone)).toBeUndefined();
+  });
+
+  it("listFinalRulingsForMatters (#2101): bara dokument med ett avgörande i de angivna ärendena, inte raderade", async () => {
+    const db = handle.db;
+    const [m1, m2, m3] = [asId<"MatterId">(uuidv7()), asId<"MatterId">(uuidv7()), asId<"MatterId">(uuidv7())];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    for (const id of [m1, m2, m3]) {
+      await db.insert(matters).values(v({ id, organizationId: uuidv7(), matterNumber: `2026-${id}`, title: "T" }));
+    }
+    const hit = asId<"DocumentId">(uuidv7());
+    const doc = (id: string, matterId: string, extra: Record<string, unknown>) => v({
+      id, matterId, fileName: "dom.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "documents/content/dom",
+      uploadedById: uuidv7(), createdAt: RULINGS_AT, ...extra,
+    });
+    await db.insert(documents).values(doc(hit, m1, { finalRuling: "DOM_HFD" }));
+    await db.insert(documents).values(doc(uuidv7(), m1, { finalRuling: null }));
+    await db.insert(documents).values(doc(uuidv7(), m2, { finalRuling: "PT_HD", deletedAt: new Date() }));
+    await db.insert(documents).values(doc(uuidv7(), m3, { finalRuling: "PT_HD" }));
+    const repo = new DrizzleDocumentRepository(db);
+    expect(await repo.listFinalRulingsForMatters([m1, m2])).toEqual([
+      { id: hit, matterId: m1, fileName: "dom.pdf", storagePath: "documents/content/dom", createdAt: RULINGS_AT, finalRuling: "DOM_HFD" },
+    ]);
+    expect(await repo.listFinalRulingsForMatters([])).toEqual([]);
   });
 });

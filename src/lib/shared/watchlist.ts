@@ -22,14 +22,16 @@
  * för att de hör hemma i samma vy, inte för att de räknas ut.
  *
  * Frågan om ett ärende ska avslutas (#2100, `close-suggestion.ts`) är också
- * härledd: den försvinner när tid registreras eller ärendet stängs. Undantaget
- * är **Behåll som aktivt**: det datumet är ett faktum på ärendet
+ * härledd: den försvinner när tid registreras eller ärendet stängs. Ett
+ * dokument som ser ut att vara ett slutligt avgörande (#2101) ger samma
+ * fråga. Undantaget är **Behåll som aktivt**: det datumet är ett faktum på ärendet
  * (`keptActiveAt`), inte en avfärdad påminnelse. Det säger att någon bedömde
  * att ärendet fortsätter, och frågan räknas från den dagen.
  */
 
 import { BILLING_SHORTCUT_PARAM } from "./billing/billing-flow";
 import { coverageStatus, type CoverageCapInput } from "./billing/coverage-cap";
+import type { FinalRuling } from "./schemas/document";
 import type { MatterRole } from "./schemas/enums";
 import { stockholmDay } from "./stockholm-time";
 
@@ -91,6 +93,14 @@ export interface WatchlistLink {
   query?: Readonly<Record<string, string>>;
 }
 
+/** Ett dokument som ger skäl att avsluta ärendet (#2101) — öppnas direkt ur posten. */
+export interface CloseSuggestionDocument {
+  id: string;
+  fileName: string;
+  storagePath: string;
+  ruling: FinalRuling;
+}
+
 export interface WatchlistItem {
   kind: WatchlistKind;
   severity: WatchlistSeverity;
@@ -108,8 +118,12 @@ export interface WatchlistItem {
   link: WatchlistLink | null;
   /** Uppgiften bakom en tidsfrist — så den kan bockas av direkt i listan (#1167). */
   taskId?: string;
-  /** Ska ärendet avslutas (#2100): titeln till frågan och dagen sedan dess ingen tid registrerats. */
-  closeSuggestion?: { matterTitle: string; noTimeSince: string };
+  /**
+   * Ska ärendet avslutas (#2100, #2101): titeln till frågan, dagen sedan dess
+   * ingen tid registrerats (null när bara dokument ger skäl) och dokumenten
+   * som ser ut att vara ett slutligt avgörande.
+   */
+  closeSuggestion?: { matterTitle: string; noTimeSince: string | null; documents: CloseSuggestionDocument[] };
   /**
    * Ärendets första KLIENT-part (#1965), som Frister på Startsidan och sidan
    * Frister visar överst på raden. Saknas när posten saknar ärende eller

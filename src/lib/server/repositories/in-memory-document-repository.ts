@@ -11,7 +11,7 @@ import type {
 } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
-  DocumentAccessRow, DocumentListRow, DocumentRepository, StoredContentRow,
+  DocumentAccessRow, DocumentListRow, DocumentRepository, FinalRulingDocument, StoredContentRow,
 } from "./document-repository";
 import { InMemoryRepository } from "./in-memory-repository";
 
@@ -52,6 +52,18 @@ export class InMemoryDocumentRepository
   async listStoredContent(): Promise<StoredContentRow[]> {
     const rows = (await this.delegate.findMany({})) as Array<{ id: DocumentId; storagePath?: string; createdAt?: Date | string }>;
     return rows.map((r) => ({ id: r.id, storagePath: r.storagePath ?? "", createdAt: new Date(r.createdAt ?? 0) }));
+  }
+
+  async listFinalRulingsForMatters(matterIds: MatterId[]): Promise<FinalRulingDocument[]> {
+    if (matterIds.length === 0) return [];
+    const wanted = new Set<string>(matterIds);
+    const docs = (await this.delegate.findMany({})) as Document[];
+    return docs.flatMap((d) => (wanted.has(d.matterId) && !d.deletedAt && d.finalRuling
+      ? [{
+        id: d.id, matterId: d.matterId, fileName: d.fileName, storagePath: d.storagePath,
+        createdAt: new Date(d.createdAt), finalRuling: d.finalRuling,
+      }]
+      : []));
   }
 
   async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {

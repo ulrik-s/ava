@@ -82,7 +82,7 @@ describe("Att åtgärda-sidan (#1734)", () => {
     query.data = { items: [item({
       kind: "closeSuggestion", severity: "approaching", title: "Ska ärendet markeras som avslutat?",
       detail: "Ingen tid registrerad sedan 2026-09-25.",
-      closeSuggestion: { matterTitle: "Vårdnadstvist", noTimeSince: "2026-09-25" },
+      closeSuggestion: { matterTitle: "Vårdnadstvist", noTimeSince: "2026-09-25", documents: [] },
     })] };
     render(<ActionItemsPage />);
     expect(screen.getByText("1 poster.")).toBeInTheDocument();
