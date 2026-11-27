@@ -37,16 +37,39 @@ let matterCreated: (() => void) | undefined;
 /** Byråns ärendetyper (org-inställning) — tom = fritext. */
 let matterTypes: string[] = [];
 const searchParamsGet = vi.fn((_: string): string | null => null);
+const routerReplace = vi.fn();
+type ListCall = [Record<string, unknown>, Record<string, unknown> | undefined];
+/** `matter.list`-anropen: (args, opts) per rendering (#1968). */
+const listCalls: ListCall[] = [];
+function listUseQuery(input: Record<string, unknown>, opts?: Record<string, unknown>): typeof mattersQuery {
+  listCalls.push([input, opts]);
+  return mattersQuery;
+}
+/** `prefs.get`-anropen: DataTable läser sin `prefKey` (#1968). */
+const prefsGet = vi.fn((_input: { key: string }) => ({ data: undefined, isLoading: false }));
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: searchParamsGet }),
+  useRouter: () => ({ replace: routerReplace }),
 }));
+
+/** Adressen `?flik=alla`: Alla ärenden på byrån (#1968). */
+function onAllTab(): void {
+  searchParamsGet.mockImplementation((k: string) => (k === "flik" ? "alla" : null));
+}
+
+/** Senaste `matter.list`-anropet för listan (args, opts) — inte jävsträffarnas `ids`-anrop. */
+function lastListCall(): ListCall {
+  const call = listCalls.filter(([input]) => !("ids" in input)).at(-1);
+  if (!call) throw new Error("matter.list anropades inte");
+  return call;
+}
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     matter: {
-      list: { useQuery: () => mattersQuery },
+      list: { useQuery: (input: Record<string, unknown>, opts?: Record<string, unknown>) => listUseQuery(input, opts) },
       create: {
         useMutation: (opts?: { onSuccess?: () => void }) => {
           matterCreated = opts?.onSuccess;
@@ -76,7 +99,7 @@ vi.mock("@/lib/client/trpc", () => ({
       current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
     },
     prefs: {
-      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      get: { useQuery: (input: { key: string }) => prefsGet(input) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -87,6 +110,7 @@ vi.mock("@/lib/client/trpc", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listCalls.length = 0;
   searchParamsGet.mockReturnValue(null);
   mattersQuery.data = { matters: [], total: 0, pages: 0 };
   matterTypes = [];
@@ -158,6 +182,7 @@ describe("MattersPage", () => {
   });
 
   it("ändrar status-filter", () => {
+    onAllTab();
     render(<MattersPage />);
     // Det finns två filter-comboboxar (status + medarbetare) — välj status
     // robust via dess "Alla statusar"-option (inte position).
@@ -176,6 +201,7 @@ describe("MattersPage", () => {
   });
 
   it("sökrutan har vit bakgrund, valrutorna bredvid ändras inte (#1963)", () => {
+    onAllTab();
     render(<MattersPage />);
     expect(screen.getByPlaceholderText(/Sök ärenden/i)).toHaveClass("bg-white");
     const filters = screen.getAllByRole("combobox").filter((el) =>
@@ -585,12 +611,14 @@ describe("MattersPage — formulärets händelser (#1903)", () => {
 
   it("medarbetarfiltret skickar vald medarbetare till listan", () => {
     employeesQuery.data.users = [{ id: "u2", name: "Eva Ek" }];
+    onAllTab();
     render(<MattersPage />);
     const filter = screen.getAllByRole("combobox").find(
       (el) => within(el).queryByRole("option", { name: "Alla medarbetare" }) !== null,
     ) as HTMLSelectElement;
     fireEvent.change(filter, { target: { value: "u2" } });
     expect(filter.value).toBe("u2");
+    expect(lastListCall()[0]).toMatchObject({ employeeId: "u2" });
   });
 
   it("klientdialogen stängs med Avbryt utan att välja klient", () => {
@@ -601,5 +629,93 @@ describe("MattersPage — formulärets händelser (#1903)", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Avbryt" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("button", { name: /Välj klient/ })).toBeInTheDocument();
+  });
+});
+
+describe("MattersPage — flikarna Mitt aktskåp och Alla ärenden på byrån (#1968)", () => {
+  const statusSelect = (): HTMLSelectElement | undefined => screen.queryAllByRole("combobox").find(
+    (el) => within(el).queryByRole("option", { name: "Alla statusar" }) !== null,
+  ) as HTMLSelectElement | undefined;
+
+  it("utan flik är Mitt aktskåp vald: egna aktiva ärenden, senast hänt överst, inga valrutor", () => {
+    render(<MattersPage />);
+    const tabs = within(screen.getByRole("tablist", { name: "Ärendelistor" })).getAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["Mitt aktskåp", "Alla ärenden på byrån"]);
+    expect(screen.getByRole("tab", { name: "Mitt aktskåp" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Mitt aktskåp" })).toBeInTheDocument();
+    expect(lastListCall()[0]).toEqual({ search: "", mine: true, status: "ACTIVE", orderBy: "lastActivity", page: 1, pageSize: 20 });
+    expect(screen.queryAllByRole("combobox")).toHaveLength(0);
+    expect(screen.getByPlaceholderText(/Sök ärenden/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sök" })).toBeInTheDocument();
+  });
+
+  it("Mitt aktskåp läses om varje gång (staleTime 0), Alla ärenden på byrån har ingen egen staleTime", () => {
+    const { rerender } = render(<MattersPage />);
+    expect(lastListCall()[1]).toEqual({ staleTime: 0 });
+    onAllTab();
+    rerender(<MattersPage />);
+    expect(lastListCall()[1]?.staleTime).toBeUndefined();
+  });
+
+  it("tom flik utan söktext: 'Du är inte ansvarig …'; med söktext 'Inga ärenden.'", () => {
+    render(<MattersPage />);
+    expect(screen.getByText("Du är inte ansvarig för något aktivt ärende.")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Sök ärenden/), { target: { value: "x" } });
+    expect(screen.getByText("Inga ärenden.")).toBeInTheDocument();
+    expect(screen.queryByText("Du är inte ansvarig för något aktivt ärende.")).toBeNull();
+  });
+
+  it("flik=alla: dagens argument, valrutorna syns och en tom lista visar 'Inga ärenden.'", () => {
+    onAllTab();
+    render(<MattersPage />);
+    expect(screen.getByRole("tab", { name: "Alla ärenden på byrån" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Alla ärenden på byrån" })).toBeInTheDocument();
+    expect(lastListCall()[0]).toEqual({ search: "", status: undefined, employeeId: undefined, page: 1, pageSize: 20 });
+    expect(statusSelect()).toBeDefined();
+    expect(screen.getByText("Inga ärenden.")).toBeInTheDocument();
+  });
+
+  it("ett klick på en flik byter adress med router.replace", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Alla ärenden på byrån" }));
+    expect(routerReplace).toHaveBeenLastCalledWith("/matters/?flik=alla");
+    fireEvent.click(screen.getByRole("tab", { name: "Mitt aktskåp" }));
+    expect(routerReplace).toHaveBeenLastCalledWith("/matters/");
+  });
+
+  it("sidan går tillbaka till 1 när flik ändras i adressen utan klick", () => {
+    mattersQuery.data = { matters: [], total: 50, pages: 3 };
+    const { rerender } = render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    expect(lastListCall()[0]).toMatchObject({ page: 2 });
+    onAllTab();
+    rerender(<MattersPage />);
+    expect(lastListCall()[0]).toMatchObject({ page: 1 });
+    expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    expect(lastListCall()[0]).toMatchObject({ page: 2 });
+  });
+
+  it("DataTable får list.matters-mine respektive list.matters", () => {
+    const { rerender } = render(<MattersPage />);
+    expect(prefsGet.mock.calls.at(-1)?.[0]).toEqual({ key: "list.matters-mine" });
+    onAllTab();
+    rerender(<MattersPage />);
+    expect(prefsGet.mock.calls.at(-1)?.[0]).toEqual({ key: "list.matters" });
+  });
+
+  it("valrutornas värden står kvar när man byter flik och sedan tillbaka", () => {
+    onAllTab();
+    const { rerender } = render(<MattersPage />);
+    const select = statusSelect();
+    if (!select) throw new Error("statusvalet saknas");
+    fireEvent.change(select, { target: { value: "CLOSED" } });
+    searchParamsGet.mockReturnValue(null);
+    rerender(<MattersPage />);
+    expect(statusSelect()).toBeUndefined();
+    onAllTab();
+    rerender(<MattersPage />);
+    expect(statusSelect()?.value).toBe("CLOSED");
+    expect(lastListCall()[0]).toMatchObject({ status: "CLOSED" });
   });
 });

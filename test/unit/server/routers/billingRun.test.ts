@@ -12,7 +12,8 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
-import { timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { timkostnadsnormFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { asId } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 
@@ -70,6 +71,60 @@ describe("billingRun.createAcconto", () => {
   });
 });
 
+describe("billingRun.createAcconto — nedbrytningen (#1940)", () => {
+  it("sparar uträkningen: underlaget, andelen, en avdragsrad per tidigare acontofaktura och momsen", async () => {
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT", expenseOre: 10_000 }); // 5000 + 100 kr
+    const first = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50_000 });
+    const second = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 30_000 });
+    const third = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 47_500 });
+    const bd = third.invoice.settlementBreakdown;
+    if (!bd) throw new Error("nedbrytningen saknas");
+    const labels = bd.rows.map((r) => r.label);
+    expect(labels.filter((l) => l.startsWith("Avgår aconto"))).toEqual([
+      expect.stringContaining(`faktura ${String(first.invoice.invoiceNumber)}`),
+      expect.stringContaining(`faktura ${String(second.invoice.invoiceNumber)}`),
+    ]);
+    expect(bd.rows.slice(0, 4).map((r) => [r.label, r.amountOre])).toEqual([
+      ["Upparbetat arvode (exkl moms)", 500_000], ["Utlägg (exkl moms)", 10_000], ["Underlag (exkl moms)", 510_000],
+      ["Klientens andel 20 % (exkl moms)", 102_000],
+    ]);
+    expect(bd.rows.find((r) => r.label.startsWith("Moms"))?.amountOre).toBe(third.invoice.vatOre);
+    expect(bd.totalOre).toBe(third.invoice.amount);
+    expect(bd.timeLines).toEqual([expect.objectContaining({ description: "Möte", minutes: 120, amountOre: 500_000 })]);
+    expect(bd.expenseLines).toEqual([expect.objectContaining({ description: "Avgift", netOre: 10_000, grossOre: 12_500 })]); // debiteras med 25 % (#975)
+  });
+
+  it("beloppet, momsen och uppdelningen är som förut för samma indata", async () => {
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" });
+    const res = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 100_000 });
+    expect(res.invoice).toMatchObject({ amount: 100_000, vatOre: 20_000 });
+    expect(res.invoice.vatBreakdown).toEqual([{ kind: "arvode", vatRate: 2500, netOre: 80_000, vatOre: 20_000 }]);
+    expect(res.run).toMatchObject({ amountOre: 100_000, proposedAmountOre: 125_000 });
+    // Ett ändrat belopp syns som Justering i nedbrytningen.
+    expect(res.invoice.settlementBreakdown?.rows.find((r) => r.label === "Justering (exkl moms)")?.amountOre).toBe(-20_000);
+  });
+
+  it("en nedbrytning från anroparen sparas oförändrad", async () => {
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" });
+    const given = {
+      timeLines: [{ date: "2026-01-02", description: "Sim", minutes: 60, amountOre: 250_000 }],
+      rows: [{ label: "Egen rad", amountOre: 100_000, kind: "add" as const }],
+      totalLabel: "Att betala (inkl moms)", totalOre: 125_000,
+    };
+    const res = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 125_000, settlementBreakdown: given });
+    expect(res.invoice.settlementBreakdown).toEqual(given);
+  });
+
+  it("nedbrytningen sparas i acontots egen kolumn och, tills vidare, i settlementBreakdown (#2180)", async () => {
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" });
+    const { invoice } = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 100_000 });
+    expect(invoice.accontoBreakdown?.totalOre).toBe(100_000);
+    expect(invoice.settlementBreakdown).toEqual(invoice.accontoBreakdown);
+    const read = await caller.invoice.getById({ id: invoice.id });
+    expect(read.accontoBreakdown).toEqual(invoice.accontoBreakdown);
+  });
+});
+
 describe("billingRun.proposal (#397)", () => {
   // Rättshjälp värderas på timkostnadsnormen, inte på posternas á-pris — en jurist
   // utan timpris gav annars 0 kr trots 7,5 h i ärendet. Ingen timme dras av (#1205):
@@ -78,8 +133,8 @@ describe("billingRun.proposal (#397)", () => {
     const { caller } = makeCaller({ workMinutes: 450, paymentMethod: "RATTSHJALP", hourlyRate: 0 });
     const p = await caller.billingRun.proposal({ matterId: "m-1" });
     const norm = timkostnadsnormFtaxForDate(new Date());
-    expect(p.workValueOre).toBe(Math.round((450 / 60) * norm));
-    expect(p.timeEntries[0]?.valueOre).toBe(Math.round((450 / 60) * norm));
+    expect(p.workValueOre).toBe(timeEntryValueOre(450, norm));
+    expect(p.timeEntries[0]?.valueOre).toBe(timeEntryValueOre(450, norm));
   });
 
   it("rättsskydd: normen, ingen rådgivningstimme", async () => {
@@ -892,6 +947,8 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.clientInvoice.invoiceType).toBe("CREDIT");
     expect(res.clientInvoice.amount).toBe(-29_700);      // negativ = kreditering
     expect(res.creditInvoice).toBe(res.clientInvoice);   // krediten ÄR klientfakturan
+    // #1946: anteckningen skriver de betalda acontona med formatKr (två decimaler, hårt mellanslag).
+    expect(res.clientInvoice.notes).toContain("betalda aconton (500,00 kr)");
     // #895: kreditfakturan visar FULLA specifikationen (tidsspec + avdragna aconton) →
     // netto = kredit (negativt), inte den gamla minimala 2-rads-vyn.
     const bd = res.clientInvoice.settlementBreakdown!;

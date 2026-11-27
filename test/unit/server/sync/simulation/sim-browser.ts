@@ -18,14 +18,14 @@ import { IDBFactory } from "fake-indexeddb";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { IndexedDbRejectedChangesPersistence, RejectedChanges, type RejectedChange } from "@/lib/client/backend/rejected-changes";
 import { createServerFirstStore } from "@/lib/client/backend/server-first-store";
-import { withSyncLock } from "@/lib/client/sync/sync-lock";
-import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
-import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
-import { IndexedDbPersistence } from "@/lib/server/data-store/in-memory/indexeddb-persistence";
+import type { CachingSyncDataStore } from "@/lib/client/local-store/caching-sync-data-store";
+import { IndexedDbPersistence } from "@/lib/client/local-store/indexeddb-persistence";
 import {
   IndexedDbMutationQueuePersistence, isProcedureCall, type MutationQueuePersistence, type QueueEntry,
-} from "@/lib/server/data-store/in-memory/mutation-queue";
-import type { BlockedEntry } from "@/lib/server/data-store/in-memory/reconcile-engine";
+} from "@/lib/client/local-store/mutation-queue";
+import type { BlockedEntry } from "@/lib/client/local-store/reconcile-engine";
+import { withSyncLock } from "@/lib/client/sync/sync-lock";
+import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { UserRole } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";

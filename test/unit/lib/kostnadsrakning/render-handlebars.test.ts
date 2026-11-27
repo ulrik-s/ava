@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
+import { renderHandlebars, TEMPLATE_HELPERS } from "@/lib/client/kostnadsrakning/render-handlebars";
 
 describe("renderHandlebars", () => {
   it("{{formatHours minutes}} ger decimaltimmar som resten av appen (#1543)", () => {
@@ -95,5 +95,54 @@ Total: {{totalInclFormatted}}`;
     expect(out).toContain("- 2026-05-20: Domstolsavgift (0 %) → 125,00 kr");
     expect(out).toContain("- 2026-05-21: Tåg (6 %) → 450,00 kr");
     expect(out).toContain("Total: 7 619,00 kr");
+  });
+});
+
+describe("mallarnas hjälpfunktioner (formatDate, formatDateShort, formatAmount)", () => {
+  /** Sen kväll UTC = nästa dag i svensk tid. */
+  const LATE_UTC = "2026-04-15T23:30:00Z";
+
+  it("TEMPLATE_HELPERS har exakt de fyra dokumenterade nycklarna", () => {
+    const keys: ReadonlyArray<keyof typeof TEMPLATE_HELPERS> = ["formatAmount", "formatDate", "formatDateShort", "formatHours"];
+    expect(Object.keys(TEMPLATE_HELPERS).sort()).toEqual([...keys]);
+  });
+
+  it("{{formatDate d}} ger datumet i ord i svensk tid, för Date, datumsträng och ISO-tidpunkt", () => {
+    expect(renderHandlebars("{{formatDate d}}", { d: new Date("2026-04-16T10:00:00Z") })).toBe("16 april 2026");
+    expect(renderHandlebars("{{formatDate d}}", { d: "2026-04-16" })).toBe("16 april 2026");
+    expect(renderHandlebars("{{formatDate d}}", { d: LATE_UTC })).toBe("16 april 2026");
+  });
+
+  it("{{formatDateShort d}} ger ÅÅÅÅ-MM-DD i svensk tid, för Date, datumsträng och ISO-tidpunkt", () => {
+    expect(renderHandlebars("{{formatDateShort d}}", { d: new Date("2026-04-16T10:00:00Z") })).toBe("2026-04-16");
+    expect(renderHandlebars("{{formatDateShort d}}", { d: "2026-04-16" })).toBe("2026-04-16");
+    expect(renderHandlebars("{{formatDateShort d}}", { d: LATE_UTC })).toBe("2026-04-16");
+  });
+
+  it("{{formatAmount öre}} ger kronor som formatKr", () => {
+    expect(renderHandlebars("{{formatAmount a}}", { a: 125000 })).toBe("1\u00a0250,00\u00a0kr");
+    expect(renderHandlebars("{{formatAmount a}}", { a: 0 })).toBe("0,00\u00a0kr");
+    expect(renderHandlebars("{{formatAmount a}}", { a: "125000" })).toBe("1\u00a0250,00\u00a0kr");
+  });
+
+  it.each(["formatDate", "formatDateShort", "formatAmount"])("%s ger tom text för tomt och ogiltigt värde", (helper) => {
+    for (const value of [undefined, null, "", "skräp"]) {
+      expect(renderHandlebars(`{{${helper} v}}`, { v: value })).toBe("");
+    }
+  });
+
+  it.each(["formatDate", "formatDateShort", "formatAmount"])("%s utan argument ger tom text", (helper) => {
+    expect(renderHandlebars(`{{${helper}}}`, {})).toBe("");
+  });
+
+  it("formatAmount ger tom text för värden som inte blir ett ändligt tal", () => {
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, "  ", true, { ore: 1 }]) {
+      expect(renderHandlebars("{{formatAmount v}}", { v: value })).toBe("");
+    }
+  });
+
+  it("datumformerna ger tom text för ett ogiltigt Date och ett tal", () => {
+    expect(renderHandlebars("{{formatDate d}}|{{formatDateShort d}}", { d: new Date("skräp") })).toBe("|");
+    expect(renderHandlebars("{{formatDate d}}|{{formatDateShort d}}", { d: 20260416 })).toBe("|");
   });
 });

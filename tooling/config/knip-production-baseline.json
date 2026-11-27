@@ -9,7 +9,6 @@
   "src/lib/client/github/push.ts",
   "src/lib/client/github/sync-state.ts",
   "src/lib/client/sync/external-actions.ts",
-  "src/lib/client/template-recipients.ts",
   "src/lib/client/todo/todo-views.ts",
   "src/lib/client/working-set/lru-budget.ts",
   "src/lib/client/working-set/working-set-cache.ts",
@@ -20,11 +19,6 @@
   "src/lib/server/integrations/ledger/capabilities.ts",
   "src/lib/server/integrations/ledger/reconcile-payments.ts",
   "src/lib/server/integrations/ledger/sie-connector.ts",
-  "src/lib/server/rules/execute.ts",
-  "src/lib/server/rules/match.ts",
-  "src/lib/server/rules/scheduler.ts",
-  "src/lib/server/rules/starter-rules.ts",
-  "src/lib/server/rules/template.ts",
   "src/lib/shared/deadline-color.ts",
   "src/lib/shared/schema-migrations.ts"
 ]

@@ -29,6 +29,7 @@
  *     bun tooling/scripts/billing-pipeline-e2e.ts
  */
 
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { assert, clientFor, kr, SERVER_URL, seedUser, waitForServer, type Ava } from "./e2e-harness";
 
 const USER = "anna-billing@byra.se";
@@ -36,7 +37,7 @@ const USER = "anna-billing@byra.se";
 /** Timtaxa och tid valda så arvodet blir jämnt: 2 h × 2 500 kr = 5 000 kr. */
 const HOURLY_RATE_ORE = 250_000;
 const WORK_MINUTES = 120;
-const ARVODE_NET_ORE = Math.round((WORK_MINUTES / 60) * HOURLY_RATE_ORE);
+const ARVODE_NET_ORE = timeEntryValueOre(WORK_MINUTES, HOURLY_RATE_ORE);
 const ARVODE_VAT_ORE = Math.round(ARVODE_NET_ORE * 0.25);
 
 /** Ett ärende med klient — grunden för allt nedan. */

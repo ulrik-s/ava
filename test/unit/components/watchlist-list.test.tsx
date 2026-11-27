@@ -33,6 +33,16 @@ describe("WatchlistList", () => {
     expect(screen.getByRole("link").getAttribute("href")).toContain("id=m1");
   });
 
+  it("Bör faktureras länkar med fakturera=1 efter id (#1854)", () => {
+    render(<WatchlistList items={[item({ kind: "unbilled", link: { route: "matters", id: "m1", query: { fakturera: "1" } } })]} emptyText="" />);
+    expect(screen.getByRole("link").getAttribute("href")).toMatch(/id=m1&fakturera=1$/);
+  });
+
+  it("en tidsfrist länkar utan fakturera (#1854)", () => {
+    render(<WatchlistList items={[item()]} emptyText="" />);
+    expect(screen.getByRole("link").getAttribute("href")).not.toContain("fakturera");
+  });
+
   it("visar belopp när posten har ett", () => {
     render(<WatchlistList items={[item({ amountOre: 2_500_000, kind: "unbilled" })]} emptyText="" />);
     expect(screen.getByText(/25 000,00/)).toBeInTheDocument();
@@ -68,5 +78,32 @@ describe("WatchlistList", () => {
       />,
     );
     expect(screen.getAllByRole("link")).toHaveLength(2);
+  });
+});
+
+describe("WatchlistList — klient och ärendenummer överst (#1965)", () => {
+  it("med showClient: \"Klient A · 2026-0001\" överst, före rubriken, och numret bara en gång", () => {
+    render(<WatchlistList items={[item({ klientName: "Klient A" })]} emptyText="" showClient />);
+    const top = screen.getByText("Klient A · 2026-0001");
+    expect(top.compareDocumentPosition(screen.getByText(/Ge in yttrande/)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByText(/2026-0001/)).toHaveLength(1);
+  });
+
+  it("med showClient men utan klient: bara ärendenumret överst", () => {
+    render(<WatchlistList items={[item()]} emptyText="" showClient />);
+    expect(screen.getAllByText("2026-0001")).toHaveLength(1);
+    expect(screen.queryByText(/ · /)).not.toBeInTheDocument();
+  });
+
+  it("med showClient: en post utan ärende har ingen översta rad", () => {
+    render(<WatchlistList items={[item({ matterId: null, matterNumber: null, link: null })]} emptyText="" showClient />);
+    // Ikonen först på raden: inget står ovanför rubriken.
+    expect(screen.getByRole("listitem").textContent.startsWith("⏳")).toBe(true);
+  });
+
+  it("utan showClient: raden som i dag, också när posten har klientName", () => {
+    render(<WatchlistList items={[item({ klientName: "Klient A" })]} emptyText="" />);
+    expect(screen.queryByText(/Klient A/)).not.toBeInTheDocument();
+    expect(screen.getByText("2026-0001")).toBeInTheDocument();
   });
 });

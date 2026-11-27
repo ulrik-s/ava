@@ -9,9 +9,9 @@
 
 import { Temporal } from "@js-temporal/polyfill";
 import fc from "fast-check";
-import type { Forhor } from "@/lib/shared/forordnandetaxa";
+import type { Forhor } from "@/lib/shared/billing/forordnandetaxa";
+import { VAT_RATES, type VatRate } from "@/lib/shared/billing/vat";
 import { amountRoundingSchema, type AmountRounding } from "@/lib/shared/schemas/enums";
-import { VAT_RATES, type VatRate } from "@/lib/shared/vat";
 
 /** Största belopp generatorerna ger: en miljard kronor, i öre. */
 export const MAX_ORE = 100_000_000_000;

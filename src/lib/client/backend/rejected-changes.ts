@@ -18,12 +18,12 @@
  */
 
 import { z } from "zod";
-import type { ChangeChannel } from "@/lib/server/data-store/in-memory/change-channel";
+import type { ChangeChannel } from "@/lib/client/local-store/change-channel";
 import {
   IdbEntryStore, v2Location, type EntryStoreLocation, type LegacyListPlace,
-} from "@/lib/server/data-store/in-memory/idb-entry-store";
-import { queueEntrySchema } from "@/lib/server/data-store/in-memory/mutation-queue";
-import { rowConflictRetryable, type ConflictRecord } from "@/lib/server/data-store/in-memory/reconcile-engine";
+} from "@/lib/client/local-store/idb-entry-store";
+import { queueEntrySchema } from "@/lib/client/local-store/mutation-queue";
+import { rowConflictRetryable, type ConflictRecord } from "@/lib/client/local-store/reconcile-engine";
 import { describeQueueEntry } from "./describe-queue-entry";
 
 /** En avvisad ändring så som den sparas: tolkas strikt när den läses ur IndexedDB. */

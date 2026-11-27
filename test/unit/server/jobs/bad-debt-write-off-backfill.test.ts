@@ -8,10 +8,10 @@ import { backfillBadDebtWriteOffs } from "@/lib/server/jobs/bad-debt-write-off-b
 import type { ChangeLogEntry } from "@/lib/server/repositories/change-log-recorder";
 import type { InvoiceListFilter } from "@/lib/server/repositories/invoice-repository";
 import type { Repositories } from "@/lib/server/repositories/repositories";
+import { MIGRATION_REASON, MIGRATION_SYSTEM_USER_ID } from "@/lib/shared/billing/write-off-migration";
 import type { WriteOff } from "@/lib/shared/schemas/billing";
 import { asId, type InvoiceId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
-import { MIGRATION_REASON, MIGRATION_SYSTEM_USER_ID } from "@/lib/shared/write-off-migration";
 import { DRIZZLE_NAME, openDrizzleRepos, type OpenRepos } from "../repositories/contract-backends";
 
 const at = new Date("2026-03-01T08:00:00.000Z");

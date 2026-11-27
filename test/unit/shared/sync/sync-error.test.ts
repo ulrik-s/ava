@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { z } from "zod";
-import { classifySyncError, httpStatusOf, syncErrorMessage, trpcCodeOf, type SyncErrorClass } from "@/lib/shared/sync/sync-error";
+import { classifySyncError, httpStatusOf, MAX_SYNC_ERROR_LENGTH, syncErrorMessage, trpcCodeOf, type SyncErrorClass } from "@/lib/shared/sync/sync-error";
 
 /** Ett tRPC-klientfel med JSON-svar från servern. */
 const trpc = (code: string, httpStatus: number): Error =>
@@ -73,5 +73,6 @@ describe("syncErrorMessage", () => {
     const text = syncErrorMessage(new Error("x".repeat(1000)));
     expect(text).toHaveLength(300);
     expect(text.endsWith("…")).toBe(true);
+    expect(text).toHaveLength(MAX_SYNC_ERROR_LENGTH);
   });
 });

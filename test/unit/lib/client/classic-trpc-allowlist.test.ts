@@ -1,5 +1,5 @@
 /**
- * Spärren för den klassiska tRPC-bindningen (#1926, ADR 0040).
+ * Spärren för den klassiska tRPC-bindningen (#1926, ADR 0041).
  *
  * `trpc` ur `@/lib/client/trpc` (`createTRPCReact`) är utfasad. Filerna flyttas
  * till `useTRPC()` en i taget, och bara filerna i `KNOWN` får fortfarande
@@ -73,6 +73,7 @@ const KNOWN: readonly string[] = [
   "src/app/templates/new/page.tsx",
   "src/app/templates/page.tsx",
   "src/app/time/_time-entry-editing.tsx",
+  "src/app/time/_use-time-list.ts",
   "src/app/time/page.tsx",
   "src/app/users/[id]/_edit-client.tsx",
   "src/app/users/_user-form.tsx",
@@ -110,8 +111,10 @@ const KNOWN: readonly string[] = [
   "src/components/shell/trpc-providers.tsx",
   "src/components/sync/sync-devices-section.tsx",
   "src/components/time/move-time-entries.tsx",
+  "src/components/time/time-chart-panel.tsx",
   "src/components/time/time-entry-form.tsx",
   "src/components/time/use-save-time-entry.ts",
+  "src/components/time/use-time-chart-view.ts",
   "src/components/ui/data-table.tsx",
   "src/components/watchlist/conflict-check-actions.tsx",
   "src/components/watchlist/conflict-hit-list.tsx",
@@ -124,6 +127,7 @@ const KNOWN: readonly string[] = [
   "src/lib/client/documents/use-matter-documents.ts",
   "src/lib/client/firma/use-eager-cache-matter-documents.ts",
   "src/lib/client/search/use-document-search.ts",
+  "src/lib/client/use-time-viewer.ts",
 ];
 
 /** Sant när källan importerar den namngivna klassiska `trpc` (inte `useTRPC`). */
@@ -158,7 +162,7 @@ function scanSources(): Map<string, string> {
 
 const HINT =
   "Ny kod skriver `const trpc = useTRPC()` med `useQuery(trpc.x.y.queryOptions(…))` " +
-  "(ADR 0040, förebild: src/lib/client/trpc.ts och test/helpers/trpc-fake.tsx).";
+  "(ADR 0041, förebild: src/lib/client/trpc.ts och test/helpers/trpc-fake.tsx).";
 
 describe("klassiska trpc – bara de kända filerna (#1926)", () => {
   it("ingen ny fil importerar den klassiska trpc, och listan är inte inaktuell", () => {

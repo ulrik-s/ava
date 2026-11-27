@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("medarbetar-dropdown fylls och filtrerar ärendelistan", async ({ page }) => {
-  await page.goto(`${BASE}/matters/`);
+  await page.goto(`${BASE}/matters/?flik=alla`);
   await page.locator("table tbody tr").first().waitFor({ timeout: 25_000 });
   await page.waitForTimeout(1500);
 

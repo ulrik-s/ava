@@ -14,7 +14,7 @@ export interface TrpcProvidersProps {
 }
 
 /**
- * Båda React-bindningarna för tRPC under flytten (ADR 0040): den klassiska
+ * Båda React-bindningarna för tRPC under flytten (ADR 0041): den klassiska
  * `trpc.Provider` och den nya `TRPCProvider`, med samma klient och samma
  * QueryClient, så att en invalidering på ena sidan når den andra.
  */

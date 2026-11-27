@@ -14,7 +14,7 @@ import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
 import { buildSemanticVoucher, type SemanticVoucherRow, type VoucherRole } from "@/lib/shared/accounting/semantic-voucher";
-import { invoiceVatOre } from "@/lib/shared/invoice-vat";
+import { invoiceVatOre } from "@/lib/shared/billing/invoice-vat";
 import type { Invoice } from "@/lib/shared/schemas/billing";
 import { asId } from "@/lib/shared/schemas/ids";
 

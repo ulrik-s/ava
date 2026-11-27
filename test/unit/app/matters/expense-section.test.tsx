@@ -7,7 +7,7 @@
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest-compat";
 import { ExpenseSection } from "@/app/matters/[id]/_expense-section";
-import { expenseBreakdownLines, grossOreOf, netOreOf, vatOreOf } from "@/lib/shared/billing-work-value";
+import { expenseBreakdownLines, grossOreOf, netOreOf, vatOreOf } from "@/lib/shared/billing/billing-work-value";
 import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/demo/entity-link", () => ({

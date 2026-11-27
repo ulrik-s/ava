@@ -21,9 +21,9 @@ import {
 import { PENDING_PURGE_KEY, purgeLocalData, resumePendingPurge } from "@/lib/client/backend/local-data/purge-local-data";
 import { LocalDocumentTextStore } from "@/lib/client/backend/local-document-text";
 import { IndexedDbRejectedChangesPersistence } from "@/lib/client/backend/rejected-changes";
-import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
-import { IndexedDbPersistence } from "@/lib/server/data-store/in-memory/indexeddb-persistence";
-import { IndexedDbMutationQueuePersistence, type QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { IdbKv } from "@/lib/client/local-store/idb-kv";
+import { IndexedDbPersistence } from "@/lib/client/local-store/indexeddb-persistence";
+import { IndexedDbMutationQueuePersistence, type QueuedMutation } from "@/lib/client/local-store/mutation-queue";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const ORG = "org-1";

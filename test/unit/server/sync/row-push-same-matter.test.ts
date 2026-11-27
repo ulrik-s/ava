@@ -7,7 +7,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
+import type { QueuedMutation } from "@/lib/client/local-store/mutation-queue";
 import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { ROW_POLICY_REASONS } from "@/lib/server/sync/row-push-policy";

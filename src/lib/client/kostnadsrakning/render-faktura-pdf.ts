@@ -243,6 +243,8 @@ interface SpecCol { header: string; rightX: number }
 /** Tidsspecifikationens talkolumner: Tim | Belopp. Timpriset står en gång per
  *  kategori i sammanställningen, inte på varje post (#1439). */
 const TIME_COLS: readonly SpecCol[] = [{ header: "Tim", rightX: 465 }, { header: "Belopp", rightX: RIGHT }];
+/** Tidsspecifikationen utan belopp (acontofakturan, #1939): bara Tim. */
+const TIME_HOURS_COLS: readonly SpecCol[] = [{ header: "Tim", rightX: RIGHT }];
 const EXPENSE_COLS: readonly SpecCol[] = [{ header: "Netto", rightX: 470 }, { header: "Brutto", rightX: RIGHT }];
 
 /** Rita talkolumnerna högerjusterat, en cell per kolumn. */
@@ -292,13 +294,13 @@ function specTotal(c: Ctx, cols: readonly SpecCol[], label: string, cells: reado
 }
 
 /** En kategoris deltabell (#1200): rubrik, poster och fet delsumma. */
-function drawTimeGroup(c: Ctx, g: FakturaView["timeGroups"][number]): void {
+function drawTimeGroup(c: Ctx, g: FakturaView["timeGroups"][number], cols: readonly SpecCol[]): void {
   ensure(c, 70);
   draw(c, g.label, { size: 10, b: true });
   c.y -= 14;
-  specHead(c, TIME_COLS);
-  for (const l of g.lines) specRow(c, l.date, l.description, [l.hours, l.amount], TIME_COLS);
-  specTotal(c, TIME_COLS, g.subtotalLabel, [g.hours, g.amount]);
+  specHead(c, cols);
+  for (const l of g.lines) specRow(c, l.date, l.description, [l.hours, l.amount], cols);
+  specTotal(c, cols, g.subtotalLabel, [g.hours, g.amount]);
 }
 
 function drawTimeSpec(c: Ctx, v: FakturaView): void {
@@ -306,7 +308,8 @@ function drawTimeSpec(c: Ctx, v: FakturaView): void {
   ensure(c, 90);
   draw(c, "Tidsspecifikation", { size: 11, b: true });
   c.y -= 18;
-  for (const g of v.timeGroups) drawTimeGroup(c, g);
+  const cols = v.showTimeAmounts ? TIME_COLS : TIME_HOURS_COLS;
+  for (const g of v.timeGroups) drawTimeGroup(c, g, cols);
 }
 
 function drawExpenseSpec(c: Ctx, v: FakturaView): void {

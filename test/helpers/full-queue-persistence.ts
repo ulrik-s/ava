@@ -2,7 +2,7 @@
  * Kö-lagring som kan bli full (#1817): med `full = true` kastar `add` som
  * IndexedDB gör när kvoten är slut. Övriga operationer fungerar som vanligt.
  */
-import { InMemoryMutationQueuePersistence, type QueueEntry } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { InMemoryMutationQueuePersistence, type QueueEntry } from "@/lib/client/local-store/mutation-queue";
 
 export class FullableQueuePersistence extends InMemoryMutationQueuePersistence {
   full = false;

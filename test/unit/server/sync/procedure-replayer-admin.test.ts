@@ -7,10 +7,10 @@
  * "gör mig till admin" får en avvisning; en admin får igenom samma anrop.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
+import type { QueuedProcedureCall } from "@/lib/client/local-store/mutation-queue";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
-import type { QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { serverFirstEventLog } from "@/lib/server/http/server-context";
 import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { appRouter } from "@/lib/server/routers/_app";

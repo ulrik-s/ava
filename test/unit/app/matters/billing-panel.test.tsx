@@ -19,7 +19,7 @@ interface BillingRunRow {
   invoiceId?: string | null; invoice?: { id: string; invoiceNumber?: string | null; status?: string } | null;
   reference?: string | null;
   kostnadsrakningStatus?: string | null; awardedOre?: number | null; beslutSlutgiltigt?: boolean | null;
-  clientShareBips?: number | null;
+  clientShareBips?: number | null; forordnandeAvslut?: string | null;
 }
 
 let runsData: { runs: BillingRunRow[] } = { runs: [] };
@@ -125,8 +125,8 @@ vi.mock("@/app/matters/[id]/_verdict-dialog", () => ({
 }));
 // Modalen själv testas separat — här bara skillnaden stänga vs faktiskt generera (#1121).
 vi.mock("@/app/matters/[id]/_kostnadsrakning-modal", () => ({
-  KostnadsrakningModal: (p: { onClose: () => void; createRun: () => Promise<string> }) => (
-    <div data-testid="kr-modal">
+  KostnadsrakningModal: (p: { onClose: () => void; createRun: () => Promise<string>; isOffentligtUppdrag?: boolean }) => (
+    <div data-testid="kr-modal" data-offentligt={String(p.isOffentligtUppdrag)}>
       <button type="button" onClick={p.onClose}>Avbryt modal</button>
       <button type="button" onClick={() => void p.createRun().then((id) => { createdRunId = id; })}>Generera</button>
     </div>
@@ -247,6 +247,12 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
     expect(screen.getByText(/Registrera domstolens beslut/)).toBeInTheDocument();
   });
 
+  it("förordnandemålets avslut står på KR-kortet (#2180)", () => {
+    runsData = { runs: runsData.runs.map((r) => ({ ...r, reference: "KR-2026-0004", forordnandeAvslut: "NEDLAGD" })) };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    expect(screen.getByText("KR-2026-0004 · Förundersökningen lades ned", { exact: false })).toBeInTheDocument();
+  });
+
   it("inskickad KR kan ångras — efter bekräftelse (#1121)", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
@@ -360,6 +366,8 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     expect(screen.getByTestId("kr-modal")).toBeInTheDocument();
+    // Förordnandetaxan kan väljas i ett offentligt uppdrag (#1858).
+    expect(screen.getByTestId("kr-modal")).toHaveAttribute("data-offentligt", "true");
   });
 
   it("att STÄNGA KR-modalen skapar ingen kostnadsräkning — bara att generera gör det (#1121)", async () => {

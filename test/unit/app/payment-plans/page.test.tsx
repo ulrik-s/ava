@@ -4,7 +4,7 @@
  */
 
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest-compat";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest-compat";
 
 import PaymentPlansPage, { formatScanResult } from "@/app/payment-plans/page";
 
@@ -61,7 +61,7 @@ describe("PaymentPlansPage — utestående", () => {
   it("visar utestående = total − inbetalt − avskrivet", () => {
     setRows([
       {
-        id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15,
+        id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15, startDate: new Date(),
         invoice: {
           amount: 100_000,
           payments: [{ amount: 30_000 }],
@@ -75,24 +75,22 @@ describe("PaymentPlansPage — utestående", () => {
     expect(screen.getByText("Aktiv")).toBeInTheDocument();
     // 100 000 − 30 000 betalt − 20 000 avskrivet = 50 000 öre = 500 kr utestående
     expect(screen.getByText("Utestående")).toBeInTheDocument();
-    // formatCurrency(50000) → "500,00 kr" (sv-SE). Matcha siffran robust.
+    // formatKr(50000) → "500,00 kr" (sv-SE). Matcha siffran robust.
     expect(screen.getByText(/500,00/)).toBeInTheDocument();
   });
 });
 
 describe("formatScanResult (#71)", () => {
   it("noll planerade → 'inga nya'", () => {
-    expect(formatScanResult({ scanned: 5, planned: 0, due: 0, overdue: 0 })).toMatch(/Inga nya/);
+    expect(formatScanResult({ scanned: 5, planned: 0, due: 0, overdue: 0 })).toBe("Inga nya påminnelser (skannade 5 aktiva planer).");
   });
-  it("planerade → antal + förfaller/försenade", () => {
-    const msg = formatScanResult({ scanned: 4, planned: 3, due: 2, overdue: 1 });
-    expect(msg).toContain("3 påminnelser");
-    expect(msg).toContain("2 förfaller");
-    expect(msg).toContain("1 försenade");
+  it("planerade → antal registrerade + förfaller/försenade (#2135)", () => {
+    expect(formatScanResult({ scanned: 4, planned: 3, due: 2, overdue: 1 }))
+      .toBe("3 påminnelser registrerade — 2 förfaller, 1 försenade (av 4 planer).");
   });
 });
 
-describe("PaymentPlansPage — Skicka påminnelser nu (#71)", () => {
+describe("PaymentPlansPage — Registrera påminnelser (#71, #2135)", () => {
   it("knappen kör scanDueReminders med {}", () => {
     render(<PaymentPlansPage />);
     fireEvent.click(screen.getByTestId("send-reminders"));
@@ -103,22 +101,34 @@ describe("PaymentPlansPage — Skicka påminnelser nu (#71)", () => {
     render(<PaymentPlansPage />);
     fireEvent.click(screen.getByTestId("send-reminders"));
     act(() => scanOnSuccess?.({ scanned: 3, planned: 2, due: 1, overdue: 1 }));
-    expect(screen.getByTestId("scan-result").textContent).toContain("2 påminnelser");
+    expect(screen.getByTestId("scan-result").textContent).toContain("2 påminnelser registrerade");
     expect(utilsMock.paymentPlan.list.invalidate).toHaveBeenCalled();
   });
 
-  it("disablad + 'Skickar…' medan mutationen körs", () => {
+  it("knappen heter Registrera påminnelser, och sidan säger inte att något skickas", () => {
+    render(<PaymentPlansPage />);
+    expect(screen.getByTestId("send-reminders").textContent).toBe("Registrera påminnelser");
+    expect(document.body.textContent).not.toMatch(/skicka/i);
+  });
+
+  it("disablad + 'Registrerar…' medan mutationen körs", () => {
     scanState.isPending = true;
     render(<PaymentPlansPage />);
     const btn = screen.getByTestId<HTMLButtonElement>("send-reminders");
     expect(btn.disabled).toBe(true);
-    expect(btn.textContent).toContain("Skickar");
+    expect(btn.textContent).toBe("Registrerar…");
+  });
+
+  it("fel → Kunde inte registrera: <fel>", () => {
+    scanState.error = { message: "nätverket" };
+    render(<PaymentPlansPage />);
+    expect(screen.getByText("Kunde inte registrera: nätverket")).toBeInTheDocument();
   });
 });
 
 describe("PaymentPlansPage — filter, sök, rad-klick", () => {
   const planRow = {
-    id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15,
+    id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15, startDate: new Date(),
     invoice: {
       amount: 100_000, payments: [], writeOffs: [],
       matter: { matterNumber: "2026-0001", title: "Tvist", contacts: [{ contact: { id: "c1", name: "Anna" } }] },
@@ -161,5 +171,31 @@ describe("PaymentPlansPage — filter, sök, rad-klick", () => {
     listQuery.isLoading = true;
     render(<PaymentPlansPage />);
     expect(screen.getByText("Laddar…")).toBeInTheDocument();
+  });
+});
+
+describe("PaymentPlansPage — Förfallen N dagar (#2136)", () => {
+  const behind = (paid: number[]) => ({
+    id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 25, startDate: "2026-11-01T09:00:00.000Z",
+    invoice: {
+      amount: 100_000, payments: paid.map((amount) => ({ amount })), writeOffs: [],
+      matter: { matterNumber: "2026-0001", title: "Tvist", contacts: [] },
+    },
+  });
+
+  beforeEach(() => vi.setSystemTime(new Date("2026-11-28T10:00:00Z")));
+  afterEach(() => vi.setSystemTime());
+
+  it("en plan som ligger efter visar Förfallen 3 dagar efter statusmärket", () => {
+    setRows([behind([])]);
+    render(<PaymentPlansPage />);
+    expect(screen.getByText("Förfallen 3 dagar")).toBeInTheDocument();
+    expect(screen.getByText("Aktiv")).toBeInTheDocument();
+  });
+
+  it("en plan som är ikapp visar ingen markering", () => {
+    setRows([behind([10_000])]);
+    render(<PaymentPlansPage />);
+    expect(screen.queryByText(/^Förfallen/)).toBeNull();
   });
 });

@@ -76,22 +76,18 @@ jobs:
       #   @esbuild-kit/core-utils (`~0.18.20`) via drizzle-kit, vars senaste
       #   version fortfarande drar in det. Advisoryn gäller esbuilds
       #   UTVECKLINGSSERVER, som vi aldrig startar; paketet är dessutom devDep.
-      # picomatch (high, ReDoS via extglobs) GHSA-fc5q-39xc-vjpf: ingen
-      #   åtgärdad version finns (≤ 4.0.7, 4.0.7 är senaste). Alla vägar går via
-      #   devDependencies (dependency-cruiser, knip, lint-staged, eslint-kedjan),
-      #   inget i produktionskoden, och mönstren är fasta ur config — en
-      #   angripare styr dem inte. Tas bort när fix finns: #1664.
       #
       # (De två image-size-undantagen är BORTA sedan #970 — html-to-docx är
       # ersatt av en egen DOCX-skrivare, så paketet finns inte längre i trädet.)
       # (braces GHSA-vfj7-8cjw-p6xm, sprintf-js GHSA-hp3w-g68c-fv3c och
       # http-cache-semantics GHSA-ch52-4w7c-c8xp DROGS TILLBAKA av GitHub i
-      # november 2026 → undantagen borttagna 2026-11-08, #1442/#1444/#1467.)
+      # november 2026 → undantagen borttagna 2026-11-08, #1442/#1444/#1467.
+      # picomatch GHSA-fc5q-39xc-vjpf drogs också tillbaka → undantaget
+      # borttaget i båda stegen 2026-11-26, #1874.)
       - name: bun audit (roten)
         run: |
           bun audit --audit-level=low \
-            --ignore GHSA-67mh-4wv8-2f99 \
-            --ignore GHSA-fc5q-39xc-vjpf
+            --ignore GHSA-67mh-4wv8-2f99
 
       # helper-ui har egen lockfil och låg helt UTANFÖR grinden fram till #966 —
       # den innehöll då 27 sårbarheter, varav en critical (node-tar).
@@ -102,11 +98,8 @@ jobs:
       # (node-forge, GHSA-86w9-cpqp-85rv, åtgärdades i stället för att undantas:
       # cert-bygget i src/engine/tls/certs.ts använder nu @peculiar/asn1-x509 +
       # node:crypto, så paketet finns inte längre i trädet.)
-      # picomatch (high) GHSA-fc5q-39xc-vjpf: samma som i roten — ingen åtgärdad
-      #   version; här bara via devDependencies (electron-builder), inget i den
-      #   paketerade appen. Tas bort när fix finns: #1664.
       - name: bun audit (helper-ui)
-        run: bun audit --audit-level=low --ignore GHSA-fc5q-39xc-vjpf
+        run: bun audit --audit-level=low
         working-directory: helper-ui
 
       - name: Full rapport (informativ, fäller inte)

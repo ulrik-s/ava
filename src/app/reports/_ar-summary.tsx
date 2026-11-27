@@ -11,8 +11,8 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { formatKr } from "@/lib/shared/kr-format";
 import { asId, type MatterId, type UserId } from "@/lib/shared/schemas/ids";
 
 function Row({ label, value, kind = "normal" }: { label: string; value: number; kind?: "normal" | "subtotal" | "result" | "sub" }) {
@@ -24,7 +24,7 @@ function Row({ label, value, kind = "normal" }: { label: string; value: number; 
   return (
     <div className={`flex items-center justify-between py-1.5 ${cls}`}>
       <span className={kind === "sub" ? "pl-4" : ""}>{label}</span>
-      <span className="tabular-nums">{formatCurrency(value)}</span>
+      <span className="tabular-nums">{formatKr(value)}</span>
     </div>
   );
 }
@@ -75,7 +75,7 @@ function ArSummaryBody({ data }: { data: ArData }) {
             data.aging.map((b) => (
               <div key={b.label} className="flex items-center justify-between py-1.5 text-gray-700">
                 <span>{b.label}</span>
-                <span className="tabular-nums">{formatCurrency(b.amount)}</span>
+                <span className="tabular-nums">{formatKr(b.amount)}</span>
               </div>
             ))
           )}
@@ -112,13 +112,13 @@ const AR_COLUMNS: Column<ArRow>[] = [
     render: (r) => <span className="font-mono text-xs text-gray-500">{arDate(r)}</span> },
   { key: "matter", label: "Ärende", sortable: true, sortValue: (r) => r.matterNumber, wrap: true, render: (r) => <ArMatterCell r={r} /> },
   { key: "fakturerat", label: "Fakturerat", sortable: true, sortValue: (r) => r.fakturerat, align: "right",
-    render: (r) => <span className="font-mono">{formatCurrency(r.fakturerat)}</span> },
+    render: (r) => <span className="font-mono">{formatKr(r.fakturerat)}</span> },
   { key: "inbetalt", label: "Inbetalt", sortable: true, sortValue: (r) => r.inbetalt, align: "right",
-    render: (r) => <span className="font-mono text-gray-600">{formatCurrency(r.inbetalt)}</span> },
+    render: (r) => <span className="font-mono text-gray-600">{formatKr(r.inbetalt)}</span> },
   { key: "avskrivet", label: "Avskrivet", sortable: true, sortValue: (r) => r.avskrivet, align: "right",
-    render: (r) => <span className="font-mono text-red-700">{r.avskrivet > 0 ? `−${formatCurrency(r.avskrivet)}` : "—"}</span> },
+    render: (r) => <span className="font-mono text-red-700">{r.avskrivet > 0 ? `−${formatKr(r.avskrivet)}` : "—"}</span> },
   { key: "utestaende", label: "Utestående", sortable: true, sortValue: (r) => r.utestaende, align: "right",
-    render: (r) => <span className="font-mono font-medium">{formatCurrency(r.utestaende)}</span> },
+    render: (r) => <span className="font-mono font-medium">{formatKr(r.utestaende)}</span> },
 ];
 
 function ArInvoiceTable({ rows }: { rows: readonly ArRow[] }) {

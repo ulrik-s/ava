@@ -7,9 +7,9 @@
 import { describe, it, expect } from "vitest-compat";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
-import { buildKostnadsrakningContext, type BuildInput, type TimeEntryInput } from "@/lib/shared/kostnadsrakning";
-import { FOOTER_SEPARATOR } from "@/lib/shared/kostnadsrakning-document";
-import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/kostnadsrakning-template";
+import { buildKostnadsrakningContext, type BuildInput, type TimeEntryInput } from "@/lib/shared/billing/kostnadsrakning";
+import { FOOTER_SEPARATOR } from "@/lib/shared/billing/kostnadsrakning-document";
+import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/billing/kostnadsrakning-template";
 import { pdfPageContents, pdfPageLayouts, pdfPageTexts, type PdfLineItem, type PdfPageLayout, type PdfTextItem } from "../../../helpers/pdf-text";
 import { BROKEN_PNG, TINY_JPEG, TINY_PNG } from "../../../helpers/tiny-images";
 

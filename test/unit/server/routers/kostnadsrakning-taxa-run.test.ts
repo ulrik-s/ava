@@ -16,9 +16,9 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
-import { advokatberedskapFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { advokatberedskapFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
+import { roundToKronor } from "@/lib/shared/billing/whole-kronor";
 import { asId } from "@/lib/shared/schemas/ids";
-import { roundToKronor } from "@/lib/shared/whole-kronor";
 
 const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),

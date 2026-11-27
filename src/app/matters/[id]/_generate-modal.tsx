@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useId, useState } from "react";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 import { labelForMatterRole } from "@/lib/client/labels";
-import { buildTemplateContext } from "@/lib/client/templates/build-template-context";
+import {
+  buildTemplateContext, type TemplateContext, type TemplateMatterData, type TemplateOfficeData,
+  type TemplateOrganizationData, type TemplateUserData,
+} from "@/lib/client/templates/build-template-context";
 import { trpc } from "@/lib/client/trpc";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 
 type Contact = { id: string; name: string; email?: string | null; phone?: string | null };
@@ -19,9 +21,6 @@ interface Props {
   onClose: () => void;
 }
 
-type Recipient = { name: string; email?: string | null; phone?: string | null };
-type GenMatter = { matterNumber: string; title: string; matterType?: string | null; contacts?: Array<{ role: string; contact: { name: string } }> };
-type GenOrg = { name: string; orgNumber?: string | null; address?: string | null; email?: string | null } | undefined;
 type RegisterDocInput = { id: string; matterId: MatterId; fileName: string; mimeType: string; sizeBytes: number; storagePath: string };
 
 interface GenerateArgs {
@@ -29,31 +28,21 @@ interface GenerateArgs {
   format: "pdf" | "docx";
   recipientIds: ContactId[];
   templates: Array<{ id: string; content?: string | null; name: string }> | undefined;
-  matter: GenMatter | undefined;
-  org: GenOrg;
-  contacts: MatterContact[];
+  matter: TemplateMatterData | undefined;
+  org: TemplateOrganizationData | undefined;
+  offices: readonly TemplateOfficeData[] | undefined;
+  user: TemplateUserData | undefined;
   matterId: MatterId;
   registerDoc: (d: RegisterDocInput) => Promise<unknown>;
 }
 
-/** Bygg mall-kontexten för en mottagare (eller ett generellt dokument). */
-function buildDocCtx(m: GenMatter, recipient: Recipient | null, org: GenOrg) {
-  const clientLink = m.contacts?.find((c) => c.role === "KLIENT");
-  return buildTemplateContext({
-    matter: { matterNumber: m.matterNumber, title: m.title, ...omitUndefined({ matterType: m.matterType }) },
-    recipient: recipient ? { name: recipient.name, ...omitUndefined({ email: recipient.email, phone: recipient.phone }) } : null,
-    client: clientLink ? { name: clientLink.contact.name } : null,
-    organization: org ? { name: org.name, ...omitUndefined({ orgNumber: org.orgNumber, address: org.address, email: org.email }) } : null,
-  });
-}
-
 /** Rendera + öppna print-flik + skriv till FSA + registrera ETT dokument. */
 async function generateOneDoc(opts: {
-  content: string; name: string; ctx: ReturnType<typeof buildTemplateContext>;
-  format: "pdf" | "docx"; recipient: Recipient | null; matterId: MatterId;
+  content: string; name: string; ctx: TemplateContext;
+  format: "pdf" | "docx"; matterId: MatterId;
   registerDoc: (d: RegisterDocInput) => Promise<unknown>;
 }): Promise<void> {
-  const { content, name, ctx, format, recipient, matterId, registerDoc } = opts;
+  const { content, name, ctx, format, matterId, registerDoc } = opts;
   const html = renderHandlebars(content, ctx);
   const printable = format === "pdf"
     ? html.replace("</body>", `<script>setTimeout(function(){window.print();},200);<\/script></body>`)
@@ -63,8 +52,8 @@ async function generateOneDoc(opts: {
   window.open(url, "_blank", "noopener,noreferrer");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
-  const suffix = recipient ? ` ${recipient.name}` : "";
-  const fileName = `${name}${suffix} ${ctx.today as string}.html`;
+  const suffix = ctx.recipient ? ` ${ctx.recipient.name}` : "";
+  const fileName = `${name}${suffix} ${ctx.today}.html`;
   const docId = `gen-${matterId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const storagePath = `documents/content/${docId}.html`;
   const bytes = new TextEncoder().encode(html);
@@ -89,12 +78,10 @@ async function runGenerate(a: GenerateArgs): Promise<void> {
   const tpl = (a.templates ?? []).find((t) => t.id === a.templateId);
   if (!tpl?.content) throw new Error("Mallen saknar innehåll.");
   if (!a.matter) throw new Error("Ärendedata kunde inte laddas.");
-  const recipients: Array<Recipient | null> = a.recipientIds.length > 0
-    ? a.contacts.filter((mc) => a.recipientIds.includes(asId<"ContactId">(mc.contact.id))).map((mc) => mc.contact)
-    : [null];
-  for (const recipient of recipients) {
-    const ctx = buildDocCtx(a.matter, recipient, a.org);
-    await generateOneDoc({ content: tpl.content, name: tpl.name, ctx, format: a.format, recipient, matterId: a.matterId, registerDoc: a.registerDoc });
+  const recipientIds: Array<ContactId | null> = a.recipientIds.length > 0 ? a.recipientIds : [null];
+  for (const recipientId of recipientIds) {
+    const ctx = buildTemplateContext({ matter: a.matter, organization: a.org, offices: a.offices, user: a.user, recipientId });
+    await generateOneDoc({ content: tpl.content, name: tpl.name, ctx, format: a.format, matterId: a.matterId, registerDoc: a.registerDoc });
   }
 }
 
@@ -103,6 +90,8 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
   const templates = trpc.documentTemplate.list.useQuery();
   const matter = trpc.matter.getById.useQuery({ id: matterId });
   const org = trpc.organization.getSettings.useQuery();
+  const offices = trpc.organization.listOffices.useQuery();
+  const me = trpc.user.current.useQuery();
   const register = trpc.document.register.useMutation();
   const [generateTemplateId, setGenerateTemplateId] = useState("");
   const [generateFormat, setGenerateFormat] = useState<"pdf" | "docx">("pdf");
@@ -124,8 +113,8 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
     try {
       await runGenerate({
         templateId: generateTemplateId, format: generateFormat, recipientIds: generateRecipientIds,
-        templates: templates.data, matter: matter.data as GenMatter | undefined, org: org.data,
-        contacts, matterId,
+        templates: templates.data, matter: matter.data, org: org.data ?? undefined,
+        offices: offices.data, user: me.data, matterId,
         registerDoc: (d) => register.mutateAsync(d),
       });
       void utils.document.tree.invalidate({ matterId });

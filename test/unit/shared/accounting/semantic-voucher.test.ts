@@ -247,19 +247,19 @@ describe("buildSemanticVoucher – moms på en sats utan momskonto (#1902)", () 
     "Verifikatet skulle inte balansera, så fakturan kan inte bokföras förrän momsuppdelningen är rättad.";
   const build = (lines: VatBreakdownLine[], amount = 0) => () => buildSemanticVoucher({ ...base, amount, vatBreakdown: lines });
 
-  it("intagets motexempel: arvode med 0,01 kr moms på 0 % kastar", () => {
-    expect(build([{ kind: "arvode", vatRate: 0, netOre: 0, vatOre: 1 }])).toThrow(`${PREFIX}0,01 kr moms på satsen 0 %${SUFFIX}`);
+  it("intagets motexempel: arvode med 0,01\u00a0kr moms på 0 % kastar", () => {
+    expect(build([{ kind: "arvode", vatRate: 0, netOre: 0, vatOre: 1 }])).toThrow(`${PREFIX}0,01\u00a0kr moms på satsen 0 %${SUFFIX}`);
   });
 
   it("intagets motexempel: utlägg med 1 kr moms på 0 % kastar", () => {
     expect(build([{ kind: "utlagg", vatRate: 0, netOre: 10_000, vatOre: 100 }], 10_100))
-      .toThrow(`${PREFIX}1,00 kr moms på satsen 0 %${SUFFIX}`);
+      .toThrow(`${PREFIX}1,00\u00a0kr moms på satsen 0 %${SUFFIX}`);
   });
 
   for (const [vatRate, sats] of [[300, "3"], [1000, "10"], [3000, "30"], [1250, "12,5"]] as const) {
     it(`moms på ${sats} % kastar (förr närmaste konto nedåt)`, () => {
       expect(build([{ kind: "arvode", vatRate, netOre: 10_000, vatOre: 500 }], 10_500))
-        .toThrow(`${PREFIX}5,00 kr moms på satsen ${sats} %${SUFFIX}`);
+        .toThrow(`${PREFIX}5,00\u00a0kr moms på satsen ${sats} %${SUFFIX}`);
     });
   }
 
@@ -269,7 +269,7 @@ describe("buildSemanticVoucher – moms på en sats utan momskonto (#1902)", () 
 
   it("utan ärende- och fakturanummer börjar felet med den neutrala titeln", () => {
     expect(() => buildSemanticVoucher({ amount: 0, invoiceDate: "2026-05-25", vatBreakdown: [{ kind: "arvode", vatRate: 0, netOre: 0, vatOre: 1 }] }))
-      .toThrow("Kundfaktura (AVA): en rad i momsuppdelningen har 0,01 kr moms");
+      .toThrow("Kundfaktura (AVA): en rad i momsuppdelningen har 0,01\u00a0kr moms");
   });
 
   it("en udda sats utan moms balanserar, utan momsrad", () => {

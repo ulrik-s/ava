@@ -39,7 +39,6 @@ export const JOB_QUEUES = {
   /** Indexera ett dokuments sidtext utan omklassificering (#1215, backfill). */
   indexDocument: "index-document",
   fortnoxSync: "fortnox-sync",
-  rulesTick: "rules-tick",
   /** Håll bokföringsanslutningen vid liv, veckovis (#1815). */
   ledgerKeepAlive: "ledger-keepalive",
 } as const;

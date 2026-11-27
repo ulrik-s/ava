@@ -8,7 +8,7 @@ import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
-import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
+import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
 import { paymentPlanLayout } from "./_payment-plan-layout";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -216,13 +216,13 @@ function OutstandingRow({ invoice, payments }: { invoice: PlanInvoice; payments:
   );
 }
 
-/** Skickade påminnelser för planen. */
+/** Registrerade påminnelser för planen. AVA skickar ingenting till klienten. */
 function RemindersSection({ reminders }: { reminders: PlanDetail["reminders"] }) {
   return (
     <section>
       <h2 className="text-sm font-semibold text-gray-700 mb-2">Påminnelser</h2>
       {reminders.length === 0 ? (
-        <p className="text-sm text-gray-500 italic">Inga påminnelser skickade än.</p>
+        <p className="text-sm text-gray-500 italic">Inga påminnelser registrerade än.</p>
       ) : (
         <ul className="divide-y divide-gray-100 bg-white border border-gray-200 rounded-lg">
           {reminders.map((r) => (
@@ -232,7 +232,7 @@ function RemindersSection({ reminders }: { reminders: PlanDetail["reminders"] })
                 <span className="ml-2 text-[10px] uppercase rounded bg-gray-100 text-gray-600 px-1.5 py-0.5">{r.type}</span>
               </span>
               <span className="text-xs text-gray-500">
-                Skickad {new Date(r.sentAt).toLocaleString("sv-SE")}
+                Registrerad {new Date(r.sentAt).toLocaleString("sv-SE")}
               </span>
             </li>
           ))}

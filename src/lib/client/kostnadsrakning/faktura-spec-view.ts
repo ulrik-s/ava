@@ -9,14 +9,14 @@
  * cirkel.
  */
 
-import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { buildInvoiceSpecification, type InvoiceSpecification, type SpecExpenseLine } from "@/lib/shared/invoice-specification";
+import { isPerDayKind, tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
+import { buildInvoiceSpecification, type InvoiceSpecification, type SpecExpenseLine } from "@/lib/shared/billing/invoice-specification";
+import { svd as svDate } from "@/lib/shared/billing/settlement-view"; // svensk kalenderdag (#1677)
+import { roundingOf } from "@/lib/shared/billing/whole-kronor";
 import { formatDecimalHours } from "@/lib/shared/kr-format";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
-import { svd as svDate } from "@/lib/shared/settlement-view"; // svensk kalenderdag (#1677)
-import { roundingOf } from "@/lib/shared/whole-kronor";
 
-/** Formaterar öre till text (`formatCurrency` i appen). */
+/** Formaterar öre till text (`formatKr` i appen). */
 export type Fc = (ore: number) => string;
 
 /** En post i nedbrytningens upparbetade arbete (#880). */
@@ -147,13 +147,21 @@ function timeGroups(spec: InvoiceSpecification, fc: Fc): FakturaTimeGroup[] {
 /** Specifikationens tabeller i vy-modellen. */
 interface SpecTables { hasSpec: boolean; timeLines: FakturaTimeRow[]; timeGroups: FakturaTimeGroup[]; expenseLines: FakturaExpenseRow[] }
 
-/** Specifikationens tabeller (tider + utlägg) ur den upplösta specifikationen. */
-export function specTables(spec: InvoiceSpecification | null, fc: Fc): SpecTables {
+/** Tidsbeloppen utelämnade (#1939): beloppet blir tom text. */
+const noAmount: Fc = () => "";
+
+/**
+ * Specifikationens tabeller (tider + utlägg) ur den upplösta specifikationen.
+ * Utan `showTimeAmounts` (acontofakturan, #1939) får tidsraderna och
+ * kategoriernas delsummor tomma belopp; timmarna och utläggen står kvar.
+ */
+export function specTables(spec: InvoiceSpecification | null, fc: Fc, showTimeAmounts = true): SpecTables {
   if (!spec) return { hasSpec: false, timeLines: [], timeGroups: [], expenseLines: [] };
+  const timeFc = showTimeAmounts ? fc : noAmount;
   return {
     hasSpec: spec.timeLines.length > 0 || spec.expenseLines.length > 0,
-    timeLines: spec.timeLines.map((l) => timeRow(l, fc)),
-    timeGroups: timeGroups(spec, fc),
+    timeLines: spec.timeLines.map((l) => timeRow(l, timeFc)),
+    timeGroups: timeGroups(spec, timeFc),
     expenseLines: spec.expenseLines.map((l) => ({ date: svDate(l.date), description: l.description, net: fc(l.netOre), gross: fc(l.grossOre) })),
   };
 }

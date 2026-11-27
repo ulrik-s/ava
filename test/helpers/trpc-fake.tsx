@@ -1,5 +1,5 @@
 /**
- * Testhjälpare för den nya tRPC-bindningen (ADR 0040, #1926).
+ * Testhjälpare för den nya tRPC-bindningen (ADR 0041, #1926).
  *
  * `fakeTrpcLink(handlers)` svarar per procedurväg ur en karta och sparar
  * anropen. `TrpcTestProvider` ger en riktig QueryClient (`retry: false`) med

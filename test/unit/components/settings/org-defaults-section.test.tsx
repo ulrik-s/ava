@@ -49,10 +49,12 @@ describe("OrgDefaultsSection", () => {
     listQuery.data = [
       { id: "p1", key: "list.contacts" },
       { id: "p2", key: "list.matters" },
+      { id: "p3", key: "list.matters-mine" },
     ];
     render(<OrgDefaultsSection />);
     expect(screen.getByText("Parter")).toBeInTheDocument();
     expect(screen.getByText("Ärenden")).toBeInTheDocument();
+    expect(screen.getByText("Ärenden – Mitt aktskåp")).toBeInTheDocument();
   });
 
   it("anropar clearOrgDefault efter confirm", () => {

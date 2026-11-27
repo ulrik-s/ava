@@ -7,9 +7,9 @@
 import { createTRPCClient, httpBatchLink, type TRPCClient } from "@trpc/client";
 import superjson from "superjson";
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
+import type { QueuedMutation } from "@/lib/client/local-store/mutation-queue";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { MAX_ROW_REFS } from "@/lib/server/data-store/in-memory/sync-transport";
 import { users } from "@/lib/server/db/schema";
 import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";

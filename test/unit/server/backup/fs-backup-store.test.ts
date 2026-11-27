@@ -41,6 +41,13 @@ describe("rena delar", () => {
     expect(newestExportName(["annat"])).toBeNull();
   });
 
+  // #1896: timexporterna (ADR 0039) är inte exporter som "Ta backup nu" lämnar ut.
+  it("nyaste exporten hoppar över timexporterna", () => {
+    expect(newestExportName(["ava-2026-10-01-0300.tar.age", "ava-2026-10-01-1400-hourly.tar.age", "ava-2026-10-01-1400-hourly.tar.age.sha256"]))
+      .toBe("ava-2026-10-01-0300.tar.age");
+    expect(newestExportName(["ava-2026-10-01-1400-hourly.tar.age"])).toBeNull();
+  });
+
   it("checksumman ur sha256sum-raden", () => {
     expect(parseSha256File(`${SHA}  ava-2026-10-01-0300.tar.age\n`)).toBe(SHA);
     expect(parseSha256File("inte en summa")).toBeNull();

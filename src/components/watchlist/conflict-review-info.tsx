@@ -7,7 +7,7 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { noteTimestamp } from "@/lib/shared/billing-notes";
+import { noteTimestamp } from "@/lib/shared/billing/billing-notes";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
 /** Det komponenten läser ur ärendet. */

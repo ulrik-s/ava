@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
 import {
+  linkToRecipientData,
   resolveRecipients,
   buildGeneratedFileName,
   RecipientNotLinkedError,
@@ -25,6 +26,22 @@ function link(overrides: Partial<MatterContactLink> & { contactId: ContactId }):
     },
   };
 }
+
+// ─── linkToRecipientData (#2118) ─────────────────────────────────
+
+describe("linkToRecipientData", () => {
+  it("ger kopplingens egen roll — en kontakt med två roller ger två olika rader", () => {
+    const klient = link({ contactId: cId("c1"), role: "KLIENT" });
+    const vittne = link({ contactId: cId("c1"), role: "VITTNE" });
+    expect(linkToRecipientData(klient)).toMatchObject({ name: "Anna Svensson", role: "KLIENT", roleLabel: "Klient" });
+    expect(linkToRecipientData(vittne).role).toBe("VITTNE");
+  });
+
+  it("saknade kontaktfält blir null", () => {
+    const sparse: MatterContactLink = { contactId: cId("c2"), role: "MOTPART", contact: { name: "Bo" } };
+    expect(linkToRecipientData(sparse)).toMatchObject({ email: null, phone: null, address: null, personalNumber: null, orgNumber: null, notes: null });
+  });
+});
 
 // ─── resolveRecipients ───────────────────────────────────────────
 

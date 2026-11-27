@@ -21,8 +21,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
-import { forhorFromTimeEntries } from "@/lib/shared/forordnandetaxa";
-import { kostnadsrakningClaimInclVat, type KrClaimInput } from "@/lib/shared/kostnadsrakning";
+import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
+import { kostnadsrakningClaimInclVat, type KrClaimInput } from "@/lib/shared/billing/kostnadsrakning";
 import { rng, type Rng } from "../../../helpers/seeded-rng";
 import {
   type BillingWorld, forordnandeCaseFor, forordnandeRngFor, nowFor, partialAwardOre, partialCaseFor, partialPruningOre, partialRngFor, type Scenario, scenarioFor,

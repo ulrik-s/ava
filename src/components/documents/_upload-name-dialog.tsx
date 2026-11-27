@@ -5,13 +5,16 @@
  * förifylld med filens namn utan ändelse — för ett mejl (`.eml`) med ämnesraden
  * om den går att läsa (#1616). **Spara** laddar upp filen med det
  * valda namnet i den mapp som är vald i fältet **Mapp** (släppmålet är förvalt,
- * #1974); **Avbryt** hoppar bara över den filen.
- * **+ Ladda upp** använder den inte.
+ * #1974); utan släppmål föreslår rutan en mapp ur namnet (#1975).
+ * **Avbryt** hoppar bara över den filen.
+ * Både släpp och **+ Ladda upp** (#1976) går genom rutan.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Modal } from "@/components/ui/modal";
+import { isMailFile, suggestedFolderPath } from "@/lib/shared/default-matter-folders";
 import { cleanFileName, fileExtension } from "@/lib/shared/document-file-name";
+import { resolveFolderPath } from "@/lib/shared/document-folder-path";
 import { EML_HEAD_BYTES, emlSubject, isEmlFile } from "@/lib/shared/eml-subject";
 import type { DocumentFolderId } from "@/lib/shared/schemas/ids";
 import type { UploadOptions } from "./_use-file-upload";
@@ -63,6 +66,17 @@ function usePrefilledName(file: File): [string, (value: string) => void] {
   return [name, change];
 }
 
+/**
+ * Mappen i **Mapp** (#1975): släppmålet när det finns, annars förslaget ur
+ * namnet i rutan — räknat om när namnet ändras, tills användaren själv valt.
+ */
+function useFolderChoice(item: NameQueueItem, folders: readonly FolderSelectFolder[], name: string): [DocumentFolderId | null, (value: DocumentFolderId | null) => void] {
+  const [chosen, setChosen] = useState<{ id: DocumentFolderId | null } | null>(() => (item.folderId === null ? null : { id: item.folderId }));
+  const choose = (id: DocumentFolderId | null): void => setChosen({ id });
+  if (chosen) return [chosen.id, choose];
+  return [resolveFolderPath(folders, suggestedFolderPath(name, isMailFile(item.file.name, item.file.type))), choose];
+}
+
 /** Hjälptexten: det namn filen sparas som. */
 function savedNameHint(input: string, original: string): string {
   const preview = cleanFileName(input, original);
@@ -94,7 +108,7 @@ interface NameFormProps {
 function NameForm({ item, folders, onSave, onNext }: NameFormProps) {
   const id = useId();
   const [name, setName] = usePrefilledName(item.file);
-  const [folderId, setFolderId] = useState(item.folderId);
+  const [folderId, setFolderId] = useFolderChoice(item, folders, name);
   const saved = cleanFileName(name, item.file.name);
   const save = () => { if (saved) onSave(item.file, { folderId, fileName: saved }); };
   return (

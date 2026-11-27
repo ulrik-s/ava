@@ -4,10 +4,10 @@
  * `classify-new-content` mot portarna. Utan nytt innehåll: ingen klassning.
  */
 import { describe, expect, it } from "vitest-compat";
+import type { QueuedMutation } from "@/lib/client/local-store/mutation-queue";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
-import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { PushResult } from "@/lib/server/data-store/in-memory/sync-transport";
 import { appRouter } from "@/lib/server/routers/_app";
 import type { SyncStore } from "@/lib/server/sync/sync-store";

@@ -1,5 +1,5 @@
 /**
- * Båda tRPC-bindningarna delar klient och cache (#1926, ADR 0040): en
+ * Båda tRPC-bindningarna delar klient och cache (#1926, ADR 0041): en
  * mutation på det nya sättet som invaliderar med `queryFilter()` gör att en
  * klassisk `trpc.x.useQuery` hämtar om.
  */

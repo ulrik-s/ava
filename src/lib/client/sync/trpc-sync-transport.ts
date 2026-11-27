@@ -10,7 +10,7 @@
  */
 
 import type { TRPCClient } from "@trpc/client";
-import type { QueuedMutation, QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
+import type { QueuedMutation, QueuedProcedureCall } from "@/lib/client/local-store/mutation-queue";
 import type {
   ProcedureReplayResult, PulledChange, PullResult, PushResult, RowRef, SyncTransport,
 } from "@/lib/server/data-store/in-memory/sync-transport";

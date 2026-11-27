@@ -2,13 +2,13 @@
 
 import { useId, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
+import { TimeChartPanel } from "@/components/time/time-chart-panel";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
-import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
+import { formatDecimalHours, formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, type UserId } from "@/lib/shared/schemas/ids";
@@ -135,6 +135,7 @@ export default function ReportsPage() {
     { id: "matters", title: "Ärenden", render: () => (r ? <MattersTable report={r} /> : loading) },
     { id: "weekly", title: "Veckor", render: () => (r ? <WeeklyTable report={r} /> : loading) },
     { id: "unbilled", title: "Ofakturerat", render: () => (r ? <UnbilledTable report={r} /> : loading) },
+    { id: "chart", title: "Stapeldiagram", render: () => (userId ? <TimeChartPanel userId={userId} anchorDay={to} /> : loading) },
   ];
 
   return (
@@ -178,11 +179,11 @@ function SummaryCard({ report }: { report: Report }) {
         </div>
         <div>
           <div className="text-gray-500 text-xs uppercase">Arbetsvärde</div>
-          <div className="font-mono font-medium">{formatCurrency(totals.workValueOre)}</div>
+          <div className="font-mono font-medium">{formatKr(totals.workValueOre)}</div>
         </div>
         <div>
           <div className="text-gray-500 text-xs uppercase">Utlägg</div>
-          <div className="font-mono font-medium">{formatCurrency(totals.expenseOre)}</div>
+          <div className="font-mono font-medium">{formatKr(totals.expenseOre)}</div>
         </div>
       </div>
     </div>
@@ -207,14 +208,14 @@ const mattersTableColumns: Column<MatterRow>[] = [
     summary: (rs) => <strong className="font-mono">{formatDecimalHours(sumOf(rs, (r) => r.billableMinutes))}</strong>,
     render: (m) => <strong className="font-mono">{formatDecimalHours(m.billableMinutes)}</strong> },
   { key: "workValueOre", label: L.workValueOre, sortable: true, align: "right", sortValue: (m) => m.workValueOre,
-    summary: (rs) => <span className="font-mono">{formatCurrency(sumOf(rs, (r) => r.workValueOre))}</span>,
-    render: (m) => <span className="font-mono">{formatCurrency(m.workValueOre)}</span> },
+    summary: (rs) => <span className="font-mono">{formatKr(sumOf(rs, (r) => r.workValueOre))}</span>,
+    render: (m) => <span className="font-mono">{formatKr(m.workValueOre)}</span> },
   { key: "expenseOre", label: L.expenseOre, sortable: true, align: "right", sortValue: (m) => m.expenseOre,
     summary: (rs) => {
       const t = sumOf(rs, (r) => r.expenseOre);
-      return <span className="font-mono">{t > 0 ? formatCurrency(t) : "—"}</span>;
+      return <span className="font-mono">{t > 0 ? formatKr(t) : "—"}</span>;
     },
-    render: (m) => <span className="font-mono">{m.expenseOre > 0 ? formatCurrency(m.expenseOre) : "—"}</span> },
+    render: (m) => <span className="font-mono">{m.expenseOre > 0 ? formatKr(m.expenseOre) : "—"}</span> },
 ];
 
 function MattersTable({ report }: { report: Report }) {
@@ -256,8 +257,8 @@ const weeklyColumns: Column<WeekRow>[] = [
     summary: (rs) => <strong className="font-mono">{formatDecimalHours(sumOf(rs, (r) => r.billableMinutes))}</strong>,
     render: (r) => <span className="font-mono">{r.billableMinutes > 0 ? <strong>{formatDecimalHours(r.billableMinutes)}</strong> : "—"}</span> },
   { key: "workValueOre", label: L.workValueOre, sortable: true, align: "right", sortValue: (r) => r.workValueOre,
-    summary: (rs) => <span className="font-mono">{formatCurrency(sumOf(rs, (r) => r.workValueOre))}</span>,
-    render: (r) => <span className="font-mono">{r.workValueOre > 0 ? formatCurrency(r.workValueOre) : "—"}</span> },
+    summary: (rs) => <span className="font-mono">{formatKr(sumOf(rs, (r) => r.workValueOre))}</span>,
+    render: (r) => <span className="font-mono">{r.workValueOre > 0 ? formatKr(r.workValueOre) : "—"}</span> },
 ];
 
 function WeeklyTable({ report }: { report: Report }) {
@@ -297,14 +298,14 @@ const unbilledColumns: Column<UnbilledRow>[] = [
   { key: "payment", label: L.payment, sortable: true, sortValue: (r) => labelForPaymentMethod(r.paymentMethod),
     render: (r) => <PaymentBadge method={r.paymentMethod} /> },
   { key: "timeOre", label: L.timeOre, sortable: true, align: "right", sortValue: (r) => r.timeOre,
-    summary: (rs) => <span className="font-mono">{formatCurrency(sumOf(rs, (r) => r.timeOre))}</span>,
-    render: (r) => <span className="font-mono">{r.timeOre > 0 ? formatCurrency(r.timeOre) : "—"}</span> },
+    summary: (rs) => <span className="font-mono">{formatKr(sumOf(rs, (r) => r.timeOre))}</span>,
+    render: (r) => <span className="font-mono">{r.timeOre > 0 ? formatKr(r.timeOre) : "—"}</span> },
   { key: "expenseOre", label: L.expenseOre, sortable: true, align: "right", sortValue: (r) => r.expenseOre,
-    summary: (rs) => <span className="font-mono">{formatCurrency(sumOf(rs, (r) => r.expenseOre))}</span>,
-    render: (r) => <span className="font-mono">{r.expenseOre > 0 ? formatCurrency(r.expenseOre) : "—"}</span> },
+    summary: (rs) => <span className="font-mono">{formatKr(sumOf(rs, (r) => r.expenseOre))}</span>,
+    render: (r) => <span className="font-mono">{r.expenseOre > 0 ? formatKr(r.expenseOre) : "—"}</span> },
   { key: "total", label: L.total, sortable: true, align: "right", sortValue: (r) => r.total,
-    summary: (rs) => <span className="font-mono font-medium">{formatCurrency(sumOf(rs, (r) => r.total))}</span>,
-    render: (r) => <span className="font-mono font-medium">{formatCurrency(r.total)}</span> },
+    summary: (rs) => <span className="font-mono font-medium">{formatKr(sumOf(rs, (r) => r.total))}</span>,
+    render: (r) => <span className="font-mono font-medium">{formatKr(r.total)}</span> },
 ];
 
 function UnbilledTable({ report }: { report: Report }) {
@@ -339,7 +340,7 @@ function UnbilledTable({ report }: { report: Report }) {
                   Risk: {CREDIT_RISK_LABELS[risk]}
                 </div>
                 <div className="font-mono font-semibold text-sm">
-                  {formatCurrency(riskTotals[risk])}
+                  {formatKr(riskTotals[risk])}
                 </div>
               </div>
             ))}
@@ -347,7 +348,7 @@ function UnbilledTable({ report }: { report: Report }) {
 
           {hasHighRisk && (
             <div className="mb-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              ⚠ {formatCurrency(riskTotals.HIGH + riskTotals.UNKNOWN)} av det ofakturerade
+              ⚠ {formatKr(riskTotals.HIGH + riskTotals.UNKNOWN)} av det ofakturerade
               arbetet ligger under hög eller okänd kreditrisk. Kontrollera
               betalningssätt på berörda ärenden innan du fakturerar.
             </div>

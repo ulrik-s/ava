@@ -1,19 +1,25 @@
 /**
- * `kr-format` — svensk tal-/beloppsformatering för kostnadsräkningen (#1218)
- * och tid i decimaltimmar i appens vyer (#1542), fakturor och kostnadsräkningar (#1543).
+ * `kr-format` — svensk tal-/beloppsformatering: belopp i kronor i hela appen
+ * (#1946), kostnadsräkningen (#1218) och tid i decimaltimmar i appens vyer
+ * (#1542), fakturor och kostnadsräkningar (#1543).
  *
- * Samlad här så att sammanställningen, arbetsredogörelsen och de äldre
- * vy-fälten (`arvodeExclFormatted` m.fl.) formaterar på exakt samma sätt.
- * Alla belopp in i öre (heltal) — formateringen avrundar aldrig beloppet, den
- * visar det som det är räknat.
+ * `formatKr` är appens ENDA formaterare för belopp i kronor: UI:t, fakturan,
+ * kostnadsräkningens dokument, mallarnas `{{formatAmount}}` och texterna som
+ * byggs utanför React (anteckningar, bevakningsrubriker, #1221). Alla belopp
+ * in i öre (heltal) — formateringen avrundar aldrig beloppet, den visar det
+ * som det är räknat. Hårt mellanslag (U+00A0) före "kr", så att enheten
+ * aldrig hamnar ensam på nästa rad.
  */
 
+const KR_FMT = new Intl.NumberFormat("sv-SE", { style: "currency", currency: "SEK" });
 const TWO_DECIMALS = new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const UP_TO_TWO_DECIMALS = new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+/** Hårt mellanslag + enheten, som `KR_FMT` skriver den. */
+const NBSP_KR = "\u00A0kr";
 
-/** Öre → `"50 975,10 kr"` (alltid två decimaler). */
-export function formatOreAsKr(ore: number): string {
-  return `${TWO_DECIMALS.format(ore / 100)} kr`;
+/** Öre → `"1 234,50 kr"` (alltid två decimaler, U+00A0 som tusentalsavgränsare och före "kr"). */
+export function formatKr(ore: number): string {
+  return KR_FMT.format(ore / 100);
 }
 
 /**
@@ -24,9 +30,12 @@ export function formatPlainKr(ore: number): string {
   return ore % 100 === 0 ? UP_TO_TWO_DECIMALS.format(ore / 100) : TWO_DECIMALS.format(ore / 100);
 }
 
-/** Á-pris i sammanställningen: `"1 626 kr"`, eller `"1 234,56 kr"` när öre finns. */
+/**
+ * Á-pris: `"1 626 kr"`, eller `"975,50 kr"` när öre finns — decimaler bara
+ * när de behövs, hårt mellanslag före "kr" som i `formatKr`.
+ */
 export function formatRateKr(ore: number): string {
-  return `${formatPlainKr(ore)} kr`;
+  return `${formatPlainKr(ore)}${NBSP_KR}`;
 }
 
 /** Ett antal (t.ex. 16 mil) — heltal utan decimaler, annars upp till två. */

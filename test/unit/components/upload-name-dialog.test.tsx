@@ -218,3 +218,55 @@ describe("UploadNameDialog med mejl (#1616)", () => {
     expect(nameInput()).toHaveValue("skiss");
   });
 });
+
+describe("UploadNameDialog: förslaget i Mapp (#1975)", () => {
+  const domstol = asId<"DocumentFolderId">("domstol");
+  const kallelse = asId<"DocumentFolderId">("kallelse");
+  const avtal = asId<"DocumentFolderId">("avtal");
+  const ovrigt = asId<"DocumentFolderId">("ovrigt");
+  const korr = asId<"DocumentFolderId">("korr");
+  const TREE: FolderSelectFolder[] = [
+    { id: domstol, name: "Domstol", parentId: null },
+    { id: kallelse, name: "Kallelse", parentId: domstol },
+    { id: avtal, name: "Avtal", parentId: null },
+    { id: ovrigt, name: "Övrigt", parentId: null },
+    { id: korr, name: "Korrespondens", parentId: null },
+  ];
+  const folderSelect = () => screen.getByLabelText("Mapp");
+
+  it("utan släppmål visar Mapp förslaget ur filnamnet direkt", () => {
+    renderDialog({ key: 1, file: pdf("Kallelse HF.pdf"), folderId: null }, TREE);
+    expect(folderSelect()).toHaveValue(kallelse);
+  });
+
+  it("förslaget följer när namnet skrivs om, och sparas i den mappen", () => {
+    const file = pdf("skiss.pdf");
+    const { onSave } = renderDialog({ key: 1, file, folderId: null }, TREE);
+    expect(folderSelect()).toHaveValue(ovrigt);
+    fireEvent.change(nameInput(), { target: { value: "Hyresavtal" } });
+    expect(folderSelect()).toHaveValue(avtal);
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+    expect(onSave).toHaveBeenCalledWith(file, { folderId: avtal, fileName: "Hyresavtal.pdf" });
+  });
+
+  it("ett mejl: Korrespondens, och Domstol › Kallelse när ämnesraden fylls i", async () => {
+    renderDialog({ key: 1, file: eml("x7f3.eml", "Subject: Kallelse till huvudförhandling\r\n\r\nText"), folderId: null }, TREE);
+    await waitFor(() => expect(nameInput()).toHaveValue("Kallelse till huvudförhandling"));
+    expect(folderSelect()).toHaveValue(kallelse);
+    fireEvent.change(nameInput(), { target: { value: "Angående mötet" } });
+    expect(folderSelect()).toHaveValue(korr);
+  });
+
+  it("efter ett eget val ändras mappen inte när namnet ändras", () => {
+    renderDialog({ key: 1, file: pdf("skiss.pdf"), folderId: null }, TREE);
+    fireEvent.change(folderSelect(), { target: { value: domstol } });
+    fireEvent.change(nameInput(), { target: { value: "Hyresavtal" } });
+    expect(folderSelect()).toHaveValue(domstol);
+  });
+
+  it("med släppmål ändras mappen inte när namnet ändras", () => {
+    renderDialog({ key: 1, file: pdf("skiss.pdf"), folderId: domstol }, TREE);
+    fireEvent.change(nameInput(), { target: { value: "Kallelse" } });
+    expect(folderSelect()).toHaveValue(domstol);
+  });
+});

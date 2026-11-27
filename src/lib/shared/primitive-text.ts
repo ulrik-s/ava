@@ -2,8 +2,7 @@
  * Text för ett värde av okänd typ — utan "[object Object]" (#1469,
  * `no-base-to-string`). Primitiva värden (sträng, tal, bigint, boolean) ges
  * som text; allt annat (objekt, JSX, Date, funktioner, symboler,
- * null/undefined) ger "". Den som vill ha JSON för objekt säger det själv
- * (se `templateText` i server/rules/template.ts).
+ * null/undefined) ger "". Den som vill ha JSON för objekt säger det själv.
  */
 export function primitiveText(v: unknown): string {
   if (typeof v === "string") return v;

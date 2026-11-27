@@ -14,6 +14,7 @@
 import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import { buildFakturaView, fakturaHeading, type FakturaBreakdown } from "@/lib/client/kostnadsrakning/faktura-template";
 import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
+import { invoiceBreakdown } from "@/lib/shared/billing/settlement-view";
 import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
 import type { BinarySink, GeneratorCaller } from "./backend-target";
 import { ensureFolderPath, INVOICE_FOLDER, type FolderCache } from "./folder-filing";
@@ -26,18 +27,18 @@ type Any = any;
 export type InvoiceDocIdFn = (invoiceId: string) => string;
 
 /** Får ett genererat dokument (#878): slutfakturor (FINAL), kreditfakturor (CREDIT),
- *  allt med en persisterad nedbrytning (aconton m. settlementBreakdown) + rådgivnings-
+ *  allt med en persisterad nedbrytning (aconton, `invoiceBreakdown`) + rådgivnings-
  *  fakturan. Så alla fakturor på ett slutreglerat ärende blir öppningsbara på GH Pages. */
 function shouldGenerateDoc(summary: Any): boolean {
   if (summary.invoiceType === "FINAL" || summary.invoiceType === "CREDIT") return true;
-  if (summary.settlementBreakdown != null) return true;
+  if (invoiceBreakdown<unknown>(summary) != null) return true;
   return String(summary.notes ?? "").startsWith("Rådgivningstimme");
 }
 
 /** Nedbrytningen (#878/#880) → mall-argumentet. Tidsraderna följer med så
  *  specifikationen kan renderas även när arbetet ligger på motpartens faktura. */
 function breakdownOf(inv: Any): FakturaBreakdown | null {
-  const b = inv.settlementBreakdown;
+  const b = invoiceBreakdown<Any>(inv);
   if (!b) return null;
   return { rows: b.rows ?? [], totalLabel: b.totalLabel, totalOre: b.totalOre, timeLines: b.timeLines ?? [] };
 }

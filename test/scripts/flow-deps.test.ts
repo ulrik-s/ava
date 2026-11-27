@@ -209,13 +209,13 @@ describe("klockan och statussidan ser blockerade", () => {
   });
 
   it("statussidan: blockerad larmar inte som fastnad, en grund säger hur många som väntar", () => {
-    const base: HealthItem = { repo: AVA, number: 11, title: "Funktion", labels: ["granskad"], labeledAt: { granskad: ago(10) }, isPr: false };
+    const base: HealthItem = { repo: AVA, number: 11, title: "Funktion", labels: ["att-granska"], labeledAt: { "att-granska": ago(10) }, isPr: false };
     const report = healthReport(flow, { now, lastClockRun: ago(0), items: [
       { ...base, blockedBy: 2 },
       { ...base, number: 10, title: "Grund", blocking: 3 },
     ] });
-    expect(report.alarms.map((a) => a.text)).toEqual(["ava#10 Grund — har stått i granskad i 10 h trots knuffar (3 väntar på den)"]);
-    expect(report.moving).toContain("ava#11 Funktion — granskad — väntar på 2 beroende(n)");
+    expect(report.alarms.map((a) => a.text)).toEqual(["ava#10 Grund — har stått i att-granska i 10 h trots knuffar (3 väntar på den)"]);
+    expect(report.moving).toContain("ava#11 Funktion — att-granska — väntar på 2 beroende(n)");
   });
 
   it("hälsokontrollen tar med beroendena från issuelistan", () => {

@@ -29,7 +29,9 @@ const recordMutateAsync = vi.fn().mockResolvedValue({});
 /** En "Deltagit i förhandling"-post — med den visas förhandlingsklockan. */
 const HEARING = { id: "te-h", date: "2026-03-01", minutes: 120, description: "Huvudförhandling", hourlyRate: 162_600, kind: "FORHANDLING" as const, billable: true };
 const ARBETE = { id: "te-a", date: "2026-02-20", minutes: 90, description: "Genomgång av handlingar", hourlyRate: 162_600, kind: "ARBETE" as const, billable: true };
-let entries: Array<typeof HEARING | typeof ARBETE> = [HEARING];
+/** Ett förhör (#1855) en vardag kl. 10.00, 45 minuter. */
+const FORHOR = { id: "te-f", date: "2026-03-04T09:00:00.000Z", minutes: 45, description: "Förhör", hourlyRate: 162_600, kind: "FORHOR" as const, billable: true };
+let entries: Array<typeof HEARING | typeof ARBETE | typeof FORHOR> = [HEARING];
 let entriesLoading = false;
 
 vi.mock("@/lib/client/trpc", () => ({
@@ -95,6 +97,65 @@ describe("KostnadsrakningModal — utan förhandling (ärendet lades ner)", () =
     render(<KostnadsrakningModal {...baseProps} />);
     expect(screen.getByText(/Läser in ärendets poster/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Generera/ })).toBeDisabled();
+  });
+});
+
+describe("KostnadsrakningModal — förordnandemål (#1858)", () => {
+  const props = { ...baseProps, isOffentligtUppdrag: true };
+
+  it("utan förhandlingspost: Ersättningstyp med förordnandetaxa och icke-taxa, icke-taxa förvald", () => {
+    entries = [ARBETE, FORHOR];
+    render(<KostnadsrakningModal {...props} />);
+    expect(screen.getByLabelText(/Icke-taxa/)).toBeChecked();
+    expect(screen.getByLabelText(/Förordnandetaxa \(DVFS 2025:5\)/)).not.toBeChecked();
+    expect(screen.queryByLabelText(/Taxa \(brottmålstaxan/)).not.toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("Ingen förhandling");
+  });
+
+  it("med förhandlingspost: tre val, brottmålstaxan förvald som i dag", () => {
+    render(<KostnadsrakningModal {...props} />);
+    expect(screen.getByLabelText(/Taxa \(brottmålstaxan/)).toBeChecked();
+    expect(screen.getByLabelText(/Förordnandetaxa/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Icke-taxa/)).toBeInTheDocument();
+  });
+
+  it("förordnandetaxan: ingen klocka, förhören visas, och avslutet krävs innan Generera", () => {
+    entries = [HEARING, FORHOR];
+    render(<KostnadsrakningModal {...props} />);
+    fireEvent.click(screen.getByLabelText(/Förordnandetaxa/));
+    expect(screen.queryByText(/STOPPA NU/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Förhör")).toHaveTextContent("1 förhör, sammanlagt 0,75 h");
+    expect(screen.getByRole("button", { name: /Generera/ })).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Lades ned"));
+    expect(screen.getByRole("button", { name: /Generera/ })).toBeEnabled();
+    expect(screen.getByLabelText("Förhör")).toHaveTextContent("Förundersökningen lades ned — förordnandemål (DVFS 2025:5)");
+  });
+
+  it("Generera skickar forordnande: { avslut } och F-skatt", async () => {
+    entries = [ARBETE, FORHOR];
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-f"));
+    render(<KostnadsrakningModal {...props} createRun={createRun} />);
+    fireEvent.click(screen.getByLabelText(/Förordnandetaxa/));
+    fireEvent.click(screen.getByLabelText("Strafföreläggande godkändes"));
+    fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
+    await waitFor(() => expect(createRun).toHaveBeenCalledWith({ forordnande: { avslut: "STRAFFORELAGGANDE" }, hasFTax: true }));
+    await waitFor(() => expect(recordMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ huvudforhandlingMinutes: 0 })));
+  });
+
+  it("tillbaka till icke-taxa: klockans val och förklaringen som förut", () => {
+    entries = [ARBETE, FORHOR];
+    render(<KostnadsrakningModal {...props} />);
+    fireEvent.click(screen.getByLabelText(/Förordnandetaxa/));
+    fireEvent.click(screen.getByLabelText(/Icke-taxa/));
+    expect(screen.queryByLabelText("Förhör")).not.toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("Ingen förhandling");
+  });
+
+  it("inte offentligt uppdrag: inget förordnandeval", () => {
+    entries = [ARBETE];
+    render(<KostnadsrakningModal {...baseProps} />);
+    expect(screen.queryByLabelText(/Förordnandetaxa/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Ersättningstyp")).not.toBeInTheDocument();
   });
 });
 

@@ -113,6 +113,25 @@ describe("TemplateEditor", () => {
     expect(screen.queryByText("{{today}}")).not.toBeInTheDocument();
   });
 
+  it("panelen Variabler har grupperna ur listan, utan Tid & Utlägg (#2119)", () => {
+    render(<TemplateEditor onSave={onSave} onCancel={onCancel} />);
+    fireEvent.click(screen.getByRole("button", { name: /Variabler/i }));
+    for (const group of ["Ärende", "Organisation", "Parter", "Övrigt", "Hjälpfunktioner"]) {
+      expect(screen.getByRole("button", { name: group })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("button", { name: /Tid & Utlägg/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Status (Aktivt, Stängt, Arkiverat)")).toBeInTheDocument();
+  });
+
+  it("platshållaren är ett exempel som fylls i, utan timeEntries (#2119)", () => {
+    render(<TemplateEditor onSave={onSave} onCancel={onCancel} />);
+    const editor = screen.getAllByRole("textbox").find((el) => el.tagName === "TEXTAREA");
+    const placeholder = editor?.getAttribute("placeholder") ?? "";
+    expect(placeholder).toContain("{{klient.name}}");
+    expect(placeholder).toContain("{{formatDate today}}");
+    expect(placeholder).not.toContain("timeEntries");
+  });
+
   it("uppdaterar content via textarea", () => {
     render(<TemplateEditor onSave={onSave} onCancel={onCancel} />);
     const textareas = screen.getAllByRole("textbox").filter((el) => el.tagName === "TEXTAREA");
