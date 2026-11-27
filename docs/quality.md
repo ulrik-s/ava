@@ -243,6 +243,15 @@ UTC-dygn stänger av regeln på raden med `-- UTC med avsikt: <varför>`.
 Tester använder absoluta tidpunkter (`Z`/offset), inte `new Date(år, mån, dag)`:
 CI kör i UTC och utvecklarna i Stockholm.
 
+#### Byggflaggan är inte runtime-läget (#1914)
+
+`NEXT_PUBLIC_DEMO_BUILD` betyder bara "statisk export" och är sann även i
+self-hosted. Läget (demo eller self-hosted) väljs med `isDemoTier()` eller
+`useCapabilities()` (ADR 0027). `no-restricted-properties` spärrar flaggan i hela
+`src/`, också som sträng-index och destrukturering. Den enda godkända läsaren
+är `src/lib/client/demo/demo-data-base.ts`. Undantag görs i lintkonfigen
+(`tooling/config/eslint.config.mjs`), inte med `eslint-disable`.
+
 ### Duplikat (`bun run duplicates`)
 
 | Mått | Gräns |
