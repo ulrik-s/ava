@@ -1,28 +1,32 @@
 /**
- * Konfliktpolicy per entitet (ADR 0017, #414) — den delade klassificeringen
- * som styr hur servern löser en stale skrivning vid reconcile:
+ * Konfliktpolicy per entitet (ADR 0017 §3, reviderad efter ADR 0037). Den
+ * delade klassningen som styr hur servern löser en inaktuell skrivning.
+ * Klassen följer skrivsättet:
  *
- *   - `append`  — append-only, ingen konflikt möjlig (idempotent upsert på id).
- *   - `lww`     — sista-skrivning-vinner; servern rebasar och returnerar kanoniskt.
- *   - `surface` — servern validerar invariant/statemaskin mot AKTUELLT tillstånd
- *                 och AVVISAR en stale skrivning → ytläggs för användarbeslut.
+ *   - `surface` — procedurägda entiteter (`procedure-owned.ts`, ADR 0037):
+ *                 servern kör om proceduren mot aktuellt läge och avvisar en
+ *                 ogiltig skrivning, som visas för användaren. Radkön tar inte
+ *                 emot deras rader. De står i ingen av listorna nedan och får
+ *                 `surface` genom standardvärdet.
+ *   - `append`  — radkö-entiteter som bara får läggas till (`appendOnly` i
+ *                 `row-push-policy.ts`): idempotent `create` på unikt id.
+ *   - `lww`     — radkö-entiteter som får ändras: servern skriver, bumpar
+ *                 `version` och svarar kanoniskt.
  *
- * Ren modul (server + klient delar den). En entitet utan klassning defaultar
- * till `surface` — säkrast: avvisar hellre än överskriver tyst (ADR 0017).
+ * Ren modul (server + klient delar den). En entitet utan klassning är
+ * `surface`, det säkraste: avvisar hellre än skriver över tyst (ADR 0017).
  */
 
 export type ConflictClass = "append" | "lww" | "surface";
 
 const APPEND: ReadonlySet<string> = new Set([
-  "timeEntry", "expense", "payment", "paymentPlanReminder", "billingRun",
-  "writeOff", "accontoDeduction", "document", "calendarEvent",
   // Jävskontrollens logg kan bara läggas till (radvägens `appendOnly`, #1344).
   "conflictCheck",
 ]);
 
 const LWW: ReadonlySet<string> = new Set([
-  "matter", "contact", "documentFolder", "documentPart", "task",
-  "serviceNote", "userPreference", "orgPreference",
+  "contact", "task", "calendarEvent", "document", "documentFolder", "documentPart",
+  "serviceNote", "userPreference",
 ]);
 
 export function conflictClassOf(entity: string): ConflictClass {

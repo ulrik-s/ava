@@ -66,7 +66,7 @@ async function harness() {
   const cursor = new InMemoryCursorStore();
   const backoff = new ReplayBackoff({ maxAttempts: 3, baseDelayMs: 1000, maxDelayMs: 1500 }, () => now);
   const engine = new ReconcileEngine({ transport, queue, cursor, apply: () => undefined, backoff });
-  const row = (id: string, entity = "timeEntry") => queue.enqueue({ entity, kind: "create", row: { id } }, { mutationId: id });
+  const row = (id: string, entity = "task") => queue.enqueue({ entity, kind: "create", row: { id } }, { mutationId: id });
   const call = (id: string) => queue.enqueueProcedure({ path: "timeEntry.create", input: {}, touches: [] }, { mutationId: id });
   const ids = () => queue.pending().map((e: QueueEntry) => e.mutationId);
   return { transport, queue, cursor, engine, clock, row, call, ids };
@@ -88,7 +88,7 @@ describe("ReconcileEngine — deterministiska fel avvisas och kön fortsätter (
 
   it("ett zod-fel avvisas likadant; en radposts klass följer entiteten", async () => {
     const h = await harness();
-    await h.row("a", "matter");
+    await h.row("a", "contact");
     const parsed = z.object({ id: z.string() }).safeParse({});
     if (parsed.success) throw new Error("förväntade ett zod-fel");
     h.transport.script.set("a", [parsed.error]);
@@ -164,7 +164,7 @@ describe("ReconcileEngine — kanske-tillfälliga fel försöks igen, begränsat
     h.clock.advance(1);
     const res = await h.engine.reconcile(); // försök 3 = gränsen
     expect(res.conflicts).toEqual([{
-      mutation: expect.objectContaining({ mutationId: "a" }), conflictClass: "append",
+      mutation: expect.objectContaining({ mutationId: "a" }), conflictClass: "lww",
       reason: "Ändringen nådde inte servern efter 3 försök: Internal Server Error",
       retryable: true,
     }]);
