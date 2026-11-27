@@ -12,7 +12,6 @@
   "src/lib/client/todo/todo-views.ts",
   "src/lib/client/working-set/lru-budget.ts",
   "src/lib/client/working-set/working-set-cache.ts",
-  "src/lib/server/auth/cached-session-auth-provider.ts",
   "src/lib/server/db/seed-rows.ts",
   "src/lib/server/events/uuid7.ts",
   "src/lib/server/integrations/ledger/bank-file-connector.ts",
