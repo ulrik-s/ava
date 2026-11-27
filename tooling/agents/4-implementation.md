@@ -82,6 +82,14 @@ Finns ingen: avsluta.
    och de ADR:er som gäller, och gör likadant som förebilden. Upptäcker du
    att det inte går utan något nytt (mönster, beroende, lager): sluta och
    gör som under "Fastnar", med ett ADR-utkast.
+   **Leta innan du skriver (kvalitetsgenomgången 2026-11-26).** Det vanligaste
+   felet i agenternas PR:er är en regel som redan finns och skrivs om: momsen
+   räknades olika på verifikat och faktura (#1820), arvodesformeln stod på
+   tolv ställen (#2174). Innan du skriver en domänregel, en beräkning (belopp,
+   moms, tid, datum, status) eller en hjälpfunktion: sök efter den med `git grep`
+   på formeln, domänordet och fältnamnet, i `src/lib/shared`, `src/lib/server`
+   och `src/lib/client`. Finns den: använd den. Gör den nästan rätt: utöka
+   den, skriv inte en till. Skriv i PR:en vad du återanvände (steg 6).
 4. Implementera enligt issuens acceptanskriterier och testplan, inget mer.
    Tester för varje ny rad. Additiva migrationer, med `-- kind: expand` på
    första raden (förra versionens kod ska klara schemat, så att deployen kan
@@ -122,6 +130,9 @@ Finns ingen: avsluta.
    - titel = commit-rubriken,
    - body: vad som ändrats, vilken förebild du följt, hur det testats, och
      `Closes #<nr>`,
+   - en egen rad `**Återanvänt:** <befintliga regler och hjälpfunktioner du
+     använt, med sökväg>` (steg 3, "Leta innan du skriver"). Skrev du ny
+     domänlogik: skriv vad du sökte efter och att inget fanns,
    - och en egen rad `**För användarna:** <en mening>` ("Nytt i AVA", #2010).
      Meningen visas för juristerna i AVA när releasen kommer: vardaglig
      svenska, vad de märker ("Dokumentlistan visar inte längre kolumnen

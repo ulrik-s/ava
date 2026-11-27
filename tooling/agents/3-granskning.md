@@ -123,6 +123,11 @@ För var och en:
      - ett nytt beroende,
      - en ändring som går emot en ADR.
 
+     Kontrollera raden `**Återanvänt:**` i PR:en (#2175): för varje ny
+     beräkning eller domänregel i diffen, sök själv med `git grep` efter
+     formeln och domänordet. Hittar du en befintlig som inte används, eller
+     saknas raden: `behöver-ändras`.
+
      Avdrift ger `behöver-ändras`, med en hänvisning till det befintliga som
      ska användas. Kräver uppgiften verkligen något nytt: `blockerad` med ett
      ADR-utkast.
