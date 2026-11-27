@@ -29,6 +29,11 @@ export type DocumentDirection = z.infer<typeof documentDirectionSchema>;
 export const documentRecipientSchema = z.enum(["DOMSTOL", "MOTPART", "KLIENT", "FORSAKRING", "MYNDIGHET", "OVRIGT"]);
 export type DocumentRecipient = z.infer<typeof documentRecipientSchema>;
 
+/** Slutligt avgörande dokumentet känts igen som (#2098): avskrivning, dom eller
+ *  nekat prövningstillstånd i Högsta domstolen eller Högsta förvaltningsdomstolen. */
+export const finalRulingSchema = z.enum(["AVSKRIVNING", "DOM_HD", "DOM_HFD", "PT_HD", "PT_HFD"]);
+export type FinalRuling = z.infer<typeof finalRulingSchema>;
+
 /**
  * DocumentFolder — hierarkisk mapp inom ett matter. `parentId` = null → root.
  * Lagras i `document-folders/<id>.json`.
@@ -83,6 +88,8 @@ export const documentSchema = z.object({
   /** Motpart/mottagare (#901): DOMSTOL/MOTPART/KLIENT/FORSAKRING/MYNDIGHET/OVRIGT.
    *  Tillsammans med `direction` driver den filtret "dok skickade till domstol". */
   recipient: documentRecipientSchema.nullish(),
+  /** Igenkänt slutligt avgörande (#2098) — metadata som `direction`. Null = inget igenkänt. */
+  finalRuling: finalRulingSchema.nullish(),
   /** Föråldrad: Ersatt av `kinds` (ADR 0038); läses bara för äldre rader. */
   tags: z.array(z.string()).default([]),
   summary: z.string().nullish(),

@@ -3,5 +3,5 @@
   "src/lib/server/routers/document/core.ts": 400,
   "src/lib/server/routers/document/suggestions.ts": 379,
   "src/lib/server/routers/invoice.ts": 539,
-  "src/lib/server/routers/matter.ts": 414
+  "src/lib/server/routers/matter.ts": 408
 }

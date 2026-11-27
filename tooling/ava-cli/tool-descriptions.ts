@@ -167,6 +167,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "matter.update": "Uppdatera ett ärendes uppgifter.",
   "matter.checkConflicts": "Kör jävskontrollen för ärendets parter (klient, motpart, motpartsombud) mot byråns alla ärenden igen.",
   "matter.markConflictsReviewed": "Markera jävskontrollens träffar i ett ärende som bedömda, med motivering (bara advokat eller admin).",
+  "matter.keepActive": "Behåll ett ärende som aktivt: sparar dagens datum som den dag någon bedömde att ärendet fortsätter. Status och övriga fält ändras inte.",
   "matter.coverageUsage": "Hur mycket debiterbart arbete som är upparbetat i ärendet — underlag för varningen när täckningstaket närmar sig.",
   "matter.addContact": "Koppla en befintlig kontakt till ärendet i en roll (klient, motpart, ombud, domstol).",
   "matter.addNewContact": "Skapa en ny kontakt och koppla den till ärendet i ett steg.",

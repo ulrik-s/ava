@@ -11,6 +11,7 @@ const PROCEDURES: Readonly<Record<string, string>> = {
   "matter.update": "Ändring av ärende",
   "matter.checkConflicts": "Jävskontroll",
   "matter.markConflictsReviewed": "Bedömning av jävsträffar",
+  "matter.keepActive": "Behåll ärendet som aktivt",
   "matter.addContact": "Ny part i ärende",
   "matter.addNewContact": "Ny part i ärende",
   "matter.removeContact": "Borttagning av part i ärende",
