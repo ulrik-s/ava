@@ -18,7 +18,7 @@ import { DEFAULT_VAT_RATE } from "@/lib/shared/billing/vat";
 import { CURRENT_ROUNDING, splitGross } from "@/lib/shared/billing/whole-kronor";
 import { forordnandeAvslutSchema } from "@/lib/shared/schemas/enums";
 import {
-  asId, billingRunIdSchema, matterIdSchema,
+  asId, billingRunIdSchema, expenseIdSchema, matterIdSchema, timeEntryIdSchema,
   type BillingRunId, type ExpenseId, type MatterId, type OrganizationId,
 } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
@@ -30,14 +30,20 @@ import { callTime, newRowId } from "../../queued-call";
 import type { BillingRunDetailRow } from "../../repositories/billing-run-repository";
 import type { Repositories } from "../../repositories/repositories";
 import { orgProcedure } from "../../trpc";
-import { applyKrTransition, assertFlowAction, fetchWorkByRun, freezeWork, invoiceNumbering, linkFinalInvoice } from "./shared";
+import {
+  applyKrTransition, assertFlowAction, fetchSelectedWork, fetchWorkByRun, freezeSelectedWork, freezeWork,
+  invoiceNumbering, linkFinalInvoice, type SelectedWork,
+} from "./shared";
 
-/** Som `fetchUnfrozenWork`, med hela raderna — kostnadsräkningens värdering läser datum och beskrivning (#1024). */
-async function fetchUnfrozenKrWork(repos: Repositories, matterId: MatterId) {
-  const te = await repos.timeEntries.listUnfrozenForMatter(matterId);
-  const ex = await repos.expenses.listUnfrozenForMatter(matterId);
-  // Förhandlingsposter värderas inte som arbete — tiden är huvudförhandlingens
-  // (samma regel som dokumentet). De fryses ändå med körningen (freezeWork).
+/**
+ * Arbetet kostnadsräkningen värderar, med hela raderna — värderingen läser datum
+ * och beskrivning (#1024): de valda posterna (#1889), eller utan urval allt
+ * ofryst. Förhandlingsposter värderas inte som arbete — tiden är huvud-
+ * förhandlingens (samma regel som dokumentet). De fryses ändå med körningen.
+ */
+async function fetchKrWork(repos: Repositories, matterId: MatterId, selected: SelectedWork | null) {
+  const te = selected ? selected.timeEntries : await repos.timeEntries.listUnfrozenForMatter(matterId);
+  const ex = selected ? selected.expenses : await repos.expenses.listUnfrozenForMatter(matterId);
   return { timeEntries: te.filter(isKrWorkEntry), expenses: ex.filter((e) => e.kind !== "PRUTNING") };
 }
 
@@ -70,11 +76,15 @@ export const kostnadsrakningProcedures = {
       hasFTax: z.boolean().optional(),
       // Förordnandemål (#1857): avslutet väljs i dialogen; utan fältet som förut.
       forordnande: z.object({ avslut: forordnandeAvslutSchema }).optional(),
+      // Urvalet (#1889), som createFinal: anges → yrka/frys ENBART dessa; utelämnas → allt ofryst.
+      timeEntryIds: z.array(timeEntryIdSchema).optional(),
+      expenseIds: z.array(expenseIdSchema).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
         await assertFlowAction(tx, ctx.orgId, input.matterId, "KOSTNADSRAKNING");
-        const work = await fetchUnfrozenKrWork(tx, input.matterId);
+        const selected = await fetchSelectedWork(tx, input.matterId, input);
+        const work = await fetchKrWork(tx, input.matterId, selected);
         const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
         if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
         // Domstolen ersätter enligt Domstolsverkets normer — rättshjälp (#839)
@@ -101,7 +111,7 @@ export const kostnadsrakningProcedures = {
         // Kostnadsräkningen ÄR inskicket — frys arbetet direkt (#806) så det
         // lämnar "Upparbetat ofakturerat". Dom/slutreglering läser raderna via
         // körningen (fetchWorkByRun), inte som ofryst.
-        await freezeWork(tx, input.matterId, run.id, now);
+        await freezeSelectedWork(tx, { matterId: input.matterId, selected, runId: run.id, now });
         await logMatterNote(tx, ctx, input.matterId, kostnadsrakningSubmittedNote(run.reference, await courtNameOf(tx, ctx.orgId, input.matterId), grossValue));
         return { run };
       });

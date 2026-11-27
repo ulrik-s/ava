@@ -14,26 +14,34 @@
  * dubbleras. Ett förslag som användaren redan AVFÄRDAT återuppstår inte heller
  * — dedupen tittar på alla statusar, inte bara PENDING. Att få tillbaka ett
  * bortvalt förslag vid varje omanalys vore värre än att inte få det alls.
+ *
+ * **Slutligt avgörande (#2099).** Samma textväg känner igen om dokumentet är
+ * ett slutligt avgörande (`@/lib/shared/final-ruling`) och sparar det i
+ * dokumentets `finalRuling`, som metadata utan versionshöjning. Fältet töms
+ * aldrig: en senare text utan markörer skriver ingenting.
  */
 
 import {
   extractEventSuggestions, extractPartySuggestions,
 } from "@/lib/shared/document-extraction";
-import type { DocumentAnalysisSuggestion, MatterEventSuggestion } from "@/lib/shared/schemas/document";
+import { detectFinalRuling } from "@/lib/shared/final-ruling";
+import type { DocumentAnalysisSuggestion, FinalRuling, MatterEventSuggestion } from "@/lib/shared/schemas/document";
 import type { MatterRole } from "@/lib/shared/schemas/enums";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 
 /**
- * Bara de två repositories funktionen faktiskt rör. Smalare än `Repositories`
+ * Bara de repositories funktionen faktiskt rör. Smalare än `Repositories`
  * med flit: anropare (och tester) slipper bygga hela sömmen, och beroendet
  * syns i signaturen i stället för att gömma sig i kroppen.
  */
-export type SuggestionRepos = Pick<Repositories, "documentAnalysisSuggestions" | "matterEventSuggestions">;
+export type SuggestionRepos = Pick<Repositories, "documentAnalysisSuggestions" | "matterEventSuggestions" | "documents">;
 
 export interface SuggestFromTextResult {
   parties: number;
   events: number;
+  /** Det slutliga avgörande som kändes igen i texten, annars `null`. */
+  finalRuling: FinalRuling | null;
 }
 
 /** Nyckel för ett kontaktförslag — samma part i samma roll är samma förslag. */
@@ -47,13 +55,30 @@ function eventKey(e: { title: string; startAt: Date | string }): string {
 }
 
 /**
+ * Spara det slutliga avgörande som känns igen i `text` på dokumentet, om det
+ * skiljer sig från det som står där. Ingen träff skriver ingenting (fältet
+ * töms aldrig), och ett saknat dokument hoppas över.
+ */
+async function writeFinalRuling(
+  repos: SuggestionRepos, documentId: DocumentId, text: string,
+): Promise<FinalRuling | null> {
+  const finalRuling = detectFinalRuling(text);
+  if (finalRuling === null) return null;
+  const doc = await repos.documents.getById(documentId);
+  if (doc && doc.finalRuling !== finalRuling) await repos.documents.updateMetadata(documentId, { finalRuling });
+  return finalRuling;
+}
+
+/**
  * Extrahera ur `text` och skapa de förslag som inte redan finns på dokumentet.
- * Returnerar antalet NYA rader — noll vid omkörning på oförändrad text.
+ * Returnerar antalet NYA rader — noll vid omkörning på oförändrad text — och
+ * det slutliga avgörande som kändes igen.
  */
 export async function writeSuggestionsFromText(
   repos: SuggestionRepos, documentId: DocumentId, text: string,
 ): Promise<SuggestFromTextResult> {
-  if (text.trim().length === 0) return { parties: 0, events: 0 };
+  if (text.trim().length === 0) return { parties: 0, events: 0, finalRuling: null };
+  const finalRuling = await writeFinalRuling(repos, documentId, text);
 
   const [existingParties, existingEvents] = await Promise.all([
     repos.documentAnalysisSuggestions.listForDocument(documentId),
@@ -85,5 +110,5 @@ export async function writeSuggestionsFromText(
     events++;
   }
 
-  return { parties, events };
+  return { parties, events, finalRuling };
 }

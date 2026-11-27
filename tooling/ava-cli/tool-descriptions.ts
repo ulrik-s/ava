@@ -81,7 +81,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "document.partsByMatter": "Lista delarna i ett ärendes sammansatta dokument (t.ex. kallelse + stämning + FUP i en PDF): kategori och sidintervall per del, i sidordning.",
   "document.setPartKind": "Rätta kategorin för en del i ett sammansatt dokument. Delen markeras som manuell och bevaras vid omklassificering; är det första delen följer dokumentets typ med.",
   "document.analyze": "Kör (eller kör om) AI-analys av ett dokument. Returnerar omedelbart; resultatet skrivs när analysen är klar.",
-  "document.suggestFromText": "Härled kontakt- och händelseförslag ur ett dokuments text. Idempotent — texten skickas in, routern läser inga filer.",
+  "document.suggestFromText": "Härled kontakt- och händelseförslag ur ett dokuments text, och känn igen ett slutligt avgörande (`finalRuling`: avskrivning, HD:s eller HFD:s dom, eller deras beslut att inte meddela prövningstillstånd) som sparas på dokumentet. Idempotent — texten skickas in, routern läser inga filer.",
   "document.uploadContent": "Ta emot dokumentets bytes och lagra dem innehållsadresserat. Ger en ny immutabel version och triggar omklassificering.",
   "document.downloadContent": "Läs tillbaka dokumentets bytes ur innehållslagret.",
   "document.missingContent": "Vilka innehållsadresserade sökvägar servern saknar — byte-synken frågar detta för att bara ladda upp det som fattas.",

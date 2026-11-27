@@ -29,6 +29,18 @@ describe("withoutServerOwned", () => {
     expect(withoutServerOwned("document", fresh, { ...fresh, documentType: "AVTAL" })).toMatchObject({ documentType: "AVTAL" });
   });
 
+  it("en push med finalRuling null tappar fältet; övriga fält påverkas inte (#2099)", () => {
+    const seen = { ...classified, analyzedAt: "2026-09-01T10:00:00.000Z", fileName: "dom-ny.pdf", finalRuling: null };
+    const patch = withoutServerOwned("document", { ...classified, finalRuling: "DOM_HD" }, seen);
+    expect(patch).not.toHaveProperty("finalRuling");
+    expect(patch).toMatchObject({ fileName: "dom-ny.pdf", documentType: "STAMNING" });
+  });
+
+  it("en push med ett satt finalRuling behåller det (FSA-vägen)", () => {
+    const pushed = { ...classified, analyzedAt: "2026-09-01T10:00:00.000Z", finalRuling: "AVSKRIVNING" };
+    expect(withoutServerOwned("document", classified, pushed)).toMatchObject({ finalRuling: "AVSKRIVNING" });
+  });
+
   it("andra entiteter lämnas orörda", () => {
     const row = { id: "t1", analysisStatus: "X" };
     expect(withoutServerOwned("timeEntry", {}, row)).toBe(row);
