@@ -13,6 +13,11 @@
  *     skiljer sig från serverns) — då är klientens värden inaktuella, inte ett
  *     medvetet val.
  *
+ *   - Det slutliga avgörandet (`finalRuling`, #2099) töms aldrig av servern.
+ *     Ett tomt värde i en radpush är därför alltid inaktuellt (t.ex. från en
+ *     klient som döpt om dokumentet innan den hämtat jobbets resultat) och tas
+ *     bort. Ett satt värde tas emot: i FSA-vägen har bara klienten texten.
+ *
  * Äldre klienter (ADR 0038) pushar rader utan `kinds`, med typerna i
  * `documentType`/`tags`. `withKindsFromLegacy` översätter dem: oförändrade
  * äldre fält tas bort (typerna står kvar), ändrade blir nya typer.
@@ -33,6 +38,11 @@ function without(row: Row, fields: readonly string[]): Row {
   return Object.fromEntries(Object.entries(row).filter(([k]) => !fields.includes(k)));
 }
 
+/** Ett tomt `finalRuling` i en push är inaktuellt — fältet töms aldrig (#2099). */
+function withoutEmptyFinalRuling(row: Row): Row {
+  return "finalRuling" in row && row.finalRuling == null ? without(row, ["finalRuling"]) : row;
+}
+
 /** Har klienten inte sett serverns senaste analys? */
 function missedAnalysis(existing: Row, incoming: Row): boolean {
   return existing.analyzedAt != null && comparable(existing.analyzedAt) !== comparable(incoming.analyzedAt);
@@ -42,7 +52,7 @@ function missedAnalysis(existing: Row, incoming: Row): boolean {
 export function withoutServerOwned(entity: string, existing: Row, incoming: Row): Row {
   if (entity !== "document") return incoming;
   const stale = missedAnalysis(existing, incoming);
-  const patch = without(incoming, ANALYSIS_FIELDS);
+  const patch = withoutEmptyFinalRuling(without(incoming, ANALYSIS_FIELDS));
   return stale ? without(patch, CLASSIFICATION_FIELDS) : patch;
 }
 
