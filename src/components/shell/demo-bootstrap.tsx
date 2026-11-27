@@ -44,13 +44,13 @@ import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import type { ProcedureRecorder } from "@/lib/client/demo/in-process-link";
 import { loadFirmaConfig, patchFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import type { CachingSyncDataStore } from "@/lib/client/local-store/caching-sync-data-store";
 import { makeAppQueryClient } from "@/lib/client/query-client";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
 import { trpc } from "@/lib/client/trpc";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import type { Principal } from "@/lib/server/auth/principal";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
-import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { ActiveMatterPrefetch } from "./active-matter-prefetch";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
@@ -69,7 +69,7 @@ type Status = BootStatus;
 type GateDecision = "continue" | "skip-ready" | "redirect-login" | "skip-loading";
 
 export function pathSkipsAuth(p: string): boolean {
-  return /\/(demo|login)\/?$/.test(p);
+  return /\/(demo|login|msal-redirect)\/?$/.test(p);
 }
 
 function redirectToLogin(): void {

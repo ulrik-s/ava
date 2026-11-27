@@ -1,6 +1,6 @@
 # ADR 0010 — Regelmotor som idempotenta schemalagda PeerActs
 
-- **Status:** Accepterad
+- **Status:** Ersatt av [ADR 0016](0016-server-first-med-offline-first-klient.md) och [ADR 0024](0024-pg-boss-som-durabel-jobbko.md) (2026-11-25): regelmotorn är raderad, schemalagda jobb körs i pg-boss
 - **Datum:** 2026-06-11
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** server-runtime (ADR 0005), påminnelser (#71), framtida automatiseringar

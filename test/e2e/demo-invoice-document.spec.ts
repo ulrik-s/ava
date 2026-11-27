@@ -18,7 +18,7 @@
  * `test` kommer från `_demo-test` → varje förfrågan utanför testets egen origin
  * blockeras och fäller testet (#932).
  */
-import { type ConsoleMessage } from "@playwright/test";
+import { type ConsoleMessage, type Page } from "@playwright/test";
 
 import { DEMO_BASE_URL, fetchDemoSeed, seedDemoConfig, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
@@ -159,4 +159,100 @@ test("faktura med datumintervall: bara posterna inom intervallet faktureras (#18
   const left = total - inRange;
   await expect(after.getByText(`Poster att fakturera (${left}/${left} valda)`)).toBeVisible({ timeout: 15_000 });
   await expect(after.getByText(OLD_POST)).toHaveCount(0);
+});
+
+// #1941: två aconton i ett rättshjälpsärende, skapade i dialogen Aconto till
+// klient. Den andra fakturans sida visar den sparade nedbrytningen (#1940):
+// klientens rättshjälpsavgift och avdraget för det första acontot, och ingen
+// Justering när förslaget inte ändrats. Fakturans dokument finns i
+// Fakturadokument-panelen. Att dokumentet får nedbrytningen täcks av
+// komponenttestet (`billing-dialog.test.tsx`); PDF:ens text läses inte här.
+// Seeden har inget rättshjälpsärende i fasen ARBETE, så testet skapar sitt eget.
+
+/** Nytt ärende med betalningssättet rättshjälp; sidan står på ärendet efteråt. */
+async function newLegalAidMatter(page: Page, base: string): Promise<void> {
+  const title = `Aconto e2e ${Date.now()}`;
+  await page.goto(`${base}/matters/?new=1`, { waitUntil: "load" });
+  await page.getByLabel("Titel *").fill(title);
+  await page.getByRole("button", { name: "Skapa ärende" }).click();
+  await expect(page.getByLabel("Titel *")).toHaveCount(0);
+  await page.getByRole("row").filter({ hasText: title }).getByRole("link", { name: title }).click();
+  const header = page.getByTestId("matter-header");
+  await header.getByRole("button", { name: "Ändra ärende" }).click({ timeout: 25_000 });
+  const edit = page.getByRole("dialog", { name: "Ändra ärende" });
+  await edit.getByLabel("Betalningssätt").selectOption("RATTSHJALP");
+  await edit.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(edit).toBeHidden();
+}
+
+/** En tidspost med dialogens standardtid. */
+async function registerTime(page: Page, description: string): Promise<void> {
+  await showPanel(page, "Tid");
+  await page.getByRole("region", { name: "Tid" }).last().getByRole("button", { name: /Registrera tid/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Registrera tid" });
+  await dialog.getByLabel("Beskrivning *").fill(description);
+  await dialog.locator("button[type=submit]").click();
+  await expect(dialog).toHaveCount(0);
+}
+
+/** Ett utlägg på 400 kr exkl moms med 25 % moms. */
+async function registerExpense(page: Page): Promise<void> {
+  await showPanel(page, "Utlägg");
+  await page.getByRole("button", { name: "+ Nytt utlägg" }).click();
+  const dialog = page.getByRole("dialog", { name: "Nytt utlägg" });
+  await dialog.locator('input[inputmode="decimal"]').fill("400");
+  await dialog.getByPlaceholder("Beskrivning *").fill("E2E: resa med moms");
+  await dialog.locator("select").selectOption("2500");
+  await dialog.getByRole("button", { name: "Spara" }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
+/**
+ * Aconto till klient med det ifyllda förslaget. Sidan laddas om först: förslaget
+ * hämtas inte om när tid eller utlägg registreras (cachen håller i 60 s), och
+ * ett inaktuellt förslag ger en Justering-rad. Det felet är inte #1941:s.
+ */
+async function createAcconto(page: Page): Promise<void> {
+  await page.reload({ waitUntil: "load" });
+  await expect(page.getByTestId("matter-header")).toBeVisible({ timeout: 25_000 });
+  await showPanel(page, "Fakturering");
+  await page.getByRole("button", { name: "+ Skapa faktura" }).click();
+  await page.getByRole("button", { name: "Aconto till klient" }).click();
+  const dialog = page.getByRole("dialog", { name: "Aconto till klient" });
+  await expect(dialog.getByText(/Ändra bara beloppet i undantagsfall/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Skapa aconto-faktura" }).click();
+  await expect(dialog).toHaveCount(0, { timeout: 25_000 });
+}
+
+test("andra acontot: nedbrytningen med avdraget för det första, ingen Justering, och dokumentet finns (#1941)", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  await newLegalAidMatter(page, base);
+  // Rådgivningsfakturan skapas av sig själv i rättshjälp (#839); vänta in den
+  // så att acontona räknas på arbetet efter den.
+  await showPanel(page, "Fakturering");
+  await expect(page.locator('main a[href*="/invoices/"]')).toHaveCount(1, { timeout: 25_000 });
+
+  await registerTime(page, "E2E: inläsning");
+  await registerExpense(page);
+  await createAcconto(page);
+  await registerTime(page, "E2E: möte");
+  await createAcconto(page);
+
+  // Acontonas fakturanummer i Fakturering — det andra acontot har det högsta.
+  await showPanel(page, "Fakturering");
+  const links = page.getByRole("row").filter({ hasText: "Aconto" }).locator('a[href*="/invoices/"]');
+  await expect(links).toHaveCount(2, { timeout: 25_000 });
+  const numbers = (await links.allTextContents()).map((t) => t.match(/F-\d{4}-\d+/)?.[0] ?? "").sort();
+  const [first, second] = numbers;
+  await links.filter({ hasText: second ?? "" }).first().click();
+  await expect(page).toHaveURL(/\/invoices\//, { timeout: 20_000 });
+
+  const body = page.locator("body");
+  await expect(body).toContainText("Klientens rättshjälpsavgift", { timeout: 25_000 });
+  await expect(body).toContainText(`Avgår aconto — faktura ${first ?? ""}`);
+  await expect(body).not.toContainText("Justering");
+
+  await showPanel(page, "Fakturadokument");
+  await expect(page.getByText(/Faktura .*\.pdf/i).first()).toBeVisible({ timeout: 25_000 });
 });

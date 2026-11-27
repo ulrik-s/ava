@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
-import { ExternalEditTracker } from "@/lib/client/fsa/external-edit-tracker";
+import { ExternalEditTracker, getExternalEditTracker, setExternalEditTracker } from "@/lib/client/fsa/external-edit-tracker";
 
 // Minimal FileSystemFileHandle-fake: vi mutar `lastModified` mellan ticks.
 class FakeHandle {
@@ -137,5 +137,84 @@ describe("ExternalEditTracker", () => {
     await vi.advanceTimersByTimeAsync(2000);
 
     expect(onCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe("ExternalEditTracker — sessioner, avbevakning och fel (#1905)", () => {
+  it("listSessions visar bara dokument med en pågående session", async () => {
+    const a = new FakeHandle(new Uint8Array([1]), 1000);
+    const b = new FakeHandle(new Uint8Array([1]), 1000);
+    const tracker = new ExternalEditTracker({ pollIntervalMs: 50, debounceMs: 500, onCommit: vi.fn() });
+    await tracker.watch({ docId: "doc-a", path: "a.pdf", handle: a });
+    await tracker.watch({ docId: "doc-b", path: "b.pdf", handle: b });
+    a.setSave(new Uint8Array([2]), 2000);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(tracker.listSessions().map((s) => s.docId)).toEqual(["doc-a"]);
+    tracker.dispose();
+  });
+
+  it("unwatch släpper dokumentet: ingen commit trots en pågående session", async () => {
+    const handle = new FakeHandle(new Uint8Array([1]), 1000);
+    const onCommit = vi.fn();
+    const tracker = new ExternalEditTracker({ pollIntervalMs: 50, debounceMs: 300, onCommit });
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle });
+    handle.setSave(new Uint8Array([2]), 2000);
+    await vi.advanceTimersByTimeAsync(100);
+    tracker.unwatch("doc-1");
+    tracker.unwatch("okänt");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(tracker.getSession("doc-1")).toBeNull();
+  });
+
+  it("watch efter dispose gör ingenting, och flushNow utan session gör ingenting", async () => {
+    const handle = new FakeHandle(new Uint8Array([1]), 1000);
+    const onCommit = vi.fn();
+    const tracker = new ExternalEditTracker({ onCommit });
+    await tracker.flushNow("doc-1");
+    tracker.dispose();
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle });
+    handle.setSave(new Uint8Array([2]), 2000);
+    await vi.advanceTimersByTimeAsync(200_000);
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(tracker.listSessions()).toEqual([]);
+  });
+
+  it("en fil som inte går att läsa varnar och stoppar inte de andra", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const broken = { getFile: vi.fn(() => Promise.resolve({ lastModified: 1000, arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) })) };
+    const ok = new FakeHandle(new Uint8Array([1]), 1000);
+    const tracker = new ExternalEditTracker({ pollIntervalMs: 50, debounceMs: 500, onCommit: vi.fn() });
+    await tracker.watch({ docId: "trasig", path: "x.pdf", handle: broken });
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle: ok });
+    broken.getFile.mockImplementation(() => Promise.reject(new Error("borta")));
+    ok.setSave(new Uint8Array([2]), 2000);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(warn).toHaveBeenCalledWith("[edit-tracker] kunde inte läsa", "x.pdf", expect.any(Error));
+    expect(tracker.getSession("doc-1")?.saves).toBe(1);
+    tracker.dispose();
+    warn.mockRestore();
+  });
+
+  it("en commit som misslyckas loggas, och sessionen är avslutad", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handle = new FakeHandle(new Uint8Array([1]), 1000);
+    const tracker = new ExternalEditTracker({ pollIntervalMs: 50, debounceMs: 300, onCommit: () => Promise.reject(new Error("nätet nere")) });
+    await tracker.watch({ docId: "doc-1", path: "a.pdf", handle });
+    handle.setSave(new Uint8Array([2]), 2000);
+    await vi.advanceTimersByTimeAsync(100);
+    await tracker.flushNow("doc-1");
+    expect(error).toHaveBeenCalledWith("[edit-tracker] commit misslyckades", "a.pdf", expect.any(Error));
+    expect(tracker.getSession("doc-1")).toBeNull();
+    tracker.dispose();
+    error.mockRestore();
+  });
+
+  it("appens instans sätts och läses med setExternalEditTracker och getExternalEditTracker", () => {
+    const tracker = new ExternalEditTracker({ onCommit: vi.fn() });
+    setExternalEditTracker(tracker);
+    expect(getExternalEditTracker()).toBe(tracker);
+    setExternalEditTracker(null);
+    expect(getExternalEditTracker()).toBeNull();
   });
 });

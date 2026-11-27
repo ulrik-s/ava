@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import {
-  STOCKHOLM_TZ, stockholmDateTime, stockholmDay, stockholmDayStart, stockholmPeriod, stockholmTime, stockholmYear,
+  addDays, STOCKHOLM_TZ, stockholmDateTime, stockholmDay, stockholmDayStart, stockholmPeriod, stockholmTime, stockholmYear,
 } from "@/lib/shared/stockholm-time";
 
 describe("stockholmDay", () => {
@@ -119,5 +119,42 @@ describe("stockholmDateTime (#1855)", () => {
   it("tillbaka till samma dag och klockslag", () => {
     const d = stockholmDateTime("2026-12-31", "23:45");
     expect([stockholmDay(d), stockholmTime(d)]).toEqual(["2026-12-31", "23:45"]);
+  });
+});
+
+describe("addDays (#2095)", () => {
+  it("över månadsskiften", () => {
+    expect(addDays("2026-03-31", 1)).toBe("2026-04-01");
+    expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
+  });
+
+  it("över årsskiftet, åt båda hållen", () => {
+    expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
+    expect(addDays("2027-01-01", -1)).toBe("2026-12-31");
+  });
+
+  it("över skottdagen", () => {
+    expect(addDays("2028-02-28", 1)).toBe("2028-02-29");
+    expect(addDays("2028-02-29", 1)).toBe("2028-03-01");
+  });
+
+  it("över omställningen till sommartid", () => {
+    expect(addDays("2026-03-28", 1)).toBe("2026-03-29");
+    expect(addDays("2026-03-29", 1)).toBe("2026-03-30");
+  });
+
+  it("över omställningen till vintertid", () => {
+    expect(addDays("2026-10-24", 1)).toBe("2026-10-25");
+    expect(addDays("2026-10-25", 1)).toBe("2026-10-26");
+  });
+
+  it("flera dagar åt båda hållen", () => {
+    expect(addDays("2026-11-24", 10)).toBe("2026-12-04");
+    expect(addDays("2026-11-24", -30)).toBe("2026-10-25");
+    expect(addDays("2026-11-24", 0)).toBe("2026-11-24");
+  });
+
+  it("en ogiltig dag kastar RangeError", () => {
+    expect(() => addDays("inte-ett-datum", 1)).toThrow(RangeError);
   });
 });

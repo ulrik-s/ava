@@ -3,7 +3,7 @@
  * servern avvisade: "Ny tidspost", "Ändring av faktura".
  */
 
-import { isProcedureCall, type QueueEntry } from "@/lib/server/data-store/in-memory/mutation-queue";
+import { isProcedureCall, type QueueEntry } from "@/lib/client/local-store/mutation-queue";
 
 /** Köbara procedurer (`QUEUED_PROCEDURES`) med egna namn. */
 const PROCEDURES: Readonly<Record<string, string>> = {
@@ -21,6 +21,7 @@ const PROCEDURES: Readonly<Record<string, string>> = {
   "timeEntry.update": "Ändring av tidspost",
   "timeEntry.delete": "Borttagning av tidspost",
   "timeEntry.markAsRadgivning": "Markering av rådgivningstimmen",
+  "timeEntry.moveToMatter": "Flytt av tidspost till annat ärende",
   "expense.create": "Nytt utlägg",
   "expense.update": "Ändring av utlägg",
   "expense.delete": "Borttagning av utlägg",

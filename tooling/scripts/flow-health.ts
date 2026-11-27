@@ -48,7 +48,7 @@ export function collectItems(flow: Flow, ghFor: (repo: string) => GitHub): Healt
         repo: m.repo, number: i.number, title: i.title, labels: i.labels, isPr: i.isPr,
         labeledAt: lastAdded(gh, i.number),
         ...(i.isPr && i.labels.includes("granskad") ? { mergeState: gh.prMergeState(i.number) } : {}),
-        ...(m.repo === intake && i.labels.includes("nedbruten") && !pending.has(i.number) ? { awaitingRelease: true } : {}),
+        ...(m.repo === intake && i.labels.includes("nedbruten") ? (pending.has(i.number) ? { awaitingWork: true } : { awaitingRelease: true }) : {}),
         ...(i.deps ? { blockedBy: i.deps.blockedBy, blocking: i.deps.blocking } : {}),
       }));
   });

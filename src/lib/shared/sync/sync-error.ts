@@ -61,8 +61,11 @@ const HALT_STATUSES: ReadonlySet<number> = new Set([401, 429, 501, 502, 503]);
 /** 4xx som ändå kan gå över: timeout och avbrutet anrop. */
 const TRANSIENT_4XX: ReadonlySet<number> = new Set([408, 499]);
 
-/** Längsta feltext som sparas eller visas. */
-const MAX_MESSAGE = 300;
+/**
+ * Längsta feltext som sparas eller visas. Serverns schema för enhetsrapporten
+ * (`syncDeviceReportSchema`) har samma gräns för `lastError`.
+ */
+export const MAX_SYNC_ERROR_LENGTH = 300;
 
 function field(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>)[key] : undefined;
@@ -107,5 +110,5 @@ export function classifySyncError(err: unknown): SyncErrorClass {
 /** Felets text, kort nog att visas och sparas. */
 export function syncErrorMessage(err: unknown): string {
   const text = err instanceof Error ? err.message : String(err);
-  return text.length > MAX_MESSAGE ? `${text.slice(0, MAX_MESSAGE - 1)}…` : text;
+  return text.length > MAX_SYNC_ERROR_LENGTH ? `${text.slice(0, MAX_SYNC_ERROR_LENGTH - 1)}…` : text;
 }

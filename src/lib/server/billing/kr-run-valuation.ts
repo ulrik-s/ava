@@ -13,8 +13,10 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { TAXA_MAX_MINUTES, type TaxaLevel } from "@/lib/shared/brottmalstaxa";
-import { type ExpenseInput, kostnadsrakningClaimInclVat, type TimeEntryInput } from "@/lib/shared/kostnadsrakning";
+import { TAXA_MAX_MINUTES, type TaxaLevel } from "@/lib/shared/billing/brottmalstaxa";
+import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
+import { type ExpenseInput, kostnadsrakningClaimInclVat, type TimeEntryInput } from "@/lib/shared/billing/kostnadsrakning";
+import { FORORDNANDE_AVSLUT_LABELS, type ForordnandeAvslut } from "@/lib/shared/schemas/enums";
 
 /** Det dialogen skickar med inskicket (allt valfritt: skript/demo saknar dialog). */
 export interface KrRunTaxaInput {
@@ -25,6 +27,11 @@ export interface KrRunTaxaInput {
   isTaxeArende?: boolean | undefined;
   /** Dialogens F-skatt; saknas → ärendets (default: F-skatt). */
   hasFTax?: boolean | undefined;
+  /**
+   * Förordnandemål (#1857): förundersökningens avslut, valt i dialogen. Bara då
+   * räknas förordnandetaxan; servern väljer den aldrig själv.
+   */
+  forordnande?: { avslut: ForordnandeAvslut } | undefined;
 }
 
 /** Ärendefälten värderingen läser. */
@@ -55,11 +62,12 @@ export type KrRunMatterPatch = {
 };
 
 /**
- * Värderingen: brottmålstaxan, löpande räkning i offentligt uppdrag (båda med
- * belopp, räknat som dialogens dokument) eller normvägen (rättshjälp; routern räknar).
+ * Värderingen: brottmålstaxan, löpande räkning i offentligt uppdrag,
+ * förordnandetaxan (alla med belopp, räknat som dialogens dokument) eller
+ * normvägen (rättshjälp; routern räknar).
  */
 export type KrRunValuation =
-  | { kind: "taxa" | "lopande"; grossOre: number; matterPatch: KrRunMatterPatch }
+  | { kind: "taxa" | "lopande" | "forordnande"; grossOre: number; matterPatch: KrRunMatterPatch }
   | { kind: "norm"; matterPatch: KrRunMatterPatch };
 
 const precondition = (message: string): TRPCError => new TRPCError({ code: "PRECONDITION_FAILED", message });
@@ -111,6 +119,7 @@ function taxaLevelOf(matter: KrRunMatter, input: KrRunTaxaInput): TaxaLevel {
 
 /** Värdera körningen. Kastar PRECONDITION_FAILED när taxan inte kan räknas. */
 export function valueKrRun(matter: KrRunMatter, work: KrRunWork, input: KrRunTaxaInput, now: Date): KrRunValuation {
+  if (input.forordnande) return forordnandeValuation(matter, work, input, input.forordnande.avslut, now);
   const dialogChoice: KrRunMatterPatch = input.isTaxeArende === undefined ? {} : { isTaxeArende: input.isTaxeArende };
   if (matter.paymentMethod !== "OFFENTLIGT_UPPDRAG") return { kind: "norm", matterPatch: dialogChoice };
   if (!isTaxeClaim(matter, input)) return lopandeValuation(matter, work, input, now, dialogChoice);
@@ -146,4 +155,61 @@ function lopandeValuation(
     expenses: [...work.expenses],
   });
   return { kind: "lopande", grossOre, matterPatch };
+}
+
+/**
+ * Förordnandemål (#1857, ADR 0034): yrkandet på förordnandetaxan med ärendets
+ * förhör (tidsposterna med kategorin FORHOR bland de ofrysta posterna), samma
+ * funktion och samma förhör som dokumentet. Utan förhör ger domänen taxans
+ * lägsta belopp (6 §). Huvudförhandlingen används inte, och ärendet ändras inte.
+ */
+function forordnandeValuation(
+  matter: KrRunMatter, work: KrRunWork, input: KrRunTaxaInput, avslut: ForordnandeAvslut, now: Date,
+): KrRunValuation {
+  if (matter.paymentMethod !== "OFFENTLIGT_UPPDRAG") {
+    throw precondition("Förordnandetaxan gäller bara offentligt uppdrag.");
+  }
+  const grossOre = kostnadsrakningClaimInclVat({
+    forordnande: { forhor: forhorFromTimeEntries(work.timeEntries), avslut },
+    yrkandeDate: now,
+    hasFTax: input.hasFTax ?? matter.taxaHasFTax ?? true,
+    isTaxeArende: true,
+    timeEntries: [...work.timeEntries],
+    expenses: [...work.expenses],
+  });
+  return { kind: "forordnande", grossOre, matterPatch: {} };
+}
+
+/**
+ * Körningens anteckning (#1857): i ett förordnandemål sparas avslutet där, så
+ * att det syns i efterhand ("Förordnandetaxa – förundersökningen lades ned").
+ * Sedan #2180 står avslutet också i kolumnen (`krRunForordnandeAvslut`); raden
+ * här skrivs kvar tills ett senare contract-steg, och migration 0054 läser den.
+ */
+export function krRunNotes(notes: string | null | undefined, input: KrRunTaxaInput): string | null | undefined {
+  if (!input.forordnande) return notes;
+  const avslut = `Förordnandetaxa – ${FORORDNANDE_AVSLUT_LABELS[input.forordnande.avslut].toLowerCase()}`;
+  return notes ? `${notes}\n${avslut}` : avslut;
+}
+
+/**
+ * Körningens typade avslut (#2180): förordnandemålets avslut, som också står i
+ * anteckningen (`krRunNotes`), så att det går att fråga på. Null utanför
+ * förordnandetaxan.
+ */
+export function krRunForordnandeAvslut(input: KrRunTaxaInput): ForordnandeAvslut | null {
+  return input.forordnande?.avslut ?? null;
+}
+
+/** Det lagrade yrkandet: värderingens belopp, eller normvägens (routern räknar). */
+export function krRunGrossOre(valuation: KrRunValuation, norm: () => number): number {
+  switch (valuation.kind) {
+    case "taxa":
+    case "lopande":
+    case "forordnande":
+      return valuation.grossOre;
+    case "norm":
+      return norm();
+    default: { const never: never = valuation; return never; }
+  }
 }

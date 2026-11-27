@@ -7,7 +7,7 @@
  */
 
 import { useState } from "react";
-import { partitionHidden } from "@/lib/shared/hidden-billing-rows";
+import { partitionHidden } from "@/lib/shared/billing/hidden-billing-rows";
 
 interface ToggleProps {
   /** Antal dolda rader; knappen visas bara när det finns några. */

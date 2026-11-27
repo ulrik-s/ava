@@ -10,7 +10,7 @@ import { formatKrPerHour, HourlyRatesFields, withRate } from "@/components/billi
 describe("formatKrPerHour", () => {
   it("öre/h → kronor med tusentalsavgränsning", () => {
     expect(formatKrPerHour(162_600).replace(/\s/g, " ")).toBe("1 626 kr/h");
-    expect(formatKrPerHour(97_550).replace(/\s/g, " ")).toBe("975,5 kr/h");
+    expect(formatKrPerHour(97_550).replace(/\s/g, " ")).toBe("975,50 kr/h");
   });
 });
 
@@ -37,9 +37,9 @@ describe("HourlyRatesFields", () => {
     render(<HourlyRatesFields value={{ ARBETE: 300_000 }} onChange={() => {}} parents={[{ TIDSSPILLAN: 148_700 }]} />);
     expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode \(kr/).value).toBe("3000");
     // Byråns tidsspillan går före juristens timarvode …
-    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan \(kr/).placeholder).toMatch(/^ärvs: 1\s487 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Tidsspillan \(kr/).placeholder).toMatch(/^ärvs: 1\s487\skr\/h$/);
     // … men utan kategoripris ärvs nivåns eget timarvode.
-    expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode helg\/kväll/).placeholder).toMatch(/^ärvs: 3\s000 kr\/h$/);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode helg\/kväll/).placeholder).toMatch(/^ärvs: 3\s000\skr\/h$/);
     // Timarvodet självt har inget att ärva.
     expect(screen.getByLabelText<HTMLInputElement>(/^Timarvode \(kr/).placeholder).toBe("ej satt");
   });

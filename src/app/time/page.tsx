@@ -3,20 +3,26 @@
 import { useId, useState } from "react";
 import { ListPage } from "@/components/layout/list-page";
 import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
+import { MoveTimeEntriesButton, useTimeEntrySelection } from "@/components/time/move-time-entries";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { DayStepper } from "@/components/ui/day-stepper";
 import { HoursInput, hasInvalidHours } from "@/components/ui/hours-input";
 import { EntityLink } from "@/lib/client/demo/entity-link";
-import { periodFrom, periodTo } from "@/lib/client/time-filter";
+import { hasPeriod } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
+import { useTimeViewer } from "@/lib/client/use-time-viewer";
+import { dayLabel } from "@/lib/shared/iso-date";
 import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import type { LockableEntry } from "@/lib/shared/time-entry-lock";
 import { TimeEntryEditModal, timeActionsColumn, useTimeEntryEditing } from "./_time-entry-editing";
+import { useTimeList, type TimeList } from "./_use-time-list";
 
 /** En rad på /time, med låsfälten som avgör om den får ändras (#1863). */
 interface TimeRow extends LockableEntry {
   id: string;
+  matterId: MatterId;
   date: string | Date;
   minutes: number;
   description: string;
@@ -46,19 +52,25 @@ const timeColumns: Column<TimeRow>[] = [
     render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
 ];
 
-interface PeriodFilterProps {
-  from: string;
-  to: string;
-  onFrom: (v: string) => void;
-  onTo: (v: string) => void;
-  onClear: () => void;
+/** Filtrets fält: dagen (#2096) och perioden, ur {@link useTimeList}. */
+type PeriodFilterProps = Pick<TimeList, "day" | "from" | "to" | "onDay" | "onFrom" | "onTo" | "onClear">;
+
+/** Dagens namn mellan pilarna, i en ruta med fast bredd så att **›** står still. */
+function DayPicker({ day, onDay }: Pick<PeriodFilterProps, "day" | "onDay">) {
+  return (
+    <DayStepper ymd={day} onChange={onDay}>
+      <span className="w-56 py-2 text-center text-sm font-medium text-gray-900">{dayLabel(day, new Date())}</span>
+    </DayStepper>
+  );
 }
 
-function PeriodFilter({ from, to, onFrom, onTo, onClear }: PeriodFilterProps) {
+function PeriodFilter({ day, from, to, onDay, onFrom, onTo, onClear }: PeriodFilterProps) {
   const fromId = useId();
   const toId = useId();
+  const period = hasPeriod(from, to);
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 flex flex-wrap items-end gap-4">
+      {!period && <DayPicker day={day} onDay={onDay} />}
       <div>
         <label htmlFor={fromId} className="block text-sm text-gray-500 mb-1">Från</label>
         <input id={fromId} type="date" value={from} max={to || undefined}
@@ -71,7 +83,7 @@ function PeriodFilter({ from, to, onFrom, onTo, onClear }: PeriodFilterProps) {
           onChange={(e) => onTo(e.target.value)}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
       </div>
-      {(from || to) && (
+      {period && (
         <button onClick={onClear}
           className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
           Rensa
@@ -122,9 +134,12 @@ function TimeEntryForm({ form, setForm, mattersData, isPending, onSubmit }: Time
         </div>
         <div>
           <label htmlFor={dateFieldId} className="block text-sm text-gray-500 mb-1">Datum *</label>
-          <input id={dateFieldId} type="date" required value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          {/* Pilarna stegar formulärets datum, inte listans dag (#2097). */}
+          <DayStepper ymd={form.date} onChange={(date) => setForm({ ...form, date })}>
+            <input id={dateFieldId} type="date" required value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </DayStepper>
         </div>
         <div>
           <label htmlFor={minutesFieldId} className="block text-sm text-gray-500 mb-1">Tid (h) *</label>
@@ -155,15 +170,9 @@ function TimeEntryForm({ form, setForm, mattersData, isPending, onSubmit }: Time
 }
 
 export default function TimePage() {
-  const [page, setPage] = useState(1);
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const timeEntries = trpc.timeEntry.list.useQuery({
-    page,
-    pageSize: 50,
-    from: periodFrom(fromDate),
-    to: periodTo(toDate),
-  });
+  // Den som inte är Admin ser bara sina egna poster (#2114).
+  const list = useTimeList(useTimeViewer());
+  const { query: timeEntries, page, setPage } = list;
   // Hämta alla ACTIVE matters (cap 500 räcker för en advokatbyrå). Tidigare
   // skickades 200 men routern cappade på 100 → Zod-fail → tom dropdown.
   const matters = trpc.matter.list.useQuery({ pageSize: 500, status: "ACTIVE" });
@@ -179,6 +188,7 @@ export default function TimePage() {
   });
 
   const editing = useTimeEntryEditing();
+  const marking = useTimeEntrySelection<TimeRow>();
   const columns = [...timeColumns, timeActionsColumn<TimeRow>(editing)];
 
   const createTimeEntry = trpc.timeEntry.create.useMutation({
@@ -219,20 +229,19 @@ export default function TimePage() {
         />
       )}
 
-      <PeriodFilter
-        from={fromDate}
-        to={toDate}
-        onFrom={(v) => { setFromDate(v); setPage(1); }}
-        onTo={(v) => { setToDate(v); setPage(1); }}
-        onClear={() => { setFromDate(""); setToDate(""); setPage(1); }}
-      />
+      <PeriodFilter day={list.day} from={list.from} to={list.to}
+        onDay={list.onDay} onFrom={list.onFrom} onTo={list.onTo} onClear={list.onClear} />
 
+      {/* /time listar alla ärendens poster: en omläsning täcker båda ärendena. */}
+      <MoveTimeEntriesButton selected={marking.selection.selected} onMoved={marking.clear}
+        refresh={() => { void utils.timeEntry.list.invalidate(); }} />
       <DataTable
         prefKey="list.time-entries"
         columns={columns}
         data={timeEntries.data?.entries ?? []}
         rowKey={(e) => e.id}
         emptyMessage="Inga tidsposter."
+        selection={marking.selection}
       />
       <TimeEntryEditModal ed={editing} />
       {timeEntries.data && timeEntries.data.pages > 1 && (

@@ -21,10 +21,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
-import { kostnadsrakningClaimInclVat, type KrClaimInput } from "@/lib/shared/kostnadsrakning";
+import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
+import { kostnadsrakningClaimInclVat, type KrClaimInput } from "@/lib/shared/billing/kostnadsrakning";
 import { rng, type Rng } from "../../../helpers/seeded-rng";
 import {
-  type BillingWorld, nowFor, partialAwardOre, partialCaseFor, partialPruningOre, partialRngFor, type Scenario, scenarioFor,
+  type BillingWorld, forordnandeCaseFor, forordnandeRngFor, nowFor, partialAwardOre, partialCaseFor, partialPruningOre, partialRngFor, type Scenario, scenarioFor,
   worldFor,
 } from "./billing-world";
 
@@ -81,6 +82,7 @@ describe.each(SEEDS)("seed %i", (seed) => {
   const r: Rng = rng(seed);
   const now = nowFor(r);
   const rp: Rng = partialRngFor(seed);
+  const rf: Rng = forordnandeRngFor(seed);
   beforeEach(() => { vi.setSystemTime(now); });
   afterEach(() => { vi.setSystemTime(); });
 
@@ -92,6 +94,23 @@ describe.each(SEEDS)("seed %i", (seed) => {
     await world.caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: runId, awardedOre: claimed });
     const { invoice } = await world.caller.billingRun.setVerdict({ billingRunId: runId });
     expect({ seed, invoiced: invoice.amount }).toEqual({ seed, invoiced: claimed });
+  });
+
+  // Förordnandemål (#1857): körningen och dokumentet räknar med samma funktion
+  // och samma förhör (tidsposterna med kategorin FORHOR), så de yrkar lika.
+  it("förordnandemål: dokument = körning = faktura vid fullt beviljat", async () => {
+    const { s, avslut } = forordnandeCaseFor(rf, now);
+    const world = worldFor(s);
+    const { entries } = await world.caller.timeEntry.list({ matterId: world.matterId, pageSize: 100 });
+    const documented = kostnadsrakningClaimInclVat({
+      forordnande: { forhor: forhorFromTimeEntries(entries), avslut },
+      yrkandeDate: now, hasFTax: true, isTaxeArende: true, expenses: s.expenses, timeEntries: entries,
+    });
+    const { run } = await world.caller.billingRun.createKostnadsrakning({ matterId: world.matterId, forordnande: { avslut }, hasFTax: true });
+    expect({ seed, claimed: run.workValueOreAtRun }).toEqual({ seed, claimed: documented });
+    await world.caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: run.id, awardedOre: documented });
+    const { invoice } = await world.caller.billingRun.setVerdict({ billingRunId: run.id });
+    expect({ seed, invoiced: invoice.amount }).toEqual({ seed, invoiced: documented });
   });
 
   it("rättshjälp: dokument = körning = fakturerat vid fullt beviljat, ingen förlust", async () => {

@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest-compat";
+import { BILLING_SHORTCUT_PARAM } from "@/lib/shared/billing/billing-flow";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
   coverageItems, dagar, deadlineItems,
-  sortWatchlist, unbilledItems, daysBetween,
+  sortWatchlist, unbilledItems, daysBetween, klientNameOf, withKlientNames,
   DEFAULT_THRESHOLDS, type WatchlistItem,
 } from "@/lib/shared/watchlist";
 
@@ -102,6 +103,12 @@ describe("unbilledItems", () => {
     expect(unbilledItems([{ ...bas, unbilledOre: 0, oldestEntryDate: "2026-01-01" }], NOW)).toEqual([]);
   });
 
+  it("öppnar faktureringen direkt: länken bär ?fakturera=1 (#1854)", () => {
+    const [item] = unbilledItems([{ ...bas, unbilledOre: 30_000_00, oldestEntryDate: "2026-09-04" }], NOW);
+    expect(item?.link).toEqual({ route: "matters", id: "m1", query: { [BILLING_SHORTCUT_PARAM]: "1" } });
+    expect(BILLING_SHORTCUT_PARAM).toBe("fakturera");
+  });
+
   it("respekterar överstyrda trösklar", () => {
     const strängare = { ...DEFAULT_THRESHOLDS, unbilledThresholdOre: 100_00, unbilledAgeDays: 9999 };
     const items = unbilledItems([{ ...bas, unbilledOre: 500_00, oldestEntryDate: "2026-09-01" }], NOW, strängare);
@@ -133,6 +140,11 @@ describe("deadlineItems", () => {
     const [item] = deadlineItems([{ ...bas, dueAt: "2026-09-01" }], NOW);
     expect(item?.severity).toBe("passed");
     expect(item?.detail).toContain("4 dagar sedan");
+  });
+
+  it("tidsfristen länkar bara till ärendet, utan query (#1854)", () => {
+    const [item] = deadlineItems([{ ...bas, dueAt: "2026-09-06" }], NOW);
+    expect(item?.link).toEqual({ route: "matters", id: "m1" });
   });
 
   it("utan ärende länkar till Frister (/tasks fanns inte, #1167) och bär uppgiftens id", () => {
@@ -234,5 +246,36 @@ describe("svensk böjning", () => {
       [{ id: "t", title: "Ge in", dueAt: "2026-09-05", matterId: null, matterNumber: null }], NOW2,
     );
     expect(item?.title).toContain("idag");
+  });
+});
+
+describe("klientens namn (#1965)", () => {
+  const post = (matterId: string | null): WatchlistItem => ({
+    kind: "deadline", severity: "approaching", title: "Frist", detail: "", matterId,
+    matterNumber: matterId === null ? null : `2026-${matterId}`, at: "2026-09-08", amountOre: null, link: null,
+  });
+
+  it("klientNameOf ger första KLIENT-partens namn; andra roller före klienten påverkar inte", () => {
+    expect(klientNameOf([
+      { role: "MOTPART", name: "Motpart AB" },
+      { role: "KLIENT", name: "Klient A" },
+      { role: "KLIENT", name: "Klient B" },
+    ])).toBe("Klient A");
+  });
+
+  it("klientNameOf: utan klient eller utan parter → undefined", () => {
+    expect(klientNameOf([{ role: "MOTPART", name: "Motpart AB" }])).toBeUndefined();
+    expect(klientNameOf(undefined)).toBeUndefined();
+  });
+
+  it("withKlientNames lägger namnet på posterna i ärenden med klient, och lämnar övriga orörda", () => {
+    const parties = new Map([
+      ["m1", [{ role: "KLIENT" as const, name: "Klient A" }]],
+      ["m2", [{ role: "MOTPART" as const, name: "Motpart AB" }]],
+    ]);
+    const [a, b, c] = withKlientNames([post("m1"), post("m2"), post(null)], parties);
+    expect(a?.klientName).toBe("Klient A");
+    expect(b).not.toHaveProperty("klientName");
+    expect(c).not.toHaveProperty("klientName");
   });
 });

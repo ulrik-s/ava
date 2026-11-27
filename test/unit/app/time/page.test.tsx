@@ -2,9 +2,11 @@
  * Test för TimePage — listrendering och nytt-tidsregistreringsflöde.
  */
 
-import { render, screen, fireEvent, within } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { act, render, screen, fireEvent, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import TimePage from "@/app/time/page";
+import { periodFrom, periodTo } from "@/lib/client/time-filter";
+import { rowOrder, sortColumn } from "../../../helpers/data-table";
 
 const timeQuery: {
   data: {
@@ -24,7 +26,21 @@ const matterQuery: { data: { matters: Array<Record<string, unknown>> } } = {
 const utilsMock = { timeEntry: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } };
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
+const moveMutate = vi.fn();
+/** Serverfel från flytten (#2042). */
+let moveError: { message: string } | null = null;
 const deleteMutate = vi.fn();
+/** Listans indata: sida, period och person (#2114). */
+interface ListInput { page: number; from?: Date; to?: Date; userId?: string }
+/** Det listan senast frågades efter, och om frågan var påslagen. */
+const listInput = vi.fn((_input: ListInput, _opts?: { enabled: boolean }) => timeQuery);
+/** Den inloggade (`user.current`); `undefined` = har inte svarat än. */
+let currentUser: { id: string; role: string } | undefined = { id: "u1", role: "LAWYER" };
+/** onSuccess från create/delete — testet anropar dem som servern hade gjort. */
+const succeeded: Record<"create" | "remove", (() => void) | undefined> = {
+  create: undefined, remove: undefined,
+};
+type MutationOpts = { onSuccess?: () => void } | undefined;
 /** Serverfel från update (t.ex. PRECONDITION_FAILED för en fryst post). */
 let updateError: { message: string } | null = null;
 
@@ -32,10 +48,21 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     timeEntry: {
-      list: { useQuery: () => timeQuery },
-      create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
+      list: { useQuery: (input: ListInput, opts?: { enabled: boolean }) => listInput(input, opts) },
+      create: {
+        useMutation: (opts: MutationOpts) => {
+          succeeded.create = opts?.onSuccess;
+          return { mutate: createMutate, isPending: false };
+        },
+      },
       update: { useMutation: () => ({ mutate: updateMutate, isPending: false, error: updateError }) },
-      delete: { useMutation: () => ({ mutate: deleteMutate, isPending: false, error: null }) },
+      moveToMatter: { useMutation: () => ({ mutate: moveMutate, isPending: false, error: moveError }) },
+      delete: {
+        useMutation: (opts: MutationOpts) => {
+          succeeded.remove = opts?.onSuccess;
+          return { mutate: deleteMutate, isPending: false, error: null };
+        },
+      },
     },
     // Byråns standardåtgärder (#956) läses av ändra-formuläret. Tom → ingen väljare.
     organization: { getSettings: { useQuery: () => ({ data: { standardAtgarder: [] } }) } },
@@ -50,15 +77,23 @@ vi.mock("@/lib/client/trpc", () => ({
       clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     user: {
-      current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
+      current: { useQuery: () => ({ data: currentUser }) },
     },
   },
 }));
 
 beforeEach(() => {
+  // Fast klocka (#2096): listan öppnas på idag = 2026-11-24 i Stockholm.
+  vi.setSystemTime(new Date("2026-11-24T12:00:00Z"));
   vi.clearAllMocks();
   timeQuery.data = { entries: [], total: 0, pages: 0, totalMinutes: 0 };
   updateError = null;
+  moveError = null;
+  currentUser = { id: "u1", role: "LAWYER" };
+});
+
+afterEach(() => {
+  vi.setSystemTime();
 });
 
 describe("TimePage", () => {
@@ -122,7 +157,7 @@ describe("TimePage", () => {
   it("togglar debiterbar-checkbox", () => {
     render(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
-    const checkbox = screen.getByRole<HTMLInputElement>("checkbox");
+    const checkbox = screen.getByRole<HTMLInputElement>("checkbox", { name: "Debiterbar" });
     expect(checkbox.checked).toBe(true);
     fireEvent.click(checkbox);
     expect(checkbox.checked).toBe(false);
@@ -169,7 +204,7 @@ describe("TimePage", () => {
     };
     render(<TimePage />);
     expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
     expect(screen.getByText(/Sida 2 av 3/)).toBeInTheDocument();
   });
 });
@@ -177,7 +212,7 @@ describe("TimePage", () => {
 describe("TimePage — ändra och ta bort", () => {
   const entry = {
     id: "t1", date: "2026-09-20", minutes: 45, description: "Genomgång av avtal",
-    billable: true, kind: "ARBETE",
+    billable: true, kind: "ARBETE", matterId: "m1",
     matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" },
     user: { name: "Cecilia" },
   };
@@ -195,7 +230,7 @@ describe("TimePage — ändra och ta bort", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
     expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({
       id: "t1", description: "Genomgång av avtal + mejl", minutes: 45, date: "2026-09-20",
-    }));
+    }), expect.anything());
   });
 
   it("Ta bort frågar först och tar bort vid ja", () => {
@@ -240,5 +275,395 @@ describe("TimePage — ändra och ta bort", () => {
     withRows(entry);
     render(<TimePage />);
     expect(screen.getByRole("alert")).toHaveTextContent(/slutfaktura/);
+  });
+});
+
+describe("TimePage — flytta posten till ett annat ärende (#2042)", () => {
+  const entry = {
+    id: "t1", date: "2026-09-20", minutes: 45, description: "Genomgång av avtal", billable: true, kind: "ARBETE",
+    matterId: "m1", matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" }, user: { name: "Cecilia" },
+  };
+  type CallOpts = { onSuccess?: () => void } | undefined;
+  const succeed = (mutate: ReturnType<typeof vi.fn>) => (mutate.mock.calls.at(-1)?.[1] as CallOpts)?.onSuccess?.();
+
+  beforeEach(() => {
+    timeQuery.data = { entries: [entry], total: 1, pages: 1, totalMinutes: 45 };
+    matterQuery.data = { matters: [
+      { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" },
+      { id: "m2", matterNumber: "UA2026-0002", title: "Hyrestvist" },
+    ] };
+  });
+
+  function openEdit() {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
+    return screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
+  }
+
+  it("fältet Ärende är förvalt postens ärende; samma ärende ger bara update", () => {
+    const dialog = openEdit();
+    expect(within(dialog).getByLabelText("Ärende")).toHaveValue("UA2026-0001 — Avtalstvist");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    act(() => succeed(updateMutate));
+    expect(moveMutate).not.toHaveBeenCalled();
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).not.toBeInTheDocument();
+  });
+
+  it("ett annat ärende: update och sedan moveToMatter med postens id", () => {
+    const dialog = openEdit();
+    fireEvent.change(within(dialog).getByLabelText("Ärende"), { target: { value: "UA2026-0002 — Hyrestvist" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    act(() => succeed(updateMutate));
+    expect(moveMutate).toHaveBeenCalledWith({ ids: ["t1"], matterId: "m2" }, expect.anything());
+    act(() => succeed(moveMutate));
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).not.toBeInTheDocument();
+  });
+
+  it("ett fel i flytten visas för användaren", () => {
+    moveError = { message: "Tidposten ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort." };
+    render(<TimePage />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/kostnadsräkning/);
+  });
+});
+
+describe("TimePage — markera flera poster och flytta dem (#2043)", () => {
+  const entries = [
+    { id: "t1", date: "2026-09-20", minutes: 45, description: "Genomgång av avtal", billable: true,
+      matterId: "m1", matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" } },
+    { id: "t2", date: "2026-09-21", minutes: 30, description: "Telefonsamtal", billable: true,
+      matterId: "m1", matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" } },
+    { id: "t3", date: "2026-09-22", minutes: 60, description: "Fakturerat möte", billable: true, invoiceId: "inv1",
+      matterId: "m1", matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" } },
+  ];
+  type CallOpts = { onSuccess?: () => void } | undefined;
+  const rowBox = (text: string) => within(screen.getByText(text).closest("tr") as HTMLElement);
+
+  beforeEach(() => {
+    timeQuery.data = { entries, total: 3, pages: 1, totalMinutes: 135 };
+    matterQuery.data = { matters: [
+      { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" },
+      { id: "m2", matterNumber: "UA2026-0002", title: "Hyrestvist" },
+    ] };
+  });
+
+  it("en låst post går inte att markera, och knappen syns först när något är markerat", () => {
+    render(<TimePage />);
+    expect(rowBox("Fakturerat möte").queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Flytta till ärende/ })).toBeNull();
+    fireEvent.click(rowBox("Genomgång av avtal").getByRole("checkbox", { name: "Markera rad" }));
+    expect(screen.getByRole("button", { name: "Flytta till ärende… (1)" })).toBeInTheDocument();
+  });
+
+  it("Flytta anropar moveToMatter med de markerade, laddar om listan och tömmer markeringen", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Markera alla" }));
+    fireEvent.click(screen.getByRole("button", { name: "Flytta till ärende… (2)" }));
+    const dialog = screen.getByRole("dialog", { name: "Flytta till ärende" });
+    fireEvent.change(within(dialog).getByLabelText("2 tidsposter flyttas till:"), { target: { value: "UA2026-0002 — Hyrestvist" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Flytta" }));
+    expect(moveMutate).toHaveBeenCalledWith({ ids: ["t1", "t2"], matterId: "m2" }, expect.anything());
+    act(() => (moveMutate.mock.calls.at(-1)?.[1] as CallOpts)?.onSuccess?.());
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Flytta till ärende" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Flytta till ärende/ })).toBeNull();
+  });
+
+  it("Avbryt stänger dialogen och behåller markeringen", () => {
+    render(<TimePage />);
+    fireEvent.click(rowBox("Telefonsamtal").getByRole("checkbox", { name: "Markera rad" }));
+    fireEvent.click(screen.getByRole("button", { name: "Flytta till ärende… (1)" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Flytta till ärende" })).getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("dialog", { name: "Flytta till ärende" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Flytta till ärende… (1)" })).toBeInTheDocument();
+    expect(moveMutate).not.toHaveBeenCalled();
+  });
+});
+
+// ── Kolumnerna, perioden och mutationernas svar (#1904) ─────────────────
+
+/** Tre poster där varje kolumn ger en egen ordning. */
+const sortableEntries = (): Array<Record<string, unknown>> => [
+  { id: "a", date: "2026-03-01", minutes: 30, description: "Bbb", billable: true,
+    matter: { id: "m1", matterNumber: "2026-0002", title: "X" }, user: { name: "Cecilia" } },
+  { id: "b", date: "2026-01-01", minutes: 90, description: "Ccc", billable: false,
+    matter: { id: "m2", matterNumber: "2026-0003", title: "Y" }, user: null },
+  { id: "c", date: "2026-02-01", minutes: 60, description: "Aaa", billable: true,
+    matter: { id: "m3", matterNumber: "2026-0001", title: "Z" }, user: { name: "Bo" } },
+];
+const descriptions = ["Aaa", "Bbb", "Ccc"];
+
+describe("TimePage — kolumnerna sorterar på det som visas (#1904)", () => {
+  beforeEach(() => {
+    timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
+  });
+
+  it("Datum, Ärende och Advokat", () => {
+    render(<TimePage />);
+    sortColumn("Datum", "asc");
+    expect(rowOrder(descriptions)).toEqual(["Ccc", "Aaa", "Bbb"]);
+    sortColumn("Ärende", "asc");
+    expect(rowOrder(descriptions)).toEqual(["Aaa", "Bbb", "Ccc"]);
+    sortColumn("Advokat", "desc");
+    expect(rowOrder(descriptions)).toEqual(["Bbb", "Aaa", "Ccc"]);
+  });
+
+  it("Tid, Beskrivning och Deb.", () => {
+    render(<TimePage />);
+    sortColumn("Tid (h)", "desc");
+    expect(rowOrder(descriptions)).toEqual(["Ccc", "Aaa", "Bbb"]);
+    sortColumn("Beskrivning", "desc");
+    expect(rowOrder(descriptions)).toEqual(["Ccc", "Bbb", "Aaa"]);
+    sortColumn("Deb.", "asc");
+    expect(rowOrder(descriptions)[0]).toBe("Ccc");
+  });
+
+  it("summaraden räknar ihop tiden på raderna", () => {
+    render(<TimePage />);
+    expect(screen.getByText("3")).toHaveClass("font-mono");
+  });
+});
+
+describe("TimePage — periodfiltret (#1904)", () => {
+  const lastInput = () => listInput.mock.calls.at(-1)?.[0];
+
+  it("Från och Till begränsar listan och går till första sidan; Rensa tar bort perioden", () => {
+    timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    expect(lastInput()?.page).toBe(2);
+    fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
+    expect(lastInput()).toMatchObject({ page: 1, from: new Date("2026-01-01T00:00:00.000") });
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    fireEvent.change(screen.getByLabelText("Till"), { target: { value: "2026-01-31" } });
+    expect(lastInput()).toMatchObject({ page: 1, to: new Date("2026-01-31T23:59:59.999") });
+    fireEvent.click(screen.getByRole("button", { name: "Rensa" }));
+    // Utan period visar listan åter dagen (#2096).
+    expect(lastInput()).toMatchObject({ page: 1, from: periodFrom("2026-11-24"), to: periodTo("2026-11-24") });
+    expect(screen.queryByRole("button", { name: "Rensa" })).toBeNull();
+  });
+
+  it("Föregående går tillbaka en sida", () => {
+    timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Föregående" }));
+    expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
+  });
+});
+
+describe("TimePage — registreringens och ändringens svar (#1904)", () => {
+  it("datumet i formuläret skickas med", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    fireEvent.change(screen.getByLabelText(/Datum \*/), { target: { value: "2026-05-04" } });
+    fireEvent.change(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i), { target: { value: "Möte" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-05-04" }));
+  });
+
+  it("när tiden registrerats stängs formuläret, fälten töms och listan laddas om", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    fireEvent.change(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i), { target: { value: "Möte" } });
+    act(() => succeeded.create?.());
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /^Spara$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    expect(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i).value).toBe("");
+  });
+
+  it("när ändringen sparats stängs dialogen och listan laddas om", () => {
+    timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
+    render(<TimePage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Ändra" })[0] as HTMLElement);
+    const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    // Ändringen skickar onSuccess med anropet (#2042), inte med hooken.
+    act(() => (updateMutate.mock.calls.at(-1)?.[1] as MutationOpts)?.onSuccess?.());
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).toBeNull();
+  });
+
+  it("Avbryt i dialogen stänger den utan att spara", () => {
+    timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
+    render(<TimePage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Ändra" })[0] as HTMLElement);
+    const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).toBeNull();
+    expect(updateMutate).not.toHaveBeenCalled();
+  });
+
+  it("när posten tagits bort laddas listan om", () => {
+    render(<TimePage />);
+    act(() => succeeded.remove?.());
+    expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+  });
+});
+
+describe("TimePage — en dag i taget (#2096)", () => {
+  const lastInput = () => listInput.mock.calls.at(-1)?.[0];
+  const dayRange = (day: string) => ({ from: periodFrom(day), to: periodTo(day) });
+  const step = (name: "Föregående dag" | "Nästa dag") => fireEvent.click(screen.getByRole("button", { name }));
+
+  it("öppnas på idag, med Idag mellan pilarna", () => {
+    render(<TimePage />);
+    expect(lastInput()).toMatchObject({ page: 1, pageSize: 50, ...dayRange("2026-11-24") });
+    expect(screen.getByText("Idag")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Föregående dag" })).toBeInTheDocument();
+  });
+
+  it("pilarna byter dag och dagens namn", () => {
+    render(<TimePage />);
+    step("Föregående dag");
+    expect(lastInput()).toMatchObject(dayRange("2026-11-23"));
+    expect(screen.getByText("Igår")).toBeInTheDocument();
+    step("Nästa dag");
+    expect(screen.getByText("Idag")).toBeInTheDocument();
+    step("Nästa dag");
+    expect(screen.getByText("Imorgon")).toBeInTheDocument();
+    step("Nästa dag");
+    expect(screen.getByText("torsdag 26 november 2026")).toBeInTheDocument();
+    expect(lastInput()).toMatchObject(dayRange("2026-11-26"));
+  });
+
+  it("dagbyte går till första sidan", () => {
+    timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    expect(screen.getByText("Sida 2 av 3")).toBeInTheDocument();
+    step("Föregående dag");
+    expect(screen.getByText("Sida 1 av 3")).toBeInTheDocument();
+    expect(lastInput()).toMatchObject({ page: 1, ...dayRange("2026-11-23") });
+  });
+
+  it("Totalt: visar frågans summa", () => {
+    timeQuery.data.totalMinutes = 150;
+    render(<TimePage />);
+    expect(screen.getByText("Totalt: 2,5 h")).toBeInTheDocument();
+  });
+
+  it("bara Från ger perioden och döljer pilarna och dagens namn", () => {
+    render(<TimePage />);
+    fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
+    expect(lastInput()).toMatchObject({ from: periodFrom("2026-01-01"), to: undefined });
+    expect(screen.queryByText("Idag")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Föregående dag" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Nästa dag" })).toBeNull();
+  });
+
+  it("bara Till ger perioden och döljer pilarna", () => {
+    render(<TimePage />);
+    fireEvent.change(screen.getByLabelText("Till"), { target: { value: "2026-01-31" } });
+    expect(lastInput()).toMatchObject({ from: undefined, to: periodTo("2026-01-31") });
+    expect(screen.queryByRole("button", { name: "Nästa dag" })).toBeNull();
+  });
+
+  it("Rensa visar åter samma dag som innan perioden valdes", () => {
+    render(<TimePage />);
+    step("Föregående dag");
+    fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
+    expect(screen.queryByText("Igår")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Rensa" }));
+    expect(screen.getByText("Igår")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Föregående dag" })).toBeInTheDocument();
+    expect(lastInput()).toMatchObject({ page: 1, ...dayRange("2026-11-23") });
+  });
+
+  it("en dag utan poster visar tomtexten", () => {
+    render(<TimePage />);
+    expect(screen.getByText("Inga tidsposter.")).toBeInTheDocument();
+  });
+});
+
+describe("TimePage — pilarna vid formulärets Datum * (#2097)", () => {
+  /** Öppnar + Registrera tid och ger formuläret, där pilarna avgränsas. */
+  function openForm(): HTMLElement {
+    const { container } = render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    const form = container.querySelector("form");
+    if (!form) throw new Error("formuläret saknas");
+    return form;
+  }
+  const dateOf = (form: HTMLElement) => within(form).getByLabelText<HTMLInputElement>(/Datum \*/).value;
+
+  it("stegar formulärets datum utan att skicka formuläret eller byta listans dag", () => {
+    const form = openForm();
+    expect(dateOf(form)).toBe("2026-11-24");
+    fireEvent.click(within(form).getByRole("button", { name: "Föregående dag" }));
+    expect(dateOf(form)).toBe("2026-11-23");
+    fireEvent.click(within(form).getByRole("button", { name: "Nästa dag" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Nästa dag" }));
+    expect(dateOf(form)).toBe("2026-11-25");
+    expect(screen.getByText("Idag")).toBeInTheDocument();
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("Spara skickar det stegade datumet", () => {
+    const form = openForm();
+    fireEvent.click(within(form).getByRole("button", { name: "Föregående dag" }));
+    fireEvent.change(within(form).getByLabelText<HTMLInputElement>(/Beskrivning/i), { target: { value: "Möte" } });
+    fireEvent.click(within(form).getByRole("button", { name: /^Spara$/i }));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-11-23" }));
+  });
+
+  it("formuläret börjar på idag fast listan visar igår", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Föregående dag" }));
+    expect(screen.getByText("Igår")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    expect(screen.getByLabelText<HTMLInputElement>(/Datum \*/).value).toBe("2026-11-24");
+  });
+
+  it("efter Spara börjar formuläret åter på idag", () => {
+    const form = openForm();
+    fireEvent.click(within(form).getByRole("button", { name: "Föregående dag" }));
+    act(() => succeeded.create?.());
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    expect(screen.getByLabelText<HTMLInputElement>(/Datum \*/).value).toBe("2026-11-24");
+  });
+
+  it("ett tömt datumfält stänger av formulärets pilar", () => {
+    const form = openForm();
+    fireEvent.change(within(form).getByLabelText(/Datum \*/), { target: { value: "" } });
+    expect(within(form).getByRole("button", { name: "Föregående dag" })).toBeDisabled();
+    expect(within(form).getByRole("button", { name: "Nästa dag" })).toBeDisabled();
+  });
+});
+
+describe("TimePage — egna tider för den som inte är Admin (#2114)", () => {
+  const lastCall = () => listInput.mock.calls.at(-1);
+
+  it("en Advokat frågar bara efter sina egna poster", () => {
+    render(<TimePage />);
+    expect(lastCall()?.[0]).toMatchObject({ userId: "u1" });
+    expect(lastCall()?.[1]).toEqual({ enabled: true });
+  });
+
+  it("en Assistent frågar bara efter sina egna poster", () => {
+    currentUser = { id: "u7", role: "ASSISTANT" };
+    render(<TimePage />);
+    expect(lastCall()?.[0]).toMatchObject({ userId: "u7" });
+  });
+
+  it("en Admin frågar efter allas poster, som förut", () => {
+    currentUser = { id: "u2", role: "ADMIN" };
+    render(<TimePage />);
+    expect(lastCall()?.[0]).not.toHaveProperty("userId");
+    expect(lastCall()?.[1]).toEqual({ enabled: true });
+  });
+
+  it("innan user.current har svarat går ingen fråga iväg", () => {
+    currentUser = undefined;
+    render(<TimePage />);
+    expect(lastCall()?.[1]).toEqual({ enabled: false });
+    expect(lastCall()?.[0]).not.toHaveProperty("userId");
+  });
+
+  it("dagbläddringen behåller personen i frågan", () => {
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Föregående dag" }));
+    expect(lastCall()?.[0]).toMatchObject({ userId: "u1", from: periodFrom("2026-11-23") });
   });
 });

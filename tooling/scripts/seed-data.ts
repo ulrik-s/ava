@@ -10,13 +10,13 @@
  * får två sourcer of truth.
  */
 
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
-import { kindsFields } from "@/lib/shared/document-kinds";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/billing/brottmalstaxa";
 import {
   KOSTNADSRAKNING_TEMPLATE_NAME,
   KOSTNADSRAKNING_TEMPLATE_CATEGORY,
   KOSTNADSRAKNING_DEFAULT_HTML,
-} from "@/lib/shared/kostnadsrakning-template";
+} from "@/lib/shared/billing/kostnadsrakning-template";
+import { kindsFields } from "@/lib/shared/document-kinds";
 import {
   ENTITY_REGISTRY,
   type ContactType,
@@ -765,7 +765,8 @@ const PLAN_TARGETS: PlanTarget[] = [
   { invoiceId: "inv-004", status: "ACTIVE", monthlyAmount: 25_000, dayOfMonth: 15, startsDaysAgo: 90, paymentsMade: 3, withReminders: true },
   { invoiceId: "inv-005", status: "ACTIVE", monthlyAmount: 15_000, dayOfMonth: 1, startsDaysAgo: 120, paymentsMade: 4, withReminders: true },
   { invoiceId: "inv-009", status: "ACTIVE", monthlyAmount: 35_000, dayOfMonth: 25, startsDaysAgo: 60, paymentsMade: 2, withReminders: true },
-  { invoiceId: "inv-010", status: "ACTIVE", monthlyAmount: 22_000, dayOfMonth: 10, startsDaysAgo: 45, paymentsMade: 1, withReminders: false },
+  // inv-010 ligger efter (#2136): den första förfallodagen är minst 15 dagar före byggdagen.
+  { invoiceId: "inv-010", status: "ACTIVE", monthlyAmount: 22_000, dayOfMonth: 10, startsDaysAgo: 45, paymentsMade: 0, withReminders: false },
   { invoiceId: "inv-008", status: "COMPLETED", monthlyAmount: 18_000, dayOfMonth: 1, startsDaysAgo: 365, paymentsMade: 6, withReminders: true },
   { invoiceId: "inv-012", status: "CANCELLED", monthlyAmount: 30_000, dayOfMonth: 28, startsDaysAgo: 60, paymentsMade: 0, withReminders: false },
 ];
@@ -1057,40 +1058,78 @@ function buildInvoiceDispatches(invoices: SeedDataset["invoices"], currentUserId
   return out;
 }
 
-function buildCalendarEvents(orgId: string, ASSIGN_USERS: string[]): SeedDataset["calendarEvents"] {
-  const out: SeedDataset["calendarEvents"] = [];
-  // calendar events
-  const tpl: Array<{ kind: "appointment" | "deadline"; title: string; location?: string; hoursLong: number }> = [
-    { kind: "appointment", title: "Klientmöte", location: "Kontoret", hoursLong: 1 },
-    { kind: "appointment", title: "Huvudförhandling", location: "Stockholms tingsrätt, sal 3", hoursLong: 6 },
-    { kind: "appointment", title: "Förberedande sammanträde", location: "Stockholms tingsrätt, sal 7", hoursLong: 2 },
-    { kind: "deadline", title: "Inlaga inlämnas", hoursLong: 0 },
-    { kind: "deadline", title: "Bevisuppgift", hoursLong: 0 },
-    { kind: "appointment", title: "Förlikningsmöte", location: "Motpartens kontor", hoursLong: 3 },
-    { kind: "deadline", title: "Överklagan sista dag", hoursLong: 0 },
-    { kind: "appointment", title: "Intern teammöte", location: "Konferensrum", hoursLong: 1 },
-  ];
-  // Fördela events över ALLA användare — annars känns multi-user-vyn
-  // tom när användaren togglar in en annan kollega. Bumpat antal så
-  // varje user får minst 3 events i ett nära tidsfönster.
+/** Ett möte eller en förhandling i seedens kalender. */
+type AppointmentTemplate = { title: string; location: string; hoursLong: number };
+
+/**
+ * En plats i seedens kalenderslinga: ett möte, eller en frist. Fristerna blir
+ * uppgifter (#2120), eftersom Frister och Att bevaka bara läser uppgifter.
+ */
+type SlotTemplate = { appointment: AppointmentTemplate } | { deadline: string };
+
+const SLOT_TEMPLATES: readonly SlotTemplate[] = [
+  { appointment: { title: "Klientmöte", location: "Kontoret", hoursLong: 1 } },
+  { appointment: { title: "Huvudförhandling", location: "Stockholms tingsrätt, sal 3", hoursLong: 6 } },
+  { appointment: { title: "Förberedande sammanträde", location: "Stockholms tingsrätt, sal 7", hoursLong: 2 } },
+  { deadline: "Inlaga inlämnas" },
+  { deadline: "Bevisuppgift" },
+  { appointment: { title: "Förlikningsmöte", location: "Motpartens kontor", hoursLong: 3 } },
+  { deadline: "Överklagan sista dag" },
+  { appointment: { title: "Intern teammöte", location: "Konferensrum", hoursLong: 1 } },
+];
+
+/** En plats i slingan med sitt ärende, sin ägare och sin starttid. */
+type CalendarSlot = { i: number; tpl: SlotTemplate; matter: MatterSeed; userId: string; start: Date };
+
+/**
+ * Seedens 25 kalenderplatser, fördelade över ALLA användare — annars känns
+ * multi-user-vyn tom när användaren togglar in en annan kollega. Varje user
+ * får minst 3 platser i ett nära tidsfönster.
+ */
+function calendarSlots(ASSIGN_USERS: string[]): CalendarSlot[] {
+  const out: CalendarSlot[] = [];
   for (let i = 0; i < 25; i++) {
-    const t = tpl[i % tpl.length];
+    const tpl = SLOT_TEMPLATES[i % SLOT_TEMPLATES.length];
     const matter = MATTERS[i % MATTERS.length];
     const userId = ASSIGN_USERS[i % ASSIGN_USERS.length];
-    if (!t || !matter) continue;
+    if (!tpl || !matter || !userId) continue;
     const daysOffset = (i % 14) - 5; // -5..+8 dagar runt idag
-    const start = isoDate(daysOffset, 9 + (i % 4) * 2);
-    const endAt = t.hoursLong > 0 ? new Date(start.getTime() + t.hoursLong * 3600_000) : null;
+    out.push({ i, tpl, matter, userId, start: isoDate(daysOffset, 9 + (i % 4) * 2) });
+  }
+  return out;
+}
+
+/** Kalenderhändelserna: bara möten och förhandlingar (#2120). */
+function buildCalendarEvents(orgId: string, ASSIGN_USERS: string[]): SeedDataset["calendarEvents"] {
+  const out: SeedDataset["calendarEvents"] = [];
+  for (const { i, tpl, matter, userId, start } of calendarSlots(ASSIGN_USERS)) {
+    if (!("appointment" in tpl)) continue;
+    const t: AppointmentTemplate = tpl.appointment;
     out.push({
       id: `cal-${String(i + 1).padStart(3, "0")}`,
-      userId, organizationId: orgId, kind: t.kind,
+      userId, organizationId: orgId, kind: "appointment",
       title: `${t.title} — ${matter.matterNumber}`, description: null,
-      location: t.location ?? null, startAt: start, endAt,
-      allDay: t.kind === "deadline", matterId: matter.id, visibility: "normal",
+      location: t.location, startAt: start, endAt: new Date(start.getTime() + t.hoursLong * 3600_000),
+      allDay: false, matterId: matter.id, visibility: "normal",
       mirrorToOutlook: false, createdAt: isoDate(-30), updatedAt: isoDate(-30),
     });
   }
+  return out;
+}
 
+/** Kalenderslingans frister som uppgifter (#2120): samma ärende, ägare och dag. */
+function buildDeadlineTasks(orgId: string, ASSIGN_USERS: string[]): SeedDataset["tasks"] {
+  const out: SeedDataset["tasks"] = [];
+  for (const { i, tpl, matter, userId, start } of calendarSlots(ASSIGN_USERS)) {
+    if (!("deadline" in tpl)) continue;
+    out.push({
+      id: `task-frist-${String(i + 1).padStart(3, "0")}`,
+      userId, organizationId: orgId,
+      title: `${tpl.deadline} — ${matter.matterNumber}`, description: null,
+      status: "TODO", priority: "MEDIUM", dueAt: start, completedAt: null,
+      matterId: matter.id, createdAt: isoDate(-30), updatedAt: isoDate(-30),
+    });
+  }
   return out;
 }
 
@@ -1140,6 +1179,7 @@ function buildTasks(orgId: string, ASSIGN_USERS: string[]): SeedDataset["tasks"]
     }
   }
 
+  out.push(...buildDeadlineTasks(orgId, ASSIGN_USERS));
   return out;
 }
 
@@ -1173,7 +1213,7 @@ function buildTemplates(orgId: string, currentUserId: string): SeedDataset["docu
   const out: SeedDataset["documentTemplates"] = [];
   // templates
   const templates = [
-    { id: "tpl-fullmakt", name: "Fullmakt", category: "Allmänt", body: "<h1>Fullmakt</h1><p>{{contact.name}} ger härmed {{user.name}} rätt att företräda mig i ärende {{matter.matterNumber}}.</p>" },
+    { id: "tpl-fullmakt", name: "Fullmakt", category: "Allmänt", body: "<h1>Fullmakt</h1><p>{{klient.name}} ger härmed {{generatedBy.name}} rätt att företräda mig i ärende {{matter.matterNumber}}.</p>" },
     { id: "tpl-stamning", name: "Stämningsansökan", category: "Tvist", body: "<h1>Stämningsansökan</h1><p>Mål nr: {{matter.matterNumber}}</p>" },
     { id: "tpl-avtal", name: "Avtal", category: "Avtal", body: "<h1>Avtal</h1>" },
     { id: "tpl-forlikning", name: "Förlikningsavtal", category: "Tvist", body: "<h1>Förlikningsavtal</h1>" },

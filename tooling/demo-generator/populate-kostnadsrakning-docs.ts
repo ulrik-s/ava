@@ -19,7 +19,7 @@
  */
 
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
-import { buildKostnadsrakningContext, type KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
+import { buildKostnadsrakningContext, type KostnadsrakningResult } from "@/lib/shared/billing/kostnadsrakning";
 import type { BinarySink, GeneratorCaller } from "./backend-target";
 import { ensureFolderPath, KOSTNADSRAKNING_FOLDER, type FolderCache } from "./folder-filing";
 

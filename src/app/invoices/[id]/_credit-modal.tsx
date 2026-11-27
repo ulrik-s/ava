@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { formatCurrency } from "@/lib/client/utils";
+import { formatKr } from "@/lib/shared/kr-format";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
 
 interface Props {
@@ -23,7 +23,7 @@ export function CreditModal({ invoiceId, amount, hasActivePlan, isPending, error
       <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
         <h3 className="font-semibold mb-2">Kreditera faktura</h3>
         <p className="text-sm text-gray-600 mb-4">
-          En kreditfaktura på <span className="font-mono">{formatCurrency(-amount)}</span> skapas
+          En kreditfaktura på <span className="font-mono">{formatKr(-amount)}</span> skapas
           och den ursprungliga fakturan annulleras.
           {hasActivePlan && " Pågående avbetalningsplan kommer att avbrytas."}
         </p>

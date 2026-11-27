@@ -9,19 +9,20 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   beslutRegisteredNote, invoiceCreatedNote, kostnadsrakningSubmittedNote, krAppealedNote, krVoidedNote,
-} from "@/lib/shared/billing-notes";
-import { krCanCreateInvoice } from "@/lib/shared/billing-todo";
-import { krGrossOre, matterKrArvodeRows } from "@/lib/shared/billing-work-value";
-import { isKrWorkEntry } from "@/lib/shared/kostnadsrakning";
-import { canVoidKostnadsrakning, krStateOf, type KostnadsrakningAction } from "@/lib/shared/kostnadsrakning-flow";
+} from "@/lib/shared/billing/billing-notes";
+import { krCanCreateInvoice } from "@/lib/shared/billing/billing-todo";
+import { krGrossOre, matterKrArvodeRows } from "@/lib/shared/billing/billing-work-value";
+import { isKrWorkEntry } from "@/lib/shared/billing/kostnadsrakning";
+import { canVoidKostnadsrakning, krStateOf, type KostnadsrakningAction } from "@/lib/shared/billing/kostnadsrakning-flow";
+import { DEFAULT_VAT_RATE } from "@/lib/shared/billing/vat";
+import { CURRENT_ROUNDING, splitGross } from "@/lib/shared/billing/whole-kronor";
+import { forordnandeAvslutSchema } from "@/lib/shared/schemas/enums";
 import {
   asId, billingRunIdSchema, matterIdSchema,
   type BillingRunId, type ExpenseId, type MatterId, type OrganizationId,
 } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
-import { DEFAULT_VAT_RATE } from "@/lib/shared/vat";
-import { CURRENT_ROUNDING, splitGross } from "@/lib/shared/whole-kronor";
-import { valueKrRun } from "../../billing/kr-run-valuation";
+import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, valueKrRun } from "../../billing/kr-run-valuation";
 import { logMatterNote } from "../../billing/matter-note";
 import { removeVoidedKrDocuments } from "../../billing/void-kr-documents";
 import { emit } from "../../events/emit";
@@ -67,6 +68,8 @@ export const kostnadsrakningProcedures = {
       taxaLevel: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
       isTaxeArende: z.boolean().optional(),
       hasFTax: z.boolean().optional(),
+      // Förordnandemål (#1857): avslutet väljs i dialogen; utan fältet som förut.
+      forordnande: z.object({ avslut: forordnandeAvslutSchema }).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
@@ -83,9 +86,8 @@ export const kostnadsrakningProcedures = {
         const now = callTime(ctx);
         const valuation = valueKrRun(matter, work, input, now);
         if (Object.keys(valuation.matterPatch).length > 0) await tx.matters.update(input.matterId, valuation.matterPatch);
-        const grossValue = valuation.kind !== "norm"
-          ? valuation.grossOre
-          : krGrossOre(work, matterKrArvodeRows({ ...matter, ...valuation.matterPatch }, work, now));
+        const grossValue = krRunGrossOre(valuation, () =>
+          krGrossOre(work, matterKrArvodeRows({ ...matter, ...valuation.matterPatch }, work, now)));
         const run = await tx.billingRuns.create({
           id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
@@ -93,7 +95,8 @@ export const kostnadsrakningProcedures = {
           reference: await tx.billingRuns.nextKrReference(ctx.orgId, stockholmYear(now)),
           proposedAmountOre: grossValue, amountOre: grossValue,
           invoiceId: null, deductedBillingRunIds: [],
-          periodTo: now, notes: input.notes,
+          // Avslutet i egen kolumn (#2180) och, tills vidare, i anteckningen (expand).
+          periodTo: now, notes: krRunNotes(input.notes, input), forordnandeAvslut: krRunForordnandeAvslut(input),
         });
         // Kostnadsräkningen ÄR inskicket — frys arbetet direkt (#806) så det
         // lämnar "Upparbetat ofakturerat". Dom/slutreglering läser raderna via

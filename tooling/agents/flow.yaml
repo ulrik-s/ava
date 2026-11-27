@@ -237,6 +237,9 @@ machines:
         description: Godkänd av granskningsloopen
         agent: L4
         wait_for_blockers: true
+        # L4 tar tre per körning, användarnas först: resten väntar på sin tur.
+        # Larmet gäller kön, inte varje arbetsorder i den (90 larm 2026-11-26).
+        queue: true
         transitions:
           - to: pagar
           - to: att-granska

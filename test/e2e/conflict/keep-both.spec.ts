@@ -39,7 +39,7 @@ test.describe("keep-both-konflikt (#742)", () => {
     // Hård-ladda den prerenderade ärendelistan, soft-navigera sen in i ärendet
     // via TITEL-länken (ärendenr är bara en <span>) → klient-routing, ingen
     // statisk 404 på den dynamiska detalj-routen.
-    await page.goto("/ava/matters/");
+    await page.goto("/ava/matters/?flik=alla");
     const matterLink = page.getByRole("link", { name: seed.matterTitle });
     await expect(matterLink).toBeVisible({ timeout: 30_000 });
     await matterLink.click();

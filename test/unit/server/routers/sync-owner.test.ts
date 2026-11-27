@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest-compat";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
-import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
+import { GitAuthProvider, TEST_PRINCIPAL } from "@/lib/server/auth/git-auth-provider";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
@@ -17,7 +17,8 @@ import { uuidv7 } from "@/lib/shared/uuid";
 
 function caller() {
   const ds = new DemoDataStore({});
-  const principal = new GitAuthProvider().getPrincipal();
+  // En inloggad med riktiga id:n: klientens ägarschema (#1849) kräver dem, som köns ägare alltid har.
+  const principal = new GitAuthProvider(TEST_PRINCIPAL).getPrincipal();
   const push = vi.fn(async (_pusher: unknown, _m: unknown) => ({ status: "accepted" as const, row: {} }));
   const sync: SyncStore = { push, pull: async () => ({ changes: [], cursor: 0 }), rows: async () => [] };
   const replayProcedure = vi.fn(async (_call: unknown) => ({ status: "accepted" as const, rows: [] }));

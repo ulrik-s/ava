@@ -12,19 +12,29 @@
  * användaren saknade sitt arbete. Med det här ser admin det innan.
  */
 
-/** En enhets rapport vid en synk. */
-export interface SyncDeviceReport {
+import { z } from "zod";
+import { MAX_SYNC_ERROR_LENGTH } from "./sync-error";
+
+/**
+ * En enhets rapport vid en synk: det klienten skickar och servern tar emot
+ * (`sync.reportDevice`), ett schema för båda sidor (#1849). Etiketten är kort
+ * text om webbläsaren, aldrig innehåll.
+ */
+export const syncDeviceReportSchema = z.object({
   /** Webbläsarens eget id (beständigt per webbläsarprofil). */
-  deviceId: string;
+  deviceId: z.uuid(),
   /** Kort beskrivning av enheten, t.ex. "Chrome på macOS". */
-  label: string | null;
+  label: z.string().max(120).nullable(),
   /** Ändringar som ligger kvar i kön efter synken. */
-  pendingCount: number;
+  pendingCount: z.number().int().nonnegative(),
   /** När den äldsta av dem gjordes (epoch-ms), eller null. */
-  oldestPendingAt: number | null;
-  /** Felet som stoppade synken, eller null när den lyckades (#1353). */
-  lastError: string | null;
-}
+  oldestPendingAt: z.number().int().nonnegative().nullable(),
+  /** Felet som stoppade synken, eller null när den lyckades (#1353). Saknas från klienter före fältet. */
+  lastError: z.string().max(MAX_SYNC_ERROR_LENGTH).nullable().default(null),
+});
+
+/** En enhets rapport vid en synk. */
+export type SyncDeviceReport = z.infer<typeof syncDeviceReportSchema>;
 
 /** En enhet som servern känner till. */
 export interface SyncDevice extends SyncDeviceReport {

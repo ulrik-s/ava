@@ -61,13 +61,19 @@ vid omspelning"):
      köas ett nytt.
    - `email-dispatch-v2` (`exclusive`): `singletonKey = <byrå>:<idempotencyKey>`
      när anroparen anger en nyckel (t.ex. påminnelsens
-     `payment.due:<plan>:<månad>`) → en replay skickar inte samma mejl två
-     gånger. Utan nyckel får jobbet en slumpad nyckel (`uuidv7()`), så att mejl
-     utan nyckel inte stoppar varandra.
+     `payment.due:<plan>:<månad>`). Nyckeln identifierar ETT mejl (en mottagare
+     och ett innehåll) och spärrar för alltid: samma nyckel skickas högst en
+     gång per byrå, även långt efter att jobbet är klart (lager 2 nedan). Utan
+     nyckel får jobbet en slumpad nyckel (`uuidv7()`), så att mejl utan nyckel
+     inte stoppar varandra; den loggas aldrig.
 
 2. **Idempotenta handlers:** varje handler ska kunna köras om utan biverkningar
    (classify skriver samma `documentType`; metadata-uppdateringar är upsertande).
-   Detta är handler-design, inte kö-infrastruktur.
+   Detta är handler-design, inte kö-infrastruktur. För mejl är lager 2
+   `email_dispatch_log` (#1901): byrå + nyckel skrivs efter ett lyckat utskick,
+   och en nyckel som redan finns där skickas inte igen. Kraschar servern mellan
+   utskick och loggning skickas mejlet igen vid omförsöket (ett tappat mejl är
+   värre än ett dubbelt).
 
 ### Avgränsning
 

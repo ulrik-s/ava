@@ -27,7 +27,12 @@ const checkState: { data: undefined | { searchTerm: string; matchCount: number; 
   data: undefined, isPending: false, error: null,
 };
 
-vi.mock("next/navigation", () => ({ useSearchParams: () => ({ get: () => null }) }));
+/** `flik` i adressen: de flesta fallen gäller Alla ärenden på byrån (#1968). */
+let flik: string | null = "alla";
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => ({ get: (k: string) => (k === "flik" ? flik : null) }),
+  useRouter: () => ({ replace: vi.fn() }),
+}));
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -67,6 +72,7 @@ const bodyRow = (i: number): HTMLElement => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  flik = "alla";
   listMatters = [row("1"), row("2")];
   conflictMatters = [];
   checkState.data = undefined;
@@ -187,5 +193,25 @@ describe("Ärendelistan — sammanslagen sökning (#1642)", () => {
     render(<MattersPage />);
     expect(screen.getByRole("button", { name: "Söker..." })).toBeDisabled();
     expect(screen.getByText("Servern svarar inte")).toBeInTheDocument();
+  });
+});
+
+describe("Ärendelistan — Sök i Mitt aktskåp (#1968)", () => {
+  it("Sök kör jävskontrollen mot hela byrån och visar Träff, också för ärenden utanför fliken", () => {
+    flik = null;
+    listMatters = [row("1")];
+    conflictMatters = [row("3", { status: "CLOSED", title: "Stängt ärende" })];
+    checkState.data = {
+      searchTerm: "Anna",
+      matchCount: 1,
+      results: [{ matterId: "3", contactName: "Anna Andersson", role: "MOTPART", personalNumber: null, orgNumber: null }],
+    };
+    render(<MattersPage />);
+    expect(listQuery).toHaveBeenCalledWith(expect.objectContaining({ mine: true, status: "ACTIVE" }), { staleTime: 0 });
+    fireEvent.change(searchBox(), { target: { value: "Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sök" }));
+    expect(checkMutate).toHaveBeenCalledWith({ searchTerm: "Anna", searchType: "both" });
+    expect(columnHeaders().some((h) => h.includes("Träff"))).toBe(true);
+    expect(within(bodyRow(0)).getByText("Stängt ärende")).toBeInTheDocument();
   });
 });

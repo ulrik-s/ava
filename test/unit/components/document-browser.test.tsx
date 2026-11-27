@@ -174,6 +174,23 @@ const baseFolder = (overrides: Partial<Folder> = {}): Folder => ({
   ...overrides,
 });
 
+/** Filväljarens input bakom **+ Ladda upp**. */
+const fileInput = (): HTMLInputElement => {
+  const input = document.querySelector<HTMLInputElement>("input[type=file]");
+  if (!input) throw new Error("filväljaren saknas");
+  return input;
+};
+/** Välj filer med **+ Ladda upp** (#1976: de hamnar i namnrutans kö). */
+function choose(files: File[]): void {
+  Object.defineProperty(fileInput(), "files", { value: files, configurable: true });
+  fireEvent.change(fileInput());
+}
+/** Välj filer med **+ Ladda upp** och tryck **Spara** i namnrutan för var och en. */
+function uploadViaButton(files: File[]): void {
+  choose(files);
+  for (const _ of files) fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+}
+
 describe("DocumentBrowser", () => {
   it("vyvalet visar Lista och Mapp-vy (ingen knapp Träd) med aria-pressed på den valda (#1804)", () => {
     render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
@@ -282,9 +299,7 @@ describe("DocumentBrowser", () => {
     it("server-first: klientens filnamnsgissning köas inte (servern klassificerar)", async () => {
       render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       const file = new File(["text"], "stamning.txt", { type: "text/plain" });
-      const input = document.querySelector("input[type=file]")!;
-      Object.defineProperty(input, "files", { value: [file], configurable: true });
-      fireEvent.change(input);
+      uploadViaButton([file]);
       await waitFor(() => expect(enqueueTextExtraction).toHaveBeenCalled());
       expect(jobQueueEnqueue).not.toHaveBeenCalledWith("classify-document", expect.anything(), expect.anything());
     });
@@ -294,9 +309,7 @@ describe("DocumentBrowser", () => {
       try {
         render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
         const file = new File(["text"], "stamning.txt", { type: "text/plain" });
-        const input = document.querySelector("input[type=file]")!;
-        Object.defineProperty(input, "files", { value: [file], configurable: true });
-        fireEvent.change(input);
+        uploadViaButton([file]);
         await waitFor(() => expect(jobQueueEnqueue).toHaveBeenCalledWith("classify-document", expect.any(String), expect.anything()));
       } finally {
         window.localStorage.removeItem("ava.firma");
@@ -487,9 +500,7 @@ describe("DocumentBrowser", () => {
     // permanent tomma i demon.
     render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     const file = new File(["Kärande: Anna Andersson 850312-4567"], "stamning.txt", { type: "text/plain" });
-    const input = document.querySelector("input[type=file]")!;
-    Object.defineProperty(input, "files", { value: [file], configurable: true });
-    fireEvent.change(input);
+    uploadViaButton([file]);
 
     await waitFor(() => expect(clientMock.document.suggestFromText.mutate).toHaveBeenCalled());
     expect(clientMock.document.suggestFromText.mutate.mock.calls[0]![0]).toMatchObject({
@@ -639,11 +650,7 @@ describe("DocumentBrowser", () => {
 });
 
 describe("DocumentBrowser — flera filer på en gång", () => {
-  function pick(files: File[]): void {
-    const input = document.querySelector("input[type=file]")!;
-    Object.defineProperty(input, "files", { value: files, configurable: true });
-    fireEvent.change(input);
-  }
+  const pick = uploadViaButton;
   const pdf = (name: string) => new File(["%PDF"], name, { type: "application/pdf" });
 
   it("filväljaren tillåter flera filer", () => {
@@ -659,14 +666,46 @@ describe("DocumentBrowser — flera filer på en gång", () => {
     expect(names).toEqual(["stamning.pdf", "svaromal.pdf", "dom.pdf"]);
   });
 
-  it("+ Ladda upp visar ingen namnruta och sparar i roten med filens eget namn (#1614)", async () => {
+  it("filväljaren töms efter valet, så att samma fil kan väljas igen (#1976)", () => {
     render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
-    pick([pdf("skiss.pdf")]);
-    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(1));
+    Object.defineProperty(fileInput(), "value", { value: "C:\\fakepath\\skiss.pdf", writable: true, configurable: true });
+    choose([pdf("skiss.pdf")]);
+    expect(fileInput().value).toBe("");
+  });
+
+  it("+ Ladda upp går genom namnrutan, en fil i taget, i roten (#1976)", async () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    choose([pdf("a.pdf"), pdf("b.pdf")]);
+    expect(screen.getByRole("dialog", { name: "Namnge dokumentet" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("a")).toBeInTheDocument();
+    expect(mutationStubs.register.mutateAsync).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByDisplayValue("a"), { target: { value: "Avtal" } });
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+    expect(screen.getByDisplayValue("b")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
     expect(screen.queryByRole("dialog", { name: "Namnge dokumentet" })).not.toBeInTheDocument();
-    const input: unknown = mutationStubs.register.mutateAsync.mock.calls[0]?.[0];
-    expect(input).toMatchObject({ fileName: "skiss.pdf", matterId: "m1" });
-    expect(input).not.toHaveProperty("folderId");
+    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(2));
+    const calls = mutationStubs.register.mutateAsync.mock.calls.map((c: readonly unknown[]) => c[0]);
+    expect(calls[0]).toMatchObject({ fileName: "Avtal.pdf", matterId: "m1" });
+    expect(calls[0]).not.toHaveProperty("folderId");
+    expect(calls[1]).toMatchObject({ fileName: "b.pdf" });
+  });
+
+  it("Avbryt i namnrutan hoppar över filen (#1976)", async () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    choose([pdf("a.pdf"), pdf("b.pdf")]);
+    fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
+    expect(screen.getByDisplayValue("b")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutationStubs.register.mutateAsync.mock.calls[0]?.[0]).toMatchObject({ fileName: "b.pdf" });
+  });
+
+  it("utan valda filer öppnas ingen namnruta", () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    Object.defineProperty(fileInput(), "files", { value: null, configurable: true });
+    fireEvent.change(fileInput());
+    expect(screen.queryByRole("dialog", { name: "Namnge dokumentet" })).not.toBeInTheDocument();
   });
 
   it("en fil som fallerar stoppar inte de andra, och felet säger vilken fil", async () => {
@@ -688,12 +727,7 @@ describe("DocumentBrowser — flera filer på en gång", () => {
  */
 describe("DocumentBrowser — listvyn visar pågående uppladdningar (#1796)", () => {
   const pdf = (name: string) => new File(["%PDF"], name, { type: "application/pdf" });
-  function pick(files: File[]): void {
-    const input = document.querySelector("input[type=file]");
-    if (!input) throw new Error("filväljaren saknas");
-    Object.defineProperty(input, "files", { value: files, configurable: true });
-    fireEvent.change(input);
-  }
+  const pick = uploadViaButton;
   /** register hänger tills testet släpper det, så uppladdningen syns som pågående. */
   function holdRegister(): () => void {
     let release: () => void = () => {};

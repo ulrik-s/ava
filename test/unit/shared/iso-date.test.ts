@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { toIsoDate, toLocalTime, toSwedishLongDate } from "@/lib/shared/iso-date";
+import { dayLabel, toIsoDate, toLocalTime, toSwedishLongDate } from "@/lib/shared/iso-date";
 
 describe("toIsoDate", () => {
   it("nollutfyller månad och dag", () => {
@@ -50,5 +50,33 @@ describe("toSwedishLongDate", () => {
   it("datum i ord på den svenska dagen", () => {
     expect(toSwedishLongDate(new Date("2025-12-31T23:30:00Z"))).toBe("1 januari 2026");
     expect(toSwedishLongDate("2026-09-24")).toBe("24 september 2026");
+  });
+});
+
+describe("dayLabel (#2095)", () => {
+  const noon = new Date("2026-11-24T12:00:00Z");
+
+  it("Idag, Igår och Imorgon räknat från dagen i Stockholm", () => {
+    expect(dayLabel("2026-11-24", noon)).toBe("Idag");
+    expect(dayLabel("2026-11-23", noon)).toBe("Igår");
+    expect(dayLabel("2026-11-25", noon)).toBe("Imorgon");
+  });
+
+  it("andra dagar som veckodag och datum i ord", () => {
+    expect(dayLabel("2026-11-26", noon)).toBe("torsdag 26 november 2026");
+    expect(dayLabel("2026-11-22", noon)).toBe("söndag 22 november 2026");
+  });
+
+  it("00:30 svensk tid den 25:e är redan den 25:e (svensk tid, inte UTC)", () => {
+    const now = new Date("2026-11-24T23:30:00Z");
+    expect(dayLabel("2026-11-25", now)).toBe("Idag");
+    expect(dayLabel("2026-11-24", now)).toBe("Igår");
+  });
+
+  it("nyårsnatten räknas på det nya året", () => {
+    const now = new Date("2026-12-31T23:30:00Z");
+    expect(dayLabel("2027-01-01", now)).toBe("Idag");
+    expect(dayLabel("2026-12-31", now)).toBe("Igår");
+    expect(dayLabel("2027-01-02", now)).toBe("Imorgon");
   });
 });

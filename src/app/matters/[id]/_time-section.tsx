@@ -1,16 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useActiveMatterOptions } from "@/components/matter/use-active-matter-options";
+import { MoveTimeEntriesButton, useTimeEntrySelection } from "@/components/time/move-time-entries";
 import {
   TimeForm, applyStandardAtgard, emptyForm, timeEntryInput, toEditForm, useStandardAtgarder, type EditForm,
 } from "@/components/time/time-entry-form";
+import { useSaveTimeEntry } from "@/components/time/use-save-time-entry";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
-import { isCoverageMethod } from "@/lib/shared/billing-flow";
-import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
+import { isCoverageMethod } from "@/lib/shared/billing/billing-flow";
+import { isPerDayKind } from "@/lib/shared/billing/brottmalstaxa";
 import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import type { MatterStatus, PaymentMethod, TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
@@ -71,13 +74,20 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<TimeEntryId | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
+  /** Ärendet som valts i Ändra tidregistrering (#2042) — förvalt det här ärendet. */
+  const [editMatterId, setEditMatterId] = useState<MatterId>(matterId);
   const [createForm, setCreateForm] = useState<EditForm>(emptyForm);
+  const matterOptions = useActiveMatterOptions();
+  const marking = useTimeEntrySelection<TimeEntryRow>();
 
   /** Tidslistan + upparbetat mot taket (#1520) — takvarningen följer med direkt. */
-  function refreshTime(): void {
-    void utils.timeEntry.list.invalidate({ matterId });
-    void utils.matter.coverageUsage.invalidate({ matterId });
+  function refreshMatters(matterIds: MatterId[]): void {
+    for (const id of matterIds) {
+      void utils.timeEntry.list.invalidate({ matterId: id });
+      void utils.matter.coverageUsage.invalidate({ matterId: id });
+    }
   }
+  const refreshTime = (): void => refreshMatters([matterId]);
 
   const createTimeEntry = trpc.timeEntry.create.useMutation({
     onSuccess: () => {
@@ -87,15 +97,9 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
     },
   });
 
-  const updateTimeEntry = trpc.timeEntry.update.useMutation({
-    onSuccess: () => {
-      refreshTime();
-      setEditingId(null);
-      setEditForm(null);
-    },
-    // Ett sparande som misslyckas får aldrig vara tyst (#1170) — felet visas i
-    // dialogen och loggas i konsolen.
-    onError: (e) => console.error("[timeEntry.update] misslyckades:", e),
+  const saver = useSaveTimeEntry({
+    refresh: refreshMatters,
+    done: () => { setEditingId(null); setEditForm(null); },
   });
 
   const deleteTimeEntry = trpc.timeEntry.delete.useMutation({
@@ -106,11 +110,12 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   function startEdit(entry: TimeEntryRow): void {
     setEditingId(entry.id);
     setEditForm(toEditForm(entry));
+    setEditMatterId(matterId);
   }
 
   function saveEdit(): void {
     if (!editingId || !editForm) return;
-    updateTimeEntry.mutate({ id: editingId, ...timeEntryInput(editForm) });
+    saver.save({ id: editingId, fromMatterId: matterId, toMatterId: editMatterId }, editForm);
   }
 
   function confirmDelete(id: TimeEntryId): void {
@@ -192,12 +197,15 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
 
       <div className="p-2">
         <RattshjalpCapWarning matterId={matterId} paymentMethod={paymentMethod} rattshjalpMaxTimmar={rattshjalpMaxTimmar} />
+        <MoveTimeEntriesButton selected={marking.selection.selected} excludeMatterId={matterId}
+          onMoved={marking.clear} refresh={(to) => refreshMatters([matterId, to])} />
         <DataTable
           prefKey={`list.matter-time.${matterId}`}
           columns={columns}
           data={rows}
           rowKey={(e) => e.id}
           emptyMessage="Inga tidsposter."
+          selection={marking.selection}
         />
       </div>
 
@@ -219,9 +227,10 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
         {editForm && (
           <TimeForm
             form={editForm}
+            matter={{ matters: matterOptions, value: editMatterId, onChange: setEditMatterId }}
             setForm={(f) => setEditForm(f)}
-            submitLabel={updateTimeEntry.isPending ? "Sparar..." : "Spara"}
-            isPending={updateTimeEntry.isPending}
+            submitLabel={saver.isPending ? "Sparar..." : "Spara"}
+            isPending={saver.isPending}
             isTaxeArende={isTaxeArende}
             isCoverage={isCoverage}
             atgarder={atgarder}
@@ -229,7 +238,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
             onCancel={() => { setEditingId(null); setEditForm(null); }}
           />
         )}
-        <SaveError error={updateTimeEntry.error} />
+        <SaveError error={saver.error} />
       </Modal>
     </div>
   );

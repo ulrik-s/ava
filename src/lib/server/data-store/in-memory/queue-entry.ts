@@ -21,8 +21,11 @@ export const queueOwnerSchema = z.object({ principalId: userIdSchema, organizati
 /** Vem som köade posten. */
 export type QueueOwner = z.infer<typeof queueOwnerSchema>;
 
-/** En radpost (radkön), så som den sparas i IndexedDB. */
-const queuedMutationSchema = z.object({
+/**
+ * En radpost (radkön), så som den sparas i IndexedDB. Serverns schema för
+ * `sync.push` byggs ur det (#1849), så att servern tar emot det klienten köar.
+ */
+export const queuedMutationSchema = z.object({
   /** Radpost (radkön). Saknas på poster persisterade före #1265 — de är rader. */
   type: z.literal("row").exactOptional(),
   /** Klient-genererat UUIDv7 — dedupe-nyckel + idempotent uppspelning. */

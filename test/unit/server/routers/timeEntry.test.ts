@@ -3,7 +3,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { noopPorts } from "@/lib/server/adapters/noop-ports";
+import { buildContext } from "@/lib/server/build-context";
+import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import { appRouter } from "@/lib/server/routers/_app";
+import { reportsRouter } from "@/lib/server/routers/reports";
 import { timeEntryRouter } from "@/lib/server/routers/timeEntry";
+import { asId } from "@/lib/shared/schemas/ids";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {
@@ -19,6 +25,8 @@ const mockPrisma = {
   user: {
     findFirst: vi.fn(),
   },
+  // reports.perLawyer läser utläggen (jämförelsen i timeEntry.chart, #2109).
+  expense: { findMany: vi.fn() },
   // Timpris-upplösningen (ärende → jurist → byrå) läser ärendet och byrån.
   matter: { findFirst: vi.fn() },
   organization: { findFirst: vi.fn() },
@@ -42,6 +50,7 @@ beforeEach(() => {
   mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a" });
   mockPrisma.organization.findFirst.mockResolvedValue(null);
   mockPrisma.timeEntry.findMany.mockResolvedValue([]);
+  mockPrisma.expense.findMany.mockResolvedValue([]);
   mockPrisma.timeEntry.count.mockResolvedValue(0);
   mockPrisma.timeEntry.aggregate.mockResolvedValue({ _sum: { minutes: 0 } });
   // Default: posten tillhör anropande org (happy path för update/delete, #60).
@@ -469,5 +478,109 @@ describe("timeEntry — låsta poster (faktura, slutfaktura, kostnadsräkning; #
     mockPrisma.timeEntry.update.mockResolvedValue({ id: "t1", matterId: "m1" });
     await makeCaller().update({ id: "t1", minutes: 60 });
     expect(mockPrisma.timeEntry.update).toHaveBeenCalled();
+  });
+});
+
+describe("timeEntry.chart (#2109)", () => {
+  type Where = { matter?: { organizationId?: string }; userId?: string; date?: { gte: Date; lte: Date } };
+  const matterA = { id: "m1", matterNumber: "2026-0001", title: "A", organizationId: "org-a", paymentMethod: "PENDING", paymentMethodNote: null, paymentMethodDecidedAt: null, contacts: [] };
+  const rows = [
+    { id: "t1", userId: "u1", date: new Date("2026-11-02T10:00:00Z"), minutes: 60, billable: true, hourlyRate: 0, matter: matterA },
+    { id: "t2", userId: "u1", date: new Date("2026-11-20T10:00:00Z"), minutes: 30, billable: false, hourlyRate: 0, matter: matterA },
+    { id: "t3", userId: "u2", date: new Date("2026-11-03T10:00:00Z"), minutes: 45, billable: true, hourlyRate: 0, matter: matterA },
+    { id: "t4", userId: "u1", date: new Date("2026-12-02T10:00:00Z"), minutes: 15, billable: true, hourlyRate: 0, matter: matterA },
+  ];
+  /** Repots fråga mot raderna ovan: byrå, person och period som databasen hade filtrerat. */
+  const filtered = ({ where }: { where: Where }) => rows.filter((r) =>
+    r.matter.organizationId === where.matter?.organizationId && r.userId === where.userId
+    && where.date !== undefined && r.date >= where.date.gte && r.date <= where.date.lte);
+  const input = { from: "2026-11-01", to: "2026-11-30", userId: "u1", granularity: "week" as const };
+
+  beforeEach(() => {
+    mockPrisma.timeEntry.findMany.mockImplementation((args: { where: Where }) => Promise.resolve(filtered(args)));
+  });
+
+  it("ger bara den valda personens poster i perioden", async () => {
+    const chart = await makeCaller().chart(input);
+    expect(chart).toMatchObject({ totalMinutes: 90, billableMinutes: 60 });
+    expect(chart.bars[0]).toMatchObject({ key: "2026-11-01", label: "v. 44", totalMinutes: 0 });
+    const bar = chart.bars.find((b) => b.key === "2026-11-02");
+    expect(bar?.totalMinutes).toBe(60);
+    expect(bar?.matters).toEqual([{ id: "m1", matterNumber: "2026-0001", title: "A" }]);
+  });
+
+  it("totalen är densamma som reports.perLawyer för samma person och period", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "Anna", hourlyRates: {} });
+    const chart = await makeCaller().chart(input);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reports = reportsRouter.createCaller({ user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: "org-a" }, prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma), get repos() { return reposFromMockDataStore(this.dataStore); } } as any);
+    const report = await reports.perLawyer({ from: input.from, to: input.to, userId: "u1" });
+    expect(chart.totalMinutes).toBe(report?.totals.totalMinutes);
+  });
+
+  it("en person i en annan byrå ger tomma staplar och totalen 0", async () => {
+    const chart = await makeCaller("org-b").chart(input);
+    expect(chart.totalMinutes).toBe(0);
+    expect(chart.bars.every((b) => b.totalMinutes === 0 && b.matters.length === 0)).toBe(true);
+    expect(chart.bars).toHaveLength(6); // v. 44–49
+  });
+
+  it("avvisar en dag som inte finns", async () => {
+    await expect(makeCaller().chart({ ...input, to: "2026-11-31" })).rejects.toThrow();
+  });
+});
+
+describe("timeEntry.chart utan userId: hela byrån (#2115)", () => {
+  const ORG_A = asId<"OrganizationId">("org-a");
+  const matter = (id: string, org: string) => ({
+    id, organizationId: org, matterNumber: `2026-${id}`, title: id, status: "ACTIVE", paymentMethod: "PRIVAT", createdAt: new Date("2026-01-01"),
+  });
+  /** En tidspost: [id, byrå, användare, ärende], dag och minuter. */
+  const entry = ([id, org, userId, matterId]: [string, string, string, string], date: string, minutes: number, billable = true) => ({
+    id, organizationId: org, userId, matterId, date: new Date(date), minutes, description: id, hourlyRate: 100_000, billable,
+  });
+
+  function caller(organizationId = ORG_A) {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-a", name: "A" }, { id: "org-b", name: "B" }],
+      users: [
+        { id: "u1", organizationId: "org-a", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: {} },
+        { id: "u2", organizationId: "org-a", email: "b@x", name: "Bo", role: "LAWYER", hourlyRates: {} },
+        { id: "u3", organizationId: "org-b", email: "c@x", name: "Cia", role: "LAWYER", hourlyRates: {} },
+      ],
+      matters: [matter("m1", "org-a"), matter("m2", "org-b")],
+      timeEntries: [
+        entry(["t1", "org-a", "u1", "m1"], "2026-11-02T10:00:00Z", 60),
+        entry(["t2", "org-a", "u2", "m1"], "2026-11-03T10:00:00Z", 45),
+        entry(["t3", "org-a", "u2", "m1"], "2026-11-20T10:00:00Z", 30, false),
+        entry(["t4", "org-a", "u1", "m1"], "2026-12-02T10:00:00Z", 15),
+        entry(["t5", "org-b", "u3", "m2"], "2026-11-04T10:00:00Z", 120),
+      ],
+      invoices: [], payments: [], expenses: [],
+    }, async () => { /* skrivbar store */ });
+    const principal = { id: asId<"UserId">("u1"), email: "a@x", name: "Anna", role: "ADMIN" as const, organizationId: organizationId };
+    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal }));
+  }
+  const input = { from: "2026-11-01", to: "2026-11-30", granularity: "week" as const };
+
+  it("räknar alla användares poster i byrån och perioden, och totalen är firmOverviews", async () => {
+    const c = caller();
+    const chart = await c.timeEntry.chart(input);
+    expect(chart).toMatchObject({ totalMinutes: 135, billableMinutes: 105 });
+    expect(chart.bars.find((b) => b.key === "2026-11-02")?.totalMinutes).toBe(105);
+    const overview = await c.reports.firmOverview({ from: input.from, to: input.to });
+    expect(chart.totalMinutes).toBe(overview.totals.totalMinutes);
+  });
+
+  it("med userId: bara den personens poster, som förut", async () => {
+    const chart = await caller().timeEntry.chart({ ...input, userId: asId<"UserId">("u2") });
+    expect(chart).toMatchObject({ totalMinutes: 75, billableMinutes: 45 });
+  });
+
+  it("poster i en annan byrå räknas aldrig med", async () => {
+    const chart = await caller(asId<"OrganizationId">("org-b")).timeEntry.chart(input);
+    expect(chart.totalMinutes).toBe(120);
+    const none = await caller(asId<"OrganizationId">("org-b")).timeEntry.chart({ ...input, userId: asId<"UserId">("u1") });
+    expect(none.totalMinutes).toBe(0);
   });
 });

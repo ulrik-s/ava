@@ -8,13 +8,15 @@
 import { Wallet, Search, BellRing } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { OverdueMark } from "@/components/billing/overdue-mark";
 import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control";
 import { shellPath } from "@/lib/client/demo/entity-href";
 import { trpc } from "@/lib/client/trpc";
-import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
+import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
+import { paymentPlanOverdue } from "@/lib/shared/payment-plan-overdue";
 
 type Status = "ACTIVE" | "COMPLETED" | "CANCELLED";
 
@@ -47,6 +49,7 @@ interface PlanRow {
   status: Status;
   monthlyAmount: number;
   dayOfMonth: number;
+  startDate: Date | string;
   invoice?: {
     amount?: number;
     payments?: Array<{ amount: number }>;
@@ -84,7 +87,20 @@ export interface ScanResult {
 /** Mänsklig sammanfattning av en påminnelse-skanning. Ren → unit-testbar. */
 export function formatScanResult(r: ScanResult): string {
   if (r.planned === 0) return `Inga nya påminnelser (skannade ${r.scanned} aktiva planer).`;
-  return `${r.planned} påminnelser skickade — ${r.due} förfaller, ${r.overdue} försenade (av ${r.scanned} planer).`;
+  return `${r.planned} påminnelser registrerade — ${r.due} förfaller, ${r.overdue} försenade (av ${r.scanned} planer).`;
+}
+
+/** Planens statusmärke, och "Förfallen N dagar" när klienten ligger efter (#2136). */
+function PlanStatus({ plan }: { plan: PlanRow }) {
+  const overdue = paymentPlanOverdue(plan, new Date());
+  return (
+    <>
+      <span className={`text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${STATUS_PILL[plan.status]}`}>
+        {ROW_STATUS_LABEL[plan.status]}
+      </span>
+      {overdue && <OverdueMark days={overdue.overdueDays} />}
+    </>
+  );
 }
 
 const planColumns: Column<PlanRow>[] = [
@@ -98,11 +114,7 @@ const planColumns: Column<PlanRow>[] = [
     sortValue: (p) => p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "",
     render: (p) => <span className="text-sm text-gray-500">{p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "—"}</span> },
   { key: "status", label: "Status", sortable: true, sortValue: (p) => ROW_STATUS_LABEL[p.status],
-    render: (p) => (
-      <span className={`text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${STATUS_PILL[p.status]}`}>
-        {ROW_STATUS_LABEL[p.status]}
-      </span>
-    ),
+    render: (p) => <PlanStatus plan={p} />,
   },
   { key: "monthlyAmount", label: "Per månad", sortable: true, align: "right",
     sortValue: (p) => p.monthlyAmount,
@@ -135,8 +147,8 @@ export default function PaymentPlansPage() {
   const list = trpc.paymentPlan.list.useQuery({ status, search: search || undefined });
 
   // #71: manuell väg att köra scanDueReminders (förfallo-/försenings-
-  // påminnelser) utan ett separat tRPC-anrop. Den automatiska job-vägen
-  // väntar på regelmotorn (#80).
+  // påminnelser). Knappen registrerar bara påminnelserna i planens logg;
+  // AVA skickar ingenting till klienten (#2135).
   const scan = trpc.paymentPlan.scanDueReminders.useMutation({
     onSuccess: (r) => {
       setScanMsg(formatScanResult(r));
@@ -169,7 +181,7 @@ export default function PaymentPlansPage() {
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
         >
           <BellRing size={14} />
-          {scan.isPending ? "Skickar…" : "Skicka påminnelser nu"}
+          {scan.isPending ? "Registrerar…" : "Registrera påminnelser"}
         </button>
         {scanMsg && (
           <span data-testid="scan-result" className="text-sm text-gray-600">
@@ -177,7 +189,7 @@ export default function PaymentPlansPage() {
           </span>
         )}
         {scan.error && (
-          <span className="text-sm text-red-600">Kunde inte skicka: {scan.error.message}</span>
+          <span className="text-sm text-red-600">Kunde inte registrera: {scan.error.message}</span>
         )}
       </div>
 

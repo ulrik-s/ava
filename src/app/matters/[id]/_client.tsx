@@ -26,6 +26,7 @@ import { matterDefaultLayout, matterPanels } from "./_matter-panels";
 import { MatterPaymentLine, type NamedMatterContact } from "./_matter-payment-line";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
+import { useBillingShortcut } from "./_use-billing-shortcut";
 import { WatchSection } from "./_watch-section";
 
 type ReferenceKey = "courtCaseNumber" | "previousCourtCaseNumber" | "insuranceReference";
@@ -54,6 +55,8 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   // fordringar håller panelen kvar även i ett icke-domstolsärende (#1213).
   const receivables = trpc.expectedReceivable.list.useQuery({ matterId: id });
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  // Bör faktureras i Frister öppnar faktureringen direkt (#1854).
+  const shortcut = useBillingShortcut(id);
   // ADR 0028 §4a: öppna ärende → eager-cacha dess dokument-bytes (offline).
   useEagerCacheMatterDocuments(id);
 
@@ -68,7 +71,8 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
     time: () => <TimeSection matterId={id} isTaxeArende={isTaxeMatter(m)} paymentMethod={m.paymentMethod}
       rattshjalpMaxTimmar={m.rattshjalpMaxTimmar} matterStatus={m.status} />,
     expenses: () => <ExpenseSection matterId={id} isTaxeArende={isTaxeMatter(m)} />,
-    billing: () => <BillingPanel matterId={id} matter={m} />,
+    billing: () => <BillingPanel matterId={id} matter={m}
+      shortcutRequested={shortcut.requested} onShortcutDone={shortcut.done} />,
     receivables: () => <ExpectedReceivablesSection matterId={id} isCourtMatter={isCourtMatter(m)} />,
     watch: () => <WatchSection matterId={id} />,
     contacts: () => <ContactsSection matterId={id} contacts={m.contacts} matterTitle={m.title} />,
@@ -84,6 +88,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         page="matter"
         panels={panels}
         defaultLayout={matterDefaultLayout}
+        activePanel={shortcut.requested ? "billing" : null}
         header={(
           <>
             <div className="mb-1">

@@ -40,8 +40,7 @@ const folderId = asId<"DocumentFolderId">("f1");
 const pdf = (name: string) => new File(["%PDF"], name, { type: "application/pdf" });
 
 function setup(createFromFsa = vi.fn(() => Promise.resolve())) {
-  const fileInputRef = { current: null };
-  const hook = renderHook(() => useFileUpload({ matterId, mutations: { createFromFsa }, fileInputRef }));
+  const hook = renderHook(() => useFileUpload({ matterId, mutations: { createFromFsa } }));
   return { ...hook, createFromFsa };
 }
 
@@ -137,27 +136,5 @@ describe("useFileUpload — enqueueUpload (namnrutan)", () => {
     expect(createFromFsa).not.toHaveBeenCalled();
     expect(result.current.pendingUploads).toEqual([]);
     expect(result.current.uploadError).toBe("a.pdf: disk full");
-  });
-});
-
-describe("useFileUpload — + Ladda upp", () => {
-  it("utan filer händer inget", async () => {
-    const { result, createFromFsa } = setup();
-    await act(() => result.current.handleFileUpload({ target: { files: null } }));
-    expect(createFromFsa).not.toHaveBeenCalled();
-  });
-
-  it("nollställer felbannern och filväljaren, roten och filens eget namn", async () => {
-    const createFromFsa = vi.fn().mockRejectedValueOnce(new Error("gammalt fel")).mockResolvedValue(undefined);
-    const fileInputRef = { current: { value: "C:\\fakepath\\a.pdf" } };
-    const { result } = renderHook(() => useFileUpload({ matterId, mutations: { createFromFsa }, fileInputRef }));
-    await act(() => result.current.enqueueUpload(pdf("x.pdf"), { fileName: "X" }));
-    expect(result.current.uploadError).toBe("x.pdf: gammalt fel");
-    await act(() => result.current.handleFileUpload({ target: { files: [pdf("a.pdf")] } }));
-    expect(result.current.uploadError).toBeNull();
-    expect(fileInputRef.current.value).toBe("");
-    const input: unknown = createFromFsa.mock.calls[1]?.[0];
-    expect(input).toMatchObject({ fileName: "a.pdf" });
-    expect(input).not.toHaveProperty("folderId");
   });
 });

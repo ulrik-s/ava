@@ -8,11 +8,11 @@
  */
 
 import { describe, it, expect, vi } from "vitest-compat";
-import { buildFakturaView, fakturaHeading, type FakturaTemplateArgs, type InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
+import { buildFakturaView, fakturaHeading, type FakturaBreakdown, type FakturaTemplateArgs, type InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
 import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
-import { formatCurrency } from "@/lib/client/utils";
-import { tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { buildInvoiceSpecification } from "@/lib/shared/invoice-specification";
+import { tidsspillanOvrigFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
+import { buildInvoiceSpecification } from "@/lib/shared/billing/invoice-specification";
+import { formatKr } from "@/lib/shared/kr-format";
 import { orgImageSchema } from "@/lib/shared/org-image";
 import { asId } from "@/lib/shared/schemas/ids";
 import { pdfPageTexts } from "../../../helpers/pdf-text";
@@ -30,7 +30,7 @@ const spec = (over: Partial<InvoiceSpecification> = {}): InvoiceSpecification =>
 });
 
 /** Beloppen som de står i PDF:en (hårda mellanslag → vanliga, som i `pdfPageTexts`). */
-const kr = (ore: number): string => formatCurrency(ore).replace(/[  ]/g, " ");
+const kr = (ore: number): string => formatKr(ore).replace(/[  ]/g, " ");
 
 /** Fakturan renderad till PDF → texten per sida, i ritordning. */
 async function rendered(args: FakturaTemplateArgs): Promise<string[][]> {
@@ -420,5 +420,99 @@ describe("fakturans moms utan uppdelning och spec (#1806)", () => {
 
   it("med vatOre → som förut", () => {
     expect(rows({ amount: 10_600, vatOre: 600 })).toEqual([["Netto (exkl moms)", "10000"], ["Moms", "600"]]);
+  });
+});
+
+// Nedbrytningens utläggsrader (#1938): en faktura utan egna rader specificerar
+// utläggen ur nedbrytningen, med och utan tidsrader.
+describe("nedbrytningens utläggsrader (#1938)", () => {
+  const expenseLines = [
+    { date: "2026-05-02", description: "Resa", netOre: 10_000, grossOre: 12_500 },
+    { date: "2026-05-03", description: "Ansökningsavgift", netOre: 90_000, grossOre: 90_000, passThrough: true },
+  ];
+  const breakdown = (timeLines: NonNullable<FakturaBreakdown["timeLines"]> = []) => ({
+    timeLines, expenseLines,
+    rows: [{ label: "Aconto", amountOre: 50_000, kind: "add" as const }],
+    totalLabel: "Att betala (inkl moms)", totalOre: 50_000,
+  });
+
+  it("bara utläggsrader: utläggsspecifikationen med netto, brutto och summarad", () => {
+    const v = buildFakturaView({ invoice: invoice({ amount: 50_000 }), recipient: "K", meta: META, spec: spec(), breakdown: breakdown() }, ore);
+    expect(v.expenseLines).toEqual([
+      { date: "2026-05-02", description: "Resa", net: "10000", gross: "12500" },
+      { date: "2026-05-03", description: "Ansökningsavgift", net: "90000", gross: "90000" },
+    ]);
+    expect([v.expenseNetTotal, v.expenseGrossTotal]).toEqual(["100000", "102500"]);
+    expect(v.timeGroups).toEqual([]);
+  });
+
+  it("med tidsrader: båda specificeras, och nedbrytningens utlägg går före spec:ens", () => {
+    const own = spec({ expenseLines: [{ date: "2026-05-09", description: "Egen", netOre: 1, grossOre: 1 }] });
+    const v = buildFakturaView({
+      invoice: invoice({ amount: 50_000 }), recipient: "K", meta: META, spec: own,
+      breakdown: breakdown([{ date: "2026-05-01", description: "Genomgång", minutes: 60, amountOre: 162_600, kind: "ARBETE" }]),
+    }, ore);
+    expect(v.expenseLines.map((l) => l.description)).toEqual(["Resa", "Ansökningsavgift"]);
+    expect(v.timeGroups.map((g) => g.label)).toEqual(["Timarvode"]);
+  });
+
+  it("utan fältet: spec:ens utlägg som förut", () => {
+    const own = spec({ expenseLines: [{ date: "2026-05-09", description: "Egen", netOre: 1, grossOre: 1 }] });
+    const { expenseLines: _omit, ...legacy } = breakdown([{ date: "2026-05-01", description: "G", minutes: 60, amountOre: 1_000 }]);
+    const v = buildFakturaView({ invoice: invoice(), recipient: "K", meta: META, spec: own, breakdown: legacy }, ore);
+    expect(v.expenseLines.map((l) => l.description)).toEqual(["Egen"]);
+  });
+});
+
+// Acontofakturan (#1939): tidsposterna med datum, beskrivning och timmar men
+// utan belopp; utläggen med belopp; sammanställningen alltid en rad.
+describe("acontofakturan visar tiden utan belopp (#1939)", () => {
+  const timeLines = [
+    { date: "2026-05-01", description: "Genomgång", minutes: 90, amountOre: 243_900, kind: "ARBETE" as const },
+    { date: "2026-05-02", description: "Restid", minutes: 60, amountOre: 80_000, kind: "TIDSSPILLAN" as const },
+  ];
+  const expenseLines = [{ date: "2026-05-03", description: "Resa", netOre: 10_000, grossOre: 12_500 }];
+  const breakdown: FakturaBreakdown = {
+    rows: [{ label: "Aconto", amountOre: 500_000, kind: "add" }],
+    totalLabel: "Att betala (inkl moms)", totalOre: 500_000, timeLines, expenseLines,
+  };
+  const viewFor = (over: Record<string, unknown>) =>
+    buildFakturaView({ invoice: invoice({ amount: 500_000, ...over }), recipient: "K", meta: META, spec: spec(), breakdown }, ore);
+
+  it("aconto: datum, beskrivning och timmar per post och kategori, utan belopp", () => {
+    const v = viewFor({ invoiceType: "ACCONTO" });
+    expect(v.showTimeAmounts).toBe(false);
+    expect(v.timeGroups).toEqual([
+      { label: "Timarvode", subtotalLabel: "Summa timarvode", hours: "1,5", amount: "",
+        lines: [{ date: "2026-05-01", description: "Genomgång", hours: "1,5", amount: "" }] },
+      { label: "Tidsspillan", subtotalLabel: "Summa tidsspillan", hours: "1", amount: "",
+        lines: [{ date: "2026-05-02", description: "Restid", hours: "1", amount: "" }] },
+    ]);
+    expect(v.timeLines.map((l) => l.amount)).toEqual(["", ""]);
+  });
+
+  it("aconto: utläggen med netto, brutto och summarad", () => {
+    const v = viewFor({ invoiceType: "ACCONTO" });
+    expect(v.expenseLines).toEqual([{ date: "2026-05-03", description: "Resa", net: "10000", gross: "12500" }]);
+    expect([v.expenseNetTotal, v.expenseGrossTotal]).toEqual(["10000", "12500"]);
+  });
+
+  it("aconto: sammanställningen är en rad med fakturans belopp, ur notes eller Arvode", () => {
+    const plain = viewFor({ invoiceType: "ACCONTO" });
+    expect(plain.summary).toEqual([{ label: "Arvode", rateLabel: "", hours: "", amount: "500000", subtotal: false }]);
+    expect(plain.summaryTotal).toBe("500000");
+    const noted = viewFor({ invoiceType: "ACCONTO", notes: "Aconto 1" });
+    expect(noted.summary.map((r) => r.label)).toEqual(["Aconto 1"]);
+  });
+
+  it("slutfaktura och självrisk-faktura (STANDARD) med samma nedbrytning ritas med belopp och flerradssammanställning", () => {
+    for (const invoiceType of ["FINAL", "STANDARD", null]) {
+      const v = viewFor({ invoiceType });
+      expect(v.showTimeAmounts).toBe(true);
+      expect(v.timeGroups[0]?.amount).toBe("243900");
+      expect(v.timeGroups[0]?.lines[0]?.amount).toBe("243900");
+      expect(v.summary.length).toBeGreaterThan(1);
+      expect(v.summary.some((r) => r.label === "Summa arvode exkl moms")).toBe(true);
+    }
   });
 });

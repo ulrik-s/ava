@@ -199,3 +199,58 @@ describe("useAutoSync — merge-needed", () => {
     expect(provider.commitAndPush).not.toHaveBeenCalled();
   });
 });
+
+describe("useAutoSync — felbesked, intervallet och offline (#1905)", () => {
+  const cases: Array<[unknown, RegExp]> = [
+    [new Error("ENOENT: no such file"), /Pull: Mappen är inte ett git-repo/],
+    [new Error("A requested file or directory could not be found"), /Pull: Mappen är inte ett git-repo/],
+    [new Error("HTTP Error: 401 Unauthorized"), /Pull: GitHub-token avvisades \(401\)/],
+    [new Error("HTTP Error: 404 Not Found"), /Pull: Repo eller branch hittades inte \(404\)/],
+    [new Error("TypeError: Failed to fetch"), /Pull: Nät-fel \(Failed to fetch\)/],
+    [new Error("blocked by CORS policy"), /Pull: CORS-fel/],
+    [new Error("något annat"), /^Pull: något annat$/],
+    ["en sträng", /^Pull: en sträng$/],
+  ];
+
+  for (const [err, expected] of cases) {
+    it(`pull som kastar ${String(err)} → begripligt besked`, async () => {
+      const provider = makeProvider({ pull: vi.fn().mockRejectedValue(err) });
+      const { result } = renderHook(() => useAutoSync({ provider, enabled: true }));
+      await waitFor(() => expect(result.current.state.kind).toBe("error"));
+      const state = result.current.state;
+      expect(state.kind === "error" ? state.message : "").toMatch(expected);
+    });
+  }
+
+  it("intervallet kör en ny synk medan hooken är aktiv och online", async () => {
+    const provider = makeProvider();
+    const { unmount } = renderHook(() => useAutoSync({ provider, enabled: true, pullIntervalMs: 40 }));
+    await waitFor(() => expect((provider.pull as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 2000 });
+    unmount();
+  });
+
+  it("offline och räkningen misslyckas → offline med 0 ändringar", async () => {
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    const provider = makeProvider({ countChanges: vi.fn().mockRejectedValue(new Error("trasig")) });
+    const { result } = renderHook(() => useAutoSync({ provider, enabled: true }));
+    await waitFor(() => expect(result.current.state).toEqual({ kind: "offline", count: 0 }));
+  });
+
+  it("en ändring medan man är offline visar offline med antalet ändringar", async () => {
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    const provider = makeProvider({ countChanges: vi.fn().mockResolvedValue(2) });
+    const { result } = renderHook(() => useAutoSync({ provider, enabled: true, pushDebounceMs: 60_000 }));
+    await waitFor(() => expect(result.current.state.kind).toBe("offline"));
+    act(() => { result.current.notifyChange(); });
+    await waitFor(() => expect(result.current.state).toEqual({ kind: "offline", count: 2 }));
+  });
+
+  it("syncNow efter en ändring synkar direkt i stället för att vänta på fördröjningen", async () => {
+    const provider = makeProvider();
+    const { result } = renderHook(() => useAutoSync({ provider, enabled: true, pushDebounceMs: 60_000 }));
+    await waitFor(() => expect(result.current.state.kind).toBe("synced"));
+    act(() => { result.current.notifyChange(); });
+    await act(async () => { await result.current.syncNow(); });
+    expect(provider.pull).toHaveBeenCalledTimes(2);
+  });
+});

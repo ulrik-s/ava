@@ -37,7 +37,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "billingRun.invoiceSpecification": "Fakturaspecifikation: de tids- och utläggsrader som är kopplade till en viss faktura, plus avdragna aconton och summering. Driver fakturadokumentet. En ren aconto-faktura får tomma rader.",
   "billingRun.createAcconto": "Skapa en aconto-faktura (à conto) på ett ärende. Fryser inte arbetet — posterna kan faktureras igen på slutfakturan, med aconto-beloppet avdraget.",
   "billingRun.createFinal": "Skapa slutfaktura på ett ärende: fakturerar allt ofakturerat arbete, drar av tidigare aconton och fryser posterna.",
-  "billingRun.createKostnadsrakning": "Skapa en kostnadsräkning till domstolen (offentligt uppdrag och rättshjälp). Status INSKICKAD — domstolens beslut registreras separat.",
+  "billingRun.createKostnadsrakning": "Skapa en kostnadsräkning till domstolen (offentligt uppdrag och rättshjälp). Status INSKICKAD — domstolens beslut registreras separat. I ett förordnandemål anges forordnande.avslut (NEDLAGD, STRAFFORELAGGANDE eller INGET_ATAL): yrkandet räknas då på förordnandetaxan och ärendets förhör, och avslutet sparas på körningen (forordnandeAvslut) och i anteckningen.",
   "billingRun.recordKostnadsrakningBeslut": "Registrera domstolens beslut på en kostnadsräkning: dömt belopp och eventuell prutning. INSKICKAD → BESLUTAD (tingsrätten), ÖVERKLAGAD → BESLUTAD slutgiltigt (hovrätten). Skapar ingen faktura — det är ett eget steg.",
   "billingRun.appealKostnadsrakning": "Överklaga domstolens prutning på en kostnadsräkning till hovrätten: BESLUTAD → ÖVERKLAGAD. Ingen ny kostnadsräkning skapas; hovrättens beslut registreras på samma körning.",
   "billingRun.voidKostnadsrakning": "Ångra en kostnadsräkning innan domstolen beslutat (INSKICKAD, inget dömt belopp, ingen faktura): låser upp de tidposter och utlägg den frös och annullerar körningen, så ärendet kan kompletteras och en ny kostnadsräkning skapas.",
@@ -51,7 +51,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "calendar.listForMatter": "Alla kalenderhändelser kopplade till ett visst ärende, kronologiskt.",
   "calendar.listForUsers": "Kalenderhändelser för flera medarbetare i en enda fråga — underlag för gemensamma vyer.",
   "calendar.getById": "Hämta en enskild kalenderhändelse.",
-  "calendar.create": "Skapa en kalenderhändelse (möte, förhandling, frist), valfritt kopplad till ett ärende.",
+  "calendar.create": "Skapa en kalenderhändelse (möte eller förhandling), valfritt kopplad till ett ärende. En frist är en uppgift: skapa den med task.create.",
   "calendar.update": "Uppdatera en kalenderhändelse.",
   "calendar.delete": "Radera en kalenderhändelse.",
 
@@ -161,7 +161,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "mail.findSaved": "Kontrollera om ett mail (Internet Message-ID) redan är sparat på ett ärende.",
 
   // ── Ärenden ──────────────────────────────────────────────────────
-  "matter.list": "Lista och sök byråns ärenden, valfritt filtrerat på status eller handläggare.",
+  "matter.list": "Lista och sök byråns ärenden, valfritt filtrerat på status eller handläggare; mine ger bara ärenden där den inloggade är ansvarig, och orderBy \"lastActivity\" sorterar på senast hänt i ärendet.",
   "matter.getById": "Hämta ett enskilt ärende med betalningssätt, klient och ekonomi.",
   "matter.create": "Lägg upp ett nytt ärende med betalningssätt (privat, rättshjälp, rättsskydd eller offentligt uppdrag).",
   "matter.update": "Uppdatera ett ärendes uppgifter.",
@@ -186,7 +186,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "paymentPlan.list": "Avbetalningsplaner med sina fakturor och förfallodagar.",
   "paymentPlan.getById": "Hämta en enskild avbetalningsplan.",
   "paymentPlan.cancel": "Avbryt en aktiv avbetalningsplan.",
-  "paymentPlan.recordReminder": "Logga en utskickad påminnelse för en plan (förfallen eller försenad, för en viss månad).",
+  "paymentPlan.recordReminder": "Registrera en påminnelse för en plan (förfaller eller försenad, för en viss månad). AVA skickar ingenting till klienten.",
   "paymentPlan.scanDueReminders": "Gå igenom alla planer och logga de påminnelser som förfallit. Idempotent — redan loggade månader hoppas över.",
 
   // ── Inställningar (användare och byrå) ───────────────────────────
@@ -243,8 +243,10 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
 
   // ── Tidsposter ───────────────────────────────────────────────────
   "timeEntry.list": "Lista tidsposter, valfritt filtrerat på ärende, medarbetare och datumintervall.",
+  "timeEntry.chart": "En medarbetares registrerade tid per dag, vecka eller månad i ett datumintervall: summa, debiterbar tid och ärendena per stapel. Utan userId gäller diagrammet hela byrån.",
   "timeEntry.create": "Registrera arbetad tid på ett ärende. Kategorin styr ersättningen: arbete, tidsspillan, arbete på obekväm tid, eller advokatberedskap som ersätts per dygn med noll minuter.",
   "timeEntry.update": "Uppdatera en tidspost.",
+  "timeEntry.moveToMatter": "Flytta en eller flera olåsta tidsposter till ett annat ärende. Timpriset räknas om mot målärendet; datum, tid och beskrivning ändras inte. Fakturerade eller frysta poster vägras.",
   "timeEntry.delete": "Radera en tidspost.",
   "timeEntry.report": "Tidsrapport aggregerad över en period.",
   "timeEntry.radgivningStatus": "Visa om ett rättshjälpsärendes rådgivningsfaktura saknar låst rådgivningspost (missing) eller redan har en (present).",

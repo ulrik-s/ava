@@ -34,6 +34,8 @@ vi.mock("@/lib/client/trpc", () => {
       organization: { getSettings: { useQuery: () => ({ data: { standardAtgarder: [] }, isLoading: false }) } },
       // Ärendets billing-runs driver förslagsraden (#958). Tom lista → inga förslag.
       billingRun: { list: { useQuery: () => ({ data: { runs: [] }, isLoading: false }) } },
+      // Ärendena en post kan flyttas till (#2042).
+      matter: { list: { useQuery: () => ({ data: { matters: [] } }) } },
       prefs: {
         get: { useQuery: () => ({ data: null }) },
         save: { useMutation: () => noopMut },
@@ -60,6 +62,7 @@ vi.mock("@/lib/client/trpc", () => {
         },
         create: { useMutation: () => ({ mutate: createMut, mutateAsync: vi.fn(), isPending: false }) },
         update: { useMutation: () => ({ mutate: updateMut, mutateAsync: vi.fn(), isPending: false, error: updateState.error }) },
+        moveToMatter: { useMutation: () => noopMut },
         delete: { useMutation: (o: { onError?: (e: { message: string }) => void }) => { deleteOpts.onError = o.onError; return { mutate: deleteMut, mutateAsync: vi.fn(), isPending: false }; } },
       },
     },
@@ -145,7 +148,7 @@ describe("TimeSection — registrera/ändra/ta-bort-flöden", () => {
     expect(screen.getByText("Ändra tidregistrering")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Möte")).toBeInTheDocument(); // förifyllt ur te-1
     fireEvent.click(screen.getByText("Spara"));
-    expect(updateMut).toHaveBeenCalledWith(expect.objectContaining({ id: "te-1" }));
+    expect(updateMut).toHaveBeenCalledWith(expect.objectContaining({ id: "te-1" }), expect.anything());
   });
 
   it("'Ta bort' med confirm → delete.mutate med id", () => {
@@ -167,7 +170,7 @@ describe("TimeSection — registrera/ändra/ta-bort-flöden", () => {
   it("toggla Debiterbar i skapa-formuläret + Avbryt stänger modalen", () => {
     renderSection();
     fireEvent.click(screen.getByText("+ Registrera tid"));
-    fireEvent.click(screen.getByRole("checkbox")); // Debiterbar
+    fireEvent.click(screen.getByRole("checkbox", { name: "Debiterbar" })); // Debiterbar
     fireEvent.click(screen.getByText("Avbryt"));
     expect(screen.queryByText("Registrera tid")).not.toBeInTheDocument();
   });

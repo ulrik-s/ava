@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildContext } from "@/lib/server/build-context";
-import type { QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
+import type { QueuedProcedureCall } from "@/lib/server/data-store/in-memory/queue-entry";
 import { users } from "@/lib/server/db/schema";
 import { serverFirstEventLog } from "@/lib/server/http/server-context";
 import { buildDrizzleRepositories, type DrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";

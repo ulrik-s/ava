@@ -50,6 +50,7 @@ export const EVENT_TYPES = [
   "time-entry.added",
   "time-entry.updated",
   "time-entry.deleted",
+  "time-entry.moved",
   // task
   "task.created",
   "task.completed",

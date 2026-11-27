@@ -68,3 +68,72 @@ test("Exportera Excel laddar ner rapporten som CSV med de tre avsnitten (#1793)"
   expect(lines).toContain("Timdebitering per vecka");
   expect(lines).toContain("Upparbetat, icke fakturerat");
 });
+
+/** Kalenderdagen `n` dagar före i dag ("YYYY-MM-DD", svensk tid). */
+function daysBeforeToday(n: number): string {
+  const day = new Date(Date.now() - n * 86_400_000);
+  return day.toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
+}
+
+test("Stapeldiagram: veckans staplar, och en stapel med tid visar ärenden som länkar (#2110)", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/reports/`);
+  await expect(page.getByLabel("Advokat", { exact: true })).not.toHaveValue("", { timeout: 30_000 });
+  await showPanel(page, "Stapeldiagram");
+
+  // Vecka är förvald: sju dagsstaplar för veckan som innehåller Till (i dag).
+  const dayBars = page.getByRole("button", { name: /^\p{L}+ \d{1,2} \p{L}+: [\d,]+ h$/u });
+  await expect(dayBars).toHaveCount(7, { timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /^Vecka \d+ \d{4}/ })).toBeVisible();
+
+  // Seeden lägger tid varannan dag bakåt från byggdagen, fördelat mellan
+  // användarna: en månad bakåt från Till har säkert tid för vald advokat.
+  await page.getByLabel("Till", { exact: true }).fill(daysBeforeToday(3));
+  await page.getByRole("button", { name: "Månad", exact: true }).click();
+  const withTime = page.getByRole("button", { name: /^Vecka \d+: (?!0 h$)[\d,]+ h$/ }).first();
+  await expect(withTime).toBeVisible({ timeout: 30_000 });
+  await withTime.click();
+  await expect(withTime).toHaveAttribute("aria-pressed", "true");
+
+  const matterLink = page.getByRole("link", { name: /^\d{4}-\d{4} — / }).first();
+  await expect(matterLink).toBeVisible();
+
+  const scroll = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+  expect(scroll.width).toBeLessThanOrEqual(scroll.client);
+
+  await matterLink.click();
+  await expect(page).toHaveURL(/\/matters\//);
+});
+
+test("Stapeldiagram: pilarna stegar en stapel, och rutan minns personens vy (#2111)", async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 956 });
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/reports/`);
+  await expect(page.getByLabel("Advokat", { exact: true })).not.toHaveValue("", { timeout: 30_000 });
+  await page.getByLabel("Till", { exact: true }).fill(daysBeforeToday(3));
+  await showPanel(page, "Stapeldiagram");
+
+  // Vecka: "Föregående dag" flyttar den valda stapeln en dag bakåt.
+  const dayBars = page.getByRole("button", { name: /^\p{L}+ \d{1,2} \p{L}+: [\d,]+ h$/u });
+  await expect(dayBars).toHaveCount(7, { timeout: 30_000 });
+  const pressedIndex = (): Promise<number> =>
+    dayBars.evaluateAll((els) => els.findIndex((e) => e.getAttribute("aria-pressed") === "true"));
+  const before = await pressedIndex();
+  await page.getByRole("button", { name: "Föregående dag" }).click();
+  await expect.poll(pressedIndex).toBe(before === 0 ? 6 : before - 1);
+
+  // Månad: veckostaplar, och pilarna stegar en vecka.
+  await page.getByRole("button", { name: "Månad", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^Vecka \d+: [\d,]+ h$/ }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Föregående vecka" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Nästa vecka" })).toBeVisible();
+
+  // Lämna Rapporter och kom tillbaka utan att ladda om: Månad är kvar.
+  const sidebar = page.locator("[data-desktop-sidebar]");
+  await sidebar.getByRole("link", { name: "Ärenden / jävskontroll" }).click();
+  await expect(page).toHaveURL(/\/matters\/?$/, { timeout: 30_000 });
+  await sidebar.getByRole("link", { name: "Rapporter" }).click();
+  await showPanel(page, "Stapeldiagram");
+  await expect(page.getByRole("button", { name: "Månad", exact: true })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+});

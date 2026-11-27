@@ -22,16 +22,16 @@
  * — den är en myndighetsblankett, inte en faktura, och berörs inte här.
  */
 
-import { formatCurrency } from "@/lib/client/utils";
-import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
-import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/expense-vat";
-import { ARVODE_VAT_BIPS } from "@/lib/shared/invoice-calc";
-import type { InvoiceSpecification } from "@/lib/shared/invoice-specification";
-import { invoiceVatOre } from "@/lib/shared/invoice-vat";
+import { isPerDayKind } from "@/lib/shared/billing/brottmalstaxa";
+import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/billing/expense-vat";
+import { ARVODE_VAT_BIPS } from "@/lib/shared/billing/invoice-calc";
+import type { InvoiceSpecification, SpecExpenseLine } from "@/lib/shared/billing/invoice-specification";
+import { invoiceVatOre } from "@/lib/shared/billing/invoice-vat";
+import { svd as svDate } from "@/lib/shared/billing/settlement-view"; // svensk kalenderdag (#1677)
+import { formatKr } from "@/lib/shared/kr-format";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
-import { svd as svDate } from "@/lib/shared/settlement-view"; // svensk kalenderdag (#1677)
 import {
   expenseTotals, groupByKind, quantityLabel, resolveSpec, specTables, sumOf, unitRateOre,
   type CarriedWorkLine, type Fc, type FakturaExpenseRow, type FakturaTimeGroup, type FakturaTimeRow, type SpecLine,
@@ -56,6 +56,8 @@ export interface FakturaBreakdown {
   totalLabel: string;
   totalOre: number;
   timeLines?: ReadonlyArray<CarriedWorkLine> | undefined;
+  /** Nedbrytningens utlägg (#1938) — går före fakturans egna i specifikationen. */
+  expenseLines?: ReadonlyArray<SpecExpenseLine> | undefined;
 }
 
 export interface FakturaDocMeta {
@@ -145,6 +147,9 @@ export interface FakturaView {
   timeLines: FakturaTimeRow[];
   /** Tidsposterna per arvodeskategori, i kategori-ordning (#1200). */
   timeGroups: FakturaTimeGroup[];
+  /** Visa tidspostens och kategorins belopp (#1939). Falskt på acontofakturan:
+   *  där står bara timmarna, och tidsraderna har tomma belopp. */
+  showTimeAmounts: boolean;
   expenseLines: FakturaExpenseRow[];
   /** Utläggsspecifikationens summarad (#1506): summan av posternas netto resp.
    *  brutto, formaterade som posterna. Tomma när utlägg saknas. */
@@ -158,6 +163,11 @@ export function fakturaHeading(inv: Pick<FakturaDocInvoice, "invoiceType" | "not
   if (inv.invoiceType === "CREDIT") return "Kreditfaktura";
   if (inv.invoiceType === "ACCONTO") return "Aconto-faktura";
   return "Faktura";
+}
+
+/** Är detta en acontofaktura? Den visar tiden utan belopp (#1939). */
+function isAcconto(inv: Pick<FakturaDocInvoice, "invoiceType">): boolean {
+  return inv.invoiceType === "ACCONTO";
 }
 
 /** Är detta rådgivningstimmen (rättshjälpens separata klientdebitering)? */
@@ -233,12 +243,13 @@ const SUMMARY_TOTAL_LABEL = "Summa inkl moms";
 /**
  * Sammanställningens rader (#925/#1200): arvoderaderna (exkl moms), följt av
  * uträkningskedjan. Slutsumman är det faktiska bruttot (arvode + moms + utlägg
- * + moms + äkta utlägg). Ren + testbar.
+ * + moms + äkta utlägg). Ett aconto har alltid enradsvarianten med fakturans
+ * belopp (#1939), också när nedbrytningen bär tidsrader. Ren + testbar.
  */
 function summarySection(a: FakturaTemplateArgs, spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView, "summary" | "summaryTotalLabel" | "summaryTotal"> {
-  if (!spec || spec.timeLines.length === 0) {
-    // Fakturor helt utan itemiserat arbete (rådgivningstimmen, rena aconton) får
-    // ändå en sammanställningsrad ur `notes` (#870) → beloppet är aldrig oförklarat.
+  if (!spec || spec.timeLines.length === 0 || isAcconto(a.invoice)) {
+    // Fakturor utan itemiserat arbete (rådgivningstimmen) och aconton får en
+    // sammanställningsrad ur `notes` (#870) → beloppet är aldrig oförklarat.
     const label = a.invoice.notes?.trim() || "Arvode";
     return { summary: [amountRow(label, fc(a.invoice.amount), false)], summaryTotalLabel: SUMMARY_TOTAL_LABEL, summaryTotal: fc(a.invoice.amount) };
   }
@@ -311,8 +322,9 @@ function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "fo
  * Bygg den färdigformaterade vy-modellen (#938) — enda stället där öre blir
  * text. PDF-renderaren (`renderFakturaPdf`) ritar den rakt av.
  */
-export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatCurrency): FakturaView {
+export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatKr): FakturaView {
   const spec = resolveSpec(a);
+  const showTimeAmounts = !isAcconto(a.invoice);
   return {
     ...headerFields(a),
     ...summarySection(a, spec, fc),
@@ -323,7 +335,8 @@ export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatCurrency
     splitRows: splitRowsFor(a, spec, fc),
     totalLabel: a.breakdown?.totalLabel ?? "Att betala (inkl moms)",
     total: fc(a.breakdown ? a.breakdown.totalOre : a.invoice.amount),
-    ...specTables(spec, fc),
+    ...specTables(spec, fc, showTimeAmounts),
+    showTimeAmounts,
     ...expenseTotals(spec, fc),
   };
 }

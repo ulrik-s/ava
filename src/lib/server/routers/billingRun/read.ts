@@ -7,29 +7,24 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { buildProposal } from "@/lib/shared/billing-proposal";
+import { buildProposal } from "@/lib/shared/billing/billing-proposal";
 import {
   buildInvoiceSpecification, specExpenseLines, specTimeLines,
   type InvoiceSpecification, type SpecDeduction,
-} from "@/lib/shared/invoice-specification";
+} from "@/lib/shared/billing/invoice-specification";
+import { roundingOf } from "@/lib/shared/billing/whole-kronor";
 import {
   billingRunIdSchema, invoiceIdSchema, matterIdSchema,
   type InvoiceId, type OrganizationId,
 } from "@/lib/shared/schemas/ids";
-import { roundingOf } from "@/lib/shared/whole-kronor";
 import type { Repositories } from "../../repositories/repositories";
 import { orgProcedure } from "../../trpc";
-import { sumPriorAccontos } from "./shared";
+import { accontoDeductionsByInvoiceIds, sumPriorAccontos } from "./shared";
 
 /** Hämta + montera avdragna aconto-fakturor för en slutfaktura (#856). */
 async function fetchSpecDeductions(repos: Repositories, orgId: OrganizationId, finalInvoiceId: InvoiceId): Promise<SpecDeduction[]> {
   const links = await repos.accontoDeductions.listByFinalInvoice(finalInvoiceId);
-  const out: SpecDeduction[] = [];
-  for (const link of links) {
-    const inv = await repos.invoices.getByIdInOrg(link.accontoInvoiceId, orgId);
-    if (inv) out.push({ invoiceNumber: inv.invoiceNumber ?? "—", date: inv.invoiceDate ?? null, amountOre: inv.amount });
-  }
-  return out;
+  return accontoDeductionsByInvoiceIds(repos, orgId, links.map((l) => l.accontoInvoiceId));
 }
 
 export const readProcedures = {

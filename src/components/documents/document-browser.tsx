@@ -80,8 +80,8 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     setRenamingFolderId,
     setAnalyzingIds,
   });
-  const upload = useFileUpload({ matterId, mutations, fileInputRef });
-  // Namnrutan före uppladdning (#1614): `nameQueue.enqueue(filer, mapp)` öppnar den.
+  const upload = useFileUpload({ matterId, mutations });
+  // Namnrutan före uppladdning (#1614, + Ladda upp #1976): `nameQueue.enqueue(filer, mapp)` öppnar den.
   const nameQueue = useUploadNameQueue();
   // Filer utifrån (#1615) går till namnrutan och sedan samma uppladdning.
   const drag = useDragHandlers(mutations, { onFiles: nameQueue.enqueue, onUnreadable: () => upload.setUploadError(UNREADABLE_DROP) });
@@ -106,7 +106,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
         showNewFolder={() => setShowNewFolder(true)}
         uploading={upload.uploading}
         fileInputRef={fileInputRef}
-        onUpload={(e) => { void upload.handleFileUpload(e); }}
+        onUpload={(e) => { nameQueue.enqueue(Array.from(e.target.files ?? []), null); e.target.value = ""; }}
         viewMode={viewMode}
         onChangeViewMode={changeViewMode}
       />
@@ -116,7 +116,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
       {upload.uploadError && (
         <UploadErrorBanner message={upload.uploadError} onDismiss={() => upload.setUploadError(null)} />
       )}
-      <UploadNameDialog item={nameQueue.current} onSave={(file, options) => { void upload.enqueueUpload(file, options); }} onNext={nameQueue.next} />
+      <UploadNameDialog item={nameQueue.current} folders={folders} onSave={(file, options) => { void upload.enqueueUpload(file, options); }} onNext={nameQueue.next} />
 
       {showNewFolder && (
         <NewFolderForm

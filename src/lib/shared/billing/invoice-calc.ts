@@ -1,0 +1,117 @@
+/**
+ * Ren beräkningslogik för fakturor. Inga DB-anrop — gör allt testbart utan
+ * mockning och utan att routern behöver duplicera summeringsregler.
+ *
+ * Alla belopp i öre (Int), så vi slipper flyttalsfel.
+ */
+
+import type { AmountRounding } from "../schemas/enums";
+import { chargedExpenseLines } from "./expense-vat";
+import { CURRENT_ROUNDING, timeRowOre, vatOnRow } from "./whole-kronor";
+
+export interface TimeEntryForInvoice {
+  minutes: number;
+  hourlyRate: number; // öre per timme
+}
+
+export interface ExpenseForInvoice {
+  amount: number; // öre (netto om vatIncluded=false, annars brutto)
+  billable: boolean;
+  /** Satsen BYRÅN betalade, i bips. Default 25 %. Räknas av innan utlägget
+   *  debiteras vidare med 25 % (#975). */
+  vatRate?: number;
+  /** Är `amount` redan inkl moms? Default FALSE — utlägg lagras netto sedan #782.
+   *  (Defaulten var `true` innan #975; anropare som utelämnar fältet fick då ett
+   *  netto som var 20 % för lågt.) */
+  vatIncluded?: boolean;
+  /** Äkta utlägg — vidarefaktureras utan moms (#975). */
+  passThrough?: boolean;
+}
+
+export interface AccontoForDeduction {
+  id: string;
+  amount: number; // öre
+}
+
+/**
+ * Moms på arvode i basis points. Alla fakturor lägger på 25 % moms på arvodet
+ * oavsett mottagare (#782) — timpriset anges exkl. moms.
+ */
+export const ARVODE_VAT_BIPS = 2500;
+
+/** Arvode netto (exkl. moms, öre) → inkl. moms (öre). Momsen avrundas som
+ *  fakturans rader (#1438): hela kronor på nya fakturor, öre på äldre. */
+export function arvodeInclVatOre(arvodeNetOre: number, rounding: AmountRounding = CURRENT_ROUNDING): number {
+  return arvodeNetOre + vatOnRow(arvodeNetOre, ARVODE_VAT_BIPS, rounding);
+}
+
+export interface FinalInvoiceBreakdown {
+  /** Brutto: arvode inkl. 25 % moms + debiterbara utlägg, före accontoavdrag (#782). */
+  grossAmount: number;
+  /** Arvodets moms (öre) — del av grossAmount. */
+  arvodeVatOre: number;
+  /** Summan av alla accontoavdrag (positivt tal). */
+  accontoDeductionTotal: number;
+  /** Nettot som klienten faktiskt ska betala: grossAmount − accontoDeductionTotal. */
+  netAmount: number;
+  /** Per-rad-avdrag för rendering på fakturan. */
+  deductions: Array<{ accontoInvoiceId: string; amount: number }>;
+}
+
+/**
+ * Räknar ut slutfakturans brutto, avdrag och netto.
+ *
+ * - `timeEntries.hourlyRate` och `minutes` multipliceras och varje post
+ *   avrundas till hela kronor (#1438), så 1,5 tim × 1500 kr/h = 2250 kr exakt.
+ * - `expenses` räknas bara om `billable=true`.
+ * - `accontos` adderas rakt av (beloppet är vad klienten redan betalat).
+ *
+ * Kastar om netto skulle bli negativt — det betyder att advokaten drar av
+ * mer acconto än vad slutfakturan täcker, vilket är ett logikfel i UI:t.
+ */
+export function computeFinalInvoiceBreakdown(
+  timeEntries: readonly TimeEntryForInvoice[],
+  expenses: readonly ExpenseForInvoice[],
+  accontos: readonly AccontoForDeduction[],
+): FinalInvoiceBreakdown {
+  const timeTotal = timeEntries.reduce(
+    (sum, t) => sum + timeRowOre(t.minutes, t.hourlyRate),
+    0,
+  );
+  // Utläggen debiteras vidare med 25 % på nettot enligt NJA 2005 s. 606 (#975) —
+  // byråns egen sats räknas av först. Äkta utlägg går utan moms. Delad regel med
+  // faktureringen (`chargedExpenseLines`); två uträkningar av samma sak var just
+  // vad som gjorde att den här helpern kunde glida isär från fakturan.
+  const expenseTotal = chargedExpenseLines(expenses.filter((e) => e.billable))
+    .reduce((sum, l) => sum + l.netOre + l.vatOre, 0);
+  // Arvodet (timmar × timpris) är exkl. moms → lägg på 25 % (#782).
+  const arvodeInclVat = arvodeInclVatOre(timeTotal);
+  const arvodeVatOre = arvodeInclVat - timeTotal;
+  const grossAmount = arvodeInclVat + expenseTotal;
+
+  const deductions = accontos.map((a) => ({
+    accontoInvoiceId: a.id,
+    amount: a.amount,
+  }));
+  const accontoDeductionTotal = deductions.reduce((s, d) => s + d.amount, 0);
+
+  const netAmount = grossAmount - accontoDeductionTotal;
+  if (netAmount < 0) {
+    throw new Error(
+      `Slutfakturan blir negativ: brutto ${grossAmount} öre − acconto ${accontoDeductionTotal} öre = ${netAmount} öre. Justera avdragen.`,
+    );
+  }
+
+  return { grossAmount, arvodeVatOre, accontoDeductionTotal, netAmount, deductions };
+}
+
+/**
+ * Avgör om en avbetalningsplan är "färdigbetald" givet summan av registrerade
+ * betalningar. När true ska invoice.status → PAID och plan.status → COMPLETED.
+ */
+export function isPaymentPlanSettled(
+  invoiceAmount: number,
+  paidSum: number,
+): boolean {
+  return paidSum >= invoiceAmount;
+}

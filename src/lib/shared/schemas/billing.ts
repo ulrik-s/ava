@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { kostnadsrakningStatusSchema } from "../kostnadsrakning-flow";
+import { kostnadsrakningStatusSchema } from "../billing/kostnadsrakning-flow";
 import { baseFields, orgScopedFields, dateLike, optionalDateLike } from "./common";
 import {
   amountRoundingSchema,
@@ -7,6 +7,7 @@ import {
   billingRunStatusSchema,
   billingRunTypeSchema,
   expenseKindSchema,
+  forordnandeAvslutSchema,
   invoiceStatusSchema,
   invoiceTypeSchema,
   paymentPlanStatusSchema,
@@ -28,6 +29,7 @@ import {
   matterIdSchema,
   userIdSchema,
 } from "./ids";
+import { settlementBreakdownSchema } from "./settlement-breakdown";
 
 /**
  * TimeEntry — tidsregistrering på ärende. Lagras i `time-entries/<id>.json`.
@@ -113,27 +115,8 @@ export const expenseSchema = z.object({
 
 export type Expense = z.infer<typeof expenseSchema>;
 
-/** Persisterad nedbrytningsvy på en faktura (#876/#880) — matchar `SettlementView`.
- *  Tidsspec-tabell (arbetad tid) + rader (trappa) + total. Delas av slutreglering
- *  OCH aconto (aconton visar det upparbetade arbetet klienten betalar för). */
-export const settlementBreakdownSchema = z.object({
-  timeLines: z.array(z.object({
-    date: z.string(),
-    description: z.string(),
-    minutes: z.number().int(),
-    amountOre: z.number().int(),
-    /** Arvodeskategori (#953) — sammanställningen på klientens faktura benämner
-     *  raderna på den (arbete/obekväm tid/tidsspillan). Saknas på äldre fakturor. */
-    kind: timeEntryKindSchema.nullish(),
-  })),
-  rows: z.array(z.object({
-    label: z.string(),
-    amountOre: z.number().int(),
-    kind: z.enum(["add", "deduct", "info"]),
-  })),
-  totalLabel: z.string(),
-  totalOre: z.number().int(),
-});
+// Nedbrytningen bor i en egen fil (#1938); exporteras vidare för befintliga importer.
+export { settlementBreakdownSchema };
 
 /**
  * Invoice — `amount` i öre (brutto för FINAL, negativt för CREDIT).
@@ -160,6 +143,9 @@ export const invoiceSchema = z.object({
    *  och Slutfaktura-sidan (`/invoices/[id]`). Sätts vid settleCoverage på klient-/
    *  betalar-fakturan; null på övriga fakturor. Matchar `SettlementView`. */
   settlementBreakdown: settlementBreakdownSchema.nullish(),
+  /** Acontofakturans nedbrytning (#2147, egen kolumn #2180). Äldre acontofakturor
+   *  har den bara i `settlementBreakdown`; läs med `invoiceBreakdown`. */
+  accontoBreakdown: settlementBreakdownSchema.nullish(),
   status: invoiceStatusSchema.default("DRAFT"),
   invoiceType: invoiceTypeSchema.default("STANDARD"),
   /** Per-byrå löpande fakturanummer (F-YYYY-NNNN), genereras vid skapande.
@@ -363,6 +349,9 @@ export const billingRunSchema = z.object({
   periodTo: optionalDateLike,
   /** Fri text — t.ex. "Inkluderar tidsspillan resa Stockholm-Göteborg". */
   notes: z.string().nullish(),
+  /** Förordnandemål (#1857): hur förundersökningen avslutades. Null utanför
+   *  förordnandetaxan (#2180; förut bara en rad i `notes`). */
+  forordnandeAvslut: forordnandeAvslutSchema.nullish(),
 }).passthrough();
 
 export type BillingRun = z.infer<typeof billingRunSchema>;

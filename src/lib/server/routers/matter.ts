@@ -33,9 +33,9 @@ import { conflictReviewInput, reviewMatterConflicts } from "../conflict/matter-c
 import { ensureDefaultMatterFolders } from "../documents/default-matter-folders";
 import { emit } from "../events/emit";
 import { applyOptionalDate, keepMatterActive, toDateOrNull } from "../matters/matter-dates";
+import { matterListInput, toMatterListFilter } from "../matters/matter-list-input";
 import { formatSeriesNumber } from "../number-series";
 import { callTime, newRowId, type QueuedCallScope } from "../queued-call";
-import type { MatterListFilter } from "../repositories/matter-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
 
@@ -183,22 +183,11 @@ async function linkKlient(ctx: MatterCtx, matterId: MatterId, klientId: ContactI
 
 export const matterRouter = router({
   list: orgProcedure
-    .input(
-      z.object({
-        search: z.string().optional(),
-        status: matterStatusSchema.optional(),
-        /** Filtrera till ärenden som medarbetaren har arbetat på (har tidsposter på). */
-        employeeId: userIdSchema.optional(),
-        /** Bara dessa ärenden (#1642): jävsträffarnas rader i den sammanslagna sökningen. */
-        ids: z.array(matterIdSchema).max(500).optional(),
-        page: z.number().min(1).default(1),
-        pageSize: z.number().min(1).max(500).default(20),
-      })
-    )
+    .input(matterListInput)
     // Migrerad till repository-sömmen (ADR 0020): listForOrg kapslar in
-    // filter/sök-where + KLIENT-include + _count + total.
+    // filter/sök-where + ordning + KLIENT-include + _count + total.
     .query(async ({ ctx, input }) => {
-      const { matters, total } = await ctx.repos.matters.listForOrg(ctx.orgId, input satisfies MatterListFilter);
+      const { matters, total } = await ctx.repos.matters.listForOrg(ctx.orgId, toMatterListFilter(input, ctx.user.id));
       // Täcknings-tak-kolumn (#793): bifoga upparbetat (debiterbart) per ärende
       // batchat, så listan kan visa/sortera/filtrera mot rättshjälps-/rättsskyddstaket.
       const usage = await ctx.repos.timeEntries.coverageUsageForMatters(matters.map((m) => asId<"MatterId">(m.id)));

@@ -5,8 +5,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { WatchSection } from "@/app/matters/[id]/_watch-section";
 import { asId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 
-const day = (offset: number): Date => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + offset); return d; };
+/** Svensk kalenderdag `offset` dagar från i dag (fristen räknas i svensk tid, #1677): en lokal
+ *  midnatt gav gårdagen på CI (UTC) mellan 23 och 24 UTC. */
+const day = (offset: number): Date => new Date(Date.parse(stockholmDay(new Date())) + offset * 86_400_000);
 
 let tasks: unknown[] = [];
 const createMutate = vi.fn();

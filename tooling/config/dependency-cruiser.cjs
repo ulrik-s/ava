@@ -130,7 +130,9 @@ module.exports = {
       // backend-lagret BARA via typer (tRPC `AppRouter`-kontraktet etc) —
       // aldrig dra in körbar server-kod. Undantag: composition-root:en där
       // backend faktiskt wire:as ihop in-process i browsern (browser ÄR
-      // runtime, se architecture.md). Håll den listan kort.
+      // runtime, se architecture.md). Håll den listan kort. (Klientens lokala
+      // lager `lib/client/local-store/` undantas här men vaktas snävare av
+      // `local-store-imports-only-in-memory-core` nedan, #2179.)
       name: "ui-imports-server-by-type-only",
       severity: "error",
       comment:
@@ -140,11 +142,44 @@ module.exports = {
       from: {
         path: "^src/(app|components)/|^src/lib/client/",
         pathNot:
-          "^src/(lib/client/(backend/|demo/in-process-link\\.ts$)|components/shell/demo-bootstrap\\.tsx$)",
+          "^src/(lib/client/(backend/|local-store/|demo/in-process-link\\.ts$)|components/shell/demo-bootstrap\\.tsx$)",
       },
       to: {
         path: "^src/lib/server/",
         dependencyTypesNot: ["type-only"],
+      },
+    },
+    {
+      // Lager-gräns (#2179, docs/architecture.md §"Klientens lokala lager"):
+      // `lib/client/local-store/` är webbläsarens lokala lager (IndexedDB,
+      // BroadcastChannel, mutations-kö, reconcile). Det kör aldrig på servern
+      // och använder webbläsar-API:er, inte importer — därför en uttrycklig
+      // regel: servern och dess binärer får inte dra in det.
+      name: "server-must-not-import-local-store",
+      severity: "error",
+      comment:
+        "src/lib/server/ och src/bin/ får inte importera klientens lokala lager " +
+        "(lib/client/local-store/: IndexedDB, BroadcastChannel). Delade scheman " +
+        "och protokolltyper hör hemma i server/data-store/in-memory/ eller shared/.",
+      from: { path: "^src/(lib/server|bin)/" },
+      to: { path: "^src/lib/client/local-store/" },
+    },
+    {
+      // Motsatt riktning (#2179): det lokala lagret bygger på den rena
+      // in-memory-kärnan (LocalStore, delegater, köpostens schema, synk-
+      // protokollets typer) men får inte dra in server-only-moduler (routrar,
+      // repositories/Drizzle, db, server-synk, jobb). Tillåtelselista: bara
+      // `server/data-store/in-memory/` och `server/queued-call.ts`.
+      name: "local-store-imports-only-in-memory-core",
+      severity: "error",
+      comment:
+        "lib/client/local-store/ får från server/ bara importera in-memory-kärnan " +
+        "(server/data-store/in-memory/) och queued-call.ts — aldrig routrar, " +
+        "repositories, db eller annan server-only-kod.",
+      from: { path: "^src/lib/client/local-store/" },
+      to: {
+        path: "^src/lib/server/",
+        pathNot: "^src/lib/server/(data-store/in-memory/|queued-call\\.ts$)",
       },
     },
     {

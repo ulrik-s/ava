@@ -23,7 +23,7 @@
  */
 
 import { buildSemanticVoucher, type VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
-import { isIssued } from "@/lib/shared/invoice-state-machine";
+import { isIssued } from "@/lib/shared/billing/invoice-state-machine";
 import type { LedgerAttachment, LedgerConnector, PushVoucherResult } from "./port";
 
 /** Fakturaraden drivrutinen behöver — en delmängd av listvyns rad. */

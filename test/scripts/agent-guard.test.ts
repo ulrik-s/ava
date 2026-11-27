@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
 import {
-  AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, guardViolations, type GuardInput, humanApproved, rankInLast24h, trustedLabels,
+  AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, ROUTER_SIZE_BASELINE, guardViolations, type GuardInput, humanApproved, rankInLast24h, trustedLabels,
 } from "../../tooling/scripts/agent-guard";
 
 const BASE: GuardInput = { labels: ["agent-pr", "granskad"], files: ["src/app/matters/page.tsx"], addedMigrationLines: [], agentPrsLast24h: 1 };
@@ -69,20 +69,20 @@ const MONEY_FILES = [
   "tooling/db/migrations/0042_x.sql",
   "tooling/db/migrations/meta/_journal.json",
   "src/lib/server/billing/x.ts",
-  "src/lib/shared/billing-flow.ts",
-  "src/lib/shared/kostnadsrakning.ts",
-  "src/lib/shared/kostnadsrakning-flow.ts",
-  "src/lib/shared/coverage-billing.ts",
-  "src/lib/shared/invoice-calc.ts",
+  "src/lib/shared/billing/billing-flow.ts",
+  "src/lib/shared/billing/kostnadsrakning.ts",
+  "src/lib/shared/billing/kostnadsrakning-flow.ts",
+  "src/lib/shared/billing/coverage-billing.ts",
+  "src/lib/shared/billing/invoice-calc.ts",
   "src/lib/server/routers/invoice.ts",
   "src/lib/server/routers/billingRun.ts",
   "src/lib/server/routers/billingRun/x.ts",
-  "src/lib/shared/vat.ts",
-  "src/lib/shared/invoice-vat.ts",
-  "src/lib/shared/expense-vat.ts",
-  "src/lib/shared/acconto-vat.ts",
-  "src/lib/shared/brottmalstaxa.ts",
-  "src/lib/shared/forordnandetaxa.ts",
+  "src/lib/shared/billing/vat.ts",
+  "src/lib/shared/billing/invoice-vat.ts",
+  "src/lib/shared/billing/expense-vat.ts",
+  "src/lib/shared/billing/acconto-vat.ts",
+  "src/lib/shared/billing/brottmalstaxa.ts",
+  "src/lib/shared/billing/forordnandetaxa.ts",
   "src/lib/shared/accounting/voucher.ts",
 ];
 
@@ -112,11 +112,11 @@ describe("pengalogik, delade scheman och migrationer (#1873)", () => {
     const owners = readFileSync(join(process.cwd(), ".github/CODEOWNERS"), "utf8");
     const entries = [
       "/src/lib/shared/schemas/", "/tooling/db/migrations/", "/src/lib/server/billing/",
-      "/src/lib/shared/billing-*.ts", "/src/lib/shared/kostnadsrakning*.ts", "/src/lib/shared/coverage-billing.ts",
-      "/src/lib/shared/invoice-calc.ts", "/src/lib/server/routers/invoice.ts", "/src/lib/server/routers/billingRun.ts",
-      "/src/lib/server/routers/billingRun/", "/src/lib/shared/vat.ts", "/src/lib/shared/invoice-vat.ts",
-      "/src/lib/shared/expense-vat.ts", "/src/lib/shared/acconto-vat.ts", "/src/lib/shared/brottmalstaxa.ts",
-      "/src/lib/shared/forordnandetaxa.ts", "/src/lib/shared/accounting/",
+      "/src/lib/shared/billing/billing-*.ts", "/src/lib/shared/billing/kostnadsrakning*.ts", "/src/lib/shared/billing/coverage-billing.ts",
+      "/src/lib/shared/billing/invoice-calc.ts", "/src/lib/server/routers/invoice.ts", "/src/lib/server/routers/billingRun.ts",
+      "/src/lib/server/routers/billingRun/", "/src/lib/shared/billing/vat.ts", "/src/lib/shared/billing/invoice-vat.ts",
+      "/src/lib/shared/billing/expense-vat.ts", "/src/lib/shared/billing/acconto-vat.ts", "/src/lib/shared/billing/brottmalstaxa.ts",
+      "/src/lib/shared/billing/forordnandetaxa.ts", "/src/lib/shared/accounting/",
     ];
     const rows = owners.split("\n").map((line) => line.trim().split(/\s+/));
     for (const entry of entries) {
@@ -153,6 +153,22 @@ describe("filstorleksbaslinjen", () => {
   it("rader i andra filer räknas inte; ingen ändring alls är strängt nog", () => {
     expect(baselineDiffTightens(["+++ b/src/x.ts", '+  "src/a.ts": 999,'].join("\n"))).toBe(true);
     expect(baselineDiffTightens("")).toBe(true);
+  });
+
+  it("routerbaslinjen (#2176) har samma undantag: bara skärpning släpps igenom", () => {
+    const router = (body: string[]) => [`--- a/${ROUTER_SIZE_BASELINE}`, `+++ b/${ROUTER_SIZE_BASELINE}`, ...body].join("\n");
+    expect(baselineDiffTightens(router(['-  "src/lib/server/routers/a.ts": 300,', '+  "src/lib/server/routers/a.ts": 280,']))).toBe(true);
+    expect(baselineDiffTightens(router(['+  "src/lib/server/routers/ny.ts": 260,']))).toBe(false);
+    expect(guardViolations({ ...BASE, files: [ROUTER_SIZE_BASELINE], baselineOnlyTightens: true })).toEqual([]);
+    expect(guardViolations({ ...BASE, files: [ROUTER_SIZE_BASELINE], baselineOnlyTightens: false })).toEqual([expect.stringContaining(ROUTER_SIZE_BASELINE)]);
+  });
+
+  it("en uppluckrad baslinje fäller hela diffen, även när den andra skärps", () => {
+    const both = [
+      `--- a/${FILE_SIZE_BASELINE}`, `+++ b/${FILE_SIZE_BASELINE}`, '-  "src/a.ts": 520,', '+  "src/a.ts": 480,',
+      `--- a/${ROUTER_SIZE_BASELINE}`, `+++ b/${ROUTER_SIZE_BASELINE}`, '+  "src/lib/server/routers/ny.ts": 260,',
+    ].join("\n");
+    expect(baselineDiffTightens(both)).toBe(false);
   });
 
   it("spärrskriptet själv är skyddat", () => {

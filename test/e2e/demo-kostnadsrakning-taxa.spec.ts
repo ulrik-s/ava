@@ -10,6 +10,9 @@
  * "Ångra kostnadsräkning" (den skickades in löpande) → "+ Skapa faktura" →
  * "Kostnadsräkning till domstol" → taxa, huvudförhandling 1 tim 35 min →
  * "Generera + spara". Kortet ska visa dialogens total, krona för krona.
+ *
+ * Förordnandemålet (#1858): samma flöde med förordnandetaxan (DVFS 2025:5).
+ * Dokumentet kan inte genereras förrän förundersökningens avslut är valt.
  */
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterWithKrStatus, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
@@ -43,6 +46,44 @@ test("taxeärende: 'Yrkat i kostnadsräkning' = dialogens total (brottmålstaxan
   expect(claimed).toBeGreaterThan(0);
 
   await modal.getByRole("button", { name: /Generera \+ (spara|öppna mail)/ }).click();
+  await expect(modal).toBeHidden({ timeout: 30_000 });
+
+  const card = page.getByText("Yrkat i kostnadsräkning", { exact: true }).locator("xpath=..");
+  await expect.poll(async () => kronor(await card.textContent()), { timeout: 15_000 }).toBe(claimed);
+});
+
+test("förordnandemål: avslutet krävs, och 'Yrkat i kostnadsräkning' = dialogens total", async ({ page }) => {
+  const matterId = matterWithKrStatus(await fetchDemoSeed(page, BASE), "INSKICKAD");
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/matters/${matterId}/`);
+  await showPanel(page, "Fakturering");
+
+  // Den inskickade kostnadsräkningen ångras — ärendet räknas på förordnandetaxan.
+  await expect(page.getByText(/Väntar på dom/i).first()).toBeVisible({ timeout: 30_000 });
+  page.once("dialog", (d) => { void d.accept(); });
+  await page.getByRole("button", { name: /^Ångra kostnadsräkning$/ }).click();
+  await expect(page.getByText(/Väntar på dom/i)).toHaveCount(0, { timeout: 20_000 });
+
+  await page.getByRole("button", { name: "+ Skapa faktura" }).click();
+  await page.getByRole("button", { name: "Kostnadsräkning till domstol" }).click();
+  const modal = page.locator("div.fixed.inset-0").filter({ hasText: "Förhandsvisning" });
+  await expect(modal).toBeVisible();
+
+  await modal.getByLabel("Förordnandetaxa (DVFS 2025:5)").check();
+  await expect(modal.getByText("STOPPA NU")).toHaveCount(0);
+  // Förhören ur ärendets poster (antal och tid), eller taxans lägsta belopp utan förhör.
+  await expect(modal.getByLabel("Förhör")).toContainText(/sammanlagt|Inga förhör/);
+  const generate = modal.getByRole("button", { name: /Generera \+ (spara|öppna mail)/ });
+  await expect(generate).toBeDisabled();
+
+  await modal.getByLabel("Lades ned").check();
+  await expect(generate).toBeEnabled();
+
+  const total = modal.locator("dt", { hasText: "Total" }).locator("xpath=following-sibling::dd[1]");
+  const claimed = kronor(await total.textContent());
+  expect(claimed).toBeGreaterThan(0);
+
+  await generate.click();
   await expect(modal).toBeHidden({ timeout: 30_000 });
 
   const card = page.getByText("Yrkat i kostnadsräkning", { exact: true }).locator("xpath=..");

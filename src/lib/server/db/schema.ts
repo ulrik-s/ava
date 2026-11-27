@@ -16,6 +16,7 @@
 
 export * from "./schema-core";
 export * from "./schema-sync";
+export * from "./schema-jobs";
 export * from "./schema-billing";
 export * from "./schema-documents";
 export * from "./schema-misc";

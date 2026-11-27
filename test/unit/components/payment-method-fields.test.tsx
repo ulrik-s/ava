@@ -108,7 +108,7 @@ describe("PaymentMethodFields", () => {
     const details = screen.getByText("Avvikande timpris för ärendet").closest("details");
     expect(details?.open).toBe(false);
     const arbete = screen.getByLabelText<HTMLInputElement>(/^Timarvode \(kr\/h/);
-    expect(arbete.placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
+    expect(arbete.placeholder).toMatch(/^ärvs: 2\s500\skr\/h$/);
   });
 
   it("ett befintligt pris öppnar sektionen; töms det försvinner kategorin ur kartan (#1206)", () => {

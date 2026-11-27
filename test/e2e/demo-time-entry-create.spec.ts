@@ -7,7 +7,7 @@
  * här testet visar att det vanliga flödet fortsätter fungera för en jurist.
  */
 
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import {
   DEMO_BASE_URL, expect, fetchDemoSeed, matterIdWith, seedDemoConfig, seedDemoLogin, showPanel, test, type DemoSeed,
@@ -185,4 +185,163 @@ test("en beskrivning över flera rader: datumet står i höjd med beskrivningens
   expect(await dateCell.evaluate((td) => getComputedStyle(td).verticalAlign)).toBe("top");
 
   expect(Math.abs(await firstLineTop(dateCell) - await firstLineTop(descCell))).toBeLessThanOrEqual(2);
+});
+
+/*
+ * #2042: en tidspost registrerad i fel ärende flyttas till rätt ärende i
+ * Ändra tidregistrering på /time. Posten syns sedan i målärendets tidslista.
+ * Timpriset mot målärendet prövas i routerns och procedurkörningens tester.
+ */
+test("en post flyttas till ett annat ärende i Ändra tidregistrering", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const [from, to] = seed.matters.filter((m) => m.status === "ACTIVE" && m.matterNumber)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!from || !to) throw new Error("demon saknar två aktiva ärenden");
+  const label = (m: typeof from) => `${m.matterNumber ?? ""} — ${m.title}`;
+
+  await page.goto(`${base}/time/`, { waitUntil: "load" });
+  await page.getByRole("button", { name: /\+ Registrera tid/ }).click();
+  await page.getByLabel("Ärende *").fill(label(from));
+  const description = "E2E: registrerad i fel ärende (#2042)";
+  await page.getByLabel("Beskrivning *").fill(description);
+  await page.getByRole("button", { name: "Spara", exact: true }).click();
+
+  const row = page.getByRole("row").filter({ hasText: description });
+  await expect(row).toContainText(from.matterNumber ?? "");
+  await row.getByRole("button", { name: "Ändra" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ändra tidregistrering" });
+  await expect(dialog.getByLabel("Ärende")).toHaveValue(label(from));
+  await dialog.getByLabel("Ärende").fill(label(to));
+  await dialog.getByRole("button", { name: "Spara" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(row).toContainText(to.matterNumber ?? "");
+
+  await page.goto(`${base}/matters/${to.id}/`, { waitUntil: "load" });
+  const tid = page.getByRole("region", { name: "Tid" }).last();
+  await expect(tid).toBeVisible({ timeout: 25_000 });
+  await expect(tid.getByText(description)).toBeVisible();
+});
+
+/*
+ * #2043: två tidsposter som hamnat i fel ärende markeras i tidslistan på /time
+ * och flyttas tillsammans till rätt ärende. Båda syns sedan i målärendets
+ * tidslista. Låsregeln prövas i komponenttesterna.
+ */
+/** Registrera en post i ärendet via formuläret på /time. */
+async function register(page: Page, matterLabel: string, description: string): Promise<void> {
+  await page.getByRole("button", { name: /\+ Registrera tid/ }).click();
+  await page.getByLabel("Ärende *").fill(matterLabel);
+  await page.getByLabel("Beskrivning *").fill(description);
+  await page.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(page.getByRole("row").filter({ hasText: description })).toBeVisible();
+}
+
+test("två markerade tidsposter flyttas till ett annat ärende", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const [from, to] = seed.matters.filter((m) => m.status === "ACTIVE" && m.matterNumber)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!from || !to) throw new Error("demon saknar två aktiva ärenden");
+  const label = (m: typeof from) => `${m.matterNumber ?? ""} — ${m.title}`;
+  const first = "E2E: första posten i fel ärende (#2043)";
+  const second = "E2E: andra posten i fel ärende (#2043)";
+
+  await page.goto(`${base}/time/`, { waitUntil: "load" });
+  await register(page, label(from), first);
+  await register(page, label(from), second);
+
+  for (const description of [first, second]) {
+    await page.getByRole("row").filter({ hasText: description }).getByRole("checkbox", { name: "Markera rad" }).check();
+  }
+  await page.getByRole("button", { name: "Flytta till ärende… (2)" }).click();
+  const dialog = page.getByRole("dialog", { name: "Flytta till ärende" });
+  await dialog.getByLabel("2 tidsposter flyttas till:").fill(label(to));
+  await dialog.getByRole("button", { name: "Flytta" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Flytta till ärende/ })).toHaveCount(0);
+
+  await page.goto(`${base}/matters/${to.id}/`, { waitUntil: "load" });
+  const tid = page.getByRole("region", { name: "Tid" }).last();
+  await expect(tid).toBeVisible({ timeout: 25_000 });
+  await expect(tid.getByText(first)).toBeVisible();
+  await expect(tid.getByText(second)).toBeVisible();
+});
+
+/*
+ * #2096: Tidregistrering visar en dag i taget, med pilar som byter dag. En
+ * vald period (Från/Till) går före dagen, och Rensa ger tillbaka samma dag.
+ */
+test("tidslistan visar en dag i taget och bläddrar med pilarna", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const matter = seed.matters.find((m) => m.status === "ACTIVE" && m.matterNumber);
+  if (!matter) throw new Error("demon saknar ett aktivt ärende");
+  const description = "E2E: dagsbläddring (#2096)";
+  const row = page.getByRole("row").filter({ hasText: description });
+  const dayName = (name: string) => page.getByText(name, { exact: true });
+
+  await page.goto(`${base}/time/`, { waitUntil: "load" });
+  await expect(dayName("Idag")).toBeVisible({ timeout: 30_000 });
+  await register(page, `${matter.matterNumber ?? ""} — ${matter.title}`, description);
+
+  await page.getByRole("button", { name: "Föregående dag" }).click();
+  await expect(dayName("Igår")).toBeVisible();
+  await expect(row).toHaveCount(0);
+
+  await page.getByLabel("Från").fill("2000-01-01");
+  await expect(dayName("Igår")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Nästa dag" })).toHaveCount(0);
+  await expect(row).toBeVisible();
+
+  await page.getByRole("button", { name: "Rensa" }).click();
+  await expect(dayName("Igår")).toBeVisible();
+  await expect(row).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Nästa dag" }).click();
+  await expect(dayName("Idag")).toBeVisible();
+  await expect(row).toBeVisible();
+});
+
+/*
+ * #2097: pilarna vid formulärets Datum * stegar datumet en dag. Formulärets
+ * datum är skilt från listans dag, och efter Spara börjar formuläret åter på idag.
+ */
+test("pilarna vid Datum * registrerar tid på igår, och formuläret börjar åter på idag", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+  const seed = await fetchDemoSeed(page, base);
+  const matter = seed.matters.find((m) => m.status === "ACTIVE" && m.matterNumber);
+  if (!matter) throw new Error("demon saknar ett aktivt ärende");
+  const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm" }).format(new Date());
+  const description = "E2E: igår via pilen (#2097)";
+  const row = page.getByRole("row").filter({ hasText: description });
+  const form = page.locator("form", { has: page.getByRole("button", { name: "Spara", exact: true }) });
+  const date = form.getByLabel("Datum *");
+
+  await page.goto(`${base}/time/`, { waitUntil: "load" });
+  await expect(page.getByText("Idag", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: /\+ Registrera tid/ }).click();
+  await expect(date).toHaveValue(today);
+  await form.getByRole("button", { name: "Föregående dag" }).click();
+  await expect(date).not.toHaveValue(today);
+  await form.getByRole("button", { name: "Nästa dag" }).click();
+  await expect(date).toHaveValue(today);
+
+  await form.getByRole("button", { name: "Föregående dag" }).click();
+  await form.getByLabel("Ärende *").fill(`${matter.matterNumber ?? ""} — ${matter.title}`);
+  await form.getByLabel("Beskrivning *").fill(description);
+  await form.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(row).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Föregående dag" }).click();
+  await expect(page.getByText("Igår", { exact: true })).toBeVisible();
+  await expect(row).toBeVisible();
+
+  await page.getByRole("button", { name: /\+ Registrera tid/ }).click();
+  await expect(date).toHaveValue(today);
 });

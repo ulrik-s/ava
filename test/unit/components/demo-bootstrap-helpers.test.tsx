@@ -32,6 +32,8 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("pathSkipsAuth", () => {
   it.each([["/demo", true], ["/demo/", true], ["/login", true], ["/login/", true],
+    ["/msal-redirect", true], ["/msal-redirect/", true], ["/ava/msal-redirect/", true],
+    ["/msal-redirects", false], ["/msal-redirect/x", false],
     ["/matters", false], ["/", false], ["/demos", false]])(
     "%s → %s", (p, expected) => expect(pathSkipsAuth(p)).toBe(expected),
   );

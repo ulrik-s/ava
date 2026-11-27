@@ -17,10 +17,10 @@
  *     ändringarna i den ordning servern tillämpade dem, på en ny databas.
  */
 import { and, eq } from "drizzle-orm";
+import { isProcedureCall } from "@/lib/client/local-store/mutation-queue";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildContext } from "@/lib/server/build-context";
 import { ENTITY_NAME_BY_SOURCE_KEY } from "@/lib/server/data-store/in-memory/entity-source-keys";
-import { isProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { billingRuns, invoiceNumbers, invoices, matters, syncReplays } from "@/lib/server/db/schema";
 import type { AppDb } from "@/lib/server/db/types";
 import { serverFirstEventLog } from "@/lib/server/http/server-context";

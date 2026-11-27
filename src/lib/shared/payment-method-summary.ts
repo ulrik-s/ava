@@ -4,8 +4,8 @@
  * styr faktureringsflödet (ADR 0034), men här ändras inget.
  */
 
+import { shareLabel } from "@/lib/shared/billing/settlement-view";
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/shared/schemas/enums";
-import { shareLabel } from "@/lib/shared/settlement-view";
 
 /** Det som raden byggs av. Saknade delar utelämnas utan tom avgränsare. */
 export interface PaymentMethodSummaryInput {

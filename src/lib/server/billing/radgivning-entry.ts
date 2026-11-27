@@ -1,10 +1,9 @@
 /**
  * "Markera som rådgivning" (#1207) — serversidan av rådgivningspostens regel
- * (`@/lib/shared/radgivning-entry`). Hämtar det predikatet behöver och utför
+ * (`@/lib/shared/billing/radgivning-entry`). Hämtar det predikatet behöver och utför
  * låsningen/delningen inne i anroparens transaktion.
  */
 import { TRPCError } from "@trpc/server";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
   entryMarkBlocker,
   findRadgivningInvoiceId,
@@ -12,7 +11,8 @@ import {
   radgivningEntryStatus,
   splitRadgivningMinutes,
   type RadgivningEntryStatus,
-} from "@/lib/shared/radgivning-entry";
+} from "@/lib/shared/billing/radgivning-entry";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { InvoiceId, OrganizationId, TimeEntryId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";

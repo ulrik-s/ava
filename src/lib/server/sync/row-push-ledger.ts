@@ -17,7 +17,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { OrganizationId } from "@/lib/shared/schemas/ids";
 import { isUuid } from "@/lib/shared/uuid";
-import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
+import type { QueuedMutation } from "../data-store/in-memory/queue-entry";
 import type { PushResult } from "../data-store/in-memory/sync-transport";
 import { syncReplays } from "../db/schema";
 import type { AppDb } from "../db/types";

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { specExpenseLines } from "@/lib/shared/invoice-specification";
+import { specExpenseLines } from "@/lib/shared/billing/invoice-specification";
 import { mileageExpensePayload } from "@/lib/shared/mileage-rate";
 
 const payload = mileageExpensePayload({ date: "2026-03-15", from: "A", to: "B", mil: 3.5, krPerMil: 25 });

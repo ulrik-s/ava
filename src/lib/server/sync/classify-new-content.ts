@@ -13,7 +13,7 @@ import type { IContentStore, IDocumentAnalyzer } from "@/lib/server/ports";
 import { log } from "@/lib/shared/observability/logger";
 import { errorMessage } from "@/lib/shared/observability/redact";
 import { asId, type DocumentId } from "@/lib/shared/schemas/ids";
-import type { QueuedMutation } from "../data-store/in-memory/mutation-queue";
+import type { QueuedMutation } from "../data-store/in-memory/queue-entry";
 import type { PushResult } from "../data-store/in-memory/sync-transport";
 
 /** Läsningen `storagePathBefore` behöver (`Repositories` uppfyller den). */

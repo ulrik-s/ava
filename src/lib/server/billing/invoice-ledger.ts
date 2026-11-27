@@ -5,8 +5,8 @@
  * `routers/invoice.ts`; importerar bara repo-gränssnittet och `shared`.
  */
 
+import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
 import type { InvoiceId, OrganizationId } from "@/lib/shared/schemas/ids";
-import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import type { Repositories } from "../repositories/repositories";
 
 /**

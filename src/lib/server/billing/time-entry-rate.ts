@@ -3,8 +3,8 @@
  * #1199, #1206). Delas av `timeEntry`- och `mail`-routern så att alla vägar som
  * skapar tid prissätter på samma sätt.
  */
-import { advokatberedskapFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { rateKindOf, resolveHourlyRate, type LevelRates } from "@/lib/shared/hourly-rate";
+import { advokatberedskapFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
+import { rateKindOf, resolveHourlyRate, type LevelRates } from "@/lib/shared/billing/hourly-rate";
 import type { TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";

@@ -34,17 +34,21 @@ export interface ResolvedRecipient {
   data: RecipientContactData;
 }
 
+/**
+ * En koppling mellan ärendet och en kontakt, som `matter.getById` ger den
+ * (kontaktens fält kan saknas).
+ */
 export interface MatterContactLink {
   contactId: ContactId;
   role: string;
-  notes: string | null;
+  notes?: string | null | undefined;
   contact: {
     name: string;
-    email: string | null;
-    phone: string | null;
-    address: string | null;
-    personalNumber: string | null;
-    orgNumber: string | null;
+    email?: string | null | undefined;
+    phone?: string | null | undefined;
+    address?: string | null | undefined;
+    personalNumber?: string | null | undefined;
+    orgNumber?: string | null | undefined;
   };
 }
 
@@ -53,6 +57,27 @@ export class RecipientNotLinkedError extends Error {
     super(`Recipient ${recipientId} is not linked to matter ${matterId}`);
     this.name = "RecipientNotLinkedError";
   }
+}
+
+const orNull = (v: string | null | undefined): string | null => v ?? null;
+
+/**
+ * En kopplings kontaktdata med kopplingens roll (#2118): varje koppling ger sin
+ * egen roll, så en kontakt med två roller blir två rader i mallens parter.
+ */
+export function linkToRecipientData(link: MatterContactLink): RecipientContactData {
+  const c = link.contact;
+  return {
+    name: c.name,
+    role: link.role,
+    roleLabel: labelForMatterRole(link.role),
+    email: orNull(c.email),
+    phone: orNull(c.phone),
+    address: orNull(c.address),
+    personalNumber: orNull(c.personalNumber),
+    orgNumber: orNull(c.orgNumber),
+    notes: orNull(link.notes),
+  };
 }
 
 /**
@@ -64,8 +89,8 @@ export class RecipientNotLinkedError extends Error {
  * - Dubbletter i `recipientIds` bevaras som separata poster (kallaren väljer).
  */
 export function resolveRecipients(
-  recipientIds: ContactId[],
-  links: MatterContactLink[],
+  recipientIds: readonly ContactId[],
+  links: readonly MatterContactLink[],
   matterId: MatterId,
 ): ResolvedRecipient[] {
   // Om samma kontakt råkar ha flera MatterContact-länkar (t.ex. två roller)
@@ -80,20 +105,7 @@ export function resolveRecipients(
   for (const cid of recipientIds) {
     const link = byId.get(cid);
     if (!link) throw new RecipientNotLinkedError(cid, matterId);
-    result.push({
-      contactId: cid,
-      data: {
-        name: link.contact.name,
-        role: link.role,
-        roleLabel: labelForMatterRole(link.role),
-        email: link.contact.email,
-        phone: link.contact.phone,
-        address: link.contact.address,
-        personalNumber: link.contact.personalNumber,
-        orgNumber: link.contact.orgNumber,
-        notes: link.notes,
-      },
-    });
+    result.push({ contactId: cid, data: linkToRecipientData(link) });
   }
   return result;
 }

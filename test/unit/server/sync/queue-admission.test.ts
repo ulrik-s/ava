@@ -4,7 +4,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { describe, expect, it } from "vitest-compat";
-import type { QueuedMutation, QueuedProcedureCall } from "@/lib/server/data-store/in-memory/mutation-queue";
+import type { QueuedMutation, QueuedProcedureCall } from "@/lib/client/local-store/mutation-queue";
 import { admitProcedure, admitRow } from "@/lib/server/sync/queue-admission";
 import type { QueuePolicy } from "@/lib/shared/sync/queue-format";
 

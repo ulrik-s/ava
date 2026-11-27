@@ -7,7 +7,11 @@
  *   - Tidrapportering för vald dag (summa + lista)
  *   - Senaste 5 ärenden man jobbat i (timeEntry order desc, dedup)
  *
- * Dagsval: Igår / Idag / Imorgon / fritt datum.
+ * Dagsval: Igår / Idag / Imorgon / fritt datum, och pilarna ‹ › som stegar en
+ * dag i taget från den valda dagen (#2095).
+ *
+ * Stapeldiagram (#2112): den inloggades egen tid som staplar, från i dag.
+ * Dagväljaren i sidhuvudet styr bara Tidrapportering, inte diagrammet.
  *
  * Användaren väljer själv vilka rutor som syns (#1612): alla kan tas bort
  * med × och läggas tillbaka med "Lägg till ruta". Kalendern är borttagen
@@ -18,13 +22,18 @@ import { Plus, Clock } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
+import { TimeChartPanel } from "@/components/time/time-chart-panel";
+import { DayStepper } from "@/components/ui/day-stepper";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
+import { dayLabel } from "@/lib/shared/iso-date";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
+import { asId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { DASHBOARD_CLOSABLE, dashboardLayout } from "./_dashboard-layout";
 
 function todayYmd(): string {
@@ -44,19 +53,13 @@ function rangeForDay(ymd: string): { from: Date; to: Date } {
   return { from, to };
 }
 
-function dayLabel(ymd: string): string {
-  if (ymd === todayYmd()) return "Idag";
-  if (ymd === offsetDayYmd(1)) return "Igår";
-  if (ymd === offsetDayYmd(-1)) return "Imorgon";
-  return new Date(`${ymd}T12:00:00`).toLocaleDateString("sv-SE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-}
-
 export default function Dashboard() {
   const [ymd, setYmd] = useState<string>(todayYmd());
   const panels = [
     { id: "watch", title: "Frister", render: () => <WatchlistCard />, fill: true },
     { id: "time", title: "Tidrapportering", render: () => <TimeCard ymd={ymd} />, fill: true },
     { id: "recent", title: "Senaste ärenden", render: () => <RecentMattersCard />, fill: true },
+    { id: "chart", title: "Stapeldiagram", render: () => <ChartCard />, fill: true },
   ];
 
   return (
@@ -69,7 +72,7 @@ export default function Dashboard() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Startsida</h1>
-            <p className="text-sm text-gray-500 capitalize">{dayLabel(ymd)}</p>
+            <p className="text-sm text-gray-500 capitalize">{ymd && dayLabel(ymd, new Date())}</p>
           </div>
           <DaySwitcher ymd={ymd} onChange={setYmd} />
         </div>
@@ -109,7 +112,7 @@ function WatchlistCard() {
         </Link>
       </div>
       <div className="p-2">
-        <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" onComplete={complete} />
+        <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" onComplete={complete} showClient />
       </div>
     </div>
   );
@@ -122,12 +125,19 @@ function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => 
     { value: offsetDayYmd(-1), label: "Imorgon" },
   ];
   return (
-    <div className="flex items-center gap-2">
+    <DayStepper ymd={ymd} onChange={onChange}>
       <SegmentedControl options={options} value={ymd} onChange={onChange} ariaLabel="Dag" />
       <input type="date" value={ymd} onChange={(e) => onChange(e.target.value)}
         className="rounded-md border border-gray-200 px-2 py-1 text-xs" />
-    </div>
+    </DayStepper>
   );
+}
+
+/** Stapeldiagrammet över den inloggades egen tid, från dagens svenska datum (#2112, #1677). */
+function ChartCard() {
+  const me = trpc.user.current.useQuery();
+  if (!me.data) return <p className="p-2 text-sm text-gray-500">Laddar...</p>;
+  return <TimeChartPanel userId={asId<"UserId">(me.data.id)} anchorDay={stockholmDay(new Date())} />;
 }
 
 interface TimeEntryRow { id: string; minutes: number; description: string; billable: boolean; matter: { id: string; matterNumber: string; title: string } }
