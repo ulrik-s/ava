@@ -32,6 +32,7 @@ import { uuidv7 } from "@/lib/shared/uuid";
 import {
   AvslutChoice, ErsattningSection, ForhorSection, forhorOf, forordnandeInputOf, krRunClaimOf, type KrRunClaim, useErsattning,
 } from "./_ersattning-section";
+import { defaultStart, effectiveHearing, toDatetimeLocalValue } from "./_hearing-time";
 import { maybeComposeMail, recordDocument } from "./_kostnadsrakning-record";
 import { UnbilledPosts, type SelectedPostIds } from "./_post-selection";
 import { useKrPosts } from "./_use-kr-posts";
@@ -68,27 +69,6 @@ interface Props extends KrDocumentFields {
    *  huvudförhandling, nivå och taxeval följer med: servern yrkar samma taxa som
    *  dokumentet (#1024). Urvalet ur postlistan (#1889) följer också med. */
   createRun: (claim: KrRunClaim, posts: SelectedPostIds) => Promise<BillingRunId>;
-}
-
-function toDatetimeLocalValue(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function defaultStart(stored?: string | Date | null): string {
-  if (stored) return toDatetimeLocalValue(new Date(stored));
-  const d = new Date();
-  d.setHours(9, 0, 0, 0);
-  return toDatetimeLocalValue(d);
-}
-
-/**
- * Det räkningen faktiskt yrkar. Utan förhandling (ärendet lades ner, ingen
- * "Deltagit i förhandling"-post) finns ingen förhandlingstid och ingen
- * brottmålstaxa: räkningen är bara ärendets poster (timkostnadsnorm × tid).
- */
-export function effectiveHearing(hearing: boolean, hufStart: string, hufEnd: string, isTaxe: boolean): { hufEnd: string; isTaxe: boolean } {
-  return hearing ? { hufEnd, isTaxe } : { hufEnd: hufStart, isTaxe: false };
 }
 
 /** Ärendet, försvararen, byrån och domstolen till räkningens underlag. */
@@ -135,7 +115,9 @@ function useKostnadsrakningModal(props: Props) {
   // För icke-taxa-ärenden räknas de in i arvodes-summan; för taxa-ärenden
   // visas de bara som specifikation (beloppet styrs av taxa). Dokumentet och
   // servern får exakt samma poster.
-  const posts = useKrPosts(props.matterId, props.expenses);
+  const proposal = trpc.billingRun.proposal.useQuery({ matterId: props.matterId });
+  const timeEntries = trpc.timeEntry.list.useQuery({ matterId: props.matterId, pageSize: 100 });
+  const posts = useKrPosts({ proposal, timeEntries }, props.expenses);
   // Förhandlingsklockan bara när en vald post är "Deltagit i förhandling".
   // Annars: bara de valda posterna, utan klocka och taxa.
   const hearing = hasHearingEntry(posts.entries);

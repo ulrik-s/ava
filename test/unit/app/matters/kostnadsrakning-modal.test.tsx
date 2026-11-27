@@ -10,7 +10,8 @@
 
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
-import { effectiveHearing, KostnadsrakningModal } from "@/app/matters/[id]/_kostnadsrakning-modal";
+import { effectiveHearing } from "@/app/matters/[id]/_hearing-time";
+import { KostnadsrakningModal } from "@/app/matters/[id]/_kostnadsrakning-modal";
 import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/helper/use-helper", () => ({
