@@ -89,11 +89,12 @@ describe("createKostnadsrakning — taxeärende yrkar brottmålstaxan (#1024)", 
     expect(run.workValueOreAtRun).toBe(yrkat(TAXA_95_NIVA1 + extraTs + advokatberedskapFtaxForDate(NOW)));
   });
 
-  it("dialogen avmarkerade taxeärendet → löpande (norm per kategori), inte taxan", async () => {
+  it("dialogen avmarkerade taxeärendet → löpande (norm per kategori), inte taxan, och ärendet är oförändrat (#1890)", async () => {
     const { caller } = setup([{ id: "te-1", minutes: 60 }]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: MATTER, ...HUF, isTaxeArende: false });
     expect(run.workValueOreAtRun).not.toBe(yrkat(TAXA_95_NIVA1));
-    expect((await caller.matter.getById({ id: MATTER })).isTaxeArende).toBe(false);
+    // Valet gäller körningen; ärendets flagga ändras bara i ärendeformuläret.
+    expect((await caller.matter.getById({ id: MATTER })).isTaxeArende).toBe(true);
   });
 
   it("beslut och prutning räknas mot taxans belopp", async () => {

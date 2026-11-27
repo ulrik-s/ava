@@ -51,11 +51,12 @@ export interface KrRunWork {
 }
 
 /**
- * Ärendefälten som sparas så yrkandet går att räkna om. En typ-alias (inte ett
- * interface) så den går att skicka som `Partial<Matter>` (index-signaturen).
+ * Ärendefälten som sparas så yrkandet går att räkna om: nivån och
+ * huvudförhandlingen (ADR 0034). Taxevalet är körningens och sparas inte på
+ * ärendet (#1890). En typ-alias (inte ett interface) så den går att skicka som
+ * `Partial<Matter>` (index-signaturen).
  */
 export type KrRunMatterPatch = {
-  isTaxeArende?: boolean;
   taxaLevel?: TaxaLevel;
   taxaHuvudforhandlingMin?: number;
   taxaHufStart?: Date;
@@ -120,9 +121,8 @@ function taxaLevelOf(matter: KrRunMatter, input: KrRunTaxaInput): TaxaLevel {
 /** Värdera körningen. Kastar PRECONDITION_FAILED när taxan inte kan räknas. */
 export function valueKrRun(matter: KrRunMatter, work: KrRunWork, input: KrRunTaxaInput, now: Date): KrRunValuation {
   if (input.forordnande) return forordnandeValuation(matter, work, input, input.forordnande.avslut, now);
-  const dialogChoice: KrRunMatterPatch = input.isTaxeArende === undefined ? {} : { isTaxeArende: input.isTaxeArende };
-  if (matter.paymentMethod !== "OFFENTLIGT_UPPDRAG") return { kind: "norm", matterPatch: dialogChoice };
-  if (!isTaxeClaim(matter, input)) return lopandeValuation(matter, work, input, now, dialogChoice);
+  if (matter.paymentMethod !== "OFFENTLIGT_UPPDRAG") return { kind: "norm", matterPatch: {} };
+  if (!isTaxeClaim(matter, input)) return lopandeValuation(matter, work, input, now);
   const huf = validHuf(matter, input, now);
   const taxaLevel = taxaLevelOf(matter, input);
   const grossOre = kostnadsrakningClaimInclVat({
@@ -137,13 +137,11 @@ export function valueKrRun(matter: KrRunMatter, work: KrRunWork, input: KrRunTax
   });
   return {
     kind: "taxa", grossOre,
-    matterPatch: { ...dialogChoice, taxaLevel, taxaHuvudforhandlingMin: huf.minutes, taxaHufStart: huf.start },
+    matterPatch: { taxaLevel, taxaHuvudforhandlingMin: huf.minutes, taxaHufStart: huf.start },
   };
 }
 
-function lopandeValuation(
-  matter: KrRunMatter, work: KrRunWork, input: KrRunTaxaInput, now: Date, matterPatch: KrRunMatterPatch,
-): KrRunValuation {
+function lopandeValuation(matter: KrRunMatter, work: KrRunWork, input: KrRunTaxaInput, now: Date): KrRunValuation {
   const huf = lopandeHuf(input, now);
   const grossOre = kostnadsrakningClaimInclVat({
     hufStart: huf.start,
@@ -154,7 +152,7 @@ function lopandeValuation(
     timeEntries: [...work.timeEntries],
     expenses: [...work.expenses],
   });
-  return { kind: "lopande", grossOre, matterPatch };
+  return { kind: "lopande", grossOre, matterPatch: {} };
 }
 
 /**
@@ -199,6 +197,18 @@ export function krRunNotes(notes: string | null | undefined, input: KrRunTaxaInp
  */
 export function krRunForordnandeAvslut(input: KrRunTaxaInput): ForordnandeAvslut | null {
   return input.forordnande?.avslut ?? null;
+}
+
+/**
+ * Ärendet som körningen värderas på (#1890): det sparade, med värderingens
+ * patch och dialogens taxeval ovanpå. Valet gäller bara körningen och skrivs
+ * inte till ärendet, men normvägen räknar med det som förut.
+ */
+export function krRunValuedMatter<M extends object>(
+  matter: M, valuation: KrRunValuation, input: KrRunTaxaInput,
+): M & KrRunMatterPatch & { isTaxeArende?: boolean } {
+  const choice = input.isTaxeArende === undefined ? {} : { isTaxeArende: input.isTaxeArende };
+  return { ...matter, ...valuation.matterPatch, ...choice };
 }
 
 /** Det lagrade yrkandet: värderingens belopp, eller normvägens (routern räknar). */
