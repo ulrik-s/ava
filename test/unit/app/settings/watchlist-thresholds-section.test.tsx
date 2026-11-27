@@ -7,9 +7,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest-compat";
 import {
-  toThresholdDraft, toThresholdPatch, WatchlistThresholdsSection,
+  isValidThresholdPatch, toThresholdDraft, toThresholdPatch, WatchlistThresholdsSection,
 } from "@/app/settings/_watchlist-thresholds-section";
-import { fakeTrpcLink, testQueryClient, TrpcTestProvider, type TrpcHandlers } from "../../../helpers/trpc-fake";
+import { fakeTrpcLink, invalidatedPaths, testQueryClient, TrpcTestProvider, type TrpcHandlers } from "../../../helpers/trpc-fake";
 
 interface Saved { unbilledThresholdOre?: number | null; unbilledAgeDays?: number | null }
 
@@ -21,13 +21,6 @@ function setup(saved: Saved = {}, update: TrpcHandlers[string] = () => ({})) {
   return { fake, invalidate };
 }
 
-/** Procedurvägarna som invaliderats, t.ex. "watchlist.list". */
-function invalidated(spy: { mock: { calls: ReadonlyArray<readonly unknown[]> } }): string[] {
-  return spy.mock.calls.map((c) => {
-    const key = (c[0] as { queryKey?: unknown[] } | undefined)?.queryKey ?? [];
-    return (key[0] as string[] | undefined)?.join(".") ?? "";
-  }).sort();
-}
 
 const amount = (): Promise<HTMLInputElement> => screen.findByLabelText<HTMLInputElement>("Ofakturerat belopp (kr)");
 const age = (): HTMLInputElement => screen.getByLabelText<HTMLInputElement>("Äldsta ofakturerade (dagar)");
@@ -81,7 +74,7 @@ describe("WatchlistThresholdsSection (#1912)", () => {
     expect(screen.queryByText("Sparat ✓")).toBeNull();
     fireEvent.click(saveButton());
     await screen.findByText("Sparat ✓");
-    await waitFor(() => expect(invalidated(invalidate)).toEqual(["organization.getSettings", "watchlist.list"]));
+    await waitFor(() => expect(invalidatedPaths(invalidate)).toEqual(["organization.getSettings", "watchlist.list"]));
     fireEvent.change(age(), { target: { value: "7" } });
     expect(screen.queryByText("Sparat ✓")).toBeNull();
   });
@@ -94,12 +87,40 @@ describe("WatchlistThresholdsSection (#1912)", () => {
     expect(saveButton()).toBeDisabled();
   });
 
+  it("ett för stort belopp sparas inte; texten Värdet är för stort syns tills fältet ändras", async () => {
+    const { fake } = setup();
+    fireEvent.change(await amount(), { target: { value: "100 000 000" } });
+    fireEvent.click(saveButton());
+    expect(await screen.findByText("Värdet är för stort")).toBeInTheDocument();
+    expect(updates(fake)).toEqual([]);
+    fireEvent.change(await amount(), { target: { value: "100" } });
+    expect(screen.queryByText("Värdet är för stort")).toBeNull();
+  });
+
+  it("ett för stort antal dagar sparas inte", async () => {
+    const { fake } = setup();
+    await amount();
+    fireEvent.change(age(), { target: { value: "3000000000" } });
+    fireEvent.click(saveButton());
+    expect(await screen.findByText("Värdet är för stort")).toBeInTheDocument();
+    expect(updates(fake)).toEqual([]);
+  });
+
   it("serverns fel visas bredvid knappen", async () => {
     setup({}, () => { throw new Error("Endast administratörer får ändra inställningarna"); });
     await amount();
     fireEvent.click(saveButton());
     expect(await screen.findByText("Endast administratörer får ändra inställningarna")).toBeInTheDocument();
     expect(screen.queryByText("Sparat ✓")).toBeNull();
+  });
+});
+
+describe("isValidThresholdPatch (#1912)", () => {
+  it("null, 0 och serverns största värde går igenom; ett mer gör det inte", () => {
+    expect(isValidThresholdPatch({ unbilledThresholdOre: null, unbilledAgeDays: 0 })).toBe(true);
+    expect(isValidThresholdPatch({ unbilledThresholdOre: 2_147_483_647, unbilledAgeDays: null })).toBe(true);
+    expect(isValidThresholdPatch({ unbilledThresholdOre: 2_147_483_648, unbilledAgeDays: null })).toBe(false);
+    expect(isValidThresholdPatch({ unbilledThresholdOre: null, unbilledAgeDays: 2_147_483_648 })).toBe(false);
   });
 });
 

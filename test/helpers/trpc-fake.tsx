@@ -80,3 +80,28 @@ export function TrpcTestProvider(props: {
     </QueryClientProvider>
   );
 }
+
+/** En spion på `queryClient.invalidateQueries` (`vi.spyOn`). */
+export interface InvalidateSpy { mock: { calls: ReadonlyArray<readonly unknown[]> } }
+
+function queryKeyOf(filter: unknown): readonly unknown[] {
+  if (typeof filter !== "object" || filter === null || !("queryKey" in filter)) return [];
+  return Array.isArray(filter.queryKey) ? filter.queryKey : [];
+}
+
+function inputOf(meta: unknown): unknown {
+  return typeof meta === "object" && meta !== null && "input" in meta ? meta.input : undefined;
+}
+
+/**
+ * Procedurvägarna som invaliderats, sorterade, t.ex. `"watchlist.list"` eller
+ * `"matter.getById {"id":"m1"}"` när filtret har input.
+ */
+export function invalidatedPaths(spy: InvalidateSpy): string[] {
+  return spy.mock.calls.map((c) => {
+    const key = queryKeyOf(c[0]);
+    const path = Array.isArray(key[0]) ? key[0].join(".") : "";
+    const input = inputOf(key[1]);
+    return input === undefined ? path : `${path} ${JSON.stringify(input)}`;
+  }).sort();
+}

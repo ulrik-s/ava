@@ -14,6 +14,7 @@ import { DecimalInput } from "@/components/ui/decimal-input";
 import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { useTRPC } from "@/lib/client/trpc";
 import { formatRateKr } from "@/lib/shared/kr-format";
+import { orgThresholdSchema } from "@/lib/shared/schemas/organization";
 import { DEFAULT_UNBILLED_AGE_DAYS, DEFAULT_UNBILLED_THRESHOLD_ORE } from "@/lib/shared/watchlist";
 
 /** Formulärets utkast: kronor och dagar; `null` = tomt fält (standard). */
@@ -40,6 +41,15 @@ export function toThresholdPatch(draft: ThresholdDraft): SavedThresholds {
     unbilledThresholdOre: draft.amountKr == null ? null : Math.round(draft.amountKr * 100),
     unbilledAgeDays: draft.ageDays == null ? null : Math.round(draft.ageDays),
   };
+}
+
+/** Texten när ett fält ligger över serverns gräns (`orgThresholdSchema`). */
+export const THRESHOLD_TOO_LARGE = "Värdet är för stort";
+
+/** Klarar anropets fält serverns gräns? Samma schema som servern, ingen egen gräns. */
+export function isValidThresholdPatch(patch: SavedThresholds): boolean {
+  const field = orgThresholdSchema.nullable();
+  return field.safeParse(patch.unbilledThresholdOre).success && field.safeParse(patch.unbilledAgeDays).success;
 }
 
 const INPUT_CLASS = "w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -69,6 +79,7 @@ function ThresholdsForm({ initial }: { initial: ThresholdDraft }) {
   const ageId = useId();
   const [draft, setDraft] = useState<ThresholdDraft>(initial);
   const [saved, setSaved] = useState(false);
+  const [invalid, setInvalid] = useState(false);
   const save = useMutation(t.organization.updateSettings.mutationOptions({
     onSuccess: () => {
       setSaved(true);
@@ -80,7 +91,15 @@ function ThresholdsForm({ initial }: { initial: ThresholdDraft }) {
 
   function change(patch: Partial<ThresholdDraft>): void {
     setSaved(false);
+    setInvalid(false);
     setDraft((d) => ({ ...d, ...patch }));
+  }
+
+  function submit(): void {
+    const patch = toThresholdPatch(draft);
+    const ok = isValidThresholdPatch(patch);
+    setInvalid(!ok);
+    if (ok) save.mutate(patch);
   }
 
   return (
@@ -102,12 +121,13 @@ function ThresholdsForm({ initial }: { initial: ThresholdDraft }) {
         på ålder (eller bara på belopp): sätt den andra gränsen så högt att den aldrig nås.
       </p>
       <div className="mt-2 flex items-center gap-3">
-        <button type="button" onClick={() => save.mutate(toThresholdPatch(draft))} disabled={save.isPending}
+        <button type="button" onClick={submit} disabled={save.isPending}
           className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
           Spara
         </button>
         {save.isPending && <span className="text-xs text-gray-500">Sparar…</span>}
         {saved && <span className="text-xs text-green-600">Sparat ✓</span>}
+        {invalid && <span className="text-xs text-red-600">{THRESHOLD_TOO_LARGE}</span>}
         {save.error && <span className="text-xs text-red-600">{save.error.message}</span>}
       </div>
     </div>
