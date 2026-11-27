@@ -45,10 +45,11 @@ export const matterRoleOptions: ReadonlyArray<MatterRoleOption> = matterRoleKeys
   (value) => ({ value, label: MATTER_ROLE_LABELS[value] }),
 );
 
-/** Säker label-lookup: accepterar okänd input men smalnar av om argumentet är typat. */
-export function labelForMatterRole(role: MatterRole): string;
-export function labelForMatterRole(role: string): string;
-export function labelForMatterRole(role: string): string {
+/**
+ * Partens roll i ärendet som text. Tar bara `MatterRole`; en okänd roll i rå
+ * data (som typen inte ser) visas som den är, via reserven `?? role`.
+ */
+export function labelForMatterRole(role: MatterRole): string {
   return (MATTER_ROLE_LABELS as Record<string, string>)[role] ?? role;
 }
 

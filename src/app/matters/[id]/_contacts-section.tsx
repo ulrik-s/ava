@@ -21,7 +21,7 @@ type Contact = {
 
 type MatterContact = {
   id: string;
-  role: string;
+  role: MatterRole;
   contact: Contact;
 };
 

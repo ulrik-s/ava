@@ -11,6 +11,7 @@
  * filskrivning).
  */
 
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import type { ContactId, MatterId } from "@/lib/shared/schemas/ids";
 import { labelForMatterRole } from "./labels";
 
@@ -24,7 +25,7 @@ export interface RecipientContactData {
   address: string | null;
   personalNumber: string | null;
   orgNumber: string | null;
-  role: string;
+  role: MatterRole;
   roleLabel: string;
   notes: string | null;
 }
@@ -40,7 +41,7 @@ export interface ResolvedRecipient {
  */
 export interface MatterContactLink {
   contactId: ContactId;
-  role: string;
+  role: MatterRole;
   notes?: string | null | undefined;
   contact: {
     name: string;

@@ -314,7 +314,7 @@
   },
   "src/components/matter/_suggestion-row.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
+      "count": 1
     }
   },
   "src/components/settings/backup-section.tsx": {
@@ -542,7 +542,7 @@
   },
   "src/lib/client/labels.ts": {
     "@typescript-eslint/unified-signatures": {
-      "count": 2
+      "count": 1
     }
   },
   "src/lib/client/local-store/cursor-store.ts": {
