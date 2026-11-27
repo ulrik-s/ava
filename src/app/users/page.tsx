@@ -8,23 +8,19 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { patchFirmaConfig } from "@/lib/client/firma/firma-config";
+import { labelForUserRole } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { formatKr } from "@/lib/shared/kr-format";
 import { mileageRateOrePerMil } from "@/lib/shared/mileage-rate";
+import type { UserRole } from "@/lib/shared/schemas/enums";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
-
-const roleLabels: Record<string, string> = {
-  ADMIN: "Admin",
-  LAWYER: "Advokat",
-  ASSISTANT: "Assistent",
-};
 
 interface UserRow {
   id: string;
   name: string;
   title?: string | null;
   email: string;
-  role: string;
+  role: UserRole;
   /** Juristens egna timpriser (öre/h, #1206). */
   hourlyRates?: HourlyRates | undefined;
   mileageRate?: number | null;
@@ -75,8 +71,8 @@ function buildUserColumns(opts: {
       render: (u) => <span className="text-sm text-gray-500">{u.title || "—"}</span> },
     { key: "email", label: "E-post", sortable: true, sortValue: (u) => u.email,
       render: (u) => <span className="text-sm text-gray-500">{u.email}</span> },
-    { key: "role", label: "Roll", sortable: true, sortValue: (u) => roleLabels[u.role] || u.role,
-      render: (u) => <span className="text-sm text-gray-500">{roleLabels[u.role] || u.role}</span> },
+    { key: "role", label: "Roll", sortable: true, sortValue: (u) => labelForUserRole(u.role),
+      render: (u) => <span className="text-sm text-gray-500">{labelForUserRole(u.role)}</span> },
     { key: "hourlyRate", label: "Timarvode", sortable: true, align: "right",
       sortValue: (u) => u.hourlyRates?.ARBETE ?? -1,
       render: (u) => <span className="text-sm text-gray-500">{userRateLabel(u.hourlyRates)}</span> },
