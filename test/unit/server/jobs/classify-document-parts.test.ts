@@ -169,4 +169,26 @@ describe("classify-document — dokumentdelar", () => {
       { kind: "BEVIS", fromPage: 1, toPage: 40, source: "AUTO", ordinal: 0 },
     ]);
   });
+
+  it("#2045: ett dokument som flyttas medan klassningen pågår får delarna i det nya ärendet", async () => {
+    const s = setup();
+    const moved = asId<"MatterId">("33333333-3333-7333-8333-333333333333");
+    s.documents.getById
+      .mockImplementationOnce(() => Promise.resolve({ id: DOC, matterId: MATTER, fileName: "inkommet.pdf", storagePath: "documents/content/x.pdf", mimeType: "application/pdf" }))
+      .mockImplementationOnce(() => Promise.resolve({ id: DOC, matterId: moved, fileName: "inkommet.pdf", storagePath: "documents/content/x.pdf", mimeType: "application/pdf" }));
+    await run(s);
+    const written = await s.parts.listForDocument(DOC);
+    expect(written.length).toBeGreaterThan(0);
+    expect(new Set(written.map((p) => p.matterId))).toEqual(new Set([moved]));
+  });
+
+  it("#2045: ett dokument som tas bort medan klassningen pågår får inga delar", async () => {
+    const s = setup();
+    s.documents.getById
+      .mockImplementationOnce(() => Promise.resolve({ id: DOC, matterId: MATTER, fileName: "inkommet.pdf", storagePath: "documents/content/x.pdf", mimeType: "application/pdf" }))
+      .mockImplementationOnce(() => Promise.resolve(null as never));
+    await run(s);
+    expect(await s.parts.listForDocument(DOC)).toEqual([]);
+    expect(s.documents.updateMetadata.mock.calls[0]?.[1]).toMatchObject({ kinds: ["KALLELSE", "STAMNING", "FUP"] });
+  });
 });

@@ -12,6 +12,7 @@ import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/server/services/meilisearch", () => ({
   searchDocuments: vi.fn(),
@@ -37,7 +38,7 @@ function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG) {
     dataStore: store, repos, orgId,
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { caller: documentRouter.createCaller(ctx as any), store };
+  return { caller: documentRouter.createCaller(ctx as any), store, repos };
 }
 
 /** Läs ut mapparna direkt ur store:n (utan att gå via routern). */
@@ -270,5 +271,87 @@ describe("mappoperationernas behörighet (#1449)", () => {
   it("breadcrumb nekar en mapp i en annan byrå", async () => {
     const { caller } = makeCaller(seed());
     await expect(caller.breadcrumb({ folderId: "fx" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("document.moveToMatter (#2045)", () => {
+  const seed = (): Partial<DemoSource> => ({
+    matters: [
+      { id: "m1", organizationId: ORG, matterNumber: "2026-1", title: "T" },
+      { id: "m2", organizationId: ORG, matterNumber: "2026-2", title: "U" },
+      { id: "mx", organizationId: "org-x", matterNumber: "X-1", title: "X" },
+    ],
+    documentFolders: [
+      { id: "f1", name: "Egen", matterId: "m1", parentId: null },
+      { id: "f2", name: "Mål", matterId: "m2", parentId: null },
+    ],
+    documents: [
+      { id: "d1", matterId: "m1", folderId: "f1", fileName: "a.pdf", version: 3 },
+      { id: "d2", matterId: "m1", folderId: null, fileName: "b.pdf", version: 1 },
+      { id: "di", matterId: "m1", folderId: null, fileName: "faktura.pdf", invoiceId: "i1" },
+      { id: "db", matterId: "m1", folderId: null, fileName: "kr.pdf", billingRunId: "b1" },
+      { id: "dx", matterId: "mx", folderId: null, fileName: "x.pdf" },
+    ],
+    documentParts: [
+      { id: "p1", documentId: "d1", matterId: "m1", kind: "KALLELSE", fromPage: 1, toPage: 2, source: "AUTO", ordinal: 0 },
+      { id: "p2", documentId: "d1", matterId: "m1", kind: "STAMNING", fromPage: 3, toPage: 3, source: "AUTO", ordinal: 1 },
+    ],
+  });
+  type Repos = ReturnType<typeof makeCaller>["repos"];
+  const doc = (repos: Repos, id: string) => repos.documents.getById(asId<"DocumentId">(id));
+  const partMatters = async (repos: Repos): Promise<string[]> =>
+    (await repos.documentParts.listForDocument(asId<"DocumentId">("d1"))).map((p) => p.matterId);
+
+  it("dokumentet och alla dess delar får målärendet och mappen; versionen byts inte", async () => {
+    const { caller, repos } = makeCaller(seed());
+    await expect(caller.moveToMatter({ ids: ["d1"], matterId: "m2", folderId: "f2" })).resolves.toEqual({ moved: 1 });
+    expect(await doc(repos, "d1")).toMatchObject({ matterId: "m2", folderId: "f2", version: 3 });
+    expect(await partMatters(repos)).toEqual(["m2", "m2"]);
+  });
+
+  it("folderId null lägger dokumenten överst, flera i samma anrop", async () => {
+    const { caller, repos } = makeCaller(seed());
+    await expect(caller.moveToMatter({ ids: ["d1", "d2"], matterId: "m2", folderId: null })).resolves.toEqual({ moved: 2 });
+    expect(await doc(repos, "d1")).toMatchObject({ matterId: "m2", folderId: null });
+    expect(await doc(repos, "d2")).toMatchObject({ matterId: "m2", folderId: null });
+  });
+
+  it("ett dokument som redan ligger i målärendet får bara den nya mappen", async () => {
+    const { caller, repos } = makeCaller(seed());
+    await caller.moveToMatter({ ids: ["d2"], matterId: "m1", folderId: "f1" });
+    expect(await doc(repos, "d2")).toMatchObject({ matterId: "m1", folderId: "f1" });
+    expect(await partMatters(repos)).toEqual(["m1", "m1"]);
+  });
+
+  it("en mapp i ett annat ärende ger BAD_REQUEST", async () => {
+    const { caller, repos } = makeCaller(seed());
+    await expect(caller.moveToMatter({ ids: ["d1"], matterId: "m2", folderId: "f1" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect((await doc(repos, "d1"))?.matterId).toBe("m1");
+  });
+
+  it.each(["di", "db"])("fakturans/kostnadsräkningens dokument %s vägras och inget ändras", async (id) => {
+    const { caller, repos } = makeCaller(seed());
+    await expect(caller.moveToMatter({ ids: ["d1", id], matterId: "m2", folderId: null })).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED", message: "Fakturans och kostnadsräkningens egna dokument kan inte flyttas.",
+    });
+    expect(await doc(repos, "d1")).toMatchObject({ matterId: "m1", folderId: "f1" });
+    expect(await partMatters(repos)).toEqual(["m1", "m1"]);
+  });
+
+  it("ett dokument i en annan byrå ger NOT_FOUND och inget ändras", async () => {
+    const { caller, repos } = makeCaller(seed());
+    await expect(caller.moveToMatter({ ids: ["d1", "dx"], matterId: "m2", folderId: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await doc(repos, "d1"))?.matterId).toBe("m1");
+    expect((await doc(repos, "dx"))?.matterId).toBe("mx");
+  });
+
+  it("ett målärende i en annan byrå ger NOT_FOUND", async () => {
+    const { caller } = makeCaller(seed());
+    await expect(caller.moveToMatter({ ids: ["d1"], matterId: "mx", folderId: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("samma dokument två gånger vägras", async () => {
+    const { caller } = makeCaller(seed());
+    await expect(caller.moveToMatter({ ids: ["d1", "d1"], matterId: "m2", folderId: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

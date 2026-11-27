@@ -13,6 +13,7 @@ import type { DocumentPartView } from "./_document-parts";
 import { MailDocumentDialog } from "./_mail-document-dialog";
 import type { SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
+import { documentMoveDisabledReason, MoveDocumentsDialog } from "./move-documents-dialog";
 import { useLeaseAwareOpen } from "./use-lease-aware-open";
 import { useOffice365Configured } from "./use-office365-configured";
 
@@ -41,6 +42,9 @@ export interface DocumentRecord {
   summary?: string | null | undefined;
   analyzedAt?: string | Date | null | undefined;
   analysisError?: string | null | undefined;
+  /** Fakturans eller kostnadsräkningens eget dokument (#2045): flyttas inte. */
+  invoiceId?: string | null | undefined;
+  billingRunId?: string | null | undefined;
 }
 
 interface Props {
@@ -169,6 +173,9 @@ interface ActionItemsOpts {
   onReanalyze: () => void;
   onDelete: () => void;
   onEditDetails: () => void;
+  /** Varför **Flytta till ärende…** är spärrad (#2045), eller `null`. */
+  moveBlocked: string | null;
+  onMoveToMatter: () => void;
   /** Office 365 är konfigurerad (#1951): raden Maila… finns. */
   mail: boolean;
   onMail: () => void;
@@ -204,6 +211,7 @@ function buildActionItems(o: ActionItemsOpts): ActionMenuItem[] {
     ...viewDownloadItems(o),
     ...mailItems(o),
     { key: "details", label: "Redigera uppgifter…", icon: <span aria-hidden>✏️</span>, onSelect: o.onEditDetails, disabled: o.isDisabled, title: o.uploadingTitle ?? "Ändra titel, filnamn, dokumenttyp, riktning och mottagare" },
+    { key: "move-matter", label: "Flytta till ärende…", icon: <span aria-hidden>📁</span>, onSelect: o.onMoveToMatter, disabled: o.moveBlocked !== null, title: o.moveBlocked ?? "Flytta dokumentet till ett annat ärende och en mapp där" },
     // ADR 0027: LLM-analys är en server-förmåga → dölj affordansen utan den.
     ...(o.llm
       ? [{ key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: o.onReanalyze, disabled: o.isDisabled || o.reanalyzePending, title: o.uploadingTitle ?? "Kör AI-analys på nytt" }]
@@ -252,6 +260,7 @@ export function DocumentActions({
   const [editing, setEditing] = useState(false);
   const mail = useOffice365Configured();
   const [mailing, setMailing] = useState(false);
+  const [moving, setMoving] = useState(false);
   const items = buildActionItems({
     isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle, llm, serverMode, mail,
     onMail: () => setMailing(true),
@@ -260,6 +269,8 @@ export function DocumentActions({
     onExternal: () => void onExternalEdit(),
     onReanalyze, onDelete,
     onEditDetails: () => setEditing(true),
+    moveBlocked: documentMoveDisabledReason(doc, isDisabled),
+    onMoveToMatter: () => setMoving(true),
   });
 
   return (
@@ -267,6 +278,7 @@ export function DocumentActions({
       <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" title={uploadingTitle} />
       <DocumentDetailsDialog docId={doc.id} doc={doc} open={editing} onClose={() => setEditing(false)} />
       {mailing && <MailDocumentDialog doc={doc} onClose={() => setMailing(false)} />}
+      {moving && <MoveDocumentsDialog ids={[doc.id]} excludeMatterId={doc.matterId} open onClose={() => setMoving(false)} />}
     </>
   );
 }
