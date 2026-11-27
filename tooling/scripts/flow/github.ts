@@ -5,6 +5,7 @@
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
+import { countsTowardCap } from "../agent-guard";
 import type { LabelEvent } from "./transition";
 import { type CiRun, closesIssue, type MergedPull } from "./watchdog";
 
@@ -77,7 +78,12 @@ const runsSchema = z.object({
   workflow_runs: z.array(z.object({ id: z.number(), status: z.string(), run_started_at: z.string() })),
 });
 
-const createdSearchSchema = z.object({ items: z.array(z.object({ created_at: z.string() })) });
+const createdSearchSchema = z.object({ items: z.array(z.object({
+  created_at: z.string(),
+  state: z.string().default("open"),
+  labels: z.array(z.object({ name: z.string() })).default([]),
+  pull_request: z.object({ merged_at: z.string().nullable().optional() }).optional(),
+})) });
 const headSchema = z.object({ head: z.object({ sha: z.string() }) });
 const checkRunsSchema = z.object({
   check_runs: z.array(z.object({ conclusion: z.string().nullable(), started_at: z.string().nullable(), details_url: z.string().nullable() })),
@@ -281,7 +287,10 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
     /** När agent-PR:erna (öppna och stängda) skapats sedan `since` (ISO) — dygnstakets underlag. */
     agentPullsCreatedSince(since: string): string[] {
       const r = parseJsonWith(createdSearchSchema, run(["api", "-X", "GET", "search/issues", "-f", `q=repo:${repo} is:pr label:agent-pr created:>=${since}`, "-f", "per_page=100"]));
-      return r.items.map((i) => i.created_at);
+      // Bara det som kan mergas räknas mot taket, som i Agentvakten (countsTowardCap).
+      return r.items
+        .filter((i) => countsTowardCap({ state: i.state, merged: i.pull_request?.merged_at != null, labels: i.labels.map((l) => l.name) }))
+        .map((i) => i.created_at);
     },
     /** Kör om PR:ens senaste check `name` om den föll (#2027). Ger true om den startades om. */
     rerunFailedCheck(pr: number, name: string): boolean {

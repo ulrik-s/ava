@@ -147,7 +147,8 @@ sätt `blockerad` så att Ulrik ser det.
   index. Aldrig DROP, RENAME, typbyte, TRUNCATE eller DELETE. En release kan
   backas med en äldre tagg men databasen backas inte, så gammal kod måste
   fungera mot det nya schemat.
-- Högst 30 agent-PR:er per dygn.
+- Högst 30 agent-PR:er per dygn. Bara de som kan mergas räknas: mergade, och
+  öppna utan `blockerad` (en PR som väntar på Ulriks `människa-godkänd` räknas inte).
 - En agent-PR kan bara mergas med `granskad` och utan `blockerad`.
 
 ## 4b. Arkitekturen — passa in, uppfinn inte
