@@ -220,7 +220,10 @@ förfrågan i inkorgen, medan en grund kan höra till flera.
     (`src/lib/shared/billing/brottmalstaxa.ts`, `forordnandetaxa.ts`) och bokföringen
     (`src/lib/shared/accounting/`). Samma lista står i `.github/CODEOWNERS`.
   - innehåller en destruktiv migration,
-  - är fler än 30 på ett dygn,
+  - är fler än 30 på ett dygn. Bara det som kan mergas räknas: mergade PR:er
+    och öppna utan `blockerad`. En PR som väntar på Ulriks `människa-godkänd`
+    eller stängts utan merge räknas inte (2026-11-27; den 26/11 band sju
+    väntande PR:er en fjärdedel av dygnets kvot),
   - eller inte har `granskad`.
 
   `människa-godkänd` (bara Ulrik) släpper de två första. Granskningsloopen

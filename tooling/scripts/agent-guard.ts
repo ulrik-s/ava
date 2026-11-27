@@ -10,7 +10,8 @@
  *      och deployens automatiska rollback, lib/migration-kind.ts, #1770) — en
  *      rollback backar koden men aldrig databasen, så migrationer från agenter
  *      måste vara additiva (expand),
- *   3. är fler än AGENT_PR_PER_DAY agent-PR:er på 24 timmar,
+ *   3. är fler än AGENT_PR_PER_DAY agent-PR:er på 24 timmar (bara de som kan
+ *      mergas räknas: mergade, och öppna utan `blockerad`, `countsTowardCap`),
  *   4. inte är godkänd av granskningsloopen (`granskad`) eller är `blockerad` —
  *      så auto-merge aldrig kan släppa igenom en ogranskad agent-PR.
  * (1) och (2) släpps igenom när Ulrik satt `människa-godkänd`. (3)–(4) gäller alltid.
@@ -167,6 +168,25 @@ export function addedMigrationLines(diff: string): string[] {
   return out;
 }
 
+/** En agent-PR som taket ser den: läge, etiketter och om den mergats. */
+export interface CapPull { number: number; createdAt: string; state: string; merged: boolean; labels: readonly string[] }
+
+/**
+ * Räknas PR:en mot dygnstaket? Bara det som kan mergas (Ulrik, 2026-11-27): en
+ * mergad PR, eller en öppen utan `blockerad`. En PR som väntar på Ulriks
+ * `människa-godkänd` (`blockerad`) eller stängts utan merge levererar inget och
+ * ska inte äta upp dygnets kvot; den 26/11 band sju sådana en fjärdedel av den.
+ */
+export function countsTowardCap(p: Omit<CapPull, "number" | "createdAt">): boolean {
+  if (p.merged) return true;
+  return p.state.toUpperCase() === "OPEN" && !p.labels.includes("blockerad");
+}
+
+/** Skapelsetiderna som räknas mot taket. PR:en som prövas räknas alltid själv. */
+export function cappedCreatedAts(pulls: readonly CapPull[], self: number): string[] {
+  return pulls.filter((p) => p.number === self || countsTowardCap(p)).map((p) => p.createdAt);
+}
+
 function gh(args: string[]): string {
   const r = spawnSync("gh", args, { encoding: "utf8" });
   if (r.status !== 0) throw new Error(`gh ${args.join(" ")}: ${r.stderr}`);
@@ -178,7 +198,10 @@ const prViewSchema = z.object({
   files: z.array(z.object({ path: z.string() })),
   createdAt: z.string(),
 });
-const prListSchema = z.array(z.object({ createdAt: z.string() }));
+const prListSchema = z.array(z.object({
+  number: z.number(), createdAt: z.string(), state: z.string(), mergedAt: z.string().nullable().optional(),
+  labels: z.array(z.object({ name: z.string() })),
+}));
 const labelEventsSchema = z.array(z.array(z.object({
   event: z.string(),
   label: z.object({ name: z.string() }).optional(),
@@ -218,14 +241,16 @@ function main(pr: string): number {
   const created = new Date(view.createdAt).getTime();
   const now = Date.now();
   const since = new Date(now - DAY_MS).toISOString();
-  const recent = parseJsonWith(prListSchema, gh(["pr", "list", "--state", "all", "--label", "agent-pr", "--limit", "100", "--search", `created:>=${since}`, "--json", "number,createdAt"]));
+  const recent = parseJsonWith(prListSchema, gh(["pr", "list", "--state", "all", "--label", "agent-pr", "--limit", "100", "--search", `created:>=${since}`, "--json", "number,createdAt,state,mergedAt,labels"]));
   const diff = gh(["pr", "diff", pr]);
   const violations = guardViolations({
     labels: trustedLabels(view.labels.map((l) => l.name), () => labelEvents(pr)),
     files: view.files.map((f) => f.path),
     addedMigrationLines: addedMigrationLines(diff),
     baselineOnlyTightens: baselineDiffTightens(diff),
-    agentPrsLast24h: rankInLast24h(recent.map((p) => p.createdAt), created, now),
+    agentPrsLast24h: rankInLast24h(cappedCreatedAts(recent.map((p) => ({
+      number: p.number, createdAt: p.createdAt, state: p.state, merged: p.mergedAt != null, labels: p.labels.map((l) => l.name),
+    })), Number(pr)), created, now),
   });
   for (const v of violations) console.error(`✗ ${v}`);
   if (violations.length === 0) console.log("✓ agentvakten: inget att invända");

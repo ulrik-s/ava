@@ -379,6 +379,17 @@ describe("klockan mot GitHub", () => {
     expect(lines[0]).toContain("PR #30");
   });
 
+  it("klockans räkning hoppar över blockerade och stängda PR:er, som Agentvakten (2026-11-27)", () => {
+    const items = [
+      { created_at: "2026-11-19T10:00:00Z", state: "closed", labels: [], pull_request: { merged_at: "2026-11-19T12:00:00Z" } },
+      { created_at: "2026-11-19T10:01:00Z", state: "open", labels: [{ name: "agent-pr" }] },
+      { created_at: "2026-11-19T10:02:00Z", state: "open", labels: [{ name: "blockerad" }] },
+      { created_at: "2026-11-19T10:03:00Z", state: "closed", labels: [], pull_request: { merged_at: null } },
+    ];
+    const gh = gitHub("ulrik-s/ava", fakeGh({ "search/issues": { items } }).run);
+    expect(gh.agentPullsCreatedSince("2026-11-18T00:00:00Z")).toEqual(["2026-11-19T10:00:00Z", "2026-11-19T10:01:00Z"]);
+  });
+
   it("inget att köra om: blockerad, ogranskad, grön Agentvakt, eller rapportläge", () => {
     const answers = (labels: string[], conclusion: string) => ({
       "search/issues": { items: burst.map((created_at) => ({ created_at })) },

@@ -7,9 +7,14 @@ granskningsloopen mergar.
 
 ## 0. Taket
 
-Räkna agent-PR:er de senaste 24 timmarna:
-`gh api -X GET search/issues -f q='repo:ulrik-s/ava is:pr label:agent-pr created:>=<nu minus 24 h, ISO>' --jq .total_count`.
-Är det 30 eller fler: gör bara steg 1 (befintliga PR:er) och skapa ingen ny.
+Räkna agent-PR:er de senaste 24 timmarna som kan mergas: mergade, och öppna
+utan `blockerad` (Ulrik, 2026-11-27). En PR som väntar på hans
+`människa-godkänd` eller stängts utan merge räknas inte. Två sökningar, lägg
+ihop dem (`<T>` = nu minus 24 h, ISO):
+`gh api -X GET search/issues -f q='repo:ulrik-s/ava is:pr label:agent-pr is:merged created:>=<T>' --jq .total_count`
+och
+`gh api -X GET search/issues -f q='repo:ulrik-s/ava is:pr label:agent-pr is:open -label:blockerad created:>=<T>' --jq .total_count`.
+Är summan 30 eller mer: gör bara steg 1 (befintliga PR:er) och skapa ingen ny.
 
 ## 1. Befintliga PR:er först
 

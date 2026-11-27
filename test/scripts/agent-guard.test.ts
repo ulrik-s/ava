@@ -1,12 +1,13 @@
 /**
  * Agentvakten: agent-PR:er stoppas vid skyddade sökvägar, destruktiva
- * migrationer och fler än tio per dygn — vanliga PR:er påverkas aldrig.
+ * migrationer och fler än taket per dygn — vanliga PR:er påverkas aldrig.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
 import {
-  AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, ROUTER_SIZE_BASELINE, guardViolations, type GuardInput, humanApproved, rankInLast24h, trustedLabels,
+  AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, cappedCreatedAts, countsTowardCap, FILE_SIZE_BASELINE, ROUTER_SIZE_BASELINE,
+  guardViolations, type GuardInput, humanApproved, rankInLast24h, trustedLabels,
 } from "../../tooling/scripts/agent-guard";
 
 const BASE: GuardInput = { labels: ["agent-pr", "granskad"], files: ["src/app/matters/page.tsx"], addedMigrationLines: [], agentPrsLast24h: 1 };
@@ -23,6 +24,33 @@ describe("rankInLast24h (#1954)", () => {
   it("en PR som var över taket går igenom när dygnet gått", () => {
     const old = Array.from({ length: 25 }, (_, i) => h(30 + i / 10));
     expect(rankInLast24h(old, Date.parse(h(30)), now)).toBe(0);
+  });
+});
+
+describe("dygnstaket räknar bara det som kan mergas (2026-11-27)", () => {
+  const pull = (number: number, state: string, merged: boolean, labels: string[] = []) =>
+    ({ number, createdAt: `2026-11-26T1${number}:00:00Z`, state, merged, labels });
+
+  it("mergad och öppen räknas; blockerad och stängd utan merge räknas inte", () => {
+    expect(countsTowardCap(pull(1, "MERGED", true))).toBe(true);
+    expect(countsTowardCap(pull(2, "OPEN", false, ["agent-pr", "granskad"]))).toBe(true);
+    expect(countsTowardCap(pull(3, "OPEN", false, ["agent-pr", "granskad", "blockerad"]))).toBe(false);
+    expect(countsTowardCap(pull(4, "CLOSED", false))).toBe(false);
+    expect(countsTowardCap(pull(5, "closed", true))).toBe(true); // sökningens gemener, mergad
+  });
+
+  it("PR:en som prövas räknas alltid själv, också när den är blockerad", () => {
+    const pulls = [pull(1, "MERGED", true), pull(2, "OPEN", false, ["blockerad"]), pull(3, "CLOSED", false), pull(4, "OPEN", false, ["blockerad"])];
+    expect(cappedCreatedAts(pulls, 4)).toEqual(["2026-11-26T11:00:00Z", "2026-11-26T14:00:00Z"]);
+  });
+
+  it("sju blockerade PR:er bland 37 släpper under taket", () => {
+    const now = Date.parse("2026-11-26T22:00:00Z");
+    const at = (i: number): string => new Date(now - (37 - i) * 600_000).toISOString();
+    const pulls = Array.from({ length: 37 }, (_, i) => ({ number: i + 1, createdAt: at(i), state: "OPEN", merged: false, labels: i < 7 ? ["blockerad"] : [] }));
+    const self = pulls.at(-1);
+    expect(rankInLast24h(pulls.map((p) => p.createdAt), Date.parse(self?.createdAt ?? ""), now)).toBe(37);
+    expect(rankInLast24h(cappedCreatedAts(pulls, self?.number ?? 0), Date.parse(self?.createdAt ?? ""), now)).toBe(AGENT_PR_PER_DAY);
   });
 });
 
