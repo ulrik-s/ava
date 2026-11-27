@@ -232,6 +232,7 @@ const SERIAL_FILES = [
   "test/unit/tooling/deploy-latest-tag.test.ts", // deploy-latest-tag.sh mot ett äkta repo + stubbad deploy
   "test/scripts/backup-pull.test.ts", // backup-pull.sh med fejkade sftp/age (#1254)
   "test/scripts/backup-verify.test.ts", // backup-verify.sh argumentfel (#1254)
+  "test/scripts/backup-export.test.ts", // backup-export.sh med fejkad docker: timexporten (#1896)
   "test/scripts/restore-db.test.ts", // restore-db.sh med fejkad docker: synkepoken byts (#1360)
   "test/scripts/pg-ready.test.ts", // wait_for_pg med falsk docker (#1305)
   "test/scripts/build-demo.test.ts", // build-demo.sh med falska bun/bunx (#1352)
