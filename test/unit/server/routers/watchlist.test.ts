@@ -353,3 +353,73 @@ describe("watchlist.actionItems — slutligt avgörande (#2101)", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 });
+
+describe("watchlist.actionItems — avbetalningar som ligger efter (#2137)", () => {
+  const matter = (id: string, p: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id, organizationId: "o1", matterNumber: `2026-${id}`, title: id, status: "ACTIVE", responsibleLawyerId: "u1", ...p,
+  });
+  const invoice = (id: string, matterId: string): Record<string, unknown> => ({
+    id, organizationId: "o1", matterId, amount: 1_000_000, invoiceType: "STANDARD", status: "INSTALLMENT_PLAN", invoiceDate: inDays(-200),
+  });
+  /** Startad för `startDaysAgo` dagar sedan, förfaller den 1:a varje månad. */
+  const plan = (id: string, invoiceId: string, p: Record<string, unknown> = {}, startDaysAgo = 100): Record<string, unknown> => ({
+    id, invoiceId, monthlyAmount: 100_000, dayOfMonth: 1, startDate: inDays(-startDaysAgo), status: "ACTIVE", createdAt: inDays(-startDaysAgo), ...p,
+  });
+
+  function setup(plans: Array<Record<string, unknown>>, payments: Array<Record<string, unknown>> = []) {
+    const ds = new DemoDataStore(prebakeJoins({
+      matters: [matter("own"), matter("own2"), matter("other", { responsibleLawyerId: "u2" }), matter("hits", { conflictCheckStatus: "HITS", conflictCheckHits: 1 })],
+      invoices: [invoice("i-own", "own"), invoice("i-own2", "own2"), invoice("i-other", "other"), invoice("i-hits", "hits")],
+      payments, paymentPlans: plans,
+      tasks: [], timeEntries: [], expenses: [], contacts: [], matterContacts: [], documents: [],
+    }), () => {});
+    return { ds, repos: buildInMemoryRepositories(ds) };
+  }
+  const planRows = async (plans: Array<Record<string, unknown>>, mine: boolean, payments: Array<Record<string, unknown>> = []) => {
+    const { ds, repos } = setup(plans, payments);
+    return (await callerFor(ds, repos).actionItems({ mine })).items.filter((i) => i.kind === "paymentPlan");
+  };
+
+  it("en plan som ligger efter i ett eget ärende ger raden, med länk till planen", async () => {
+    const items = await planRows([plan("pp-own", "i-own")], true);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      severity: "passed", matterId: "own", matterNumber: "2026-own",
+      link: { route: "payment-plans", id: "pp-own" },
+    });
+    expect(items[0]?.title).toMatch(/^Delbetalning förfallen \d+ dag(ar)?$/);
+    expect(items[0]?.amountOre).toBeGreaterThan(0);
+  });
+
+  it("i en kollegas ärende bara med mine: false", async () => {
+    const plans = [plan("pp-other", "i-other")];
+    expect(await planRows(plans, true)).toEqual([]);
+    expect((await planRows(plans, false)).map((i) => i.matterId)).toEqual(["other"]);
+  });
+
+  it("slutförd, avbruten och ikapp ger ingen rad", async () => {
+    const plans = [
+      plan("pp-done", "i-own", { status: "COMPLETED" }),
+      plan("pp-stop", "i-own2", { status: "CANCELLED" }),
+      plan("pp-paid", "i-other"),
+    ];
+    const paid = [{ id: "pay", invoiceId: "i-other", amount: 1_000_000, paidAt: inDays(-1) }];
+    expect(await planRows(plans, false, paid)).toEqual([]);
+  });
+
+  it("planerna läses i ETT anrop, bara de aktiva", async () => {
+    const { ds, repos } = setup([plan("pp-own", "i-own"), plan("pp-own2", "i-own2")]);
+    const spy = vi.spyOn(repos.paymentPlans, "listForOrg");
+    await callerFor(ds, repos).actionItems({ mine: false });
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.calls[0]?.[1]).toBe("ACTIVE");
+  });
+
+  it("raden sorteras bland de passerade posterna efter datum, äldst först", async () => {
+    const { ds, repos } = setup([plan("pp-new", "i-own", {}, 40), plan("pp-old", "i-own2", {}, 100)]);
+    const { items } = await callerFor(ds, repos).actionItems({ mine: true });
+    expect(items.map((i) => `${i.kind}:${i.matterId ?? ""}`)).toEqual([
+      "paymentPlan:own2", "paymentPlan:own", "conflictCheck:hits",
+    ]);
+  });
+});

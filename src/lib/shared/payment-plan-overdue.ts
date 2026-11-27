@@ -1,6 +1,6 @@
 /**
- * När en avbetalningsplan ligger efter (#2136) — EN regel för Avbetalningar och,
- * senare, Att åtgärda.
+ * När en avbetalningsplan ligger efter (#2136) — EN regel för Avbetalningar och
+ * Att åtgärda (#2137, `paymentPlanItems`).
  *
  * AVA skickar inga påminnelser till klienten (#2135); juristen ser i stället
  * att klienten ligger efter och tar kontakt själv. Härlett, inget lagras: när
@@ -11,7 +11,7 @@
 
 import { Temporal } from "@js-temporal/polyfill";
 import { stockholmDay } from "./stockholm-time";
-import { daysBetween } from "./watchlist";
+import { dagar, daysBetween, type WatchlistItem } from "./watchlist";
 
 /** Planens fält som regeln läser. Datum kan vara Date eller ISO-sträng. */
 export interface PlanOverdueInput {
@@ -76,4 +76,37 @@ export function paymentPlanOverdue(plan: PlanOverdueInput, now: Date): PlanOverd
   if (expected <= paid) return null;
   const dueDate = first.add({ months: Math.floor(paid / plan.monthlyAmount) }).toString();
   return { dueDate, overdueDays: daysBetween(new Date(dueDate), now), behindOre: expected - paid };
+}
+
+/** En plan som Att åtgärda läser (#2137): regelns fält plus planens id och fakturans ärende. */
+export interface PlanItemInput extends PlanOverdueInput {
+  id: string;
+  invoice?: (NonNullable<PlanOverdueInput["invoice"]> & {
+    matter?: { id: string; matterNumber: string } | null | undefined;
+  }) | null | undefined;
+}
+
+/** Raden i Att åtgärda för en plan som ligger efter, eller `null` (ikapp, inte aktiv, utan ärende). */
+function paymentPlanItem(plan: PlanItemInput, now: Date): WatchlistItem | null {
+  const matter = plan.invoice?.matter;
+  const overdue = matter ? paymentPlanOverdue(plan, now) : null;
+  if (!matter || !overdue) return null;
+  return {
+    kind: "paymentPlan",
+    severity: "passed",
+    title: `Delbetalning förfallen ${dagar(overdue.overdueDays)}`,
+    detail: `Förföll ${overdue.dueDate}. AVA skickar ingen påminnelse, så kontakta klienten.`,
+    matterId: matter.id, matterNumber: matter.matterNumber,
+    at: overdue.dueDate, amountOre: overdue.behindOre,
+    link: { route: "payment-plans", id: plan.id },
+  };
+}
+
+/**
+ * Att åtgärda (#2137): en rad per avbetalningsplan där klienten ligger efter,
+ * ur samma regel som markeringen under Avbetalningar. Härledd, inget lagras:
+ * raden försvinner när klienten betalat ikapp.
+ */
+export function paymentPlanItems(plans: readonly PlanItemInput[], now: Date): WatchlistItem[] {
+  return plans.map((p) => paymentPlanItem(p, now)).filter((i): i is WatchlistItem => i !== null);
 }

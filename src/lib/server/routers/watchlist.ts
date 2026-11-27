@@ -2,7 +2,7 @@
  * Frister-router (#1062, #1735): tidsfrister och "Bör faktureras" i `list`,
  * takvarningar, jävskontroller och frågan om ett aktivt ärende utan tid på två
  * månader, eller med ett slutligt avgörande (#2101), ska avslutas (#2100) i
- * `actionItems` (#1734).
+ * `actionItems` (#1734), liksom avbetalningar där klienten ligger efter (#2137).
  *
  * Varje signal härleds ur data som redan finns; ingenting lagras. Se
  * `@/lib/shared/watchlist` för varför (kort: en härledd påminnelse städar sig
@@ -16,6 +16,7 @@
 import { z } from "zod";
 import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { closeSuggestionItems, type CloseSuggestionCandidate } from "@/lib/shared/close-suggestion";
+import { paymentPlanItems, type PlanItemInput } from "@/lib/shared/payment-plan-overdue";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
@@ -139,6 +140,16 @@ async function closeSuggestionInput(ctx: Ctx, matters: readonly MatterRow[]): Pr
   }));
 }
 
+/**
+ * Aktiva avbetalningsplaner i urvalets ärenden (#2137): byråns planer i ETT
+ * repo-anrop, sedan bara de vars fakturas ärende finns bland `matters`.
+ */
+async function paymentPlanInput(ctx: Ctx, matters: readonly MatterRow[]): Promise<PlanItemInput[]> {
+  const ids = new Set(matters.map((m) => m.id));
+  const plans = await ctx.repos.paymentPlans.listForOrg(ctx.orgId, "ACTIVE");
+  return plans.filter((p) => ids.has(String(p.invoice?.matter?.id ?? "")));
+}
+
 /** Tidsfrister ur uppgifter — bara öppna, och bara de som har ett datum. */
 async function deadlineInput(ctx: Ctx, userId: string): Promise<DeadlineTask[]> {
   const tasks = await ctx.repos.tasks.listForUser(
@@ -205,7 +216,8 @@ export const watchlistRouter = router({
   /**
    * "Att åtgärda" (#1734): takvarningar, jävskontroller med träffar som
    * ingen har bedömt, och aktiva ärenden utan tid på två månader eller med
-   * ett slutligt avgörande (#2101) som kanske ska avslutas (#2100). En kontroll som bara väntar (`PENDING`) hör inte hit.
+   * ett slutligt avgörande (#2101) som kanske ska avslutas (#2100), och
+   * avbetalningar där klienten ligger efter (#2137). En kontroll som bara väntar (`PENDING`) hör inte hit.
    * Samma `mine`-urval och sortering som `list`.
    */
   actionItems: orgProcedure
@@ -213,13 +225,14 @@ export const watchlistRouter = router({
     .query(async ({ ctx, input }): Promise<{ items: WatchlistItem[]; generatedAt: string }> => {
       const now = new Date();
       const matters = await selectMatters(ctx, input?.userId ?? ctx.user.id, input?.mine ?? true);
-      const [coverage, closeCandidates] = await Promise.all([
-        coverageInput(ctx, matters), closeSuggestionInput(ctx, matters),
+      const [coverage, closeCandidates, plans] = await Promise.all([
+        coverageInput(ctx, matters), closeSuggestionInput(ctx, matters), paymentPlanInput(ctx, matters),
       ]);
       const items = sortWatchlist([
         ...coverageItems(coverage),
         ...conflictCheckItems(matters.filter((m) => m.conflictCheckStatus === "HITS")),
         ...closeSuggestionItems(closeCandidates, now),
+        ...paymentPlanItems(plans, now),
       ], stockholmDay(now));
       return { items, generatedAt: now.toISOString() };
     }),
