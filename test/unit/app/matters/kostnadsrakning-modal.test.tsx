@@ -8,7 +8,7 @@
  * sidoeffekter (PDF-render, persist, helper, trpc) stubbas.
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { effectiveHearing, KostnadsrakningModal } from "@/app/matters/[id]/_kostnadsrakning-modal";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -33,6 +33,15 @@ const ARBETE = { id: "te-a", date: "2026-02-20", minutes: 90, description: "Geno
 const FORHOR = { id: "te-f", date: "2026-03-04T09:00:00.000Z", minutes: 45, description: "Förhör", hourlyRate: 162_600, kind: "FORHOR" as const, billable: true };
 let entries: Array<typeof HEARING | typeof ARBETE | typeof FORHOR> = [HEARING];
 let entriesLoading = false;
+/** Ett ofryst och ett redan fryst utlägg (#1889): bara det ofrysta finns i förslaget. */
+const RESA = { id: "ex-r", date: "2026-02-21", description: "Resa", amount: 40_000, billable: true };
+const FRYST = { id: "ex-f", date: "2026-01-10", description: "Fryst kopia", amount: 9_900, billable: true };
+let unbilledExpenses: Array<typeof RESA> = [];
+
+/** Förslaget ur posterna, med ett fast värde per tidspost. */
+function proposalOf(te: ReadonlyArray<{ id: string; description: string; billable: boolean; date: string }>, ex: ReadonlyArray<typeof RESA>) {
+  return { timeEntries: te.map((t) => ({ ...t, valueOre: 100_000 })), expenses: ex };
+}
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -40,6 +49,8 @@ vi.mock("@/lib/client/trpc", () => ({
     matter: { update: { useMutation: noopMut } },
     kostnadsrakning: { record: { useMutation: () => ({ mutateAsync: recordMutateAsync, isPending: false }) } },
     timeEntry: { list: { useQuery: () => (entriesLoading ? { data: undefined, isLoading: true } : { data: { entries }, isLoading: false }) } },
+    // Postlistan (#1889) läser fakturaförslaget: de ofrysta posterna.
+    billingRun: { proposal: { useQuery: () => ({ data: proposalOf(entries, unbilledExpenses), isLoading: false }) } },
   },
 }));
 
@@ -60,6 +71,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   entries = [HEARING];
   entriesLoading = false;
+  unbilledExpenses = [];
 });
 
 describe("KostnadsrakningModal — utan förhandling (ärendet lades ner)", () => {
@@ -138,7 +150,7 @@ describe("KostnadsrakningModal — förordnandemål (#1858)", () => {
     fireEvent.click(screen.getByLabelText(/Förordnandetaxa/));
     fireEvent.click(screen.getByLabelText("Strafföreläggande godkändes"));
     fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
-    await waitFor(() => expect(createRun).toHaveBeenCalledWith({ forordnande: { avslut: "STRAFFORELAGGANDE" }, hasFTax: true }));
+    await waitFor(() => expect(createRun).toHaveBeenCalledWith({ forordnande: { avslut: "STRAFFORELAGGANDE" }, hasFTax: true }, {}));
     await waitFor(() => expect(recordMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ huvudforhandlingMinutes: 0 })));
   });
 
@@ -220,5 +232,59 @@ describe("KostnadsrakningModal", () => {
     render(<KostnadsrakningModal {...baseProps} onClose={onClose} />);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe("KostnadsrakningModal — postlistan (#1889)", () => {
+  /** Kryssrutan för en post i listan, ur dess beskrivning. */
+  const box = (label: string): HTMLElement => {
+    const row = screen.getAllByText(label).map((el) => el.closest("label")).find((l) => l !== null);
+    if (!row) throw new Error(`raden ${label} saknas`);
+    return within(row).getByRole("checkbox");
+  };
+  const total = (): string => screen.getByText("Total").nextElementSibling?.textContent ?? "";
+
+  it("listan står före förhandsvisningen, med de ofrysta posterna förvalda", () => {
+    entries = [HEARING, ARBETE];
+    render(<KostnadsrakningModal {...baseProps} />);
+    const list = screen.getByText(/Poster att fakturera \(2\/2 valda\)/);
+    expect(list.compareDocumentPosition(screen.getByText("Förhandsvisning")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("orörd lista: inga id:n skickas — servern tar allt ofryst", async () => {
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-1"));
+    render(<KostnadsrakningModal {...baseProps} createRun={createRun} />);
+    fireEvent.click(screen.getByText("Generera + spara"));
+    await waitFor(() => expect(createRun).toHaveBeenCalledOnce());
+    expect(createRun.mock.calls[0]?.[1]).toEqual({});
+  });
+
+  it("summan följer urvalet, och de valda id:na skickas med", async () => {
+    entries = [HEARING, ARBETE];
+    unbilledExpenses = [RESA];
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-1"));
+    render(<KostnadsrakningModal {...baseProps} initialIsTaxe={false} expenses={[RESA, FRYST]} createRun={createRun} />);
+    const before = total();
+    fireEvent.click(box("Resa"));
+    expect(total()).not.toBe(before);
+    expect(screen.getByText(/Utlägg inkl moms \(0 st\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Generera + spara"));
+    await waitFor(() => expect(createRun).toHaveBeenCalledOnce());
+    expect(createRun.mock.calls[0]?.[1]).toEqual({ timeEntryIds: ["te-h", "te-a"], expenseIds: [] });
+  });
+
+  it("dokumentet får bara ofrysta utlägg — det redan frysta är inte med", () => {
+    unbilledExpenses = [RESA];
+    render(<KostnadsrakningModal {...baseProps} expenses={[RESA, FRYST]} />);
+    expect(screen.getByText(/Utlägg inkl moms \(1 st\)/)).toBeInTheDocument();
+  });
+
+  it("förhandlingsklockan följer de valda: utan den valda förhandlingsposten ingen klocka", () => {
+    entries = [HEARING, ARBETE];
+    render(<KostnadsrakningModal {...baseProps} />);
+    expect(screen.getByText(/STOPPA NU/)).toBeInTheDocument();
+    fireEvent.click(box("Huvudförhandling"));
+    expect(screen.queryByText(/STOPPA NU/)).not.toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("Ingen förhandling");
   });
 });
