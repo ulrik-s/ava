@@ -118,6 +118,38 @@ export const feedbackMessageSchema = z.object({
 });
 export type FeedbackMessage = z.infer<typeof feedbackMessageSchema>;
 
+/**
+ * Var en del (en arbetsorder i kodrepot) befinner sig: klar (stängd som
+ * genomförd), pågår (etiketten `pågår`), i kön (öppen) eller väntar på beslut
+ * (etiketten `blockerad`).
+ */
+export const FEEDBACK_PART_STATES = ["klar", "pagar", "i_ko", "vantar_beslut"] as const;
+export type FeedbackPartState = (typeof FEEDBACK_PART_STATES)[number];
+
+/**
+ * Uppskattningen av leveransen (#2216) — aldrig ett datum: ett spann i ord med
+ * sitt skäl, "väntar på beslut/dig", eller "med nästa uppdatering" när alla
+ * delar är klara. Null när förfrågan är levererad eller avslutad.
+ */
+export const feedbackEtaSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("range"), label: z.string(), reason: z.string() }),
+  z.object({ kind: z.literal("waiting"), on: z.enum(["beslut", "dig"]) }),
+  z.object({ kind: z.literal("next_release") }),
+]).nullable();
+export type FeedbackEta = z.infer<typeof feedbackEtaSchema>;
+
+/** Hur långt en godkänd förfrågan kommit: delarna ur kodrepot och uppskattningen. */
+export const feedbackProgressSchema = z.object({
+  /** En rad per arbetsorder, äldst först; rubriken utan Conventional-Commit-prefix. */
+  parts: z.array(z.object({ title: z.string(), state: z.enum(FEEDBACK_PART_STATES) })),
+  done: z.number().int(),
+  total: z.number().int(),
+  /** När den första arbetsordern skapades — nedbrytningen följer beslutet. */
+  approvedAt: z.string().nullable(),
+  eta: feedbackEtaSchema,
+});
+export type FeedbackProgress = z.infer<typeof feedbackProgressSchema>;
+
 export const feedbackItemSchema = z.object({
   number: z.number().int(),
   title: z.string(),
@@ -132,6 +164,8 @@ export const feedbackItemSchema = z.object({
   canReply: z.boolean(),
   /** Bilagorna i själva förfrågan (sökvägar i intag-repot). */
   attachments: z.array(z.string()).default([]),
+  /** Delarna och uppskattningen (#2216) — bara när förfrågan har arbetsordrar; saknas i äldre svar. */
+  progress: feedbackProgressSchema.nullish(),
 });
 export type FeedbackItem = z.infer<typeof feedbackItemSchema>;
 

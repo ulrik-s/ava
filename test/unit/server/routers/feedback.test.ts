@@ -4,7 +4,7 @@
  * egna förfrågningar, och ingen kan skicka mer än FEEDBACK_PER_HOUR i timmen.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest-compat";
-import type { FeedbackComment, FeedbackIssue, IFeedbackSink } from "@/lib/server/ports";
+import type { FeedbackComment, FeedbackIssue, IFeedbackSink, WorkOrderSnapshot } from "@/lib/server/ports";
 import {
   feedbackRouter, FEEDBACK_PER_HOUR, issueBody, messagesFrom, mineFrom, neutralize, ownerMarker, REPLIES_PER_HOUR,
   replyBody, resetFeedbackRateLimit,
@@ -106,6 +106,23 @@ describe("feedback.mine", () => {
       [2, "feature", "levererad", "v0.5.0"],
       [1, "bug", "verifierad", null],
     ]);
+  });
+
+  it("delarna ur kodrepot (#2216): bara på förfrågningar med arbetsordrar", async () => {
+    const mine = issue(1, `${ownerMarker("u-1")}\n…`, ["user-request", "förslag", "nedbruten"]);
+    const plain = issue(2, `${ownerMarker("u-1")}\n…`, ["user-request", "bugg"]);
+    const snapshot: WorkOrderSnapshot = { perDay: 20, orders: [
+      { intake: 1, title: "feat(x): flytta ett dokument", state: "klar", createdAt: "2026-11-05T10:00:00Z" },
+      { intake: 3, title: "feat(x): någon annans", state: "i_ko", createdAt: "2026-11-04T10:00:00Z" },
+    ] };
+    const items = await feedbackRouter.createCaller({
+      user: USER, orgId: USER.organizationId, requestId: "req-1",
+      ports: { feedback: fakeSink([mine, plain]).sink, workOrders: { snapshot: () => Promise.resolve(snapshot) } },
+    } as never).mine();
+    expect(items.find((i) => i.number === 1)?.progress).toEqual({
+      parts: [{ title: "Flytta ett dokument", state: "klar" }], done: 1, total: 1, approvedAt: "2026-11-05T10:00:00Z", eta: { kind: "next_release" },
+    });
+    expect(items.find((i) => i.number === 2)?.progress).toBeUndefined();
   });
 
   it("mineFrom är tom när inget matchar", () => {

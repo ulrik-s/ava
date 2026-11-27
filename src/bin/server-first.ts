@@ -42,6 +42,7 @@ import { loadContentDirFromEnv, makeContentStore } from "@/lib/server/adapters/g
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { backupDirsFromEnv, FsBackupStore } from "@/lib/server/backup/fs-backup-store";
 import { feedbackConfigFromEnv, GithubFeedbackSink } from "@/lib/server/feedback/github-feedback-sink";
+import { GithubWorkOrders } from "@/lib/server/feedback/github-work-orders";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { emailStatusLine } from "@/lib/server/integrations/email/disabled-email-sender";
 import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-service";
@@ -55,7 +56,7 @@ import { runStartupBackfills } from "@/lib/server/jobs/startup-backfills";
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { startErrorReporting } from "@/lib/server/observability/posthog-sink";
-import type { IBackupStore, IFeedbackSink, ILedgerService } from "@/lib/server/ports";
+import type { IBackupStore, ILedgerService, IPorts } from "@/lib/server/ports";
 import { GithubReleaseNotes } from "@/lib/server/release-notes/github-release-notes";
 import { appRouter } from "@/lib/server/routers/_app";
 import { organizationKinds } from "@/lib/shared/document-kinds";
@@ -100,11 +101,11 @@ function ledgerWiring(orgId: string): { port: { ledger?: ILedgerService }; jobs:
   return ledger ? { port: { ledger }, jobs: { ledger: { service: ledger, orgId } } } : { port: {}, jobs: {} };
 }
 
-/** Förfrågningar → intag-repot: kräver token + repo. Annars av. */
-function feedbackPort(): { feedback?: IFeedbackSink } {
+/** Förfrågningar → intag-repot, och deras delar i kodrepot (#2216): kräver token + repo. Annars av. */
+function feedbackPort(): Pick<IPorts, "feedback" | "workOrders"> {
   const config = feedbackConfigFromEnv();
   log(config ? `förfrågningar: till ${config.repo}` : "förfrågningar: av (AVA_FEEDBACK_* saknas)");
-  return config ? { feedback: new GithubFeedbackSink(config) } : {};
+  return config ? { feedback: new GithubFeedbackSink(config), workOrders: new GithubWorkOrders(config.token) } : {};
 }
 
 /** Backup på begäran (#1431): kräver båda backupkatalogerna. Annars av. */

@@ -7,6 +7,7 @@
 import type { Buffer } from "node:buffer";
 import type { LedgerAccountMap } from "@/lib/shared/accounting/account-map";
 import type { BackupExport, BackupFileName } from "@/lib/shared/backup";
+import type { FeedbackPartState } from "@/lib/shared/feedback";
 import type { ReleaseNote } from "@/lib/shared/release-notes";
 import type { DocumentId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import type { LedgerConnector } from "./integrations/ledger/port";
@@ -345,6 +346,26 @@ export interface IFeedbackSink {
   file(path: string): Promise<string>;
 }
 
+/** En arbetsorder i kodrepot med raden `Intag: ava-feedback#N` (#2216); `intake` = N. */
+export interface WorkOrder {
+  intake: number;
+  title: string;
+  state: FeedbackPartState;
+  createdAt: string;
+}
+
+/** Arbetsordrarna och takten, hämtade på en gång och delade av alla användare. */
+export interface WorkOrderSnapshot {
+  orders: WorkOrder[];
+  /** Mergade agent-PR:er per dygn de senaste 7 dygnen. */
+  perDay: number;
+}
+
+/** Arbetsordrarna ur kodrepot. Kastar aldrig: ett fel ger det senaste svaret, eller null. */
+export interface IWorkOrderSource {
+  snapshot(): Promise<WorkOrderSnapshot | null>;
+}
+
 /** "Nytt i AVA" (#2010): nyheterna i de senaste releaserna, nyast först. */
 export interface IReleaseNotesSource {
   list(): Promise<ReleaseNote[]>;
@@ -362,6 +383,8 @@ export interface IPorts {
   backup?: IBackupStore;
   /** Förfrågningar från användarna — bara server-first med GitHub-token. */
   feedback?: IFeedbackSink;
+  /** Förfrågningarnas delar i kodrepot (#2216) — bara server-first, med förfrågningarna. */
+  workOrders?: IWorkOrderSource;
   /** "Nytt i AVA" ur kodrepots releaser — bara server-first. */
   releaseNotes?: IReleaseNotesSource;
 }
