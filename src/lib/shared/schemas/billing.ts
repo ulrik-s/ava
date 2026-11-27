@@ -7,6 +7,7 @@ import {
   billingRunStatusSchema,
   billingRunTypeSchema,
   expenseKindSchema,
+  forordnandeAvslutSchema,
   invoiceStatusSchema,
   invoiceTypeSchema,
   paymentPlanStatusSchema,
@@ -142,6 +143,9 @@ export const invoiceSchema = z.object({
    *  och Slutfaktura-sidan (`/invoices/[id]`). Sätts vid settleCoverage på klient-/
    *  betalar-fakturan; null på övriga fakturor. Matchar `SettlementView`. */
   settlementBreakdown: settlementBreakdownSchema.nullish(),
+  /** Acontofakturans nedbrytning (#2147, egen kolumn #2180). Äldre acontofakturor
+   *  har den bara i `settlementBreakdown`; läs med `invoiceBreakdown`. */
+  accontoBreakdown: settlementBreakdownSchema.nullish(),
   status: invoiceStatusSchema.default("DRAFT"),
   invoiceType: invoiceTypeSchema.default("STANDARD"),
   /** Per-byrå löpande fakturanummer (F-YYYY-NNNN), genereras vid skapande.
@@ -345,6 +349,9 @@ export const billingRunSchema = z.object({
   periodTo: optionalDateLike,
   /** Fri text — t.ex. "Inkluderar tidsspillan resa Stockholm-Göteborg". */
   notes: z.string().nullish(),
+  /** Förordnandemål (#1857): hur förundersökningen avslutades. Null utanför
+   *  förordnandetaxan (#2180; förut bara en rad i `notes`). */
+  forordnandeAvslut: forordnandeAvslutSchema.nullish(),
 }).passthrough();
 
 export type BillingRun = z.infer<typeof billingRunSchema>;

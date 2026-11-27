@@ -218,6 +218,15 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     expect(text).toContain("Att betala nu");
   });
 
+  it("dokumentet läser acontots egen kolumn före settlementBreakdown (#2180)", async () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    const stale = { ...BREAKDOWN, rows: [], totalLabel: "Gammal summa" };
+    await succeed(accontoOnSuccess, { invoice: { id: "inv-3", amount: 100_000, invoiceType: "ACCONTO", accontoBreakdown: BREAKDOWN, settlementBreakdown: stale } });
+    const text = await docText();
+    expect(text).toContain("Att betala nu");
+    expect(text).not.toContain("Gammal summa");
+  });
+
   it("hjälptexten säger att beloppet bara ändras i undantagsfall (#1941)", () => {
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     expect(screen.getByText(/Ändra bara beloppet i undantagsfall\. Skillnaden visas som Justering på fakturan\./)).toBeInTheDocument();
