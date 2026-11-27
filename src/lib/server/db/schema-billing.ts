@@ -10,7 +10,7 @@ import type { SettlementView } from "@/lib/shared/billing/settlement-view";
 import type { DispatchChannel, DispatchStatus, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
 import type {
   AmountRounding, BillingRunRecipient, BillingRunStatus, BillingRunType, ExpenseKind, ForordnandeAvslut, InvoiceStatus,
-  InvoiceType, PaymentPlanStatus, ReminderType, TimeEntryKind,
+  InvoicePurpose, InvoiceType, PaymentPlanStatus, ReminderType, TimeEntryKind,
 } from "@/lib/shared/schemas/enums";
 import type {
   AccontoDeductionId, BillingRunId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterId, PaymentId, PaymentPlanId,
@@ -89,6 +89,8 @@ export const invoices = pgTable("invoices", {
   creditedInvoiceId: uuid("credited_invoice_id").$type<InvoiceId>(),
   // Radavrundning (#1438): 'KRONOR' på nya fakturor; null = äldre (öre).
   amountRounding: text("amount_rounding").$type<AmountRounding>(),
+  // Affärsroll (#1933): 'RADGIVNING'; null = en vanlig faktura.
+  purpose: text("purpose").$type<InvoicePurpose>(),
 }, (t) => [index("invoices_matter_idx").on(t.matterId)]);
 
 /**

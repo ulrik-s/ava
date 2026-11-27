@@ -86,6 +86,16 @@ async function assertAccontoBreakdown(repo: InvoiceRepository): Promise<void> {
   expect((await repo.getById(plain))?.accontoBreakdown ?? null).toBeNull();
 }
 
+/** Fakturans affärsroll (#1933) skrivs och läses tillbaka; en vanlig faktura har ingen. */
+async function assertPurpose(repo: InvoiceRepository): Promise<void> {
+  const id = asId<"InvoiceId">(uuidv7());
+  await repo.create(inv({ id, purpose: "RADGIVNING" }));
+  expect((await repo.getById(id))?.purpose).toBe("RADGIVNING");
+  const plain = asId<"InvoiceId">(uuidv7());
+  await repo.create(inv({ id: plain }));
+  expect((await repo.getById(plain))?.purpose ?? null).toBeNull();
+}
+
 describe("InvoiceRepository — in-memory", () => {
   it("uppfyller kontraktet", async () => {
     const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
@@ -100,6 +110,11 @@ describe("InvoiceRepository — in-memory", () => {
   it("acontofakturans nedbrytning i egen kolumn sparas och läses tillbaka (#2180)", async () => {
     const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
     await assertAccontoBreakdown(new InMemoryInvoiceRepository(store));
+  });
+
+  it("fakturans affärsroll sparas och läses tillbaka (#1933)", async () => {
+    const store = new LocalStore({ invoices: [], payments: [], writeOffs: [] }, async () => {});
+    await assertPurpose(new InMemoryInvoiceRepository(store));
   });
 
   it("lockForBooking är en no-op (#1453)", async () => {
@@ -305,6 +320,10 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
 
   it("acontofakturans nedbrytning i egen kolumn sparas och läses tillbaka (#2180)", async () => {
     await assertAccontoBreakdown(new DrizzleInvoiceRepository(handle.db));
+  });
+
+  it("fakturans affärsroll sparas och läses tillbaka (#1933)", async () => {
+    await assertPurpose(new DrizzleInvoiceRepository(handle.db));
   });
 
   it("getByIdWithLedger hämtar betalningar", async () => {
