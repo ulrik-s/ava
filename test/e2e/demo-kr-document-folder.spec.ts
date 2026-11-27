@@ -8,7 +8,7 @@
  */
 import type { Page } from "@playwright/test";
 import { z } from "zod";
-import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterWithKrStatus, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterWithKrStatus, seedDemoLogin, showPanel, test, expect, type DemoSeed } from "./_demo-test";
 
 test("KR som väntar på dom: inget självupptäckt fel, och referensen öppnar dokumentet", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
@@ -150,43 +150,90 @@ async function fetchMoveSeed(page: Page): Promise<z.output<typeof moveSeedSchema
 // Flytta till ärende…. Det syns där, i mappen, och inte längre i det gamla.
 // Ligger här eftersom demo-konfigurationens testMatch (skyddad) listar filerna.
 test("Flytta till ärende… flyttar dokumentet till en mapp i ett annat ärende", async ({ page }) => {
-  await page.setViewportSize({ width: 1600, height: 1000 });
-  await seedDemoLogin(page, BASE);
-  const seed = await fetchDemoSeed(page, BASE);
-  const from = matterWithKrStatus(seed, "INSKICKAD");
-  const docs = seed.documents;
-  const { documentFolders: folders, documents: withInvoice } = await fetchMoveSeed(page);
-  const invoiced = new Set(withInvoice.filter((d) => d.invoiceId).map((d) => d.id));
-  const hasTitle = (matterId: string, title: string) => docs.some((d) => d.matterId === matterId && d.title === title);
-  const movable = docs.filter((d) => d.matterId === from && !d.billingRunId && !invoiced.has(d.id));
-  // Målet: ett aktivt ärende med mappen Korrespondens överst och inget dokument med samma titel.
-  const pick = movable.flatMap((d) => seed.matters
-    .filter((m) => m.id !== from && m.status === "ACTIVE" && !hasTitle(m.id, d.title)
-      && folders.some((f) => f.matterId === m.id && f.name === "Korrespondens" && f.parentId === null))
-    .flatMap((m) => (m.matterNumber ? [{ doc: d, to: { ...m, matterNumber: m.matterNumber } }] : [])))[0];
-  const doc = pick?.doc;
-  const to = pick?.to;
-  if (!doc || !to) throw new Error("seeden saknar ett flyttbart dokument eller ett aktivt ärende med mappen Korrespondens");
-
-  await page.goto(`${BASE}/matters/${from}/`);
-  await showPanel(page, "Dokument");
-  await page.getByRole("button", { name: "Mapp-vy", exact: true }).click();
+  const { docs: [doc], to } = await openMoveSource(page, 1);
+  if (!doc) throw new Error("inget dokument valt");
   const row = page.getByRole("row").filter({ hasText: doc.title });
   await row.getByLabel("Dokumentåtgärder").click();
   await page.getByRole("menuitem", { name: /Flytta till ärende…/ }).click();
+  await moveToKorrespondens(page, "1 dokument flyttas till:", to);
+  await expectMovedToKorrespondens(page, [doc], to);
+});
+
+// #2046: två markerade dokument flyttas tillsammans till samma mapp i ett annat ärende.
+test("markerade dokument flyttas tillsammans till en mapp i ett annat ärende", async ({ page }) => {
+  const { docs, to } = await openMoveSource(page, 2);
+  for (const doc of docs) await page.getByRole("row").filter({ hasText: doc.title }).getByLabel("Markera rad").check();
+  await page.getByRole("button", { name: "Flytta till ärende… (2)" }).click();
+  await moveToKorrespondens(page, "2 dokument flyttas till:", to);
+  await expectMovedToKorrespondens(page, docs, to);
+});
+
+interface MoveTarget { id: string; title: string; matterNumber: string }
+interface MovePick { from: string; docs: { title: string }[]; to: MoveTarget }
+
+/**
+ * Öppna mappvyn i ett ärende med `count` flyttbara dokument och välj ett aktivt
+ * mål med mappen Korrespondens överst (#2045, #2046). Titlarna är unika och
+ * finns inte i målet (inte heller som del av en annan titel), så raderna kan
+ * sökas på titeln i båda ärendena. Ärendet med en inskickad kostnadsräkning
+ * prövas först, så att fakturans och kostnadsräkningens dokument finns i det.
+ */
+async function openMoveSource(page: Page, count: number): Promise<MovePick> {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await seedDemoLogin(page, BASE);
+  const seed = await fetchDemoSeed(page, BASE);
+  const pick = pickMove(seed, await fetchMoveSeed(page), count);
+  await page.goto(`${BASE}/matters/${pick.from}/`);
+  await showPanel(page, "Dokument");
+  await page.getByRole("button", { name: "Mapp-vy", exact: true }).click();
+  return pick;
+}
+
+function pickMove(seed: DemoSeed, extra: z.output<typeof moveSeedSchema>, count: number): MovePick {
+  const invoiced = new Set(extra.documents.filter((d) => d.invoiceId).map((d) => d.id));
+  const titlesIn = (matterId: string) => seed.documents.filter((d) => d.matterId === matterId).map((d) => d.title);
+  const clashes = (title: string, others: string[]) => others.some((o) => o !== title && o.includes(title));
+  const targets = seed.matters.filter((m) => m.status === "ACTIVE" && m.matterNumber
+    && extra.documentFolders.some((f) => f.matterId === m.id && f.name === "Korrespondens" && f.parentId === null));
+  const kr = matterWithKrStatus(seed, "INSKICKAD");
+  const sources = [kr, ...seed.matters.filter((m) => m.status === "ACTIVE" && m.id !== kr).map((m) => m.id)];
+  for (const from of sources) {
+    const own = titlesIn(from);
+    const movable = seed.documents
+      .filter((d) => d.matterId === from && !d.billingRunId && !invoiced.has(d.id))
+      .map((d) => d.title)
+      .filter((t) => own.filter((o) => o === t).length === 1 && !clashes(t, own));
+    for (const to of targets.filter((m) => m.id !== from)) {
+      const there = titlesIn(to.id);
+      const titles = movable.filter((t) => !there.includes(t) && !clashes(t, there)).slice(0, count);
+      if (titles.length === count) {
+        return { from, docs: titles.map((title) => ({ title })), to: { id: to.id, title: to.title, matterNumber: to.matterNumber ?? "" } };
+      }
+    }
+  }
+  throw new Error("seeden saknar flyttbara dokument eller ett aktivt ärende med mappen Korrespondens");
+}
+
+/** Välj målärendet och mappen Korrespondens i dialogen (överst förvalt) och flytta. */
+async function moveToKorrespondens(page: Page, matterLabel: string, to: MoveTarget): Promise<void> {
   const dialog = page.getByRole("dialog", { name: "Flytta till ärende" });
-  await dialog.getByLabel("1 dokument flyttas till:").fill(`${to.matterNumber} — ${to.title}`);
+  await dialog.getByLabel(matterLabel).fill(`${to.matterNumber} — ${to.title}`);
   await expect(dialog.getByLabel("Mapp").locator("option:checked")).toHaveText("Överst, utan mapp");
   await dialog.getByLabel("Mapp").selectOption({ label: "Korrespondens" });
   await dialog.getByRole("button", { name: "Flytta" }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(row).toHaveCount(0, { timeout: 30_000 });
+}
 
+/** Dokumenten finns inte kvar i det gamla ärendet, och ligger under Korrespondens i målet. */
+async function expectMovedToKorrespondens(page: Page, docs: MovePick["docs"], to: MoveTarget): Promise<void> {
+  for (const doc of docs) await expect(page.getByRole("row").filter({ hasText: doc.title })).toHaveCount(0, { timeout: 30_000 });
   await page.goto(`${BASE}/matters/${to.id}/`);
   await showPanel(page, "Dokument");
   await page.getByRole("button", { name: "Mapp-vy", exact: true }).click();
-  const moved = page.getByRole("row").filter({ hasText: doc.title });
-  await expect(moved).toBeVisible({ timeout: 30_000 });
-  // Raden ligger under Korrespondens: indragen (djup 1), inte i roten.
-  await expect(moved.locator("[style*='padding-left: 20px']").first()).toBeVisible();
-});
+  for (const doc of docs) {
+    const moved = page.getByRole("row").filter({ hasText: doc.title });
+    await expect(moved).toBeVisible({ timeout: 30_000 });
+    // Raden ligger under Korrespondens: indragen (djup 1), inte i roten.
+    await expect(moved.locator("[style*='padding-left: 20px']").first()).toBeVisible();
+  }
+}

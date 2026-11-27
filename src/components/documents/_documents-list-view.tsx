@@ -9,7 +9,7 @@
  */
 
 import { useState } from "react";
-import { DataTable, type Column } from "@/components/ui/data-table";
+import { DataTable, type Column, type RowSelection } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
 import { folderNamePath } from "@/lib/shared/document-folder-path";
 import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
@@ -37,6 +37,8 @@ interface Props {
   analyzingIds: ReadonlySet<string>;
   /** Sant medan en analys körs: "Analysera (AI)" är spärrad, som i träd-vyn. */
   reanalyzePending: boolean;
+  /** Dokumentvyns markering (#2046): kryssrutor på de dokument som kan flyttas. */
+  selection?: RowSelection<DocumentRecord> | undefined;
 }
 
 const NO_SYNC: Map<string, SyncStatus> = new Map();
@@ -47,7 +49,7 @@ function folderPath(folderId: DocumentFolderId | null, folders: FolderRecord[]):
 
 export function DocumentsListView({
   matterId, documents, folders, docSync = NO_SYNC, onDelete, onReanalyze, isDropTarget = false,
-  uploadingIds, analyzingIds, reanalyzePending,
+  uploadingIds, analyzingIds, reanalyzePending, selection,
 }: Props) {
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   // Lease-medveten öppning (ADR 0033 §2) — delad med träd-vyn.
@@ -109,6 +111,7 @@ export function DocumentsListView({
         data={documents}
         rowKey={(d) => d.id}
         emptyMessage="Inga dokument."
+        {...(selection ? { selection } : {})}
       />
       {folders.length > 0 && (
         <p className="mt-2 text-xs text-gray-400">
