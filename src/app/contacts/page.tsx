@@ -2,7 +2,8 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { EMPTY_CONTACT_FORM, NewContactForm, type ContactForm } from "@/components/contacts/new-contact-form";
+import { contactInput, EMPTY_CONTACT_FORM, type ContactForm } from "@/components/contacts/contact-fields";
+import { NewContactForm } from "@/components/contacts/new-contact-form";
 import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Pager } from "@/components/ui/pager";
@@ -66,7 +67,7 @@ function ContactsContent() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    createContact.mutate(form as Parameters<typeof createContact.mutate>[0]);
+    createContact.mutate(contactInput(form));
   }
 
   return (
