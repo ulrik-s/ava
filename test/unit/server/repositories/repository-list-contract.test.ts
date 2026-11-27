@@ -63,8 +63,8 @@ function applies(backend: Backend, scenario: Scenario): boolean {
 /** Kända avvikelser: `backend: scenario`. */
 const KNOWN: Readonly<Record<string, KnownDeviation>> = {
   "in-memory: kontaktpersoner sorteras på namn i svensk ordning": {
-    why: "Minnesrepot tillämpar inte `orderBy` i en `include` (read-only-delegate, resolveRelation): kontaktpersonerna kommer i skapad ordning. Drizzle sorterar dem i svensk ordning (#1917).",
-    issue: 1917,
+    why: "Minnesrepot tillämpar inte `orderBy` i en `include` (read-only-delegate, resolveRelation): kontaktpersonerna kommer i skapad ordning. Drizzle sorterar dem i svensk ordning (#1917). Uppföljning: Intag: ava-feedback#147.",
+    issue: 1698,
   },
 };
 
