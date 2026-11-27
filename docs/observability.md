@@ -75,9 +75,9 @@ docker logs ava-server 2>&1 | jq -c 'select(.durationMs > 1000) | {path, duratio
 
 ### Integritetskontrollen: metadata utan innehåll (#1145)
 
-Med ett innehållslager (`AVA_CONTENT_DIR`) kontrollerar servern vid start och
-sedan dagligen att varje dokument har sitt innehåll
-(`src/lib/server/integrity/content-integrity.ts`). Dokument yngre än 15
+Med ett innehållslager (`AVA_CONTENT_DIR`) kontrollerar servern varje natt 02:00
+(svensk tid, det schemalagda jobbet `content-integrity`, #1993) att varje
+dokument har sitt innehåll (`src/lib/server/integrity/content-integrity.ts`). Dokument yngre än 15
 minuter räknas inte, eftersom klienten laddar upp bytes:en efter raden.
 
 | Händelse | Nivå | Fält |
