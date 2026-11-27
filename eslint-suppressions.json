@@ -2805,7 +2805,7 @@
   },
   "test/unit/server/integrity/content-integrity.test.ts": {
     "@typescript-eslint/require-await": {
-      "count": 6
+      "count": 2
     }
   },
   "test/unit/server/jobs/classify-document-handler.test.ts": {

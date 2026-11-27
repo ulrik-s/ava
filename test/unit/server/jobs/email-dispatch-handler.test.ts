@@ -143,6 +143,15 @@ describe("buildServerFirstJobHandlers", () => {
   it("ingen keepalive-handler utan bokföring (#1815)", () => {
     expect(buildServerFirstJobHandlers({})[JOB_QUEUES.ledgerKeepAlive]).toBeUndefined();
   });
+
+  it("registrerar integritetskontrollen när innehållslagret finns (#1993)", () => {
+    const integrity = { deps: { listStoredContent: () => Promise.resolve([]), exists: () => Promise.resolve(true) }, orgId: "org-1" };
+    expect(typeof buildServerFirstJobHandlers({ integrity })[JOB_QUEUES.contentIntegrity]).toBe("function");
+  });
+
+  it("ingen integritetskontroll utan innehållslager (#1993)", () => {
+    expect(buildServerFirstJobHandlers({})[JOB_QUEUES.contentIntegrity]).toBeUndefined();
+  });
 });
 
 describe("loadSmtpConfigFromEnv", () => {

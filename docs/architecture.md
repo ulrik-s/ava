@@ -183,6 +183,8 @@ aldrig routrar, repositories, db eller server-synk).
   `ledger-keepalive` (#1815, måndag 03:00) håller bokföringsanslutningen vid
   liv via `ILedgerService.keepAlive`, bara när Fortnox är konfigurerat;
   `reconnect-required` loggas på `error` varje vecka tills någon ansluter.
+  `content-integrity` (#1993, varje natt 02:00) kör integritetskontrollen
+  (#1145), bara med ett innehållslager. Inga egna `setInterval` i servern.
 - **Fulltextsökning** (#1215): dokumentjobben (`classify-document-v2`,
   `index-document`) extraherar texten EN gång per jobb, per sida
   (`extractPages`), och skriver den till `document_pages` (genererad
