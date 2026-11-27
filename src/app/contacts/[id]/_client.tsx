@@ -3,46 +3,23 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useState } from "react";
+import { contactFormOf, ContactFields, contactInput, EMPTY_CONTACT_FORM, type ContactForm } from "@/components/contacts/contact-fields";
 import { PanelPage } from "@/components/layout/panel-page";
 import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
-import { labelForContactType, labelForMatterRole, contactTypeOptions } from "@/lib/client/labels";
+import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { asId } from "@/lib/shared/schemas/ids";
 import { contactLayout } from "./_contact-layout";
 
 type ContactData = NonNullable<inferRouterOutputs<AppRouter>["contacts"]["getById"]>;
 
-interface EditForm {
-  name: string;
-  contactType: string;
-  personalNumber: string;
-  orgNumber: string;
-  email: string;
-  phone: string;
-  address: string;
-  notes: string;
-}
 interface ChildForm { name: string; email: string; phone: string; notes: string }
 
-const EMPTY_EDIT: EditForm = {
-  name: "", contactType: "PERSON", personalNumber: "", orgNumber: "",
-  email: "", phone: "", address: "", notes: "",
-};
 const EMPTY_CHILD: ChildForm = { name: "", email: "", phone: "", notes: "" };
-
-/** Kontakt → edit-form (null/undefined → ""). Egen helper håller startEditing
- *  under complexity@8 (annars 8× `??` i en funktion). */
-function toEditForm(c: ContactData): EditForm {
-  const s = (v: string | null | undefined): string => v ?? "";
-  return {
-    name: c.name, contactType: c.contactType,
-    personalNumber: s(c.personalNumber), orgNumber: s(c.orgNumber),
-    email: s(c.email), phone: s(c.phone), address: s(c.address), notes: s(c.notes),
-  };
-}
 
 /** All state, mutationer och handlers för kontakt-detaljsidan (#6-ratchet:
  *  lyft ut ur komponenten så vyn blir tunn + presentational). */
@@ -56,7 +33,7 @@ function useContactDetail(paramId: string) {
   const [editing, setEditing] = useState(false);
   const [showChildForm, setShowChildForm] = useState(false);
   const [childForm, setChildForm] = useState<ChildForm>(EMPTY_CHILD);
-  const [editForm, setEditForm] = useState<EditForm>(EMPTY_EDIT);
+  const [editForm, setEditForm] = useState<ContactForm>(EMPTY_CONTACT_FORM);
 
   const updateContact = trpc.contacts.update.useMutation({
     onSuccess: () => { void utils.contacts.getById.invalidate({ id }); setEditing(false); },
@@ -74,7 +51,7 @@ function useContactDetail(paramId: string) {
 
   function startEditing(): void {
     if (!contact.data) return;
-    setEditForm(toEditForm(contact.data));
+    setEditForm(contactFormOf(contact.data));
     setEditing(true);
   }
   function handleDelete(): void {
@@ -90,77 +67,18 @@ function useContactDetail(paramId: string) {
 }
 
 interface EditFormProps {
-  form: EditForm;
-  setForm: (f: EditForm) => void;
+  form: ContactForm;
+  setForm: (f: ContactForm) => void;
   onSubmit: () => void;
   onCancel: () => void;
   isPending: boolean;
 }
 
-/** Redigeringsformuläret (äger sina fält-id:n). */
+/** Ändra part: partens fält (#1925) och knapparna Spara och Avbryt. */
 function ContactEditForm({ form, setForm, onSubmit, onCancel, isPending }: EditFormProps) {
-  const nameId = useId();
-  const typeId = useId();
-  const personalNumberId = useId();
-  const orgNumberId = useId();
-  const emailId = useId();
-  const phoneId = useId();
-  const addressId = useId();
-  const notesId = useId();
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor={nameId} className="block text-sm text-gray-500 mb-1">Namn *</label>
-          <input id={nameId} type="text" required value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label htmlFor={typeId} className="block text-sm text-gray-500 mb-1">Typ</label>
-          <select id={typeId} value={form.contactType}
-            onChange={(e) => setForm({ ...form, contactType: e.target.value })}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
-            {contactTypeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label htmlFor={personalNumberId} className="block text-sm text-gray-500 mb-1">Personnummer</label>
-          <input id={personalNumberId} type="text" value={form.personalNumber}
-            onChange={(e) => setForm({ ...form, personalNumber: e.target.value })}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label htmlFor={orgNumberId} className="block text-sm text-gray-500 mb-1">Organisationsnummer</label>
-          <input id={orgNumberId} type="text" value={form.orgNumber}
-            onChange={(e) => setForm({ ...form, orgNumber: e.target.value })}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label htmlFor={emailId} className="block text-sm text-gray-500 mb-1">E-post</label>
-          <input id={emailId} type="email" value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label htmlFor={phoneId} className="block text-sm text-gray-500 mb-1">Telefon</label>
-          <input id={phoneId} type="text" value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-        <div className="md:col-span-2">
-          <label htmlFor={addressId} className="block text-sm text-gray-500 mb-1">Adress</label>
-          <input id={addressId} type="text" value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-        <div className="md:col-span-2">
-          <label htmlFor={notesId} className="block text-sm text-gray-500 mb-1">Anteckningar</label>
-          <textarea id={notesId} value={form.notes} rows={3}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-      </div>
+      <ContactFields value={form} onChange={setForm} />
       <div className="mt-4 flex gap-3">
         <button type="submit" disabled={isPending}
           className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
@@ -378,7 +296,7 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
         <ContactEditForm
           form={d.editForm}
           setForm={d.setEditForm}
-          onSubmit={() => d.updateContact.mutate({ id: d.id, ...d.editForm } as Parameters<typeof d.updateContact.mutate>[0])}
+          onSubmit={() => d.updateContact.mutate(contactInput(d.editForm, asId<"ContactId">(d.id)))}
           onCancel={() => d.setEditing(false)}
           isPending={d.updateContact.isPending}
         />
