@@ -17,7 +17,6 @@
 import type { OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 import { backfillBadDebtWriteOffs } from "./bad-debt-write-off-backfill";
-import { backfillDeadlineTasks } from "./deadline-task-backfill";
 import { backfillDocumentKinds } from "./document-kinds-backfill";
 import { backfillPublicAssignmentTypes } from "./public-assignment-backfill";
 
@@ -82,17 +81,6 @@ export const STARTUP_BACKFILLS: readonly StartupBackfill[] = [
       return `${r.writeOffs} avskrivningsposter skapade, ${r.failed} fel`;
     },
     ownerIssue: "https://github.com/ulrik-s/ava-feedback/issues/142",
-    removeBy: "2027-01-31",
-  },
-  {
-    // #2121: frister i kalendern (`kind = "deadline"`) får var sin uppgift, en
-    // gång (härlett id). Bara INSERT i tasks; kalenderraderna rörs inte.
-    name: "frister",
-    run: async ({ repos, organizationIds, onError }) => {
-      const r = await backfillDeadlineTasks(repos, organizationIds, onError);
-      return `${r.tasks} uppgifter skapade, ${r.failed} fel`;
-    },
-    ownerIssue: "https://github.com/ulrik-s/ava-feedback/issues/144",
     removeBy: "2027-01-31",
   },
 ];

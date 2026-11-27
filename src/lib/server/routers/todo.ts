@@ -25,7 +25,7 @@ export interface TodoItem {
   allDay: boolean;
   status: string | null; // task-status (TODO/IN_PROGRESS/DONE) eller null för event
   priority: string | null; // task-priority eller null
-  kind: string | null; // event-kind (appointment/deadline) eller null
+  kind: string | null; // event-kind (appointment) eller null
   location: string | null;
   matter: { id: string; matterNumber: string; title: string } | null;
   userId: string;
@@ -71,9 +71,7 @@ export const todoRouter = router({
         status: t.status, priority: t.priority, kind: null, location: null,
         matter: t.matter ?? null, userId: t.userId,
       }));
-      // Frister i kalendern (`kind = "deadline"`) flyttas till uppgifter vid
-      // start (#2121) och visas där; här skulle de annars stå två gånger.
-      const eventItems: TodoItem[] = events.filter((e) => e.kind !== "deadline").map((e) => ({
+      const eventItems: TodoItem[] = events.map((e) => ({
         id: e.id, source: "event", title: e.title, description: e.description ?? null,
         at: toDate(e.startAt), endAt: e.endAt ? toDate(e.endAt) : null, allDay: e.allDay ?? false,
         status: null, priority: null, kind: e.kind, location: e.location ?? null,

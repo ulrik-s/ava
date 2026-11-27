@@ -181,6 +181,16 @@ describe("schemas — minimal valid input", () => {
     expect(e.allDay).toBe(false);
   });
 
+  it("calendarEventSchema avvisar kind=deadline — en frist är en uppgift (#2214)", () => {
+    const now = "2026-05-24T10:00:00Z";
+    expect(calendarEventSchema.safeParse({
+      id: "e-1", userId: "u-1", organizationId: "org-1",
+      title: "Inlaga inlämnas", kind: "deadline",
+      startAt: now,
+      createdAt: now, updatedAt: now,
+    }).success).toBe(false);
+  });
+
   it("calendarEventSchema kräver title min(1)", () => {
     const now = "2026-05-24T10:00:00Z";
     expect(() => calendarEventSchema.parse({
