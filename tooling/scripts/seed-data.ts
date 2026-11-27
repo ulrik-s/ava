@@ -681,8 +681,7 @@ function buildInvoices(orgId: string): SeedDataset["invoices"] {
       matterId: matter.id,
       invoiceNumber: `${new Date().getFullYear()}-${String(i + 1).padStart(4, "0")}`,
       // `invoiceType` är kanoniskt. Legacy-aliaset `type` skrivs inte längre
-      // (borttaget i schemaVersion 2 — migrate-on-read strippar det ur äldre
-      // repon vid hydrering, ADR 0004).
+      // (borttaget i schemaVersion 2).
       invoiceType: "STANDARD",
       status,
       // Båda fältnamnen — UI använder gamla `amount`/`invoiceDate`/`dueDate`,

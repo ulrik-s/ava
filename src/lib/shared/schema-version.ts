@@ -59,7 +59,7 @@ export function parseSchemaVersion(raw: unknown): number | undefined {
  *
  *   - saknas (`undefined`) → tolka som v1-baslinje (repon skapade före ADR:t) → OK
  *   - repo === kod         → OK
- *   - repo  <  kod         → OK (äldre rader läses via schemats `.passthrough()`)
+ *   - repo  <  kod         → OK (läses som de är, ingen uppgradering)
  *   - repo  >  kod         → kasta {@link IncompatibleSchemaVersionError}
  */
 export function assertRepoSchemaCompatible(
