@@ -6,8 +6,27 @@
 
 import { describe, expect, it } from "vitest-compat";
 import {
-  CURRENT_ROUNDING, kronorQuotient, roundingOf, roundRow, roundToKronor, shareOfRow, splitGross, timeRowOre, vatOnRow,
+  CURRENT_ROUNDING, kronorQuotient, roundingOf, roundRow, roundToKronor, shareOfRow, splitGross, timeEntryValueOre,
+  timeRowOre, vatOnRow,
 } from "@/lib/shared/billing/whole-kronor";
+
+describe("timeEntryValueOre", () => {
+  it("minuter × taxa, avrundat en gång", () => {
+    expect(timeEntryValueOre(60, 250_000)).toBe(250_000);
+    expect(timeEntryValueOre(90, 250_000)).toBe(375_000);
+  });
+
+  // Avrundning i mellansummor ackumulerar ören tills fakturan slutar stämma
+  // med sin egen specifikation. Därför avrundas EN gång, per post.
+  it("avrundar obekväma kvoter i stället för att tappa ören", () => {
+    expect(timeEntryValueOre(1, 100_000)).toBe(1_667); // 1/60 × 100 000
+    expect(timeEntryValueOre(7, 162_600)).toBe(18_970);
+  });
+
+  it("noll minuter ger noll", () => {
+    expect(timeEntryValueOre(0, 250_000)).toBe(0);
+  });
+});
 
 describe("roundToKronor — öresavrundning", () => {
   it.each([

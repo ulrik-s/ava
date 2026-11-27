@@ -17,8 +17,8 @@ import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { specCardTotals, specLineOre } from "@/lib/shared/billing/invoice-specification";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/billing/rattshjalp";
-import type { SettlementView } from "@/lib/shared/billing/settlement-view";
-import { roundingOf } from "@/lib/shared/billing/whole-kronor";
+import { invoiceBreakdown, type SettlementView } from "@/lib/shared/billing/settlement-view";
+import { roundingOf, timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
 import { formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
 import { INVOICE_STATUS_LABELS, type AmountRounding } from "@/lib/shared/schemas/enums";
@@ -34,7 +34,7 @@ import { LedgerBooking } from "./_ledger-booking";
 import { PaymentModal } from "./_payment-modal";
 import { PaymentsTable } from "./_payments-table";
 import { PlanModal } from "./_plan-modal";
-import { SendInvoiceModal, type SendInvoiceModalProps } from "./_send-invoice-modal";
+import { SendInvoiceModal } from "./_send-invoice-modal";
 import { WriteOffModal } from "./_write-off-modal";
 
 
@@ -168,8 +168,8 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
 /** Primär specifikation: slutregleringsfakturor (#876) visar den PERSISTERADE vyn
  *  (identisk med faktura-dokumentet), övriga fakturor den vanliga tids-/utläggsspecen. */
 function PrimarySpecCard({ inv }: { inv: Inv }) {
-  if (inv.settlementBreakdown) return <SettlementBreakdownCard view={inv.settlementBreakdown} />;
-  return <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} rounding={roundingOf(inv)} />;
+  const view = invoiceBreakdown(inv);
+  return view ? <SettlementBreakdownCard view={view} /> : <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} rounding={roundingOf(inv)} />;
 }
 
 /** Slutregleringens persisterade vy (#876): tidsspec-tabell + beloppstrappa + total,
@@ -267,7 +267,7 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
           invoiceType={inv.invoiceType}
           notes={inv.notes}
           amountRounding={roundingOf(inv)}
-          settlementBreakdown={(inv as { settlementBreakdown?: SendInvoiceModalProps["settlementBreakdown"] }).settlementBreakdown}
+          settlementBreakdown={invoiceBreakdown(inv)}
           matterNumber={inv.matter.matterNumber}
           matterTitle={inv.matter.title}
           onRecorded={() => {
@@ -429,7 +429,7 @@ type SpecExpenseRow = Inv["expenses"][number];
 function buildSettlement(inv: Inv, ledger: LedgerView): MatterSettlement {
   const times = inv.timeEntries ?? [];
   const exps = inv.expenses ?? [];
-  const arvodeOre = times.reduce((s, t) => s + Math.round((t.minutes / 60) * (t.hourlyRate ?? 0)), 0);
+  const arvodeOre = times.reduce((s, t) => s + timeEntryValueOre(t.minutes, t.hourlyRate ?? 0), 0);
   const utlaggOre = exps.reduce((s, e) => s + e.amount, 0);
   const m = inv.matter as { paymentMethod?: string | null; taxaHasFTax?: boolean | null } | null;
   const radgivningOre = m?.paymentMethod === "RATTSHJALP"

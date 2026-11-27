@@ -10,6 +10,7 @@ import { coverageEntryRateOre } from "@/lib/shared/billing/brottmalstaxa";
 import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/billing/rattshjalp";
 import type { SettlementViewLine } from "@/lib/shared/billing/settlement-view";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { kindLabel } from "@/lib/shared/document-kind";
 import { AVA_NAMESPACE, uuidv5 } from "@/lib/shared/uuid-derive";
 import { demoPaymentPlanId } from "../../scripts/demo-billing-ids";
@@ -74,7 +75,7 @@ async function hTime(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimStat
   });
   ctx.res.timeEntries++;
   if (isBillable(e)) {
-    const amountOre = Math.round((e.minutes / 60) * rateOre);
+    const amountOre = timeEntryValueOre(e.minutes, rateOre);
     st.accruedNetOre += amountOre;
     st.periodLines.push({ date: iso.slice(0, 10), description: e.description, minutes: e.minutes, amountOre, kind: e.entryKind });
     await maybeAcconto(ctx, m, iso, st); // #885: skicka aconto när klientens andel nått tröskeln

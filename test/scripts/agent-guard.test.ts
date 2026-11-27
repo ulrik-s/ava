@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
 import {
-  AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, guardViolations, type GuardInput, humanApproved, rankInLast24h, trustedLabels,
+  AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, FILE_SIZE_BASELINE, ROUTER_SIZE_BASELINE, guardViolations, type GuardInput, humanApproved, rankInLast24h, trustedLabels,
 } from "../../tooling/scripts/agent-guard";
 
 const BASE: GuardInput = { labels: ["agent-pr", "granskad"], files: ["src/app/matters/page.tsx"], addedMigrationLines: [], agentPrsLast24h: 1 };
@@ -153,6 +153,22 @@ describe("filstorleksbaslinjen", () => {
   it("rader i andra filer räknas inte; ingen ändring alls är strängt nog", () => {
     expect(baselineDiffTightens(["+++ b/src/x.ts", '+  "src/a.ts": 999,'].join("\n"))).toBe(true);
     expect(baselineDiffTightens("")).toBe(true);
+  });
+
+  it("routerbaslinjen (#2176) har samma undantag: bara skärpning släpps igenom", () => {
+    const router = (body: string[]) => [`--- a/${ROUTER_SIZE_BASELINE}`, `+++ b/${ROUTER_SIZE_BASELINE}`, ...body].join("\n");
+    expect(baselineDiffTightens(router(['-  "src/lib/server/routers/a.ts": 300,', '+  "src/lib/server/routers/a.ts": 280,']))).toBe(true);
+    expect(baselineDiffTightens(router(['+  "src/lib/server/routers/ny.ts": 260,']))).toBe(false);
+    expect(guardViolations({ ...BASE, files: [ROUTER_SIZE_BASELINE], baselineOnlyTightens: true })).toEqual([]);
+    expect(guardViolations({ ...BASE, files: [ROUTER_SIZE_BASELINE], baselineOnlyTightens: false })).toEqual([expect.stringContaining(ROUTER_SIZE_BASELINE)]);
+  });
+
+  it("en uppluckrad baslinje fäller hela diffen, även när den andra skärps", () => {
+    const both = [
+      `--- a/${FILE_SIZE_BASELINE}`, `+++ b/${FILE_SIZE_BASELINE}`, '-  "src/a.ts": 520,', '+  "src/a.ts": 480,',
+      `--- a/${ROUTER_SIZE_BASELINE}`, `+++ b/${ROUTER_SIZE_BASELINE}`, '+  "src/lib/server/routers/ny.ts": 260,',
+    ].join("\n");
+    expect(baselineDiffTightens(both)).toBe(false);
   });
 
   it("spärrskriptet själv är skyddat", () => {

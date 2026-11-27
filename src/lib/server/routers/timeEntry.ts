@@ -1,117 +1,23 @@
 import { z } from "zod";
-import { isPerDayKind } from "@/lib/shared/billing/brottmalstaxa";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { ReportSubject } from "@/lib/shared/report-subject";
 import { type TimeEntry } from "@/lib/shared/schemas/billing";
 import { isoDayInput } from "@/lib/shared/schemas/common";
-import { timeEntryKindSchema, type TimeEntryKind } from "@/lib/shared/schemas/enums";
-import {
-  asId,
-  matterIdSchema,
-  userIdSchema,
-  timeEntryIdSchema,
-  invoiceIdSchema,
-  type MatterId,
-  type OrganizationId,
-  type TimeEntryId,
-} from "@/lib/shared/schemas/ids";
+import { timeEntryKindSchema } from "@/lib/shared/schemas/enums";
+import { asId, matterIdSchema, userIdSchema, timeEntryIdSchema, invoiceIdSchema } from "@/lib/shared/schemas/ids";
 import { stockholmPeriod } from "@/lib/shared/stockholm-time";
 import { buildTimeChart } from "@/lib/shared/time-chart";
-import { isLockedEntry, type LockableEntry } from "@/lib/shared/time-entry-lock";
 import { isAllowedMinutes, TIME_NOT_ALLOWED_MESSAGE } from "@/lib/shared/time-hours";
 import { requireMatterInOrg, requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
 import { loadRadgivningStatus, markEntryAsRadgivning, type MarkRadgivningCall } from "../billing/radgivning-entry";
-import { entryRateOre } from "../billing/time-entry-rate";
 import { emit } from "../events/emit";
 import { callTime, newRowId } from "../queued-call";
 import { loadPeriodWork } from "../reports/period-work";
+import { assertEditable, assertMinutes, rateOnCreate, rateOnKindChange } from "../time-entries/entry-rules";
+import { moveEntries } from "../time-entries/move-entries";
+import { loadTimeReport } from "../time-entries/time-report";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
-import type { Context } from "../trpc-core";
-
-/**
- * En låst post (`isLockedEntry`: fakturerad eller fryst av en slutfaktura eller
- * kostnadsräkning, #1862/#1863) får varken ändras eller tas bort: det fakturerade
- * eller till domstolen redovisade underlaget hade annars inte längre stämt med
- * posterna. Samma regel och lydelse som utläggsroutern. Aconto låser inte — de
- * posterna är fortfarande redigerbara.
- */
-function assertEditable(entry: LockableEntry): void {
-  if (isLockedEntry(entry)) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Tidposten ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort.",
-    });
-  }
-}
-
-/** Vad `minutes`-regeln behöver veta om posten. */
-interface EntryShape {
-  minutes?: number | undefined;
-  kind?: TimeEntryKind | null | undefined;
-  date?: string | undefined;
-}
-
-/**
- * Noll minuter är bara meningsfullt för per-dygns-kategorier (#950). Zod kan
- * inte uttrycka beroendet mellan två fält lika läsbart som en guard, och
- * felmeddelandet ska säga VILKEN kategori som gäller — inte bara "≥ 1".
- */
-function assertMinutes(input: EntryShape): void {
-  if ((input.minutes ?? 0) > 0 || isPerDayKind(input.kind)) return;
-  throw new TRPCError({
-    code: "BAD_REQUEST",
-    message: "Tidsposten måste ha minst en minut. Noll minuter används bara för advokatberedskap, som ersätts per dag.",
-  });
-}
-
-/**
- * Nytt á-pris när kategorin byts (#1206) — en post som går från timarvode till
- * tidsspillan ska debiteras som tidsspillan. Oförändrad eller utelämnad
- * kategori rör inte priset (en prisändring på byrå/jurist/ärende gäller bara ny tid).
- */
-async function rateOnKindChange(
-  repos: Context["repos"], orgId: OrganizationId, owned: TimeEntry, kind: TimeEntryKind | undefined,
-): Promise<number | undefined> {
-  if (kind === undefined || kind === (owned.kind ?? "ARBETE")) return undefined;
-  return rateFor(repos, orgId, owned, { kind, matterId: owned.matterId });
-}
-
-/** Postens á-pris med en ny kategori eller ett nytt ärende, med postens jurists priser. */
-async function rateFor(
-  repos: Context["repos"], orgId: OrganizationId, owned: TimeEntry,
-  change: { kind: TimeEntryKind | null | undefined; matterId: MatterId },
-): Promise<number> {
-  const user = await repos.users.getByIdInOrg(owned.userId, orgId);
-  return entryRateOre(repos, orgId, { kind: change.kind, date: owned.date, matterId: change.matterId, userRates: user?.hourlyRates });
-}
-
-/** Posterna som ska flyttas, var och en i byrån och olåst — annars vägras hela anropet. */
-async function loadMovable(repos: Context["repos"], orgId: OrganizationId, ids: TimeEntryId[]): Promise<TimeEntry[]> {
-  const entries = await Promise.all(ids.map((id) => repos.timeEntries.getByIdInOrg(id, orgId)));
-  return entries.map((entry) => {
-    if (!entry) throw new TRPCError({ code: "NOT_FOUND" });
-    assertEditable(entry);
-    return entry;
-  });
-}
-
-/**
- * Flyttar posterna till `matterId` (#2042) med målärendets á-pris, som om de
- * registrerats där. Alla prövas innan någon skrivs (allt eller inget). En post
- * som redan ligger i målärendet lämnas orörd. Ger posterna som flyttades, som
- * de såg ut före flytten (deras `matterId` är ärendet de kom från).
- */
-async function moveEntries(
-  repos: Context["repos"], orgId: OrganizationId, ids: TimeEntryId[], matterId: MatterId,
-): Promise<TimeEntry[]> {
-  const moving = (await loadMovable(repos, orgId, ids)).filter((entry) => entry.matterId !== matterId);
-  for (const entry of moving) {
-    const hourlyRate = await rateFor(repos, orgId, entry, { kind: entry.kind, matterId });
-    await repos.timeEntries.update(entry.id, { matterId, hourlyRate });
-  }
-  return moving;
-}
 
 export const timeEntryRouter = router({
   list: protectedProcedure
@@ -200,10 +106,7 @@ export const timeEntryRouter = router({
       await requireMatterInOrg(ctx, input.matterId);
       const userId = input.userId ?? ctx.user.id;
       const user = await requireUserInOrg(ctx, userId);
-      // Explicit á-pris i input (setup-väg) vinner, utom för beredskap.
-      const rate = input.hourlyRate !== undefined && !isPerDayKind(input.kind)
-        ? input.hourlyRate
-        : await entryRateOre(ctx.repos, ctx.orgId, { ...input, userRates: user.hourlyRates });
+      const rate = await rateOnCreate(ctx.repos, ctx.orgId, { ...input, userRates: user.hourlyRates }, input.hourlyRate);
 
       const entry = await ctx.repos.timeEntries.create(omitUndefined({
         id: input.id, // undefined → store genererar
@@ -331,27 +234,12 @@ export const timeEntryRouter = router({
       })
     )
     // Migrerad till repository-sömmen (ADR 0020): listForReport (jurist + ärende
-    // inkl. KLIENT-kontakt). Grupperingen per jurist bor kvar i routern.
-    .query(async ({ ctx, input }) => {
-      const entries = await ctx.repos.timeEntries.listForReport(ctx.user.organizationId, {
-        from: new Date(input.from),
-        to: new Date(input.to),
-        userId: input.userId,
-        userIds: input.userIds,
-        matterId: input.matterId,
-      });
-
-      // Group by user
-      const byUser: Record<string, { name: string; totalMinutes: number; billableMinutes: number; entries: typeof entries }> = {};
-      for (const entry of entries) {
-        const bucket = byUser[entry.userId] ??= {
-          name: entry.user.name, totalMinutes: 0, billableMinutes: 0, entries: [],
-        };
-        bucket.totalMinutes += entry.minutes;
-        if (entry.billable) bucket.billableMinutes += entry.minutes;
-        bucket.entries.push(entry);
-      }
-
-      return { byUser, totalEntries: entries.length };
-    }),
+    // inkl. KLIENT-kontakt). Grupperingen per jurist: `loadTimeReport`.
+    .query(({ ctx, input }) => loadTimeReport(ctx.repos, ctx.user.organizationId, {
+      from: new Date(input.from),
+      to: new Date(input.to),
+      userId: input.userId,
+      userIds: input.userIds,
+      matterId: input.matterId,
+    })),
 });

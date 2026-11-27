@@ -39,6 +39,7 @@
 
 import type { TimeEntryKind } from "../schemas/enums";
 import { stockholmDay, stockholmYear } from "../stockholm-time";
+import { timeEntryValueOre } from "./whole-kronor";
 
 export type TaxaLevel = 1 | 2 | 3 | 4;
 
@@ -193,14 +194,12 @@ export interface CoverageEntryLike {
 /**
  * Värdet (öre, netto) av EN post i ett täckningsärende, på normerna som gäller
  * `date` — postens eget datum när den registreras, slutregleringsdatumet när
- * arbetet värderas om retroaktivt (#891).
- *
- * Den ENDA vägen att värdera en tidspost: per-dygns-kategorier har ingen
- * timnorm, så `minuter × norm` ger noll för dem.
+ * arbetet värderas om retroaktivt (#891). Den ENDA vägen att värdera en
+ * tidspost: per-dygns-kategorier har ingen timnorm, så `minuter × norm` ger noll.
  */
 export function coverageEntryValueOre(entry: CoverageEntryLike, date: Date | string): number {
   if (isPerDayKind(entry.kind)) return advokatberedskapFtaxForDate(date);
-  return Math.round((entry.minutes / 60) * coverageEntryRateOre(entry.kind, date));
+  return timeEntryValueOre(entry.minutes, coverageEntryRateOre(entry.kind, date));
 }
 
 /** Dagnyckel (YYYY-MM-DD, svensk dag #1677) — jämförelsen i § 2 gäller DAG, inte tidpunkt. */

@@ -12,6 +12,7 @@
  */
 
 import { z } from "zod";
+import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
@@ -90,7 +91,7 @@ function unbilledInput(matters: readonly MatterRow[], entries: readonly EntryRow
     const matterId = String(e.matterId);
     if (!known.has(matterId)) continue;
     const cur = acc.get(matterId) ?? { ore: 0, oldest: null };
-    cur.ore += Math.round((e.minutes / 60) * e.hourlyRate);
+    cur.ore += timeEntryValueOre(e.minutes, e.hourlyRate);
     const d = isoDate(e.date);
     if (d !== null && (cur.oldest === null || d < cur.oldest)) cur.oldest = d;
     acc.set(matterId, cur);

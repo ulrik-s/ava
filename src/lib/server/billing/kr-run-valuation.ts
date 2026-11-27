@@ -183,11 +183,22 @@ function forordnandeValuation(
 /**
  * Körningens anteckning (#1857): i ett förordnandemål sparas avslutet där, så
  * att det syns i efterhand ("Förordnandetaxa – förundersökningen lades ned").
+ * Sedan #2180 står avslutet också i kolumnen (`krRunForordnandeAvslut`); raden
+ * här skrivs kvar tills ett senare contract-steg, och migration 0054 läser den.
  */
 export function krRunNotes(notes: string | null | undefined, input: KrRunTaxaInput): string | null | undefined {
   if (!input.forordnande) return notes;
   const avslut = `Förordnandetaxa – ${FORORDNANDE_AVSLUT_LABELS[input.forordnande.avslut].toLowerCase()}`;
   return notes ? `${notes}\n${avslut}` : avslut;
+}
+
+/**
+ * Körningens typade avslut (#2180): förordnandemålets avslut, som också står i
+ * anteckningen (`krRunNotes`), så att det går att fråga på. Null utanför
+ * förordnandetaxan.
+ */
+export function krRunForordnandeAvslut(input: KrRunTaxaInput): ForordnandeAvslut | null {
+  return input.forordnande?.avslut ?? null;
 }
 
 /** Det lagrade yrkandet: värderingens belopp, eller normvägens (routern räknar). */

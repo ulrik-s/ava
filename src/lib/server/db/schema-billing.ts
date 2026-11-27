@@ -9,8 +9,8 @@ import type { KostnadsrakningStatus } from "@/lib/shared/billing/kostnadsrakning
 import type { SettlementView } from "@/lib/shared/billing/settlement-view";
 import type { DispatchChannel, DispatchStatus, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
 import type {
-  AmountRounding, BillingRunRecipient, BillingRunStatus, BillingRunType, ExpenseKind, InvoiceStatus, InvoiceType,
-  PaymentPlanStatus, ReminderType, TimeEntryKind,
+  AmountRounding, BillingRunRecipient, BillingRunStatus, BillingRunType, ExpenseKind, ForordnandeAvslut, InvoiceStatus,
+  InvoiceType, PaymentPlanStatus, ReminderType, TimeEntryKind,
 } from "@/lib/shared/schemas/enums";
 import type {
   AccontoDeductionId, BillingRunId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterId, PaymentId, PaymentPlanId,
@@ -76,6 +76,8 @@ export const invoices = pgTable("invoices", {
   vatBreakdown: jsonb("vat_breakdown").$type<Array<{ kind: "arvode" | "utlagg"; vatRate: number; netOre: number; vatOre: number }>>(),
   // Persisterad slutregleringsvy (#876) — EN källa för faktura-dokument + Slutfaktura-sida.
   settlementBreakdown: jsonb("settlement_breakdown").$type<SettlementView>(),
+  // Acontofakturans nedbrytning (#2147), egen kolumn sedan migration 0054 (#2180).
+  accontoBreakdown: jsonb("acconto_breakdown").$type<SettlementView>(),
   status: text("status").notNull().default("DRAFT").$type<InvoiceStatus>(),
   invoiceType: text("invoice_type").notNull().default("STANDARD").$type<InvoiceType>(),
   invoiceNumber: text("invoice_number"),
@@ -192,6 +194,8 @@ export const billingRuns = pgTable("billing_runs", {
   periodFrom: timestamp("period_from", { withTimezone: true }),
   periodTo: timestamp("period_to", { withTimezone: true }),
   notes: text("notes"),
+  /** Förundersökningens avslut i ett förordnandemål (#2180, migration 0054). */
+  forordnandeAvslut: text("forordnande_avslut").$type<ForordnandeAvslut>(),
 }, (t) => [index("billing_runs_matter_idx").on(t.matterId)]);
 
 /**

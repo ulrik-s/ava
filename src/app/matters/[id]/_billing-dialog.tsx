@@ -20,6 +20,7 @@ import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/genera
 import { trpc } from "@/lib/client/trpc";
 import { DEFAULT_ACCONTO_SHARE_BIPS, proposedAccontoOre } from "@/lib/shared/billing/billing-proposal";
 import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
+import { invoiceBreakdown } from "@/lib/shared/billing/settlement-view";
 import { roundToKronor } from "@/lib/shared/billing/whole-kronor";
 import { toIsoDate } from "@/lib/shared/iso-date";
 import { formatKr } from "@/lib/shared/kr-format";
@@ -82,7 +83,9 @@ function recipientLabel(recipient: string, clientName?: string): string {
  * Fakturans sparade nedbrytning (acontot, #1940) följer med som på fakturasidan
  * (#1941); en faktura utan nedbrytning får samma dokument som förut.
  */
-type DocInvoice = FakturaDocInvoice & { settlementBreakdown?: FakturaBreakdown | null | undefined };
+type DocInvoice = FakturaDocInvoice & {
+  accontoBreakdown?: FakturaBreakdown | null | undefined; settlementBreakdown?: FakturaBreakdown | null | undefined;
+};
 
 function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: DocInvoice, recipient: string) => Promise<void> {
   const register = trpc.document.register.useMutation();
@@ -92,7 +95,7 @@ function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: DocInvo
     try {
       const spec = await utils.billingRun.invoiceSpecification.fetch({ matterId, invoiceId: invoice.id });
       await generateFakturaFromTemplate({
-        invoice, matterId, recipient, meta: docMeta, register, utils, spec, breakdown: invoice.settlementBreakdown,
+        invoice, matterId, recipient, meta: docMeta, register, utils, spec, breakdown: invoiceBreakdown(invoice),
       });
     } catch (e) { console.warn("[billing] faktura-dokument misslyckades:", e); }
   };

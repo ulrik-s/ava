@@ -15,7 +15,7 @@ import {
   arvodeLine, arvodeNetOre, entryOwnValueOre,
   expenseGrossOre, expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown,
   krGrossOre, matterKrArvodeRows, minutesByKind, netOreOf, settlementArvodeNet, sumKindValueOre,
-  timeEntryValueOre, vatOreOf, workValueOre, type UnfrozenWork,
+  vatOreOf, workValueOre, type UnfrozenWork,
 } from "@/lib/shared/billing/billing-work-value";
 import { asId } from "@/lib/shared/schemas/ids";
 
@@ -28,24 +28,6 @@ const ex = (o: Partial<UnfrozenWork["expenses"][number]> = {}): UnfrozenWork["ex
 });
 const work = (t: UnfrozenWork["timeEntries"] = [], e: UnfrozenWork["expenses"] = []): UnfrozenWork =>
   ({ timeEntries: t, expenses: e });
-
-describe("timeEntryValueOre", () => {
-  it("minuter × taxa, avrundat en gång", () => {
-    expect(timeEntryValueOre(60, 250_000)).toBe(250_000);
-    expect(timeEntryValueOre(90, 250_000)).toBe(375_000);
-  });
-
-  // Avrundning i mellansummor ackumulerar ören tills fakturan slutar stämma
-  // med sin egen specifikation. Därför avrundas EN gång, per post.
-  it("avrundar obekväma kvoter i stället för att tappa ören", () => {
-    expect(timeEntryValueOre(1, 100_000)).toBe(1_667); // 1/60 × 100 000
-    expect(timeEntryValueOre(7, 162_600)).toBe(18_970);
-  });
-
-  it("noll minuter ger noll", () => {
-    expect(timeEntryValueOre(0, 250_000)).toBe(0);
-  });
-});
 
 describe("entryOwnValueOre", () => {
   it("vanlig post värderas på sin egen taxa", () => {

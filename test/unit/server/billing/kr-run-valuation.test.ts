@@ -4,7 +4,7 @@
  * grenar som avgör VÄGEN.
  */
 import { describe, expect, it } from "vitest-compat";
-import { krRunGrossOre, krRunNotes, valueKrRun, type KrRunMatter } from "@/lib/server/billing/kr-run-valuation";
+import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, valueKrRun, type KrRunMatter } from "@/lib/server/billing/kr-run-valuation";
 import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
 import { kostnadsrakningClaimInclVat } from "@/lib/shared/billing/kostnadsrakning";
 
@@ -138,6 +138,13 @@ describe("krRunNotes", () => {
   it("förordnande → avslutet sparas i anteckningen", () => {
     expect(krRunNotes(null, { forordnande: { avslut: "NEDLAGD" } })).toBe("Förordnandetaxa – förundersökningen lades ned");
     expect(krRunNotes("Egen", { forordnande: { avslut: "STRAFFORELAGGANDE" } })).toBe("Egen\nFörordnandetaxa – strafföreläggande godkändes");
+  });
+});
+
+describe("krRunForordnandeAvslut (#2180)", () => {
+  it("förordnande → avslutet; annars null", () => {
+    expect(krRunForordnandeAvslut({ forordnande: { avslut: "INGET_ATAL" } })).toBe("INGET_ATAL");
+    expect(krRunForordnandeAvslut({})).toBeNull();
   });
 });
 

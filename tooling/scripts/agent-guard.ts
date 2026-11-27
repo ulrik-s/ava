@@ -22,6 +22,7 @@
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
+import { BASELINE_PATH, ROUTER_BASELINE_PATH } from "./file-size-ratchet";
 import { destructiveStatements } from "./lib/migration-kind";
 
 export const AGENT_PR_PER_DAY = 30;
@@ -67,7 +68,7 @@ export interface GuardInput {
   addedMigrationLines: readonly string[];
   /** Agent-PR:er skapade de senaste 24 h fram till och med den här. */
   agentPrsLast24h: number;
-  /** Ändrar PR:en filstorleksbaslinjen bara åt det strängare hållet? */
+  /** Ändrar PR:en storleksbaslinjerna bara åt det strängare hållet? */
   baselineOnlyTightens?: boolean;
 }
 
@@ -77,10 +78,16 @@ export interface GuardInput {
  * bara åt det strängare hållet (lägre radantal, borttagna rader). Aldrig nya
  * filer, aldrig högre.
  */
-export const FILE_SIZE_BASELINE = "tooling/config/file-size-baseline.json";
+export const FILE_SIZE_BASELINE = BASELINE_PATH;
+
+/** Routertakets baslinje (#2176) — samma regel som filstorleksbaslinjen. */
+export const ROUTER_SIZE_BASELINE = ROUTER_BASELINE_PATH;
+
+/** Baslinjerna en agent-PR får skärpa (men aldrig luckra upp). */
+const SIZE_BASELINES: readonly string[] = [FILE_SIZE_BASELINE, ROUTER_SIZE_BASELINE];
 
 function isProtectedChange(file: string, input: GuardInput): boolean {
-  if (file === FILE_SIZE_BASELINE && input.baselineOnlyTightens === true) return false;
+  if (SIZE_BASELINES.includes(file) && input.baselineOnlyTightens === true) return false;
   return PROTECTED_PATHS.some((p) => p.test(file));
 }
 
@@ -105,11 +112,16 @@ function baselineEntries(lines: readonly string[], sign: "+" | "-"): Map<string,
   }));
 }
 
-/** Ändrar diffen baslinjen bara åt det strängare hållet? (Ingen ändring = sant.) */
-export function baselineDiffTightens(diff: string): boolean {
-  const lines = diffLinesOf(diff, FILE_SIZE_BASELINE);
+/** Ändrar diffen just den här baslinjen bara åt det strängare hållet? */
+function fileDiffTightens(diff: string, file: string): boolean {
+  const lines = diffLinesOf(diff, file);
   const removed = baselineEntries(lines, "-");
   return [...baselineEntries(lines, "+")].every(([path, n]) => (removed.get(path) ?? -1) >= n);
+}
+
+/** Ändrar diffen storleksbaslinjerna bara åt det strängare hållet? (Ingen ändring = sant.) */
+export function baselineDiffTightens(diff: string): boolean {
+  return SIZE_BASELINES.every((file) => fileDiffTightens(diff, file));
 }
 
 const DAY_MS = 24 * 3_600_000;

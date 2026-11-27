@@ -7,11 +7,10 @@
  */
 
 import type { AmountRounding, PaymentMethod, TimeEntryKind } from "../schemas/enums";
-import { timeEntryValueOre } from "./billing-work-value";
 import { coverageEntryRateOre } from "./brottmalstaxa";
 import { CHARGED_EXPENSE_VAT_RATE, chargedExpenseLines, type ChargeableExpense } from "./expense-vat";
 import { ARVODE_VAT_BIPS } from "./invoice-calc";
-import { timeRowOre, vatOnRow } from "./whole-kronor";
+import { timeEntryValueOre, timeRowOre, vatOnRow } from "./whole-kronor";
 
 /** En rad i fakturans tidsspecifikation (belopp = timmar × gällande timarvode). */
 export interface SpecTimeLine {
