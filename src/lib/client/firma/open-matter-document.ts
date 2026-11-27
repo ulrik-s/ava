@@ -14,7 +14,7 @@
  * FSA-lokal kopia (nyligen uppladdad) provas före nätet i båda lägena.
  */
 
-import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
+import { DEMO_REPO, loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { asId } from "@/lib/shared/schemas/ids";
 
 export type OpenableDoc = { id: string; storagePath?: string | null; fileName?: string };
@@ -48,7 +48,7 @@ export async function openMatterDocument(doc: OpenableDoc, page?: number): Promi
     doc,
     ...(page ? { page } : {}),
     isDemo,
-    ...(process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ? { demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO } : {}),
+    demoRepo: DEMO_REPO,
     loadHandle: () => loadHandle("repo-root"),
     readFromHandle: readFromFsa,
     ...(fetchBlob ? { fetchBlob } : {}),

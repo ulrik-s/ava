@@ -4,7 +4,7 @@ import { Trash2 } from "lucide-react";
 import { Fragment, useState } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
-import { isDemoTier } from "@/lib/client/firma/firma-config";
+import { DEMO_REPO, isDemoTier } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import { DocumentDetailsDialog } from "./_document-details-dialog";
@@ -147,7 +147,7 @@ export function DocumentRow({
  *  tiern är demo (#1913); self-hosted öppnar via servern och ignorerar dem.
  *  Utbruten ur DocumentActions så repo-parsningen bor i en egen funktion. */
 function buildDocHrefs(doc: DocumentRecord): { viewHref: string; downloadHref: string } {
-  const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
+  const repo = DEMO_REPO;
   const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
   const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
   const rec = doc as DocumentRecord & { storagePath?: string };
