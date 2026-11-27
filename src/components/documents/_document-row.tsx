@@ -13,7 +13,7 @@ import type { DocumentPartView } from "./_document-parts";
 import { MailDocumentDialog } from "./_mail-document-dialog";
 import type { SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
-import { documentMoveDisabledReason, MoveDocumentsDialog } from "./move-documents-dialog";
+import { documentMoveDisabledReason, MoveDocumentsDialog, UPLOADING_TITLE } from "./move-documents-dialog";
 import { useLeaseAwareOpen } from "./use-lease-aware-open";
 import { useOffice365Configured } from "./use-office365-configured";
 
@@ -255,7 +255,7 @@ export function DocumentActions({
   };
 
   const isDisabled = !!disabled;
-  const uploadingTitle = isDisabled ? "Vänta tills uppladdningen är klar" : undefined;
+  const uploadingTitle = isDisabled ? UPLOADING_TITLE : undefined;
   const { llm } = useCapabilities();
   const [editing, setEditing] = useState(false);
   const mail = useOffice365Configured();

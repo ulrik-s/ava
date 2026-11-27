@@ -16,8 +16,8 @@ import { documentMoveBlock, type MovableDocumentFields } from "@/lib/shared/docu
 import type { DocumentFolderId, DocumentId, MatterId } from "@/lib/shared/schemas/ids";
 import { FolderSelect } from "./folder-select";
 
-/** Titeln medan dokumentet laddas upp (samma som dokumentmenyns övriga rader). */
-const UPLOADING = "Vänta tills uppladdningen är klar";
+/** Titeln på dokumentmenyns rader medan dokumentet laddas upp. */
+export const UPLOADING_TITLE = "Vänta tills uppladdningen är klar";
 
 /**
  * Varför dokumentet inte kan flyttas just nu, eller `null` om det kan det:
@@ -25,7 +25,7 @@ const UPLOADING = "Vänta tills uppladdningen är klar";
  * dokument som laddas upp.
  */
 export function documentMoveDisabledReason(doc: MovableDocumentFields, isUploading: boolean): string | null {
-  return isUploading ? UPLOADING : documentMoveBlock(doc);
+  return isUploading ? UPLOADING_TITLE : documentMoveBlock(doc);
 }
 
 interface Props {

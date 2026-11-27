@@ -7,7 +7,8 @@
  * inte en länk till dokumentet.
  */
 import type { Page } from "@playwright/test";
-import { DEMO_BASE_URL as BASE, type DemoSeed, fetchDemoSeed, matterWithKrStatus, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
+import { z } from "zod";
+import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterWithKrStatus, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
 test("KR som väntar på dom: inget självupptäckt fel, och referensen öppnar dokumentet", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
@@ -134,11 +135,15 @@ test("dokumentträdet: cellerna i mapp- och dokumentrader börjar längst upp", 
   }
 });
 
-/** Demons mappar ur seeden (#2045); `DemoSeed` tar inte med dem. */
-async function fetchDocumentFolders(page: Page): Promise<Array<{ matterId: string; name: string; parentId: string | null }>> {
+/** Det ur seeden som `DemoSeed` inte tar med (#2045): mapparna och dokumentens faktura. */
+const moveSeedSchema = z.object({
+  documentFolders: z.array(z.object({ matterId: z.string(), name: z.string(), parentId: z.string().nullable() })).default([]),
+  documents: z.array(z.object({ id: z.string(), invoiceId: z.string().nullish() })),
+});
+
+async function fetchMoveSeed(page: Page): Promise<z.output<typeof moveSeedSchema>> {
   const res = await page.request.get(`${BASE}/demo-seed.json`);
-  const body: { documentFolders?: Array<{ matterId: string; name: string; parentId: string | null }> } = await res.json();
-  return body.documentFolders ?? [];
+  return moveSeedSchema.parse(await res.json());
 }
 
 // #2045: ett dokument flyttas till en mapp i ett annat ärende med dokumentmenyns
@@ -149,10 +154,11 @@ test("Flytta till ärende… flyttar dokumentet till en mapp i ett annat ärende
   await seedDemoLogin(page, BASE);
   const seed = await fetchDemoSeed(page, BASE);
   const from = matterWithKrStatus(seed, "INSKICKAD");
-  const docs = seed.documents as Array<DemoSeed["documents"][number] & { invoiceId?: string | null }>;
-  const folders = await fetchDocumentFolders(page);
+  const docs = seed.documents;
+  const { documentFolders: folders, documents: withInvoice } = await fetchMoveSeed(page);
+  const invoiced = new Set(withInvoice.filter((d) => d.invoiceId).map((d) => d.id));
   const hasTitle = (matterId: string, title: string) => docs.some((d) => d.matterId === matterId && d.title === title);
-  const movable = docs.filter((d) => d.matterId === from && !d.billingRunId && !d.invoiceId);
+  const movable = docs.filter((d) => d.matterId === from && !d.billingRunId && !invoiced.has(d.id));
   // Målet: ett aktivt ärende med mappen Korrespondens överst och inget dokument med samma titel.
   const pick = movable.flatMap((d) => seed.matters
     .filter((m) => m.id !== from && m.status === "ACTIVE" && !hasTitle(m.id, d.title)
