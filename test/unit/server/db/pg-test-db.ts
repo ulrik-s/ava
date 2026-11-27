@@ -18,6 +18,7 @@ import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "@/lib/server/db/schema";
+import { SWEDISH_COLLATION } from "@/lib/server/db/swedish-order";
 import type { AppDb } from "@/lib/server/db/types";
 import { uuidv7 } from "@/lib/shared/uuid";
 
@@ -44,9 +45,17 @@ function migrationSql(): string[] {
     .map((f) => readFileSync(`${MIGRATIONS_DIR}/${f}`, "utf8"));
 }
 
+/**
+ * pglite saknar ICU-data, och därmed `sv-x-icu` (#1917). En ersättare med samma
+ * namn (byteordning, C) låter pglite köra samma SQL som Postgres; scenarier som
+ * kräver svensk ordning körs därför bara mot minnesrepot och riktig Postgres.
+ */
+const PGLITE_SWEDISH_COLLATION_STANDIN = `CREATE COLLATION "${SWEDISH_COLLATION}" FROM "C"`;
+
 async function createPgliteTestDb(): Promise<TestDbHandle> {
   const client = new PGlite();
   const db = drizzlePglite(client, { schema });
+  await client.exec(PGLITE_SWEDISH_COLLATION_STANDIN);
   for (const sql of migrationSql()) await client.exec(sql);
   return { db: db, close: () => client.close() };
 }

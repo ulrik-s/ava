@@ -28,7 +28,9 @@ import { asId, type MatterId, type OrganizationId, type UserId } from "@/lib/sha
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { type KnownDeviation, ratchetDiff } from "../../../../tooling/scripts/ratchet";
-import { DRIZZLE_NAME, type OpenRepos, openDrizzleRepos, openInMemoryRepos } from "./contract-backends";
+import {
+  DRIZZLE_HAS_SWEDISH_COLLATION, DRIZZLE_NAME, type OpenRepos, openDrizzleRepos, openInMemoryRepos,
+} from "./contract-backends";
 
 type BackendKind = "in-memory" | "drizzle";
 
@@ -36,28 +38,39 @@ interface Backend {
   readonly kind: BackendKind;
   readonly name: string;
   readonly open: () => Promise<OpenRepos>;
+  /** Saknar svensk ordning i databasen (pglite, #1917): flaggade scenarier hoppas över. */
+  readonly lacksSwedishCollation?: boolean;
 }
 
 const BACKENDS: readonly Backend[] = [
   { kind: "in-memory", name: "in-memory", open: () => Promise.resolve(openInMemoryRepos()) },
-  { kind: "drizzle", name: DRIZZLE_NAME, open: () => openDrizzleRepos() },
+  { kind: "drizzle", name: DRIZZLE_NAME, open: () => openDrizzleRepos(), lacksSwedishCollation: !DRIZZLE_HAS_SWEDISH_COLLATION },
 ];
 
 /** Ett scenario svarar med en beskrivning av skillnaden, eller `null` när backenden gör rätt. */
 interface Scenario {
   readonly name: string;
   readonly run: (repos: Repositories) => Promise<string | null>;
+  /** Kräver svensk ordning i databasen (#1917); körs inte mot en backend utan den. */
+  readonly needsSwedishCollation?: boolean;
+}
+
+/** Körs scenariot mot backenden? Ett flaggat scenario hoppas över utan svensk ordning, som `itPg`. */
+function applies(backend: Backend, scenario: Scenario): boolean {
+  return !(scenario.needsSwedishCollation && backend.lacksSwedishCollation);
 }
 
 /** Kända avvikelser: `backend: scenario`. */
 const KNOWN: Readonly<Record<string, KnownDeviation>> = {
-  "drizzle: kontakter sorteras på namn i svensk ordning": {
-    why: "Postgres sorterar i databasens kollation: C/byteordning i pglite och Alpine-imagen (Ä före Å, gemener efter Ö). Svensk ordning kräver en ICU-kollation, som pglite saknar.",
+  "in-memory: kontaktpersoner sorteras på namn i svensk ordning": {
+    why: "Minnesrepot tillämpar inte `orderBy` i en `include` (read-only-delegate, resolveRelation): kontaktpersonerna kommer i skapad ordning. Drizzle sorterar dem i svensk ordning (#1917). Uppföljning: Intag: ava-feedback#147.",
     issue: 1698,
   },
 };
 
 const SWEDISH = new Intl.Collator("sv");
+/** Namn där byteordning och svensk ordning skiljer sig (Å/Ä/Ö, versaler och gemener). */
+const SWEDISH_NAMES: readonly string[] = ["Örjan", "Åsa", "ärla", "Bertil", "anna", "Adam", "Zelda"];
 const swedish = (a: string, b: string): number => SWEDISH.compare(a, b);
 const day = (iso: string): Date => new Date(`${iso}T08:00:00.000Z`);
 const newOrg = (): OrganizationId => asId<"OrganizationId">(uuidv7());
@@ -144,12 +157,23 @@ const forEveryKind = (value: unknown): Record<string, unknown> => Object.fromEnt
 const SCENARIOS: readonly Scenario[] = [
   {
     name: "kontakter sorteras på namn i svensk ordning",
+    needsSwedishCollation: true,
     run: async (repos) => {
       const org = newOrg();
-      const names = ["Örjan", "Åsa", "ärla", "Bertil", "anna", "Adam", "Zelda"];
-      for (const name of names) await addContact(repos, org, { name });
+      for (const name of SWEDISH_NAMES) await addContact(repos, org, { name });
       const { contacts } = await repos.contacts.listForOrg(org, { page: 1, pageSize: 50 });
-      return differs(contacts.map((c) => c.name), [...names].sort(swedish));
+      return differs(contacts.map((c) => c.name), [...SWEDISH_NAMES].sort(swedish));
+    },
+  },
+  {
+    name: "kontaktpersoner sorteras på namn i svensk ordning",
+    needsSwedishCollation: true,
+    run: async (repos) => {
+      const org = newOrg();
+      const parent = await addContact(repos, org, { name: "Bolaget", contactType: "COMPANY" });
+      for (const name of SWEDISH_NAMES) await addContact(repos, org, { name, parentId: parent.id });
+      const children = (await repos.contacts.getByIdFull(parent.id, org))?.children ?? [];
+      return differs(children.map((c) => c.name), [...SWEDISH_NAMES].sort(swedish));
     },
   },
   {
@@ -350,7 +374,7 @@ for (const backend of BACKENDS) {
 
     it("listor, sökning och sortering beter sig som i den andra backenden — utom de listade", async () => {
       const found: Record<string, string> = {};
-      for (const scenario of SCENARIOS) {
+      for (const scenario of SCENARIOS.filter((s) => applies(backend, s))) {
         const mismatch = await scenario.run(open.repos);
         if (mismatch !== null) found[`${backend.kind}: ${scenario.name}`] = mismatch;
       }
