@@ -41,7 +41,6 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
-import { assertAdmin } from "../auth/assert-admin";
 import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
 import { gatherInvoiceLedger } from "../billing/invoice-ledger";
@@ -49,7 +48,7 @@ import { logMatterNote } from "../billing/matter-note";
 import { emit } from "../events/emit";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
-import { router, orgProcedure } from "../trpc";
+import { router, adminProcedure, orgProcedure } from "../trpc";
 
 
 /**
@@ -525,10 +524,9 @@ export const invoiceRouter = router({
    * Bara administratör (#1450): ett påhittat id stoppar annars den riktiga
    * bokföringen, eftersom ett satt id aldrig skrivs över.
    */
-  markFortnoxBooked: orgProcedure
+  markFortnoxBooked: adminProcedure
     .input(z.object({ invoiceId: invoiceIdSchema, fortnoxId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       // Migrerad till repository-sömmen (ADR 0020). Org-scope via getByIdInOrg.
       const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });

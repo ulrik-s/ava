@@ -24,6 +24,7 @@ import { errorMessage } from "@/lib/shared/observability/redact";
 import { newRequestId } from "@/lib/shared/observability/request-id";
 import { asId } from "@/lib/shared/schemas/ids";
 import { syncRefusalFromCause } from "@/lib/shared/sync/sync-error";
+import { assertAdmin } from "./auth/assert-admin";
 import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { QueuedProcedureCall } from "./data-store/in-memory/queue-entry";
@@ -189,6 +190,18 @@ export const orgProcedure = protectedProcedure.use(({ ctx, next }) =>
   // (`data: { organizationId: ctx.orgId }`) och typkollas mot entiteten.
   next({ ctx: { ...ctx, orgId: asId<"OrganizationId">(ctx.user.organizationId) } }),
 );
+
+/**
+ * adminProcedure — `orgProcedure` som bara släpper igenom administratörer
+ * (`FORBIDDEN` annars, via {@link assertAdmin}). Kontrollen ligger före
+ * `.input()`, så en icke-admin får `FORBIDDEN` även med ogiltig indata och
+ * ser aldrig schemat. Gäller också köade anrop som spelas upp via
+ * `createCaller`.
+ */
+export const adminProcedure = orgProcedure.use(({ ctx, next }) => {
+  assertAdmin(ctx);
+  return next();
+});
 
 /**
  * requireOrgOwned — validerar att en resurs både existerar OCH

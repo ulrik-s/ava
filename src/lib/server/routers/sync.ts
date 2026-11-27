@@ -16,7 +16,6 @@ import { releaseLabel } from "@/lib/server/http/health";
 import { syncDeviceReportSchema } from "@/lib/shared/sync/device-health";
 import { serverSyncInfo } from "@/lib/shared/sync/protocol";
 import { FOREIGN_ENTRY_REFUSAL, SyncRefusal } from "@/lib/shared/sync/sync-error";
-import { assertAdmin } from "../auth/assert-admin";
 import { rowRefSchema } from "../data-store/in-memory/procedure-touches";
 import {
   type QueuedMutation, queuedMutationSchema as queuedRowShape, queuedProcedureCallSchema as queuedCallShape, type QueueOwner, queueOwnerSchema,
@@ -25,7 +24,7 @@ import { MAX_ROW_REFS } from "../data-store/in-memory/sync-transport";
 import { analyzeIfNewContent, storagePathBefore } from "../sync/classify-new-content";
 import type { SyncDeviceStore } from "../sync/sync-device-store";
 import type { SyncStore } from "../sync/sync-store";
-import { orgProcedure, router } from "../trpc";
+import { adminProcedure, orgProcedure, router } from "../trpc";
 
 /**
  * Vem som köade posten (#1347): klientens schema (#1849). Klienten stämplar
@@ -101,16 +100,14 @@ export const syncRouter = router({
     }),
 
   /** Byråns enheter och deras synkläge — bara för admin (#1267). */
-  devices: orgProcedure.query(({ ctx }) => {
-    assertAdmin(ctx);
+  devices: adminProcedure.query(({ ctx }) => {
     return requireDevices(ctx.syncDevices).list(ctx.orgId);
   }),
 
   /** Glöm en utrangerad enhet — bara för admin (#1267). */
-  forgetDevice: orgProcedure
+  forgetDevice: adminProcedure
     .input(z.object({ deviceId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       await requireDevices(ctx.syncDevices).forget(ctx.orgId, input.deviceId);
       return { ok: true as const };
     }),
