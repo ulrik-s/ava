@@ -35,7 +35,8 @@ The loop for every change:
    (commitlint, config at `tooling/config/commitlint.config.mjs`) **and** in CI.
    Run `bun install` so the hook's `commitlint` binary is present.
 4. **Before opening the PR, verify locally** (CI mirrors these):
-   - `bun run quality:fast` — typecheck + type-aware lint + `test:fast`.
+   - `bun run quality:fast` — typecheck + type-aware lint + `file-size` +
+     `knip:production` + `test:fast`.
    - `bun run build:demo` — the GH Pages static export. **It fails silently in
      CI/Pages otherwise**, so always run it for app changes.
    - `bun run e2e:demo` — the browser suite against the built `out/`. Run it for
@@ -43,12 +44,17 @@ The loop for every change:
    - `bun run e2e:conflict` / `bun run e2e:oidc` — only when you touch the
      conflict (keep-both) or login paths; both need docker up.
 5. **Open a PR** to `main`. CI runs the full matrix and every check must be green
-   before merge: **Commit messages** (commitlint), **Static analysis** (typecheck
-   + ESLint + knip + dep-cruiser + jscpd), **Unit / komponent / integration**
+   before merge. In `.github/workflows/ci.yml`: **Commit messages** (commitlint),
+   **Static analysis** (typecheck, lint, `lint:complexity-strict`, `deps:check`,
+   `file-size`, `knip`, `knip:production`, `duplicates` and
+   `db:check-migrations`), **Unit / komponent / integration**
    (`bun test --parallel` + coverage floor), **Repository (Postgres)**,
-   **Demo build** (static export + bundle-size ratchet), **Demo E2E**,
-   **Server-first (deploy E2E)**, **Keep-both konflikt-E2E**, **E2E (OIDC login)**,
-   **CodeQL** and **bun audit**.
+   **Server-first (deploy E2E)**, **Återställningsövning (backup → förstör →
+   återställ)**, **E2E (OIDC login)**, **Demo build** (static export +
+   bundle-size ratchet), **Demo E2E (browser-smoke)**, **Outlook-tillägg E2E
+   (Chromium + WebKit)** and **Keep-both konflikt-E2E**. In
+   `.github/workflows/security.yml`: **CodeQL (JS/TS)** and **Sårbara beroenden
+   (bun audit)**.
 6. **Self-merge.** No approval is required (solo project, 0 required reviews),
    but the PR itself is mandatory — merge your own PR once CI is green.
    `gh pr merge --squash` works. A check that fails on infrastructure (a runner
@@ -68,7 +74,8 @@ code or extract a sub-component (a "ratchet-step", cf. PR #6). See
 ## Where to start
 
 Read [`docs/architecture.md`](docs/architecture.md) first — it's the canonical
-overview. Then [`docs/auth.md`](docs/auth.md) for the self-hosted auth model.
+overview. Then [ADR 0009](docs/adr/0009-oidc-login-via-servern.md) for the
+login model.
 
 ## Operational facts (easy to get wrong)
 
@@ -76,39 +83,50 @@ overview. Then [`docs/auth.md`](docs/auth.md) for the self-hosted auth model.
   the `src/app/api/` route handlers. Build the static export with
   `DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh` (it stashes `api/`
   + seeds data + generates `manifest.json` + touches `.nojekyll`).
-- The docker `web` container serves `out/` (at `/ava/`) **and** git smart-HTTP
-  (`git-http-backend` behind nginx, at `/git/`) from the same origin — so the
-  browser pushes to `http://localhost:8080/git/firma.git` with no CORS proxy.
-- **`rm -rf out` breaks the docker bind-mount** → restart with:
-  `docker compose -f tooling/docker/docker-compose.yml restart web`.
+- The docker `web` container serves `out/` (at `/ava/`). Which stack:
+  - `tooling/docker/docker-compose.yml` is started by the `tier3:*` scripts and
+    by the OIDC E2E (`tooling/scripts/e2e-oidc.sh`, together with
+    `tooling/docker/docker-compose.oidc.yml`);
+  - the conflict E2E (`e2e:conflict`, `tooling/scripts/conflict-e2e.sh`) starts
+    `tooling/docker/docker-compose.selfhosted-local.yml`, which has its own
+    `web` serving `out/` behind oauth2-proxy and keycloak.
+- **`rm -rf out` breaks the docker bind-mount** of the
+  `tooling/docker/docker-compose.yml` stack → restart with:
+  `docker compose -f tooling/docker/docker-compose.yml restart web` (same as
+  `bun run tier3:restart`).
 - Run the browser e2e with `bun run e2e:demo` (needs `out/` built; the config
   serves it itself — no docker required). Unit tests: `bun run test`
-  (`bun test --parallel`, ~2334 tester). Per-fil-isolering krävs (annars läcker `mock.module`/stubbar
+  (`bun test --parallel`). Per-fil-isolering krävs (annars läcker `mock.module`/stubbar
   mellan filer); `--parallel` ger det via en worker-pool (`--isolate`
   kraschar på CI-linux, epoll). Se [[docs/quality.md]] + #92.
 
 ## Two deploy modes (selected by `firma-config.tier`)
 
-- **`demo`** — GH Pages, data fetched from same-origin via `manifest.json`.
-  Mutations work in-memory but never persist past a tab reload.
-- **`self-hosted`** — OPFS-cloned working copy + iso-git push/pull to
-  `localhost:8080/git/firma.git`. Auth via `htpasswd` (Basic-auth header).
-  Default-config för localhost-host hostname:n; ändras i `/settings`.
+- **`demo`** — GH Pages. The same offline-first core with no sync target,
+  seeded from `manifest.json`/CDN JSON into IndexedDB (ADR 0025).
+- **`self-hosted`** — server-first (ADR 0016): Postgres + tRPC-over-HTTP behind
+  oauth2-proxy; the production stack is
+  `tooling/docker/docker-compose.production.yml`. The client is built with
+  `AVA_BUILD_TARGET=server` (`tooling/scripts/build-demo.sh`) and is
+  offline-first with a local store, a mutation queue and reconcile
+  (ADR 0017/0037).
 
 ## Data store
 
-- `DemoDataStore` (in-memory) + optional write-back-callback to OPFS via
-  `src/lib/client/firma/fsa-write-back.ts`. tRPC routers use
-  `ctx.dataStore.transaction(...)`, NOT `raw.$transaction` (Prisma is gone).
+- The server reaches data through the typed repository `ctx.repos`
+  (ADR 0020).
+- The schema is Drizzle with SQL migrations in `tooling/db/migrations/`
+  (ADR 0019); zod is the source of truth.
+- Background jobs run in pg-boss (ADR 0024).
 - Single source of truth for seed-data: `tooling/scripts/seed-data.ts`.
-  `seed-firma-local.ts` and `build-demo-repo.ts` both call `buildSeed(opts)`.
+  `build-demo-repo.ts` and `seed-demo-into-server.ts` both call
+  `buildSeed(opts)`.
 
-## Auth (self-hosted)
+## Auth
 
-`tooling/docker/web/entrypoint.sh` auto-bootstraps a random admin-PAT on
-first start (logged once). Admin adds users with
-`tooling/scripts/add-user.sh <email>`. No custom auth-server in default
-stack — just nginx `auth_basic` + htpasswd. See [`docs/auth.md`](docs/auth.md).
+People log in with OIDC via oauth2-proxy (ADR 0009). The CLI and the add-in use
+a Bearer token (ADR 0013/0035). See
+[ADR 0009](docs/adr/0009-oidc-login-via-servern.md).
 
 # 🛡️ TypeScript Strict Mode
 
