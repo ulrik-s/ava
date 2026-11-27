@@ -15,6 +15,8 @@ import { asId } from "@/lib/shared/schemas/ids";
 // Self-hosted-läget letar efter ett FSA-handle via IndexedDB; jsdom har inte
 // någon working copy uppsatt. Mock:a explicit så testen är deterministisk
 // oavsett om andra tester polyfillar IndexedDB.
+// Office 365-konfigurationen (#1951): av som standard, så att Maila… inte syns.
+vi.mock("@/components/documents/use-office365-configured", () => ({ useOffice365Configured: () => false }));
 vi.mock("@/lib/client/fsa/handle-store", () => ({
   loadHandle: vi.fn(async () => null),
   saveHandle: vi.fn(async () => {}),

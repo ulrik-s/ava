@@ -32,6 +32,11 @@ export interface IntegrationConnector {
   getStatus(): Promise<ConnectionStatus>;
   /** Starta OAuth-flow. Resolvar när användaren godkänt. */
   connect(): Promise<void>;
+  /**
+   * Förbered `connect()` i förväg (konfiguration, bibliotek), så att dess popup
+   * kan öppnas direkt i klicket (iOS Safari). Valfri: saknas den förbereds inget.
+   */
+  preload?(): Promise<void>;
   /** Återkalla token + rensa lokal cache. */
   disconnect(): Promise<void>;
   /**
