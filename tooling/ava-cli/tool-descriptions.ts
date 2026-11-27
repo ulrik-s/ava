@@ -199,7 +199,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
 
   // ── Rapporter ────────────────────────────────────────────────────
   "reports.firmOverview": "Byråöversikt för en period: en rad per jurist med arbetade timmar, debiterbart värde, upparbetat ofakturerat och fakturerat netto, plus byråtotaler och kundfordringsläget. Rätt startpunkt för hur det går för byrån; djupdyk per person med reports.perLawyer.",
-  "reports.perLawyer": "Advokatrapport för en period: vilka ärenden advokaten arbetat i, timdebitering per vecka, och upparbetat men ofakturerat arbete.",
+  "reports.perLawyer": "Advokatrapport för en period: vilka ärenden advokaten arbetat i, timdebitering per vecka, och upparbetat men ofakturerat arbete. Utan `userId` gäller rapporten hela byrån (`scope: \"firm\"`, `user: null`).",
   "reports.billed": "Fakturerat per advokat och period, attribuerat mot advokatens andel av det frysta arbetsvärdet, netto efter avskrivningar.",
   "reports.arSummary": "Kundfordringar över byråns livstid: brygga och åldersanalys, byggd på de daterade avskrivningsposterna.",
 

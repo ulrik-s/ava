@@ -1,6 +1,7 @@
 /**
  * Advokatrapporten (`reports.perLawyer`), utbruten ur rapportroutern (#2176):
- * en advokat, en period, tre rena delrapporter över redan hämtad data.
+ * en advokat (eller utan advokat hela byrån, #2116), en period, tre rena
+ * delrapporter över redan hämtad data.
  *   1. Ärenden advokaten jobbat i under perioden
  *   2. Timdebitering per vecka
  *   3. Upparbetat, icke fakturerat (debiterbar tid och utlägg utan faktura)
@@ -16,7 +17,7 @@ import type { InvoiceId, MatterId, OrganizationId, UserId } from "@/lib/shared/s
 import { stockholmDay, stockholmPeriod } from "@/lib/shared/stockholm-time";
 import { hasInvoice } from "@/lib/shared/time-entry-lock";
 import type { Repositories } from "../repositories/repositories";
-import { loadPeriodWork } from "./period-work";
+import { loadPeriodWork, type PeriodWork } from "./period-work";
 
 /**
  * Den delmängd av matter-selecten delrapporterna läser. Kontakterna läses
@@ -168,12 +169,11 @@ export function sumMatterTotals(matters: MatterAgg[]): MatterTotals {
   );
 }
 
-/** Period (svenska kalenderdagar, `YYYY-MM-DD`) och advokat. */
-export interface LawyerReportInput { from: string; to: string; userId: UserId }
+/** Period (svenska kalenderdagar, `YYYY-MM-DD`) och advokat; utan advokat hela byrån (#2116). */
+export interface LawyerReportInput { from: string; to: string; userId?: UserId | undefined }
 
-/** Advokatrapporten: advokaten, perioden och de tre delrapporterna. */
-export interface LawyerReport {
-  user: { id: UserId; name: string; hourlyRates: HourlyRates };
+/** Rapportens delar, lika för en advokat och för hela byrån. */
+interface ReportBody {
   period: { from: string; to: string };
   matters: MatterAgg[];
   weeklyRows: WeeklyRow[];
@@ -181,23 +181,45 @@ export interface LawyerReport {
   totals: MatterTotals;
 }
 
-/** Hämta periodens arbete och bygg advokatrapporten; `null` om advokaten inte finns i byrån. */
-export async function loadLawyerReport(
-  repos: Pick<Repositories, "users" | "timeEntries" | "expenses">, org: OrganizationId, input: LawyerReportInput,
-): Promise<LawyerReport | null> {
-  const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
-  const [user, { timeEntries, expenses }] = await Promise.all([
-    repos.users.getByIdInOrg(input.userId, org),
-    loadPeriodWork(repos, org, { kind: "lawyer", userId: input.userId }, fromDate, toDate),
-  ]);
-  if (!user) return null;
+/**
+ * Advokatrapporten: en vald advokat (`scope: "lawyer"`) eller hela byrån
+ * (`scope: "firm"`, `user: null`), med perioden och de tre delrapporterna.
+ */
+export type LawyerReport =
+  | ReportBody & { scope: "lawyer"; user: { id: UserId; name: string; hourlyRates: HourlyRates } }
+  | ReportBody & { scope: "firm"; user: null };
+
+type LawyerReportRepos = Pick<Repositories, "users" | "timeEntries" | "expenses">;
+
+/** De tre delrapporterna och totalerna över periodens arbete. */
+function reportBody({ timeEntries, expenses }: PeriodWork, input: LawyerReportInput, fromDate: Date, toDate: Date): ReportBody {
   const matters = buildMatters(timeEntries, expenses);
   return {
-    user: { id: user.id, name: user.name, hourlyRates: user.hourlyRates },
     period: { from: input.from, to: input.to },
     matters,
     weeklyRows: buildWeeklyRows(timeEntries, stockholmDay(fromDate), stockholmDay(toDate)),
     unbilled: buildUnbilled(timeEntries, expenses),
     totals: sumMatterTotals(matters),
   };
+}
+
+/**
+ * Hämta periodens arbete och bygg rapporten. Utan `userId` gäller den hela
+ * byrån; `null` bara när en angiven advokat inte finns i byrån.
+ */
+export async function loadLawyerReport(
+  repos: LawyerReportRepos, org: OrganizationId, input: LawyerReportInput,
+): Promise<LawyerReport | null> {
+  const { from: fromDate, to: toDate } = stockholmPeriod(input.from, input.to);
+  if (!input.userId) {
+    const work = await loadPeriodWork(repos, org, { kind: "firm" }, fromDate, toDate);
+    return { scope: "firm", user: null, ...reportBody(work, input, fromDate, toDate) };
+  }
+  const [user, work] = await Promise.all([
+    repos.users.getByIdInOrg(input.userId, org),
+    loadPeriodWork(repos, org, { kind: "lawyer", userId: input.userId }, fromDate, toDate),
+  ]);
+  if (!user) return null;
+  const lawyer = { id: user.id, name: user.name, hourlyRates: user.hourlyRates };
+  return { scope: "lawyer", user: lawyer, ...reportBody(work, input, fromDate, toDate) };
 }

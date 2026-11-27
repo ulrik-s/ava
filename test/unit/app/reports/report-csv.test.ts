@@ -14,6 +14,7 @@ const downloadTextFile = vi.fn();
 vi.mock("@/lib/client/download-text", () => ({ downloadTextFile }));
 
 const report: Report = {
+  scope: "lawyer",
   user: { id: asId<"UserId">("u1"), name: "Anna", hourlyRates: {} },
   period: { from: "2026-01-01", to: "2026-01-11" },
   totals: { totalMinutes: 690, billableMinutes: 480, workValueOre: 1_200_000, expenseOre: 25_000 },

@@ -30,14 +30,15 @@ const lawyerPeriodInput = z.object({
 
 export const reportsRouter = router({
   /**
-   * Advokatrapport: en advokat, en period, tre delrapporter.
+   * Advokatrapport: en advokat (utan `userId` hela byrån, #2116), en period,
+   * tre delrapporter.
    *   1. Ärenden advokaten jobbat i under perioden
    *   2. Timdebitering per vecka
    *   3. Upparbetat, icke fakturerat (time entries & billable expenses
    *      utan invoiceId för den advokaten inom perioden)
    */
   perLawyer: protectedProcedure
-    .input(lawyerPeriodInput)
+    .input(lawyerPeriodInput.extend({ userId: userIdSchema.optional() }))
     .query(({ ctx, input }) => loadLawyerReport(ctx.repos, ctx.user.organizationId, input)),
 
   /**
