@@ -4,7 +4,8 @@ import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
   coverageItems, dagar, deadlineItems,
   sortWatchlist, unbilledItems, daysBetween, klientNameOf, withKlientNames,
-  DEFAULT_THRESHOLDS, type WatchlistItem,
+  thresholdsForOrg, DEFAULT_THRESHOLDS, DEFAULT_UNBILLED_AGE_DAYS, DEFAULT_UNBILLED_THRESHOLD_ORE,
+  type WatchlistItem,
 } from "@/lib/shared/watchlist";
 
 const NOW = new Date("2026-09-05T00:00:00Z");
@@ -113,6 +114,29 @@ describe("unbilledItems", () => {
     const strängare = { ...DEFAULT_THRESHOLDS, unbilledThresholdOre: 100_00, unbilledAgeDays: 9999 };
     const items = unbilledItems([{ ...bas, unbilledOre: 500_00, oldestEntryDate: "2026-09-01" }], NOW, strängare);
     expect(items).toHaveLength(1);
+  });
+});
+
+describe("thresholdsForOrg (#1911)", () => {
+  it("utan byrå: standard", () => {
+    expect(thresholdsForOrg(null)).toEqual(DEFAULT_THRESHOLDS);
+  });
+
+  it("ett satt fält och ett tomt: byråns värde och standard", () => {
+    expect(thresholdsForOrg({ unbilledThresholdOre: 1_000_000, unbilledAgeDays: null }))
+      .toEqual({ ...DEFAULT_THRESHOLDS, unbilledThresholdOre: 1_000_000, unbilledAgeDays: DEFAULT_UNBILLED_AGE_DAYS });
+    expect(thresholdsForOrg({ unbilledAgeDays: 30 }))
+      .toEqual({ ...DEFAULT_THRESHOLDS, unbilledThresholdOre: DEFAULT_UNBILLED_THRESHOLD_ORE, unbilledAgeDays: 30 });
+  });
+
+  it("0 räknas som ett värde", () => {
+    expect(thresholdsForOrg({ unbilledThresholdOre: 0, unbilledAgeDays: 0 }))
+      .toMatchObject({ unbilledThresholdOre: 0, unbilledAgeDays: 0 });
+  });
+
+  it("horisonten för tidsfrister är alltid standard", () => {
+    expect(thresholdsForOrg({ unbilledThresholdOre: 1, unbilledAgeDays: 1 }).deadlineHorizonDays)
+      .toBe(DEFAULT_THRESHOLDS.deadlineHorizonDays);
   });
 });
 

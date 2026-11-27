@@ -20,7 +20,7 @@ import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/s
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
   conflictCheckItems, coverageItems, deadlineItems, sortWatchlist, unbilledItems, withKlientNames,
-  DEFAULT_THRESHOLDS, type CoverageMatter, type DeadlineTask, type UnbilledMatter, type WatchlistItem,
+  thresholdsForOrg, type CoverageMatter, type DeadlineTask, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
@@ -171,17 +171,14 @@ export const watchlistRouter = router({
     .query(async ({ ctx, input }): Promise<{ items: WatchlistItem[]; generatedAt: string }> => {
       const userId = input?.userId ?? ctx.user.id;
       const now = new Date();
-      // Trösklarna är kodens defaults i v1. De VARIERAR mellan byråer (en byrå
-      // fakturerar vid 25 000 kr, en annan vid 50 000) och hör därför hemma i
-      // org-inställningarna — men det kräver en migration och hör inte hemma i
-      // samma ändring som signalerna själva. Se #1063.
-      const thresholds = DEFAULT_THRESHOLDS;
-
-      const [matters, entries, deadlines] = await Promise.all([
+      const [matters, entries, deadlines, org] = await Promise.all([
         selectMatters(ctx, userId, input?.mine ?? true),
         ctx.repos.timeEntries.listBillableForOrg(ctx.orgId),
         deadlineInput(ctx, userId),
+        ctx.repos.organizations.getById(ctx.orgId),
       ]);
+      // Byråns trösklar för "Bör faktureras" (#1911); utan sparade värden kodens standard.
+      const thresholds = thresholdsForOrg(org);
       const items = sortWatchlist([
         ...unbilledItems(unbilledInput(matters, entries), now, thresholds),
         ...deadlineItems(deadlines, now, thresholds),

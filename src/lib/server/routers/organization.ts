@@ -6,7 +6,7 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { orgImageSchema } from "@/lib/shared/org-image";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
-import type { Office, Organization } from "@/lib/shared/schemas/organization";
+import { orgThresholdSchema, type Office, type Organization } from "@/lib/shared/schemas/organization";
 import { standardAtgarderInputSchema } from "@/lib/shared/standard-atgard";
 import { assertAdmin } from "../auth/assert-admin";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
@@ -37,6 +37,14 @@ function brandingFields(org: Organization) {
   };
 }
 
+/** Byråns trösklar för "Bör faktureras" i Frister (#1911); `null` = kodens standard. */
+function watchlistThresholdFields(org: Organization) {
+  return {
+    unbilledThresholdOre: org.unbilledThresholdOre ?? null,
+    unbilledAgeDays: org.unbilledAgeDays ?? null,
+  };
+}
+
 /** Byråns ärendetyper och vilka av dem som är offentligt uppdrag (#1638). */
 function matterTypeFields(org: Organization) {
   return {
@@ -60,6 +68,7 @@ function toOrgSettings(org: Organization) {
     ...matterTypeFields(org),
     /** Gränsbelopp (öre) för aconto-utskick (#885). */
     accontoThresholdOre: org.accontoThresholdOre ?? null,
+    ...watchlistThresholdFields(org),
     /** Byråns timpris per kategori (öre/h, #1206). */
     hourlyRates: org.hourlyRates ?? {},
     /** Byråns standardåtgärder (#956) — samma beskrivning + tid för alla. */
@@ -103,6 +112,9 @@ export const organizationRouter = router({
         publicAssignmentMatterTypes: z.array(z.string()).optional(),
         /** Gränsbelopp (öre) för aconto-utskick (#885). */
         accontoThresholdOre: z.number().int().nonnegative().optional(),
+        /** Trösklar för "Bör faktureras" (#1911). `null` = tillbaka till standard. */
+        unbilledThresholdOre: orgThresholdSchema.nullable().optional(),
+        unbilledAgeDays: orgThresholdSchema.nullable().optional(),
         /** Timpris per kategori (öre/h, #1206). HELA kartan ersätts; en
          *  utelämnad kategori har inget byråpris (→ timarvodet). */
         hourlyRates: hourlyRatesSchema.optional(),

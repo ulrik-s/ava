@@ -38,6 +38,12 @@ export const organizations = pgTable("organizations", {
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: integer("acconto_threshold_ore"),
+  /** Tröskel (öre) för "Bör faktureras" i Frister (#1911). NULL = kodens
+   *  standard (DEFAULT_UNBILLED_THRESHOLD_ORE). */
+  unbilledThresholdOre: integer("unbilled_threshold_ore"),
+  /** Ålder (dagar) för "Bör faktureras" i Frister (#1911). NULL = kodens
+   *  standard (DEFAULT_UNBILLED_AGE_DAYS). */
+  unbilledAgeDays: integer("unbilled_age_days"),
   /** Byråns timpris per kategori (öre/h, exkl moms) — minst specifika nivån (#1206). */
   hourlyRates: hourlyRatesColumn(),
   /** Byråns standardåtgärder (#956) — samma beskrivning + tidsåtgång för alla. */
