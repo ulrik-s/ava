@@ -564,7 +564,6 @@ export function buildKostnadsrakningContext(original: BuildInput): Kostnadsrakni
   // Yrkandet avrundas per rad till hela kronor och momsen på summan (#1218).
   const huf: KrHuvudforhandling = {
     start, end, minutes: huvudforhandlingMinutes, rateOrePerH: arvodeNorm,
-    amountOre: timeEntryValueOre(huvudforhandlingMinutes, arvodeNorm),
   };
   const basis = arvodeBasis({ input, ford, level, taxa, billable: billableTimeEntries, yrkandeDate, avslut: input.forordnande?.avslut });
   const claim = claimOf(krArvodePart(basis, huf, timeLines), expenseLines);
@@ -677,7 +676,5 @@ function toIsoDateTime(d: Date): string {
 }
 
 function vatRateLabel(bp: number): string {
-  return bp === 0 ? "0 %"
-    : bp === 600 ? "6 %"
-    : bp === 1200 ? "12 %" : "25 %";
+  return bp === 0 ? "0 %" : "25 %";
 }
