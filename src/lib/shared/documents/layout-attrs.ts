@@ -39,9 +39,9 @@ export const color = z.union([
 const bool = z.enum(["true", "false"]).transform((s) => s === "true");
 const align = z.enum(["left", "center", "right"]);
 
-/** Teckensnitt, storlek och färg. */
+/** Teckensnitt, storlek och färg. `sans` = Helvetica också i ett Times-dokument. */
 const fontShape = {
-  font: z.enum(["regular", "bold", "italic"]).optional(),
+  font: z.enum(["regular", "bold", "italic", "sans"]).optional(),
   size: size.optional(),
   color: color.optional(),
 };
@@ -80,14 +80,15 @@ export const ATTRS = {
     width: size.optional(),
   }),
   text: z.strictObject({ ...styleShape, ...spacingShape, align: align.optional() }),
+  u: z.strictObject({}),
   spacer: z.strictObject({ height: length }),
   "page-break": z.strictObject({}),
   rule: z.strictObject({ ...spacingShape, style: z.string().min(1).optional(), color: color.optional(), thickness: size.optional() }),
   image: z.strictObject({ ...spacingShape, src: z.string().min(1), width: size, height: size, align: align.optional() }),
-  table: z.strictObject({ ...styleShape, "keep-extra": size.optional(), "repeat-header": bool.optional() }),
+  table: z.strictObject({ ...styleShape, "keep-extra": size.optional(), "repeat-header": bool.optional(), fill: color.optional() }),
   col: z.strictObject({ width: z.union([z.literal("*"), size]), align: align.optional(), wrap: bool.optional() }),
   section: z.strictObject({ keep: size.optional() }),
-  row: z.strictObject({ ...styleShape, keep: size.optional(), "space-after": length.optional() }),
+  row: z.strictObject({ ...styleShape, keep: size.optional(), "space-after": length.optional(), fill: color.optional() }),
   cell: z.strictObject({ ...fontShape, style: z.string().min(1).optional(), align: align.optional() }),
 } as const;
 

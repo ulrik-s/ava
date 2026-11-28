@@ -5,7 +5,7 @@
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { BillingRun } from "@/lib/shared/schemas/billing";
-import { asId, type BillingRunId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { asId, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { billingRuns, invoices, krReferences, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -122,6 +122,12 @@ export class DrizzleBillingRunRepository
         eq(billingRuns.status, "SENT"), isNull(billingRuns.deletedAt),
       ));
     return rows;
+  }
+
+  async listByInvoice(invoiceId: InvoiceId): Promise<BillingRun[]> {
+    return await this.db
+      .select().from(billingRuns)
+      .where(and(eq(billingRuns.invoiceId, invoiceId), isNull(billingRuns.deletedAt)));
   }
 
   async listAccontoByIds(matterId: MatterId, ids: BillingRunId[]): Promise<BillingRun[]> {

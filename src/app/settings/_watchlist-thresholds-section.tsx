@@ -10,6 +10,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
+import { SaveStatusRow } from "@/components/settings/save-status-row";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { useTRPC } from "@/lib/client/trpc";
@@ -120,16 +121,8 @@ function ThresholdsForm({ initial }: { initial: ThresholdDraft }) {
         Bör faktureras visas när beloppet eller åldern nås. Tomt fält = standard. Vill byrån bara gå
         på ålder (eller bara på belopp): sätt den andra gränsen så högt att den aldrig nås.
       </p>
-      <div className="mt-2 flex items-center gap-3">
-        <button type="button" onClick={submit} disabled={save.isPending}
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
-          Spara
-        </button>
-        {save.isPending && <span className="text-xs text-gray-500">Sparar…</span>}
-        {saved && <span className="text-xs text-green-600">Sparat ✓</span>}
-        {invalid && <span className="text-xs text-red-600">{THRESHOLD_TOO_LARGE}</span>}
-        {save.error && <span className="text-xs text-red-600">{save.error.message}</span>}
-      </div>
+      <SaveStatusRow onSave={submit} pending={save.isPending} saved={saved}
+        invalid={invalid ? THRESHOLD_TOO_LARGE : null} error={save.error?.message ?? null} />
     </div>
   );
 }

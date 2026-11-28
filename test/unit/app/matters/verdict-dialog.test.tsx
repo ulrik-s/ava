@@ -87,8 +87,8 @@ describe("VerdictDialog", () => {
     // Fakturan renderas via den DELADE vy-modellen (#937) → en PDF (#1439) med
     // sammanställning + specifikation.
     const text = (await pdfPageTexts(persistedBytes())).flat();
-    expect(text).toContain("Sammanställning");
-    expect(text).toContain("Mottagare: Rättshjälpsmyndighet/domstol");
+    expect(text).toContain("Rättshjälpsmyndighet/domstol"); // mottagaren i fönsterkuvertet
+    expect(text).toContain("Benämning");
     expect(fake.calls.find((c) => c.path === "document.register")?.input).toEqual(expect.objectContaining({
       id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-9", kinds: ["FAKTURA"],
     }));
@@ -96,13 +96,13 @@ describe("VerdictDialog", () => {
     expect(invalidatedPaths(invalidate)).toEqual(["document.list", "document.tree {\"matterId\":\"m1\"}"]);
   });
 
-  it("byråns namn, org.nr och logga följer med till fakturadokumentet (#1439)", async () => {
+  it("byråns namn, org.nr (som VAT-nummer) och logga följer med till fakturadokumentet (#1439/#2255)", async () => {
     const logo = orgImageSchema.parse("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
     const onClose = vi.fn();
     renderDialog({ onClose, organization: { organizationName: "Byrå AB", organizationOrgNumber: "556677-8899", organizationLogo: logo } });
     await submitAndWait(onClose);
     const bytes = persistedBytes();
-    expect((await pdfPageTexts(bytes)).flat()).toEqual(expect.arrayContaining(["Byrå AB", "Org.nr 556677-8899"]));
+    expect((await pdfPageTexts(bytes)).flat()).toEqual(expect.arrayContaining(["Byrå AB", "VAT nr: SE556677889901 · Godkänd för F-skatt"]));
     const [page1] = await pdfPageContents(bytes);
     expect(page1).toMatch(/\/\S+ Do/); // loggan ritad
   });

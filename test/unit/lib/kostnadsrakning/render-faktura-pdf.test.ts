@@ -2,8 +2,8 @@
  * `renderFakturaPdf` (#938/#1439) — fakturans enda format: både det arkiverade
  * dokumentet och bilagan vid utskick. Sammanställning på sida 1, specifikation
  * på egen sida därefter. Renderaren tar en färdig `FakturaView` och räknar inget.
- * Sedan #2251 ritas fakturan ur standardmallen (ADR 0042); testerna här är
- * desamma som när den ritades i kod.
+ * Sedan #2251 ritas fakturan ur en mall (ADR 0042), sedan #2255 byråns
+ * fakturamall (Times, marginaler 20 mm).
  */
 import { inflateSync } from "node:zlib";
 import { describe, it, expect } from "vitest-compat";
@@ -31,7 +31,10 @@ const view = (over: Partial<FakturaView> = {}): FakturaView => ({
   summaryTotalLabel: "Summa inkl moms", summaryTotal: "8 130,00 kr",
   hasSplit: false, splitRows: [{ label: "Netto (exkl moms)", amount: "6 504,00 kr", style: "", muted: false }],
   totalLabel: "Att betala (inkl moms)", total: "8 130,00 kr",
-  hasSpec: false, timeLines: [], timeGroups: [], showTimeAmounts: true, expenseLines: [], expenseNetTotal: "", expenseGrossTotal: "", ...over,
+  hasSpec: false, timeLines: [], timeGroups: [], showTimeAmounts: true, expenseLines: [], expenseNetTotal: "", expenseGrossTotal: "",
+  showSummaryTotal: false, settlementRows: [], totals: { exclVat: "6 504,00 kr", vatLabel: "Moms (25%)", vat: "1 626,00 kr", inclVat: "8 130,00 kr" },
+  recipientLines: ["Domstolsverket"], clientName: "", dueDate: "", payable: true, organizationPhone: "", organizationWebsite: "",
+  organizationBankgiro: "", organizationVatNumber: "", footerSeal: null, ...over,
 });
 
 describe("toWinAnsi", () => {
@@ -178,13 +181,16 @@ describe("renderFakturaPdf — byråns logga (#1439)", () => {
     expect(drawsImage(page2)).toBe(false);
   });
 
-  it("utan logga är layouten oförändrad — ingen bild, samma text på samma plats", async () => {
+  it("utan logga står byråns namn i brevhuvudet i stället — i övrigt samma text (#2255)", async () => {
     const without = await renderFakturaPdf(view());
     const [page] = await pdfPageContents(without);
     expect(drawsImage(page)).toBe(false);
     const withLogo = await renderFakturaPdf(view({ logo: PNG_LOGO }));
-    // Texten (och dess ordning) är densamma med och utan logga — loggan ritas i en egen ruta.
-    expect(await pdfPageTexts(withLogo)).toEqual(await pdfPageTexts(without));
+    const [withTexts = []] = await pdfPageTexts(withLogo);
+    const [withoutTexts = []] = await pdfPageTexts(without);
+    // Loggan ritas i en egen ruta och ersätter namnet överst; resten är oförändrat.
+    expect(withoutTexts[0]).toBe("Firma AB");
+    expect(withTexts).toEqual(withoutTexts.slice(1));
   });
 
   it("en logga som inte går att bädda in fäller inte fakturan — den ritas utan logga", async () => {
@@ -238,10 +244,12 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
   async function rightEdge(run: PdfTextItem | undefined): Promise<number> {
     if (!run) return Number.NaN;
     const { PDFDocument, StandardFonts } = await import("pdf-lib");
-    const bold = await (await PDFDocument.create()).embedFont(StandardFonts.HelveticaBold);
+    const bold = await (await PDFDocument.create()).embedFont(run.font === "Times-Italic" ? StandardFonts.TimesRomanItalic : StandardFonts.TimesRomanBold);
     return run.x + bold.widthOfTextAtSize(run.text, run.size);
   }
   const find = (runs: readonly PdfTextItem[], text: string): PdfTextItem | undefined => runs.find((r) => r.text === text);
+  /** Innehållets högerkant: A4 minus högermarginalen 20 mm (#2255). */
+  const RIGHT = 595.28 - 20 * 72 / 25.4;
   const isBold = (run: PdfTextItem | undefined): boolean => run?.font.includes("Bold") ?? false;
   /** Strecket närmast ovanför baslinjen `y` (fakturan ritar bara vågräta streck). */
   const ruleAbove = (lines: readonly PdfLineItem[], y: number): PdfLineItem | undefined =>
@@ -257,11 +265,11 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
     expect(isBold(net) && isBold(gross)).toBe(true);
     expect(net?.y).toBe(label?.y);
     expect(gross?.y).toBe(label?.y);
-    // Exakt samma högerkant som kolumnrubrikerna (Netto 470, Brutto 545).
-    expect(await rightEdge(net)).toBeCloseTo(470, 3);
-    expect(await rightEdge(gross)).toBeCloseTo(545, 3);
+    // Exakt samma högerkant som kolumnrubrikerna (Netto 75 pt före Brutto, Brutto vid högerkanten).
+    expect(await rightEdge(net)).toBeCloseTo(RIGHT - 75, 3);
+    expect(await rightEdge(gross)).toBeCloseTo(RIGHT, 3);
     const headNet = find(runs, "Netto");
-    expect(await rightEdge(headNet)).toBeCloseTo(470, 3);
+    expect(await rightEdge(headNet)).toBeCloseTo(RIGHT - 75, 3);
   });
 
   it("ett tunt streck med tydlig luft står mellan sista utlägget och summaraden", async () => {
@@ -287,7 +295,7 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
     expect(isBold(subtotal)).toBe(true);
     const amounts = runs.filter((r) => r.text === "3 252,00 kr" && isBold(r));
     expect(amounts).toHaveLength(1);
-    expect(await rightEdge(amounts[0])).toBeCloseTo(545, 3);
+    expect(await rightEdge(amounts[0])).toBeCloseTo(RIGHT, 3);
   });
 
   it("utan utlägg ritas ingen utläggssummarad", async () => {

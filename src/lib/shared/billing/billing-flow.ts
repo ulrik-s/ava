@@ -184,6 +184,25 @@ export function availableActions(matter: FlowMatter, runs: ReadonlyArray<FlowRun
  */
 export const BILLING_SHORTCUT_PARAM = "fakturera";
 
+/** Det genvägens parameter ber om: att fakturera, och ev. vilken faktura (#2260). */
+export interface BillingShortcutRequest {
+  requested: boolean;
+  /** `?fakturera=FINAL|ACCONTO` — öppna den dialogen direkt (en omgjord faktura). */
+  preferred?: BillingActionType | undefined;
+}
+
+/** Tolka genvägens värde: `1` = fakturera, `FINAL`/`ACCONTO` = just den fakturan. */
+export function parseBillingShortcut(value: string | null): BillingShortcutRequest {
+  if (value === "1") return { requested: true };
+  if (value === "ACCONTO" || value === "FINAL") return { requested: true, preferred: value };
+  return { requested: false };
+}
+
+/** Den önskade åtgärden, om fasen erbjuder den och den öppnar faktureringsdialogen. */
+function preferredAction(actions: readonly BillingAction[], preferred: BillingActionType | undefined): BillingAction | undefined {
+  return preferred === undefined ? undefined : actions.find((a) => a.type === preferred && a.dialog === "billing");
+}
+
 /**
  * Vad en "fakturera nu"-genväg öppnar i faktureringspanelen (#1853, ADR 0034):
  * en dialog direkt (`dialog`, samma väg som menyvalet), menyn + Skapa faktura
@@ -195,15 +214,17 @@ export type BillingShortcut =
   | { kind: "none" };
 
 /**
- * Avgör vad genvägen öppnar ur flödet: aconto till klient i rättshjälp och
+ * Avgör vad genvägen öppnar ur flödet: den önskade fakturan när fasen erbjuder
+ * den (en omgjord faktura, #2260), aconto till klient i rättshjälp och
  * rättsskydd när fasen tillåter det, annars menyn när fasen har åtgärder,
  * annars ingenting. Servern prövar fasen som förut, så genvägen kan aldrig
  * erbjuda något som menyn inte gör.
  */
-export function billingShortcut(matter: FlowMatter, runs: ReadonlyArray<FlowRun>): BillingShortcut {
+export function billingShortcut(matter: FlowMatter, runs: ReadonlyArray<FlowRun>, preferred?: BillingActionType): BillingShortcut {
   const actions = availableActions(matter, runs);
   const acconto = isCoverageMethod(matter.paymentMethod) ? actions.find((a) => a.type === "ACCONTO") : undefined;
-  if (acconto) return { kind: "dialog", action: acconto };
+  const direct = preferredAction(actions, preferred) ?? acconto;
+  if (direct) return { kind: "dialog", action: direct };
   return actions.length > 0 ? { kind: "menu" } : { kind: "none" };
 }
 

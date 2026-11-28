@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import {
-  BILLING_FLOWS, COVERAGE_METHODS, availableActions, billingShortcut, currentPhase, isCoverageMethod,
+  BILLING_FLOWS, COVERAGE_METHODS, availableActions, billingShortcut, currentPhase, isCoverageMethod, parseBillingShortcut,
   canBillingTransition, assertBillingTransition, type FlowRun,
 } from "@/lib/shared/billing/billing-flow";
 
@@ -143,5 +143,27 @@ describe("billingShortcut — vad fakturera nu öppnar (#1853)", () => {
     const shortcut = billingShortcut({ paymentMethod: "RATTSHJALP" }, []);
     const acconto = availableActions({ paymentMethod: "RATTSHJALP" }, []).find((a) => a.type === "ACCONTO");
     expect(shortcut).toEqual({ kind: "dialog", action: acconto });
+  });
+});
+
+describe("genvägen till en omgjord faktura (#2260)", () => {
+  it("parseBillingShortcut: 1 = fakturera, FINAL/ACCONTO = just den, annat = ingen begäran", () => {
+    expect(parseBillingShortcut("1")).toEqual({ requested: true });
+    expect(parseBillingShortcut("FINAL")).toEqual({ requested: true, preferred: "FINAL" });
+    expect(parseBillingShortcut("ACCONTO")).toEqual({ requested: true, preferred: "ACCONTO" });
+    expect(parseBillingShortcut("KOSTNADSRAKNING")).toEqual({ requested: false });
+    expect(parseBillingShortcut(null)).toEqual({ requested: false });
+  });
+
+  it("den önskade fakturan öppnas direkt när fasen erbjuder den", () => {
+    const privat = { paymentMethod: "PRIVAT" } as const;
+    const final = availableActions(privat, []).find((a) => a.type === "FINAL");
+    expect(billingShortcut(privat, [], "FINAL")).toEqual({ kind: "dialog", action: final });
+    // Rättshjälp: slutfakturan är ingen åtgärd → flödets eget val (aconto).
+    const rh = { paymentMethod: "RATTSHJALP" } as const;
+    const acconto = availableActions(rh, []).find((a) => a.type === "ACCONTO");
+    expect(billingShortcut(rh, [], "FINAL")).toEqual({ kind: "dialog", action: acconto });
+    // En åtgärd som inte öppnar faktureringsdialogen önskas aldrig fram.
+    expect(billingShortcut({ paymentMethod: "OFFENTLIGT_UPPDRAG" }, [], "KOSTNADSRAKNING").kind).toBe("menu");
   });
 });

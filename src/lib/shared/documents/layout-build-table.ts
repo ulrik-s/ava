@@ -8,16 +8,24 @@
  *     <tfoot keep="30"> <rule/> <row>…</row> </tfoot>
  *   </table>
  *
+ * `fill="#f2f2f2"` på `<row>` (eller på `<table>`, som standard för alla rader)
+ * ger raden en bakgrund över hela tabellens bredd.
+ *
  * En kolumn får bredden `*` = det som blir kvar av ramen. Varje rad har exakt
  * en cell per kolumn. Bara kroppens rader radbryts (i `wrap`-kolumnerna).
  */
 
-import type { TableCell, TableColumn, TableItem, TableNode, TableRow, TableSection } from "./layout-ast";
+import type { LayoutColor, TableCell, TableColumn, TableItem, TableNode, TableRow, TableSection } from "./layout-ast";
 import { ATTRS, attrsOf, type Attrs } from "./layout-attrs";
 import { buildRule, elementChildren, finalStyle, inheritStyle, textContent, unexpected, type BuildCtx } from "./layout-style";
 import { LayoutError, type MarkupElement } from "./markup-parser";
 
 const TABLE_CHILDREN = ["col", "thead", "tfoot", "row", "rule"] as const;
+
+/** Byggkontexten inne i en tabell: tabellens `fill` är radernas standard. */
+interface TableCtx extends BuildCtx {
+  fill: LayoutColor | undefined;
+}
 const SECTION_CHILDREN = ["row", "rule"] as const;
 
 function buildCell(el: MarkupElement, ctx: BuildCtx, column: TableColumn): TableCell {
@@ -26,7 +34,7 @@ function buildCell(el: MarkupElement, ctx: BuildCtx, column: TableColumn): Table
   return { column, content: textContent(el), style: finalStyle(inheritStyle(ctx, a, el)), align: a.align ?? column.align };
 }
 
-function buildRow(el: MarkupElement, ctx: BuildCtx, columns: readonly TableColumn[]): TableRow {
+function buildRow(el: MarkupElement, ctx: TableCtx, columns: readonly TableColumn[]): TableRow {
   const a = attrsOf(ATTRS.row, el);
   const style = inheritStyle(ctx, a, el);
   const cellEls = elementChildren(el);
@@ -35,14 +43,14 @@ function buildRow(el: MarkupElement, ctx: BuildCtx, columns: readonly TableColum
   }
   const inner: BuildCtx = { ...ctx, inherited: style };
   const cells = columns.map((column, i) => buildCell(cellEls[i] ?? el, inner, column));
-  return { kind: "row", cells, leading: finalStyle(style).leading, keep: a.keep, spaceAfter: a["space-after"] ?? 0 };
+  return { kind: "row", cells, leading: finalStyle(style).leading, keep: a.keep, spaceAfter: a["space-after"] ?? 0, fill: a.fill ?? ctx.fill };
 }
 
-function buildItem(el: MarkupElement, ctx: BuildCtx, columns: readonly TableColumn[]): TableItem {
+function buildItem(el: MarkupElement, ctx: TableCtx, columns: readonly TableColumn[]): TableItem {
   return el.name === "rule" ? buildRule(el, ctx) : buildRow(el, ctx, columns);
 }
 
-function buildSection(el: MarkupElement, ctx: BuildCtx, columns: readonly TableColumn[]): TableSection {
+function buildSection(el: MarkupElement, ctx: TableCtx, columns: readonly TableColumn[]): TableSection {
   const a = attrsOf(ATTRS.section, el);
   const items = elementChildren(el).map((c) => {
     if (c.name !== "row" && c.name !== "rule") throw unexpected(c, el.name, SECTION_CHILDREN);
@@ -100,7 +108,7 @@ export function buildTable(el: MarkupElement, ctx: BuildCtx): TableNode {
   for (const child of elementChildren(el)) sortPart(parts, child);
   if (parts.cols.length === 0) throw new LayoutError(`Rad ${el.line}: <table> saknar <col>.`);
   const columns = buildColumns(parts.cols, ctx.frameWidth);
-  const inner: BuildCtx = { ...ctx, inherited: inheritStyle(ctx, a, el) };
+  const inner: TableCtx = { ...ctx, inherited: inheritStyle(ctx, a, el), fill: a.fill };
   return {
     kind: "table",
     columns,

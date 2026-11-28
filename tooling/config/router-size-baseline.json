@@ -2,6 +2,6 @@
   "src/lib/server/routers/billingRun/settlement.ts": 268,
   "src/lib/server/routers/document/core.ts": 400,
   "src/lib/server/routers/document/suggestions.ts": 379,
-  "src/lib/server/routers/invoice.ts": 537,
+  "src/lib/server/routers/invoice.ts": 477,
   "src/lib/server/routers/matter.ts": 408
 }

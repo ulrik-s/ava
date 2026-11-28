@@ -77,7 +77,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
       rattshjalpMaxTimmar={m.rattshjalpMaxTimmar} matterStatus={m.status} />,
     expenses: () => <ExpenseSection matterId={id} isTaxeArende={isTaxeMatter(m)} />,
     billing: () => <BillingPanel matterId={id} matter={m}
-      shortcutRequested={shortcut.requested} onShortcutDone={shortcut.done} />,
+      shortcutRequested={shortcut.requested} shortcutPreferred={shortcut.preferred} onShortcutDone={shortcut.done} />,
     receivables: () => <ExpectedReceivablesSection matterId={id} isCourtMatter={isCourtMatter(m)} />,
     watch: () => <WatchSection matterId={id} />,
     contacts: () => <ContactsSection matterId={id} contacts={m.contacts} matterTitle={m.title} />,

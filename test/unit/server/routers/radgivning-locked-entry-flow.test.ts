@@ -18,6 +18,7 @@ import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
 import { asId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
@@ -63,13 +64,13 @@ async function entriesOf(caller: Caller) {
 }
 
 describe("invoice.createRadgivning — förfallodatum", () => {
-  it("utan dueDate saknar fakturan förfallodatum; med dueDate (demo/fixtures) sätts det", async () => {
+  it("med dueDate (demo/fixtures) sätts det; utan gäller byråns betalningsvillkor, standard tio dagar (#2265)", async () => {
     const caller = makeCaller();
     const { invoice } = await caller.invoice.createRadgivning({ matterId: MATTER, invoiceDate: "2026-03-01", dueDate: "2026-03-31" });
     expect(invoice.dueDate?.toISOString().slice(0, 10)).toBe("2026-03-31");
     const other = makeCaller();
     const { invoice: plain } = await other.invoice.createRadgivning({ matterId: MATTER, invoiceDate: "2026-03-01" });
-    expect(plain.dueDate).toBeNull();
+    expect(stockholmDay(new Date(plain.dueDate ?? ""))).toBe("2026-03-11");
   });
 });
 

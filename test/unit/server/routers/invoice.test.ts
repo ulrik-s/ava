@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
 import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 // ─── Mock prisma ─────────────────────────────────────────────────
@@ -59,6 +60,8 @@ const mockPrisma = {
   },
   // Rådgivningspostens ägare slås upp i byrån (#1345).
   user: { findFirst: vi.fn() },
+  // Byråns betalningsvillkor ger förfallodagen (#2265).
+  organization: { findFirst: vi.fn() },
   // Faktureringshändelser loggas som tjänsteanteckning (#1221).
   serviceNote: {
     create: vi.fn(),
@@ -141,6 +144,22 @@ describe("invoice.createRadgivning", () => {
     expect(mockPrisma.invoice.create.mock.calls[0]?.[0].data).toMatchObject({
       purpose: "RADGIVNING", notes: RADGIVNING_INVOICE_NOTES, invoiceType: "STANDARD",
     });
+  });
+
+  it("utan förfallodag gäller betalningsvillkoret: fakturadagen plus tio dagar (2026-11-28)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+    await makeCaller().createRadgivning({ matterId: "m1", invoiceDate: "2026-03-02T09:00:00.000Z" });
+    const due: unknown = mockPrisma.invoice.create.mock.calls[0]?.[0].data.dueDate;
+    expect(due instanceof Date ? stockholmDay(due) : due).toBe("2026-03-12");
+  });
+
+  it("utan förfallodag gäller byråns betalningsvillkor (#2265)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Byrå", paymentTermDays: 30 });
+    await makeCaller().createRadgivning({ matterId: "m1", invoiceDate: "2026-03-02T09:00:00.000Z" });
+    const due: unknown = mockPrisma.invoice.create.mock.calls[0]?.[0].data.dueDate;
+    expect(due instanceof Date ? stockholmDay(due) : due).toBe("2026-04-01");
+    expect(mockPrisma.organization.findFirst.mock.calls[0]?.[0].where).toMatchObject({ id: "org-a" });
   });
 
   it("förfallodatum: en dag eller tidpunkt sparas; ett ogiltigt avvisas i stället för Invalid Date (#1362)", async () => {

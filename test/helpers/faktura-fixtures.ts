@@ -1,8 +1,9 @@
 /**
- * Fakturor för golden-testerna (#2251): en vy-modell per fakturavariant, byggd
- * med appens egen `buildFakturaView` ur realistiska fakturor — slutfaktura med
- * flera kategorier, utlägg och avdragna aconton, aconto, kredit, rådgivning,
- * självrisk-nedbrytning, logga och en flersidig specifikation.
+ * Fakturor för golden-testerna (#2251, #2255): en vy-modell per fakturavariant,
+ * byggd med appens egen `buildFakturaView` ur realistiska fakturor — slutfaktura
+ * med flera kategorier, utlägg och avdragna aconton, aconto med självrisk-
+ * avräkning (och öresutjämning), kredit, rådgivning, självrisk-nedbrytning,
+ * logga, sigill och en flersidig specifikation. All data är påhittad.
  */
 
 import { buildFakturaView, type FakturaTemplateArgs, type FakturaView } from "@/lib/client/kostnadsrakning/faktura-template";
@@ -13,11 +14,20 @@ import { asId } from "@/lib/shared/schemas/ids";
 /** 1×1 px PNG — minsta giltiga byråbild. */
 export const PNG_LOGO = orgImageSchema.parse("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
 
-const META = { matterNumber: "2026-0042", matterTitle: "Brottmål Falk", organizationName: "Advokatfirman Exempel AB", organizationOrgNumber: "556677-8899" };
+/** Byråns uppgifter (påhittade) — som organisationsinställningarna ger dem. */
+export const ORG = {
+  organizationName: "Advokatfirman Exempel AB", organizationOrgNumber: "556677-8899",
+  organizationPhone: "08-123 456 78", organizationWebsite: "https://www.exempel.se/", organizationBankgiro: "123-4567",
+};
+
+const META = {
+  matterNumber: "2026-0042", matterTitle: "Brottmål Falk", ...ORG,
+  clientName: "Kalle Klientsson", recipientAddress: "Exempelgatan 1\n123 45 Exempelstad",
+};
 
 const invoice = (over: Partial<FakturaTemplateArgs["invoice"]> = {}): FakturaTemplateArgs["invoice"] => ({
   id: asId<"InvoiceId">("inv-golden"), amount: 1_046_875, invoiceNumber: "F-2026-0101", ocrReference: "202601014",
-  invoiceDate: "2026-06-30", invoiceType: "FINAL", amountRounding: "KRONOR", ...over,
+  invoiceDate: "2026-06-30", dueDate: "2026-07-30", invoiceType: "FINAL", amountRounding: "KRONOR", ...over,
 });
 
 const LONG = "Genomgång av förundersökningsprotokollet med samtliga bilagor, förhörsutskrifter och tekniska utredningar inför huvudförhandlingen";
@@ -35,26 +45,40 @@ const EXPENSES: SpecExpenseLine[] = [
 ];
 
 const slutfaktura = (): FakturaView => buildFakturaView({
-  invoice: invoice(), recipient: "Klient AB", meta: META,
+  invoice: invoice({ amount: 768_750, vatOre: 153_750 }), recipient: "Klient AB", meta: META,
   spec: buildInvoiceSpecification({
     timeLines: TIME, expenseLines: EXPENSES, rounding: "KRONOR", payableOre: 768_750,
     deductions: [{ invoiceNumber: "F-2026-0090", date: "2026-04-01", amountOre: 200_000 }],
   }),
 });
 
+/**
+ * Aconto med självrisk (#151): underlaget, klientens självrisk 20 % och momsen —
+ * raderna går på 2 999,60 kr, fakturan på hela kronor, så tabellen får en rad
+ * Öresutjämning på 0,40 kr.
+ */
 const aconto = (): FakturaView => buildFakturaView({
-  invoice: invoice({ invoiceType: "ACCONTO", amount: 500_000, notes: "Aconto enligt uppdragsavtal" }), recipient: "Klient AB", meta: META,
-  breakdown: { rows: [{ label: "Aconto", amountOre: 500_000, kind: "add" }], totalLabel: "Att betala (inkl moms)", totalOre: 500_000, timeLines: TIME },
+  invoice: invoice({ invoiceType: "ACCONTO", amount: 300_000, vatOre: 60_000, notes: "Áconto debitering Brottmål Falk 2026-0042" }),
+  recipient: "Kalle Klientsson", meta: { ...META, organizationLogo: PNG_LOGO, organizationFooterSeal: PNG_LOGO },
+  breakdown: {
+    rows: [
+      { label: "Upparbetat arvode (exkl moms)", amountOre: 1_199_840, kind: "add", role: "basis" },
+      { label: "Klientens självrisk (exkl moms)", amountOre: 239_968, kind: "add", basisOre: 1_199_840, shareBips: 2000 },
+      { label: "Moms", amountOre: 59_992, kind: "add", basisOre: 239_968, shareBips: 2500 },
+      { label: "Självrisk inkl utlägg (inkl moms)", amountOre: 299_960, kind: "add", role: "subtotal" },
+    ],
+    totalLabel: "Att betala (inkl moms)", totalOre: 300_000, timeLines: TIME,
+  },
 });
 
 const kredit = (): FakturaView => buildFakturaView({
-  invoice: invoice({ invoiceType: "CREDIT", amount: -203_250, vatOre: -40_650, invoiceNumber: "K-2026-0003", ocrReference: null }),
-  recipient: "Klient AB", meta: { ...META, organizationOrgNumber: "" },
+  invoice: invoice({ invoiceType: "CREDIT", amount: -203_250, vatOre: -40_650, invoiceNumber: "K-2026-0003", ocrReference: null, dueDate: null }),
+  recipient: "Kalle Klientsson", meta: { ...META, organizationOrgNumber: "", organizationBankgiro: "" },
 });
 
 const radgivning = (): FakturaView => buildFakturaView({
   invoice: invoice({ invoiceType: "STANDARD", amount: 162_600, vatOre: 32_520, notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim)." }),
-  recipient: "Cecilia Carlsson", meta: { matterNumber: "2026-0010", matterTitle: "Umgängestvist Carlsson" },
+  recipient: "Cecilia Carlsson", meta: { matterNumber: "2026-0010", matterTitle: "Umgängestvist Carlsson", recipientAddress: "Provvägen 7, 234 56 Testby" },
 });
 
 const sjalvrisk = (): FakturaView => buildFakturaView({
@@ -77,7 +101,7 @@ const timeLine = (i: number): SpecTimeLine => ({
 const expense = (i: number): SpecExpenseLine => ({ date: "2026-05-03", description: `Utlägg ${i}`, netOre: 90_000, grossOre: 112_500 });
 
 const flersidig = (): FakturaView => buildFakturaView({
-  invoice: invoice({ amount: 12_000_000 }), recipient: "Domstolsverket", meta: META,
+  invoice: invoice({ amount: 12_000_000 }), recipient: "Domstolsverket", meta: { ...META, recipientAddress: "", organizationFooterSeal: PNG_LOGO },
   spec: buildInvoiceSpecification({
     timeLines: Array.from({ length: 70 }, (_, i) => timeLine(i)), expenseLines: Array.from({ length: 25 }, (_, i) => expense(i)),
     rounding: "KRONOR", payableOre: 12_000_000, deductions: [],

@@ -33,6 +33,8 @@ const PROCEDURES: Readonly<Record<string, string>> = {
   "invoice.cancelPaymentPlan": "Avbruten avbetalningsplan",
   "paymentPlan.cancel": "Avbruten avbetalningsplan",
   "invoice.createCredit": "Kreditfaktura",
+  "invoice.creditAndRedo": "Kreditering för att göra om faktura",
+  "invoice.voidDraft": "Makulerad faktura",
   "invoice.createRadgivning": "Rådgivningsfaktura",
   "billingRun.createAcconto": "Acontofaktura",
   "billingRun.createFinal": "Slutfaktura",

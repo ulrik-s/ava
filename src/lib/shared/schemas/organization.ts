@@ -12,6 +12,9 @@ import { organizationIdSchema, officeIdSchema } from "./ids";
  */
 export const orgThresholdSchema = z.number().int().nonnegative().max(2_147_483_647);
 
+/** Byråns betalningsvillkor: hela dagar från fakturadag till förfallodag (#2265). */
+export const paymentTermDaysSchema = z.number().int().min(0).max(365);
+
 /**
  * Organisation = byrå. En per git-repo (vanligen). Lagras i
  * `.ava/organizations/<id>.json`.
@@ -53,6 +56,8 @@ export const organizationSchema = z.object({
   unbilledThresholdOre: orgThresholdSchema.nullish(),
   /** Ålder (dagar) för "Bör faktureras" i Frister (#1911). NULL = kodens standard. */
   unbilledAgeDays: orgThresholdSchema.nullish(),
+  /** Betalningsvillkor i dagar (#2265). NULL = kodens standard (10 dagar). */
+  paymentTermDays: paymentTermDaysSchema.nullish(),
   /** Byråns timpris per kategori (öre/h, exkl moms) — minst specifika nivån,
    *  gäller när varken ärendet eller juristen har ett eget (#1206). */
   hourlyRates: hourlyRatesSchema.default({}),

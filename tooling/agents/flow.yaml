@@ -397,6 +397,11 @@ nudge:
     - väntar-på-användaren
     - auto-godkänn
 
+# Inkorgen: ett issue i kodrepot utan arbetsorder-flagga flyttas till intaget
+# när det är äldre än så här och ingen öppen PR stänger det.
+inbox:
+  grace: 2h
+
 # Hälsokontrollen (statussidan "Agentkedjans status" i ava-feedback): en sak
 # som stått så här länge i ett agenttillstånd trots knuffar larmar, med push.
 health:

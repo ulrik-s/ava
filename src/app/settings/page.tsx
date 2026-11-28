@@ -18,6 +18,7 @@ import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { useCanSeeBackup } from "@/lib/client/backend/server-backup";
 import { trpc } from "@/lib/client/trpc";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
+import { PaymentTermSection } from "./_payment-term-section";
 import { settingsLayout } from "./_settings-layout";
 import { StandardAtgarderSection } from "./_standard-atgarder-section";
 import { DocumentKindsSection, MatterTypesSection } from "./_vocabulary-sections";
@@ -33,13 +34,7 @@ interface OfficeFormState {
   isMain: boolean;
 }
 
-const emptyOffice = (): OfficeFormState => ({
-  name: "",
-  address: "",
-  phone: "",
-  email: "",
-  isMain: false,
-});
+const emptyOffice = (): OfficeFormState => ({ name: "", address: "", phone: "", email: "", isMain: false });
 
 function OfficesSection() {
   const utils = trpc.useUtils();
@@ -455,6 +450,7 @@ export default function SettingsPage() {
         <OrgImagesSection logo={settings.data?.logo ?? null} footerSeal={settings.data?.footerSeal ?? null}
           save={(patch) => updateSettings.mutate(patch)} />
         <OrgFieldsForm form={form} setForm={setForm} isPending={updateSettings.isPending} saved={saved} error={updateSettings.error?.message ?? null} />
+        <PaymentTermSection />
         <DocFooterPreview form={form} />
       </>
     ) },

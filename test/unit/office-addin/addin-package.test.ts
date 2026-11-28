@@ -51,10 +51,21 @@ describe("Outlook-manifestet", () => {
     expect(MANIFEST).not.toContain("{{");
   });
 
-  it("versionen följer release-taggen", () => {
-    expect(text("Version")).toBe("0.7.20");
-    expect(manifestVersion({ AVA_VERSION: "v0.7.20-3-gabc123" })).toBe("0.7.20");
-    expect(manifestVersion({})).toBe("0.0.0");
+  it("versionen följer release-taggen, med huvudversionen ett steg upp (Microsoft kräver minst 1.0)", () => {
+    expect(text("Version")).toBe("1.7.20");
+    expect(manifestVersion({ AVA_VERSION: "v0.7.20-3-gabc123" })).toBe("1.7.20");
+    expect(manifestVersion({ AVA_VERSION: "v1.2.3" })).toBe("2.2.3");
+    expect(manifestVersion({})).toBe("1.0.0");
+  });
+
+  it("versionen är aldrig under 1.0 och ökar förbi den senast utrullade (0.7.77)", () => {
+    for (const tag of ["v0.0.0", "v0.7.79", "v0.8.0", "", "okänd"]) {
+      const [major = "0"] = manifestVersion({ AVA_VERSION: tag }).split(".");
+      expect(Number(major), tag).toBeGreaterThanOrEqual(1);
+    }
+    const parts = (v: string): number[] => v.split(".").map(Number);
+    const [a = 0, b = 0, c = 0] = parts(manifestVersion({ AVA_VERSION: "v0.7.79" }));
+    expect(a * 1e6 + b * 1e3 + c).toBeGreaterThan(0 * 1e6 + 7 * 1e3 + 77);
   });
 
   it("är välformad XML", () => {

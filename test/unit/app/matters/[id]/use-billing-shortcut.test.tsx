@@ -52,4 +52,10 @@ describe("useBillingShortcut", () => {
     result.current.done();
     expect(navigation.replace).toHaveBeenCalledTimes(2);
   });
+
+  it("fakturera=FINAL ber om just slutfakturan (en omgjord faktura, #2260)", () => {
+    navigation.search = new URLSearchParams("id=m1&fakturera=FINAL");
+    const { result } = renderHook(() => useBillingShortcut("m1"));
+    expect(result.current).toMatchObject({ requested: true, preferred: "FINAL" });
+  });
 });

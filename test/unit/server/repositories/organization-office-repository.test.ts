@@ -1,5 +1,6 @@
 /**
  * Organization/Office-repo-paritet (ADR 0020) — in-memory + Drizzle (pglite).
+ * Byråns betalningsvillkor (#2265) prövas mot båda backendarna.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
@@ -12,6 +13,7 @@ import { InMemoryOrganizationRepository } from "@/lib/server/repositories/in-mem
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
+import { DRIZZLE_NAME, openDrizzleRepos, openInMemoryRepos, type OpenRepos } from "./contract-backends";
 
 describe("Organization/Office — in-memory", () => {
   it("org getById/update; offices listByOrg (main först) + getByIdInOrg + demoteMains", async () => {
@@ -72,5 +74,27 @@ describe("Organization/Office — Drizzle (pglite)", () => {
     expect((await repo.getById(org))?.publicAssignmentMatterTypes).toEqual(["Bodelning"]);
     await repo.update(org, { publicAssignmentMatterTypes: [] });
     expect((await repo.getById(org))?.publicAssignmentMatterTypes).toEqual([]);
+  });
+});
+
+describe.each([
+  ["in-memory", (): Promise<OpenRepos> => Promise.resolve(openInMemoryRepos())],
+  [DRIZZLE_NAME, (): Promise<OpenRepos> => openDrizzleRepos()],
+])("Byråns betalningsvillkor (#2265) — %s", (_name, open) => {
+  let opened: OpenRepos;
+  beforeAll(async () => { opened = await open(); });
+  afterAll(async () => { await opened.close(); });
+
+  it("utan val saknas villkoret; 30, 0 och null skrivs och läses tillbaka", async () => {
+    const repo = opened.repos.organizations;
+    const id = asId<"OrganizationId">(uuidv7());
+    await repo.create({ id, name: "Byrå AB" });
+    expect((await repo.getById(id))?.paymentTermDays ?? null).toBeNull();
+    await repo.update(id, { paymentTermDays: 30 });
+    expect((await repo.getById(id))?.paymentTermDays).toBe(30);
+    await repo.update(id, { paymentTermDays: 0 });
+    expect((await repo.getById(id))?.paymentTermDays).toBe(0);
+    await repo.update(id, { paymentTermDays: null });
+    expect((await repo.getById(id))?.paymentTermDays ?? null).toBeNull();
   });
 });

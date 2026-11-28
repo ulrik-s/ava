@@ -31,6 +31,8 @@ export interface SendInvoiceModalProps {
   vatOre?: number | null | undefined;
   ocrReference?: string | null | undefined;
   invoiceDate?: string | Date | null | undefined;
+  /** Förfallodagen — på fakturans uppgiftsblock (#2255). */
+  dueDate?: string | Date | null | undefined;
   invoiceType?: InvoiceType | null | undefined;
   /** Typmarkören (#1933) — bilagans rubrik och fotnot för rådgivningsfakturan. */
   purpose?: InvoicePurpose | null | undefined;
@@ -93,7 +95,7 @@ async function buildPdf(p: SendInvoiceModalProps, recipient: string, sources: Pd
   const view = buildFakturaView({
     invoice: {
       id: p.invoiceId, amount: p.amount, vatOre: p.vatOre,
-      invoiceNumber: p.invoiceNumber, ocrReference: p.ocrReference, invoiceDate: p.invoiceDate,
+      invoiceNumber: p.invoiceNumber, ocrReference: p.ocrReference, invoiceDate: p.invoiceDate, dueDate: p.dueDate,
       invoiceType: p.invoiceType, notes: p.notes, purpose: p.purpose, amountRounding: p.amountRounding,
     },
     recipient: recipient || p.matterTitle,

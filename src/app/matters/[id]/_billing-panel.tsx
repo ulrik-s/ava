@@ -22,11 +22,11 @@ import { invalidateBillingSideEffects, invalidateDocumentLists } from "@/lib/cli
 import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 import { useMatterDocuments } from "@/lib/client/documents/use-matter-documents";
-import { fakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
+import { fakturaOrgMeta, pickFakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaDocInvoice } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { useTRPC, useTRPCClient } from "@/lib/client/trpc";
-import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing/billing-flow";
+import { availableActions, type BillingAction, type BillingActionType, type FlowMatter } from "@/lib/shared/billing/billing-flow";
 import { insurerPruningPending, krCanCreateInvoice } from "@/lib/shared/billing/billing-todo";
 import { availableKrActions, canVoidKostnadsrakning, isActiveKr, krStateOf, type KostnadsrakningState } from "@/lib/shared/billing/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -36,7 +36,7 @@ import { BillingActions, useApplyBillingShortcut } from "./_billing-actions";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { krCardSuffix, openKrDoc, pickKrDoc, runDateOf, RunsList, svDate, type BillingRunRow, type KrDocInfo, type StandaloneInvoiceRow } from "./_billing-runs-list";
 import { BillingSummary } from "./_billing-summary";
-import { clientOf, KostnadsrakningEntry, type MatterContext } from "./_kostnadsrakning-entry";
+import { clientAddressOf, clientOf, KostnadsrakningEntry, type MatterContext } from "./_kostnadsrakning-entry";
 import { RadgivningEntryWarning } from "./_radgivning-entry";
 import { RecordBeslutDialog } from "./_record-beslut-dialog";
 import { SettlementDialog } from "./_settlement-dialog";
@@ -48,6 +48,8 @@ interface Props {
   matter: MatterContext;
   /** Begäran om att fakturera nu (#1853): panelen öppnar det flödet väljer. */
   shortcutRequested?: boolean | undefined;
+  /** Fakturan begäran gäller (en omgjord faktura, #2260); utelämnad = flödet väljer. */
+  shortcutPreferred?: BillingActionType | undefined;
   /** Anropas en gång när begäran hanterats, också när inget öppnas. */
   onShortcutDone?: (() => void) | undefined;
 }
@@ -156,7 +158,10 @@ function useBillingMeta(matter: MatterContext): BillingMeta {
   const settings = useQuery(useTRPC().organization.getSettings.queryOptions()).data;
   return {
     matterNumber: matter.matterNumber, matterTitle: matter.title,
-    ...omitUndefined({ clientName: clientOf(matter) || undefined, clientShareBips: matter.clientShareBips ?? undefined }),
+    ...omitUndefined({
+      clientName: clientOf(matter) || undefined, clientAddress: clientAddressOf(matter) || undefined,
+      clientShareBips: matter.clientShareBips ?? undefined,
+    }),
     // Byråns namn, org.nr och logga till fakturadokumenten (#1439).
     ...fakturaOrgMeta(settings),
   };
@@ -184,14 +189,14 @@ function BillingDialogs({ matterId, matter, rows, dialog, setDialog, verdictRunI
         <VerdictDialog billingRunId={verdictRunId} workValueOre={amounts.workValueOre}
           awardedOre={amounts.awardedOre}
           matterId={matterId} matterNumber={matter.matterNumber} matterTitle={matter.title}
-          clientName={clientOf(matter)} organization={fakturaOrgMeta({ name: meta.organizationName, orgNumber: meta.organizationOrgNumber, logo: meta.organizationLogo })}
+          clientName={clientOf(matter)} organization={pickFakturaOrgMeta(meta)}
           onClose={() => { setVerdictRunId(null); onRefetch(); }} />
       )}
     </>
   );
 }
 
-export function BillingPanel({ matterId, matter, shortcutRequested, onShortcutDone }: Props) {
+export function BillingPanel({ matterId, matter, shortcutRequested, shortcutPreferred, onShortcutDone }: Props) {
   const t = useTRPC();
   const queryClient = useQueryClient();
   const utils = useBillingQueryUtils();
@@ -233,7 +238,7 @@ export function BillingPanel({ matterId, matter, shortcutRequested, onShortcutDo
     else if (a.dialog === "settlement") setShowSettle(true);
     else setDialog(a.type as DialogState);
   };
-  useApplyBillingShortcut({ requested: shortcutRequested, runs, matter: flowMatter, rows, onPick,
+  useApplyBillingShortcut({ requested: shortcutRequested, preferred: shortcutPreferred, runs, matter: flowMatter, rows, onPick,
     openMenu: () => setMenuOpen(true), onDone: onShortcutDone });
   return (
     <div className={SECTION_FILL_CLASS}>

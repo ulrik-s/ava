@@ -6,9 +6,19 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
 import {
-  AGENT_PR_CAP_MAX, AGENT_PR_PER_DAY, addedMigrationLines, agentPrCap, baselineDiffTightens, cappedCreatedAts, countsTowardCap, FILE_SIZE_BASELINE, ROUTER_SIZE_BASELINE,
-  guardViolations, type GuardInput, humanApproved, rankInLast24h, trustedLabels,
+  AGENT_PR_CAP_MAX, AGENT_PR_PER_DAY, addedMigrationLines, agentPrCap, baselineDiffTightens, cappedCreatedAts, countsTowardCap, FILE_SIZE_BASELINE,
+  ROUTER_SIZE_BASELINE, guardLabels, guardViolations as violationsWith, type GuardInput, humanApproved as approvedBy, rankInLast24h,
+  trustedLabels as trustedWith,
 } from "../../tooling/scripts/agent-guard";
+import { loadFlow } from "../../tooling/scripts/flow/load";
+
+const flow = loadFlow();
+const LABELS = guardLabels(flow);
+const APPROVER = { ulrik: flow.ulrik, label: LABELS.humanApproved };
+const guardViolations = (input: GuardInput): string[] => violationsWith(input, LABELS);
+const humanApproved = (events: Parameters<typeof approvedBy>[0]): boolean => approvedBy(events, APPROVER);
+const trustedLabels = (labels: readonly string[], events: Parameters<typeof trustedWith>[1]): string[] =>
+  trustedWith(labels, events, APPROVER);
 
 const BASE: GuardInput = { labels: ["agent-pr", "granskad"], files: ["src/app/matters/page.tsx"], addedMigrationLines: [], agentPrsLast24h: 1 };
 
@@ -258,6 +268,12 @@ describe("människa-godkänd måste vara satt av Ulrik själv", () => {
     expect(humanApproved([])).toBe(false);
   });
 
+  it("godtar bara den identitet och etikett som skickas in", () => {
+    expect(approvedBy([ev("labeled", "någon")], { ulrik: "någon", label: "människa-godkänd" })).toBe(true);
+    expect(approvedBy([ev("labeled")], { ulrik: "någon", label: "människa-godkänd" })).toBe(false);
+    expect(approvedBy([ev("labeled")], { ulrik: "ulrik-s", label: "annan" })).toBe(false);
+  });
+
   it("trustedLabels tar bort en etikett som en agent satt, och läser bara loggen när det behövs", () => {
     let reads = 0;
     const events = () => { reads++; return [ev("labeled", "ulrik-s", true)]; };
@@ -265,5 +281,23 @@ describe("människa-godkänd måste vara satt av Ulrik själv", () => {
     expect(reads).toBe(0);
     expect(trustedLabels(["agent-pr", "människa-godkänd"], events)).toEqual(["agent-pr"]);
     expect(trustedLabels(["agent-pr", "människa-godkänd"], () => [ev("labeled")])).toEqual(["agent-pr", "människa-godkänd"]);
+  });
+});
+
+describe("guardLabels läser etiketterna ur flow.yaml (#1996)", () => {
+  it("ger PR-maskinens etiketter och identiteten ur flödet", () => {
+    expect(LABELS).toEqual({ reviewed: "granskad", blocked: "blockerad", humanApproved: "människa-godkänd", agentPr: "agent-pr" });
+    expect(flow.ulrik).toBe("ulrik-s");
+  });
+
+  it("vakten följer etiketterna den får (ett namnbyte i flödet slår igenom)", () => {
+    const renamed = { ...LABELS, reviewed: "godkänd" };
+    expect(violationsWith(BASE, renamed)).toEqual([expect.stringContaining("etiketten godkänd saknas")]);
+    expect(violationsWith({ ...BASE, labels: ["agent-pr", "godkänd"] }, renamed)).toEqual([]);
+  });
+
+  it("kastar när flödet saknar PR-maskinen", () => {
+    const { "code-pr": _dropped, ...machines } = flow.machines;
+    expect(() => guardLabels({ ...flow, machines })).toThrow("code-pr");
   });
 });

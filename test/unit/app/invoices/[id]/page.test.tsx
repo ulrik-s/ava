@@ -29,14 +29,20 @@ const utilsMock = {
   client: { document: { downloadContent: { query: vi.fn() } } },
 };
 let setStatusOpts: { onSuccess: () => void } | undefined;
+/** En mutationsstubbe; `mutateAsync` används av "Fel på fakturan?"-dialogen (#2260). */
+const stub = () => ({ mutate: vi.fn(), mutateAsync: vi.fn((_input: unknown) => Promise.resolve()), isPending: false });
 const stubs = {
-  recordPayment: { mutate: vi.fn(), isPending: false },
-  createPaymentPlan: { mutate: vi.fn(), isPending: false },
-  cancelPaymentPlan: { mutate: vi.fn(), isPending: false },
-  setStatus: { mutate: vi.fn(), isPending: false },
-  createCredit: { mutate: vi.fn(), isPending: false },
-  writeOff: { mutate: vi.fn(), isPending: false },
+  recordPayment: stub(),
+  createPaymentPlan: stub(),
+  cancelPaymentPlan: stub(),
+  setStatus: stub(),
+  voidDraft: stub(),
+  creditAndRedo: stub(),
+  writeOff: stub(),
 };
+/** Navigeringen efter "Kreditera och gör om" (#2260). */
+const pushMock = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock }), usePathname: () => null, useSearchParams: () => null }));
 
 /** Callbacks som sidan ger useMutation — testerna spelar upp serverns svar genom dem. */
 interface MutationOpts { onSuccess?: () => void; onError?: (e: Error) => void }
@@ -46,11 +52,13 @@ const captured = (key: StubKey, o: MutationOpts) => { mutationOpts[key] = o; ret
 
 /** Låt mutationen svara som servern: lyckas, eller fel med `error` som meddelande. */
 function respond(key: StubKey, error?: string): void {
-  stubs[key].mutate = vi.fn(() => {
+  const run = () => {
     const o = mutationOpts[key];
     if (error) o?.onError?.(new Error(error));
     else o?.onSuccess?.();
-  });
+  };
+  stubs[key].mutate = vi.fn(run);
+  stubs[key].mutateAsync = vi.fn((_input: unknown) => { run(); return error ? Promise.reject(new Error(error)) : Promise.resolve(); });
 }
 
 // Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
@@ -87,7 +95,8 @@ vi.mock("@/lib/client/trpc", () => ({
       createPaymentPlan: { useMutation: (o: MutationOpts) => captured("createPaymentPlan", o) },
       cancelPaymentPlan: { useMutation: () => stubs.cancelPaymentPlan },
       setStatus: { useMutation: (o: { onSuccess: () => void }) => { setStatusOpts = o; return stubs.setStatus; } },
-      createCredit: { useMutation: (o: MutationOpts) => captured("createCredit", o) },
+      voidDraft: { useMutation: (o: MutationOpts) => captured("voidDraft", o) },
+      creditAndRedo: { useMutation: (o: MutationOpts) => captured("creditAndRedo", o) },
       writeOff: { useMutation: (o: MutationOpts) => captured("writeOff", o) },
     },
     invoiceDispatch: {
@@ -160,7 +169,8 @@ beforeEach(() => {
   stubs.createPaymentPlan.mutate = vi.fn();
   stubs.cancelPaymentPlan.mutate = vi.fn();
   stubs.setStatus.mutate = vi.fn();
-  stubs.createCredit.mutate = vi.fn();
+  stubs.voidDraft.mutateAsync = vi.fn((_input: unknown) => Promise.resolve());
+  stubs.creditAndRedo.mutateAsync = vi.fn((_input: unknown) => Promise.resolve());
   stubs.writeOff.mutate = vi.fn();
 });
 
@@ -239,11 +249,13 @@ describe("InvoiceDetailPage", () => {
     expect(screen.getByText(/Detta är en kreditfaktura/i)).toBeInTheDocument();
   });
 
-  it("visar Kreditera-knappen på SENT-faktura utan creditNote", async () => {
+  it("visar Fel på fakturan? på en SENT-faktura — inga Annullera/Kreditera-knappar (#2260)", async () => {
     renderPage();
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Kreditera/i })).toBeInTheDocument(),
+      expect(screen.getByRole("button", { name: /Fel på fakturan\?/i })).toBeInTheDocument(),
     );
+    expect(screen.queryByRole("button", { name: /^Annullera$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Kreditera$/i })).not.toBeInTheDocument();
   });
 
   it("visar 'krediterad'-banner när creditNote finns", async () => {
@@ -327,40 +339,55 @@ describe("InvoiceDetailPage", () => {
     expect(skapaBtn.disabled).toBe(true);
   });
 
-  it("öppnar och submittar Kreditera-modal", async () => {
+  it("Kreditera och gör om: anledningen skickas och faktureringen öppnas för ärendet (#2260)", async () => {
+    invoiceQuery.data = { ...baseInvoice, invoiceNumber: "F-2026-0007", matterId: "m1", invoiceType: "FINAL" };
     renderPage();
-    fireEvent.click(
-      await waitFor(() => screen.getByRole("button", { name: /^Kreditera$/i })),
-    );
-    expect(screen.getByRole("heading", { name: /Kreditera faktura/i })).toBeInTheDocument();
-    const noteArea = screen.getByPlaceholderText<HTMLTextAreaElement>(/anledning/i);
-    fireEvent.change(noteArea, { target: { value: "Felaktig fakturering" } });
-    const krediteraBtns = screen.getAllByRole("button", { name: /Kreditera/i });
-    fireEvent.click(krediteraBtns[krediteraBtns.length - 1]!);
-    expect(stubs.createCredit.mutate).toHaveBeenCalledWith({
-      invoiceId: "i1",
-      notes: "Felaktig fakturering",
-    });
+    fireEvent.click(await screen.findByRole("button", { name: /Fel på fakturan\?/i }));
+    expect(screen.getByText(/kan inte ändras eller makuleras/)).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText<HTMLTextAreaElement>(/fel timpris/i), { target: { value: "Felaktig fakturering" } });
+    fireEvent.click(screen.getByRole("button", { name: "Kreditera faktura F-2026-0007 och gör om" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/matters/__shell__/?id=m1&fakturera=FINAL"));
+    expect(stubs.creditAndRedo.mutateAsync).toHaveBeenCalledWith({ invoiceId: "i1", notes: "Felaktig fakturering" });
+  });
+
+  it("Makulera ett utkast: dialogen förklarar och makulerar, utan navigering (#2260)", async () => {
+    invoiceQuery.data = { ...baseInvoice, status: "DRAFT", invoiceNumber: "F-2026-0008", matterId: "m1" };
+    respond("voidDraft");
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Fel på fakturan\?/i }));
+    expect(screen.getByText(/som inte används igen/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Makulera faktura F-2026-0008" }));
+    await waitFor(() => expect(stubs.voidDraft.mutateAsync).toHaveBeenCalledWith({ invoiceId: "i1" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("en betald faktura: dialogen förklarar varför den inte görs om och erbjuder ingen åtgärd (#2260)", async () => {
+    invoiceQuery.data = { ...baseInvoice, status: "PAID", payments: [{ id: "p1", amount: 1000000, paidAt: new Date("2026-04-10"), note: null, recordedBy: null }] };
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Fel på fakturan\?/i }));
+    expect(screen.getByText(/tillgodohavande/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Kreditera faktura|Makulera faktura/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stäng" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("Kreditera och gör om som servern nekar: felet visas, ingen navigering", async () => {
+    respond("creditAndRedo", "Servern nekade");
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Fel på fakturan\?/i }));
+    fireEvent.click(lastButton(/och gör om/));
+    await waitFor(() => expect(screen.getByText("Servern nekade")).toBeInTheDocument());
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
   it("efter statusändring hämtas ärendets Anteckningar och Frister om (#1221)", async () => {
+    invoiceQuery.data = { ...baseInvoice, status: "DRAFT" };
     renderPage();
-    await waitFor(() => screen.getByRole("button", { name: /Annullera/i }));
+    await waitFor(() => screen.getByRole("button", { name: /Markera som skickad/i }));
     setStatusOpts?.onSuccess();
     expect(utilsMock.serviceNote.list.invalidate).toHaveBeenCalled();
     expect(utilsMock.watchlist.list.invalidate).toHaveBeenCalled();
-  });
-
-  it("Annullera-knappen sätter status till CANCELLED", async () => {
-    renderPage();
-    const btn = await waitFor(() =>
-      screen.getByRole("button", { name: /Annullera/i }),
-    );
-    fireEvent.click(btn);
-    expect(stubs.setStatus.mutate).toHaveBeenCalledWith({
-      invoiceId: "i1",
-      status: "CANCELLED",
-    });
   });
 
   it("Skriv av som kundförlust öppnar modal → writeOff-mutationen (ADR 0007)", async () => {
@@ -529,15 +556,12 @@ describe("InvoiceDetailPage", () => {
     expect(screen.queryByRole("button", { name: /Registrera betalning/i })).not.toBeInTheDocument();
   });
 
-  it("Avbryt i Kreditera-modalen stänger den", async () => {
+  it("Avbryt i Fel på fakturan?-dialogen stänger den", async () => {
     renderPage();
-    fireEvent.click(
-      await waitFor(() => screen.getByRole("button", { name: /^Kreditera$/i })),
-    );
-    expect(screen.getByRole("heading", { name: /Kreditera faktura/i })).toBeInTheDocument();
-    const cancels = screen.getAllByRole("button", { name: /Avbryt/i });
-    fireEvent.click(cancels[0]!);
-    expect(screen.queryByRole("heading", { name: /Kreditera faktura/i })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /Fel på fakturan\?/i }));
+    expect(screen.getByRole("heading", { name: /Fel på fakturan\?/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("heading", { name: /Fel på fakturan\?/i })).not.toBeInTheDocument();
   });
 
   it("Avbryt i plan-modalen stänger den", async () => {
@@ -643,8 +667,6 @@ const MODAL_CASES: readonly ModalCase[] = [
   { name: "avbetalningsplan", key: "createPaymentPlan", open: /Skapa avbetalningsplan/i, heading: /Skapa avbetalningsplan/i,
     fill: () => fireEvent.change(screen.getByLabelText("Månadsbelopp (kr)"), { target: { value: "1000" } }),
     submit: () => screen.getByRole("button", { name: /Skapa plan/i }) },
-  { name: "kreditering", key: "createCredit", open: /^Kreditera$/i, heading: /Kreditera faktura/i,
-    fill: () => {}, submit: () => lastButton(/Kreditera/i) },
   { name: "avskrivning", key: "writeOff", open: /Skriv av som kundförlust/i, heading: /Skriv av som kundförlust/i,
     fill: () => {}, submit: () => screen.getByRole("button", { name: "Skriv av" }) },
 ];
