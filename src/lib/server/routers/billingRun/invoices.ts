@@ -36,6 +36,7 @@ import {
   type TimeEntryId,
 } from "@/lib/shared/schemas/ids";
 import { logMatterNote } from "../../billing/matter-note";
+import { invoiceDueDate } from "../../billing/payment-term";
 import { emit } from "../../events/emit";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../../queued-call";
 import type { Repositories } from "../../repositories/repositories";
@@ -70,17 +71,18 @@ async function resolveFinalWork(
 
 /**
  * Valfritt klient-id + datum (paritet med legacy `invoice.createFinal` så demo-
- * generatorn/fixtures kan styra dem). Default-invoiceDate = nu. Tomma → store
- * genererar id / sätter dueDate null.
+ * generatorn/fixtures kan styra dem). Default-invoiceDate = nu, och utan
+ * förfallodag gäller byråns betalningsvillkor (#2265, standard tio dagar).
  */
-function invoiceMeta(
-  scope: QueuedCallScope,
+async function invoiceMeta(
+  repos: Repositories, scope: QueuedCallScope & { orgId: OrganizationId },
   input: { id?: string | undefined; invoiceDate?: string | undefined; dueDate?: string | undefined },
-): Partial<{ id: ReturnType<typeof asId<"InvoiceId">>; invoiceDate: Date; dueDate: Date }> {
+): Promise<Partial<{ id: ReturnType<typeof asId<"InvoiceId">>; invoiceDate: Date; dueDate: Date }>> {
+  const invoiceDate = dateOrCallTime(scope, input.invoiceDate);
   return omitUndefined({
     id: input.id ? asId<"InvoiceId">(input.id) : undefined,
-    invoiceDate: dateOrCallTime(scope, input.invoiceDate),
-    dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+    invoiceDate,
+    dueDate: await invoiceDueDate(repos, scope.orgId, input.dueDate, invoiceDate),
   });
 }
 
@@ -147,7 +149,7 @@ export const invoiceProcedures = {
           accontoBreakdown: settlementBreakdown, settlementBreakdown,
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
-          ...invoiceMeta(ctx, input), notes: input.notes,
+          ...(await invoiceMeta(tx, ctx, input)), notes: input.notes,
         });
         const run = await tx.billingRuns.create({
           id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
@@ -196,7 +198,7 @@ export const invoiceProcedures = {
           vatBreakdown: rest.lines, amountRounding: CURRENT_ROUNDING,
           invoiceType: "FINAL", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
-          ...invoiceMeta(ctx, input), notes: input.notes,
+          ...(await invoiceMeta(tx, ctx, input)), notes: input.notes,
         });
         const run = await tx.billingRuns.create({
           id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),

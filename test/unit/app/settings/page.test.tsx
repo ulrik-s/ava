@@ -55,6 +55,10 @@ vi.mock("@/components/layout/panel-page", () => ({
 vi.mock("@/app/settings/_watchlist-thresholds-section", () => ({
   WatchlistThresholdsSection: () => <div data-testid="watchlist-thresholds" />,
 }));
+// Betalningsvillkoret (#2265) likaså (payment-term-section.test.tsx).
+vi.mock("@/app/settings/_payment-term-section", () => ({
+  PaymentTermSection: () => <div data-testid="payment-term" />,
+}));
 
 vi.mock("@/components/settings/datasource-section", () => ({
   DatasourceSection: () => null,
@@ -159,6 +163,12 @@ describe("SettingsPage", () => {
     expect(panel).not.toBeNull();
     expect(panel?.textContent).toContain("När ett ärende hamnar under Bör faktureras i Frister (admin).");
     expect(screen.getByTestId("watchlist-thresholds")).toBeInTheDocument();
+  });
+
+  it("betalningsvillkoret står i panelen Byråns uppgifter (#2265)", () => {
+    const { container } = render(<SettingsPage />);
+    const panel = container.querySelector('[data-panel="org"]');
+    expect(panel?.querySelector('[data-testid="payment-term"]')).not.toBeNull();
   });
 
   it("Backup-panelen bara för den som får se den (#1431)", () => {

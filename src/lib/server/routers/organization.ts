@@ -6,7 +6,7 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { orgImageSchema } from "@/lib/shared/org-image";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
-import { orgThresholdSchema, type Office, type Organization } from "@/lib/shared/schemas/organization";
+import { orgThresholdSchema, paymentTermDaysSchema, type Office, type Organization } from "@/lib/shared/schemas/organization";
 import { standardAtgarderInputSchema } from "@/lib/shared/standard-atgard";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
 import { updateOrgSettings } from "../organization/settings";
@@ -44,6 +44,11 @@ function watchlistThresholdFields(org: Organization) {
   };
 }
 
+/** Byråns betalningsvillkor i dagar (#2265); `null` = kodens standard (10). */
+function invoicingFields(org: Organization) {
+  return { paymentTermDays: org.paymentTermDays ?? null };
+}
+
 /** Byråns ärendetyper och vilka av dem som är offentligt uppdrag (#1638). */
 function matterTypeFields(org: Organization) {
   return {
@@ -68,6 +73,7 @@ function toOrgSettings(org: Organization) {
     /** Gränsbelopp (öre) för aconto-utskick (#885). */
     accontoThresholdOre: org.accontoThresholdOre ?? null,
     ...watchlistThresholdFields(org),
+    ...invoicingFields(org),
     /** Byråns timpris per kategori (öre/h, #1206). */
     hourlyRates: org.hourlyRates ?? {},
     /** Byråns standardåtgärder (#956) — samma beskrivning + tid för alla. */
@@ -114,6 +120,8 @@ export const organizationRouter = router({
         /** Trösklar för "Bör faktureras" (#1911). `null` = tillbaka till standard. */
         unbilledThresholdOre: orgThresholdSchema.nullable().optional(),
         unbilledAgeDays: orgThresholdSchema.nullable().optional(),
+        /** Betalningsvillkor i dagar (#2265). `null` = tillbaka till standard. */
+        paymentTermDays: paymentTermDaysSchema.nullable().optional(),
         /** Timpris per kategori (öre/h, #1206). HELA kartan ersätts; en
          *  utelämnad kategori har inget byråpris (→ timarvodet). */
         hourlyRates: hourlyRatesSchema.optional(),

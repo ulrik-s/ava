@@ -44,6 +44,9 @@ export const organizations = pgTable("organizations", {
   /** Ålder (dagar) för "Bör faktureras" i Frister (#1911). NULL = kodens
    *  standard (DEFAULT_UNBILLED_AGE_DAYS). */
   unbilledAgeDays: integer("unbilled_age_days"),
+  /** Betalningsvillkor (dagar från fakturadag till förfallodag, #2265). NULL =
+   *  kodens standard (DEFAULT_PAYMENT_TERM_DAYS). */
+  paymentTermDays: integer("payment_term_days"),
   /** Byråns timpris per kategori (öre/h, exkl moms) — minst specifika nivån (#1206). */
   hourlyRates: hourlyRatesColumn(),
   /** Byråns standardåtgärder (#956) — samma beskrivning + tidsåtgång för alla. */
