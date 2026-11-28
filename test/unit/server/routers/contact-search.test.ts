@@ -14,7 +14,7 @@ const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
 };
 
-function caller() {
+function caller(extra: ReadonlyArray<Record<string, unknown>> = []) {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "Byrån" }, { id: "org-2", name: "Annan byrå" }],
     contacts: [
@@ -26,6 +26,7 @@ function caller() {
       { id: "c4", organizationId: "org-1", name: "Anna Lindström", contactType: "PERSON", parentId: "c3" },
       // Annan byrås kontakt — får aldrig synas.
       { id: "c5", organizationId: "org-2", name: "Anna Andersson", contactType: "PERSON", parentId: null },
+      ...extra,
     ],
   }, async () => { /* noop write-back */ });
   return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }));
@@ -71,6 +72,28 @@ describe("contacts.search (#1128)", () => {
   it("delsträngsträffar rangordnas efter jävsträffarna", async () => {
     // "ka": Karlsson och Kask börjar på termen; Annika har den bara mitt i ordet.
     expect(names(await caller().contacts.search({ term: "ka" }))).toEqual(["Anna Karlsson", "Björn Kask", "Annika Berg"]);
+  });
+});
+
+// #1891: Välj domstol i kostnadsräkningen söker bara bland byråns domstolar.
+describe("contacts.search med contactType (#1891)", () => {
+  const COURTS = [
+    // Prefixträff på "rätt" — rankas före domstolarna, där termen står mitt i ordet.
+    { id: "p-r", organizationId: "org-1", name: "Rätt Rasmus", contactType: "PERSON", parentId: null },
+    { id: "d-1", organizationId: "org-1", name: "Attunda tingsrätt", contactType: "COURT", parentId: null },
+    { id: "d-2", organizationId: "org-1", name: "Svea hovrätt", contactType: "COURT", parentId: null },
+    { id: "d-x", organizationId: "org-2", name: "Göta hovrätt", contactType: "COURT", parentId: null },
+  ];
+
+  it("bara kontakter av typen, och filtret gäller före limit", async () => {
+    const c = caller(COURTS);
+    expect(names(await c.contacts.search({ term: "rätt", limit: 1 }))).toEqual(["Rätt Rasmus"]);
+    expect(names(await c.contacts.search({ term: "rätt", contactType: "COURT", limit: 1 }))).toEqual(["Attunda tingsrätt"]);
+    expect(names(await c.contacts.search({ term: "rätt", contactType: "COURT" }))).toEqual(["Attunda tingsrätt", "Svea hovrätt"]);
+  });
+
+  it("en annan byrås domstol syns inte", async () => {
+    expect(names(await caller(COURTS).contacts.search({ term: "Göta", contactType: "COURT" }))).toEqual([]);
   });
 });
 

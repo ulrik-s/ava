@@ -1,6 +1,5 @@
 {
   "src/app/invoices/[id]/_client.tsx": 578,
-  "src/app/matters/[id]/_kostnadsrakning-modal.tsx": 454,
   "src/app/settings/page.tsx": 493,
   "src/components/documents/document-browser.tsx": 493,
   "src/components/shell/demo-bootstrap.tsx": 569,
