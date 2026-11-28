@@ -71,10 +71,12 @@ describe("faktureringshändelser blir tjänsteanteckningar (#1221)", () => {
     const c = makeCaller({ paymentMethod: "PRIVAT" });
     const a = await c.billingRun.createFinal({ matterId: M, recipient: "KLIENT" });
     await c.invoiceDispatch.queue({ invoiceId: a.invoice.id, channel: "email", recipient: "k@x.se" });
-    await c.invoice.setStatus({ invoiceId: a.invoice.id, status: "CANCELLED" });
+    // Skickad → krediteras och görs om, annulleras aldrig rakt av (#2260).
+    await expect(c.invoice.setStatus({ invoiceId: a.invoice.id, status: "CANCELLED" })).rejects.toThrow(/kreditnota/);
+    const credit = await c.invoice.creditAndRedo({ invoiceId: a.invoice.id });
     const texts = await noteTexts(c);
     expect(texts).toContain(`Faktura ${a.invoice.invoiceNumber} köad för utskick till k@x.se`);
-    expect(texts).toContain(`Faktura ${a.invoice.invoiceNumber} markerad som annullerad`);
+    expect(texts.some((t) => t.startsWith(`Kreditfaktura ${credit.invoiceNumber} skapad`) && t.endsWith("posterna är tillbaka under Fakturera"))).toBe(true);
   });
 
   it("aconto och slutfaktura: 'Faktura … skapad (typ, belopp)'", async () => {

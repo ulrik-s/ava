@@ -25,10 +25,16 @@ export function addinBaseUrl(env: Env): string {
   return domain ? `https://${domain}/addin` : "https://localhost:3443";
 }
 
-/** `v0.7.20`, `v0.7.20-3-gabc123` → `0.7.20`. Okänt → `0.0.0`. */
+/**
+ * Manifestets version ur release-taggen, med huvudversionen ett steg upp:
+ * `v0.7.20`, `v0.7.20-3-gabc123` → `1.7.20`. Okänt → `1.0.0`. Microsofts
+ * godkännandekontroll underkänner versioner under 1.0 ("Manifest Version Too
+ * Low", 2026-11-28), och versionen måste fortsätta öka för att Outlook ska
+ * hämta en uppdatering (förra var 0.7.77, nästa blir 1.7.x).
+ */
 export function manifestVersion(env: Env): string {
   const m = /(\d+)\.(\d+)\.(\d+)/.exec(value(env, "AVA_VERSION") ?? "");
-  return m ? `${m[1]}.${m[2]}.${m[3]}` : "0.0.0";
+  return m ? `${Number(m[1]) + 1}.${m[2]}.${m[3]}` : "1.0.0";
 }
 
 /** Tilläggets konfiguration, eller null om installationen saknar Entra-uppgifter. */

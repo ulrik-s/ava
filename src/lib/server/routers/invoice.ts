@@ -7,7 +7,8 @@
  *   • recordPayment — registrerar Payment, auto-markerar PAID/COMPLETED
  *   • createPaymentPlan — knyter avbetalningsplan till en SENT faktura
  *   • cancelPaymentPlan — river planen och återställer invoice.status=SENT
- *   • setStatus — manuell statusändring (SENT/CANCELLED); kundförlust via writeOff
+ *   • setStatus — manuell statusändring (SENT, makulera utkast); kundförlust via writeOff
+ *   • createCredit / creditAndRedo / voidDraft — kreditera, gör om, makulera (#2260)
  *
  * Invariant: allt är scopat till ctx.orgId via matter-joinen, så en org
  * kan aldrig se/mutera en annan orgs fakturor.
@@ -17,13 +18,14 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { creditCreatedNote, invoiceStatusNote, radgivningInvoicedNote } from "@/lib/shared/billing/billing-notes";
 import { isPaymentPlanSettled } from "@/lib/shared/billing/invoice-calc";
+import { ISSUED_CANCEL_REASON } from "@/lib/shared/billing/invoice-redo";
 import { canTransition, transitionErrorMessage } from "@/lib/shared/billing/invoice-state-machine";
 import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/billing/rattshjalp";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/billing/write-off-calc";
 import { ledgerRefOf } from "@/lib/shared/ledger-ref";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { pageEnvelope } from "@/lib/shared/paginate";
-import type { Invoice, Payment, PaymentPlan, TimeEntry, WriteOff } from "@/lib/shared/schemas/billing";
+import type { Payment, PaymentPlan, TimeEntry, WriteOff } from "@/lib/shared/schemas/billing";
 import { isoDateOrDateTimeInput } from "@/lib/shared/schemas/common";
 import { invoiceStatusSchema, invoiceTypeSchema } from "@/lib/shared/schemas/enums";
 import {
@@ -38,38 +40,25 @@ import {
   type UserId,
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
-import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
+import { creditInvoice } from "../billing/credit-invoice";
 import { gatherInvoiceLedger } from "../billing/invoice-ledger";
 import { logMatterNote } from "../billing/matter-note";
 import { createRadgivningInvoice } from "../billing/radgivning-invoice";
+import { creditAndRedoInvoice, voidDraftInvoice } from "../billing/redo-invoice";
 import { emit } from "../events/emit";
-import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
+import { dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
 import { router, adminProcedure, orgProcedure } from "../trpc";
 
-
-/**
- * Kreditnotans moms + uppdelning: originalets, med omvända tecken (#977).
- *
- * En kreditnota ska spegla den faktura den avser post för post — samma konton,
- * samma momssatser, motsatt riktning. Saknar originalet uppdelning (rader från
- * före #782) speglar vi bara `vatOre`; då får verifikatet falla tillbaka på
- * enkelrads-vägen precis som originalet gjorde.
- */
-function mirroredCreditAmounts(original: Pick<Invoice, "vatOre" | "vatBreakdown" | "amountRounding">): Partial<Invoice> {
-  const lines = original.vatBreakdown ?? [];
-  // Krediteringen avrundas som originalet (#1438) — den räknas aldrig om.
-  const amountRounding = original.amountRounding ?? undefined;
-  return omitUndefined({
-    amountRounding,
-    vatOre: original.vatOre == null ? undefined : -original.vatOre,
-    vatBreakdown: lines.length === 0
-      ? undefined
-      : lines.map((l) => ({ ...l, netOre: -l.netOre, vatOre: -l.vatOre })),
-  });
-}
+/** Krediteringens indata (`createCredit`, `creditAndRedo`). */
+const creditInputSchema = z.object({
+  /** Valfritt klient-genererat id för kredit-fakturan (demo-generator/fixtures). */
+  id: invoiceIdSchema.optional(),
+  invoiceId: invoiceIdSchema,
+  notes: z.string().optional(),
+});
 
 // ─── writeOff-helpers (ADR 0007) — håller mutationen under complexity ≤ 8 ──
 
@@ -216,79 +205,36 @@ export const invoiceRouter = router({
     ),
 
   /**
-   * FINAL: summerar valda time entries + expenses, drar av valda acconto-
-   * fakturor. Allt går i en transaktion så time entries/expenses inte
-   * "flaggas som fakturerade" halvvägs om något kraschar.
-   */
-  /**
-   * CREDIT: krediterar en befintlig faktura. Skapar en ny faktura med
-   * negativt belopp som pekar tillbaka på originalet, och sätter originalets
-   * status till CANCELLED. Kan inte kreditera en redan krediterad eller
-   * annullerad faktura.
+   * CREDIT: krediterar en befintlig faktura (`creditInvoice`): en ny faktura med
+   * negativt belopp som pekar tillbaka på originalet, och originalet blir
+   * CANCELLED. Kan inte kreditera en redan krediterad eller annullerad faktura.
    */
   createCredit: orgProcedure
-    .input(
-      z.object({
-        /** Valfritt klient-genererat id för kredit-fakturan (demo-generator/fixtures). */
-        id: invoiceIdSchema.optional(),
-        invoiceId: invoiceIdSchema,
-        notes: z.string().optional(),
-      }),
-    )
-    // Migrerad till repository-sömmen (ADR 0020). "Redan krediterad"-kollen via
-    // getCreditNoteFor; aktiv plan avbryts via paymentPlans; allt i transaktionen.
+    .input(creditInputSchema)
     .mutation(({ ctx, input }) =>
       ctx.repos.transaction(async (repos) => {
-        const original = await repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
-        if (!original) throw new TRPCError({ code: "NOT_FOUND" });
-        if (original.invoiceType === "CREDIT") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Kan inte kreditera en kreditfaktura.",
-          });
-        }
-        if (await repos.invoices.getCreditNoteFor(original.id)) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Fakturan är redan krediterad.",
-          });
-        }
-        if (original.status === "CANCELLED") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Kan inte kreditera en annullerad faktura.",
-          });
-        }
-
-        // Om originalet har en aktiv avbetalningsplan: avbryt den
-        const plan = await repos.paymentPlans.getByInvoiceId(original.id);
-        if (plan && plan.status === "ACTIVE") {
-          await repos.paymentPlans.update(plan.id, { status: "CANCELLED" });
-        }
-
-        const creditDate = callTime(ctx);
-        const credit = await repos.invoices.create(omitUndefined({
-          id: input.id, // undefined → store genererar
-          notes: input.notes,
-          matterId: original.matterId,
-          invoiceNumber: await repos.invoices.nextInvoiceNumber(ctx.orgId, stockholmYear(creditDate)),
-          amount: -original.amount,
-          // Kreditnotan speglar originalet POST FÖR POST (#977): samma konton och
-          // momssatser, omvända tecken. Förr bar den bara ett negativt belopp, så
-          // verifikatet fick gissa fram en 25 %-split av bruttot — fel för varje
-          // faktura med utlägg, äkta utlägg eller flera satser.
-          ...mirroredCreditAmounts(original),
-          invoiceType: "CREDIT",
-          status: "SENT", // kreditfaktura är "färdig" direkt
-          invoiceDate: creditDate,
-          creditedInvoiceId: original.id,
-        }) satisfies Partial<Invoice>);
-
-        await repos.invoices.update(original.id, { status: "CANCELLED" });
+        const { credit, original } = await creditInvoice(repos, ctx, input);
         await logMatterNote(repos, ctx, original.matterId, creditCreatedNote(credit.invoiceNumber, credit.amount, original.invoiceNumber));
         return credit;
       }),
     ),
+
+  /**
+   * "Fel på fakturan?" → Kreditera och gör om (#2260): kreditnota som hänvisar
+   * till originalet, och originalets tidsposter, utlägg och körning släpps i
+   * samma transaktion så att en ny faktura kan skapas direkt.
+   */
+  creditAndRedo: orgProcedure
+    .input(creditInputSchema)
+    .mutation(({ ctx, input }) => ctx.repos.transaction(async (repos) => (await creditAndRedoInvoice(repos, ctx, input)).credit)),
+
+  /**
+   * "Fel på fakturan?" → Makulera (#2260): ett obokfört utkast blir CANCELLED med
+   * numret kvar, och dess poster och körning släpps. Ett bokfört utkast avvisas.
+   */
+  voidDraft: orgProcedure
+    .input(z.object({ invoiceId: invoiceIdSchema }))
+    .mutation(({ ctx, input }) => ctx.repos.transaction((repos) => voidDraftInvoice(repos, ctx, input.invoiceId))),
 
   recordPayment: orgProcedure
     .input(
@@ -474,9 +420,10 @@ export const invoiceRouter = router({
     ),
 
   /**
-   * Manuell statusändring för DRAFT→SENT och SENT→CANCELLED. Kundförlust
-   * registreras via `writeOff` ovan (ADR 0007), som skapar en daterad
-   * WriteOff-post och härleder statusen ur den.
+   * Manuell statusändring: DRAFT→SENT, och DRAFT→CANCELLED som makulerar utkastet
+   * (`voidDraftInvoice`, #2260). En utställd faktura annulleras aldrig utan
+   * kreditnota (ML 17 kap. 22–23 §§) — den krediteras (`creditAndRedo`).
+   * Kundförlust registreras via `writeOff` (ADR 0007).
    */
   setStatus: orgProcedure
     .input(
@@ -493,6 +440,11 @@ export const invoiceRouter = router({
       // för en redan betald faktura). Se [ADR 0015].
       if (!canTransition(inv.status, input.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: transitionErrorMessage(inv.status, input.status) });
+      }
+      if (input.status === "CANCELLED" && inv.status !== "CANCELLED") {
+        // Bara ett utkast makuleras; en utställd faktura krediteras (#2260).
+        if (inv.status !== "DRAFT") throw new TRPCError({ code: "BAD_REQUEST", message: ISSUED_CANCEL_REASON });
+        return ctx.repos.transaction((repos) => voidDraftInvoice(repos, ctx, inv.id));
       }
       return ctx.repos.transaction(async (repos) => {
         const updated = await repos.invoices.update(input.invoiceId, { status: input.status });

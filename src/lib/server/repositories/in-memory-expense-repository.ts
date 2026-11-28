@@ -5,11 +5,12 @@
 
 import type { Expense } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, ExpenseId, InvoiceId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
-import { unlockedMatch } from "@/lib/shared/time-entry-lock";
+import { unlockedMatch, type InvoiceRelease } from "@/lib/shared/time-entry-lock";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
   ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
 } from "./expense-repository";
+import { releaseInvoiceInMemory } from "./in-memory-invoice-release";
 import { InMemoryRepository, withDateObject } from "./in-memory-repository";
 
 /** Delegaten repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
@@ -91,6 +92,10 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
       where: { frozenByBillingRunId: billingRunId },
       data: { frozenAt: null, frozenByBillingRunId: null },
     });
+  }
+
+  async releaseInvoice(release: InvoiceRelease): Promise<void> {
+    await releaseInvoiceInMemory(this.delegate, release);
   }
 
   async freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void> {
