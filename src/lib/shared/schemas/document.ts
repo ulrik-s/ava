@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { KNOWN_KINDS } from "../document-kind";
 import { baseFields, optionalDateLike } from "./common";
-import { suggestionStatusSchema, matterRoleSchema, contactTypeSchema } from "./enums";
+import {
+  suggestionStatusSchema, matterRoleSchema, contactTypeSchema, documentDirectionSchema, documentRecipientSchema,
+  type DocumentDirection, type DocumentRecipient,
+} from "./enums";
 import {
   billingRunIdSchema,
   documentIdSchema,
@@ -20,14 +23,8 @@ import {
 export const documentAnalysisStatusSchema = z.enum(["PENDING", "RUNNING", "DONE", "ERROR"]);
 export type DocumentAnalysisStatus = z.infer<typeof documentAnalysisStatusSchema>;
 
-/** Dokumentets riktning (#880): inkommande (från motpart/domstol) vs utgående (byrån skickar). */
-export const documentDirectionSchema = z.enum(["INKOMMANDE", "UTGAENDE"]);
-export type DocumentDirection = z.infer<typeof documentDirectionSchema>;
-
-/** Motpart/instans dokumentet utväxlats med (#901) — mottagare för utgående,
- *  avsändare för inkommande. Driver "visa dok skickade till domstol"-filtret. */
-export const documentRecipientSchema = z.enum(["DOMSTOL", "MOTPART", "KLIENT", "FORSAKRING", "MYNDIGHET", "OVRIGT"]);
-export type DocumentRecipient = z.infer<typeof documentRecipientSchema>;
+export { documentDirectionSchema, documentRecipientSchema };
+export type { DocumentDirection, DocumentRecipient };
 
 /** Slutligt avgörande dokumentet känts igen som (#2098): avskrivning, dom eller
  *  nekat prövningstillstånd i Högsta domstolen eller Högsta förvaltningsdomstolen. */

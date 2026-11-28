@@ -6,6 +6,7 @@ import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { DocumentDirection, DocumentRecipient } from "@/lib/shared/schemas/enums";
 import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import { DocumentDetailsDialog } from "./_document-details-dialog";
 import { DocumentNameCell } from "./_document-name-cell";
@@ -37,8 +38,8 @@ export interface DocumentRecord {
   documentType?: string | null | undefined;
   /** Delar i ett sammansatt dokument (#1220), sidordning. Tom/saknas = inga delar. */
   parts?: readonly DocumentPartView[] | undefined;
-  direction?: "INKOMMANDE" | "UTGAENDE" | null | undefined;
-  recipient?: "DOMSTOL" | "MOTPART" | "KLIENT" | "FORSAKRING" | "MYNDIGHET" | "OVRIGT" | null | undefined;
+  direction?: DocumentDirection | null | undefined;
+  recipient?: DocumentRecipient | null | undefined;
   tags?: readonly string[] | undefined;
   summary?: string | null | undefined;
   analyzedAt?: string | Date | null | undefined;
@@ -293,4 +294,3 @@ export function DocumentActions({
   );
 }
 
-export { DOCUMENT_RECIPIENT_LABELS } from "./_document-details-input";

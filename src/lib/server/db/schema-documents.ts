@@ -10,7 +10,9 @@ import {
 } from "drizzle-orm/pg-core";
 import type { DocumentKind } from "@/lib/shared/document-kind";
 import type { DocumentPartSource, FinalRuling } from "@/lib/shared/schemas/document";
-import type { ContactType, MatterRole, SuggestionStatus } from "@/lib/shared/schemas/enums";
+import type {
+  ContactType, DocumentDirection, DocumentRecipient, MatterRole, SuggestionStatus,
+} from "@/lib/shared/schemas/enums";
 import type {
   BillingRunId, ContactId, DocumentAnalysisSuggestionId, DocumentFolderId, DocumentId, DocumentPartId, InvoiceId,
   MatterEventSuggestionId, MatterId, UserId,
@@ -47,9 +49,9 @@ export const documents = pgTable("documents", {
   kindsManual: boolean("kinds_manual").notNull().default(false), // satta av person/system → AI:n ändrar dem inte
   documentType: text("document_type"), // föråldrad: spegel av primärtypen för äldre klienter
   /** Riktning (#880): INKOMMANDE / UTGAENDE — null där det saknar mening. */
-  direction: text("direction").$type<"INKOMMANDE" | "UTGAENDE">(),
+  direction: text("direction").$type<DocumentDirection>(),
   /** Motpart/mottagare (#901) — driver "dok skickade till domstol"-filtret. */
-  recipient: text("recipient").$type<"DOMSTOL" | "MOTPART" | "KLIENT" | "FORSAKRING" | "MYNDIGHET" | "OVRIGT">(),
+  recipient: text("recipient").$type<DocumentRecipient>(),
   /** Igenkänt slutligt avgörande (#2098) — null = inget igenkänt. */
   finalRuling: text("final_ruling").$type<FinalRuling>(),
   tags: jsonb("tags").notNull().default([]).$type<string[]>(), // föråldrad: ersatt av kinds (ADR 0038)
