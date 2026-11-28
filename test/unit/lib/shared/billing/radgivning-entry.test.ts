@@ -8,6 +8,7 @@ import {
   entryMarkBlocker,
   findRadgivningInvoiceId,
   hasRadgivningEntry,
+  isRadgivningInvoice,
   markTarget,
   needsRadgivningEntry,
   radgivningEntryStatus,
@@ -29,6 +30,25 @@ describe("findRadgivningInvoiceId", () => {
   it("aldrig en kreditnota, och null när ingen finns", () => {
     expect(findRadgivningInvoiceId([{ id: INV, notes: RADGIVNING_INVOICE_NOTES, invoiceType: "CREDIT" }])).toBeNull();
     expect(findRadgivningInvoiceId([])).toBeNull();
+  });
+});
+
+describe("isRadgivningInvoice — markören, med texten som övergång (#1934, ADR 0038 §4/§6)", () => {
+  it.each([
+    ["markör med texten", { invoiceType: "STANDARD", purpose: "RADGIVNING", notes: RADGIVNING_INVOICE_NOTES }, true],
+    ["markör med annan text", { invoiceType: "STANDARD", purpose: "RADGIVNING", notes: "Annat" }, true],
+    ["bara texten, purpose null", { invoiceType: "STANDARD", purpose: null, notes: RADGIVNING_INVOICE_NOTES }, true],
+    ["bara texten, purpose saknas", { invoiceType: "ACCONTO", notes: RADGIVNING_INVOICE_NOTES }, true],
+    ["kreditnota med markör", { invoiceType: "CREDIT", purpose: "RADGIVNING", notes: "Annat" }, false],
+    ["kreditnota med texten", { invoiceType: "CREDIT", notes: RADGIVNING_INVOICE_NOTES }, false],
+    ["annan text utan markör", { invoiceType: "STANDARD", notes: "Annat" }, false],
+    ["text som bara börjar med Rådgivningstimme", { invoiceType: "STANDARD", notes: "Rådgivningstimme extra" }, false],
+  ] as const)("%s → %s", (_name, inv, expected) => {
+    expect(isRadgivningInvoice(inv)).toBe(expected);
+  });
+
+  it("findRadgivningInvoiceId hittar en markerad faktura med annan text", () => {
+    expect(findRadgivningInvoiceId([{ id: INV, notes: "Annat", invoiceType: "STANDARD", purpose: "RADGIVNING" }])).toBe(INV);
   });
 });
 

@@ -18,7 +18,7 @@ import { fakturaOrgMeta, type FakturaOrgMeta, type FakturaOrgSettings } from "@/
 import type { FakturaBreakdown, InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
 import { trpc } from "@/lib/client/trpc";
 import { formatKr } from "@/lib/shared/kr-format";
-import type { AmountRounding } from "@/lib/shared/schemas/enums";
+import type { AmountRounding, InvoicePurpose, InvoiceType } from "@/lib/shared/schemas/enums";
 import type { InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 
 export interface SendInvoiceModalProps {
@@ -31,7 +31,9 @@ export interface SendInvoiceModalProps {
   vatOre?: number | null | undefined;
   ocrReference?: string | null | undefined;
   invoiceDate?: string | Date | null | undefined;
-  invoiceType?: string | null | undefined;
+  invoiceType?: InvoiceType | null | undefined;
+  /** Typmarkören (#1933) — bilagans rubrik och fotnot för rådgivningsfakturan. */
+  purpose?: InvoicePurpose | null | undefined;
   notes?: string | null | undefined;
   /** Fakturans radavrundning (#1438) — bilagan räknas som fakturan skapades. */
   amountRounding?: AmountRounding | null | undefined;
@@ -92,7 +94,7 @@ async function buildPdf(p: SendInvoiceModalProps, recipient: string, sources: Pd
     invoice: {
       id: p.invoiceId, amount: p.amount, vatOre: p.vatOre,
       invoiceNumber: p.invoiceNumber, ocrReference: p.ocrReference, invoiceDate: p.invoiceDate,
-      invoiceType: p.invoiceType, notes: p.notes, amountRounding: p.amountRounding,
+      invoiceType: p.invoiceType, notes: p.notes, purpose: p.purpose, amountRounding: p.amountRounding,
     },
     recipient: recipient || p.matterTitle,
     meta: { matterNumber: p.matterNumber, matterTitle: p.matterTitle, ...org },

@@ -9,7 +9,7 @@
  * (åtgärden + varningen i fakturapanelen) läser samma predikat.
  */
 
-import type { InvoiceType, PaymentMethod, TimeEntryKind } from "../schemas/enums";
+import type { InvoicePurpose, InvoiceType, PaymentMethod, TimeEntryKind } from "../schemas/enums";
 import type { InvoiceId } from "../schemas/ids";
 import { isInvoicedOutsideCoverage, isLockedEntry, type LockableEntry } from "../time-entry-lock";
 import { isPerDayKind } from "./brottmalstaxa";
@@ -22,16 +22,38 @@ export const RADGIVNING_INVOICE_NOTES = "Rådgivningstimme enligt rättshjälpst
 /** Rådgivningstimmen är exakt 1 tim enligt rättshjälpstaxan. */
 export const RADGIVNING_MINUTES = 60;
 
-/** Det som krävs av en faktura för att känna igen rådgivningsfakturan. */
-export interface RadgivningInvoiceCandidate {
-  id: InvoiceId;
+/** Fälten regeln läser för att känna igen rådgivningsfakturan (ADR 0038 §4). */
+export interface RadgivningInvoiceFields {
   notes?: string | null | undefined;
   invoiceType?: InvoiceType | null | undefined;
+  /** Fakturans typmarkör (#1933) — `RADGIVNING` bär identiteten. */
+  purpose?: InvoicePurpose | null | undefined;
 }
 
-/** Är fakturan en rådgivningsfaktura (aldrig en kreditnota)? */
-export function isRadgivningInvoice(i: RadgivningInvoiceCandidate): boolean {
-  return i.notes === RADGIVNING_INVOICE_NOTES && i.invoiceType !== "CREDIT";
+/** En faktura som `findRadgivningInvoiceId` kan peka ut. */
+export interface RadgivningInvoiceCandidate extends RadgivningInvoiceFields {
+  id: InvoiceId;
+}
+
+/**
+ * Är fakturan en rådgivningsfaktura (aldrig en kreditnota)? Markören
+ * `purpose: "RADGIVNING"` avgör (ADR 0038 §4).
+ *
+ * Textgrenen (`purpose` saknas och `notes` är exakt `RADGIVNING_INVOICE_NOTES`)
+ * är en övergång (ADR 0038 §6) för rader som backfillen inte når: demons och
+ * LocalStores JSON, klientens cache före nästa hämtning, och fakturor som äldre
+ * serverkod skapar efter migreringen (i deployfönstret och efter en automatisk
+ * rollback). Den tas bort när inga äldre klienter finns kvar, och först efter att
+ * backfillen körts igen (den är idempotent).
+ */
+export function isRadgivningInvoice(i: RadgivningInvoiceFields): boolean {
+  if (i.invoiceType === "CREDIT") return false;
+  return (i.purpose ?? purposeFromNotes(i.notes)) === "RADGIVNING";
+}
+
+/** Övergången (ADR 0038 §6): markören härledd ur texten när den saknas. */
+function purposeFromNotes(notes: string | null | undefined): InvoicePurpose | null {
+  return notes === RADGIVNING_INVOICE_NOTES ? "RADGIVNING" : null;
 }
 
 /** Ärendets rådgivningsfaktura (aldrig en kreditnota), eller null. */

@@ -28,6 +28,8 @@ interface SeedOpts {
   paymentMethod?: string;
   radgivningBetaldAt?: Date | null;
   withInvoice?: boolean;
+  /** Fält som ersätter rådgivningsfakturans (t.ex. markören och en annan text, #1934). */
+  invoice?: Record<string, unknown>;
 }
 
 function entry(entryId: string, minutes: number, extra: Record<string, unknown> = {}) {
@@ -49,7 +51,7 @@ function makeCaller(opts: SeedOpts = {}, timeEntries: ReturnType<typeof entry>[]
     users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250_000 }],
     invoices: opts.withInvoice === false ? [] : [{
       id: INV, organizationId: "org-1", matterId: "m-1", amount: 203_250, invoiceType: "STANDARD", status: "SENT",
-      invoiceDate: new Date("2026-03-01"), notes: RADGIVNING_INVOICE_NOTES,
+      invoiceDate: new Date("2026-03-01"), notes: RADGIVNING_INVOICE_NOTES, ...opts.invoice,
     }],
     timeEntries,
     expenses: [],
@@ -196,6 +198,21 @@ describe("timeEntry.markAsRadgivning — avvisar (#1207)", () => {
     expect(await caller.timeEntry.radgivningStatus({ matterId: MATTER })).toMatchObject({ kind: "present" });
     await expect(caller.timeEntry.markAsRadgivning({ id: id("mote") }))
       .rejects.toMatchObject({ code: "BAD_REQUEST", message: "Ärendet har redan en låst rådgivningspost." });
+  });
+});
+
+describe("markerad rådgivningsfaktura med annan text (#1934)", () => {
+  const MARKED = { invoice: { purpose: "RADGIVNING", notes: "Rådgivning enligt överenskommelse" } };
+
+  it("radgivningStatus känner igen fakturan på markören", async () => {
+    expect(await makeCaller(MARKED).timeEntry.radgivningStatus({ matterId: MATTER })).toEqual({ kind: "missing", invoiceId: INV });
+  });
+
+  it("markAsRadgivning låser posten mot den markerade fakturan", async () => {
+    const caller = makeCaller(MARKED);
+    const res = await caller.timeEntry.markAsRadgivning({ id: id("mote") });
+    expect(res.locked).toMatchObject({ id: "mote", invoiceId: INV });
+    expect(await caller.timeEntry.radgivningStatus({ matterId: MATTER })).toEqual({ kind: "present", invoiceId: INV });
   });
 });
 
