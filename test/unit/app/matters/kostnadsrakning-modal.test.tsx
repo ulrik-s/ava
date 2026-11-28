@@ -9,13 +9,15 @@
  * länk med en riktig QueryClient (#1929).
  */
 
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { effectiveHearing } from "@/app/matters/[id]/_hearing-time";
 import { KostnadsrakningModal } from "@/app/matters/[id]/_kostnadsrakning-modal";
+import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { asId } from "@/lib/shared/schemas/ids";
-import { fakeTrpcLink, testQueryClient, TrpcTestProvider, type FakeTrpcLink, type TrpcHandlers } from "../../../helpers/trpc-fake";
+import { renderWithFakeTrpc } from "../../../helpers/trpc-both-fake";
+import { fakeTrpcLink, type FakeTrpcLink, type TrpcHandlers } from "../../../helpers/trpc-fake";
 
 vi.mock("@/lib/client/helper/use-helper", () => ({
   useHelper: () => ({ checked: true, version: null }),
@@ -52,6 +54,8 @@ const handlers: TrpcHandlers = {
   "timeEntry.list": () => (entriesLoading ? new Promise(() => {}) : { entries }),
   // Postlistan (#1889) läser fakturaförslaget: de ofrysta posterna.
   "billingRun.proposal": () => proposalOf(entries, unbilledExpenses),
+  // Välj domstol (#1891).
+  "contacts.search": () => ({ contacts: [{ id: "c-hov", name: "Svea hovrätt", contactType: "COURT" }] }),
 };
 
 let fake: FakeTrpcLink = fakeTrpcLink(handlers);
@@ -60,10 +64,11 @@ let fake: FakeTrpcLink = fakeTrpcLink(handlers);
 const recorded = (): unknown[] => fake.calls.filter((c) => c.path === "kostnadsrakning.record").map((c) => c.input);
 
 /** Renderar modalen och väntar tills postlistan har lästs in (eller fastnat i inläsning). */
+/** Under båda bindningarna: domstolsväljaren (#1891) läser fortfarande den klassiska `trpc`. */
 async function renderModal(ui: ReactElement): Promise<void> {
-  fake = fakeTrpcLink(handlers);
-  const queryClient = testQueryClient();
-  render(<TrpcTestProvider link={fake.link} queryClient={queryClient}>{ui}</TrpcTestProvider>);
+  const view = renderWithFakeTrpc(ui, handlers);
+  fake = view.fake;
+  const queryClient = view.queryClient;
   await waitFor(() => expect(fake.calls.length).toBeGreaterThanOrEqual(2));
   if (!entriesLoading) await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 }
@@ -164,7 +169,7 @@ describe("KostnadsrakningModal — förordnandemål (#1858)", () => {
     fireEvent.click(screen.getByLabelText(/Förordnandetaxa/));
     fireEvent.click(screen.getByLabelText("Strafföreläggande godkändes"));
     fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
-    await waitFor(() => expect(createRun).toHaveBeenCalledWith({ forordnande: { avslut: "STRAFFORELAGGANDE" }, hasFTax: true }, {}));
+    await waitFor(() => expect(createRun).toHaveBeenCalledWith({ forordnande: { avslut: "STRAFFORELAGGANDE" }, hasFTax: true }, {}, {}));
     await waitFor(() => expect(recorded()).toEqual([expect.objectContaining({ huvudforhandlingMinutes: 0 })]));
   });
 
@@ -300,5 +305,39 @@ describe("KostnadsrakningModal — postlistan (#1889)", () => {
     fireEvent.click(box("Huvudförhandling"));
     expect(screen.queryByText(/STOPPA NU/)).not.toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent("Ingen förhandling");
+  });
+});
+
+/** Dokumentet och domstolen som skickades till PDF-renderingen vid Generera. */
+function renderedPdf(): { title: string; courtName: string } {
+  const arg = vi.mocked(renderKostnadsrakningPdf).mock.calls[0]?.[0];
+  if (!arg) throw new Error("ingen PDF renderad");
+  return { title: arg.result.document.title, courtName: arg.meta.courtName };
+}
+
+describe("KostnadsrakningModal — domstol och målnummer (#1891)", () => {
+  const withCourt = { ...baseProps, courtName: "Stockholms tingsrätt", courtCaseNumber: "B 123-26" };
+
+  it("förvalt: ärendets domstol och målnummer i dokumentet, och ingen vald kontakt till servern", async () => {
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-1"));
+    await renderModal(<KostnadsrakningModal {...withCourt} createRun={createRun} />);
+    expect(screen.getByTestId("kr-court-name")).toHaveTextContent("Stockholms tingsrätt");
+    fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
+    await waitFor(() => expect(createRun).toHaveBeenCalledOnce());
+    expect(createRun.mock.calls[0]?.[2]).toEqual({});
+    expect(renderedPdf()).toEqual({ title: "KOSTNADSRÄKNING i mål B 123-26", courtName: "Stockholms tingsrätt" });
+  });
+
+  it("byt domstol: tomt målnummer ger rubriken utan 'i mål', och domstolen följer med", async () => {
+    const createRun = vi.fn().mockResolvedValue(asId<"BillingRunId">("run-1"));
+    await renderModal(<KostnadsrakningModal {...withCourt} createRun={createRun} />);
+    fireEvent.click(screen.getByRole("button", { name: "Byt domstol…" }));
+    fireEvent.change(screen.getByLabelText("Sök domstol"), { target: { value: "hov" } });
+    fireEvent.click(await screen.findByRole("button", { name: /Svea hovrätt/ }));
+    expect(screen.getByLabelText("Målnummer")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
+    await waitFor(() => expect(createRun).toHaveBeenCalledOnce());
+    expect(createRun.mock.calls[0]?.[2]).toEqual({ courtContactId: "c-hov" });
+    expect(renderedPdf()).toEqual({ title: "KOSTNADSRÄKNING", courtName: "Svea hovrätt" });
   });
 });

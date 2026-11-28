@@ -42,13 +42,6 @@ export class InMemoryCalendarEventRepository extends InMemoryRepository<Calendar
     })) as CalendarEvent[];
   }
 
-  async listDeadlinesForOrg(organizationId: OrganizationId): Promise<CalendarEvent[]> {
-    return (await this.delegate.findMany({
-      where: { organizationId, kind: "deadline", deletedAt: null },
-      orderBy: { startAt: "asc" },
-    })) as CalendarEvent[];
-  }
-
   async getOwned(id: CalendarEventId, userId: UserId, organizationId: OrganizationId): Promise<CalendarEvent | null> {
     const row = (await this.delegate.findFirst({ where: { id, userId, organizationId } })) as CalendarEvent | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;

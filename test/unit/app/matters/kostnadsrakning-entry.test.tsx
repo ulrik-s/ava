@@ -9,6 +9,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { KostnadsrakningEntry, type MatterContext } from "@/app/matters/[id]/_kostnadsrakning-entry";
 import { asId } from "@/lib/shared/schemas/ids";
+import { renderWithFakeTrpc } from "../../../helpers/trpc-both-fake";
 import { fakeTrpcLink, TrpcTestProvider, type FakeTrpcLink, type TrpcHandlers } from "../../../helpers/trpc-fake";
 
 const T1 = { id: "t1", date: "2026-09-01", description: "Inläsning", minutes: 60, billable: true, valueOre: 150_000 };
@@ -16,7 +17,7 @@ const T2 = { id: "t2", date: "2026-10-01", description: "Möte", minutes: 30, bi
 const E1 = { id: "e1", date: "2026-09-02", description: "Resa", amount: 40_000, billable: true };
 const FROZEN = { id: "e-old", date: "2026-08-02", description: "Fryst", amount: 9_900, billable: true };
 
-const generateKrDoc = vi.fn((): Promise<void> => Promise.resolve());
+const generateKrDoc = vi.fn((_opts: { meta: Record<string, unknown> }): Promise<void> => Promise.resolve());
 let createKr: (input: unknown) => unknown = () => ({ run: { id: "run-1" } });
 
 const handlers: TrpcHandlers = {
@@ -26,6 +27,8 @@ const handlers: TrpcHandlers = {
   "expense.list": () => ({ expenses: [E1, FROZEN] }),
   "user.current": () => ({ name: "Adv. Anna", email: "anna@byra.se" }),
   "organization.getSettings": () => ({ name: "Byrå AB" }),
+  // Välj domstol (#1891).
+  "contacts.search": () => ({ contacts: [{ id: "c-hov", name: "Svea hovrätt", contactType: "COURT" }] }),
 };
 vi.mock("@/lib/client/kostnadsrakning/generate-kr-doc", () => ({ generateKrDoc }));
 
@@ -123,5 +126,44 @@ describe("RattshjalpKrDialog — postlistan (#1889)", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe("RattshjalpKrDialog — domstol och målnummer (#1891)", () => {
+  const WITH_COURT: MatterContext = {
+    ...MATTER, courtCaseNumber: "T 55-26",
+    contacts: [{ role: "DOMSTOL", contact: { name: "Stockholms tingsrätt" } }],
+  };
+  /** Under båda bindningarna: domstolsväljaren läser fortfarande den klassiska `trpc`. */
+  const renderWithCourt = async () => {
+    fake = renderWithFakeTrpc(
+      <KostnadsrakningEntry matterId={asId<"MatterId">("m1")} matter={WITH_COURT} open onClose={onClose} onRecorded={onRecorded} />,
+      handlers,
+    ).fake;
+    await waitFor(() => expect(screen.getByRole("button", { name: "Skapa kostnadsräkning" })).toBeEnabled());
+  };
+
+  it("förvalt: ärendets domstol och målnummer i dokumentet, ingen vald kontakt till servern", async () => {
+    await renderWithCourt();
+    expect(screen.getByLabelText("Målnummer")).toHaveValue("T 55-26");
+    fireEvent.click(screen.getByRole("button", { name: "Skapa kostnadsräkning" }));
+    await waitFor(() => expect(generateKrDoc).toHaveBeenCalled());
+    expect(createCalls()).toEqual([{ matterId: "m1" }]);
+    expect(generateKrDoc).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({ courtName: "Stockholms tingsrätt", courtCaseNumber: "T 55-26" }),
+    }));
+  });
+
+  it("byt domstol: kontakten skickas, dokumentet får den nya domstolen och inget målnummer", async () => {
+    await renderWithCourt();
+    fireEvent.click(screen.getByRole("button", { name: "Byt domstol…" }));
+    fireEvent.change(screen.getByLabelText("Sök domstol"), { target: { value: "hov" } });
+    fireEvent.click(await screen.findByRole("button", { name: /Svea hovrätt/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Skapa kostnadsräkning" }));
+    await waitFor(() => expect(generateKrDoc).toHaveBeenCalled());
+    expect(createCalls()).toEqual([{ matterId: "m1", courtContactId: "c-hov" }]);
+    const meta = generateKrDoc.mock.calls[0]?.[0].meta;
+    expect(meta.courtName).toBe("Svea hovrätt");
+    expect(meta).not.toHaveProperty("courtCaseNumber");
   });
 });

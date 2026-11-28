@@ -13,6 +13,9 @@
  *
  * Förordnandemålet (#1858): samma flöde med förordnandetaxan (DVFS 2025:5).
  * Dokumentet kan inte genereras förrän förundersökningens avslut är valt.
+ *
+ * Domstolen (#1891): "Byt domstol…" i samma dialog väljer en annan domstol bland
+ * byråns domstolar; anteckningen nämner den, och ärendets parter är oförändrade.
  */
 import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterWithKrStatus, seedDemoLogin, showPanel, test, expect } from "./_demo-test";
 
@@ -130,4 +133,46 @@ test("kostnadsräkning på ett intervall (#1889): bara posterna i intervallet yr
 
   await expect.poll(async () => kronor(await unbilled.textContent()), { timeout: 15_000 }).toBeGreaterThan(0);
   expect(kronor(await unbilled.textContent())).toBeLessThan(unbilledBefore);
+});
+
+test("byt domstol i kostnadsräkningen: anteckningen nämner den valda domstolen", async ({ page }) => {
+  const matterId = matterWithKrStatus(await fetchDemoSeed(page, BASE), "INSKICKAD");
+  await seedDemoLogin(page, BASE);
+  await page.goto(`${BASE}/matters/${matterId}/`);
+  await showPanel(page, "Fakturering");
+
+  await expect(page.getByText(/Väntar på dom/i).first()).toBeVisible({ timeout: 30_000 });
+  page.once("dialog", (d) => { void d.accept(); });
+  await page.getByRole("button", { name: /^Ångra kostnadsräkning$/ }).click();
+  await expect(page.getByText(/Väntar på dom/i)).toHaveCount(0, { timeout: 20_000 });
+
+  await page.getByRole("button", { name: "+ Skapa faktura" }).click();
+  await page.getByRole("button", { name: "Kostnadsräkning till domstol" }).click();
+  const modal = page.locator("div.fixed.inset-0").filter({ hasText: "Förhandsvisning" });
+  await expect(modal).toBeVisible();
+
+  await modal.getByRole("button", { name: "Byt domstol…" }).click();
+  const picker = page.getByRole("dialog", { name: "Välj domstol" });
+  await expect(picker).toBeVisible();
+  await expect(picker.getByText(/\+ Ny/)).toHaveCount(0);
+  await picker.getByLabel("Sök domstol").fill("Svea");
+  await picker.getByRole("button", { name: /Svea hovrätt/ }).click();
+  await expect(picker).toBeHidden();
+  await expect(modal.getByTestId("kr-court-name")).toHaveText("Svea hovrätt");
+  await expect(modal.getByLabel("Målnummer")).toHaveValue("");
+
+  const generate = modal.getByRole("button", { name: /Generera \+ (spara|öppna mail)/ });
+  if (await modal.getByText("STOPPA NU").count() > 0) {
+    await modal.locator('input[type="datetime-local"]').nth(0).fill("2026-09-22T09:00");
+    await modal.locator('input[type="datetime-local"]').nth(1).fill("2026-09-22T10:35");
+  }
+  await generate.click();
+  await expect(modal).toBeHidden({ timeout: 30_000 });
+
+  await showPanel(page, "Anteckningar");
+  const notes = page.getByRole("region", { name: "Anteckningar" }).last();
+  await expect(notes.getByText(/Kostnadsräkning .* till Svea hovrätt skapad/).first()).toBeVisible({ timeout: 15_000 });
+
+  await showPanel(page, "Parter");
+  await expect(page.getByRole("region", { name: "Parter" }).last().getByText("Svea hovrätt")).toHaveCount(0);
 });

@@ -3,7 +3,7 @@
  * (pglite). listForUser/listForUsers/listForMatter + getOwned/getOwnedWithMatter.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest-compat";
+import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { calendarEvents, matters } from "@/lib/server/db/schema";
 import { DrizzleCalendarEventRepository } from "@/lib/server/repositories/drizzle-calendar-event-repository";
@@ -11,7 +11,6 @@ import { InMemoryCalendarEventRepository } from "@/lib/server/repositories/in-me
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
-import { DRIZZLE_NAME, type OpenRepos, openDrizzleRepos, openInMemoryRepos } from "./contract-backends";
 
 describe("CalendarEventRepository — in-memory", () => {
   it("list-varianter + ägar-vakt", async () => {
@@ -64,30 +63,5 @@ describe("CalendarEventRepository — Drizzle (pglite)", () => {
     expect(await repo.getOwned(e1, userId, org)).toMatchObject({ id: e1 });
     expect(await repo.getOwned(e1, other, org)).toBeNull();
     expect((await repo.getOwnedWithMatter(e1, userId, org))?.matter?.matterNumber).toBe("2026-1");
-  });
-});
-
-describe.each([
-  ["in-memory", () => Promise.resolve(openInMemoryRepos())],
-  [DRIZZLE_NAME, () => openDrizzleRepos()],
-] as const)("CalendarEventRepository.listDeadlinesForOrg (#2121) — %s", (_name, open) => {
-  let repos: OpenRepos;
-  beforeEach(async () => { repos = await open(); });
-  afterEach(async () => { await repos.close(); });
-
-  it("ger byråns ej raderade frister, alla ägares, kronologiskt", async () => {
-    const org = asId<"OrganizationId">(uuidv7());
-    const ev = (o: Record<string, unknown>) => repos.repos.calendarEvents.create({
-      id: asId<"CalendarEventId">(uuidv7()), organizationId: org, userId: asId<"UserId">(uuidv7()), kind: "deadline",
-      startAt: new Date("2026-06-02T09:00:00Z"), ...o,
-    } as never);
-    await ev({ title: "Senare", startAt: new Date("2026-06-03T09:00:00Z") });
-    await ev({ title: "Först" });
-    await ev({ title: "Möte", kind: "appointment" });
-    await ev({ title: "Annan byrå", organizationId: asId<"OrganizationId">(uuidv7()) });
-    const gone = await ev({ title: "Raderad" });
-    await repos.repos.calendarEvents.softDelete(gone.id);
-    const rows = await repos.repos.calendarEvents.listDeadlinesForOrg(org);
-    expect(rows.map((r) => r.title)).toEqual(["Först", "Senare"]);
   });
 });

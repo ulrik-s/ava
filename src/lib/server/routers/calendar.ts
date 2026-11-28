@@ -2,10 +2,9 @@
  * Calendar router — CRUD för CalendarEvent (möten och förhandlingar).
  *
  * En frist är en uppgift (`task.create` med `dueAt`), inte en kalenderhändelse:
- * Frister och Att bevaka läser bara uppgifter (#2120). Routern skapar därför
- * bara `appointment`. Gamla rader med `kind = "deadline"` går fortfarande att
- * läsa och redigera (det delade schemat har kvar värdet), men `kind` kan inte
- * sättas till `deadline`.
+ * Frister och Att bevaka läser bara uppgifter (#2120). `kind` är bara
+ * `appointment`; `deadline` ger BAD_REQUEST, och de gamla raderna är
+ * borttagna (ADR 0040 §3, #2214).
  *
  * Designval:
  *   - `list` returnerar bara den aktiva användarens events. Org-admins
@@ -26,11 +25,8 @@ import {
 import { requireRefsInOrg } from "../auth/org-scope";
 import { router, protectedProcedure, TRPCError } from "../trpc";
 
-/** Det enda `kind` routern skriver (#2120); `deadline` ger BAD_REQUEST. */
-const writableKindSchema = calendarEventKindSchema.extract(["appointment"]);
-
 const createInput = z.object({
-  kind: writableKindSchema.default("appointment"),
+  kind: calendarEventKindSchema.default("appointment"),
   title: z.string().min(1),
   description: z.string().nullish(),
   location: z.string().nullish(),
@@ -53,7 +49,7 @@ const createInput = z.object({
 // fält som användaren inte angav, och en delvis update skulle skriva över dem.
 const updateInput = z.object({
   id: calendarEventIdSchema,
-  kind: writableKindSchema.optional(),
+  kind: calendarEventKindSchema.optional(),
   title: z.string().min(1).optional(),
   description: z.string().nullish(),
   location: z.string().nullish(),

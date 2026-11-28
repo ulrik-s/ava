@@ -18,14 +18,21 @@ interface ContactSearchPage {
 }
 
 /**
+ * Byråns kontakter av en viss typ (#1868), eller alla utan typ. Gäller före
+ * rangordning och sidindelning/`limit`, både i Parter och i Välj domstol (#1891).
+ */
+function ofContactType<T extends { contactType: ContactType }>(all: readonly T[], contactType: ContactType | undefined): readonly T[] {
+  return contactType ? all.filter((c) => c.contactType === contactType) : all;
+}
+
+/**
  * Parter-sökningen (#1868): byråns sökregel (`rankContacts`, #1866), samma som
  * Välj klient. Kandidaterna rangordnas, sidan klipps ur den rangordnade listan,
  * och sidans rader hämtas med sin `_count` via repots `ids`-filter (#1867).
  */
 async function searchContactPage(repo: ContactRepository, orgId: OrganizationId, q: ContactSearchPage): Promise<ContactListResult> {
   const all = await repo.listAllForOrg(orgId);
-  const candidates = q.contactType ? all.filter((c) => c.contactType === q.contactType) : all;
-  const ranked = rankContacts(candidates, q.term);
+  const ranked = rankContacts(ofContactType(all, q.contactType), q.term);
   const ids = ranked.slice((q.page - 1) * q.pageSize, q.page * q.pageSize).map((c) => c.id);
   const { contacts } = await repo.listForOrg(orgId, { ids, page: 1, pageSize: Math.max(ids.length, 1) });
   const byId = new Map(contacts.map((c) => [c.id, c]));
@@ -42,12 +49,16 @@ export const contactRouter = router({
    * matchning (förnamn, efternamn, person-/orgnummer, var för sig eller
    * tillsammans) plus delsträngar och e-post med lägst rang; bäst träff först.
    * Driver "Välj klient…"-dialogen, som inte kan vara en dropdown när byrån har många.
+   * Med `contactType` bara kontakter av den typen (Välj domstol, #1891).
    */
   search: orgProcedure
-    .input(z.object({ term: z.string().trim().min(1), limit: z.number().int().min(1).max(100).default(20) }))
+    .input(z.object({
+      term: z.string().trim().min(1), limit: z.number().int().min(1).max(100).default(20),
+      contactType: contactTypeSchema.optional(),
+    }))
     .query(async ({ ctx, input }) => {
       const all = await ctx.repos.contacts.listAllForOrg(asId<"OrganizationId">(ctx.orgId));
-      return { contacts: rankContacts(all, input.term).slice(0, input.limit) };
+      return { contacts: rankContacts(ofContactType(all, input.contactType), input.term).slice(0, input.limit) };
     }),
 
   list: orgProcedure
