@@ -9,7 +9,8 @@
  * samma predikat som servern avgör markeringen med.
  */
 
-import { trpc } from "@/lib/client/trpc";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTRPC } from "@/lib/client/trpc";
 import { entryMarkBlocker, needsRadgivningEntry, type MarkableEntry } from "@/lib/shared/billing/radgivning-entry";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
@@ -23,7 +24,8 @@ export const MARK_RADGIVNING_CONFIRM =
 
 /** Ärendets rådgivningsstatus; frågas bara i rättshjälpsärenden. */
 function useNeedsRadgivningEntry(matterId: MatterId, paymentMethod: PaymentMethod | null | undefined): boolean {
-  const status = trpc.timeEntry.radgivningStatus.useQuery({ matterId }, { enabled: paymentMethod === "RATTSHJALP" }).data;
+  const t = useTRPC();
+  const status = useQuery(t.timeEntry.radgivningStatus.queryOptions({ matterId }, { enabled: paymentMethod === "RATTSHJALP" })).data;
   return status !== undefined && needsRadgivningEntry(status);
 }
 
@@ -34,12 +36,16 @@ export interface MarkRadgivning {
 }
 
 export function useMarkRadgivning(matterId: MatterId, paymentMethod: PaymentMethod | null | undefined): MarkRadgivning {
-  const utils = trpc.useUtils();
+  const t = useTRPC();
+  const queryClient = useQueryClient();
   const needed = useNeedsRadgivningEntry(matterId, paymentMethod);
-  const markMutation = trpc.timeEntry.markAsRadgivning.useMutation({
-    onSuccess: () => { void utils.timeEntry.invalidate(); void utils.billingRun.invalidate(); },
+  const markMutation = useMutation(t.timeEntry.markAsRadgivning.mutationOptions({
+    onSuccess: () => {
+      void queryClient.invalidateQueries(t.timeEntry.pathFilter());
+      void queryClient.invalidateQueries(t.billingRun.pathFilter());
+    },
     onError: (e) => { console.error("[timeEntry.markAsRadgivning] misslyckades:", e); alert(`Kunde inte markera: ${e.message}`); },
-  });
+  }));
   return {
     canMark: (entry) => needed && entryMarkBlocker(entry) === null,
     mark: (id) => { if (confirm(MARK_RADGIVNING_CONFIRM)) markMutation.mutate({ id }); },

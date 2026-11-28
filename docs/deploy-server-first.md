@@ -221,6 +221,9 @@ docker compose -f tooling/docker/docker-compose.production.yml ps
 curl -s https://ava.byra.se/readyz     # {"status":"ok","checks":{"database":{"ok":true}},"release":"v0.2.0"}
 ```
 
+`release` i svaret är `AVA_RELEASE`: deployen sätter den till taggen, och
+`ava-server.env` får sätta en egen (`AVA_RELEASE=<etikett>`).
+
 ### Vad som INTE finns
 
 Ingen strukturerad loggning, ingen felrapportering (Sentry e.d.), ingen
@@ -757,30 +760,6 @@ annars saknar helperns token det oauth2-proxy verifierar mot — se
 ```bash
 docker compose -f tooling/docker/docker-compose.production.yml up -d oauth2-proxy server-first
 ```
-
-## Felrapportering till PostHog EU (valfritt)
-
-Ingen felrapportering är påslagen som standard. Med en PostHog-nyckel skickas
-serverns oväntade fel (5xx, aldrig 4xx) till PostHog **EU Cloud (Frankfurt)** —
-standardvärden är `eu.i.posthog.com` och en amerikansk värd vägras. Teckna
-PostHogs biträdesavtal (DPA) innan nyckeln sätts. Vad som skickas: se
-`docs/observability.md`. I `ava-server.env`:
-
-```bash
-AVA_POSTHOG_KEY=phc_<byråns-projekt-token>   # skapas på eu.posthog.com
-# AVA_POSTHOG_HOST=https://posthog.byran.se   # bara vid själv-hostad PostHog
-# AVA_ERROR_ENVIRONMENT=staging               # default production
-# AVA_RELEASE=<etikett>   # sätts annars av deploy-prod.sh (taggen); syns i /readyz
-```
-
-```bash
-docker compose -f tooling/docker/docker-compose.production.yml up -d server-first
-docker compose -f tooling/docker/docker-compose.production.yml logs server-first | grep felrapportering
-```
-
-Exakt vad som skickas (felklass, felkod, procedur, requestId, version, miljö,
-tid och `fil:rad`-ramar — aldrig meddelanden, användare eller indata) står i
-[observability.md](observability.md#felrapportering-till-posthog-eu-1343).
 
 ## Dokumentklassificering med lokal LLM (valfritt)
 

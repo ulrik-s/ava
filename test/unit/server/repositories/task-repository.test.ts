@@ -3,14 +3,15 @@
  * `listForUser` (ägar-/org-scope + matter-subset + filter) och `getByIdInOrg` (#1231).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { matters, tasks } from "@/lib/server/db/schema";
 import { DrizzleTaskRepository } from "@/lib/server/repositories/drizzle-task-repository";
 import { InMemoryTaskRepository } from "@/lib/server/repositories/in-memory-task-repository";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, type OrganizationId, type TaskId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
+import { DRIZZLE_NAME, type OpenRepos, openDrizzleRepos, openInMemoryRepos } from "./contract-backends";
 
 describe("TaskRepository — in-memory", () => {
   it("listForUser (ägar-scope + filter + matter) och getByIdInOrg", async () => {
@@ -105,5 +106,32 @@ describe("TaskRepository — Drizzle (pglite)", () => {
     const rows = await new DrizzleTaskRepository(db).listForMatter(mId, org);
     expect(rows.map((r) => r.title)).toEqual(["Bo", "Anna"]); // dueAt asc
     expect(rows[0]!.matter?.matterNumber).toBe("2026-2");
+  });
+});
+
+describe.each([
+  ["in-memory", () => Promise.resolve(openInMemoryRepos())],
+  [DRIZZLE_NAME, () => openDrizzleRepos()],
+] as const)("TaskRepository.existingIdsInOrg (#2121) — %s", (_name, open) => {
+  let repos: OpenRepos;
+  beforeEach(async () => { repos = await open(); });
+  afterEach(async () => { await repos.close(); });
+
+  it("ger levande och mjukraderade uppgifter i byrån, inte en annan byrås eller saknade", async () => {
+    const org = asId<"OrganizationId">(uuidv7());
+    const task = async (organizationId: OrganizationId): Promise<TaskId> => {
+      const id = asId<"TaskId">(uuidv7());
+      await repos.repos.tasks.create({ id, organizationId, userId: asId<"UserId">(uuidv7()), title: "T", status: "TODO" } as never);
+      return id;
+    };
+    const alive = await task(org);
+    const gone = await task(org);
+    await repos.repos.tasks.softDelete(gone);
+    const other = await task(asId<"OrganizationId">(uuidv7()));
+    const missing = asId<"TaskId">(uuidv7());
+    const found = await repos.repos.tasks.existingIdsInOrg([alive, gone, other, missing], org);
+    expect([...found].sort()).toEqual([alive, gone].sort());
+    expect(await repos.repos.tasks.getByIds([alive, gone])).toHaveLength(1); // getByIds utelämnar raderade
+    expect((await repos.repos.tasks.existingIdsInOrg([], org)).size).toBe(0);
   });
 });

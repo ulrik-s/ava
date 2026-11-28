@@ -16,7 +16,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterDocuments, type MatterDocument } from "@/lib/client/documents/use-matter-documents";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPCClient } from "@/lib/client/trpc";
 import { isHiddenBillingRun, isHiddenInvoice } from "@/lib/shared/billing/hidden-billing-rows";
 import { KOSTNADSRAKNING_STATUS_LABELS, krStateOf, type KostnadsrakningStatus } from "@/lib/shared/billing/kostnadsrakning-flow";
 import { pickKrDocForRun } from "@/lib/shared/billing/kr-document";
@@ -196,11 +196,11 @@ export function RunsList({ matterId, rows, standalone, loading }: { matterId: Ma
   // Dokumentlistan hämtas en gång → KOSTNADSRAKNING-raden kan länka till sitt KR-dokument (#843),
   // i vilken mapp det än ligger (#1308).
   const docs = useMatterDocuments(matterId) ?? [];
-  const utils = trpc.useUtils();
+  const client = useTRPCClient();
   // Slå ihop billing-runs + fristående fakturor och sortera KRONOLOGISKT på fakturadatum
   // (#878) — annars blandas createdAt-ordning med en påklistrad standalone-grupp.
   const items = [
-    ...rows.map((r) => runListRow(r, docs, utils.client)),
+    ...rows.map((r) => runListRow(r, docs, client)),
     ...standalone.map(standaloneListRow),
   ].sort((a, b) => dateMs(a.date) - dateMs(b.date));
   const { rows: shown, toggle } = useHiddenRows(items, (r) => r.hidden);

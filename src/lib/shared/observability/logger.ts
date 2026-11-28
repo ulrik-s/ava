@@ -25,9 +25,8 @@
  * ## Sink:en injiceras
  *
  * Modulen skriver inte själv. `setLogSink` byter destination — JSON till
- * stdout i drift, en array i tester. Felrapporteringen till byråns egen
- * mottagare går INTE via loggen utan via `server/observability/error-reporter`
- * (#1343), som skickar mindre än en loggpost bär. Utan det hade varje test som råkar logga spammat testutskriften.
+ * stdout i drift, en array i tester. Loggen är den enda vägen ut för serverfel,
+ * och den stannar på byråns server. Utan det hade varje test som råkar logga spammat testutskriften.
  */
 
 export type LogLevel = "debug" | "info" | "warn" | "error";

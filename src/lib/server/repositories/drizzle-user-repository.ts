@@ -8,6 +8,7 @@ import type { OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { User } from "@/lib/shared/schemas/user";
 import { normalizeLoginEmail } from "../auth/login-email-normalize";
 import { users } from "../db/schema";
+import { swedishOrder } from "../db/swedish-order";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { UserRepository } from "./user-repository";
@@ -29,7 +30,7 @@ export class DrizzleUserRepository extends DrizzleRepository<User> implements Us
     const rows = await this.db
       .select().from(users)
       .where(and(eq(users.organizationId, organizationId), isNull(users.deletedAt)))
-      .orderBy(asc(users.name));
+      .orderBy(asc(swedishOrder(users.name)));
     return this.asRows(rows);
   }
 

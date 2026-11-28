@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { MoveToMatterDialog } from "@/components/matter/move-to-matter-dialog";
-import type { RowSelection } from "@/components/ui/data-table";
+import { useRowSelection, type RowSelectionState } from "@/components/ui/data-table-selection";
 import { trpc } from "@/lib/client/trpc";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { isLockedEntry, type LockableEntry } from "@/lib/shared/time-entry-lock";
@@ -19,15 +19,8 @@ export function isMovableEntry(entry: LockableEntry): boolean {
 }
 
 /** Tidslistans markering: tabellens `selection` och en tömning efter flytten. */
-export function useTimeEntrySelection<T extends LockableEntry>(): {
-  selection: RowSelection<T>;
-  clear: () => void;
-} {
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  return {
-    selection: { selected, onChange: setSelected, isSelectable: isMovableEntry },
-    clear: () => setSelected(new Set()),
-  };
+export function useTimeEntrySelection<T extends LockableEntry>(): RowSelectionState<T> {
+  return useRowSelection<T>(isMovableEntry);
 }
 
 interface Props {

@@ -72,6 +72,10 @@ const SWEDISH = new Intl.Collator("sv");
 /** Namn där byteordning och svensk ordning skiljer sig (Å/Ä/Ö, versaler och gemener). */
 const SWEDISH_NAMES: readonly string[] = ["Örjan", "Åsa", "ärla", "Bertil", "anna", "Adam", "Zelda"];
 const swedish = (a: string, b: string): number => SWEDISH.compare(a, b);
+/** Mallar som `[kategori, namn]`, i en ordning som varken är svensk eller byteordning; utan kategori sist (#1918). */
+const TEMPLATES: readonly (readonly [string | null, string])[] = [
+  [null, "Adam"], ["Brev", "Bertil"], ["avtal", "ärla"], ["Ärende", "Örjan"], ["Brev", "anna"], ["Ärende", "Åsa"],
+];
 const day = (iso: string): Date => new Date(`${iso}T08:00:00.000Z`);
 const newOrg = (): OrganizationId => asId<"OrganizationId">(uuidv7());
 const newUser = (): UserId => asId<"UserId">(uuidv7());
@@ -174,6 +178,37 @@ const SCENARIOS: readonly Scenario[] = [
       for (const name of SWEDISH_NAMES) await addContact(repos, org, { name, parentId: parent.id });
       const children = (await repos.contacts.getByIdFull(parent.id, org))?.children ?? [];
       return differs(children.map((c) => c.name), [...SWEDISH_NAMES].sort(swedish));
+    },
+  },
+  {
+    // #1918: mappar, mallar, kontor och användare i svensk ordning, som kontakterna.
+    name: "mappar, mallar, kontor och användare sorteras på namn i svensk ordning",
+    needsSwedishCollation: true,
+    run: async (repos) => {
+      const org = newOrg();
+      const matterId = (await addMatter(repos, org, {})).id;
+      const userId = newUser();
+      for (const name of SWEDISH_NAMES) {
+        await repos.documentFolders.create({ id: asId<"DocumentFolderId">(uuidv7()), matterId, name, parentId: null, createdAt: day("2026-01-01") });
+        await repos.offices.create({ id: asId<"OfficeId">(uuidv7()), organizationId: org, name, isMain: name === "Zelda" });
+        await repos.users.create({ id: asId<"UserId">(uuidv7()), organizationId: org, email: `${uuidv7()}@byra.se`, name, role: "LAWYER", hourlyRates: {}, active: true });
+      }
+      for (const [category, name] of TEMPLATES) {
+        await repos.documentTemplates.create({ id: asId<"DocumentTemplateId">(uuidv7()), organizationId: org, name, category, content: "", createdById: userId });
+      }
+      const sorted = [...SWEDISH_NAMES].sort(swedish);
+      return differs({
+        folders: (await repos.documentFolders.listInParent(matterId, null)).map((f) => f.name),
+        byMatter: (await repos.documentFolders.listByMatter(matterId)).map((f) => f.name),
+        templates: (await repos.documentTemplates.listForOrg(org)).map((t) => [t.category, t.name]),
+        offices: (await repos.offices.listByOrg(org)).map((o) => o.name),
+        users: (await repos.users.listByOrg(org)).map((u) => u.name),
+      }, {
+        folders: sorted, byMatter: sorted,
+        templates: [["avtal", "ärla"], ["Brev", "anna"], ["Brev", "Bertil"], ["Ärende", "Åsa"], ["Ärende", "Örjan"], [null, "Adam"]],
+        offices: ["Zelda", ...sorted.filter((n) => n !== "Zelda")],
+        users: sorted,
+      });
     },
   },
   {

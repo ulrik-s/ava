@@ -24,11 +24,11 @@ import { errorMessage } from "@/lib/shared/observability/redact";
 import { newRequestId } from "@/lib/shared/observability/request-id";
 import { asId } from "@/lib/shared/schemas/ids";
 import { syncRefusalFromCause } from "@/lib/shared/sync/sync-error";
+import { assertAdmin } from "./auth/assert-admin";
 import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { QueuedProcedureCall } from "./data-store/in-memory/queue-entry";
 import type { ProcedureReplayResult } from "./data-store/in-memory/sync-transport";
-import { reportError } from "./observability/error-reporter";
 import type { IPorts } from "./ports";
 import type { QueuedCallIdentity } from "./queued-call";
 import type { Repositories } from "./repositories/repositories";
@@ -130,10 +130,6 @@ export const router = t.router;
  * (19670312-4521) saknar …" — och ett felmeddelande är den väg strukturskyddet
  * inte täcker.
  *
- * Serverfel (5xx, och allt som inte är ett `TRPCError`) går dessutom till
- * byråns felrapportering om den är påslagen (#1343) — utan meddelandet och
- * utan ids för användare och org, se `observability/error-reporter.ts`.
- *
  * Kastar vidare oförändrat. En logg som sväljer fel är värre än ingen logg.
  */
 const logged = t.middleware(async ({ ctx, path, type, next }) => {
@@ -155,7 +151,6 @@ const logged = t.middleware(async ({ ctx, path, type, next }) => {
       code: result.error.code,
       message: errorMessage(result.error.cause ?? result.error),
     });
-    reportError(result.error, { path, requestId });
   }
   return result;
 });
@@ -189,6 +184,18 @@ export const orgProcedure = protectedProcedure.use(({ ctx, next }) =>
   // (`data: { organizationId: ctx.orgId }`) och typkollas mot entiteten.
   next({ ctx: { ...ctx, orgId: asId<"OrganizationId">(ctx.user.organizationId) } }),
 );
+
+/**
+ * adminProcedure — `orgProcedure` som bara släpper igenom administratörer
+ * (`FORBIDDEN` annars, via {@link assertAdmin}). Kontrollen ligger före
+ * `.input()`, så en icke-admin får `FORBIDDEN` även med ogiltig indata och
+ * ser aldrig schemat. Gäller också köade anrop som spelas upp via
+ * `createCaller`.
+ */
+export const adminProcedure = orgProcedure.use(({ ctx, next }) => {
+  assertAdmin(ctx);
+  return next();
+});
 
 /**
  * requireOrgOwned — validerar att en resurs både existerar OCH

@@ -2,10 +2,11 @@
  * Test för ArSummarySection (ADR 0007): brygga + åldersanalys renderas.
  */
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 
 import { ArSummarySection } from "@/app/reports/_ar-summary";
+import { rowOrder, rowWith, sortColumn } from "../../../helpers/data-table";
 
 const arQuery = { data: undefined as Record<string, unknown> | undefined, isLoading: false };
 
@@ -86,5 +87,42 @@ describe("ArSummarySection", () => {
     };
     render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     expect(screen.getByText("Inga förfallna fakturor.")).toBeInTheDocument();
+  });
+
+  it("Per faktura sorterar på varje kolumn; utan fakturanummer länkas datumet och utan ärende står ärendet som text (#1907)", () => {
+    const bridge = {
+      fakturerat: 0, krediterat: 0, justerat: 0, inbetalt: 0, konstateradKundforlust: 0,
+      utestaende: 0, ejForfallet: 0, forfallet: 0, nettoRealiserat: 0,
+    };
+    arQuery.data = {
+      bridge,
+      aging: [{ label: "0–30 dagar", amount: 0 }],
+      rows: [
+        { id: "i1", invoiceNumber: "F-2026-0002", invoiceDate: "2026-01-10", matterId: "m1", matterNumber: "2026-0009", title: "Alfa", fakturerat: 100_00, inbetalt: 0, avskrivet: 50_00, utestaende: 50_00 },
+        { id: "i2", invoiceNumber: "", invoiceDate: "2026-03-10", matterId: "", matterNumber: "2026-0001", title: "", fakturerat: 300_00, inbetalt: 100_00, avskrivet: 0, utestaende: 200_00 },
+      ],
+    };
+    render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
+    const order = (): string[] => rowOrder(["2026-0009 — Alfa", "2026-0001"]);
+    sortColumn("Fakturanr", "asc");
+    expect(order()).toEqual(["2026-0001", "2026-0009 — Alfa"]);
+    sortColumn("Fakturadatum", "asc");
+    expect(order()).toEqual(["2026-0009 — Alfa", "2026-0001"]);
+    sortColumn("Ärende", "asc");
+    expect(order()).toEqual(["2026-0001", "2026-0009 — Alfa"]);
+    sortColumn("Fakturerat", "asc");
+    expect(order()).toEqual(["2026-0009 — Alfa", "2026-0001"]);
+    sortColumn("Inbetalt", "desc");
+    expect(order()).toEqual(["2026-0001", "2026-0009 — Alfa"]);
+    sortColumn("Avskrivet", "desc");
+    expect(order()).toEqual(["2026-0009 — Alfa", "2026-0001"]);
+    sortColumn("Utestående", "desc");
+    expect(order()).toEqual(["2026-0001", "2026-0009 — Alfa"]);
+
+    const noMatter = rowWith("2026-0001");
+    expect(within(noMatter).getByText("2026-0001").closest("a")).toBeNull();
+    expect(within(noMatter).getByRole("link", { name: new Date("2026-03-10").toLocaleDateString("sv-SE") })).toBeInTheDocument();
+    expect(within(noMatter).getByText("—")).toBeInTheDocument();
+    expect(within(rowWith("2026-0009 — Alfa")).getByText(/^−/)).toBeInTheDocument();
   });
 });

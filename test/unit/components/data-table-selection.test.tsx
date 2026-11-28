@@ -4,10 +4,11 @@
  * kolumnmenyn. Utan `selection` finns inga kryssrutor alls.
  */
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { useRowSelection } from "@/components/ui/data-table-selection";
 import { rowWith } from "../../helpers/data-table";
 
 interface Row { id: string; name: string; locked: boolean; hours: number }
@@ -142,5 +143,29 @@ describe("DataTable — radmarkering (#2043)", () => {
     unmount();
     const withSelection = render(<Page />);
     expect(withSelection.container.querySelector("table")?.style.width).toBe("244px");
+  });
+});
+
+describe("useRowSelection", () => {
+  it("börjar tom, tar emot nästa markering via onChange och tömmer med clear", () => {
+    const { result } = renderHook(() => useRowSelection<Row>());
+    expect([...result.current.selection.selected]).toEqual([]);
+    act(() => result.current.selection.onChange(new Set(["a", "c"])));
+    expect([...result.current.selection.selected]).toEqual(["a", "c"]);
+    act(() => result.current.clear());
+    expect([...result.current.selection.selected]).toEqual([]);
+  });
+
+  it("skickar vidare isSelectable, och utan den går alla rader att markera", () => {
+    const isSelectable = (r: Row): boolean => !r.locked;
+    expect(renderHook(() => useRowSelection<Row>(isSelectable)).result.current.selection.isSelectable).toBe(isSelectable);
+    expect(renderHook(() => useRowSelection<Row>()).result.current.selection.isSelectable).toBeUndefined();
+  });
+
+  it("clear är stabil mellan renderingar", () => {
+    const { result, rerender } = renderHook(() => useRowSelection<Row>());
+    const first = result.current.clear;
+    rerender();
+    expect(result.current.clear).toBe(first);
   });
 });

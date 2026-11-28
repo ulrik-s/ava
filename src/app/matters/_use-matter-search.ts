@@ -8,9 +8,10 @@
  * kolumner som listan. Sammanslagningen bor i `mergeMatterSearch` (ren).
  */
 
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Column } from "@/components/ui/data-table";
 import { labelForMatterRole } from "@/lib/client/labels";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { mergeMatterSearch, type MergeConflictHit } from "@/lib/shared/matter-search-merge";
 import { asId } from "@/lib/shared/schemas/ids";
 import { matterColumns, matterColumnsWithHits, type MatterRow } from "./_matter-columns";
@@ -53,12 +54,13 @@ function searchRows(data: ConflictCheckData | undefined, conflictMatters: Matter
 }
 
 export function useMatterSearch(listMatters: MatterRow[] | undefined): MatterSearch {
-  const check = trpc.conflict.check.useMutation();
+  const t = useTRPC();
+  const check = useMutation(t.conflict.check.mutationOptions());
   const ids = conflictMatterIds(check.data);
-  const conflictMatters = trpc.matter.list.useQuery(
+  const conflictMatters = useQuery(t.matter.list.queryOptions(
     { ids: ids.map((id) => asId<"MatterId">(id)), page: 1, pageSize: Math.max(ids.length, 1) },
     { enabled: ids.length > 0 },
-  );
+  ));
   const searched = check.data !== undefined;
   return {
     rows: searchRows(check.data, ids.length > 0 ? conflictMatters.data?.matters : [], listMatters ?? []),
