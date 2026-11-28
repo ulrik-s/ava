@@ -18,15 +18,15 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { loadBundledSeed } from "@/lib/client/demo/bundled-seed-loader";
 import { useDemoSeed } from "@/lib/client/demo/use-demo-seed";
+import { DEMO_REPO } from "@/lib/client/firma/firma-config";
 import type { DemoSource } from "@/lib/shared/demo-source";
 
 /**
  * Default demo-data-repo. Användare kan klistra in eget om de vill,
  * men 99% vill bara klicka in och se nåt. Override via
- * NEXT_PUBLIC_DEFAULT_DEMO_REPO vid build-time.
+ * `DEMO_REPO` (`NEXT_PUBLIC_DEMO_REPO` vid bygget).
  */
-const DEFAULT_DEMO_REPO =
-  process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
+const DEFAULT_DEMO_REPO = DEMO_REPO;
 
 export interface DemoClientProps {
   /**
@@ -37,7 +37,7 @@ export interface DemoClientProps {
   loader?: (repo: string) => Promise<DemoSource>;
   /**
    * Default-repo som auto-laddas vid mount. Sätt till tom sträng för att
-   * kräva användar-input. Override via `NEXT_PUBLIC_DEFAULT_DEMO_REPO`.
+   * kräva användar-input. Standard: `DEMO_REPO` (`NEXT_PUBLIC_DEMO_REPO` vid bygget).
    */
   defaultRepo?: string;
 }

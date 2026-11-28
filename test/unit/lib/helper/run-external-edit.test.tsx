@@ -19,7 +19,7 @@ vi.mock("@/lib/client/fsa/external-edit-tracker", () => ({
   getExternalEditTracker: () => trackerValue,
 }));
 let demoTier = true;
-vi.mock("@/lib/client/firma/firma-config", () => ({ isDemoTier: () => demoTier }));
+vi.mock("@/lib/client/firma/firma-config", () => ({ DEMO_REPO: "ulrik-s/ava-demo", isDemoTier: () => demoTier }));
 
 const DOC = { id: "d1", fileName: "rapport.pdf", storagePath: "documents/d1.pdf" };
 

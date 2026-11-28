@@ -15,12 +15,11 @@ import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterDocuments, type MatterDocument } from "@/lib/client/documents/use-matter-documents";
-import { isDemoTier } from "@/lib/client/firma/firma-config";
+import { DEMO_REPO, isDemoTier } from "@/lib/client/firma/firma-config";
 import { useTRPCClient } from "@/lib/client/trpc";
 import { isHiddenBillingRun, isHiddenInvoice } from "@/lib/shared/billing/hidden-billing-rows";
 import { KOSTNADSRAKNING_STATUS_LABELS, krStateOf, type KostnadsrakningStatus } from "@/lib/shared/billing/kostnadsrakning-flow";
 import { pickKrDocForRun } from "@/lib/shared/billing/kr-document";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
   BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, FORORDNANDE_AVSLUT_LABELS, INVOICE_STATUS_LABELS,
   type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type ForordnandeAvslut, type InvoiceStatus, type InvoiceType,
@@ -90,7 +89,7 @@ export async function openKrDoc(doc: KrDocInfo, client: DownloadClient): Promise
     // RUNTIME-tier, inte NEXT_PUBLIC_DEMO_BUILD (sant även i lokala self-hosted-
     // builden → länkade dokument till GH Pages = 404). #844.
     isDemo: isDemoTier(),
-    ...omitUndefined({ demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO }),
+    demoRepo: DEMO_REPO,
     loadHandle: () => loadHandle("repo-root"),
     readFromHandle: readFromFsa,
     // Server-first (#518/#839): hämta bytes från servern (+ klient-cache).
