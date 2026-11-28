@@ -62,22 +62,25 @@ async function settle(onClose: () => void): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  matterData = { matterNumber: "2026-0010", title: "Umgängestvist", contacts: [{ role: "KLIENT", contact: { name: "Cecilia Carlsson" } }] };
+  matterData = { matterNumber: "2026-0010", title: "Umgängestvist", contacts: [{ role: "KLIENT", contact: { name: "Cecilia Carlsson", address: "Provvägen 7, 234 56 Testby" } }] };
   orgData = { name: "Byrå AB", orgNumber: "556677-8899", logo: LOGO };
   splitData = null;
 });
 
 describe("SettlementDialog — fakturadokumenten", () => {
-  it("båda fakturorna får ärendets fält och byråns namn, org.nr och logga (#1439)", async () => {
+  it("båda fakturorna får ärendets fält, klienten och byråns namn, org.nr och logga (#1439); klientens får hennes adress (#2255)", async () => {
     const onClose = vi.fn();
     const { fake, invalidate } = await renderDialog("RATTSHJALP", onClose);
     await settle(onClose);
     expect(fake.calls.find((c) => c.path === "billingRun.settleCoverage")?.input).toEqual({ matterId: "m1", payerRecipient: "DOMSTOL" });
     expect(generateFn).toHaveBeenCalledTimes(2);
-    const meta = { matterNumber: "2026-0010", matterTitle: "Umgängestvist", organizationName: "Byrå AB", organizationOrgNumber: "556677-8899", organizationLogo: LOGO };
+    const meta = {
+      matterNumber: "2026-0010", matterTitle: "Umgängestvist", clientName: "Cecilia Carlsson",
+      organizationName: "Byrå AB", organizationOrgNumber: "556677-8899", organizationLogo: LOGO,
+    };
     expect(generateFn.mock.calls.map(([a]: [GenArgs]) => [a.recipient, a.meta])).toEqual([
       ["Domstolen betalar", meta],
-      ["Cecilia Carlsson", meta],
+      ["Cecilia Carlsson", { ...meta, recipientAddress: "Provvägen 7, 234 56 Testby" }],
     ]);
     // Betalarens persisterade nedbrytning (#876) blir dokumentets uppdelning.
     expect(generateFn.mock.calls[0]?.[0]).toMatchObject({ breakdown: BREAKDOWN });

@@ -5,7 +5,7 @@
  * kräver `keep` (annars raderna × `leading` + tabellens `keepExtra`) och ritar
  * först de enradiga cellerna på radens baslinje, sedan de radbrutna. `thead`
  * och `tfoot` hålls ihop och radbryts inte. Med `repeatHeader` ritas `thead`
- * igen överst när kroppen bryter sidan.
+ * igen överst när kroppen bryter sidan. En rad med `fill` får en bakgrund.
  */
 
 import type { TableItem, TableNode, TableRow, TableSection } from "@/lib/shared/documents/layout-ast";
@@ -33,11 +33,26 @@ function drawCell(ctx: DrawCtx, c: CellLines, leading: number): void {
   });
 }
 
-/** Rita raden på markören: enradiga celler först, sedan de radbrutna. Flyttar markören förbi raden. */
+/**
+ * Radens bakgrund (`fill`): över tabellens bredd, från `FILL_ASCENT` × radavståndet
+ * ovanför baslinjen och radernas höjd + `spaceAfter` nedåt — så fyllda rader i
+ * följd möts utan glipa. Ritas före texten (som annars skulle täckas).
+ */
+const FILL_ASCENT = 0.72;
+
+function drawFill(ctx: DrawCtx, row: TableRow, lineCount: number): void {
+  const last = row.cells.at(-1);
+  if (!row.fill || !last) return;
+  const width = last.column.offset + last.column.width;
+  ctx.writer.rect(ctx.frame.left, ctx.cursor.y - FILL_ASCENT * row.leading, width, lineCount * row.leading + row.spaceAfter, row.fill);
+}
+
+/** Rita raden på markören: bakgrunden, enradiga celler, sedan de radbrutna. Flyttar markören förbi raden. */
 function drawRowCells(ctx: DrawCtx, row: TableRow, cells: readonly CellLines[]): void {
+  const lineCount = Math.max(1, ...cells.map((c) => c.lines.length));
+  drawFill(ctx, row, lineCount);
   const ordered = [...cells.filter((c) => !c.wrapped), ...cells.filter((c) => c.wrapped)];
   for (const c of ordered) drawCell(ctx, c, row.leading);
-  const lineCount = Math.max(1, ...cells.map((c) => c.lines.length));
   ctx.cursor.y += lineCount * row.leading + row.spaceAfter;
 }
 

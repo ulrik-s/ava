@@ -86,7 +86,7 @@ describe("billingRun.createAcconto — nedbrytningen (#1940)", () => {
     ]);
     expect(bd.rows.slice(0, 4).map((r) => [r.label, r.amountOre])).toEqual([
       ["Upparbetat arvode (exkl moms)", 500_000], ["Utlägg (exkl moms)", 10_000], ["Underlag (exkl moms)", 510_000],
-      ["Klientens andel 20 % (exkl moms)", 102_000],
+      ["Klientens andel (exkl moms)", 102_000],
     ]);
     expect(bd.rows.find((r) => r.label.startsWith("Moms"))?.amountOre).toBe(third.invoice.vatOre);
     expect(bd.totalOre).toBe(third.invoice.amount);
@@ -877,7 +877,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     // det som återstår — 16 300 − 10 000 = 6 300 — och acontot dras av NETTO,
     // före momsraden. Förr stod hela momsen här, vilket var momsen på ett belopp
     // klienten aldrig skulle betala i sin helhet.
-    expect(cv.rows.find((r) => r.label === "Moms 25 %")).toBeUndefined();
+    expect(cv.rows.find((r) => r.label === "Moms")).toBeUndefined();
     expect(cv.rows.find((r) => r.label === "Moms på återstående belopp")?.amountOre).toBe(6_300);
     const accontoRow = cv.rows.find((r) => r.kind === "deduct" && r.label.startsWith("Avgår aconto"));
     expect(accontoRow?.amountOre).toBe(40_000);          // netto, inte 50 000 brutto
@@ -894,7 +894,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     // #947: andelen omfattar arvode + utlägg; utan utlägg i fixturen = 325 200 − 65 000.
     expect(pv.rows.find((r) => r.label.includes("andel (exkl moms)"))?.amountOre).toBe(260_200);
     // Moms på domstolens andel: bruttot 3 252 kr minus nettot 2 602 kr (2 601,60).
-    expect(pv.rows.find((r) => r.label === "Moms 25 %")?.amountOre).toBe(65_000);
+    expect(pv.rows.find((r) => r.label === "Moms")).toMatchObject({ amountOre: 65_000, shareBips: 2500 });
     // #1205 — rådgivningstimmen är redan fakturerad klienten: den ingår varken i
     // "Upparbetat" eller dras av, utan omnämns som info-rad före klientens andel.
     const labels = pv.rows.map((r) => r.label);

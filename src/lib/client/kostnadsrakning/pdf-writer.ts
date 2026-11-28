@@ -189,6 +189,11 @@ export class PdfWriter {
     this.current.drawLine({ start: { x: x1, y }, end: { x: x2, y }, thickness, color: this.ruleColour(grey) });
   }
 
+  /** Fylld rektangel (ingen ram) med överkanten `top` från sidans överkant. */
+  rect(x: number, top: number, width: number, height: number, color: RgbTuple): void {
+    this.current.drawRectangle({ x, y: this.size.height - top - height, width, height, color: this.rgb(...color) });
+  }
+
   private ruleColour(grey: boolean | RgbTuple): RGB {
     if (typeof grey !== "boolean") return this.rgb(...grey);
     return grey ? this.rgb(0.75, 0.75, 0.75) : this.rgb(0, 0, 0);

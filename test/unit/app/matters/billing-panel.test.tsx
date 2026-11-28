@@ -142,7 +142,7 @@ const baseMatter: MatterContext = {
   matterNumber: "2026-0001",
   title: "Tvist mot motpart",
   contacts: [
-    { role: "KLIENT", contact: { name: "Anna Andersson", email: "anna@klient.se" } },
+    { role: "KLIENT", contact: { name: "Anna Andersson", email: "anna@klient.se", address: "Provgatan 2, 111 22 Teststad" } },
     { role: "DOMSTOL", contact: { name: "Stockholms tingsrätt" } },
   ],
 };
@@ -362,6 +362,8 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     expect(screen.getByTestId("billing-dialog")).toHaveTextContent("FINAL");
     // Byråns namn, org.nr och logga följer med till fakturadokumentet (#1439).
     expect(billingDialogMeta).toMatchObject({ organizationName: "Byrå AB", organizationOrgNumber: "556677-8899", organizationLogo: ORG_LOGO });
+    // Klienten och hennes postadress följer med till fönsterkuvertet (#2255).
+    expect(billingDialogMeta).toMatchObject({ clientName: "Anna Andersson", clientAddress: "Provgatan 2, 111 22 Teststad" });
   });
 
   it("RATTSSKYDD: aconto + faktura till försäkring", async () => {

@@ -6,11 +6,14 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
-import { GRACE_MS, markInternalParts, moveStrayIssues, orphanedParts, STAYS_IN_CODE_REPO, strayIssues } from "../../tooling/scripts/flow/inbox";
+import { markInternalParts, moveStrayIssues, orphanedParts, STAYS_IN_CODE_REPO, strayIssues } from "../../tooling/scripts/flow/inbox";
 import { loadFlow } from "../../tooling/scripts/flow/load";
 import { decide } from "../../tooling/scripts/flow/transition";
+import { parseDuration } from "../../tooling/scripts/flow/watchdog";
 
 const flow = loadFlow();
+/** Inkorgens graceperiod ur flow.yaml (`inbox.grace`, 2 h). */
+const GRACE_MS = parseDuration(flow.inbox.grace);
 const NOW = Date.parse("2026-11-18T18:00:00Z");
 const OLD = new Date(NOW - GRACE_MS - 60_000).toISOString();
 const NEW = new Date(NOW - 10 * 60_000).toISOString();
@@ -50,9 +53,17 @@ const log = (lines: string[]) => (l: string): void => { lines.push(l); };
 describe("inkorgen", () => {
   it("bara förfrågningar flyttas: inte arbetsorder, förslag, veckorapport, PR:er eller direkt arbete", () => {
     const items = gitHub("ulrik-s/ava", fakeGh().run).openItems();
-    expect(strayIssues(items, NOW, (n) => WITH_OPEN_PR.has(n)).map((i) => i.number)).toEqual([5, 8]);
+    expect(strayIssues(items, NOW, (n) => WITH_OPEN_PR.has(n), GRACE_MS).map((i) => i.number)).toEqual([5, 8]);
     // Okänd ålder räknas inte som en förfrågan.
-    expect(strayIssues([{ number: 1, title: "t", body: "", labels: [], isPr: false }], NOW, () => false)).toEqual([]);
+    expect(strayIssues([{ number: 1, title: "t", body: "", labels: [], isPr: false }], NOW, () => false, GRACE_MS)).toEqual([]);
+  });
+
+  it("graceperioden läses ur flödet (2 h) och följer den längd som skickas in", () => {
+    expect(GRACE_MS).toBe(2 * 3_600_000);
+    const items = gitHub("ulrik-s/ava", fakeGh().run).openItems();
+    // Med 5 minuter är också det tio minuter gamla #10 en förfrågan; med ett dygn ingen.
+    expect(strayIssues(items, NOW, (n) => WITH_OPEN_PR.has(n), 5 * 60_000).map((i) => i.number)).toEqual([5, 8, 10]);
+    expect(strayIssues(items, NOW, () => false, 24 * 3_600_000)).toEqual([]);
   });
 
   it("flaggorna som stannar finns i kodrepots flöde", () => {
@@ -66,7 +77,7 @@ describe("inkorgen", () => {
     const lines: string[] = [];
     const moved = moveStrayIssues(gitHub("ulrik-s/ava", source.run), {
       source: gitHub("ulrik-s/ava", source.run), intake: gitHub("ulrik-s/ava-feedback", intake.run), intakeRepo: "ulrik-s/ava-feedback",
-    }, { now: NOW, enforce: true, log: log(lines) });
+    }, { now: NOW, graceMs: GRACE_MS, enforce: true, log: log(lines) });
     expect(moved).toEqual([[5, 100], [8, 101]]);
     expect(source.calls.filter((c) => c.startsWith("issue transfer"))).toEqual([
       "issue transfer 5 ulrik-s/ava-feedback -R ulrik-s/ava",
@@ -84,9 +95,9 @@ describe("inkorgen", () => {
   it("utan token eller i rapportläge flyttas inget, men det loggas", () => {
     const gh = fakeGh();
     const lines: string[] = [];
-    expect(moveStrayIssues(gitHub("ulrik-s/ava", gh.run), null, { now: NOW, enforce: true, log: log(lines) })).toEqual([]);
+    expect(moveStrayIssues(gitHub("ulrik-s/ava", gh.run), null, { now: NOW, graceMs: GRACE_MS, enforce: true, log: log(lines) })).toEqual([]);
     const mover = { source: gitHub("ulrik-s/ava", gh.run), intake: gitHub("ulrik-s/ava-feedback", gh.run), intakeRepo: "ulrik-s/ava-feedback" };
-    expect(moveStrayIssues(gitHub("ulrik-s/ava", gh.run), mover, { now: NOW, enforce: false, log: log(lines) })).toEqual([]);
+    expect(moveStrayIssues(gitHub("ulrik-s/ava", gh.run), mover, { now: NOW, graceMs: GRACE_MS, enforce: false, log: log(lines) })).toEqual([]);
     expect(lines).toEqual([
       "förfrågningar i kodrepot: #5, #8 — ingen FLOW_TRANSFER_TOKEN, flyttas inte",
       "förfrågningar i kodrepot: #5, #8 — bara rapport",
@@ -105,7 +116,7 @@ describe("inkorgen", () => {
     const lines: string[] = [];
     const moved = moveStrayIssues(gitHub("ulrik-s/ava", source.run), {
       source: gitHub("ulrik-s/ava", deniesFive), intake: gitHub("ulrik-s/ava-feedback", intake.run), intakeRepo: "ulrik-s/ava-feedback",
-    }, { now: NOW, enforce: true, log: log(lines) });
+    }, { now: NOW, graceMs: GRACE_MS, enforce: true, log: log(lines) });
     expect(moved).toEqual([[8, 100]]);
     expect(intake.calls).toEqual([
       "api repos/ulrik-s/ava-feedback/issues/100/labels -f labels[]=intern",
@@ -123,7 +134,7 @@ describe("inkorgen", () => {
     const lines: string[] = [];
     const moved = moveStrayIssues(gitHub("ulrik-s/ava", source.run), {
       source: gitHub("ulrik-s/ava", source.run), intake: gitHub("ulrik-s/ava-feedback", deniesLabels), intakeRepo: "ulrik-s/ava-feedback",
-    }, { now: NOW, enforce: true, log: log(lines) });
+    }, { now: NOW, graceMs: GRACE_MS, enforce: true, log: log(lines) });
     expect(moved).toEqual([]);
     expect(lines).toEqual([
       "::warning::flytten av #5 till ulrik-s/ava-feedback blev inte klar: gh api repos/ulrik-s/ava-feedback/issues/100/labels -f labels[]=intern: HTTP 403",
@@ -134,7 +145,7 @@ describe("inkorgen", () => {
   it("inget att flytta: ingen loggrad", () => {
     const lines: string[] = [];
     const run: GhRunner = () => JSON.stringify([[issue(6, ["agent-task"])]]);
-    expect(moveStrayIssues(gitHub("ulrik-s/ava", run), null, { now: NOW, enforce: true, log: log(lines) })).toEqual([]);
+    expect(moveStrayIssues(gitHub("ulrik-s/ava", run), null, { now: NOW, graceMs: GRACE_MS, enforce: true, log: log(lines) })).toEqual([]);
     expect(lines).toEqual([]);
   });
 

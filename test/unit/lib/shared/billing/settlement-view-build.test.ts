@@ -12,10 +12,11 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { vatRow } from "@/lib/shared/billing/settlement-row";
 import {
   accontoDeductionRow, arvodeLadderRows, awardedBaseOre, buildClientArvodeLines, buildClientView, buildCreditView, buildPayerView, buildSettlementViews,
   creditPayload, feeBaseSuffix, ladderBaseOre, radgivningOre, shareLabel, svd,
-  toViewLine, totalPrutningNetOre, vatLabel, workBaseRows, type SettlementBreakdown,
+  toViewLine, totalPrutningNetOre, workBaseRows, type SettlementBreakdown,
 } from "@/lib/shared/billing/settlement-view";
 import { asId } from "@/lib/shared/schemas/ids";
 
@@ -84,7 +85,7 @@ describe("radgivningOre", () => {
 describe("arvodeLadderRows — rådgivningstimmen (#1205)", () => {
   it("toppraden är det upparbetade (ofrysta) arvodet — rådgivningen läggs varken till eller dras av", () => {
     const rows = arvodeLadderRows(breakdown({ radgivningNetOre: 162_600, radgivningGrossOre: 203_250 }), "Domstolens");
-    expect(rows[0]).toEqual({ label: "Upparbetat arvode (exkl moms)", amountOre: 100_000, kind: "add" });
+    expect(rows[0]).toEqual({ label: "Upparbetat arvode (exkl moms)", amountOre: 100_000, kind: "add", role: "basis" });
     expect(rows.some((r) => r.kind === "deduct")).toBe(false);
     expect(rows.some((r) => r.label.startsWith("Beviljat"))).toBe(false);
   });
@@ -145,7 +146,7 @@ describe("buildClientArvodeLines (#1205)", () => {
 
 describe("delade rader för slutregleringen och acontofakturan (#1940)", () => {
   it("workBaseRows: bara arvodet utan utlägg", () => {
-    expect(workBaseRows(100_000, 0)).toEqual([{ label: "Upparbetat arvode (exkl moms)", amountOre: 100_000, kind: "add" }]);
+    expect(workBaseRows(100_000, 0)).toEqual([{ label: "Upparbetat arvode (exkl moms)", amountOre: 100_000, kind: "add", role: "basis" }]);
   });
 
   it("workBaseRows: med utlägg även utläggen och underlaget", () => {
@@ -185,13 +186,14 @@ describe("trappans baser", () => {
   });
 });
 
-describe("vatLabel", () => {
-  it("namnger momsen med sitt belopp", () => {
-    expect(vatLabel(100_000, 25_000)).toContain("25");
+describe("vatRow (#2255/#151)", () => {
+  it("25 % på hela underlaget: underlaget och andelen i egna fält, inte i etiketten", () => {
+    expect(vatRow(100_000, 25_000)).toEqual({ label: "Moms", amountOre: 25_000, kind: "add", basisOre: 100_000, shareBips: 2500 });
   });
 
-  it("tål noll moms utan att dela med noll", () => {
-    expect(() => vatLabel(0, 0)).not.toThrow();
+  it("blandade satser eller noll: bara \"Moms\", utan underlag och andel", () => {
+    expect(vatRow(100_000, 12_000)).toEqual({ label: "Moms", amountOre: 12_000, kind: "add" });
+    expect(vatRow(0, 0)).toEqual({ label: "Moms", amountOre: 0, kind: "add" });
   });
 });
 

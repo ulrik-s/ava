@@ -18,7 +18,7 @@ import { loadFlow } from "./flow/load";
 import type { Flow, Machine } from "./flow/schema";
 import {
   type AgentPull, closesIssue, type DuplicatePull, dueNudges, dueTimeouts, duplicatePulls, hungRuns, type MergedPull,
-  nudgeLabels, timedLabels, type WatchAction, type WatchItem,
+  nudgeLabels, parseDuration, timedLabels, type WatchAction, type WatchItem,
 } from "./flow/watchdog";
 import { runDependencies } from "./flow-deps";
 import { type Log, normalize } from "./flow-guard";
@@ -188,7 +188,7 @@ if (import.meta.main) {
     // Inkorgen: en förfrågan i kodrepot flyttas till intaget (kräver en token som når båda).
     if (codeIssues) {
       const mover = token ? { source: gitHub(m.repo, runGhWithToken(token)), intake: gitHub(intakeRepo, runGhWithToken(token)), intakeRepo } : null;
-      moveStrayIssues(gh, mover, { now: Date.now(), enforce, log: console.log });
+      moveStrayIssues(gh, mover, { now: Date.now(), graceMs: parseDuration(flow.inbox.grace), enforce, log: console.log });
     }
   }
   const ciRepo = machines[0]?.repo;
