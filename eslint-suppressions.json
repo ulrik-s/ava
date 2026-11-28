@@ -486,30 +486,6 @@
       "count": 2
     }
   },
-  "src/lib/client/github/api.ts": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-spread": {
-      "count": 1
-    },
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 5
-    }
-  },
-  "src/lib/client/github/fsa-walker.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    }
-  },
-  "src/lib/client/github/push.ts": {
-    "@typescript-eslint/no-dynamic-delete": {
-      "count": 1
-    },
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
-    }
-  },
   "src/lib/client/integrations/office365-connector.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
@@ -2265,52 +2241,6 @@
     }
   },
   "test/unit/lib/generate-demo-manifest.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/lib/github/api.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 23
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 5
-    },
-    "no-restricted-syntax": {
-      "count": 8
-    }
-  },
-  "test/unit/lib/github/fsa-walker.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
-    }
-  },
-  "test/unit/lib/github/pull.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/require-await": {
-      "count": 3
-    }
-  },
-  "test/unit/lib/github/push.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 4
-    },
-    "@typescript-eslint/require-await": {
-      "count": 3
-    },
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/lib/github/sync-state.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
     "no-restricted-syntax": {
       "count": 1
     }

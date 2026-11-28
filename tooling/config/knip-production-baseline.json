@@ -2,12 +2,6 @@
   "src/components/shell/external-action-badge.tsx",
   "src/components/shell/queued-badge.tsx",
   "src/components/ui/feature-unavailable.tsx",
-  "src/lib/client/github/api.ts",
-  "src/lib/client/github/fsa-walker.ts",
-  "src/lib/client/github/git-blob-hash.ts",
-  "src/lib/client/github/pull.ts",
-  "src/lib/client/github/push.ts",
-  "src/lib/client/github/sync-state.ts",
   "src/lib/client/sync/external-actions.ts",
   "src/lib/client/todo/todo-views.ts",
   "src/lib/client/working-set/lru-budget.ts",
@@ -18,6 +12,5 @@
   "src/lib/server/integrations/ledger/capabilities.ts",
   "src/lib/server/integrations/ledger/reconcile-payments.ts",
   "src/lib/server/integrations/ledger/sie-connector.ts",
-  "src/lib/shared/deadline-color.ts",
-  "src/lib/shared/schema-migrations.ts"
+  "src/lib/shared/deadline-color.ts"
 ]
