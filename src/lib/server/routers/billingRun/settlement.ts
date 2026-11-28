@@ -40,6 +40,7 @@ import {
 } from "./settlement-invoices";
 import {
   applyKrTransition, assertFlowAction, fetchDeductedAccontoRuns, fetchUnfrozenWork, fetchWorkByRun, invoiceNumbering,
+  undeductedAccontoIds,
 } from "./shared";
 
 /**
@@ -208,10 +209,9 @@ export const settlementProcedures = {
         const { split, clientLines, payerLines } = allocation;
 
         // Klient: självrisk (+ ev. prutning), moms 25 %, minus tidigare aconton.
-        // Auto-dra av ALLA skickade klient-aconton (#856): de har redan betalats,
-        // så slutfakturan reduceras med dem (utöver ev. explicit valda).
-        const sentAccontoIds = (await tx.billingRuns.listAccontoSent(input.matterId)).map((r) => r.id);
-        const deductIds = [...new Set([...input.deductedBillingRunIds, ...sentAccontoIds])];
+        // Auto-dra av skickade klient-aconton (#856), utöver ev. explicit valda,
+        // men aldrig ett som en tidigare slutfaktura redan dragit av (#1892).
+        const deductIds = await undeductedAccontoIds(tx, ctx.orgId, input.matterId, input.deductedBillingRunIds);
         const clientGross = allocation.clientGrossOre;
         const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, deductIds);
         const deductionOre = deductedRuns.reduce((s, r) => s + (r.amountOre ?? 0), 0);

@@ -79,6 +79,27 @@ describe("availableActions — statemaskinens kanter", () => {
     expect(availableActions({ paymentMethod: "RATTSSKYDD", rattsskyddNekadAt: "2026-05-01" }, [])).toEqual([]);
   });
 
+  it("SLUTREGLERAD i rättshjälp och offentligt uppdrag: ny kostnadsräkning till domstol (#1892)", () => {
+    const settled: FlowRun = { type: "KOSTNADSRAKNING", status: "SENT", kostnadsrakningStatus: "FAKTURERAD", invoiceId: "inv-1" };
+    for (const paymentMethod of ["RATTSHJALP", "OFFENTLIGT_UPPDRAG"] as const) {
+      expect(currentPhase({ paymentMethod }, [settled])).toBe("SLUTREGLERAD");
+      const actions = availableActions({ paymentMethod }, [settled]);
+      expect(actions.map((a) => [a.type, a.label, a.toPhase])).toEqual([["KOSTNADSRAKNING", "Kostnadsräkning till domstol", "VANTAR_DOM"]]);
+      expect(canBillingTransition(paymentMethod, "SLUTREGLERAD", "KOSTNADSRAKNING")).toBe(true);
+    }
+  });
+
+  it("en ny kostnadsräkning efter slutregleringen ger VANTAR_DOM igen (#1892)", () => {
+    const runs: FlowRun[] = [{ type: "KOSTNADSRAKNING", status: "SENT", kostnadsrakningStatus: "FAKTURERAD", invoiceId: "inv-1" }, pendingKr];
+    expect(currentPhase({ paymentMethod: "RATTSHJALP" }, runs)).toBe("VANTAR_DOM");
+  });
+
+  it("rättsskyddets SLUTREGLERAD och NEKAD är fortfarande slutfaser (#1892)", () => {
+    expect(availableActions({ paymentMethod: "RATTSSKYDD" }, [sentFinal])).toEqual([]);
+    expect(canBillingTransition("RATTSSKYDD", "SLUTREGLERAD", "KOSTNADSRAKNING")).toBe(false);
+    expect(BILLING_FLOWS.RATTSSKYDD.actionsByPhase.NEKAD).toEqual([]);
+  });
+
   it("SETTLE-action i rättshjälp öppnar settlement-dialogen", () => {
     const settle = availableActions({ paymentMethod: "RATTSHJALP" }, []).find((a) => a.type === "SETTLE");
     expect(settle?.dialog).toBe("settlement");
@@ -121,7 +142,7 @@ describe("billingShortcut — vad fakturera nu öppnar (#1853)", () => {
   const cases: ReadonlyArray<[string, Parameters<typeof billingShortcut>[0], FlowRun[], "dialog" | "menu" | "none"]> = [
     ["rättshjälp ARBETE", { paymentMethod: "RATTSHJALP" }, [], "dialog"],
     ["rättshjälp VANTAR_DOM", { paymentMethod: "RATTSHJALP" }, [pendingKr], "menu"],
-    ["rättshjälp SLUTREGLERAD", { paymentMethod: "RATTSHJALP" }, [{ type: "KOSTNADSRAKNING", status: "SENT" }], "none"],
+    ["rättshjälp SLUTREGLERAD", { paymentMethod: "RATTSHJALP" }, [{ type: "KOSTNADSRAKNING", status: "SENT" }], "menu"], // ny kostnadsräkning (#1892)
     ["rättsskydd ARBETE", { paymentMethod: "RATTSSKYDD" }, [sentAcconto], "dialog"],
     ["rättsskydd NEKAD", { paymentMethod: "RATTSSKYDD", rattsskyddNekadAt: nekad }, [], "none"],
     ["rättsskydd SLUTREGLERAD", { paymentMethod: "RATTSSKYDD" }, [sentFinal], "none"],
@@ -130,7 +151,7 @@ describe("billingShortcut — vad fakturera nu öppnar (#1853)", () => {
     ["PENDING", { paymentMethod: "PENDING" }, [], "menu"],
     ["offentligt uppdrag ARBETE", { paymentMethod: "OFFENTLIGT_UPPDRAG" }, [], "menu"],
     ["offentligt uppdrag VANTAR_DOM", { paymentMethod: "OFFENTLIGT_UPPDRAG" }, [pendingKr], "menu"],
-    ["offentligt uppdrag SLUTREGLERAD", { paymentMethod: "OFFENTLIGT_UPPDRAG" }, [{ type: "KOSTNADSRAKNING", status: "SENT" }], "none"],
+    ["offentligt uppdrag SLUTREGLERAD", { paymentMethod: "OFFENTLIGT_UPPDRAG" }, [{ type: "KOSTNADSRAKNING", status: "SENT" }], "menu"], // ny kostnadsräkning (#1892)
   ];
 
   for (const [name, matter, runs, kind] of cases) {

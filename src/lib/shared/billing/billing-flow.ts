@@ -18,8 +18,10 @@
  *
  * Statemaskinen: `actionsByPhase[fas]` = de actions som är lagliga i fasen, och
  * varje action:s `toPhase` är kanten till nästa fas. Faserna härleds av
- * {@link currentPhase}; terminala faser (SLUTREGLERAD/NEKAD) har tomma action-
- * listor men finns som nycklar så flödet "äger" fasen.
+ * {@link currentPhase}; terminala faser (NEKAD och rättsskyddets SLUTREGLERAD)
+ * har tomma action-listor men finns som nycklar så flödet "äger" fasen. I
+ * rättshjälp och offentligt uppdrag kan en slutreglerad fas få en ny
+ * kostnadsräkning (#1892, ADR 0034).
  */
 
 import type { BillingRunRecipient, BillingRunStatus, BillingRunType, PaymentMethod } from "../schemas/enums";
@@ -51,6 +53,9 @@ export interface BillingFlow {
 }
 
 const aconto = (): BillingAction => ({ type: "ACCONTO", label: "Aconto till klient", toPhase: "ARBETE", recipient: "KLIENT", dialog: "billing" });
+/** Kostnadsräkning till domstol → väntar på dom. Också efter slutregleringen i
+ *  rättshjälp och offentligt uppdrag: ett ärende kan ha flera (#1892). */
+const kostnadsrakning = (): BillingAction => ({ type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol", toPhase: "VANTAR_DOM", recipient: "DOMSTOL", dialog: "kostnadsrakning" });
 
 /** PRIVAT/MIX/PENDING: löpande räkning till klienten — à-conto under arbetets gång +
  *  slutfaktura. Ingen besluts-/domslivscykel (stannar i ARBETE). */
@@ -90,13 +95,13 @@ export const BILLING_FLOWS: Record<PaymentMethod, BillingFlow> = {
     actionsByPhase: {
       ARBETE: [
         aconto(),
-        { type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol", toPhase: "VANTAR_DOM", recipient: "DOMSTOL", dialog: "kostnadsrakning" },
+        kostnadsrakning(),
         { type: "SETTLE", label: "Slutreglera (dom)", toPhase: "SLUTREGLERAD", recipient: "DOMSTOL", dialog: "settlement" },
       ],
       VANTAR_DOM: [
         { type: "SETTLE", label: "Slutreglera (dom)", toPhase: "SLUTREGLERAD", recipient: "DOMSTOL", dialog: "settlement" },
       ],
-      SLUTREGLERAD: [],
+      SLUTREGLERAD: [kostnadsrakning()],
     },
   },
   // Offentligt uppdrag: kostnadsräkning till domstol → dom (prutning) via verdict.
@@ -105,13 +110,13 @@ export const BILLING_FLOWS: Record<PaymentMethod, BillingFlow> = {
     initialPhase: "ARBETE",
     actionsByPhase: {
       ARBETE: [
-        { type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol", toPhase: "VANTAR_DOM", recipient: "DOMSTOL", dialog: "kostnadsrakning" },
+        kostnadsrakning(),
         { type: "FINAL", label: "Faktura till klient (återbetalning)", toPhase: "ARBETE", recipient: "KLIENT", dialog: "billing" },
       ],
       VANTAR_DOM: [
         { type: "FINAL", label: "Faktura till klient (återbetalning)", toPhase: "VANTAR_DOM", recipient: "KLIENT", dialog: "billing" },
       ],
-      SLUTREGLERAD: [],
+      SLUTREGLERAD: [kostnadsrakning()],
     },
   },
 };

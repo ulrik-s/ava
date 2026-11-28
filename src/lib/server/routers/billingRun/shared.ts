@@ -69,6 +69,20 @@ export async function priorAccontoDeductions(repos: Repositories, orgId: Organiz
   return accontoDeductionsByInvoiceIds(repos, orgId, runs.map((r) => r.invoiceId));
 }
 
+/**
+ * Aconton som slutregleringen drar av (#856, #1892): de explicit valda plus alla
+ * skickade i ärendet, utom de som en tidigare skickad slutfaktura redan har
+ * dragit av (`deductedBillingRunIds`). Ett aconto dras aldrig av två gånger.
+ */
+export async function undeductedAccontoIds(
+  repos: Repositories, orgId: OrganizationId, matterId: MatterId, explicit: ReadonlyArray<BillingRunId>,
+): Promise<BillingRunId[]> {
+  const sent = (await repos.billingRuns.listAccontoSent(matterId)).map((r) => r.id);
+  const runs = await repos.billingRuns.listForOrg(orgId, matterId);
+  const done = new Set(runs.filter((r) => r.type === "FINAL" && r.status === "SENT").flatMap((r) => r.deductedBillingRunIds));
+  return [...new Set([...explicit, ...sent])].filter((id) => !done.has(id));
+}
+
 /** Valda poster med hela raderna (#734, #1889). */
 export interface SelectedWork { timeEntries: TimeEntry[]; expenses: Expense[] }
 
