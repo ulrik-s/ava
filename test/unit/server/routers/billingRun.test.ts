@@ -77,7 +77,7 @@ describe("billingRun.createAcconto — nedbrytningen (#1940)", () => {
     const first = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50_000 });
     const second = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 30_000 });
     const third = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 47_500 });
-    const bd = third.invoice.settlementBreakdown;
+    const bd = third.invoice.accontoBreakdown;
     if (!bd) throw new Error("nedbrytningen saknas");
     const labels = bd.rows.map((r) => r.label);
     expect(labels.filter((l) => l.startsWith("Avgår aconto"))).toEqual([
@@ -101,7 +101,7 @@ describe("billingRun.createAcconto — nedbrytningen (#1940)", () => {
     expect(res.invoice.vatBreakdown).toEqual([{ kind: "arvode", vatRate: 2500, netOre: 80_000, vatOre: 20_000 }]);
     expect(res.run).toMatchObject({ amountOre: 100_000, proposedAmountOre: 125_000 });
     // Ett ändrat belopp syns som Justering i nedbrytningen.
-    expect(res.invoice.settlementBreakdown?.rows.find((r) => r.label === "Justering (exkl moms)")?.amountOre).toBe(-20_000);
+    expect(res.invoice.accontoBreakdown?.rows.find((r) => r.label === "Justering (exkl moms)")?.amountOre).toBe(-20_000);
   });
 
   it("en nedbrytning från anroparen sparas oförändrad", async () => {
@@ -112,14 +112,14 @@ describe("billingRun.createAcconto — nedbrytningen (#1940)", () => {
       totalLabel: "Att betala (inkl moms)", totalOre: 125_000,
     };
     const res = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 125_000, settlementBreakdown: given });
-    expect(res.invoice.settlementBreakdown).toEqual(given);
+    expect(res.invoice.accontoBreakdown).toEqual(given);
   });
 
-  it("nedbrytningen sparas i acontots egen kolumn och, tills vidare, i settlementBreakdown (#2180)", async () => {
+  it("nedbrytningen sparas bara i acontots egen kolumn, settlementBreakdown lämnas tom (#2180, #2192)", async () => {
     const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "PRIVAT" });
     const { invoice } = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 100_000 });
     expect(invoice.accontoBreakdown?.totalOre).toBe(100_000);
-    expect(invoice.settlementBreakdown).toEqual(invoice.accontoBreakdown);
+    expect(invoice.settlementBreakdown ?? null).toBeNull();
     const read = await caller.invoice.getById({ id: invoice.id });
     expect(read.accontoBreakdown).toEqual(invoice.accontoBreakdown);
   });

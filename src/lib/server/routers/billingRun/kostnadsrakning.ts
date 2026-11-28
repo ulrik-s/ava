@@ -23,7 +23,7 @@ import {
 } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { krCourtName } from "../../billing/kr-court";
-import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, krRunValuedMatter, valueKrRun } from "../../billing/kr-run-valuation";
+import { krRunForordnandeAvslut, krRunGrossOre, krRunValuedMatter, valueKrRun } from "../../billing/kr-run-valuation";
 import { logMatterNote } from "../../billing/matter-note";
 import { removeVoidedKrDocuments } from "../../billing/void-kr-documents";
 import { emit } from "../../events/emit";
@@ -100,8 +100,8 @@ export const kostnadsrakningProcedures = {
           reference: await tx.billingRuns.nextKrReference(ctx.orgId, stockholmYear(now)),
           proposedAmountOre: grossValue, amountOre: grossValue,
           invoiceId: null, deductedBillingRunIds: [],
-          // Avslutet i egen kolumn (#2180) och, tills vidare, i anteckningen (expand).
-          periodTo: now, notes: krRunNotes(input.notes, input), forordnandeAvslut: krRunForordnandeAvslut(input),
+          // Avslutet bara i egen kolumn (#2180, contract #2192); anteckningen är juristens.
+          periodTo: now, notes: input.notes, forordnandeAvslut: krRunForordnandeAvslut(input),
         });
         // Kostnadsräkningen ÄR inskicket — frys arbetet direkt (#806) så det
         // lämnar "Upparbetat ofakturerat". Dom/slutreglering läser raderna via

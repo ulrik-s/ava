@@ -135,7 +135,7 @@ export const invoiceProcedures = {
         // är fakturans enda rad → hela kronor (#1438), och nettot likaså.
         const amountOre = roundToKronor(input.amountOre);
         const { netOre: accontoNetOre, vatOre: accontoVatOre } = accontoSplit(amountOre);
-        const settlementBreakdown = await accontoBreakdown(tx, ctx.orgId, {
+        const breakdown = await accontoBreakdown(tx, ctx.orgId, {
           given: input.settlementBreakdown, matterId: input.matterId, matter, work, at,
           clientShareBips: input.clientShareBips, amountOre,
         });
@@ -143,8 +143,8 @@ export const invoiceProcedures = {
           matterId: input.matterId, amount: amountOre, vatOre: accontoVatOre, amountRounding: CURRENT_ROUNDING,
           vatBreakdown: [{ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: accontoNetOre, vatOre: accontoVatOre }],
           // Nedbrytning (#878/#880/#1940): vad acontot avser och hur beloppet räknats.
-          // Egen kolumn (#2180); settlementBreakdown skrivs tills vidare också (expand).
-          accontoBreakdown: settlementBreakdown, settlementBreakdown,
+          // Bara i acontots egen kolumn (#2180, contract #2192).
+          accontoBreakdown: breakdown,
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient, invoiceDate)),
           ...invoiceMeta(ctx, input), notes: input.notes,

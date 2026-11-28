@@ -74,9 +74,9 @@ export const invoices = pgTable("invoices", {
   vatOre: integer("vat_ore"),
   // Moms-uppdelning per sats (#790) — driver per-sats bokföring i verifikat/SIE.
   vatBreakdown: jsonb("vat_breakdown").$type<Array<{ kind: "arvode" | "utlagg"; vatRate: number; netOre: number; vatOre: number }>>(),
-  // Persisterad slutregleringsvy (#876) — EN källa för faktura-dokument + Slutfaktura-sida.
+  // Slut- och kreditfakturans vy (#876) — EN källa för faktura-dokument + Slutfaktura-sida.
   settlementBreakdown: jsonb("settlement_breakdown").$type<SettlementView>(),
-  // Acontofakturans nedbrytning (#2147), egen kolumn sedan migration 0054 (#2180).
+  // Acontofakturans nedbrytning (#2147), egen kolumn sedan 0054 (#2180), enda källan sedan #2192.
   accontoBreakdown: jsonb("acconto_breakdown").$type<SettlementView>(),
   status: text("status").notNull().default("DRAFT").$type<InvoiceStatus>(),
   invoiceType: text("invoice_type").notNull().default("STANDARD").$type<InvoiceType>(),
