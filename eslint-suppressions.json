@@ -226,7 +226,7 @@
   },
   "src/app/matters/[id]/_settlement-dialog.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
+      "count": 1
     }
   },
   "src/app/matters/[id]/_watch-section.tsx": {

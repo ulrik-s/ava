@@ -1,6 +1,6 @@
 # ADR 0042 — Dokumentmotorn: Handlebars-mall över ett layoutspråk som `PdfWriter` ritar
 
-**Status:** Antagen · **Datum:** 2026-11-28 · **Issue:** #2251 · **Intag:** ava-feedback#153
+**Status:** Antagen, med tillägg 2026-11-28 (#2255, se sist) · **Datum:** 2026-11-28 · **Issue:** #2251 · **Intag:** ava-feedback#153
 **Bygger på:** [ADR 0038](0038-en-mekanism-for-dokumenttyp.md) (dokumenttyperna)
 
 ## Kontext
@@ -150,3 +150,61 @@ egen standardmall, samma partials).
   hålls medvetet litet och växer bara när ett dokument behöver det.
 - − Golden-filerna låser fakturans exakta utseende; en avsiktlig layoutändring
   kräver att de skrivs om (`UPDATE_GOLDEN=1`) och granskas i PR:en.
+
+## Tillägg 2026-11-28 — byråns fakturamall (#2255; intag #149, #150, #151)
+
+Fakturan som byrån får är nu **byråns egen layout**, byggd som mall i motorn:
+`templates/faktura-brev.ts` (`FAKTURA_BREV_TEMPLATE`, standard i
+`renderFakturaPdf`). Den gamla standardmallen (paritet med koden, 595 × 842)
+togs bort — inget använde den längre — och golden-filerna skrevs om för den
+nya mallen (`UPDATE_GOLDEN=1`).
+
+### Språket växer med fyra saker
+
+| Tillägg | Var | Betydelse |
+|---|---|---|
+| `<u>…</u>` | inne i `<text>` | Understruken del. Inga attribut, bara text, ingen nästling; följer radbrytningen (ett streck per rad, 0,12 × storleken under baslinjen, 0,06 × storleken tjockt, minst 0,5 pt, i textens färg). Blanktecken komprimeras över delarnas gränser. |
+| `fill="#rrggbb"` / grånivå | `<row>`, `<table>` | Radens bakgrund över hela tabellens bredd; på `<table>` standard för alla rader. Rektangeln börjar 0,72 × radavståndet över baslinjen och är raderna × radavståndet + `space-after` hög, så fyllda rader i följd möts utan glipa. Ritas före texten. |
+| `font="sans"` | `<style>`, `<text>`, `<row>`, `<cell>`, `<table>` | Helvetica också i ett Times-dokument (sidfoten). |
+| `<image src="seal">` | — | Fakturans andra namngivna bild: byråns sigill (`footerSeal`) bredvid `logo`. Motorn själv känner bara namngivna bilder; namnen sätts av renderaren. |
+
+`<rule thickness="…">` fanns redan (summeringsrutans tjocka linje är 2,2 pt).
+Varje tillägg valideras strikt som resten: ett attribut på `<u>`, `<u>` i en
+`<cell>` eller utanför `<text>`, ett okänt `font` eller en ogiltig färg i
+`fill` är ett `LayoutError` med rad och element.
+
+### Partialerna
+
+`stilar` (nu även `kolumnrubrik` och `sidfot`), `brevhuvud` (loggan centrerad,
+byråns namn utan logga, mottagarens namn och postadress i `<block
+at="window">`), `betalningsuppgifter` ("FAKTURA NR …", "Ange <u>endast
+fakturanummer</u> vid betalning tack!", uppgiftsblocket klient · fakturadag ·
+förfallodag · ärendenr · bankgiro, dröjsmålsräntan), `avrakning` (ny:
+Avräkning | Underlag | Andel | Belopp) och `sidfot` (linje, sigill, byråns namn,
+telefon, webbplats, "Arvoden bankgiro … · VAT nr: … · Godkänd för F-skatt" på
+varje sida). Byråns uppgifter kommer ur organisationsinställningarna, aldrig
+ur mallen.
+
+### Vy-modellen
+
+`FakturaView` får (bara presentation, inga belopp räknas om):
+`recipientLines`, `clientName`, `dueDate`, `payable`, byråns telefon,
+webbplats, bankgiro, momsregistreringsnummer (härlett SE + org.nr + 01 med
+`vatNumberFromOrgNumber`, samma som kostnadsräkningen) och sigill,
+`settlementRows` och `totals` (exkl moms, moms, inkl moms ur fakturans belopp
+och verifikatets moms).
+
+**Avräkningstabellen (#151):** nedbrytningens rader (`SettlementRow`) får
+`basisOre`, `shareBips` och `role` (`basis` = bygger underlaget, står i
+Underlag; `subtotal` = mellansumma, utelämnas). Procenten står inte längre i
+etiketten. Tabellens räknade rader summerar exakt till totalen; skiljer några
+ören läggs raden "Öresutjämning" till. Nedbrytningar sparade före tillägget
+saknar fälten och ritas rad för rad som förut, utan utjämning.
+
+**Skiljetecknet** i sidfoten är mittpunkten " · " (WinAnsi), som
+kostnadsräkningens sidfot — byråns tidigare "∽" finns inte i
+standardteckensnittens kodning.
+
+**Sidmått:** ISO-A4 (595,28 × 841,89 pt), marginaler 20 mm så att innehållet
+slutar där fönsteradressen slutar (20 mm från högerkanten). Första sidans flöde
+börjar 215 pt ned (under fönstret, som kostnadsräkningens rubrik).

@@ -18,9 +18,10 @@ import {
   type UnfrozenWork, type ValuationMatter,
 } from "./billing-work-value";
 import { specExpenseLines, type SpecDeduction } from "./invoice-specification";
+import { vatRow, type SettlementRow } from "./settlement-row";
 import {
-  accontoDeductionRow, buildClientArvodeLines, shareLabel, toViewLine, vatLabel, workBaseRows,
-  type SettlementRow, type SettlementView, type SettlementViewExpenseLine,
+  accontoDeductionRow, buildClientArvodeLines, toViewLine, workBaseRows,
+  type SettlementView, type SettlementViewExpenseLine,
 } from "./settlement-view";
 import { CURRENT_ROUNDING, roundToKronor, shareOfRow } from "./whole-kronor";
 
@@ -111,12 +112,15 @@ export function buildAccontoView(input: AccontoViewInput): SettlementView {
   const netOre = amountOre - a.vatOre;
   const rows: SettlementRow[] = [
     ...workBaseRows(arvodeNet, expensesNet),
-    { label: `Klientens ${accontoShareTerm(matter.paymentMethod)} ${shareLabel(clientShareBips)} % (exkl moms)`, amountOre: shareNet, kind: "add" },
+    {
+      label: `Klientens ${accontoShareTerm(matter.paymentMethod)} (exkl moms)`, amountOre: shareNet, kind: "add",
+      basisOre: arvodeNet + expensesNet, shareBips: clientShareBips,
+    },
     ...deductionRows,
     ...rowIfNonZero("Tidigare aconton överstiger andelen (exkl moms)", a.excessOre),
     ...rowIfNonZero("Justering (exkl moms)", a.adjustmentOre),
-    { label: vatLabel(netOre, a.vatOre), amountOre: a.vatOre, kind: "add" },
-    ...rowIfNonZero("Öresavrundning", a.roundingOre),
+    vatRow(netOre, a.vatOre),
+    ...rowIfNonZero("Öresutjämning", a.roundingOre),
   ];
   const valueOf = (t: UnfrozenWork["timeEntries"][number]): number => matterEntryValueOre(matter, t, at);
   return {

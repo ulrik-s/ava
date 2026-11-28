@@ -49,6 +49,8 @@ interface DocLookups {
   recipientByInvoice: Map<string, string>;
   /** matterId → klientens namn (ärendelistans KLIENT-include). */
   clientByMatter: Map<string, string>;
+  /** matterId → klientens postadress — fönsteradressen på klientfakturor (#2255). */
+  addressByMatter: Map<string, string>;
   /** Byråns namn, org.nr och logga (#1439) — samma på alla fakturor. */
   org: FakturaOrgMeta;
 }
@@ -60,6 +62,7 @@ async function loadLookups(c: Any): Promise<DocLookups> {
   return {
     recipientByInvoice: new Map(runs.filter((r) => r.invoiceId).map((r) => [String(r.invoiceId), String(r.recipient)])),
     clientByMatter: new Map(matters.map((m) => [String(m.id), clientNameOf(m)]).filter((e): e is [string, string] => !!e[1])),
+    addressByMatter: new Map(matters.map((m) => [String(m.id), clientAddressOf(m)]).filter((e): e is [string, string] => !!e[1])),
     org: fakturaOrgMeta(org),
   };
 }
@@ -67,6 +70,20 @@ async function loadLookups(c: Any): Promise<DocLookups> {
 function clientNameOf(matter: Any): string | undefined {
   const link = (matter.contacts ?? []).find((mc: Any) => mc.role === "KLIENT");
   return link?.contact?.name ?? undefined;
+}
+
+function clientAddressOf(matter: Any): string | undefined {
+  const link = (matter.contacts ?? []).find((mc: Any) => mc.role === "KLIENT");
+  return link?.contact?.address ?? undefined;
+}
+
+/** Klienten, och klientens adress när fakturan går till klienten (#2255). */
+function clientMeta(inv: Any, l: DocLookups): { clientName?: string; recipientAddress?: string } {
+  const matterId = String(inv.matter.id);
+  const clientName = l.clientByMatter.get(matterId);
+  const recipient = l.recipientByInvoice.get(String(inv.id));
+  const address = !recipient || recipient === "KLIENT" ? l.addressByMatter.get(matterId) : undefined;
+  return { ...(clientName ? { clientName } : {}), ...(address ? { recipientAddress: address } : {}) };
 }
 
 /**
@@ -90,10 +107,10 @@ async function renderDoc(c: Any, inv: Any, l: DocLookups): Promise<Uint8Array> {
   return renderFakturaPdf(buildFakturaView({
     invoice: {
       id: inv.id, amount: inv.amount, vatOre: inv.vatOre, invoiceNumber: inv.invoiceNumber,
-      ocrReference: inv.ocrReference, invoiceDate: inv.invoiceDate, invoiceType: inv.invoiceType, notes: inv.notes,
+      ocrReference: inv.ocrReference, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, invoiceType: inv.invoiceType, notes: inv.notes,
     },
     recipient: recipientOf(inv, l),
-    meta: { matterNumber: inv.matter.matterNumber, matterTitle: inv.matter.title, ...l.org },
+    meta: { matterNumber: inv.matter.matterNumber, matterTitle: inv.matter.title, ...clientMeta(inv, l), ...l.org },
     spec, breakdown: breakdownOf(inv),
   }));
 }

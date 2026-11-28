@@ -205,3 +205,72 @@ describe("ReadOnlyDelegate — relationsfilter inuti OR/AND", () => {
     expect((await del.findMany({ where: { AND: [{ contacts: byName("greta") }] } })).map((r) => r.id)).toEqual(["m1"]);
   });
 });
+
+describe("ReadOnlyDelegate — include med orderBy och take (#2250)", () => {
+  type Parent = { id: string } & Record<string, unknown>;
+  const parents: Parent[] = [{ id: "p1" }];
+  const children = [
+    { id: "c1", parentId: "p1", name: "Örjan", n: 2 },
+    { id: "c2", parentId: "p1", name: "anna", n: 5 },
+    { id: "c3", parentId: "p1", name: "Åsa", n: 1 },
+    { id: "c4", parentId: "p1", name: "Björn", n: 4 },
+    { id: "c5", parentId: "p1", name: "Ärla", n: 3 },
+  ];
+  const grandchildren = [
+    { id: "g1", childId: "c1", at: "2026-01-01" },
+    { id: "g2", childId: "c1", at: "2026-03-01" },
+    { id: "g3", childId: "c1", at: "2026-02-01" },
+  ];
+  const del = new ReadOnlyDelegate<Parent>(() => parents, {
+    relations: {
+      children: {
+        collection: () => children,
+        where: (p) => ({ parentId: p.id }),
+        relations: { grandchildren: { collection: () => grandchildren, where: (c) => ({ childId: c.id }) } },
+      },
+    },
+  });
+
+  /** Raderna i en hydrerad relation (en array av rader, annars tom). */
+  function rowsOf(v: unknown): ReadonlyArray<Record<string, unknown>> {
+    return Array.isArray(v) ? (v as ReadonlyArray<Record<string, unknown>>) : [];
+  }
+
+  async function childIds(include: Record<string, unknown>): Promise<string[]> {
+    const r = await del.findUnique({ where: { id: "p1" }, include });
+    return rowsOf(r?.children).map((c) => String(c.id));
+  }
+
+  it("stigande orderBy sorterar barnen", async () => {
+    expect(await childIds({ children: { orderBy: { n: "asc" } } })).toEqual(["c3", "c1", "c5", "c4", "c2"]);
+  });
+
+  it("fallande orderBy sorterar barnen", async () => {
+    expect(await childIds({ children: { orderBy: { n: "desc" } } })).toEqual(["c2", "c4", "c5", "c1", "c3"]);
+  });
+
+  it("strängar i svensk ordning: Å, Ä, Ö sist, oavsett versal eller gemen", async () => {
+    expect(await childIds({ children: { orderBy: { name: "asc" } } })).toEqual(["c2", "c4", "c3", "c5", "c1"]);
+  });
+
+  it("take gäller efter sorteringen", async () => {
+    expect(await childIds({ children: { orderBy: { n: "desc" }, take: 1 } })).toEqual(["c2"]);
+  });
+
+  it("take utan orderBy tar de första i lagrets ordning, som förut", async () => {
+    expect(await childIds({ children: { take: 2 } })).toEqual(["c1", "c2"]);
+  });
+
+  it("utan orderBy och take: lagrets ordning", async () => {
+    expect(await childIds({ children: true })).toEqual(["c1", "c2", "c3", "c4", "c5"]);
+  });
+
+  it("nästlad include sorterar barn-barnen", async () => {
+    const r = await del.findUnique({
+      where: { id: "p1" },
+      include: { children: { where: { id: "c1" }, include: { grandchildren: { orderBy: { at: "desc" } } } } },
+    });
+    const [first] = rowsOf(r?.children);
+    expect(rowsOf(first?.grandchildren).map((g) => String(g.id))).toEqual(["g2", "g3", "g1"]);
+  });
+});

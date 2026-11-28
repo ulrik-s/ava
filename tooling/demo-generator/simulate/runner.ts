@@ -168,9 +168,9 @@ async function sendAcconto(ctx: RunCtx, m: SimMatter, iso: string, st: SimState,
   const settlementBreakdown = {
     timeLines: st.periodLines,
     rows: [
-      { label: "Upparbetat arbete i perioden (exkl moms)", amountOre: newWorkNet, kind: "add" as const },
-      { label: `Klientens andel ${bips / 100} % (exkl moms)`, amountOre: clientNet, kind: "add" as const },
-      { label: "Moms 25 %", amountOre: amountOre - clientNet, kind: "add" as const },
+      { label: "Upparbetat arbete i perioden (exkl moms)", amountOre: newWorkNet, kind: "add" as const, role: "basis" as const },
+      { label: "Klientens andel (exkl moms)", amountOre: clientNet, kind: "add" as const, basisOre: newWorkNet, shareBips: bips },
+      { label: "Moms", amountOre: amountOre - clientNet, kind: "add" as const, basisOre: clientNet, shareBips: 2500 },
     ],
     totalLabel: "Att betala (inkl moms)", totalOre: amountOre,
   };

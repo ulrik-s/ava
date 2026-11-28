@@ -78,7 +78,8 @@ describe("fakturan (PDF) — sammanställning + specifikation (#937/#1439)", () 
       }),
     });
     expect(pages).toHaveLength(2);
-    expect(pages[0]).toContain("Sammanställning");
+    expect(pages[0]).toContain("Benämning");
+    expect(pages[0]).toContain("Timarvode");
     expect(pages[0]).not.toContain("Specifikation");
     expect(pages[1]?.[0]).toBe("Specifikation");
     expect(pages[1]).toContain("Tidsspecifikation");
@@ -120,8 +121,7 @@ describe("fakturan (PDF) — sammanställning + specifikation (#937/#1439)", () 
       recipient: "Cecilia Carlsson", meta: META, spec: spec({ payableOre: 203_250 }),
     });
     const text = pages.flat().join("\n");
-    expect(text).toContain("RÅDGIVNINGSFAKTURA");
-    expect(text).toContain("Sammanställning");
+    expect(text).toContain("RÅDGIVNINGSFAKTURA NR F-2026-0007");
     expect(text).toContain("Rådgivningstimme enligt rättshjälpstaxan (1 tim).");
     expect(text).toContain(kr(203_250));
     // Rådgivningsnotisen (spegel av KR-notisen) följer med — ordbruten i PDF:en.
@@ -130,11 +130,12 @@ describe("fakturan (PDF) — sammanställning + specifikation (#937/#1439)", () 
     expect(pages).toHaveLength(1);
   });
 
-  it("utan spec faller fakturan tillbaka på netto/moms ur fakturan", async () => {
+  it("utan spec: ingen avräkningstabell, summeringsrutan visar netto/moms ur fakturan", async () => {
     const texts = (await rendered({ invoice: invoice(), recipient: "Klient AB", meta: META })).flat();
-    expect(texts).toContain("Netto (exkl moms)");
+    expect(texts).not.toContain("Avräkning");
+    expect(texts).toContain("Belopp exkl. moms");
     expect(texts).toContain(kr(203_250 - 40_650));
-    expect(texts).toContain("Att betala (inkl moms)");
+    expect(texts).toContain("Belopp inkl. moms");
   });
 
   it("sammanställningen BENÄMNER varje arvodeskategori — inte 'Arvode' fyra gånger (#953)", async () => {
@@ -178,13 +179,14 @@ describe("fakturan (PDF) — sammanställning + specifikation (#937/#1439)", () 
     expect(page1).toContain(`${kr(280_000)}/tim`);
   });
 
-  it("organisationsuppgifter står i sidhuvudet när de finns", async () => {
+  it("organisationsuppgifterna står i brevhuvudet och sidfoten när de finns (#2255)", async () => {
     const texts = (await rendered({
       invoice: invoice(), recipient: "Klient AB",
       meta: { ...META, organizationName: "Firma AB", organizationOrgNumber: "556677-8899" },
     })).flat();
-    expect(texts).toContain("Firma AB");
-    expect(texts).toContain("Org.nr 556677-8899");
+    expect(texts[0]).toBe("Firma AB");
+    expect(texts.at(-2)).toBe("Firma AB");
+    expect(texts.at(-1)).toBe("VAT nr: SE556677889901 · Godkänd för F-skatt");
   });
 });
 

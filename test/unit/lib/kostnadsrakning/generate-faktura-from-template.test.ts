@@ -60,7 +60,7 @@ describe("generateFakturaFromTemplate", () => {
     const text = await persistedText();
     expect(text).toContain("F-2026-0099"); // fakturanummer
     expect(text).toContain("Staten");      // mottagare
-    expect(text).toContain("Vårdnadstvist");
+    expect(text).toContain("Vårt ärendenr:\nÄ-1"); // ärendenumret i uppgiftsblocket (#2255)
   });
 
   it("renderar fullständig specifikation (tider, utlägg, avdragna aconton) — #856", async () => {
@@ -147,7 +147,7 @@ describe("generateFakturaFromTemplate", () => {
     const text = await persistedText();
     // En rad per kategori + timpris (norm 1 626 kr/tim + tidsspillan 1 487 kr/tim),
     // läst som uträkning: Benämning | Tim | Timpris | Belopp (#1200).
-    expect(text).toContain("Sammanställning");
+    expect(text).toContain("FAKTURA NR F-2026-0055");
     expect(text).toContain("Benämning");
     expect(text).toContain("Timpris");
     expect(text).toContain(`${kr(162_600)}/tim`); // timkostnadsnorm 2026
@@ -172,7 +172,7 @@ describe("generateFakturaFromTemplate", () => {
     expect(text).toContain(kr(1_071_500)); // 785 200 + 196 300 + 90 000
     // Sammanställningen står FÖRE specifikationen, som börjar på en egen sida.
     const pages = await pdfPageTexts(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
-    expect(pages[0]).toContain("Sammanställning");
+    expect(pages[0]).toContain("Benämning");
     expect(pages[1]?.[0]).toBe("Specifikation");
     expect(pages[1]).toContain("Tidsspecifikation");
   });

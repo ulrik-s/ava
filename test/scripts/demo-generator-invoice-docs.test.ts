@@ -94,13 +94,17 @@ describe("populateInvoiceDocs", () => {
       // Demon renderas med APPENS renderare: varje faktura inleds med
       // sammanställningen (den gamla demo-egna renderarens "Underlag (arbetad
       // tid)" finns inte längre).
-      expect(page1).toContain("Sammanställning");
+      expect(page1).toContain("Benämning");
       expect(page1).not.toContain("Specifikation");
       expect(page1.join("\n")).not.toContain("Underlag (arbetad tid)");
       // Finns ett underlag börjar det på en egen sida EFTER sammanställningen.
-      if (rest.length > 0) expect(rest[0]?.[0]).toBe("Specifikation");
-      // Mottagaren är alltid namngiven (klient eller betalare), aldrig tom.
-      expect(page1.some((t) => /^Mottagare: \S/.test(t))).toBe(true);
+      // (En lång första sida kan föra summeringsrutan till sida 2 — den hålls ihop.)
+      const specPage = rest.find((p) => p.includes("Specifikation"));
+      if (specPage) expect(specPage[0]).toBe("Specifikation");
+      // Mottagaren är alltid namngiven (klient eller betalare), aldrig tom: första
+      // raden i fönsterkuvertet, efter loggan eller byråns namn.
+      expect(page1[1]).toMatch(/^\S/);
+      expect(page1.some((t) => t.endsWith("Godkänd för F-skatt"))).toBe(true);
     }
   });
 });

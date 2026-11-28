@@ -13,6 +13,7 @@ import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { settlementRowText } from "@/lib/client/kostnadsrakning/faktura-avrakning";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { specCardTotals, specLineOre } from "@/lib/shared/billing/invoice-specification";
@@ -37,7 +38,6 @@ import { PlanModal } from "./_plan-modal";
 import { RedoInvoiceDialog } from "./_redo-invoice-dialog";
 import { SendInvoiceModal } from "./_send-invoice-modal";
 import { WriteOffModal } from "./_write-off-modal";
-
 
 /** All state + mutationer för fakturadetaljsidan (sätter/öppnar modals, fel). */
 function useInvoiceDetail(id: string) {
@@ -217,7 +217,7 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
       <dl className="divide-y divide-gray-100">
         {view.rows.map((r, i) => (
           <div key={i} className="flex items-center justify-between py-1.5">
-            <dt className={`text-sm ${r.kind === "info" ? "text-gray-400" : "text-gray-600"}`}>{r.label}</dt>
+            <dt className={`text-sm ${r.kind === "info" ? "text-gray-400" : "text-gray-600"}`}>{settlementRowText(r, formatKr)}</dt>
             <dd className={`text-sm font-mono ${r.kind === "deduct" ? "text-amber-700" : r.kind === "info" ? "text-gray-400" : "text-gray-700"}`}>
               {r.kind === "deduct" ? "−" : r.kind === "info" ? "(" : ""}{formatKr(r.amountOre)}{r.kind === "info" ? ")" : ""}
             </dd>
@@ -263,7 +263,7 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
           amount={inv.amount}
           vatOre={(inv as { vatOre?: number | null }).vatOre}
           ocrReference={(inv as { ocrReference?: string | null }).ocrReference}
-          invoiceDate={inv.invoiceDate}
+          invoiceDate={inv.invoiceDate} dueDate={inv.dueDate}
           invoiceType={inv.invoiceType}
           notes={inv.notes}
           amountRounding={roundingOf(inv)}

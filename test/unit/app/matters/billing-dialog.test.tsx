@@ -86,7 +86,10 @@ const BREAKDOWN = {
 
 vi.mock("@/lib/client/demo/persist-generated-doc", () => ({ persistGeneratedDoc }));
 
-const meta = { matterNumber: "2026-0001", matterTitle: "Tvist", clientName: "Anna Andersson", organizationName: "Byrå AB" };
+const meta = {
+  matterNumber: "2026-0001", matterTitle: "Tvist", clientName: "Anna Andersson", clientAddress: "Provgatan 2, 111 22 Teststad",
+  organizationName: "Byrå AB", organizationBankgiro: "123-4567",
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -202,12 +205,13 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     // Aconton renderas via den DELADE vy-modellen (#937) som PDF (#1439):
     // sammanställning med notes-raden (fakturan har inga länkade tidsposter).
     const text = (await docText()).split("\n");
-    expect(text).toContain("ACONTO-FAKTURA");
-    expect(text).toContain("Sammanställning");
+    expect(text).toContain("ACONTO-FAKTURA NR -"); // numret inte fastställt än (WinAnsi: — → -)
     expect(text).toContain("Aconto - klientens andel"); // WinAnsi: tankstreck → bindestreck
-    expect(text).toContain("Mottagare: Anna Andersson"); // mottagare = klienten
-    // Byråns fält ur metan (#1439) står i sidhuvudet.
+    // Mottagaren = klienten, med sin postadress i fönsterkuvertet (#2255).
+    expect(text.slice(1, 4)).toEqual(["Anna Andersson", "Provgatan 2", "111 22 Teststad"]);
+    // Byråns fält ur metan (#1439/#2255) står i brevhuvudet, uppgiftsblocket och sidfoten.
     expect(text).toContain("Byrå AB");
+    expect(text).toContain("Arvoden bankgiro 123-4567 · Godkänd för F-skatt");
     expect(lastInput("document.register")).toEqual(expect.objectContaining({
       id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-1", kinds: ["FAKTURA"],
     }));

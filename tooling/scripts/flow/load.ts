@@ -29,6 +29,19 @@ export function stateLabels(machine: Machine): string[] {
   return Object.values(machine.states).flatMap((s) => (s.label === null ? [] : [s.label]));
 }
 
+/** Etiketten om den är ett tillstånd eller en flagga i maskinen; annars kastar den. */
+export function labelIn(machine: Machine, label: string): string {
+  if (stateLabels(machine).includes(label) || label in machine.flags) return label;
+  throw new Error(`flow.yaml saknar etiketten ${label} i ${machine.repo} (${machine.items})`);
+}
+
+/** Maskinen med det namnet; kastar om flödet saknar den. */
+export function machineNamed(flow: Flow, name: string): Machine {
+  const machine = flow.machines[name];
+  if (machine === undefined) throw new Error(`flow.yaml saknar maskinen ${name}`);
+  return machine;
+}
+
 function targetErrors(name: string, m: Machine): string[] {
   const out: string[] = [];
   if (!(m.start in m.states)) out.push(`${name}: starttillståndet ${m.start} finns inte`);

@@ -25,6 +25,12 @@ export const settlementBreakdownSchema = z.object({
     label: z.string(),
     amountOre: z.number().int(),
     kind: z.enum(["add", "deduct", "info"]),
+    /** Avräkningstabellens Underlag och Andel (#2255/#151) — bara presentation,
+     *  saknas på äldre fakturor (de ritas med etiketten som förut). */
+    basisOre: z.number().int().optional(),
+    shareBips: z.number().int().nonnegative().optional(),
+    /** `basis` = bygger underlaget, `subtotal` = mellansumma (utelämnas i tabellen). */
+    role: z.enum(["basis", "subtotal"]).optional(),
   })),
   totalLabel: z.string(),
   totalOre: z.number().int(),
