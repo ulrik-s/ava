@@ -3,10 +3,14 @@
  * firmastandard. dockview kräver en riktig layoutmotor, så en attrapp spelar in
  * anropen; det är logiken runt den som testas här.
  */
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { QueryClient } from "@tanstack/react-query";
+import { act, fireEvent, screen, waitFor, type RenderResult } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import type { AddPanel } from "@/components/layout/dock-workspace";
 import { LAYOUT_VERSION, type SerializedLayout } from "@/lib/shared/layout/dock-layout";
+import { invalidatedPaths, never, type InvalidateSpy } from "../../../helpers/trpc-fake";
+import { renderWithSeededTrpc, seedQuery, type TrpcProxy } from "../../../helpers/trpc-seeded";
 
 interface FakeApi {
   added: Array<{ id: string; inactive?: boolean; position?: unknown }>;
@@ -101,25 +105,44 @@ const save = vi.fn();
 const clear = vi.fn();
 const setOrg = vi.fn();
 const clearOrg = vi.fn();
-const invalidate = vi.fn(async () => undefined);
-const mutation = (fn: ReturnType<typeof vi.fn>) => ({
-  useMutation: () => ({ mutate: (a: unknown, o?: { onSuccess?: () => void }) => { fn(a); o?.onSuccess?.(); } }),
-});
+/** Spionen på den senaste renderingens invalideringar. */
+let invalidate: InvalidateSpy;
 
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    useUtils: () => ({ prefs: { get: { invalidate } } }),
-    prefs: {
-      get: {
-        useQuery: ({ key }: { key: string }) => (key.startsWith("panels.")
-          ? { data: hiddenPrefs, isLoading: hiddenPrefs.loading }
-          : { data: prefsData, isLoading: false }),
-      },
-      save: mutation(save), clear: mutation(clear), setOrgDefault: mutation(setOrg), clearOrgDefault: mutation(clearOrg),
-    },
-    user: { current: { useQuery: () => ({ data: { role: role.value } }) } },
-  },
-}));
+/** Svaret på `prefs.get`: listan över dolda för `panels.*`, annars layouten. */
+const prefsFor = (key: string) => (key.startsWith("panels.") ? { user: hiddenPrefs.user, org: hiddenPrefs.org } : prefsData);
+const keyOf = (input: unknown): string => (typeof input === "object" && input !== null && "key" in input ? String(input.key) : "");
+
+/** Ändringarna svarar tomt och spelas in i respektive spion. */
+const recorded = (fn: ReturnType<typeof vi.fn>) => (input: unknown) => { fn(input); return {}; };
+
+/**
+ * Cachen har redan svaren (som de mockade frågorna gav direkt): layouten per
+ * sida och skärmklass, listan över dolda (utom medan den laddar) och rollen.
+ */
+function seed(t: TrpcProxy, qc: QueryClient): void {
+  for (const page of ["matter", "dashboard"]) {
+    for (const screenKind of ["laptop", "large"]) seedQuery(qc, t.prefs.get.queryKey({ key: `layout.${page}.${screenKind}` }), prefsData);
+    if (!hiddenPrefs.loading) seedQuery(qc, t.prefs.get.queryKey({ key: `panels.${page}.hidden` }), prefsFor(`panels.${page}.hidden`));
+  }
+  seedQuery(qc, t.user.current.queryKey(), { role: role.value });
+}
+
+/** Renderar under en fejkad tRPC-länk med förifylld cache. */
+function render(ui: ReactElement): RenderResult {
+  const view = renderWithSeededTrpc(ui, {
+    "prefs.get": (input) => (hiddenPrefs.loading && keyOf(input).startsWith("panels.") ? never() : prefsFor(keyOf(input))),
+    "user.current": () => ({ role: role.value }),
+    "prefs.save": recorded(save), "prefs.clear": recorded(clear),
+    "prefs.setOrgDefault": recorded(setOrg), "prefs.clearOrgDefault": recorded(clearOrg),
+  }, seed);
+  ({ invalidate } = view);
+  return view;
+}
+
+/** Låter länkens svar och ändringarna landa. */
+async function flush(): Promise<void> {
+  await act(async () => { for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0)); });
+}
 
 const screenClass = { value: "laptop" as "laptop" | "large" | "phone" };
 vi.mock("@/lib/client/layout/use-screen-class", () => ({ useScreenClass: () => screenClass.value }));
@@ -231,8 +254,8 @@ describe("DockWorkspace — spara", () => {
   it("återställ rensar den personliga layouten", async () => {
     renderWs();
     fireEvent.click(screen.getByRole("button", { name: "Återställ layout" }));
-    expect(clear).toHaveBeenCalledWith({ key: "layout.matter.laptop" });
-    await waitFor(() => expect(invalidate).toHaveBeenCalled());
+    await waitFor(() => expect(clear).toHaveBeenCalledWith({ key: "layout.matter.laptop" }));
+    await waitFor(() => expect(invalidatedPaths(invalidate)).toEqual(['prefs.get {"key":"layout.matter.laptop"}']));
   });
 });
 
@@ -242,23 +265,23 @@ describe("DockWorkspace — firmastandard (admin)", () => {
     expect(screen.queryByRole("button", { name: "Spara som firmastandard" })).not.toBeInTheDocument();
   });
 
-  it("admin sparar och tar bort firmastandard", () => {
+  it("admin sparar och tar bort firmastandard", async () => {
     role.value = "ADMIN";
     prefsData.org = stored(SAVED);
     renderWs();
     fireEvent.click(screen.getByRole("button", { name: "Spara som firmastandard" }));
-    expect(setOrg).toHaveBeenCalledWith({ key: "layout.matter.laptop", prefs: { version: LAYOUT_VERSION, layout: { saved: true, grid: {} } } });
+    await waitFor(() => expect(setOrg).toHaveBeenCalledWith({ key: "layout.matter.laptop", prefs: { version: LAYOUT_VERSION, layout: { saved: true, grid: {} } } }));
     fireEvent.click(screen.getByRole("button", { name: "Ta bort firmastandard" }));
-    expect(clearOrg).toHaveBeenCalledWith({ key: "layout.matter.laptop" });
+    await waitFor(() => expect(clearOrg).toHaveBeenCalledWith({ key: "layout.matter.laptop" }));
   });
 
-  it("stor skärm har egen nyckel", () => {
+  it("stor skärm har egen nyckel", async () => {
     screenClass.value = "large";
     role.value = "ADMIN";
     renderWs();
     expect(defaultLayout).toHaveBeenCalledWith(expect.any(Function), "large");
     fireEvent.click(screen.getByRole("button", { name: "Spara som firmastandard" }));
-    expect(setOrg).toHaveBeenCalledWith(expect.objectContaining({ key: "layout.matter.large" }));
+    await waitFor(() => expect(setOrg).toHaveBeenCalledWith(expect.objectContaining({ key: "layout.matter.large" })));
   });
 });
 
@@ -326,11 +349,11 @@ describe("DockWorkspace — valbara paneler", () => {
     expect(tabs.map((t) => t.getAttribute("data-hide-close"))).toEqual(["true", "undefined", "true"]);
   });
 
-  it("× stänger panelen, sparar den som dold och den läggs inte tillbaka", () => {
+  it("× stänger panelen, sparar den som dold och den läggs inte tillbaka", async () => {
     renderClosable(["b", "c"]);
     fireEvent.click(screen.getByRole("button", { name: "Stäng b" }));
     expect(fake.closed).toEqual(["b"]);
-    expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: ["b"] } });
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: ["b"] } }));
     expect(fake.added.filter((p) => p.id === "b")).toHaveLength(1);
   });
 
@@ -370,12 +393,13 @@ describe("DockWorkspace — valbara paneler", () => {
     expect(fake.added[1]).toEqual(expect.objectContaining({ id: "b", position: { referencePanel: "a", direction: "within" } }));
   });
 
-  it("programmatiska borttagningar (trasig layout, Återställ layout) döljer inget", () => {
+  it("programmatiska borttagningar (trasig layout, Återställ layout) döljer inget", async () => {
     prefsData.user = stored(SAVED);
     fake.failLoad = true;
     renderClosable(["a", "b", "c"]);
     fireEvent.click(screen.getByRole("button", { name: "Återställ layout" }));
-    expect(clear).toHaveBeenCalledWith({ key: "layout.dashboard.laptop" });
+    await waitFor(() => expect(clear).toHaveBeenCalledWith({ key: "layout.dashboard.laptop" }));
+    await flush();
     expect(save).not.toHaveBeenCalledWith(expect.objectContaining({ key: "panels.dashboard.hidden" }));
   });
 
@@ -386,14 +410,14 @@ describe("DockWorkspace — valbara paneler", () => {
     expect(screen.queryByTestId("dock")).not.toBeInTheDocument();
   });
 
-  it("telefon: dolda paneler syns inte och × på en valbar flik döljer den", () => {
+  it("telefon: dolda paneler syns inte och × på en valbar flik döljer den", async () => {
     screenClass.value = "phone";
     hiddenPrefs.user = { hidden: ["b"] };
     renderClosable(["b", "c"]);
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Alfa", "Gamma"]);
     expect(screen.queryByRole("button", { name: "Ta bort Alfa" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Ta bort Gamma" }));
-    expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: ["b", "c"] } });
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: ["b", "c"] } }));
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Alfa"]);
   });
 
@@ -421,14 +445,14 @@ describe("DockWorkspace — Lägg till ruta", () => {
     expect(addButton()).toHaveAttribute("title", "Alla rutor visas redan");
   });
 
-  it("listan visar bara dolda valbara rutor; ett val lägger tillbaka rutan aktiv", () => {
+  it("listan visar bara dolda valbara rutor; ett val lägger tillbaka rutan aktiv", async () => {
     hiddenPrefs.user = { hidden: ["b", "a"] };
     renderClosable(["b", "c"]);
     expect(addButton()).toBeEnabled();
     fireEvent.click(addButton());
     expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Beta"]);
     fireEvent.click(screen.getByRole("menuitem", { name: "Beta" }));
-    expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: ["a"] } });
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ key: "panels.dashboard.hidden", prefs: { hidden: ["a"] } }));
     expect(fake.added.filter((p) => p.id === "b")).toEqual([expect.not.objectContaining({ inactive: true })]);
   });
 
@@ -501,7 +525,7 @@ describe("DockWorkspace — firmastandard under maximering (#1356)", () => {
     act(() => { fake.maximizeListeners.forEach((l) => l({ isMaximized: on })); });
   };
 
-  it("knappen är spärrad medan en panel är maximerad och öppnas igen efter återställning", () => {
+  it("knappen är spärrad medan en panel är maximerad och öppnas igen efter återställning", async () => {
     role.value = "ADMIN";
     renderWs();
     const btn = screen.getByRole("button", { name: "Spara som firmastandard" });
@@ -509,18 +533,20 @@ describe("DockWorkspace — firmastandard under maximering (#1356)", () => {
     expect(btn).toBeDisabled();
     expect(btn).toHaveAttribute("title", "Återställ den maximerade panelen först");
     fireEvent.click(btn);
+    await flush();
     expect(setOrg).not.toHaveBeenCalled();
     maximize(false);
     expect(btn).toBeEnabled();
     fireEvent.click(btn);
-    expect(setOrg).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(setOrg).toHaveBeenCalledTimes(1));
   });
 
-  it("sparar inte heller om maximeringen hann före omritningen", () => {
+  it("sparar inte heller om maximeringen hann före omritningen", async () => {
     role.value = "ADMIN";
     renderWs();
     fake.maximized = true; // dockview har maximerat; React har inte ritat om än
     fireEvent.click(screen.getByRole("button", { name: "Spara som firmastandard" }));
+    await flush();
     expect(setOrg).not.toHaveBeenCalled();
   });
 });

@@ -2,8 +2,9 @@
  * Dokumentsökningen offline mot en server (#1244): sökningen körs på enheten,
  * träffarna märks "Lokal cache", och en träff öppnas via cachen på träffsidan.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 const HIT = {
   documentId: "d1", fileName: "stamning.pdf", storagePath: "documents/d1.pdf", matterId: "m1",
@@ -18,6 +19,7 @@ vi.mock("@/lib/client/capabilities/use-capabilities", () => ({ useCapabilities: 
 vi.mock("@/lib/client/sync/use-online-status", () => ({ useOnlineStatus: () => online }));
 vi.mock("@/lib/client/firma/open-matter-document", () => ({ openMatterDocument }));
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     document: { listDocumentTypes: { useQuery: () => ({ data: [] }) } },
@@ -44,26 +46,26 @@ beforeEach(() => { online = false; vi.clearAllMocks(); });
 
 describe("DocumentSearchPage offline (#1244)", () => {
   it("sökrutan går att använda, och omfånget säger vad som söks", () => {
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     expect(screen.getByPlaceholderText(/Sök i dokument/i)).toBeEnabled();
     expect(screen.getByText(/söker i dokumenten på den här enheten/)).toBeInTheDocument();
   });
 
   it("träffarna märks som lokal cache", () => {
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     search("stämning");
     expect(screen.getByText("Lokal cache")).toBeInTheDocument();
   });
 
   it("online märks träffarna inte", () => {
     online = true;
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     search("stämning");
     expect(screen.queryByText("Lokal cache")).not.toBeInTheDocument();
   });
 
   it("en träff öppnas via ärendets dokumentväg, på träffsidan", async () => {
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     search("stämning");
     fireEvent.click(screen.getByRole("button", { name: "stamning.pdf" }));
     await waitFor(() => expect(openMatterDocument).toHaveBeenCalledWith(

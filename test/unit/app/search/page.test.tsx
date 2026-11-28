@@ -2,10 +2,11 @@
  * Test för DocumentSearchPage.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import DocumentSearchPage from "@/app/search/page";
 import { rowOrder, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 const searchQuery = {
   data: undefined as
@@ -25,6 +26,7 @@ vi.mock("@/lib/client/search/use-document-search", () => ({
 let docTypes: Array<{ type: string; count: number }> = [];
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     document: {
@@ -51,14 +53,14 @@ beforeEach(() => {
 
 describe("DocumentSearchPage", () => {
   it("renderar Dokumentsökning-rubrik och sökruta", () => {
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     expect(screen.getByRole("heading", { name: /Dokumentsökning/i })).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Sök i dokument/i)).toBeInTheDocument();
   });
 
   it("visar 'Inga träffar' när data har 0 hits", () => {
     searchQuery.data = { hits: [], totalHits: 0 };
-    const { container } = render(<DocumentSearchPage />);
+    const { container } = renderWithNewTrpc(<DocumentSearchPage />);
     const input = container.querySelector("input[type='text']") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "abc" } });
     fireEvent.submit(input.closest("form")!);
@@ -79,7 +81,7 @@ describe("DocumentSearchPage", () => {
       ],
       totalHits: 1,
     };
-    const { container } = render(<DocumentSearchPage />);
+    const { container } = renderWithNewTrpc(<DocumentSearchPage />);
     const input = container.querySelector("input[type='text']") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "stamning" } });
     fireEvent.submit(input.closest("form")!);
@@ -93,7 +95,7 @@ describe("DocumentSearchPage", () => {
       hits: [{ documentId: "d1", fileName: "inlaga.pdf", matterId: "m1", matterNumber: "1", matterTitle: "X", highlight: "<mark>stämning</mark>", page: 7 }],
       totalHits: 1,
     };
-    const { container } = render(<DocumentSearchPage />);
+    const { container } = renderWithNewTrpc(<DocumentSearchPage />);
     const input = container.querySelector("input[type='text']") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "stämning" } });
     fireEvent.submit(input.closest("form")!);
@@ -105,7 +107,7 @@ describe("DocumentSearchPage", () => {
       hits: [{ documentId: "d1", fileName: "sammansatt.pdf", matterId: "m1", matterNumber: "1", matterTitle: "X", highlight: "x", page: 5, part: { kind: "STAMNING", fromPage: 3, toPage: 9 } }],
       totalHits: 1,
     };
-    const { container } = render(<DocumentSearchPage />);
+    const { container } = renderWithNewTrpc(<DocumentSearchPage />);
     const input = container.querySelector("input[type='text']") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "yrkar" } });
     fireEvent.submit(input.closest("form")!);
@@ -115,7 +117,7 @@ describe("DocumentSearchPage", () => {
   it("#1220: typfiltret visar etiketter, inte koder", () => {
     docTypes = [{ type: "FUP", count: 2 }, { type: "DELGIVNINGSKVITTO", count: 1 }];
     try {
-      render(<DocumentSearchPage />);
+      renderWithNewTrpc(<DocumentSearchPage />);
       expect(screen.getByText("Delgivningskvitto")).toBeInTheDocument();
       expect(screen.queryByText("DELGIVNINGSKVITTO")).toBeNull();
     } finally {
@@ -125,13 +127,13 @@ describe("DocumentSearchPage", () => {
 
   it("visar 'Söker...' under fetch", () => {
     searchQuery.isFetching = true;
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     expect(screen.getByRole("button", { name: /Söker/i })).toBeInTheDocument();
   });
 
   it("visar fel när server returnerar error", () => {
     searchQuery.error = new Error("Meilisearch nere");
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     expect(screen.getByText(/Meilisearch nere/i)).toBeInTheDocument();
   });
 });
@@ -154,7 +156,7 @@ describe("DocumentSearchPage — kolumnerna sorterar på det som visas (#1904)",
       hits: [hit("d1", "b.pdf", "2026-0002"), hit("d2", "c.pdf", "2026-0001"), hit("d3", "a.pdf", "2026-0003")],
       totalHits: 3,
     };
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     search("avtal");
     const files = ["a.pdf", "b.pdf", "c.pdf"];
     sortColumn("Fil", "asc");
@@ -176,7 +178,7 @@ describe("DocumentSearchPage — typfiltret (#1904)", () => {
   };
 
   it("kryss väljer typen, nytt kryss tar bort den, och Sök skickar valet", () => {
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     expect(screen.getByText("Inga filter — söker i alla typer.")).toBeInTheDocument();
     fireEvent.click(chip("Stämning"));
     fireEvent.click(chip("FUP"));
@@ -188,7 +190,7 @@ describe("DocumentSearchPage — typfiltret (#1904)", () => {
   });
 
   it("Rensa filter tar bort alla valda typer", () => {
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     fireEvent.click(chip("Stämning"));
     fireEvent.click(screen.getByRole("button", { name: "Rensa filter" }));
     expect(chip("Stämning").checked).toBe(false);
@@ -199,7 +201,7 @@ describe("DocumentSearchPage — typfiltret (#1904)", () => {
 
   it("efter sökning visar räknarna träffarna per typ, 0 för typer utan träff", () => {
     searchQuery.data = { hits: [], totalHits: 3, facets: { documentTypes: [{ type: "STAMNING", count: 3 }] } };
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     expect(screen.getByText(/räknarna visar träffar för ""/)).toBeInTheDocument();
     expect(screen.getByText("Stämning").closest("label")).toHaveTextContent("Stämning (3)");
     expect(screen.getByText("FUP").closest("label")).toHaveTextContent("(0)");
@@ -207,7 +209,7 @@ describe("DocumentSearchPage — typfiltret (#1904)", () => {
 
   it("efter sökning utan typräkning står alla typer på 0", () => {
     searchQuery.data = { hits: [], totalHits: 0 };
-    render(<DocumentSearchPage />);
+    renderWithNewTrpc(<DocumentSearchPage />);
     expect(screen.getByText("Stämning").closest("label")).toHaveTextContent("Stämning (0)");
   });
 });

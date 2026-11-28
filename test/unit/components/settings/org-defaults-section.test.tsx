@@ -2,78 +2,78 @@
  * Test för OrgDefaultsSection — admin-only-gate, lista, ta bort-knapp.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
+import { callsTo, renderWithFakeTrpc, settled, type FakeTrpcRender } from "../../../helpers/trpc-both-fake";
+import { invalidatedPaths } from "../../../helpers/trpc-fake";
 
-const meQuery: { data: { role: string } | undefined } = { data: undefined };
-const listQuery: { data: Array<{ id: string; key: string }>; isLoading: boolean } = {
-  data: [],
-  isLoading: false,
-};
-const clearMutate = vi.fn();
-const utilsMock = { prefs: { listOrgDefaults: { invalidate: vi.fn() } } };
+let me: { role: string } | null = null;
+let orgDefaults: Array<{ id: string; key: string }> = [];
 
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    useUtils: () => utilsMock,
-    user: { current: { useQuery: () => meQuery } },
-    prefs: {
-      listOrgDefaults: { useQuery: () => listQuery },
-      clearOrgDefault: { useMutation: () => ({ mutate: clearMutate, isPending: false }) },
-    },
-  },
-}));
+/** Renderar sektionen och väntar tills frågorna svarat. */
+async function renderSection(): Promise<FakeTrpcRender> {
+  const view = renderWithFakeTrpc(<OrgDefaultsSection />, {
+    "user.current": () => me,
+    "prefs.listOrgDefaults": () => orgDefaults,
+    "prefs.clearOrgDefault": () => ({ ok: true }),
+  });
+  await settled(view);
+  return view;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  meQuery.data = undefined;
-  listQuery.data = [];
+  me = null;
+  orgDefaults = [];
 });
 
 describe("OrgDefaultsSection", () => {
-  it("blockerar non-admin med tydligt meddelande", () => {
-    meQuery.data = { role: "LAWYER" };
-    render(<OrgDefaultsSection />);
+  it("blockerar non-admin med tydligt meddelande", async () => {
+    me = { role: "LAWYER" };
+    const view = await renderSection();
     expect(screen.getByText(/Endast administrat/i)).toBeInTheDocument();
+    expect(callsTo(view.fake, "prefs.listOrgDefaults")).toEqual([]);
   });
 
-  it("visar tomt-meddelande för admin utan defaults", () => {
-    meQuery.data = { role: "ADMIN" };
-    render(<OrgDefaultsSection />);
+  it("visar tomt-meddelande för admin utan defaults", async () => {
+    me = { role: "ADMIN" };
+    await renderSection();
     expect(screen.getByText(/Inga org-globala standardvyer/i)).toBeInTheDocument();
   });
 
-  it("listar org-defaults med svensk etikett", () => {
-    meQuery.data = { role: "ADMIN" };
-    listQuery.data = [
+  it("listar org-defaults med svensk etikett", async () => {
+    me = { role: "ADMIN" };
+    orgDefaults = [
       { id: "p1", key: "list.contacts" },
       { id: "p2", key: "list.matters" },
       { id: "p3", key: "list.matters-mine" },
     ];
-    render(<OrgDefaultsSection />);
+    await renderSection();
     expect(screen.getByText("Parter")).toBeInTheDocument();
     expect(screen.getByText("Ärenden")).toBeInTheDocument();
     expect(screen.getByText("Ärenden – Mitt aktskåp")).toBeInTheDocument();
   });
 
-  it("anropar clearOrgDefault efter confirm", () => {
+  it("anropar clearOrgDefault efter confirm och hämtar listan igen", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    meQuery.data = { role: "ADMIN" };
-    listQuery.data = [{ id: "p1", key: "list.contacts" }];
-    render(<OrgDefaultsSection />);
+    me = { role: "ADMIN" };
+    orgDefaults = [{ id: "p1", key: "list.contacts" }];
+    const view = await renderSection();
     fireEvent.click(screen.getByText("Ta bort"));
-    expect(clearMutate).toHaveBeenCalledWith({ key: "list.contacts" });
+    await waitFor(() => expect(callsTo(view.fake, "prefs.clearOrgDefault")).toEqual([{ key: "list.contacts" }]));
+    await waitFor(() => expect(invalidatedPaths(view.invalidate)).toEqual(["prefs.listOrgDefaults"]));
     confirmSpy.mockRestore();
   });
 
-  it("avbryter när användaren ångrar i confirm-dialogen", () => {
+  it("avbryter när användaren ångrar i confirm-dialogen", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    meQuery.data = { role: "ADMIN" };
-    listQuery.data = [{ id: "p1", key: "list.contacts" }];
-    render(<OrgDefaultsSection />);
+    me = { role: "ADMIN" };
+    orgDefaults = [{ id: "p1", key: "list.contacts" }];
+    const view = await renderSection();
     fireEvent.click(screen.getByText("Ta bort"));
-    expect(clearMutate).not.toHaveBeenCalled();
+    await settled(view);
+    expect(callsTo(view.fake, "prefs.clearOrgDefault")).toEqual([]);
     confirmSpy.mockRestore();
   });
 });

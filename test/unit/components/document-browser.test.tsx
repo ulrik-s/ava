@@ -7,10 +7,11 @@
  * etc.
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 import { asId } from "@/lib/shared/schemas/ids";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../helpers/trpc-classic-mock";
 
 // Self-hosted-läget letar efter ett FSA-handle via IndexedDB; jsdom har inte
 // någon working copy uppsatt. Mock:a explicit så testen är deterministisk
@@ -95,6 +96,7 @@ const mutationStubs = {
 };
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => utilsMock,
     document: {
@@ -195,7 +197,7 @@ function uploadViaButton(files: File[]): void {
 
 describe("DocumentBrowser", () => {
   it("vyvalet visar Lista och Mapp-vy (ingen knapp Träd) med aria-pressed på den valda (#1804)", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByRole("group", { name: "Dokumentvy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Mapp-vy" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Lista" })).toHaveAttribute("aria-pressed", "false");
@@ -204,7 +206,7 @@ describe("DocumentBrowser", () => {
 
   it("klick på Mapp-vy från listvyn byter till mappvyn och sparar \"tree\" (#1804)", () => {
     window.localStorage.setItem("ava.documents.viewMode", "list");
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByRole("button", { name: "Lista" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "Mapp-vy" }));
     expect(screen.getByRole("button", { name: "Mapp-vy" })).toHaveAttribute("aria-pressed", "true");
@@ -213,13 +215,13 @@ describe("DocumentBrowser", () => {
   });
 
   it("visar tomtillstånd när inga mappar/dokument finns", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/Inga dokument eller mappar/i)).toBeInTheDocument();
   });
 
   it("renderar dokumentnamn för loose root-fil", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("test.pdf")).toBeInTheDocument();
   });
 
@@ -228,7 +230,7 @@ describe("DocumentBrowser", () => {
       baseDoc({ id: "d1", fileName: "kostnadsrakning.pdf", direction: "UTGAENDE", recipient: "DOMSTOL" }),
       baseDoc({ id: "d2", fileName: "svaromal.pdf", direction: "INKOMMANDE", recipient: "MOTPART" }),
     ] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("kostnadsrakning.pdf")).toBeInTheDocument();
     expect(screen.getByText("svaromal.pdf")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Riktning"), { target: { value: "UTGAENDE" } });
@@ -247,7 +249,7 @@ describe("DocumentBrowser", () => {
     it("visar delarnas etiketter och en expanderbar dellista med sidintervall", () => {
       treeQuery.data = { folders: [], documents: [baseDoc({ documentType: "KALLELSE" })] };
       partsQuery.data = parts;
-      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       expect(screen.getByText("Kallelse + Stämning + FUP")).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: /3 delar/ }));
       expect(screen.getByText("s. 1–2")).toBeInTheDocument();
@@ -258,7 +260,7 @@ describe("DocumentBrowser", () => {
     it("rättar en dels typ via setPartKind och invaliderar", () => {
       treeQuery.data = { folders: [], documents: [baseDoc()] };
       partsQuery.data = parts;
-      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       fireEvent.click(screen.getByRole("button", { name: /3 delar/ }));
       fireEvent.change(screen.getByLabelText("Rätta typ för del 3"), { target: { value: "BEVIS" } });
       expect(setPartKind.mutate).toHaveBeenCalledWith({ partId: "p3", kind: "BEVIS" });
@@ -273,7 +275,7 @@ describe("DocumentBrowser", () => {
       partsQuery.data = parts;
       const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
       try {
-        render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+        renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
         fireEvent.click(screen.getByRole("button", { name: /3 delar/ }));
         fireEvent.click(screen.getByTitle("Öppna på sidan 3"));
         await waitFor(() => expect(openSpy).toHaveBeenCalled(), { timeout: 2000 });
@@ -290,7 +292,7 @@ describe("DocumentBrowser", () => {
         baseDoc({ id: "d2", fileName: "dom.pdf", documentType: "DOM" }),
       ] };
       partsQuery.data = parts;
-      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "FUP" } });
       expect(screen.getByText("sammansatt.pdf")).toBeInTheDocument();
       expect(screen.queryByText("dom.pdf")).not.toBeInTheDocument();
@@ -299,7 +301,7 @@ describe("DocumentBrowser", () => {
     });
 
     it("server-first: klientens filnamnsgissning köas inte (servern klassificerar)", async () => {
-      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       const file = new File(["text"], "stamning.txt", { type: "text/plain" });
       uploadViaButton([file]);
       await waitFor(() => expect(enqueueTextExtraction).toHaveBeenCalled());
@@ -309,7 +311,7 @@ describe("DocumentBrowser", () => {
     it("demo (ingen server-jobbkö): klienten klassificerar som förut", async () => {
       window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "u/r" }));
       try {
-        render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+        renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
         const file = new File(["text"], "stamning.txt", { type: "text/plain" });
         uploadViaButton([file]);
         await waitFor(() => expect(jobQueueEnqueue).toHaveBeenCalledWith("classify-document", expect.any(String), expect.anything()));
@@ -324,19 +326,19 @@ describe("DocumentBrowser", () => {
       folders: [],
       documents: [baseDoc({ title: "Stämningsansökan 2026-0001", documentType: "Stämning" })],
     };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Stämningsansökan 2026-0001")).toBeInTheDocument();
     expect(screen.getByText("Stämning", { selector: "span" })).toBeInTheDocument();
   });
 
   it("renderar mappar i trädet", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Inlagor")).toBeInTheDocument();
   });
 
   it("öppnar Ny mapp-form vid klick", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny mapp/i }));
     expect(screen.getByPlaceholderText(/Mappnamn/i)).toBeInTheDocument();
   });
@@ -346,7 +348,7 @@ describe("DocumentBrowser", () => {
       folders: [],
       documents: [baseDoc({ analysisError: "Tika fail" })],
     };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/analys-fel/i)).toBeInTheDocument();
   });
 
@@ -356,20 +358,20 @@ describe("DocumentBrowser", () => {
       folders: [],
       documents: [baseDoc({ createdAt: recent })],
     };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/analyseras/i)).toBeInTheDocument();
   });
 
   it("visar inte analyseras-badge för gamla, oanalyserade dokument", () => {
     const old = new Date("2025-01-01");
     treeQuery.data = { folders: [], documents: [baseDoc({ createdAt: old })] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.queryByText(/analyseras/i)).not.toBeInTheDocument();
   });
 
   it("har Visa, Ladda ner, Analysera, Ta bort i kebab-menyn på varje fil", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
     expect(screen.getByText("Visa")).toBeInTheDocument();
     expect(screen.getByText("Ladda ner")).toBeInTheDocument();
@@ -382,7 +384,7 @@ describe("DocumentBrowser", () => {
     window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "u/r" }));
     try {
       treeQuery.data = { folders: [], documents: [baseDoc()] };
-      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
       expect(screen.getByText("Visa")).toBeInTheDocument(); // övriga finns kvar
       expect(screen.getByText("Ta bort")).toBeInTheDocument();
@@ -393,7 +395,7 @@ describe("DocumentBrowser", () => {
   });
 
   it("submittar Ny mapp-formuläret med mappnamn", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny mapp/i }));
     const input = screen.getByPlaceholderText(/Mappnamn/i);
     fireEvent.change(input, { target: { value: "Avtal" } });
@@ -406,7 +408,7 @@ describe("DocumentBrowser", () => {
   });
 
   it("anropar inte createFolder när namnet är tomt/whitespace", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny mapp/i }));
     const input = screen.getByPlaceholderText(/Mappnamn/i);
     // required-attributet stoppar tomt namn vid submit; men whitespace kan tas in
@@ -417,7 +419,7 @@ describe("DocumentBrowser", () => {
   });
 
   it("Avbryt stänger Ny mapp-formuläret", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny mapp/i }));
     expect(screen.getByPlaceholderText(/Mappnamn/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Avbryt/i }));
@@ -429,7 +431,7 @@ describe("DocumentBrowser", () => {
       folders: [baseFolder()],
       documents: [baseDoc({ folderId: "f1", fileName: "barn.pdf" })],
     };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("barn.pdf")).toBeInTheDocument();
     // Klicka på mappnamnet (det är en knapp inom raden)
     fireEvent.click(screen.getByText("Inlagor"));
@@ -441,7 +443,7 @@ describe("DocumentBrowser", () => {
 
   it("klick på Byt namn aktiverar inline-rename-input", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Mappåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /Byt namn/i }));
     // En input ska nu finnas (med mappnamnet förifyllt)
@@ -459,7 +461,7 @@ describe("DocumentBrowser", () => {
   it("Ta bort-mapp visar confirm — vid OK körs deleteFolder", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Mappåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Ta bort$/i }));
     expect(confirmSpy).toHaveBeenCalled();
@@ -470,7 +472,7 @@ describe("DocumentBrowser", () => {
   it("Ta bort-mapp avbryts när confirm returnerar false", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Mappåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Ta bort$/i }));
     expect(mutationStubs.deleteFolder.mutate).not.toHaveBeenCalled();
@@ -480,7 +482,7 @@ describe("DocumentBrowser", () => {
   it("Ta bort-dokument confirm + delete", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Ta bort$/i }));
     expect(mutationStubs.delete.mutate).toHaveBeenCalledWith({ id: "d1" });
@@ -489,7 +491,7 @@ describe("DocumentBrowser", () => {
 
   it("klick på Analysera triggar reanalyze-mutation", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /Analysera/i }));
     expect(mutationStubs.analyze.mutate).toHaveBeenCalledWith({ documentId: "d1" });
@@ -500,7 +502,7 @@ describe("DocumentBrowser", () => {
     // klientens disk — extract-text-jobbet kan alltså aldrig läsa den igen.
     // Bytes:en finns bara i den här uppladdningen; missas de blir panelerna
     // permanent tomma i demon.
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     const file = new File(["Kärande: Anna Andersson 850312-4567"], "stamning.txt", { type: "text/plain" });
     uploadViaButton([file]);
 
@@ -518,7 +520,7 @@ describe("DocumentBrowser", () => {
     // eller sökväg. Utan det här steget analyseras dokumentet om utan att
     // panelerna någonsin fylls.
     treeQuery.data = { folders: [], documents: [baseDoc({ storagePath: "documents/content/a.pdf" })] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /Analysera/i }));
     expect(enqueueTextExtraction).toHaveBeenCalledWith(
@@ -528,7 +530,7 @@ describe("DocumentBrowser", () => {
 
   it("dragstart + drop på mapp anropar moveDocument", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     const docCell = screen.getByText("test.pdf").closest("tr")!;
     const folderCell = screen.getByText("Inlagor").closest("tr")!;
     const dataTransfer = {
@@ -554,7 +556,7 @@ describe("DocumentBrowser", () => {
       folders: [baseFolder(), baseFolder({ id: "f2", name: "Beslut" })],
       documents: [],
     };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     const f1 = screen.getByText("Inlagor").closest("tr")!;
     const f2 = screen.getByText("Beslut").closest("tr")!;
     const dataTransfer = {
@@ -580,7 +582,7 @@ describe("DocumentBrowser", () => {
       folders: [baseFolder()],
       documents: [baseDoc({ folderId: "f1" })],
     };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     const docRow = screen.getByText("test.pdf").closest("tr")!;
     const rootRow = screen.getByText("Rot").closest("tr")!;
     const dataTransfer = {
@@ -609,7 +611,7 @@ describe("DocumentBrowser", () => {
       ],
       documents: [baseDoc({ folderId: "c", fileName: "sub.pdf" })],
     };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Parent")).toBeInTheDocument();
     expect(screen.getByText("Child")).toBeInTheDocument();
     expect(screen.getByText("sub.pdf")).toBeInTheDocument();
@@ -622,7 +624,7 @@ describe("DocumentBrowser", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
     try {
-      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       fireEvent.click(screen.getByText("test.pdf"));
       await import("@testing-library/react").then(({ waitFor }) =>
         waitFor(() => expect(openSpy).toHaveBeenCalled(), { timeout: 2000 }),
@@ -643,7 +645,7 @@ describe("DocumentBrowser", () => {
         baseDoc({ id: "d-b", fileName: "small.pdf", sizeBytes: 500 }),
       ],
     };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.queryByRole("columnheader", { name: /Storlek/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/5 KB/)).not.toBeInTheDocument();
     expect(screen.queryByText(/4\.8 MB/)).not.toBeInTheDocument();
@@ -656,12 +658,12 @@ describe("DocumentBrowser — flera filer på en gång", () => {
   const pdf = (name: string) => new File(["%PDF"], name, { type: "application/pdf" });
 
   it("filväljaren tillåter flera filer", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(document.querySelector("input[type=file]")!.hasAttribute("multiple")).toBe(true);
   });
 
   it("laddar upp ALLA valda filer, i tur och ordning (förut bara den första)", async () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     pick([pdf("stamning.pdf"), pdf("svaromal.pdf"), pdf("dom.pdf")]);
     await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(3));
     const names = mutationStubs.register.mutateAsync.mock.calls.map((c: readonly unknown[]) => (c[0] as { fileName: string }).fileName);
@@ -669,14 +671,14 @@ describe("DocumentBrowser — flera filer på en gång", () => {
   });
 
   it("filväljaren töms efter valet, så att samma fil kan väljas igen (#1976)", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     Object.defineProperty(fileInput(), "value", { value: "C:\\fakepath\\skiss.pdf", writable: true, configurable: true });
     choose([pdf("skiss.pdf")]);
     expect(fileInput().value).toBe("");
   });
 
   it("+ Ladda upp går genom namnrutan, en fil i taget, i roten (#1976)", async () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     choose([pdf("a.pdf"), pdf("b.pdf")]);
     expect(screen.getByRole("dialog", { name: "Namnge dokumentet" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("a")).toBeInTheDocument();
@@ -694,7 +696,7 @@ describe("DocumentBrowser — flera filer på en gång", () => {
   });
 
   it("Avbryt i namnrutan hoppar över filen (#1976)", async () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     choose([pdf("a.pdf"), pdf("b.pdf")]);
     fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
     expect(screen.getByDisplayValue("b")).toBeInTheDocument();
@@ -704,7 +706,7 @@ describe("DocumentBrowser — flera filer på en gång", () => {
   });
 
   it("utan valda filer öppnas ingen namnruta", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     Object.defineProperty(fileInput(), "files", { value: null, configurable: true });
     fireEvent.change(fileInput());
     expect(screen.queryByRole("dialog", { name: "Namnge dokumentet" })).not.toBeInTheDocument();
@@ -715,7 +717,7 @@ describe("DocumentBrowser — flera filer på en gång", () => {
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(new Error("för stor"))
       .mockResolvedValueOnce({});
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     pick([pdf("a.pdf"), pdf("b.pdf"), pdf("c.pdf")]);
     await waitFor(() => expect(screen.getByText(/b\.pdf: för stor/)).toBeInTheDocument());
     expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(3);
@@ -745,7 +747,7 @@ describe("DocumentBrowser — listvyn visar pågående uppladdningar (#1796)", (
   it("en pågående uppladdning syns i listvyn, gråtonad och ej klickbar, även med ett filter aktivt", async () => {
     const release = holdRegister();
     treeQuery.data = { folders: [], documents: [baseDoc({ direction: "UTGAENDE" })] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.change(screen.getByLabelText("Riktning"), { target: { value: "INKOMMANDE" } });
     expect(screen.queryByText("test.pdf")).not.toBeInTheDocument();
     pick([pdf("skiss.pdf")]);
@@ -757,7 +759,7 @@ describe("DocumentBrowser — listvyn visar pågående uppladdningar (#1796)", (
 
   it("raden byts mot den riktiga när uppladdningen är klar", async () => {
     const release = holdRegister();
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     pick([pdf("skiss.pdf")]);
     await waitFor(() => expect(nameButton("skiss.pdf")).toBeDisabled());
     treeQuery.data = { folders: [], documents: [baseDoc({ id: "d-skiss", fileName: "skiss.pdf" })] };
@@ -770,7 +772,7 @@ describe("DocumentBrowser — listvyn visar pågående uppladdningar (#1796)", (
   it("ett dokument som laddas upp har ingen kryssruta, i listvyn och i mappvyn (#2046)", async () => {
     const release = holdRegister();
     treeQuery.data = { folders: [], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     pick([pdf("skiss.pdf")]);
     await waitFor(() => expect(nameButton("skiss.pdf")).toBeDisabled());
     expect(screen.getAllByLabelText("Markera rad")).toHaveLength(1);
@@ -784,7 +786,7 @@ describe("DocumentBrowser — listvyn visar pågående uppladdningar (#1796)", (
     mutationStubs.analyze.isPending = true;
     try {
       treeQuery.data = { folders: [], documents: [baseDoc()] };
-      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
       expect(screen.getByRole("menuitem", { name: /Analysera \(AI\)/ })).toBeDisabled();
     } finally {
@@ -794,7 +796,7 @@ describe("DocumentBrowser — listvyn visar pågående uppladdningar (#1796)", (
 
   it("listvyn visar \"⏳ analyseras…\" när Analysera körs", () => {
     treeQuery.data = { folders: [], documents: [baseDoc({ analyzedAt: new Date("2026-04-16") })] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.queryByText("⏳ analyseras…")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
     fireEvent.click(screen.getByText("Analysera (AI)"));
@@ -824,7 +826,7 @@ describe("DocumentBrowser — släpp filer utifrån", () => {
   const registered = (): unknown[] => mutationStubs.register.mutateAsync.mock.calls.map((c: readonly unknown[]) => c[0]);
   const renderTree = () => {
     treeQuery.data = { folders: [baseFolder()], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
   };
 
   it("fil släppt på en mapp → namnrutan, Spara → register i mappen", async () => {
@@ -905,7 +907,7 @@ describe("DocumentBrowser — släpp filer utifrån", () => {
   it("listvyn: fil släppt i listan → roten, med markering under dragningen", async () => {
     window.localStorage.setItem("ava.documents.viewMode", "list");
     treeQuery.data = { folders: [baseFolder()], documents: [baseDoc({ folderId: "f1" })] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     const cell = screen.getByText("test.pdf");
     fireEvent.dragOver(cell, { dataTransfer: outside([]) });
     expect(document.querySelector(".ring-blue-300")).not.toBeNull();
@@ -919,7 +921,7 @@ describe("DocumentBrowser — släpp filer utifrån", () => {
   it("listvyn: en kolumndragning (inte utifrån) rörs inte", () => {
     window.localStorage.setItem("ava.documents.viewMode", "list");
     treeQuery.data = { folders: [], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(drop(screen.getByText("test.pdf"), outside([], ["text/x-col"]))).toBe(true);
     expect(screen.queryByText(/Det gick inte att läsa in/)).not.toBeInTheDocument();
   });
@@ -949,7 +951,7 @@ describe("DocumentBrowser — nytt ärende har standardmappar (#1228)", () => {
     const matter = await caller.matter.create({ title: "Nytt ärende" });
     const tree = await caller.document.tree({ matterId: asId<"MatterId">(matter.id) });
     treeQuery.data = { folders: tree.folders, documents: tree.documents };
-    render(<DocumentBrowser matterId={asId<"MatterId">(matter.id)} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">(matter.id)} />);
     // Mapparna är expanderade från start → hela trädet syns. ("Domstol" finns
     // även som <option> i mottagarfiltret — räkna bara trädets noder.)
     const inTree = (name: string) => screen.getAllByText(name).filter((el) => el.tagName !== "OPTION");
@@ -984,7 +986,7 @@ describe("DocumentBrowser — markera dokument (#2046)", () => {
   });
 
   it("mappvyn: kryssruta på dokumentraderna som kan flyttas, inte på mappar, rot-raden eller fakturans dokument", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getAllByLabelText("Markera rad")).toHaveLength(2);
     expect(markRow("a.pdf")).not.toBeChecked();
     expect(markRow("b.pdf")).not.toBeChecked();
@@ -995,14 +997,14 @@ describe("DocumentBrowser — markera dokument (#2046)", () => {
 
   it("listvyn: kryssrutor via tabellens markering, inte på fakturans och kostnadsräkningens dokument", () => {
     window.localStorage.setItem("ava.documents.viewMode", "list");
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByLabelText("Markera alla")).toBeInTheDocument();
     expect(screen.getAllByLabelText("Markera rad")).toHaveLength(2);
     expect(screen.getByText("faktura.pdf").closest("tr")?.querySelector("input[type=checkbox]")).toBeNull();
   });
 
   it("knappen syns först när något är markerat och visar antalet", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(moveButton()).toBeNull();
     fireEvent.click(markRow("a.pdf"));
     expect(markRow("a.pdf")).toBeChecked();
@@ -1014,7 +1016,7 @@ describe("DocumentBrowser — markera dokument (#2046)", () => {
   });
 
   it("markeringen töms när man byter vy", () => {
-    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    renderWithNewTrpc(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(markRow("a.pdf"));
     fireEvent.click(screen.getByRole("button", { name: "Lista" }));
     expect(moveButton()).toBeNull();

@@ -10,7 +10,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createTRPCClient, TRPCClientError, type TRPCClient, type TRPCLink } from "@trpc/client";
 import { observable } from "@trpc/server/observable";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 import { TRPCProvider } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 
@@ -79,6 +79,28 @@ export function TrpcTestProvider(props: {
       </TRPCProvider>
     </QueryClientProvider>
   );
+}
+
+/** En `wrapper` (för `renderHook`/`render`) under den nya bindningen, med länk och QueryClient. */
+export interface FakeTrpcWrapper {
+  wrapper: (props: { children: ReactNode }) => ReactElement;
+  fake: FakeTrpcLink;
+  queryClient: QueryClient;
+}
+
+/** `TrpcTestProvider` som `wrapper`, över en länk som svarar ur `handlers`. */
+export function fakeTrpcWrapper(handlers: TrpcHandlers): FakeTrpcWrapper {
+  const fake = fakeTrpcLink(handlers);
+  const queryClient = testQueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <TrpcTestProvider link={fake.link} queryClient={queryClient}>{children}</TrpcTestProvider>
+  );
+  return { wrapper, fake, queryClient };
+}
+
+/** Ett svar som aldrig kommer: frågan står kvar som laddande. */
+export function never(): Promise<never> {
+  return new Promise(() => {});
 }
 
 /** En spion på `queryClient.invalidateQueries` (`vi.spyOn`). */

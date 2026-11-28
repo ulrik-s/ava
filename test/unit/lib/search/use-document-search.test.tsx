@@ -3,69 +3,60 @@
  * (Postgres-fulltext), demon kör in-process-routern, och offline söker den
  * i det som finns på enheten (#1244) — samma in-process-router.
  */
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
+import { callsTo } from "../../../helpers/trpc-both-fake";
+import { fakeTrpcWrapper, type FakeTrpcWrapper } from "../../../helpers/trpc-fake";
 
 const serverCalls: unknown[] = [];
-const localCalls: Array<{ input: unknown; enabled: boolean }> = [];
-const localResult = { data: { hits: [], totalHits: 0, source: "local" }, isFetching: false, error: null };
 
-vi.mock("@trpc/client", () => ({
-  httpBatchLink: () => ({}),
-  createTRPCClient: () => ({
+vi.mock("@/lib/client/backend/server-trpc-client", () => ({
+  serverTrpcClient: () => ({
     document: { search: { query: async (input: unknown) => { serverCalls.push(input); return { hits: [], totalHits: 0, source: "server" }; } } },
   }),
-}));
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    document: {
-      search: {
-        useQuery: (input: unknown, opts: { enabled: boolean }) => { localCalls.push({ input, enabled: opts.enabled }); return localResult; },
-      },
-    },
-  },
 }));
 
 const { useDocumentSearch } = await import("@/lib/client/search/use-document-search");
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{children}</QueryClientProvider>
-);
+/** In-process-routern (den nya bindningen) över en fejkad länk; sparar anropen. */
+let local: FakeTrpcWrapper;
 
 beforeEach(() => {
   serverCalls.length = 0;
-  localCalls.length = 0;
+  local = fakeTrpcWrapper({ "document.search": () => ({ hits: [], totalHits: 0, source: "local" }) });
 });
+
+/** Anropen till in-process-routerns `document.search`. */
+const localCalls = (): unknown[] => callsTo(local.fake, "document.search");
 
 describe("useDocumentSearch", () => {
   it("server-omfång: frågar serverns document.search direkt, inte in-process-routern", async () => {
     const input = { query: "stämning", documentTypes: ["DOM"] };
-    const { result } = renderHook(() => useDocumentSearch(input, "server"), { wrapper });
+    const { result } = renderHook(() => useDocumentSearch(input, "server"), { wrapper: local.wrapper });
     await waitFor(() => expect(result.current.data).toMatchObject({ source: "server" }));
     expect(serverCalls).toEqual([input]);
-    expect(localCalls.every((c) => !c.enabled)).toBe(true);
+    expect(localCalls()).toEqual([]);
   });
 
-  it("lokalt omfång (demo): in-process-routern, servern frågas inte", () => {
-    const { result } = renderHook(() => useDocumentSearch({ query: "x" }, "local"), { wrapper });
-    expect(result.current.data).toMatchObject({ source: "local" });
-    expect(localCalls.at(-1)).toEqual({ input: { query: "x" }, enabled: true });
+  it("lokalt omfång (demo): in-process-routern, servern frågas inte", async () => {
+    const { result } = renderHook(() => useDocumentSearch({ query: "x" }, "local"), { wrapper: local.wrapper });
+    await waitFor(() => expect(result.current.data).toMatchObject({ source: "local" }));
+    expect(localCalls()).toEqual([{ query: "x" }]);
     expect(serverCalls).toEqual([]);
   });
 
-  it("offline: söker på enheten (in-process-routern), servern frågas inte (#1244)", () => {
-    const { result } = renderHook(() => useDocumentSearch({ query: "x" }, "offline"), { wrapper });
-    expect(result.current.data).toMatchObject({ source: "local" });
-    expect(localCalls.at(-1)).toEqual({ input: { query: "x" }, enabled: true });
+  it("offline: söker på enheten (in-process-routern), servern frågas inte (#1244)", async () => {
+    const { result } = renderHook(() => useDocumentSearch({ query: "x" }, "offline"), { wrapper: local.wrapper });
+    await waitFor(() => expect(result.current.data).toMatchObject({ source: "local" }));
+    expect(localCalls()).toEqual([{ query: "x" }]);
     expect(serverCalls).toEqual([]);
   });
 
-  it("tom söksträng: ingen fråga i något omfång", () => {
-    renderHook(() => useDocumentSearch({ query: "" }, "server"), { wrapper });
-    renderHook(() => useDocumentSearch({ query: "" }, "local"), { wrapper });
-    expect(localCalls.every((c) => !c.enabled)).toBe(true);
+  it("tom söksträng: ingen fråga i något omfång", async () => {
+    renderHook(() => useDocumentSearch({ query: "" }, "server"), { wrapper: local.wrapper });
+    renderHook(() => useDocumentSearch({ query: "" }, "local"), { wrapper: local.wrapper });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(localCalls()).toEqual([]);
     expect(serverCalls).toEqual([]);
   });
 });

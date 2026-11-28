@@ -3,25 +3,24 @@
  * kostnadsräkning. Förvalt är ärendets; Byt domstol… söker bara bland byråns
  * domstolar, utan "+ Ny …", och tömmer målnumret.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest-compat";
+import { fireEvent, render, screen, waitFor, type RenderResult } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { beforeEach, describe, expect, it } from "vitest-compat";
 import { KrRecipientFields, useKrRecipient } from "@/app/matters/[id]/_kr-recipient-fields";
+import { fakeTrpcLink, TrpcTestProvider, type FakeTrpcLink } from "../../../helpers/trpc-fake";
 
-const searchInputs: unknown[] = [];
 let hits: Array<{ id: string; name: string; contactType: string }> = [];
+/** Den senaste renderingens länk. */
+let fake: FakeTrpcLink;
 
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    contacts: {
-      search: {
-        useQuery: (input: unknown) => {
-          searchInputs.push(input);
-          return { data: { contacts: hits }, isLoading: false };
-        },
-      },
-    },
-  },
-}));
+/** Renderar under en fejkad tRPC-länk där domstolssökningen svarar med `hits`. */
+function renderTrpc(ui: ReactElement): RenderResult {
+  fake = fakeTrpcLink({ "contacts.search": () => ({ contacts: hits }) });
+  return render(<TrpcTestProvider link={fake.link}>{ui}</TrpcTestProvider>);
+}
+
+/** Indata till klientsökningen, i ordning. */
+const searchInputs = (): unknown[] => fake.calls.filter((c) => c.path === "contacts.search").map((c) => c.input);
 
 interface Sent {
   courtName?: string;
@@ -60,44 +59,43 @@ function openPickerAndSearch(term: string): void {
 }
 
 beforeEach(() => {
-  searchInputs.length = 0;
   hits = [{ id: "c-hov", name: "Svea hovrätt", contactType: "COURT" }];
 });
 
 describe("KrRecipientFields (#1891)", () => {
   it("förvalt: ärendets domstol och målnummer, utan vald kontakt", () => {
-    render(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
+    renderTrpc(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
     expect(screen.getByTestId("kr-court-name")).toHaveTextContent("Stockholms tingsrätt");
     expect(screen.getByLabelText("Målnummer")).toHaveValue("B 123-26");
     expect(current()).toMatchObject({ courtName: "Stockholms tingsrätt", courtCaseNumber: "B 123-26", court: {} });
   });
 
   it("utan domstol i ärendet: 'Ingen domstol vald' och tomt målnummer", () => {
-    render(<Harness />);
+    renderTrpc(<Harness />);
     expect(screen.getByTestId("kr-court-name")).toHaveTextContent("Ingen domstol vald");
     expect(screen.getByLabelText("Målnummer")).toHaveValue("");
     expect(current().courtCaseNumber).toBeUndefined();
   });
 
-  it("Välj domstol söker bara domstolar och har inget '+ Ny …'", () => {
-    render(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
+  it("Välj domstol söker bara domstolar och har inget '+ Ny …'", async () => {
+    renderTrpc(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
     openPickerAndSearch("hov");
     expect(screen.getByRole("dialog", { name: "Välj domstol" })).toBeInTheDocument();
-    expect(searchInputs.at(-1)).toEqual({ term: "hov", contactType: "COURT" });
+    await waitFor(() => expect(searchInputs().at(-1)).toEqual({ term: "hov", contactType: "COURT" }));
     expect(screen.queryByText(/\+ Ny/)).not.toBeInTheDocument();
   });
 
-  it("utan träff: bara 'Ingen träff.', ingen hänvisning till Ny …", () => {
+  it("utan träff: bara 'Ingen träff.', ingen hänvisning till Ny …", async () => {
     hits = [];
-    render(<Harness court="Stockholms tingsrätt" />);
+    renderTrpc(<Harness court="Stockholms tingsrätt" />);
     openPickerAndSearch("xyz");
-    expect(screen.getByText("Ingen träff.")).toBeInTheDocument();
+    expect(await screen.findByText("Ingen träff.")).toBeInTheDocument();
   });
 
-  it("vald domstol: namnet byts, målnumret töms och kontakten skickas med", () => {
-    render(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
+  it("vald domstol: namnet byts, målnumret töms och kontakten skickas med", async () => {
+    renderTrpc(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
     openPickerAndSearch("hov");
-    fireEvent.click(screen.getByRole("button", { name: /Svea hovrätt/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Svea hovrätt/ }));
     expect(screen.queryByRole("dialog", { name: "Välj domstol" })).not.toBeInTheDocument();
     expect(screen.getByTestId("kr-court-name")).toHaveTextContent("Svea hovrätt");
     expect(screen.getByLabelText("Målnummer")).toHaveValue("");
@@ -106,7 +104,7 @@ describe("KrRecipientFields (#1891)", () => {
   });
 
   it("målnumret går att ändra; blanksteg runt tas bort och bara blanksteg ger inget", () => {
-    render(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
+    renderTrpc(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
     fireEvent.change(screen.getByLabelText("Målnummer"), { target: { value: " Ö 9-26 " } });
     expect(current().courtCaseNumber).toBe("Ö 9-26");
     fireEvent.change(screen.getByLabelText("Målnummer"), { target: { value: "   " } });
@@ -114,7 +112,7 @@ describe("KrRecipientFields (#1891)", () => {
   });
 
   it("Avbryt i Välj domstol stänger utan att byta", () => {
-    render(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
+    renderTrpc(<Harness court="Stockholms tingsrätt" caseNumber="B 123-26" />);
     fireEvent.click(screen.getByRole("button", { name: "Byt domstol…" }));
     fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
     expect(screen.queryByRole("dialog", { name: "Välj domstol" })).not.toBeInTheDocument();

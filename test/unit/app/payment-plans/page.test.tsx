@@ -3,11 +3,12 @@
  * − avskrivet via ledgern.
  */
 
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest-compat";
 
 import PaymentPlansPage, { formatScanResult } from "@/app/payment-plans/page";
 import { rowOrder, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 // Kuvertform sedan #1014. `setRows` håller mockens form på ETT ställe, så
 // testerna fortsätter tilldela rader utan att upprepa kuvertet.
@@ -22,6 +23,7 @@ let scanOnSuccess: ((r: ScanResult) => void) | undefined;
 const utilsMock = { prefs: { get: { invalidate: vi.fn() } }, paymentPlan: { list: { invalidate: vi.fn() } } };
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => utilsMock,
     user: {
@@ -71,7 +73,7 @@ describe("PaymentPlansPage — utestående", () => {
         },
       },
     ]);
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     // Radens status i singular (#1309) — "Aktiva" är filterknappen.
     expect(screen.getByText("Aktiv")).toBeInTheDocument();
     // 100 000 − 30 000 betalt − 20 000 avskrivet = 50 000 öre = 500 kr utestående
@@ -93,13 +95,13 @@ describe("formatScanResult (#71)", () => {
 
 describe("PaymentPlansPage — Registrera påminnelser (#71, #2135)", () => {
   it("knappen kör scanDueReminders med {}", () => {
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     fireEvent.click(screen.getByTestId("send-reminders"));
     expect(scanMutate).toHaveBeenCalledWith({});
   });
 
   it("visar resultat + invaliderar listan vid onSuccess", () => {
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     fireEvent.click(screen.getByTestId("send-reminders"));
     act(() => scanOnSuccess?.({ scanned: 3, planned: 2, due: 1, overdue: 1 }));
     expect(screen.getByTestId("scan-result").textContent).toContain("2 påminnelser registrerade");
@@ -107,14 +109,14 @@ describe("PaymentPlansPage — Registrera påminnelser (#71, #2135)", () => {
   });
 
   it("knappen heter Registrera påminnelser, och sidan säger inte att något skickas", () => {
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     expect(screen.getByTestId("send-reminders").textContent).toBe("Registrera påminnelser");
     expect(document.body.textContent).not.toMatch(/skicka/i);
   });
 
   it("disablad + 'Registrerar…' medan mutationen körs", () => {
     scanState.isPending = true;
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     const btn = screen.getByTestId<HTMLButtonElement>("send-reminders");
     expect(btn.disabled).toBe(true);
     expect(btn.textContent).toBe("Registrerar…");
@@ -122,7 +124,7 @@ describe("PaymentPlansPage — Registrera påminnelser (#71, #2135)", () => {
 
   it("fel → Kunde inte registrera: <fel>", () => {
     scanState.error = { message: "nätverket" };
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     expect(screen.getByText("Kunde inte registrera: nätverket")).toBeInTheDocument();
   });
 });
@@ -137,7 +139,7 @@ describe("PaymentPlansPage — filter, sök, rad-klick", () => {
   };
 
   it("status-filter: klick på Slutförda/Avbrutna sätter aria-pressed", () => {
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     const completed = screen.getByRole("button", { name: "Slutförda" });
     fireEvent.click(completed);
     expect(completed).toHaveAttribute("aria-pressed", "true");
@@ -148,14 +150,14 @@ describe("PaymentPlansPage — filter, sök, rad-klick", () => {
   });
 
   it("status-filtret är en knappgrupp med namnet Status (#1805)", () => {
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     const group = screen.getByRole("group", { name: "Status" });
     expect(group).toHaveTextContent("AktivaSlutfördaAvbrutna");
     expect(screen.getByRole("button", { name: "Aktiva" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("sökfältet uppdaterar värdet", () => {
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     const search = screen.getByPlaceholderText<HTMLInputElement>(/Sök på klient/);
     fireEvent.change(search, { target: { value: "Anna" } });
     expect(search.value).toBe("Anna");
@@ -163,14 +165,14 @@ describe("PaymentPlansPage — filter, sök, rad-klick", () => {
 
   it("rad-klick navigerar till plan-detaljen (router.push)", () => {
     setRows([planRow]);
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     fireEvent.click(screen.getByText("Tvist"));
     expect(pushSpy).toHaveBeenCalled();
   });
 
   it("laddar-tillstånd visar 'Laddar…'", () => {
     listQuery.isLoading = true;
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     expect(screen.getByText("Laddar…")).toBeInTheDocument();
   });
 });
@@ -189,14 +191,14 @@ describe("PaymentPlansPage — Förfallen N dagar (#2136)", () => {
 
   it("en plan som ligger efter visar Förfallen 3 dagar efter statusmärket", () => {
     setRows([behind([])]);
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     expect(screen.getByText("Förfallen 3 dagar")).toBeInTheDocument();
     expect(screen.getByText("Aktiv")).toBeInTheDocument();
   });
 
   it("en plan som är ikapp visar ingen markering", () => {
     setRows([behind([10_000])]);
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     expect(screen.queryByText(/^Förfallen/)).toBeNull();
   });
 });
@@ -221,7 +223,7 @@ describe("PaymentPlansPage — sortering per kolumn (#1907)", () => {
 
   it("varje kolumn sorterar på det som visas", () => {
     setRows(rows());
-    render(<PaymentPlansPage />);
+    renderWithNewTrpc(<PaymentPlansPage />);
     sortColumn("Ärendenr", "asc");
     expect(order()).toEqual(["Slutförd", "Alfa", "Beta"]);
     sortColumn("Titel", "desc");

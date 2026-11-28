@@ -1593,7 +1593,7 @@
   },
   "test/unit/client/backend/sync-devices.test.tsx": {
     "@typescript-eslint/require-await": {
-      "count": 3
+      "count": 2
     }
   },
   "test/unit/client/demo/persist-generated-doc.test.ts": {
@@ -1890,11 +1890,6 @@
       "count": 2
     }
   },
-  "test/unit/components/layout/dock-workspace.test.tsx": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
   "test/unit/components/matter-combobox.test.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
@@ -1928,17 +1923,12 @@
   },
   "test/unit/components/server-invoice-numbering.test.tsx": {
     "@typescript-eslint/require-await": {
-      "count": 2
+      "count": 1
     }
   },
   "test/unit/components/settings/backup-section.test.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
-    }
-  },
-  "test/unit/components/settings/ledger-accounts-section.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
     }
   },
   "test/unit/components/sidebar.test.tsx": {

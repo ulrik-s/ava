@@ -2,10 +2,11 @@
  * Test för TemplatesPage — listrendering, gruppering, ta-bort-dialog.
  */
 
-import { act, render, screen, fireEvent } from "@testing-library/react";
+import { act, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import TemplatesPage from "@/app/templates/page";
 import { rowOrder, rowWith, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 const templatesQuery = {
   data: undefined as Array<Record<string, unknown>> | undefined,
@@ -26,6 +27,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => utilsMock,
     documentTemplate: {
@@ -58,20 +60,20 @@ beforeEach(() => {
 describe("TemplatesPage", () => {
   it("renderar rubrik och Ny mall-länk", () => {
     templatesQuery.data = [];
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     expect(screen.getByRole("heading", { name: /Dokumentmallar/i })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /Ny mall/i }).length).toBeGreaterThan(0);
   });
 
   it("visar laddartext", () => {
     templatesQuery.isLoading = true;
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     expect(screen.getByText(/Laddar mallar/i)).toBeInTheDocument();
   });
 
   it("visar tomt-läge om inga mallar finns", () => {
     templatesQuery.data = [];
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     expect(screen.getByText(/Inga mallar än/i)).toBeInTheDocument();
   });
 
@@ -94,7 +96,7 @@ describe("TemplatesPage", () => {
         updatedAt: new Date("2026-01-15").toISOString(),
       },
     ];
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     expect(screen.getByText("Fullmakt")).toBeInTheDocument();
     expect(screen.getByText("Avtal")).toBeInTheDocument();
     expect(screen.getByText("Fullmakter")).toBeInTheDocument();
@@ -112,7 +114,7 @@ describe("TemplatesPage", () => {
         updatedAt: new Date().toISOString(),
       },
     ];
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     fireEvent.click(screen.getByTitle("Ta bort"));
     expect(screen.getByText(/Ta bort mall\?/i)).toBeInTheDocument();
     // Click confirm (the second "Ta bort" button in the dialog)
@@ -132,7 +134,7 @@ describe("TemplatesPage", () => {
         updatedAt: new Date().toISOString(),
       },
     ];
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     fireEvent.click(screen.getByTitle("Ta bort"));
     expect(screen.getByText(/Ta bort mall\?/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Avbryt/i }));
@@ -160,7 +162,7 @@ describe("TemplatesPage — kolumnerna sorterar på det som visas (#1904)", () =
   const names = ["Alfa", "Beta", "Gamma"];
 
   it("Namn, Kategori och Beskrivning", () => {
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     sortColumn("Namn", "desc");
     expect(rowOrder(names)).toEqual(["Gamma", "Beta", "Alfa"]);
     sortColumn("Kategori", "asc");
@@ -170,7 +172,7 @@ describe("TemplatesPage — kolumnerna sorterar på det som visas (#1904)", () =
   });
 
   it("Skapad av och Uppdaterad", () => {
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     sortColumn("Skapad av", "desc");
     expect(rowOrder(names)).toEqual(["Alfa", "Gamma", "Beta"]);
     sortColumn("Uppdaterad", "asc");
@@ -181,14 +183,14 @@ describe("TemplatesPage — kolumnerna sorterar på det som visas (#1904)", () =
 describe("TemplatesPage — radklick och borttagning (#1904)", () => {
   it("klick på raden öppnar mallen för redigering", () => {
     templatesQuery.data = sortableTemplates();
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     fireEvent.click(rowWith("Gamma"));
     expect(routerPush).toHaveBeenCalledWith("/templates/__shell__/edit/?id=c");
   });
 
   it("klick på Ta bort öppnar inte mallen", () => {
     templatesQuery.data = sortableTemplates();
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     fireEvent.click(screen.getAllByTitle("Ta bort")[0] as HTMLElement);
     expect(routerPush).not.toHaveBeenCalled();
     expect(screen.getByText(/Ta bort mall\?/i)).toBeInTheDocument();
@@ -196,7 +198,7 @@ describe("TemplatesPage — radklick och borttagning (#1904)", () => {
 
   it("när mallen tagits bort stängs dialogen och listan laddas om", () => {
     templatesQuery.data = sortableTemplates();
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     fireEvent.click(screen.getAllByTitle("Ta bort")[0] as HTMLElement);
     act(() => templateDeleted?.());
     expect(utilsMock.documentTemplate.list.invalidate).toHaveBeenCalled();
@@ -206,7 +208,7 @@ describe("TemplatesPage — radklick och borttagning (#1904)", () => {
   it("medan borttagningen pågår är knappen låst", () => {
     templatesQuery.data = sortableTemplates();
     deleteState.isPending = true;
-    render(<TemplatesPage />);
+    renderWithNewTrpc(<TemplatesPage />);
     fireEvent.click(screen.getAllByTitle("Ta bort")[0] as HTMLElement);
     expect(screen.getByRole("button", { name: "Tar bort…" })).toBeDisabled();
   });

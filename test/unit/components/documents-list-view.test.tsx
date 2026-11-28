@@ -2,10 +2,11 @@
  * DocumentsListView — flat-vy för dokument med folder-path-kolumn.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import { afterEach, describe, it, expect, vi } from "vitest-compat";
 import { DocumentsListView } from "@/components/documents/_documents-list-view";
 import { asId } from "@/lib/shared/schemas/ids";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../helpers/trpc-classic-mock";
 
 /** Sparade kolumninställningar (DataTable läser dem via `prefs.get`). */
 const persisted = { data: undefined as undefined | { user: unknown; org: unknown } };
@@ -13,6 +14,7 @@ const persisted = { data: undefined as undefined | { user: unknown; org: unknown
 // Office 365-konfigurationen (#1951): av som standard, så att Maila… inte syns.
 vi.mock("@/components/documents/use-office365-configured", () => ({ useOffice365Configured: () => false }));
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } }, document: { partsByMatter: { invalidate: vi.fn() }, tree: { invalidate: vi.fn() } } }),
     user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
@@ -65,7 +67,7 @@ const baseFolder = (id: string, name: string, parentId: string | null = null) =>
 
 describe("DocumentsListView", () => {
   it("tipset säger Mapp-vy när ärendet har mappar (#1804)", () => {
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} folders={[baseFolder("f1", "Inlagor")]}
         documents={[]} onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -76,7 +78,7 @@ describe("DocumentsListView", () => {
   });
 
   it("#1220: Typ-kolumnen visar etiketter (inte koder) och delarna i sammansatta dokument", () => {
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} folders={[]}
         documents={[
@@ -97,7 +99,7 @@ describe("DocumentsListView", () => {
   });
 
   it("renderar tomt-state när inga docs", () => {
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -109,7 +111,7 @@ describe("DocumentsListView", () => {
   it("renderar dokumentens filnamn, typ, mapp-path", () => {
     const folder = baseFolder("f1", "Underlag");
     const doc = baseDoc({ folderId: "f1" });
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[folder]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -124,7 +126,7 @@ describe("DocumentsListView", () => {
     const f1 = baseFolder("f1", "Parent");
     const f2 = baseFolder("f2", "Child", "f1");
     const doc = baseDoc({ folderId: "f2" });
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[f1, f2]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -136,7 +138,7 @@ describe("DocumentsListView", () => {
   it("uploadedBy=undefined kraschar inte — visar '—'", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const doc = baseDoc({ uploadedBy: undefined } as any);
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -148,7 +150,7 @@ describe("DocumentsListView", () => {
 
   it("filnamnet renderas som klickbar knapp (default: openDocumentSmart)", () => {
     const doc = baseDoc();
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -166,7 +168,7 @@ describe("DocumentsListView", () => {
     const sibling = baseDoc({
       id: "d2", fileName: "minnesanteckning (din ändring 2027-03-14 09:15).txt", documentType: "Anteckning",
     });
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[original, sibling]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -187,7 +189,7 @@ describe("DocumentsListView", () => {
  */
 describe("DocumentsListView — kebab-menyn (#983)", () => {
   function renderRow() {
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -208,7 +210,7 @@ describe("DocumentsListView — kebab-menyn (#983)", () => {
     const onDelete = vi.fn();
     const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValue(true);
     try {
-      render(
+      renderWithNewTrpc(
         <DocumentsListView
           matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
           onDelete={onDelete} onReanalyze={() => {}} {...idle}
@@ -231,7 +233,7 @@ describe("DocumentsListView — kebab-menyn (#983)", () => {
  */
 describe("DocumentsListView — kolumner på små skärmar (#983)", () => {
   it("sekundära kolumner bär responsiv döljning; filnamnet gör det inte", () => {
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -256,7 +258,7 @@ describe("DocumentsListView — ingen kolumn Storlek (#1803)", () => {
   afterEach(() => { persisted.data = undefined; });
 
   function renderList(): void {
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[baseDoc({ sizeBytes: 5_000_000 })]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle}
@@ -291,7 +293,7 @@ describe("DocumentsListView — ingen kolumn Storlek (#1803)", () => {
  */
 describe("DocumentsListView — namncellen och statusen (#1796)", () => {
   function renderList(docs: ReturnType<typeof baseDoc>[], props: Partial<typeof idle> = {}) {
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={docs} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}} {...idle} {...props}
@@ -344,7 +346,7 @@ describe("DocumentsListView — namncellen och statusen (#1796)", () => {
 
   it("\"Analysera (AI)\" går att välja när ingen analys pågår", () => {
     const onReanalyze = vi.fn();
-    render(
+    renderWithNewTrpc(
       <DocumentsListView
         matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
         onDelete={() => {}} onReanalyze={onReanalyze} {...idle}

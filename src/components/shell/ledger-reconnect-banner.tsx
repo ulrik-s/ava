@@ -8,13 +8,15 @@
  * efter anslutningen). I demon är statusfrågan avstängd, så där syns den aldrig.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useLedgerStatus } from "@/lib/client/backend/server-ledger";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 
 export function LedgerReconnectBanner() {
   const status = useLedgerStatus();
-  const me = trpc.user.current.useQuery();
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions());
   if (status.data?.reconnectRequired !== true || me.data?.role !== "ADMIN") return null;
   return (
     <div role="alert" data-testid="ledger-reconnect-banner" className="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">

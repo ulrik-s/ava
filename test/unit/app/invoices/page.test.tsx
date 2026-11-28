@@ -2,10 +2,11 @@
  * Test för InvoicesPage — listrendering, status, tomt-läge.
  */
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import InvoicesPage from "@/app/invoices/page";
 import { rowOrder, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 // Kuvertform sedan #1014 — sidan läser `data.items`.
 const invoicesQuery = {
@@ -23,6 +24,7 @@ const usersQuery: { data: { users: Array<{ id: string; name: string; matterNumbe
 };
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     invoice: {
@@ -59,19 +61,19 @@ beforeEach(() => {
 describe("InvoicesPage", () => {
   it("renderar rubrik", () => {
     setInvoices([]);
-    render(<InvoicesPage />);
+    renderWithNewTrpc(<InvoicesPage />);
     expect(screen.getByRole("heading", { name: /Fakturor/i })).toBeInTheDocument();
   });
 
   it("visar laddartext", () => {
     invoicesQuery.isLoading = true;
-    render(<InvoicesPage />);
+    renderWithNewTrpc(<InvoicesPage />);
     expect(screen.getByText(/Laddar/i)).toBeInTheDocument();
   });
 
   it("visar tomt-läge när inga fakturor finns", () => {
     setInvoices([]);
-    render(<InvoicesPage />);
+    renderWithNewTrpc(<InvoicesPage />);
     expect(screen.getByText(/Inga fakturor ännu/i)).toBeInTheDocument();
   });
 
@@ -102,7 +104,7 @@ describe("InvoicesPage", () => {
         matter: { id: "m3", matterNumber: "2026-0003", title: "Arv" },
       },
     ]);
-    render(<InvoicesPage />);
+    renderWithNewTrpc(<InvoicesPage />);
     fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (1)" })); // kreditfakturan dold från början (#1522)
     expect(screen.getByText("Faktura")).toBeInTheDocument();
     expect(screen.getByText("Aconto")).toBeInTheDocument();
@@ -121,7 +123,7 @@ describe("InvoicesPage", () => {
       { id: "i2", invoiceNumber: "F-1", invoiceDate: "2026-01-01", invoiceType: "ACCONTO", status: "SENT",
         amount: 500, matter: { id: "m2", matterNumber: "2026-0002", title: "B" } },
     ]);
-    render(<InvoicesPage />);
+    renderWithNewTrpc(<InvoicesPage />);
     const numbers = ["F-1", "F-2"];
     sortColumn("Fakturanr", "asc");
     expect(rowOrder(numbers)).toEqual(["F-1", "F-2"]);
@@ -148,7 +150,7 @@ describe("InvoicesPage", () => {
         matter: { id: "m1", matterNumber: "2026-0001", title: "T" },
       },
     ]);
-    render(<InvoicesPage />);
+    renderWithNewTrpc(<InvoicesPage />);
     const links = screen.getAllByRole("link");
     const hrefs = links.map((l) => l.getAttribute("href"));
     // Både faktura- och ärende-länken renderas nu som Next-<Link> till den
@@ -169,7 +171,7 @@ describe("InvoicesPage", () => {
       { id: "i4", invoiceDate: new Date().toISOString(), invoiceType: "STANDARD", status: "BAD_DEBT", amount: 100, matter: { id: "m4", matterNumber: "4", title: "T" } },
       { id: "i5", invoiceDate: new Date().toISOString(), invoiceType: "FINAL", status: "SENT", amount: -100, matter: { id: "m5", matterNumber: "5", title: "T" } },
     ]);
-    render(<InvoicesPage />);
+    renderWithNewTrpc(<InvoicesPage />);
     fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (1)" })); // annullerad dold från början (#1522)
     expect(screen.getByText("Skapad")).toBeInTheDocument();
     expect(screen.getByText("Avbetalningsplan")).toBeInTheDocument();
@@ -193,7 +195,7 @@ describe("InvoicesPage", () => {
 
     it("döljer annullerade och kreditfakturor och visar antalet på knappen", () => {
       mixed();
-      render(<InvoicesPage />);
+      renderWithNewTrpc(<InvoicesPage />);
       expect(screen.getByText("F-1")).toBeInTheDocument();
       expect(screen.getByText("F-4")).toBeInTheDocument();
       expect(screen.queryByText("F-2")).toBeNull();
@@ -203,7 +205,7 @@ describe("InvoicesPage", () => {
 
     it("klick visar de dolda med sin status och byter text; nytt klick döljer igen", () => {
       mixed();
-      render(<InvoicesPage />);
+      renderWithNewTrpc(<InvoicesPage />);
       fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (2)" }));
       expect(screen.getByText("F-2")).toBeInTheDocument();
       expect(screen.getByText("F-3")).toBeInTheDocument();
@@ -215,7 +217,7 @@ describe("InvoicesPage", () => {
 
     it("summeringen räknar bara synliga rader", () => {
       setInvoices([row("1", "SENT", "STANDARD", 100000), row("2", "CANCELLED", "STANDARD", 40000)]);
-      const { container } = render(<InvoicesPage />);
+      const { container } = renderWithNewTrpc(<InvoicesPage />);
       expect(footer(container)).toMatch(/1\s?000/);
       fireEvent.click(screen.getByRole("button", { name: "Visa annullerade (1)" }));
       expect(footer(container)).toMatch(/1\s?400/);
@@ -223,7 +225,7 @@ describe("InvoicesPage", () => {
 
     it("ingen knapp när inget är dolt", () => {
       setInvoices([row("1", "SENT", "STANDARD", 100000)]);
-      render(<InvoicesPage />);
+      renderWithNewTrpc(<InvoicesPage />);
       expect(screen.queryByRole("button", { name: /annullerade/ })).toBeNull();
     });
   });
@@ -235,7 +237,7 @@ describe("InvoicesPage", () => {
       matter: { id: `m${id}`, matterNumber, title: `Fall ${id}`, responsibleLawyerId: "u-cd" },
     });
     setInvoices([row("1", "AB2026-0001"), row("2", "CD2026-0002")]);
-    render(<InvoicesPage />);
+    renderWithNewTrpc(<InvoicesPage />);
     const other = screen.getByRole("link", { name: "CD AB2026-0001 — Fall 1" });
     expect(within(other).getByText("CD").tagName).toBe("STRONG");
     const own = screen.getByRole("link", { name: "CD2026-0002 — Fall 2" });
@@ -257,7 +259,7 @@ describe("InvoicesPage", () => {
 
     it("en förfallen faktura visar \"Förfallen N dagar\" i rött, singular för en dag", () => {
       setInvoices([row("1", "SENT", daysAgo(12)), row("2", "INSTALLMENT_PLAN", daysAgo(1)), row("3", "SENT", daysAgo(5), [10000])]);
-      render(<InvoicesPage />);
+      renderWithNewTrpc(<InvoicesPage />);
       const mark = screen.getByText("Förfallen 12 dagar");
       expect(mark.className).toContain("text-red-700");
       expect(statusCell("F-1")).toContainElement(mark);
@@ -268,7 +270,7 @@ describe("InvoicesPage", () => {
     it("en faktura med misslyckat utskick visar \"Kom inte fram\"; en faktura kan ha båda", () => {
       failedQuery.data = [{ invoiceId: "1" }, { invoiceId: "2" }];
       setInvoices([row("1", "SENT", daysAgo(3)), row("2", "PAID", daysAgo(3))]);
-      render(<InvoicesPage />);
+      renderWithNewTrpc(<InvoicesPage />);
       expect(statusCell("F-1").textContent).toContain("Förfallen 3 dagar");
       expect(statusCell("F-1").textContent).toContain("Kom inte fram");
       expect(statusCell("F-2").textContent).toContain("Kom inte fram");
@@ -278,7 +280,7 @@ describe("InvoicesPage", () => {
     it("knappen visar bara markerade fakturor och växlar tillbaka", () => {
       failedQuery.data = [{ invoiceId: "3" }];
       setInvoices([row("1", "SENT", daysAgo(3)), row("2", "PAID", daysAgo(3)), row("3", "DRAFT", null)]);
-      render(<InvoicesPage />);
+      renderWithNewTrpc(<InvoicesPage />);
       const button = screen.getByRole("button", { name: "Förfallna och ej framkomna" });
       expect(button.getAttribute("aria-pressed")).toBe("false");
       fireEvent.click(button);
@@ -294,7 +296,7 @@ describe("InvoicesPage", () => {
     it("innan misslyckade utskick laddats visas bara förfallen-markeringen", () => {
       failedQuery.data = undefined;
       setInvoices([row("1", "SENT", daysAgo(2))]);
-      render(<InvoicesPage />);
+      renderWithNewTrpc(<InvoicesPage />);
       expect(statusCell("F-1").textContent).toContain("Förfallen 2 dagar");
       expect(statusCell("F-1").textContent).not.toContain("Kom inte fram");
     });

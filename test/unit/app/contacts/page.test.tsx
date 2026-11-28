@@ -2,10 +2,11 @@
  * Test för ContactsPage — listrendering, filter, +Ny kontakt-form.
  */
 
-import { act, render, screen, fireEvent } from "@testing-library/react";
+import { act, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import ContactsPage from "@/app/contacts/page";
 import { rowOrder, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 const contactsQuery: {
   data: { contacts: Array<Record<string, unknown>>; total: number; pages: number };
@@ -25,6 +26,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => utilsMock,
     contacts: {
@@ -57,14 +59,14 @@ beforeEach(() => {
 
 describe("ContactsPage", () => {
   it("renderar Parter-rubrik och +Ny part-knapp", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     expect(screen.getByRole("heading", { name: "Parter" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "+ Ny part" })).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Sök parter...")).toBeInTheDocument();
   });
 
   it("tom lista visar 'Inga parter.'", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     expect(screen.getByText("Inga parter.")).toBeInTheDocument();
   });
 
@@ -85,12 +87,12 @@ describe("ContactsPage", () => {
       total: 1,
       pages: 1,
     };
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     expect(screen.getByText("Anna Andersson")).toBeInTheDocument();
   });
 
   it("öppnar formulär vid +Ny part", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     // Form-submit-knappen "Skapa kontakt" syns nu
     expect(screen.getByRole("button", { name: /Skapa kontakt|Spara/i })).toBeInTheDocument();
@@ -100,12 +102,12 @@ describe("ContactsPage", () => {
 
   it("öppnar form direkt med ?new=1 query-parameter", () => {
     searchParamsGet.mockImplementation((k: string) => (k === "new" ? "1" : null));
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     expect(screen.getByRole("button", { name: /Skapa kontakt|Spara/i })).toBeInTheDocument();
   });
 
   it("submittar nytt kontakt-formulär med namn", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     fireEvent.change(screen.getByLabelText("Namn *"), { target: { value: "Cecilia C" } });
     fireEvent.click(screen.getByRole("button", { name: /Spara part/i }));
@@ -114,7 +116,7 @@ describe("ContactsPage", () => {
   });
 
   it("byter mellan PERSON och COMPANY visar olika nummer-fält", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     expect(screen.getByPlaceholderText(/YYYYMMDD/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "COMPANY" } });
@@ -123,7 +125,7 @@ describe("ContactsPage", () => {
   });
 
   it("Avbryt-knappen i form stänger den", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     expect(screen.getByRole("button", { name: /Spara part/i })).toBeInTheDocument();
     // Det finns två "Avbryt" — top-headerns toggle och form Avbryt
@@ -138,14 +140,14 @@ describe("ContactsPage", () => {
       total: 0,
       pages: 0,
     };
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     const search = screen.getByPlaceholderText<HTMLInputElement>(/Sök parter/i);
     fireEvent.change(search, { target: { value: "Anna" } });
     expect(search.value).toBe("Anna");
   });
 
   it("ändrar typ-filtret", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     const filters = screen.getAllByRole("combobox");
     const typeFilter = filters[filters.length - 1] as HTMLSelectElement;
     fireEvent.change(typeFilter, { target: { value: "COMPANY" } });
@@ -158,27 +160,27 @@ describe("ContactsPage", () => {
       total: 50,
       pages: 3,
     };
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Nästa/i })).toBeInTheDocument();
   });
 
   it("paginering: Nästa ökar sidan", () => {
     contactsQuery.data = { contacts: [], total: 50, pages: 3 };
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
     expect(screen.getByText(/Sida 2 av 3/)).toBeInTheDocument();
   });
 
   it("paginering: Föregående är disabled på sida 1", () => {
     contactsQuery.data = { contacts: [], total: 50, pages: 3 };
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     const prev = screen.getByRole<HTMLButtonElement>("button", { name: /Föregående/i });
     expect(prev.disabled).toBe(true);
   });
 
   it("uppdaterar alla formulärfält i ny kontakt-form", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     const nameInput = screen.getByLabelText<HTMLInputElement>(/Namn/);
     fireEvent.change(nameInput, { target: { value: "Bertil" } });
@@ -206,7 +208,7 @@ describe("ContactsPage", () => {
   });
 
   it("uppdaterar org-nummerfält när typ=COMPANY", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     const typeSelect = screen.getByLabelText<HTMLSelectElement>(/^Typ$/);
     fireEvent.change(typeSelect, { target: { value: "COMPANY" } });
@@ -216,7 +218,7 @@ describe("ContactsPage", () => {
   });
 
   it("när parten skapats stängs formuläret, listan laddas om och nästa formulär är tomt", () => {
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny part/i }));
     fireEvent.change(screen.getByLabelText("Namn *"), { target: { value: "Cecilia C" } });
     fireEvent.click(screen.getByRole("button", { name: /Spara part/i }));
@@ -238,7 +240,7 @@ describe("ContactsPage", () => {
       total: 2,
       pages: 1,
     };
-    render(<ContactsPage />);
+    renderWithNewTrpc(<ContactsPage />);
     const names = ["Bertil AB", "Anna Andersson"];
     sortColumn("Namn", "asc");
     expect(rowOrder(names)).toEqual(["Anna Andersson", "Bertil AB"]);

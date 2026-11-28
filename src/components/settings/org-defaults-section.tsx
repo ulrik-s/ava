@@ -7,8 +7,9 @@
  * Här kan man bara titta + ta bort.
  */
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 
 const KEY_LABELS: Record<string, string> = {
   "list.contacts": "Parter",
@@ -29,13 +30,14 @@ function labelFor(key: string): string {
 }
 
 export function OrgDefaultsSection() {
-  const me = trpc.user.current.useQuery();
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions());
   const isAdmin = me.data?.role === "ADMIN";
-  const list = trpc.prefs.listOrgDefaults.useQuery(undefined, { enabled: isAdmin });
-  const utils = trpc.useUtils();
-  const clearOrg = trpc.prefs.clearOrgDefault.useMutation({
-    onSuccess: () => utils.prefs.listOrgDefaults.invalidate(),
-  });
+  const list = useQuery(t.prefs.listOrgDefaults.queryOptions(undefined, { enabled: isAdmin }));
+  const queryClient = useQueryClient();
+  const clearOrg = useMutation(t.prefs.clearOrgDefault.mutationOptions({
+    onSuccess: () => queryClient.invalidateQueries(t.prefs.listOrgDefaults.queryFilter()),
+  }));
 
   if (!isAdmin) {
     return (

@@ -11,9 +11,10 @@
  * Klick → går till /settings för att logga in/ut eller byta repo.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useAuthMode } from "@/lib/client/auth/use-auth-mode";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 
 const STYLES: Record<string, string> = {
   anonymous: "bg-gray-50 text-gray-700",
@@ -39,7 +40,8 @@ export function AuthStatusBanner() {
   // ADR 0027: visa den FAKTISKA inloggade principalen (demo-väljaren ELLER
   // OIDC) i st.f. det pensionerade GitHub-`login`-fältet (som gav "@okänd" i
   // server-first). Faller tillbaka på legacy-login → "okänd" om inget finns.
-  const me = trpc.user.current.useQuery();
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions());
   if (loading) return null;
 
   const who = me.data?.name ?? me.data?.email ?? user?.login ?? "okänd";

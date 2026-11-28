@@ -2,12 +2,13 @@
  * Test för InvoiceDetailPage — fakturalisning, betalningar, plan, kreditera.
  */
 
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { Suspense } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import InvoiceDetailPage from "@/app/invoices/[id]/_client";
 import { VatDisplayProvider } from "@/lib/client/vat/vat-display-context";
 import { rowOrder, sortColumn } from "../../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../../helpers/trpc-classic-mock";
 
 const invoiceQuery = {
   data: undefined as Record<string, unknown> | undefined,
@@ -67,6 +68,7 @@ const usersQuery: { data: { users: Array<{ id: string; name: string; matterNumbe
 };
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     // DataTable (#1146) läser/sparar vy-inställningar.
     prefs: {
@@ -125,7 +127,7 @@ vi.mock("@/lib/client/helper/use-helper", () => ({
 vi.mock("@/lib/client/fsa/read-from-fsa", () => ({ readFromFsa: vi.fn(async () => null) }));
 
 const renderPage = () =>
-  render(
+  renderWithNewTrpc(
     <Suspense fallback={<div>laddar</div>}>
       <InvoiceDetailPage id="i1" />
     </Suspense>,
@@ -201,7 +203,7 @@ describe("InvoiceDetailPage", () => {
 
   it("beloppsrubriken följer momsväxlingen: inkl. → exkl. efter klick (#1726)", async () => {
     window.localStorage.clear();
-    render(<VatDisplayProvider><Suspense fallback={<div>laddar</div>}><InvoiceDetailPage id="i1" /></Suspense></VatDisplayProvider>);
+    renderWithNewTrpc(<VatDisplayProvider><Suspense fallback={<div>laddar</div>}><InvoiceDetailPage id="i1" /></Suspense></VatDisplayProvider>);
     await waitFor(() => expect(screen.getByText("Belopp inkl. moms")).toBeInTheDocument());
     expect(screen.queryByText("Belopp (brutto)")).toBeNull();
     const amountBtn = screen.getByText("Belopp inkl. moms").nextElementSibling?.querySelector("button");

@@ -9,7 +9,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { backupDownloadUrl, type BackupFileName, type BackupStatus } from "@/lib/shared/backup";
 import { serverTrpcClient as server } from "./server-trpc-client";
 
@@ -26,7 +26,8 @@ export function backupRefetchInterval(status: BackupStatus | undefined): number 
 /** Visas backupen här? (servern kan + administratör) */
 export function useCanSeeBackup(): boolean {
   const { backup } = useCapabilities();
-  const me = trpc.user.current.useQuery(undefined, { enabled: backup });
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions(undefined, { enabled: backup }));
   return backup && me.data?.role === "ADMIN";
 }
 

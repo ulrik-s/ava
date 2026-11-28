@@ -4,12 +4,13 @@
  * (idempotens) och rätt belopp/datum.
  */
 
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 
 import PaymentImportPage from "@/app/payments/import/page";
 import { buildOcrReference } from "@/lib/shared/ocr-reference";
 import { rowOrder, rowWith, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 
 const OCR = buildOcrReference("20260001");
@@ -48,6 +49,7 @@ vi.mock("@/components/layout/panel-page", () => ({
 }));
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     // DataTable (#1146) läser/sparar vy-inställningar.
     prefs: {
@@ -156,13 +158,13 @@ const COURT_RECEIVABLES = [
 
 describe("PaymentImportPage (#181)", () => {
   it("tom start: rubrik + filväljare, ingen förhandsvisning", () => {
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     expect(screen.getByText("Importera betalfil")).toBeInTheDocument();
     expect(screen.queryByText(/Matchade betalningar/)).not.toBeInTheDocument();
   });
 
   it("inklistrad camt → matchad rad (OCR) + granskningsrad (fri text utan träff)", () => {
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     fireEvent.change(screen.getByLabelText("camt-XML"), { target: { value: CAMT } });
 
     expect(screen.getByText("Matchade betalningar (1)")).toBeInTheDocument();
@@ -174,7 +176,7 @@ describe("PaymentImportPage (#181)", () => {
   });
 
   it("Bokför → recordPayment med referens, belopp och valutadatum + invalidate", async () => {
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     fireEvent.change(screen.getByLabelText("camt-XML"), { target: { value: CAMT } });
     fireEvent.click(screen.getByRole("button", { name: /Bokför 1 betalningar/ }));
 
@@ -191,14 +193,14 @@ describe("PaymentImportPage (#181)", () => {
   });
 
   it("ogiltig XML → felmeddelande, inget bokfört", () => {
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     fireEvent.change(screen.getByLabelText("camt-XML"), { target: { value: "<foo/>" } });
     expect(screen.getByText(/Kunde inte läsa filen/)).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
   it("vald camt-fil läses in och matchas som inklistrad text", async () => {
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     const input = screen.getByLabelText(/Välj camt-fil/);
     Object.defineProperty(input, "files", { value: [new File([CAMT], "camt.xml", { type: "text/xml" })] });
     fireEvent.change(input);
@@ -206,7 +208,7 @@ describe("PaymentImportPage (#181)", () => {
   });
 
   it("granskningsraden visar den strukturerade referensen när fri text saknas", () => {
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     const xml = camtWith([{ ref: "REF-X", amount: "42.00", date: "2026-06-05", rmt: strd("99999999") }]);
     fireEvent.change(screen.getByLabelText("camt-XML"), { target: { value: xml } });
     expect(screen.getByText("Kräver granskning (1)")).toBeInTheDocument();
@@ -215,7 +217,7 @@ describe("PaymentImportPage (#181)", () => {
   });
 
   it("matchade betalningar sorteras på varje kolumn", () => {
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     const xml = camtWith([
       { ref: "REF-1", amount: "100.00", date: "2026-06-01", debtor: "Bertil AB", rmt: strd(OCR) },
       { ref: "REF-2", amount: "200.00", date: "2026-06-03", debtor: "Anna AB", rmt: strd("F-2026-0002") },
@@ -236,7 +238,7 @@ describe("PaymentImportPage (#181)", () => {
 
   it("domstolsbetalningar föreslås mot förväntade fordringar och sorteras (#175)", () => {
     receivableCandidates.data = COURT_RECEIVABLES;
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     fireEvent.change(screen.getByLabelText("camt-XML"), { target: { value: COURT_CAMT } });
     expect(screen.getByText("Domstolsbetalningar — förväntade fordringar (2)")).toBeInTheDocument();
     const labels = ["Kostnadsräkning Berg", "Kostnadsräkning Alm"];
@@ -248,7 +250,7 @@ describe("PaymentImportPage (#181)", () => {
 
   it("Pricka av → settle med utbetalt belopp och referens, listorna laddas om (#175)", async () => {
     receivableCandidates.data = COURT_RECEIVABLES;
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     fireEvent.change(screen.getByLabelText("camt-XML"), { target: { value: COURT_CAMT } });
     fireEvent.click(within(rowWith("Kostnadsräkning Berg")).getByRole("button", { name: "Pricka av" }));
     expect(await screen.findByText("Domstolsbetalning avprickad mot fordran.")).toBeInTheDocument();
@@ -258,7 +260,7 @@ describe("PaymentImportPage (#181)", () => {
 
   it("en redan bokförd referens visas som dubblett, inte som matchad (idempotens)", () => {
     firstInvoice().payments = [{ reference: null }, { reference: "REF-A" }];
-    render(<PaymentImportPage />);
+    renderWithNewTrpc(<PaymentImportPage />);
     fireEvent.change(screen.getByLabelText("camt-XML"), { target: { value: CAMT } });
     expect(screen.getByText("Matchade betalningar (0)")).toBeInTheDocument();
     expect(screen.getByText("Inga matchade betalningar i filen.")).toBeInTheDocument();

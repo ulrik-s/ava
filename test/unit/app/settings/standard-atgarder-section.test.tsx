@@ -5,10 +5,11 @@
  * använts i ärenden — de får inte bara raderas, då tappar historiken sin referens.
  */
 
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { StandardAtgarderSection } from "@/app/settings/_standard-atgarder-section";
 import { columnHeader, rowOrder, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 const settingsQuery = {
   data: {
@@ -25,6 +26,7 @@ const invalidateSettings = vi.fn();
 let onUpdateSuccess: (() => void) | undefined;
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     // DataTable (#1146) läser/sparar vy-inställningar.
     prefs: {
@@ -54,7 +56,7 @@ beforeEach(() => {
 
 describe("StandardAtgarderSection", () => {
   it("listar byråns åtgärder med tid, skede och kategori", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     // Skede-/kategori-etiketterna finns även i lägg-till-formulärets dropdowns,
     // så tabellen frågas ut för sig.
     const table = within(screen.getByRole("table"));
@@ -68,7 +70,7 @@ describe("StandardAtgarderSection", () => {
   });
 
   it("ny åtgärd får ett läsbart slug-id ur beskrivningen", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Avslutande åtgärder inklusive dom" } });
     fireEvent.change(screen.getByLabelText("Tid (h)"), { target: { value: "0,75" } });
     fireEvent.change(screen.getByLabelText("Skede"), { target: { value: "CLOSING" } });
@@ -85,7 +87,7 @@ describe("StandardAtgarderSection", () => {
   });
 
   it("id-kollision bryts med löpnummer i stället för att skriva över", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     // "Gammal åtgärd" slug:as till "gammal-atgard"; skriv en beskrivning vars
     // slug blir exakt ett BEFINTLIGT id ("gammal") → kollision.
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Gammal" } });
@@ -95,7 +97,7 @@ describe("StandardAtgarderSection", () => {
   });
 
   it("avställning växlar active utan att röra övriga åtgärder", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     fireEvent.click(screen.getByLabelText("Avställ Inledande åtgärder och genomgång av handlingar"));
     const saved = updateMutate.mock.calls[0]![0] as { standardAtgarder: Array<{ id: string; active: boolean }> };
     expect(saved.standardAtgarder).toEqual([
@@ -105,14 +107,14 @@ describe("StandardAtgarderSection", () => {
   });
 
   it("borttagning sparar listan UTAN åtgärden (hela listan ersätts)", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     fireEvent.click(screen.getByLabelText("Ta bort Gammal åtgärd"));
     const saved = updateMutate.mock.calls[0]![0] as { standardAtgarder: Array<{ id: string }> };
     expect(saved.standardAtgarder.map((a) => a.id)).toEqual(["inledande-atgarder"]);
   });
 
   it("tom beskrivning eller 0 minuter går inte att spara", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     const button = screen.getByText("Lägg till");
     expect(button).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "   " } });
@@ -123,7 +125,7 @@ describe("StandardAtgarderSection", () => {
   });
 
   it("en otillåten tid (0,33) visar ett fel och går inte att lägga till (#1545)", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Åtgärd" } });
     fireEvent.change(screen.getByLabelText("Tid (h)"), { target: { value: "0,33" } });
     expect(screen.getByRole("alert")).toHaveTextContent("Ändra värdet");
@@ -135,7 +137,7 @@ describe("StandardAtgarderSection", () => {
   });
 
   it("kategorin väljs i formuläret och följer med den nya åtgärden (#1907)", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Restid till tingsrätten" } });
     fireEvent.change(screen.getByLabelText("Kategori"), { target: { value: "TIDSSPILLAN" } });
     fireEvent.keyDown(screen.getByLabelText("Beskrivning"), { key: "Enter" });
@@ -145,13 +147,13 @@ describe("StandardAtgarderSection", () => {
   });
 
   it("sparade åtgärder hämtar om byråns inställningar (#1907)", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     onUpdateSuccess?.();
     expect(invalidateSettings).toHaveBeenCalledTimes(1);
   });
 
   it("tabellen sorterar på beskrivning, tid, skede och kategori (#1907)", () => {
-    render(<StandardAtgarderSection />);
+    renderWithNewTrpc(<StandardAtgarderSection />);
     const inledande = "Inledande åtgärder och genomgång av handlingar";
     const order = (): string[] => rowOrder([inledande, "Gammal åtgärd"]);
     sortColumn("Beskrivning", "asc");

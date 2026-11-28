@@ -8,9 +8,10 @@
  * obligatoriska rollerna.
  */
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import {
   DEFAULT_LEDGER_ACCOUNT_MAP,
   ledgerAccountMapSchema,
@@ -93,17 +94,18 @@ function AccountRow({
 }
 
 function LedgerAccountForm({ initial }: { initial: LedgerAccountMap }) {
-  const utils = trpc.useUtils();
+  const t = useTRPC();
+  const queryClient = useQueryClient();
   const [series, setSeries] = useState(initial.voucherSeries);
   const [draft, setDraft] = useState<Draft>(() => toDraft(initial));
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const save = trpc.organization.updateSettings.useMutation({
+  const save = useMutation(t.organization.updateSettings.mutationOptions({
     onSuccess: () => {
       setSaved(true);
-      void utils.organization.getSettings.invalidate();
+      void queryClient.invalidateQueries(t.organization.getSettings.queryFilter());
     },
-  });
+  }));
 
   function setRole(key: RoleDef["key"], next: LedgerAccount): void {
     setSaved(false);
@@ -174,8 +176,9 @@ export function LedgerAccountsSection() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- engångs-flip post-mount; det ÄR avsikten (jfr demo-bootstrap)
   useEffect(() => setMounted(true), []);
 
-  const me = trpc.user.current.useQuery(undefined, { enabled: mounted });
-  const settings = trpc.organization.getSettings.useQuery(undefined, { enabled: mounted });
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions(undefined, { enabled: mounted }));
+  const settings = useQuery(t.organization.getSettings.queryOptions(undefined, { enabled: mounted }));
 
   if (!mounted) return null;
 

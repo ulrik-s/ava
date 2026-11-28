@@ -2,17 +2,18 @@
 
 /**
  * `AppShell` — full-höjds layout med Sidebar + main. Wrapper:n hämtar
- * inloggad användare via `trpc.user.current` så Sidebar:s userName-prop
+ * inloggad användare via `user.current` så Sidebar:s userName-prop
  * visar rätt namn.
  *
  * SOLID: shell:n ansvarar bara för layouten — auth/data-state hör hemma
  * uppåt i `DemoBootstrap`. /demo har egen runtime så skippas härifrån.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { ExternalEditIndicator } from "@/components/documents/external-edit-indicator";
 import { ExternalEditRegistrar } from "@/components/documents/external-edit-registrar";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { DemoModeBanner } from "./demo-mode-banner";
 import { LedgerReconnectBanner } from "./ledger-reconnect-banner";
 import { ReleaseNotesOnUpdate } from "./release-notes";
@@ -26,7 +27,8 @@ const FULLSCREEN_ROUTES: readonly string[] = [];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const current = trpc.user.current.useQuery(undefined, { staleTime: 60_000, retry: false });
+  const t = useTRPC();
+  const current = useQuery(t.user.current.queryOptions(undefined, { staleTime: 60_000, retry: false }));
 
   if (FULLSCREEN_ROUTES.includes(pathname ?? "")) {
     return <>{children}</>;

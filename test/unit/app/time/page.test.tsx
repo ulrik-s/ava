@@ -2,11 +2,14 @@
  * Test för TimePage — listrendering och nytt-tidsregistreringsflöde.
  */
 
-import { act, render, screen, fireEvent, within } from "@testing-library/react";
+import { act, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import TimePage from "@/app/time/page";
 import { periodFrom, periodTo } from "@/lib/client/time-filter";
 import { rowOrder, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc, type NewTrpcRender } from "../../../helpers/trpc-classic-mock";
+import { never } from "../../../helpers/trpc-fake";
+import { seedQuery } from "../../../helpers/trpc-seeded";
 
 const timeQuery: {
   data: {
@@ -54,6 +57,7 @@ type MutationOpts = { onSuccess?: () => void } | undefined;
 let updateError: { message: string } | null = null;
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => utilsMock,
     timeEntry: {
@@ -91,6 +95,17 @@ vi.mock("@/lib/client/trpc", () => ({
   },
 }));
 
+/**
+ * Renderar som den inloggade (`user.current`, som tittaren läser med den nya
+ * bindningen); `undefined` har inte svarat än.
+ */
+function renderAsViewer(ui: React.ReactElement): NewTrpcRender {
+  return renderWithNewTrpc(ui, {
+    handlers: { "user.current": () => currentUser ?? never() },
+    seed: (t, qc) => { if (currentUser) seedQuery(qc, t.user.current.queryKey(), currentUser); },
+  });
+}
+
 beforeEach(() => {
   // Fast klocka (#2096): listan öppnas på idag = 2026-11-24 i Stockholm.
   vi.setSystemTime(new Date("2026-11-24T12:00:00Z"));
@@ -108,7 +123,7 @@ afterEach(() => {
 describe("TimePage", () => {
   it("renderar Tidregistrering-rubrik och totalsumma", () => {
     timeQuery.data.totalMinutes = 90;
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByRole("heading", { name: /Tidregistrering/i })).toBeInTheDocument();
     expect(screen.getByText("Totalt: 1,5 h")).toBeInTheDocument();
   });
@@ -130,7 +145,7 @@ describe("TimePage", () => {
       pages: 1,
       totalMinutes: 60,
     };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByText("Möte med klient")).toBeInTheDocument();
     expect(screen.getByText("Anna")).toBeInTheDocument();
     // Lång beskrivning bryter rad i stället för att rinna in i grannkolumnen (#1197).
@@ -138,7 +153,7 @@ describe("TimePage", () => {
   });
 
   it("öppnar Ny-form vid klick", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny tidregistrering|\+ Ny|\+ Registrera/i }));
     expect(screen.getByRole("button", { name: /Spara|Skapa/i })).toBeInTheDocument();
   });
@@ -147,7 +162,7 @@ describe("TimePage", () => {
     matterQuery.data = {
       matters: [{ id: "m1", matterNumber: "2026-0001", title: "Test" }],
     };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     // MatterCombobox är en sökbar <input>+<datalist> — välj via exakt etikett
     // ("<nr> — <titel>") → komponenten anropar onChange(matterId).
@@ -164,7 +179,7 @@ describe("TimePage", () => {
   });
 
   it("togglar debiterbar-checkbox", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     const checkbox = screen.getByRole<HTMLInputElement>("checkbox", { name: "Debiterbar" });
     expect(checkbox.checked).toBe(true);
@@ -173,7 +188,7 @@ describe("TimePage", () => {
   });
 
   it("ändrar tiden i timmar via text-input (utan spinner, #798, #1545)", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
     const numberInput = screen.getByLabelText<HTMLInputElement>(/Tid \(h\)/);
@@ -182,7 +197,7 @@ describe("TimePage", () => {
   });
 
   it("registrerar 1,5 timmar som 90 minuter; 1,33 ger fel och sparas inte (#1545)", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     const hours = screen.getByLabelText<HTMLInputElement>(/Tid \(h\)/);
     fireEvent.change(hours, { target: { value: "1,33" } });
@@ -195,7 +210,7 @@ describe("TimePage", () => {
   });
 
   it("Avbryt stänger formuläret", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     const toggle = screen.getByRole("button", { name: /\+ Registrera tid/i });
     fireEvent.click(toggle);
     expect(screen.getByRole("button", { name: /^Spara$/i })).toBeInTheDocument();
@@ -211,7 +226,7 @@ describe("TimePage", () => {
       pages: 3,
       totalMinutes: 0,
     };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
     expect(screen.getByText(/Sida 2 av 3/)).toBeInTheDocument();
@@ -231,7 +246,7 @@ describe("TimePage — ändra och ta bort", () => {
 
   it("Ändra öppnar formuläret förifyllt; Spara skickar update med postens id", () => {
     withRows(entry);
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
     const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
     const description = within(dialog).getByDisplayValue("Genomgång av avtal");
@@ -245,7 +260,7 @@ describe("TimePage — ändra och ta bort", () => {
   it("Ta bort frågar först och tar bort vid ja", () => {
     withRows(entry);
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: "Ta bort" }));
     expect(confirmSpy).toHaveBeenCalled();
     expect(deleteMutate).toHaveBeenCalledWith({ id: "t1" });
@@ -255,7 +270,7 @@ describe("TimePage — ändra och ta bort", () => {
   it("Ta bort gör inget om man ångrar sig", () => {
     withRows(entry);
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: "Ta bort" }));
     expect(deleteMutate).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
@@ -263,7 +278,7 @@ describe("TimePage — ändra och ta bort", () => {
 
   it("en fryst post (slutfaktura/kostnadsräkning) visas som Låst utan knappar", () => {
     withRows({ ...entry, frozenAt: "2026-09-21" });
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByText("Låst")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Ändra" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Ta bort" })).not.toBeInTheDocument();
@@ -271,7 +286,7 @@ describe("TimePage — ändra och ta bort", () => {
 
   it("en post med bara faktura (invoiceId) visas som Låst utan knappar, med serverns lydelse (#1863)", () => {
     withRows({ ...entry, invoiceId: "inv-1" });
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByText("Låst")).toHaveAttribute(
       "title", "Ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort.",
     );
@@ -282,7 +297,7 @@ describe("TimePage — ändra och ta bort", () => {
   it("visar serverns fel (t.ex. låst post) för användaren", () => {
     updateError = { message: "Tidposten ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort." };
     withRows(entry);
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByRole("alert")).toHaveTextContent(/slutfaktura/);
   });
 });
@@ -304,7 +319,7 @@ describe("TimePage — flytta posten till ett annat ärende (#2042)", () => {
   });
 
   function openEdit() {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
     return screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
   }
@@ -331,7 +346,7 @@ describe("TimePage — flytta posten till ett annat ärende (#2042)", () => {
 
   it("ett fel i flytten visas för användaren", () => {
     moveError = { message: "Tidposten ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort." };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByRole("alert")).toHaveTextContent(/kostnadsräkning/);
   });
 });
@@ -357,7 +372,7 @@ describe("TimePage — markera flera poster och flytta dem (#2043)", () => {
   });
 
   it("en låst post går inte att markera, och knappen syns först när något är markerat", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(rowBox("Fakturerat möte").queryByRole("checkbox")).toBeNull();
     expect(screen.queryByRole("button", { name: /Flytta till ärende/ })).toBeNull();
     fireEvent.click(rowBox("Genomgång av avtal").getByRole("checkbox", { name: "Markera rad" }));
@@ -365,7 +380,7 @@ describe("TimePage — markera flera poster och flytta dem (#2043)", () => {
   });
 
   it("Flytta anropar moveToMatter med de markerade, laddar om listan och tömmer markeringen", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Markera alla" }));
     fireEvent.click(screen.getByRole("button", { name: "Flytta till ärende… (2)" }));
     const dialog = screen.getByRole("dialog", { name: "Flytta till ärende" });
@@ -381,7 +396,7 @@ describe("TimePage — markera flera poster och flytta dem (#2043)", () => {
   });
 
   it("Avbryt stänger dialogen och behåller markeringen", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(rowBox("Telefonsamtal").getByRole("checkbox", { name: "Markera rad" }));
     fireEvent.click(screen.getByRole("button", { name: "Flytta till ärende… (1)" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Flytta till ärende" })).getByRole("button", { name: "Avbryt" }));
@@ -410,7 +425,7 @@ describe("TimePage — kolumnerna sorterar på det som visas (#1904)", () => {
   });
 
   it("Datum, Ärende och Advokat", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     sortColumn("Datum", "asc");
     expect(rowOrder(descriptions)).toEqual(["Ccc", "Aaa", "Bbb"]);
     sortColumn("Ärende", "asc");
@@ -420,7 +435,7 @@ describe("TimePage — kolumnerna sorterar på det som visas (#1904)", () => {
   });
 
   it("Tid, Beskrivning och Deb.", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     sortColumn("Tid (h)", "desc");
     expect(rowOrder(descriptions)).toEqual(["Ccc", "Aaa", "Bbb"]);
     sortColumn("Beskrivning", "desc");
@@ -430,7 +445,7 @@ describe("TimePage — kolumnerna sorterar på det som visas (#1904)", () => {
   });
 
   it("summaraden räknar ihop tiden på raderna", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByText("3")).toHaveClass("font-mono");
   });
 });
@@ -440,7 +455,7 @@ describe("TimePage — periodfiltret (#1904)", () => {
 
   it("Från och Till begränsar listan och går till första sidan; Rensa tar bort perioden", () => {
     timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
     expect(lastInput()?.page).toBe(2);
     fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
@@ -456,7 +471,7 @@ describe("TimePage — periodfiltret (#1904)", () => {
 
   it("Föregående går tillbaka en sida", () => {
     timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
     fireEvent.click(screen.getByRole("button", { name: "Föregående" }));
     expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
@@ -465,7 +480,7 @@ describe("TimePage — periodfiltret (#1904)", () => {
 
 describe("TimePage — registreringens och ändringens svar (#1904)", () => {
   it("datumet i formuläret skickas med", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     fireEvent.change(screen.getByLabelText(/Datum \*/), { target: { value: "2026-05-04" } });
     fireEvent.change(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i), { target: { value: "Möte" } });
@@ -474,7 +489,7 @@ describe("TimePage — registreringens och ändringens svar (#1904)", () => {
   });
 
   it("när tiden registrerats stängs formuläret, fälten töms och listan och förslagen laddas om", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     fireEvent.change(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i), { target: { value: "Möte" } });
     expect(utilsMock.billingRun.proposal.invalidate).not.toHaveBeenCalled();
@@ -488,7 +503,7 @@ describe("TimePage — registreringens och ändringens svar (#1904)", () => {
 
   it("när ändringen sparats stängs dialogen och listan och förslagen laddas om", () => {
     timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getAllByRole("button", { name: "Ändra" })[0] as HTMLElement);
     const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
     fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
@@ -502,7 +517,7 @@ describe("TimePage — registreringens och ändringens svar (#1904)", () => {
 
   it("Avbryt i dialogen stänger den utan att spara", () => {
     timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getAllByRole("button", { name: "Ändra" })[0] as HTMLElement);
     const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
     fireEvent.click(within(dialog).getByRole("button", { name: "Avbryt" }));
@@ -511,7 +526,7 @@ describe("TimePage — registreringens och ändringens svar (#1904)", () => {
   });
 
   it("när posten tagits bort laddas listan och förslagen om", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     act(() => succeeded.remove?.());
     expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
     expectAllProposalsRefetched();
@@ -524,14 +539,14 @@ describe("TimePage — en dag i taget (#2096)", () => {
   const step = (name: "Föregående dag" | "Nästa dag") => fireEvent.click(screen.getByRole("button", { name }));
 
   it("öppnas på idag, med Idag mellan pilarna", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(lastInput()).toMatchObject({ page: 1, pageSize: 50, ...dayRange("2026-11-24") });
     expect(screen.getByText("Idag")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Föregående dag" })).toBeInTheDocument();
   });
 
   it("pilarna byter dag och dagens namn", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     step("Föregående dag");
     expect(lastInput()).toMatchObject(dayRange("2026-11-23"));
     expect(screen.getByText("Igår")).toBeInTheDocument();
@@ -546,7 +561,7 @@ describe("TimePage — en dag i taget (#2096)", () => {
 
   it("dagbyte går till första sidan", () => {
     timeQuery.data = { entries: [], total: 100, pages: 3, totalMinutes: 0 };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
     expect(screen.getByText("Sida 2 av 3")).toBeInTheDocument();
     step("Föregående dag");
@@ -556,12 +571,12 @@ describe("TimePage — en dag i taget (#2096)", () => {
 
   it("Totalt: visar frågans summa", () => {
     timeQuery.data.totalMinutes = 150;
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByText("Totalt: 2,5 h")).toBeInTheDocument();
   });
 
   it("bara Från ger perioden och döljer pilarna och dagens namn", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
     expect(lastInput()).toMatchObject({ from: periodFrom("2026-01-01"), to: undefined });
     expect(screen.queryByText("Idag")).toBeNull();
@@ -570,14 +585,14 @@ describe("TimePage — en dag i taget (#2096)", () => {
   });
 
   it("bara Till ger perioden och döljer pilarna", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.change(screen.getByLabelText("Till"), { target: { value: "2026-01-31" } });
     expect(lastInput()).toMatchObject({ from: undefined, to: periodTo("2026-01-31") });
     expect(screen.queryByRole("button", { name: "Nästa dag" })).toBeNull();
   });
 
   it("Rensa visar åter samma dag som innan perioden valdes", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     step("Föregående dag");
     fireEvent.change(screen.getByLabelText("Från"), { target: { value: "2026-01-01" } });
     expect(screen.queryByText("Igår")).toBeNull();
@@ -588,7 +603,7 @@ describe("TimePage — en dag i taget (#2096)", () => {
   });
 
   it("en dag utan poster visar tomtexten", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(screen.getByText("Inga tidsposter.")).toBeInTheDocument();
   });
 });
@@ -596,7 +611,7 @@ describe("TimePage — en dag i taget (#2096)", () => {
 describe("TimePage — pilarna vid formulärets Datum * (#2097)", () => {
   /** Öppnar + Registrera tid och ger formuläret, där pilarna avgränsas. */
   function openForm(): HTMLElement {
-    const { container } = render(<TimePage />);
+    const { container } = renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     const form = container.querySelector("form");
     if (!form) throw new Error("formuläret saknas");
@@ -625,7 +640,7 @@ describe("TimePage — pilarna vid formulärets Datum * (#2097)", () => {
   });
 
   it("formuläret börjar på idag fast listan visar igår", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: "Föregående dag" }));
     expect(screen.getByText("Igår")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
@@ -652,33 +667,33 @@ describe("TimePage — egna tider för den som inte är Admin (#2114)", () => {
   const lastCall = () => listInput.mock.calls.at(-1);
 
   it("en Advokat frågar bara efter sina egna poster", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(lastCall()?.[0]).toMatchObject({ userId: "u1" });
     expect(lastCall()?.[1]).toEqual({ enabled: true });
   });
 
   it("en Assistent frågar bara efter sina egna poster", () => {
     currentUser = { id: "u7", role: "ASSISTANT" };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(lastCall()?.[0]).toMatchObject({ userId: "u7" });
   });
 
   it("en Admin frågar efter allas poster, som förut", () => {
     currentUser = { id: "u2", role: "ADMIN" };
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(lastCall()?.[0]).not.toHaveProperty("userId");
     expect(lastCall()?.[1]).toEqual({ enabled: true });
   });
 
   it("innan user.current har svarat går ingen fråga iväg", () => {
     currentUser = undefined;
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     expect(lastCall()?.[1]).toEqual({ enabled: false });
     expect(lastCall()?.[0]).not.toHaveProperty("userId");
   });
 
   it("dagbläddringen behåller personen i frågan", () => {
-    render(<TimePage />);
+    renderAsViewer(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: "Föregående dag" }));
     expect(lastCall()?.[0]).toMatchObject({ userId: "u1", from: periodFrom("2026-11-23") });
   });
