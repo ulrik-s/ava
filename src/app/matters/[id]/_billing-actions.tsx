@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import { billingShortcut, type BillingAction, type BillingShortcut, type FlowMatter, type FlowRun } from "@/lib/shared/billing/billing-flow";
+import { billingShortcut, type BillingAction, type BillingActionType, type BillingShortcut, type FlowMatter, type FlowRun } from "@/lib/shared/billing/billing-flow";
 
 interface BillingActionsProps {
   actions: readonly BillingAction[];
@@ -50,6 +50,8 @@ export function BillingActions({ actions, open, onOpenChange, onPick }: BillingA
 interface ShortcutRequest {
   /** Har någon bett om att fakturera nu? */
   requested: boolean | undefined;
+  /** Fakturan begäran gäller (#2260); utelämnad = `billingShortcut` väljer. */
+  preferred?: BillingActionType | undefined;
   /** Körningsfrågan — genvägen väntar tills den laddats, annars blir fasen fel. */
   runs: { data?: unknown; isLoading: boolean };
   matter: FlowMatter;
@@ -80,7 +82,7 @@ export function useApplyBillingShortcut(req: ShortcutRequest): void {
     if (!req.requested) { handled.current = false; return; }
     if (!loaded || handled.current) return;
     handled.current = true;
-    applyShortcut(billingShortcut(req.matter, req.rows), req.onPick, req.openMenu);
+    applyShortcut(billingShortcut(req.matter, req.rows, req.preferred), req.onPick, req.openMenu);
     req.onDone?.();
   }, [req, loaded]);
 }

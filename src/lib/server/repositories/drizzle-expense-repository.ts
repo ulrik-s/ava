@@ -9,9 +9,10 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Expense } from "@/lib/shared/schemas/billing";
 import { asId, type BillingRunId, type ExpenseId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
+import type { InvoiceRelease } from "@/lib/shared/time-entry-lock";
 import { expenses, invoices, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { unlockedWhere } from "./billing-lock-sql";
+import { releaseInvoiceWhere, unlockedWhere } from "./billing-lock-sql";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
@@ -112,6 +113,10 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
     await this.updateWhere(eq(expenses.frozenByBillingRunId, billingRunId), { frozenAt: null, frozenByBillingRunId: null });
+  }
+
+  async releaseInvoice(release: InvoiceRelease): Promise<void> {
+    await releaseInvoiceWhere(expenses, release, (where, patch) => this.updateWhere(where, patch));
   }
 
   async freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void> {

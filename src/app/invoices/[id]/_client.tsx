@@ -25,7 +25,6 @@ import { ledgerRefOf } from "@/lib/shared/ledger-ref";
 import { INVOICE_STATUS_LABELS, type AmountRounding } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { AmountHeading } from "./_amount-heading";
-import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
 import { InvoiceActions } from "./_invoice-actions";
 import { InvoiceDocumentsCard } from "./_invoice-documents";
@@ -35,6 +34,7 @@ import { LedgerBooking } from "./_ledger-booking";
 import { PaymentModal } from "./_payment-modal";
 import { PaymentsTable } from "./_payments-table";
 import { PlanModal } from "./_plan-modal";
+import { RedoInvoiceDialog } from "./_redo-invoice-dialog";
 import { SendInvoiceModal } from "./_send-invoice-modal";
 import { WriteOffModal } from "./_write-off-modal";
 
@@ -44,7 +44,7 @@ function useInvoiceDetail(id: string) {
   const utils = trpc.useUtils();
   const [showPayment, setShowPayment] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
-  const [showCredit, setShowCredit] = useState(false);
+  const [showRedo, setShowRedo] = useState(false);
   const [showWriteOff, setShowWriteOff] = useState(false);
   const [showSend, setShowSend] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,16 +68,15 @@ function useInvoiceDetail(id: string) {
     onSuccess: () => { refetchAll(); setShowWriteOff(false); setError(null); },
     onError: (e) => setError(e.message),
   });
-  const createCredit = trpc.invoice.createCredit.useMutation({
-    onSuccess: () => { refetchAll(); setShowCredit(false); setError(null); },
-    onError: (e) => setError(e.message),
-  });
+  // "Fel på fakturan?" (#2260): makulera stänger dialogen; kreditera och gör om navigerar vidare.
+  const voidDraft = trpc.invoice.voidDraft.useMutation({ onSuccess: () => { refetchAll(); setShowRedo(false); setError(null); }, onError: (e) => setError(e.message) });
+  const creditAndRedo = trpc.invoice.creditAndRedo.useMutation({ onSuccess: () => { refetchAll(); setError(null); }, onError: (e) => setError(e.message) });
 
   return {
     utils, error, setError,
-    show: { payment: showPayment, plan: showPlan, credit: showCredit, writeOff: showWriteOff, send: showSend },
-    setShowPayment, setShowPlan, setShowCredit, setShowWriteOff, setShowSend,
-    recordPayment, createPlan, cancelPlan, setStatus, writeOff, createCredit,
+    show: { payment: showPayment, plan: showPlan, redo: showRedo, writeOff: showWriteOff, send: showSend },
+    setShowPayment, setShowPlan, setShowRedo, setShowWriteOff, setShowSend,
+    recordPayment, createPlan, cancelPlan, setStatus, writeOff, voidDraft, creditAndRedo,
   };
 }
 type InvoiceDetailState = ReturnType<typeof useInvoiceDetail>;
@@ -151,11 +150,10 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
         invoiceType={inv.invoiceType}
         status={inv.status}
         hasPlan={inv.paymentPlan?.status === "ACTIVE"}
-        hasCreditNote={!!inv.creditNote}
         outstanding={ledger.outstanding}
         onShowPayment={() => s.setShowPayment(true)}
         onShowPlan={() => s.setShowPlan(true)}
-        onShowCredit={() => s.setShowCredit(true)}
+        onShowRedo={() => s.setShowRedo(true)}
         onShowWriteOff={() => s.setShowWriteOff(true)}
         onShowSend={() => s.setShowSend(true)}
         onSetStatus={(status) => s.setStatus.mutate({ invoiceId: inv.id, status: status as Parameters<typeof s.setStatus.mutate>[0]["status"] })}
@@ -242,10 +240,12 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
         <PaymentModal invoiceId={inv.id} isPending={s.recordPayment.isPending} error={s.error}
           onSubmit={(data) => s.recordPayment.mutate(data)} onClose={() => s.setShowPayment(false)} />
       )}
-      {s.show.credit && (
-        <CreditModal invoiceId={inv.id} amount={inv.amount} hasActivePlan={inv.paymentPlan?.status === "ACTIVE"}
-          isPending={s.createCredit.isPending} error={s.error}
-          onSubmit={(data) => s.createCredit.mutate(data)} onClose={() => { s.setShowCredit(false); s.setError(null); }} />
+      {s.show.redo && (
+        <RedoInvoiceDialog inv={inv} paidOre={ledger.paidSum} writtenOffOre={ledger.writtenOffSum} hasActivePlan={inv.paymentPlan?.status === "ACTIVE"}
+          isPending={s.voidDraft.isPending || s.creditAndRedo.isPending} error={s.error}
+          onVoid={() => s.voidDraft.mutateAsync({ invoiceId: inv.id })}
+          onCredit={(notes) => s.creditAndRedo.mutateAsync({ invoiceId: inv.id, ...(notes ? { notes } : {}) })}
+          onClose={() => { s.setShowRedo(false); s.setError(null); }} />
       )}
       {s.show.plan && (
         <PlanModal invoiceId={inv.id} isPending={s.createPlan.isPending} error={s.error}
