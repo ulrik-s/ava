@@ -155,10 +155,12 @@ test("byt domstol i kostnadsräkningen: anteckningen nämner den valda domstolen
   const picker = page.getByRole("dialog", { name: "Välj domstol" });
   await expect(picker).toBeVisible();
   await expect(picker.getByText(/\+ Ny/)).toHaveCount(0);
-  await picker.getByLabel("Sök domstol").fill("Svea");
-  await picker.getByRole("button", { name: /Svea hovrätt/ }).click();
+  // Ärendet (2026-0017 i seeden) har Svea hovrätt som domstol — välj en ANNAN
+  // domstol, annars säger testet inget om att parterna lämnas orörda.
+  await picker.getByLabel("Sök domstol").fill("Göteborg");
+  await picker.getByRole("button", { name: /Göteborgs tingsrätt/ }).click();
   await expect(picker).toBeHidden();
-  await expect(modal.getByTestId("kr-court-name")).toHaveText("Svea hovrätt");
+  await expect(modal.getByTestId("kr-court-name")).toHaveText("Göteborgs tingsrätt");
   await expect(modal.getByLabel("Målnummer")).toHaveValue("");
 
   const generate = modal.getByRole("button", { name: /Generera \+ (spara|öppna mail)/ });
@@ -171,8 +173,12 @@ test("byt domstol i kostnadsräkningen: anteckningen nämner den valda domstolen
 
   await showPanel(page, "Anteckningar");
   const notes = page.getByRole("region", { name: "Anteckningar" }).last();
-  await expect(notes.getByText(/Kostnadsräkning .* till Svea hovrätt skapad/).first()).toBeVisible({ timeout: 15_000 });
+  await expect(notes.getByText(/Kostnadsräkning .* till Göteborgs tingsrätt skapad/).first()).toBeVisible({ timeout: 15_000 });
 
   await showPanel(page, "Parter");
-  await expect(page.getByRole("region", { name: "Parter" }).last().getByText("Svea hovrätt")).toHaveCount(0);
+  // Vänta in parterna (ärendets egen domstol står kvar) innan frånvaron prövas —
+  // annars går toHaveCount(0) igenom redan innan tabellen ritats.
+  const parties = page.getByRole("region", { name: "Parter" }).last();
+  await expect(parties.getByText("Svea hovrätt")).toBeVisible({ timeout: 15_000 });
+  await expect(parties.getByText("Göteborgs tingsrätt")).toHaveCount(0);
 });
