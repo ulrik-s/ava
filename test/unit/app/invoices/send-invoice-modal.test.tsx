@@ -95,6 +95,15 @@ describe("SendInvoiceModal", () => {
     expect(renderFakturaPdf.mock.calls[0]?.[0]).toMatchObject({ organizationName: "Byrå AB", organizationOrgNumber: "556677-8899", logo: LOGO });
   });
 
+  it("bilagan för en markerad rådgivningsfaktura med annan text har dess rubrik och fotnot (#1934)", async () => {
+    render(<SendInvoiceModal {...baseProps} invoiceType="STANDARD" purpose="RADGIVNING" notes="Rådgivning enligt överenskommelse" />);
+    fireEvent.click(screen.getByRole("button", { name: /Ladda ner PDF/i }));
+    await waitFor(() => expect(renderFakturaPdf).toHaveBeenCalled());
+    const view = renderFakturaPdf.mock.calls[0]?.[0] as { heading: string; footnote: string };
+    expect(view.heading).toBe("Rådgivningsfaktura");
+    expect(view.footnote).toContain("ingår INTE i kostnadsräkningen till domstolen");
+  });
+
   it("inställningarna går inte att hämta → bilagan skapas ändå, utan logga", async () => {
     orgFetch.mockRejectedValueOnce(new Error("offline"));
     render(<SendInvoiceModal {...baseProps} />);

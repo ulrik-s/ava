@@ -12,6 +12,7 @@ import { toWinAnsi } from "@/lib/client/documents/win-ansi";
 import { buildFakturaView, type FakturaView } from "@/lib/client/kostnadsrakning/faktura-template";
 import { buildInvoiceSpecification } from "@/lib/shared/billing/invoice-specification";
 import { orgImageSchema } from "@/lib/shared/org-image";
+import type { InvoiceType } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { pdfPageContents, pdfPageLayouts, pdfPageTexts, type PdfLineItem, type PdfTextItem } from "../../../helpers/pdf-text";
 
@@ -324,14 +325,14 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
 
 describe("renderFakturaPdf — acontofakturan utan tidsbelopp (#1939)", () => {
   const timeLines = [{ date: "2026-05-02", description: "Genomgång av handlingar", minutes: 90, amountOre: 243_900, kind: "ARBETE" as const }];
-  const viewFor = (invoiceType: string) => buildFakturaView({
+  const viewFor = (invoiceType: InvoiceType) => buildFakturaView({
     invoice: { id: asId<"InvoiceId">("inv-3"), amount: 500_000, invoiceNumber: "F-2026-0009", invoiceDate: "2026-06-30", invoiceType },
     recipient: "Klient AB",
     meta: { matterNumber: "2026-0012", matterTitle: "Tvist" },
     breakdown: { rows: [{ label: "Aconto", amountOre: 500_000, kind: "add" }], totalLabel: "Att betala (inkl moms)", totalOre: 500_000, timeLines },
   });
   /** Texten från specifikationens rubrik och framåt. */
-  const specTexts = async (invoiceType: string): Promise<string[]> => {
+  const specTexts = async (invoiceType: InvoiceType): Promise<string[]> => {
     const texts = pdfTexts(await renderFakturaPdf(viewFor(invoiceType)));
     return texts.slice(texts.indexOf("Tidsspecifikation"));
   };

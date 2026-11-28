@@ -47,6 +47,23 @@ describe("fakturaHeading", () => {
   });
 });
 
+describe("rådgivningsfakturans rubrik och fotnot följer isRadgivningInvoice (#1934)", () => {
+  const NOTES = "Rådgivningstimme enligt rättshjälpstaxan (1 tim).";
+  const FOOT = "ingår INTE i kostnadsräkningen till domstolen";
+  const view = (over: Record<string, unknown>) => buildFakturaView({ invoice: invoice(over), recipient: "Klient", meta: META });
+
+  it.each([
+    ["markerad faktura med annan text", { invoiceType: "STANDARD", purpose: "RADGIVNING", notes: "Annan text" }, "Rådgivningsfaktura", true],
+    ["omarkerad faktura med rådgivningstexten", { invoiceType: "STANDARD", purpose: null, notes: NOTES }, "Rådgivningsfaktura", true],
+    ["kreditnota med rådgivningstexten", { invoiceType: "CREDIT", notes: NOTES }, "Kreditfaktura", false],
+    ["text som bara börjar med Rådgivningstimme", { invoiceType: "STANDARD", notes: "Rådgivningstimme extra" }, "Faktura", false],
+  ] as const)("%s", (_name, over, heading, hasFoot) => {
+    const v = view(over);
+    expect(v.heading).toBe(heading);
+    expect(v.footnote.includes(FOOT)).toBe(hasFoot);
+  });
+});
+
 describe("fakturadatum = svensk kalenderdag (#1677)", () => {
   it("nyårsnatten 00:30 svensk tid (23:30 UTC) är den 1 januari — på fakturan och i specifikationen", () => {
     const v = buildFakturaView({

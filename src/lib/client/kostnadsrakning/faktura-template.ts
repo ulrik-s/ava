@@ -27,10 +27,13 @@ import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/billing/expense-vat";
 import { ARVODE_VAT_BIPS } from "@/lib/shared/billing/invoice-calc";
 import type { InvoiceSpecification, SpecExpenseLine } from "@/lib/shared/billing/invoice-specification";
 import { invoiceVatOre } from "@/lib/shared/billing/invoice-vat";
+import { isRadgivningInvoice, type RadgivningInvoiceFields } from "@/lib/shared/billing/radgivning-entry";
 import { svd as svDate, type SettlementRow } from "@/lib/shared/billing/settlement-view"; // svensk kalenderdag (#1677)
 import { formatKr } from "@/lib/shared/kr-format";
 import type { OrgImage } from "@/lib/shared/org-image";
-import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
+import {
+  TIME_ENTRY_KIND_LABELS, type AmountRounding, type InvoicePurpose, type InvoiceType, type TimeEntryKind,
+} from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import {
   fakturaTotals, formatSettlementRows, hasTableFields, settlementTable, specSettlementRows,
@@ -87,7 +90,9 @@ export interface FakturaDocInvoice {
   /** Förfallodagen (#149) — saknas → raden utelämnas på fakturan. */
   dueDate?: string | Date | null | undefined;
   /** Fakturatyp — styr rubriken (Aconto-/Kreditfaktura). Saknas → "Faktura". */
-  invoiceType?: string | null | undefined;
+  invoiceType?: InvoiceType | null | undefined;
+  /** Typmarkören (#1933) — `RADGIVNING` ger rådgivningsfakturans rubrik och fotnot. */
+  purpose?: InvoicePurpose | null | undefined;
   /** Fri text. Blir sammanställningens rad när fakturan saknar itemiserat
    *  arbete (rådgivningstimmen, rena aconton) så beloppet aldrig är oförklarat (#870). */
   notes?: string | null | undefined;
@@ -172,8 +177,8 @@ export interface FakturaView extends FakturaLetterFields {
 }
 
 /** Rubrik (h1 + `<title>` + demo-generatorns filnamn) per fakturatyp. */
-export function fakturaHeading(inv: Pick<FakturaDocInvoice, "invoiceType" | "notes">): string {
-  if (isRadgivning(inv)) return "Rådgivningsfaktura";
+export function fakturaHeading(inv: RadgivningInvoiceFields): string {
+  if (isRadgivningInvoice(inv)) return "Rådgivningsfaktura";
   if (inv.invoiceType === "CREDIT") return "Kreditfaktura";
   if (inv.invoiceType === "ACCONTO") return "Aconto-faktura";
   return "Faktura";
@@ -184,15 +189,10 @@ function isAcconto(inv: Pick<FakturaDocInvoice, "invoiceType">): boolean {
   return inv.invoiceType === "ACCONTO";
 }
 
-/** Är detta rådgivningstimmen (rättshjälpens separata klientdebitering)? */
-function isRadgivning(inv: Pick<FakturaDocInvoice, "notes">): boolean {
-  return String(inv.notes ?? "").startsWith("Rådgivningstimme");
-}
-
 /** Spegel av KR-notisen, sett från klientens sida (#870): klargör att
  *  rådgivningstimmen INTE ligger i kostnadsräkningen till domstolen. */
-function footnoteFor(inv: Pick<FakturaDocInvoice, "notes">): string {
-  return isRadgivning(inv)
+function footnoteFor(inv: RadgivningInvoiceFields): string {
+  return isRadgivningInvoice(inv)
     ? "Rådgivningstimmen (1 tim enligt rättshjälpstaxan) faktureras klienten separat och ingår INTE i kostnadsräkningen till domstolen."
     : "";
 }

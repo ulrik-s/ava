@@ -265,7 +265,7 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
           ocrReference={(inv as { ocrReference?: string | null }).ocrReference}
           invoiceDate={inv.invoiceDate} dueDate={inv.dueDate}
           invoiceType={inv.invoiceType}
-          notes={inv.notes}
+          notes={inv.notes} purpose={inv.purpose}
           amountRounding={roundingOf(inv)}
           settlementBreakdown={invoiceBreakdown(inv)}
           matterNumber={inv.matter.matterNumber}

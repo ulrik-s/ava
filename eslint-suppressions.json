@@ -501,11 +501,6 @@
       "count": 2
     }
   },
-  "src/lib/client/kostnadsrakning/faktura-template.ts": {
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 1
-    }
-  },
   "src/lib/client/kostnadsrakning/pdf-writer.ts": {
     "@typescript-eslint/no-misused-spread": {
       "count": 2

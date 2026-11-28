@@ -14,6 +14,7 @@
 import { renderFakturaPdf } from "@/lib/client/documents/faktura-pdf";
 import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import { buildFakturaView, fakturaHeading, type FakturaBreakdown } from "@/lib/client/kostnadsrakning/faktura-template";
+import { isRadgivningInvoice } from "@/lib/shared/billing/radgivning-entry";
 import { invoiceBreakdown } from "@/lib/shared/billing/settlement-view";
 import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
 import type { BinarySink, GeneratorCaller } from "./backend-target";
@@ -32,7 +33,7 @@ export type InvoiceDocIdFn = (invoiceId: string) => string;
 function shouldGenerateDoc(summary: Any): boolean {
   if (summary.invoiceType === "FINAL" || summary.invoiceType === "CREDIT") return true;
   if (invoiceBreakdown<unknown>(summary) != null) return true;
-  return String(summary.notes ?? "").startsWith("Rådgivningstimme");
+  return isRadgivningInvoice(summary);
 }
 
 /** Nedbrytningen (#878/#880) → mall-argumentet. Tidsraderna följer med så
@@ -107,7 +108,8 @@ async function renderDoc(c: Any, inv: Any, l: DocLookups): Promise<Uint8Array> {
   return renderFakturaPdf(buildFakturaView({
     invoice: {
       id: inv.id, amount: inv.amount, vatOre: inv.vatOre, invoiceNumber: inv.invoiceNumber,
-      ocrReference: inv.ocrReference, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, invoiceType: inv.invoiceType, notes: inv.notes,
+      ocrReference: inv.ocrReference, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, invoiceType: inv.invoiceType,
+      notes: inv.notes, purpose: inv.purpose,
     },
     recipient: recipientOf(inv, l),
     meta: { matterNumber: inv.matter.matterNumber, matterTitle: inv.matter.title, ...clientMeta(inv, l), ...l.org },

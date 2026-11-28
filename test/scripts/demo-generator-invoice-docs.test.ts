@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
@@ -62,6 +63,34 @@ describe("populateInvoiceDocs", () => {
     expect(radg).toMatch(/1\s626,00\skr\/tim/);
     // Klargör (spegel av KR-notisen) att timmen INTE ligger i domstolens KR.
     expect(radg?.replace(/\n/g, " ")).toContain("ingår INTE i kostnadsräkningen till domstolen");
+  });
+
+  it("en markerad rådgivningsfaktura med annan text får dokument, rubrik och filnamn (#1934)", async () => {
+    const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
+    await runDemoSeed(target.caller, buildSeed());
+    const c = target.caller as Any;
+    const OTHER = "Rådgivning enligt överenskommelse";
+    // Demons rådgivningsfaktura får markören och en annan text: bara markören känner igen den.
+    const marked = (i: Any): Any => (i.notes === RADGIVNING_INVOICE_NOTES ? { ...i, purpose: "RADGIVNING", notes: OTHER } : i);
+    const fileNames: string[] = [];
+    // Anroparen är en proxy (tRPC) — bara de tre procedurerna byts ut.
+    const overrides: Record<string, Any> = {
+      invoice: {
+        list: async (a: Any) => { const r = await c.invoice.list(a); return { ...r, items: r.items.map(marked) }; },
+        getById: async (a: Any) => marked(await c.invoice.getById(a)),
+      },
+      document: {
+        createFolder: (a: Any) => c.document.createFolder(a),
+        tree: (a: Any) => c.document.tree(a),
+        register: (a: Any) => { fileNames.push(String(a.fileName)); return c.document.register(a); },
+      },
+    };
+    const caller = new Proxy(c, { get: (t, k: string) => overrides[k] ?? t[k] });
+    const bodies: Uint8Array[] = [];
+    await populateInvoiceDocs(caller, (_p, b) => { bodies.push(b); return b.byteLength; });
+    const radg = (await docTexts(bodies)).find((h) => h.includes("RÅDGIVNINGSFAKTURA"));
+    expect(radg, "den markerade fakturan ska få ett dokument").toBeDefined();
+    expect(fileNames.some((f) => f.startsWith("Rådgivningsfaktura "))).toBe(true);
   });
 
   it("settlement-/kredit-/aconto-fakturor får doc ur den persisterade nedbrytningen (#878)", async () => {
