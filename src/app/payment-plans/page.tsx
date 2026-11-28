@@ -14,14 +14,14 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control";
 import { shellPath } from "@/lib/client/demo/entity-href";
+import { labelForPaymentPlanStatus } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
 import { paymentPlanOverdue } from "@/lib/shared/payment-plan-overdue";
-
-type Status = "ACTIVE" | "COMPLETED" | "CANCELLED";
+import type { PaymentPlanStatus } from "@/lib/shared/schemas/enums";
 
 /** Filterknapparna: vilka planer som visas (plural). */
-const STATUS_LABEL: Record<Status, string> = {
+const STATUS_LABEL: Record<PaymentPlanStatus, string> = {
   ACTIVE: "Aktiva",
   COMPLETED: "Slutförda",
   CANCELLED: "Avbrutna",
@@ -31,14 +31,8 @@ const STATUS_OPTIONS = [
   { value: "ACTIVE", label: STATUS_LABEL.ACTIVE },
   { value: "COMPLETED", label: STATUS_LABEL.COMPLETED },
   { value: "CANCELLED", label: STATUS_LABEL.CANCELLED },
-] as const satisfies readonly SegmentedOption<Status>[];
-/** En plans status på raden (singular) — förr filterknappens "AKTIVA" (#1309). */
-const ROW_STATUS_LABEL: Record<Status, string> = {
-  ACTIVE: "Aktiv",
-  COMPLETED: "Slutförd",
-  CANCELLED: "Avbruten",
-};
-const STATUS_PILL: Record<Status, string> = {
+] as const satisfies readonly SegmentedOption<PaymentPlanStatus>[];
+const STATUS_PILL: Record<PaymentPlanStatus, string> = {
   ACTIVE: "bg-green-100 text-green-800",
   COMPLETED: "bg-gray-200 text-gray-700",
   CANCELLED: "bg-red-100 text-red-800",
@@ -46,7 +40,7 @@ const STATUS_PILL: Record<Status, string> = {
 
 interface PlanRow {
   id: string;
-  status: Status;
+  status: PaymentPlanStatus;
   monthlyAmount: number;
   dayOfMonth: number;
   startDate: Date | string;
@@ -96,7 +90,7 @@ function PlanStatus({ plan }: { plan: PlanRow }) {
   return (
     <>
       <span className={`text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${STATUS_PILL[plan.status]}`}>
-        {ROW_STATUS_LABEL[plan.status]}
+        {labelForPaymentPlanStatus(plan.status)}
       </span>
       {overdue && <OverdueMark days={overdue.overdueDays} />}
     </>
@@ -113,7 +107,7 @@ const planColumns: Column<PlanRow>[] = [
   { key: "klient", label: "Klient", sortable: true,
     sortValue: (p) => p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "",
     render: (p) => <span className="text-sm text-gray-500">{p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "—"}</span> },
-  { key: "status", label: "Status", sortable: true, sortValue: (p) => ROW_STATUS_LABEL[p.status],
+  { key: "status", label: "Status", sortable: true, sortValue: (p) => labelForPaymentPlanStatus(p.status),
     render: (p) => <PlanStatus plan={p} />,
   },
   { key: "monthlyAmount", label: "Per månad", sortable: true, align: "right",
@@ -141,7 +135,7 @@ const planColumns: Column<PlanRow>[] = [
 export default function PaymentPlansPage() {
   const router = useRouter();
   const utils = trpc.useUtils();
-  const [status, setStatus] = useState<Status>("ACTIVE");
+  const [status, setStatus] = useState<PaymentPlanStatus>("ACTIVE");
   const [search, setSearch] = useState("");
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const list = trpc.paymentPlan.list.useQuery({ status, search: search || undefined });

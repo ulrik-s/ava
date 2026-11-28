@@ -2,7 +2,8 @@
  * Frister (#1062, #1735) och Att åtgärda (#1734) — ren logik, ingen I/O.
  *
  * Frister visar tidsfrister och "Bör faktureras". Att åtgärda visar
- * takvarningar och jävskontroller. Förfallna fakturor, misslyckade utskick och
+ * takvarningar, jävskontroller och avbetalningar där klienten ligger efter
+ * (#2137, `payment-plan-overdue.ts`). Förfallna fakturor, misslyckade utskick och
  * faktureringssteg står där man redan arbetar med dem: fakturalistan och
  * ärendets flik Fakturering (#1735).
  *
@@ -88,7 +89,8 @@ export type WatchlistKind =
   | "unbilled"         // upparbetat som borde faktureras
   | "deadline"         // tidsfrist ur en uppgift (dokument, överklagande)
   | "conflictCheck"    // jävskontrollen väntar eller har träffar (#1246)
-  | "closeSuggestion"; // ska ärendet avslutas? ingen tid på länge (#2100)
+  | "closeSuggestion"  // ska ärendet avslutas? ingen tid på länge (#2100)
+  | "paymentPlan";     // klienten ligger efter sin avbetalningsplan (#2137)
 
 /**
  * `passed` = det har redan hänt (taket passerat, fristen ute, utskicket
@@ -102,7 +104,7 @@ export type WatchlistSeverity = "passed" | "approaching";
  * route för ärenden som skapats efter bygget (static export) och gör ingenting.
  */
 export interface WatchlistLink {
-  route: "matters" | "invoices";
+  route: "matters" | "invoices" | "payment-plans";
   id: string;
   /**
    * Extra query-parametrar efter `?id=` (#1854), t.ex. att ärendesidan ska

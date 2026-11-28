@@ -38,13 +38,14 @@ describe("STARTUP_BACKFILLS", () => {
     }
   });
 
-  it("registret kör dokumenttyper, offentligt uppdrag och kundförlust mot byrån", async () => {
+  it("registret kör dokumenttyper, offentligt uppdrag, kundförlust och frister mot byrån", async () => {
     const lines: string[] = [];
     await runStartupBackfills({ deps, log: (m) => lines.push(m) });
     expect(lines.filter((l) => l.includes(": klar — "))).toEqual([
       "uppstartsfyllning dokumenttyper: klar — 0 dokument, 0 byråer flyttade, 0 fel",
       "uppstartsfyllning offentligt uppdrag: klar — 1 byråer uppdaterade, 0 fel",
       "uppstartsfyllning kundförlust: klar — 0 avskrivningsposter skapade, 0 fel",
+      "uppstartsfyllning frister: klar — 0 uppgifter skapade, 0 fel",
     ]);
     expect((await repos.organizations.getById(ORG))?.publicAssignmentMatterTypes).toHaveLength(4);
   });

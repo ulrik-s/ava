@@ -59,7 +59,12 @@ const stripTrailingSlash = (s: string): string => s.replace(/\/+$/, "");
 /** Tom sträng under SSR/prerender — där finns ingen origin att utgå från. */
 const currentOrigin = (): string => (typeof window === "undefined" ? "" : window.location.origin);
 const buildBasePath = (): string => process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
-/** Satt av `build-demo.sh`, som ALLTID seedar datan in i `out/`. */
+/**
+ * Satt av `build-demo.sh` för varje statisk export. Demomålet seedar datan in i
+ * `out/`; prodmålet (`AVA_BUILD_TARGET=server`) gör det inte. Den här filen är
+ * flaggans enda godkända läsare (lintspärren, #1914); läget väljs annars med
+ * `isDemoTier()` eller `useCapabilities()` (ADR 0027).
+ */
 const isStaticDemoBuild = (): boolean => process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
 
 function readEnv(env: DemoDataBaseEnv = {}): ResolvedEnv {

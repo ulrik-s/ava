@@ -8,10 +8,9 @@
 
 import { useBookInvoice, useLedgerStatus } from "@/lib/client/backend/server-ledger";
 import { trpc } from "@/lib/client/trpc";
+import { isIssued } from "@/lib/shared/billing/invoice-state-machine";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
-
-const NOT_BOOKABLE: ReadonlySet<InvoiceStatus> = new Set<InvoiceStatus>(["DRAFT", "CANCELLED"]);
 
 interface Props {
   invoiceId: string;
@@ -36,7 +35,7 @@ function BookedLine({ fortnoxId, bookedPayments }: { fortnoxId: string; bookedPa
 
 /** Finns något att bokföra, och får fakturan bokföras? */
 function shouldOfferBooking(connected: boolean, status: InvoiceStatus, invoiceBooked: boolean, pending: number): boolean {
-  return connected && !NOT_BOOKABLE.has(status) && (!invoiceBooked || pending > 0);
+  return connected && isIssued(status) && (!invoiceBooked || pending > 0);
 }
 
 export function LedgerBooking({ invoiceId, status, fortnoxId, payments }: Props) {

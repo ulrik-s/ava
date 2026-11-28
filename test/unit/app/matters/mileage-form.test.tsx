@@ -4,48 +4,45 @@
  * ändrat belopp gäller bara resan, och sparat utlägg får rätt payload.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { ExpenseSection } from "@/app/matters/[id]/_expense-section";
 import { MileageForm } from "@/app/matters/[id]/_mileage-form";
 import { asId } from "@/lib/shared/schemas/ids";
+import { callsTo, renderWithFakeTrpc, type FakeTrpcRender } from "../../../helpers/trpc-both-fake";
+import type { TrpcHandlers } from "../../../helpers/trpc-fake";
 
 vi.mock("@/lib/client/demo/entity-link", () => ({
   EntityLink: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
 }));
 
-const user: { data: { id: string; mileageRate: number | null } } = { data: { id: "u1", mileageRate: 250 } };
-const createMutate = vi.fn();
-const noopMut = () => ({ mutate: vi.fn(), isPending: false });
+let mileageRate: number | null = 250;
+let view: FakeTrpcRender | undefined;
 
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    useUtils: () => ({ expense: { list: { invalidate: vi.fn() } } }),
-    expense: {
-      list: { useQuery: () => ({ data: { expenses: [], totalAmount: 0 }, isLoading: false }) },
-      create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
-      update: { useMutation: noopMut },
-      delete: { useMutation: noopMut },
-    },
-    prefs: {
-      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
-      save: { useMutation: noopMut },
-      clear: { useMutation: noopMut },
-      setOrgDefault: { useMutation: noopMut },
-      clearOrgDefault: { useMutation: noopMut },
-    },
-    user: { current: { useQuery: () => user } },
-  },
-}));
+const handlers: TrpcHandlers = {
+  "user.current": () => ({ id: "u1", mileageRate }),
+  "expense.list": () => ({ expenses: [], totalAmount: 0 }),
+  "expense.create": () => ({ id: "e-ny" }),
+  "prefs.get": () => null,
+};
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  user.data = { id: "u1", mileageRate: 250 };
+  mileageRate = 250;
+  view = undefined;
 });
 
-function openMileage(): void {
-  render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+/** Anropen till `expense.create` (indata). */
+function created(): unknown[] {
+  return view ? callsTo(view.fake, "expense.create") : [];
+}
+
+/** Öppnar formuläret när juristens milersättning har lästs in. */
+async function openMileage(): Promise<void> {
+  const rendered = renderWithFakeTrpc(<ExpenseSection matterId={asId<"MatterId">("m1")} />, handlers);
+  view = rendered;
   fireEvent.click(screen.getByText("+ Milersättning"));
+  await waitFor(() => expect(callsTo(rendered.fake, "user.current")).toHaveLength(1));
+  await waitFor(() => expect(screen.getByLabelText("Kr/mil *")).toHaveValue(mileageRate === null ? "" : String(mileageRate / 10)));
 }
 
 function fillTrip(mil: string): void {
@@ -56,69 +53,69 @@ function fillTrip(mil: string): void {
 }
 
 describe("Milersättning i ExpenseSection", () => {
-  it("'+ Milersättning' öppnar formuläret med resans fält", () => {
-    openMileage();
+  it("'+ Milersättning' öppnar formuläret med resans fält", async () => {
+    await openMileage();
     expect(screen.getByRole("dialog", { name: "Milersättning" })).toBeInTheDocument();
     for (const label of ["Datum *", "Från *", "Till *", "Antal mil *", "Kr/mil *"]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
   });
 
-  it("förifyller kr/mil ur juristens milersättning (250 öre/km → 25 kr/mil)", () => {
-    openMileage();
+  it("förifyller kr/mil ur juristens milersättning (250 öre/km → 25 kr/mil)", async () => {
+    await openMileage();
     expect(screen.getByLabelText("Kr/mil *")).toHaveValue("25");
   });
 
-  it("lämnar kr/mil tomt när juristen saknar belopp, och Spara är spärrat", () => {
-    user.data = { id: "u1", mileageRate: null };
-    openMileage();
+  it("lämnar kr/mil tomt när juristen saknar belopp, och Spara är spärrat", async () => {
+    mileageRate = null;
+    await openMileage();
     fillTrip("3,5");
     expect(screen.getByLabelText("Kr/mil *")).toHaveValue("");
     expect(screen.getByText("Spara")).toBeDisabled();
   });
 
-  it("visar summa och debitering exkl./moms/inkl. och sparar ett debiterbart utlägg", () => {
-    openMileage();
+  it("visar summa och debitering exkl./moms/inkl. och sparar ett debiterbart utlägg", async () => {
+    await openMileage();
     fillTrip("3,5");
     expect(screen.getByText(/Summa:/)).toHaveTextContent(/87,50/);
     expect(screen.getByText(/Debiteras:/)).toHaveTextContent(/87,50.*moms 25 %:.*21,88.*inkl:.*109,38/);
     fireEvent.click(screen.getByText("Spara"));
-    expect(createMutate).toHaveBeenCalledWith({
+    await waitFor(() => expect(created()).toEqual([{
       matterId: "m1", date: "2026-03-15", amount: 8750,
       description: "Milersättning A – B, 3,5 mil à 25 kr",
       billable: true, vatRate: 0, vatIncluded: false, passThrough: false,
-    });
+    }]));
   });
 
-  it("ett ändrat kr/mil används för resan", () => {
-    openMileage();
+  it("ett ändrat kr/mil används för resan", async () => {
+    await openMileage();
     fillTrip("2");
     fireEvent.change(screen.getByLabelText("Kr/mil *"), { target: { value: "18,5" } });
     fireEvent.click(screen.getByText("Spara"));
-    expect(createMutate).toHaveBeenCalledWith(
+    await waitFor(() => expect(created()).toEqual([
       expect.objectContaining({ amount: 3700, description: "Milersättning A – B, 2 mil à 18,5 kr" }),
-    );
+    ]));
   });
 
-  it("Avbryt stänger formuläret utan att spara", () => {
-    openMileage();
+  it("Avbryt stänger formuläret utan att spara", async () => {
+    await openMileage();
     fireEvent.click(screen.getByText("Avbryt"));
     expect(screen.queryByRole("dialog", { name: "Milersättning" })).not.toBeInTheDocument();
-    expect(createMutate).not.toHaveBeenCalled();
+    expect(created()).toEqual([]);
   });
 });
 
 describe("MileageForm", () => {
   it("skickar inget när resan är ofullständig", () => {
     const onSubmit = vi.fn();
-    render(<MileageForm isPending={false} onSubmit={onSubmit} onCancel={vi.fn()} />);
+    renderWithFakeTrpc(<MileageForm isPending={false} onSubmit={onSubmit} onCancel={vi.fn()} />, handlers);
     fireEvent.submit(screen.getByLabelText("Från *").closest("form") as HTMLFormElement);
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText("Förhandsvisning")).toBeInTheDocument();
   });
 
   it("visar Sparar... medan utlägget sparas", () => {
-    render(<MileageForm isPending onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    renderWithFakeTrpc(<MileageForm isPending onSubmit={vi.fn()} onCancel={vi.fn()} />, handlers);
     expect(screen.getByText("Sparar...")).toBeDisabled();
   });
 });

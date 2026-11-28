@@ -188,4 +188,19 @@ describe("WatchlistList — Ska ärendet markeras som avslutat? (#2100)", () => 
       "a.pdf ser ut att vara ett slutligt beslut om avskrivning.",
     ]);
   });
+
+  it("en avbetalning som ligger efter: ikonen 💳, etiketten Avbetalning och länken till planen (#2137)", () => {
+    render(<WatchlistList items={[item({
+      kind: "paymentPlan", severity: "passed", title: "Delbetalning förfallen 31 dagar",
+      detail: "Förföll 2026-10-25. AVA skickar ingen påminnelse, så kontakta klienten.",
+      at: "2026-10-25", amountOre: 50_000, link: { route: "payment-plans", id: "pp1" },
+    })]} emptyText="" />);
+    expect(screen.getByText("💳")).toBeInTheDocument();
+    expect(screen.getByText(/Avbetalning:/)).toBeInTheDocument();
+    expect(screen.getByText(/Delbetalning förfallen 31 dagar/)).toBeInTheDocument();
+    expect(screen.getByText(/500,00/)).toBeInTheDocument();
+    const href = screen.getByRole("link").getAttribute("href") ?? "";
+    expect(href).toContain("/payment-plans/__shell__");
+    expect(href).toContain("id=pp1");
+  });
 });

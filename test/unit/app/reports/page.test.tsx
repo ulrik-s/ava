@@ -3,9 +3,10 @@
  * inloggade, en Advokat har bara sig själv, en Admin har Alla överst.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import ReportsPage from "@/app/reports/page";
+import { rowOrder, rowWith, sortColumn } from "../../../helpers/data-table";
 
 const usersQuery = {
   data: undefined as Record<string, unknown> | undefined,
@@ -327,5 +328,102 @@ describe("ReportsPage", () => {
 
     fireEvent.change(screen.getByRole<HTMLSelectElement>("combobox"), { target: { value: "u2" } });
     expect(chartCalls[chartCalls.length - 1]).toMatchObject({ userId: "u2", from: "2026-03-30" });
+  });
+});
+
+// ── Tabellernas sortering (#1907) ─────────────────────────────────────────
+
+/** Två rader där varje kolumn ger en egen ordning. */
+const sortableReport = (over: Record<string, unknown>): Record<string, unknown> => ({
+  ...sampleReport,
+  matters: [],
+  weeklyRows: [{ ...sampleReport.weeklyRows[0], totalMinutes: 0 }],
+  unbilled: { rows: [], total: 0 },
+  ...over,
+});
+
+const ALL_SORTS = ["asc", "desc"] as const;
+
+describe("ReportsPage — sortering per kolumn (#1907)", () => {
+  it("Ärenden under perioden sorterar på varje kolumn", () => {
+    reportQuery.data = sortableReport({
+      matters: [
+        { matterId: "m1", matterNumber: "2026-0001", title: "Alfa", client: null, paymentMethod: "PRIVAT",
+          totalMinutes: 60, billableMinutes: 120, workValueOre: 300, expenseOre: 0 },
+        { matterId: "m2", matterNumber: "2026-0002", title: "Beta", client: "Klient B", paymentMethod: "RATTSHJALP",
+          totalMinutes: 120, billableMinutes: 60, workValueOre: 100, expenseOre: 500 },
+      ],
+    });
+    render(<ReportsPage />);
+    const order = (): string[] => rowOrder(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Ärende", "desc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Klient", "asc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Betalning", "desc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Tid (h)", "asc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Deb. tid (h)", "asc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Arbetsvärde", "desc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Utlägg", "desc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    // Utan klient står "—", och utlägg 0 visas som "—".
+    expect(within(rowWith("2026-0001 — Alfa")).getAllByText("—")).toHaveLength(2);
+  });
+
+  it("Timdebitering per vecka sorterar på varje kolumn", () => {
+    reportQuery.data = sortableReport({
+      weeklyRows: [
+        { isoYear: 2026, week: 2, start: "2026-01-05", end: "2026-01-11", totalMinutes: 60, billableMinutes: 0, workValueOre: 0 },
+        { isoYear: 2026, week: 10, start: "2026-03-02", end: "2026-03-08", totalMinutes: 0, billableMinutes: 0, workValueOre: 0 },
+        { isoYear: 2026, week: 3, start: "2026-01-12", end: "2026-01-18", totalMinutes: 120, billableMinutes: 90, workValueOre: 500 },
+      ],
+    });
+    render(<ReportsPage />);
+    const order = (): string[] => rowOrder(["01-05 – 01-11", "03-02 – 03-08", "01-12 – 01-18"]);
+    // Vecka sorterar på år och tvåsiffrig vecka: v. 10 efter v. 3.
+    sortColumn("Vecka", "asc");
+    expect(order()).toEqual(["01-05 – 01-11", "01-12 – 01-18", "03-02 – 03-08"]);
+    sortColumn("Period", "desc");
+    expect(order()).toEqual(["03-02 – 03-08", "01-12 – 01-18", "01-05 – 01-11"]);
+    sortColumn("Tid (h)", "desc");
+    expect(order()).toEqual(["01-12 – 01-18", "01-05 – 01-11", "03-02 – 03-08"]);
+    for (const dir of ALL_SORTS) {
+      sortColumn("Deb. tid (h)", dir);
+      sortColumn("Arbetsvärde", dir);
+      expect(order()[dir === "asc" ? 2 : 0]).toBe("01-12 – 01-18");
+    }
+  });
+
+  it("Upparbetat, icke fakturerat sorterar på varje kolumn och varnar för hög risk", () => {
+    reportQuery.data = sortableReport({
+      unbilled: {
+        rows: [
+          { matterId: "m1", matterNumber: "2026-0001", title: "Alfa", client: "Klient A", paymentMethod: "RATTSHJALP",
+            timeOre: 0, expenseOre: 900, total: 900 },
+          { matterId: "m2", matterNumber: "2026-0002", title: "Beta", client: null, paymentMethod: "PRIVAT",
+            timeOre: 500, expenseOre: 0, total: 500 },
+        ],
+        total: 1400,
+      },
+    });
+    render(<ReportsPage />);
+    const order = (): string[] => rowOrder(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Ärende", "desc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Klient", "desc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Betalning", "asc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Tid", "asc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Utlägg", "asc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Summa", "desc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    expect(screen.getByText(/av det ofakturerade\s+arbetet ligger under hög eller okänd kreditrisk/)).toBeInTheDocument();
   });
 });

@@ -108,6 +108,24 @@ const RESTRICTED_FEE_FORMULA = [
 /** Formelns hem: den enda filen som får skriva den. */
 const FEE_FORMULA_HOME = "src/lib/shared/billing/whole-kronor.ts";
 
+/**
+ * Byggflaggan `NEXT_PUBLIC_DEMO_BUILD` (#1914) betyder bara "statisk export" och
+ * är sann även i self-hosted, så den har förväxlats med runtime-läget. Läget
+ * väljs med `isDemoTier()` eller `useCapabilities()` (ADR 0027). Bara
+ * `DEMO_BUILD_FLAG_HOME` läser flaggan. `no-restricted-properties` med bara
+ * `property` fångar punkt, sträng-index och destrukturering.
+ */
+const RESTRICTED_DEMO_BUILD_FLAG = [
+  {
+    property: "NEXT_PUBLIC_DEMO_BUILD",
+    message:
+      "NEXT_PUBLIC_DEMO_BUILD betyder bara \"statisk export\" och är sann även i self-hosted. Välj läget med isDemoTier() eller useCapabilities() (ADR 0027). Bara src/lib/client/demo/demo-data-base.ts får läsa flaggan (#1914).",
+  },
+];
+
+/** Flaggans enda godkända läsare (#1914). */
+const DEMO_BUILD_FLAG_HOME = "src/lib/client/demo/demo-data-base.ts";
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -220,6 +238,15 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unsafe-argument": "error",
       // Kalenderdagen är Stockholmsdagen (#1677) — se RESTRICTED_UTC_DAY ovan.
       "no-restricted-syntax": ["error", ...RESTRICTED_SYNTAX_BASE, ...RESTRICTED_FEE_FORMULA, ...RESTRICTED_UTC_DAY],
+      // Byggflaggan är inte runtime-läget (#1914) — se RESTRICTED_DEMO_BUILD_FLAG ovan.
+      "no-restricted-properties": ["error", ...RESTRICTED_DEMO_BUILD_FLAG],
+    },
+  },
+  {
+    // Byggflaggans enda godkända läsare (#1914): undantaget står här, inte som eslint-disable.
+    files: [DEMO_BUILD_FLAG_HOME],
+    rules: {
+      "no-restricted-properties": "off",
     },
   },
   {
