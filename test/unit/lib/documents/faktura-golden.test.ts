@@ -1,12 +1,13 @@
 /**
  * Paritet för fakturamallen (#2251, ADR 0042): standardmallen ritar EXAKT samma
- * faktura som den gamla renderaren i kod gjorde.
+ * faktura som den gamla renderaren i kod gjorde (den togs bort när paritet var
+ * bevisad — golden-filerna skrevs medan båda fanns och var identiska).
  *
  * Jämförelsen är på ritoperationsnivå (`pdfDrawingOps`): varje text med
  * teckensnitt, storlek, färg och position, varje linje med tjocklek och färg och
  * varje bild — i ritordning, sida för sida — plus titel, ämne och sidstorlek.
- * Golden-filerna i `test/fixtures/faktura-golden/` skrevs av den gamla
- * renderaren och är läsbara: en rad per ritoperation, texten avkodad.
+ * Golden-filerna i `test/fixtures/faktura-golden/` är läsbara: en rad per
+ * ritoperation, texten avkodad (svepen lagras som en hash per längd).
  *
  * Ändras fakturans layout med avsikt (fas 2): kör `UPDATE_GOLDEN=1 bun test
  * test/unit/lib/documents/faktura-golden.test.ts` och granska diffen.
@@ -18,7 +19,6 @@ import { join } from "node:path";
 import { describe, it, expect } from "vitest-compat";
 import { z } from "zod";
 import { renderFakturaPdf } from "@/lib/client/documents/faktura-pdf";
-import { renderFakturaPdf as renderLegacy } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 import { parseJsonWith } from "@/lib/shared/parse-json";
 import { expenseSweep, FAKTURA_FIXTURES, timeSweep } from "../../../helpers/faktura-fixtures";
 import { pdfDrawingOps } from "../../../helpers/pdf-text";
@@ -57,12 +57,10 @@ function expectGolden(name: string, actual: unknown): void {
 
 const hash = (g: Golden): string => createHash("sha256").update(JSON.stringify(g)).digest("hex");
 
-describe("fakturamallen — paritet med den gamla renderaren (#2251)", () => {
+describe("fakturamallen — paritet med fakturan som ritades i kod (#2251)", () => {
   for (const [name, fixture] of Object.entries(FAKTURA_FIXTURES)) {
     it(`${name}: samma ritoperationer, sidor och metadata`, async () => {
-      const view = fixture();
-      const actual = await goldenOf(await renderFakturaPdf(view));
-      expect(actual).toEqual(await goldenOf(await renderLegacy(view)));
+      const actual = await goldenOf(await renderFakturaPdf(fixture()));
       expect(actual.pages.flat().length).toBeGreaterThan(20);
       expectGolden(name, actual);
     });
@@ -72,7 +70,6 @@ describe("fakturamallen — paritet med den gamla renderaren (#2251)", () => {
     const hashes: Record<string, string> = {};
     for (let n = 30; n <= 75; n++) {
       const actual = await goldenOf(await renderFakturaPdf(expenseSweep(n)));
-      expect(actual).toEqual(await goldenOf(await renderLegacy(expenseSweep(n))));
       hashes[String(n)] = hash(actual);
     }
     expectGolden("sweep-utlagg", hashes);
@@ -82,7 +79,6 @@ describe("fakturamallen — paritet med den gamla renderaren (#2251)", () => {
     const hashes: Record<string, string> = {};
     for (let n = 20; n <= 60; n++) {
       const actual = await goldenOf(await renderFakturaPdf(timeSweep(n)));
-      expect(actual).toEqual(await goldenOf(await renderLegacy(timeSweep(n))));
       hashes[String(n)] = hash(actual);
     }
     expectGolden("sweep-tid", hashes);

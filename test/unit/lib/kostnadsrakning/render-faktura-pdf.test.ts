@@ -2,12 +2,14 @@
  * `renderFakturaPdf` (#938/#1439) — fakturans enda format: både det arkiverade
  * dokumentet och bilagan vid utskick. Sammanställning på sida 1, specifikation
  * på egen sida därefter. Renderaren tar en färdig `FakturaView` och räknar inget.
+ * Sedan #2251 ritas fakturan ur standardmallen (ADR 0042); testerna här är
+ * desamma som när den ritades i kod.
  */
 import { inflateSync } from "node:zlib";
 import { describe, it, expect } from "vitest-compat";
+import { renderFakturaPdf } from "@/lib/client/documents/faktura-pdf";
 import { toWinAnsi } from "@/lib/client/documents/win-ansi";
 import { buildFakturaView, type FakturaView } from "@/lib/client/kostnadsrakning/faktura-template";
-import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 import { buildInvoiceSpecification } from "@/lib/shared/billing/invoice-specification";
 import { orgImageSchema } from "@/lib/shared/org-image";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -293,7 +295,7 @@ describe("renderFakturaPdf — summarader i specifikationen (#1506)", () => {
     expect(texts).not.toContain("Summa utlägg");
   });
 
-  /** Sidans nedre marginal i mallen (`BOTTOM` i render-faktura-pdf.ts). */
+  /** Sidans nedre marginal i mallen (`margin-bottom` i standardmallen, `templates/faktura.ts`). */
   const PAGE_BOTTOM_MARGIN = 64;
 
   it("streck och summarad hålls ihop vid sidbrytning", async () => {
