@@ -13,6 +13,7 @@ export {
   publicProcedure,
   protectedProcedure,
   orgProcedure,
+  adminProcedure,
   requireOrgOwned,
   TRPCError,
   type Context,

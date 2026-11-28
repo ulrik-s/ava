@@ -484,7 +484,6 @@ håller staging helt isär.
    ```bash
    AVA_DOMAIN=staging.ava-crm.io
    AVA_DEPLOY_TRACK=main            # följ main, inte taggar
-   AVA_ERROR_ENVIRONMENT=staging
    AVA_EMAIL_DISABLED=1             # staging skickar aldrig e-post
    # inga AVA_FEEDBACK_*, inga AVA_FORTNOX_*: inget riktigt utanför staging
    ```

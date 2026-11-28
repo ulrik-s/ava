@@ -6,7 +6,7 @@
   "src/components/shell/demo-bootstrap.tsx": 569,
   "src/components/ui/data-table.tsx": 638,
   "src/lib/client/jobs/job-queue.ts": 418,
-  "src/lib/server/routers/invoice.ts": 539,
+  "src/lib/server/routers/invoice.ts": 537,
   "src/lib/server/routers/matter.ts": 408,
   "src/lib/shared/billing/brottmalstaxa.ts": 536,
   "src/lib/shared/billing/kostnadsrakning.ts": 684
