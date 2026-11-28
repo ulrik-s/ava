@@ -522,6 +522,22 @@ describe("InvoiceDetailPage", () => {
     for (const text of ["Brev", "Porto", /Aconto 2026-03-01/]) expect(screen.getByText(text).closest("tr")).toHaveClass("align-top");
   });
 
+  it("slutfakturans rådgivningstimme räknas med ärendets F-skatt, utan reservvärde (#1919)", async () => {
+    const radgivningRow = async (taxaHasFTax: boolean): Promise<string> => {
+      invoiceQuery.data = { ...baseInvoice, invoiceType: "FINAL", matter: { ...baseInvoice.matter, paymentMethod: "RATTSHJALP", taxaHasFTax } };
+      const { unmount } = renderPage();
+      const label = await waitFor(() => screen.getByText(/Rådgivningstimme/));
+      const text = label.nextElementSibling?.textContent ?? "";
+      unmount();
+      return text;
+    };
+    const med = await radgivningRow(true);
+    const utan = await radgivningRow(false);
+    const kronor = (t: string): number => Number(t.replace(/[^\d,]/g, "").replace(",", "."));
+    expect(kronor(med)).toBeGreaterThan(kronor(utan));
+    expect(kronor(utan)).toBeGreaterThan(0);
+  });
+
   it("renderar PAID-status utan Registrera betalning-knapp", async () => {
     invoiceQuery.data = { ...baseInvoice, status: "PAID" };
     renderPage();

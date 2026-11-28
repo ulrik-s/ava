@@ -431,9 +431,9 @@ function buildSettlement(inv: Inv, ledger: LedgerView): MatterSettlement {
   const exps = inv.expenses ?? [];
   const arvodeOre = times.reduce((s, t) => s + timeEntryValueOre(t.minutes, t.hourlyRate ?? 0), 0);
   const utlaggOre = exps.reduce((s, e) => s + e.amount, 0);
-  const m = inv.matter as { paymentMethod?: string | null; taxaHasFTax?: boolean | null } | null;
+  const m = inv.matter as { paymentMethod?: string | null; taxaHasFTax: boolean } | null;
   const radgivningOre = m?.paymentMethod === "RATTSHJALP"
-    ? computeRadgivningsavgift({ hasFTax: m.taxaHasFTax ?? true }).beloppExclVatOre
+    ? computeRadgivningsavgift({ hasFTax: m.taxaHasFTax }).beloppExclVatOre
     : 0;
   return computeMatterSettlement({
     arvodeOre, utlaggOre, radgivningOre,

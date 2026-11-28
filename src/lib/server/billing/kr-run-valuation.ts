@@ -37,9 +37,11 @@ export interface KrRunTaxaInput {
 /** Ärendefälten värderingen läser. */
 export interface KrRunMatter {
   paymentMethod?: string | null | undefined;
-  isTaxeArende?: boolean | null | undefined;
+  /** Aldrig null, som kolumnen (`NOT NULL DEFAULT false`). */
+  isTaxeArende: boolean;
   taxaLevel?: number | null | undefined;
-  taxaHasFTax?: boolean | null | undefined;
+  /** Aldrig null, som kolumnen (`NOT NULL DEFAULT true`, #1675). */
+  taxaHasFTax: boolean;
   taxaHuvudforhandlingMin?: number | null | undefined;
   taxaHufStart?: Date | string | null | undefined;
 }
@@ -75,7 +77,7 @@ const precondition = (message: string): TRPCError => new TRPCError({ code: "PREC
 
 /** Taxeärende = offentligt uppdrag med taxan vald (dialogens val går före ärendets). */
 function isTaxeClaim(matter: KrRunMatter, input: KrRunTaxaInput): boolean {
-  return matter.paymentMethod === "OFFENTLIGT_UPPDRAG" && (input.isTaxeArende ?? matter.isTaxeArende === true);
+  return matter.paymentMethod === "OFFENTLIGT_UPPDRAG" && (input.isTaxeArende ?? matter.isTaxeArende);
 }
 
 /**
@@ -130,7 +132,7 @@ export function valueKrRun(matter: KrRunMatter, work: KrRunWork, input: KrRunTax
     hufEnd: new Date(huf.start.getTime() + huf.minutes * 60_000),
     yrkandeDate: now,
     taxaLevel,
-    hasFTax: input.hasFTax ?? matter.taxaHasFTax ?? true,
+    hasFTax: input.hasFTax ?? matter.taxaHasFTax,
     isTaxeArende: true,
     timeEntries: [...work.timeEntries],
     expenses: [...work.expenses],
@@ -147,7 +149,7 @@ function lopandeValuation(matter: KrRunMatter, work: KrRunWork, input: KrRunTaxa
     hufStart: huf.start,
     hufEnd: huf.end,
     yrkandeDate: now,
-    hasFTax: input.hasFTax ?? matter.taxaHasFTax ?? true,
+    hasFTax: input.hasFTax ?? matter.taxaHasFTax,
     isTaxeArende: false,
     timeEntries: [...work.timeEntries],
     expenses: [...work.expenses],
@@ -170,7 +172,7 @@ function forordnandeValuation(
   const grossOre = kostnadsrakningClaimInclVat({
     forordnande: { forhor: forhorFromTimeEntries(work.timeEntries), avslut },
     yrkandeDate: now,
-    hasFTax: input.hasFTax ?? matter.taxaHasFTax ?? true,
+    hasFTax: input.hasFTax ?? matter.taxaHasFTax,
     isTaxeArende: true,
     timeEntries: [...work.timeEntries],
     expenses: [...work.expenses],

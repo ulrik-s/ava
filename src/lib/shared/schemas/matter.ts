@@ -118,8 +118,12 @@ export const matterSchema = z.object({
   taxaLevel: z.number().int().min(1).max(4).nullish(),
   /** Total förhandlingstid i minuter (input till `computeBrottmalstaxa`). */
   taxaHuvudforhandlingMin: z.number().int().nonnegative().nullish(),
-  /** Default true. False → ersättning × 1237/1626 (DVFS 11 §). */
-  taxaHasFTax: z.boolean().nullish(),
+  /**
+   * Har advokaten F-skatt? Aldrig null: kolumnen är `NOT NULL DEFAULT true`
+   * (migration 0051, #1675), och samma standardvärde gäller här.
+   * False → ersättning × 1237/1626 (DVFS 11 §).
+   */
+  taxaHasFTax: z.boolean().default(true),
   /**
    * Start-tidpunkt för huvudförhandlingen. Auto-sparas av Kostnadsräkningens
    * modal så advokaten slipper minnas/skriva in den från scratch i

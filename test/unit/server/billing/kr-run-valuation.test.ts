@@ -10,7 +10,7 @@ import { kostnadsrakningClaimInclVat } from "@/lib/shared/billing/kostnadsraknin
 
 const NOW = new Date("2026-09-29T12:00:00.000Z");
 const NO_WORK = { timeEntries: [], expenses: [] };
-const TAXE: KrRunMatter = { paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: true, taxaHuvudforhandlingMin: 95 };
+const TAXE: KrRunMatter = { paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: true, taxaHasFTax: true, taxaHuvudforhandlingMin: 95 };
 const taxaOf = (level: 1 | 2 | 3 | 4, start = NOW): number => kostnadsrakningClaimInclVat({
   hufStart: start, hufEnd: new Date(start.getTime() + 95 * 60_000), yrkandeDate: NOW, taxaLevel: level, hasFTax: true,
   isTaxeArende: true, timeEntries: [], expenses: [],
@@ -43,6 +43,13 @@ describe("valueKrRun", () => {
     const med = valueKrRun(TAXE, NO_WORK, huf, NOW);
     const utan = valueKrRun(TAXE, NO_WORK, { ...huf, hasFTax: false }, NOW);
     expect(utan.kind !== "norm" && med.kind !== "norm" && utan.grossOre < med.grossOre).toBe(true);
+  });
+
+  it("löpande: ärendets taxaHasFTax false ger beloppet utan F-skatt, dialogens hasFTax går före (#1919)", () => {
+    const huf = { hufStart: "2026-09-22T09:00:00.000Z", hufEnd: "2026-09-22T10:00:00.000Z", isTaxeArende: false };
+    const utanFSkatt = { ...TAXE, taxaHasFTax: false };
+    expect(valueKrRun(utanFSkatt, NO_WORK, huf, NOW)).toEqual(valueKrRun(TAXE, NO_WORK, { ...huf, hasFTax: false }, NOW));
+    expect(valueKrRun(utanFSkatt, NO_WORK, { ...huf, hasFTax: true }, NOW)).toEqual(valueKrRun(TAXE, NO_WORK, huf, NOW));
   });
 
   it("löpande: slut före start → vägras", () => {
@@ -99,7 +106,7 @@ describe("valueKrRun", () => {
 
 // Förordnandemål (#1857): förordnandetaxan med ärendets förhör, som dokumentet.
 describe("valueKrRun — förordnandemål", () => {
-  const OU: KrRunMatter = { paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: false };
+  const OU: KrRunMatter = { paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: false, taxaHasFTax: true };
   const NEDLAGD = { forordnande: { avslut: "NEDLAGD" as const } };
   /** Ett förhör en tisdag (UTC 08:00 = 10:00 svensk tid) på `minutes` minuter. */
   const forhor = (minutes: number, date = "2026-09-22T08:00:00.000Z") => ({
@@ -138,7 +145,7 @@ describe("valueKrRun — förordnandemål", () => {
   });
 
   it("inte offentligt uppdrag → PRECONDITION_FAILED", () => {
-    expect(() => valueKrRun({ paymentMethod: "RATTSHJALP" }, NO_WORK, NEDLAGD, NOW)).toThrow(/offentligt uppdrag/);
+    expect(() => valueKrRun({ ...OU, paymentMethod: "RATTSHJALP" }, NO_WORK, NEDLAGD, NOW)).toThrow(/offentligt uppdrag/);
   });
 });
 
