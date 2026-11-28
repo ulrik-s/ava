@@ -9,7 +9,7 @@
  *
  * FLOW_GUARD_MODE=enforce gör ändringarna; annars (report) loggas de bara.
  */
-import { agentPrCap, rankInLast24h } from "./agent-guard";
+import { agentPrCap, onlyCapViolation, rankInLast24h } from "./agent-guard";
 import { dispatchTarget, type FetchFn, fire } from "./flow/dispatch";
 import { type GitHub, gitHub, runGhWithToken } from "./flow/github";
 import { prioOrder } from "./flow/health";
@@ -137,29 +137,38 @@ export function cancelHung(gh: GitHub, now: number, minutes: number, enforce: bo
 const DAY_MS = 24 * 3_600_000;
 
 /**
- * Var PR:en över dygnstaket när den skapades, men är under det nu? Agentvakten
- * räknar taket vid varje körning (#1955), men ingenting kör den igen när
- * fönstret har passerat (#2027) — det gör klockan.
+ * Kör om Agentvakten på PR:en om den föll bara på dygnstaket (#2158), oavsett
+ * vilket tak som gällde då. Ett fel loggas och stoppar inte de andra PR:erna.
+ * Ger true om vakten startades om.
  */
-export function capReleased(created: number, createdAts: readonly string[], now: number, cap = agentPrCap()): boolean {
-  return rankInLast24h(createdAts, created, created) > cap && rankInLast24h(createdAts, created, now) <= cap;
+function rerunIfOnlyCap(gh: GitHub, pr: number, enforce: boolean, log: Log): boolean {
+  try {
+    const guardLog = gh.failedCheckLog(pr, "Agentvakt");
+    if (guardLog === null || !onlyCapViolation(guardLog)) return false;
+    if (!enforce) { log(`PR #${pr}: under dygnstaket nu (bara rapport)`); return false; }
+    if (!gh.rerunFailedCheck(pr, "Agentvakt")) return false;
+    log(`PR #${pr}: under dygnstaket nu — Agentvakten körs om`);
+    return true;
+  } catch (e) {
+    log(`PR #${pr}: Agentvakten kunde inte köras om: ${e instanceof Error ? e.message : String(e)}`);
+    return false;
+  }
 }
 
-/** Kör om Agentvakten på granskade agent-PR:er som taket släppt. Ger PR-numren. */
+/**
+ * Kör om Agentvakten på granskade agent-PR:er under dygnstaket vars vakt föll
+ * bara på taket. Agentvakten räknar taket vid varje körning (#1955), men
+ * ingenting kör den igen när fönstret har passerat eller taket höjts (#2027,
+ * #2158) — det gör klockan. Ger PR-numren.
+ */
 export function rerunReleasedFromCap(gh: GitHub, now: number, enforce: boolean, log: Log): number[] {
   const createdAts = gh.agentPullsCreatedSince(new Date(now - 2 * DAY_MS).toISOString());
-  const released = gh.openPulls().filter((p) =>
-    p.labels.includes(AGENT_PR) && p.labels.includes("granskad") && !p.labels.includes("blockerad")
-    && capReleased(Date.parse(p.createdAt ?? ""), createdAts, now));
-  const rerun: number[] = [];
-  for (const p of released) {
-    // ponytail: en PR som också faller av ett annat skäl körs om varje timme tills taket inte längre gäller den (efter 24 h).
-    if (!enforce) { log(`PR #${p.number}: under dygnstaket nu (bara rapport)`); continue; }
-    try {
-      if (gh.rerunFailedCheck(p.number, "Agentvakt")) { rerun.push(p.number); log(`PR #${p.number}: under dygnstaket nu — Agentvakten körs om`); }
-    } catch (e) { log(`PR #${p.number}: Agentvakten kunde inte köras om: ${e instanceof Error ? e.message : String(e)}`); }
-  }
-  return rerun;
+  const cap = agentPrCap();
+  return gh.openPulls()
+    .filter((p) => p.labels.includes(AGENT_PR) && p.labels.includes("granskad") && !p.labels.includes("blockerad")
+      && rankInLast24h(createdAts, Date.parse(p.createdAt ?? ""), now) <= cap)
+    .filter((p) => rerunIfOnlyCap(gh, p.number, enforce, log))
+    .map((p) => p.number);
 }
 
 if (import.meta.main) {

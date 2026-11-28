@@ -173,6 +173,13 @@ function openDeps(run: GhRunner, repo: string, n: number, kind: "blocked_by" | "
 
 /** GitHub-operationerna för ett repo. */
 export function gitHub(repo: string, run: GhRunner = runGh) {
+  /** Jobb-id:t för PR:ens senaste check `name`, om den föll; annars undefined (grön, pågår eller saknas). */
+  const failedJob = (pr: number, name: string): string | undefined => {
+    const sha = parseJsonWith(headSchema, run(["api", `repos/${repo}/pulls/${pr}`])).head.sha;
+    const runs = parseJsonWith(checkRunsSchema, run(["api", `repos/${repo}/commits/${sha}/check-runs?check_name=${encodeURIComponent(name)}`])).check_runs;
+    const last = runs.sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""))[0];
+    return last?.conclusion === "failure" ? /\/job\/(\d+)/.exec(last.details_url ?? "")?.[1] : undefined;
+  };
   return {
     labelEvents(n: number): TimedLabelEvent[] {
       const pages = parseJsonWith(pagesSchema(eventSchema), run(["api", `repos/${repo}/issues/${n}/events?per_page=100`, "--paginate", "--slurp"]));
@@ -294,13 +301,15 @@ export function gitHub(repo: string, run: GhRunner = runGh) {
     },
     /** Kör om PR:ens senaste check `name` om den föll (#2027). Ger true om den startades om. */
     rerunFailedCheck(pr: number, name: string): boolean {
-      const sha = parseJsonWith(headSchema, run(["api", `repos/${repo}/pulls/${pr}`])).head.sha;
-      const runs = parseJsonWith(checkRunsSchema, run(["api", `repos/${repo}/commits/${sha}/check-runs?check_name=${encodeURIComponent(name)}`])).check_runs;
-      const last = runs.sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""))[0];
-      const job = last?.conclusion === "failure" ? /\/job\/(\d+)/.exec(last.details_url ?? "")?.[1] : undefined;
+      const job = failedJob(pr, name);
       if (job === undefined) return false;
       run(["api", "-X", "POST", `repos/${repo}/actions/jobs/${job}/rerun`]);
       return true;
+    },
+    /** Jobbloggen som text om PR:ens senaste check `name` föll (#2158); annars null (grön, pågår eller saknas). */
+    failedCheckLog(pr: number, name: string): string | null {
+      const job = failedJob(pr, name);
+      return job === undefined ? null : run(["api", `repos/${repo}/actions/jobs/${job}/logs`]);
     },
   };
 }
