@@ -310,7 +310,7 @@ STATE_DB="migrerad ($sha)"
 
 step "startar om servern med ny kod (klienten är fortfarande den gamla)"
 STATE_SERVER="omstarten avbröts — kontrollera: docker compose -f $COMPOSE ps"
-# Versionsstämpeln i /readyz (och PostHog): taggen om HEAD är taggad, annars
+# Versionsstämpeln i /readyz: taggen om HEAD är taggad, annars
 # sha. ava-server.env får sätta egen. ponytail: wait_ready kräver inte att
 # stämpeln bytt — lägg till det om en gammal server någon gång svarar ok.
 export AVA_RELEASE="${AVA_RELEASE:-$(git describe --tags --always)}"
