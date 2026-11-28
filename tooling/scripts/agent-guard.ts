@@ -171,6 +171,9 @@ export function guardLabels(flow: Flow): GuardLabels {
   };
 }
 
+/** Takradens början (#2158): klockan känner igen en vakt som bara föll på taket med den. */
+export const CAP_LINE_START = "Taket är";
+
 /**
  * Dygnstaket. En PR som Ulrik själv godkänt (labels är redan kontrollerade,
  * trustedLabels) stoppas aldrig av det: taket finns för att begränsa det som
@@ -179,7 +182,25 @@ export function guardLabels(flow: Flow): GuardLabels {
 function capViolations(input: GuardInput, labels: GuardLabels): string[] {
   const cap = input.cap ?? AGENT_PR_PER_DAY;
   if (input.labels.includes(labels.humanApproved) || input.agentPrsLast24h <= cap) return [];
-  return [`Taket är ${cap} agent-PR:er per dygn — den här är nr ${input.agentPrsLast24h}.`];
+  return [`${CAP_LINE_START} ${cap} agent-PR:er per dygn — den här är nr ${input.agentPrsLast24h}.`];
+}
+
+/** Regelbrotten i vaktens jobblogg: texten efter `✗ ` på varje rad som har det (tidsstämpeln före ignoreras). */
+function loggedViolations(log: string): string[] {
+  return log.split("\n").flatMap((line) => {
+    const at = line.indexOf("✗ ");
+    return at < 0 ? [] : [line.slice(at + 2)];
+  });
+}
+
+/**
+ * Föll vakten bara på dygnstaket (#2158)? Sant när loggen har minst en `✗`-rad
+ * och alla är takraden, oavsett vilket tak som gällde då. En logg utan
+ * `✗`-rader (infrastrukturfel) är falsk: det fallet äger PR-vakten.
+ */
+export function onlyCapViolation(log: string): boolean {
+  const violations = loggedViolations(log);
+  return violations.length > 0 && violations.every((v) => v.startsWith(`${CAP_LINE_START} `));
 }
 
 /** Vad som bryter mot reglerna — tom lista = godkänd. */

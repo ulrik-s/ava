@@ -15,7 +15,7 @@ import { decide, GUARD_ACTOR, type LabelEvent, normalizeRemovals, previousStateL
 import { closesIssue, dueNudges, dueTimeouts, duplicatePulls, hungRuns, parseDuration } from "../../tooling/scripts/flow/watchdog";
 import { expectedFiles, staleFiles } from "../../tooling/scripts/flow-gen";
 import { dispatchLabel, handleLabel, machineFor, normalize } from "../../tooling/scripts/flow-guard";
-import { AGENT_PR, cancelHung, capReleased, closeDuplicatePulls, rerunReleasedFromCap, runNudges, runTimeouts } from "../../tooling/scripts/flow-watchdog";
+import { AGENT_PR, cancelHung, closeDuplicatePulls, rerunReleasedFromCap, runNudges, runTimeouts } from "../../tooling/scripts/flow-watchdog";
 
 const flow: Flow = loadFlow();
 const machine = (name: string): Machine => {
@@ -273,7 +273,9 @@ function fakeGh(answers: Record<string, unknown>): { run: GhRunner; calls: strin
     const line = args.join(" ");
     calls.push(line);
     const key = Object.keys(answers).find((k) => line.includes(k));
-    return key === undefined ? "{}" : JSON.stringify(answers[key]);
+    const answer = key === undefined ? {} : answers[key];
+    // En jobblogg är text, inte JSON (#2158): en sträng skickas vidare som den är.
+    return typeof answer === "string" ? answer : JSON.stringify(answer);
   };
   return { run, calls };
 }
@@ -383,28 +385,35 @@ describe("klockan mot GitHub", () => {
     { number: 31, title: "t", body: "Closes #4", labels: [{ name: "agent-pr" }, { name: "granskad" }], created_at: "2026-11-20T11:00:00Z" },
   ]];
 
-  it("capReleased: över taket när den skapades och under det nu", () => {
-    const created = Date.parse(lastInBurst);
-    expect(capReleased(created, burst, created + 60_000)).toBe(false); // fortfarande över taket
-    expect(capReleased(created, burst, now)).toBe(true); // fönstret har passerat
-    expect(capReleased(Date.parse(burst[3] ?? ""), burst, now)).toBe(false); // nr 4: aldrig över taket
-    expect(capReleased(created, burst, created + 60_000, 60)).toBe(false); // höjt tak: aldrig över, inget att släppa
+  const capLog = (cap: number, rank: number): string => `2026-11-19T11:30:01.0000000Z ✗ Taket är ${cap} agent-PR:er per dygn — den här är nr ${rank}.\n##[error]Process completed with exit code 1.`;
+  const failedRuns = { check_runs: [
+    { conclusion: "success", started_at: "2026-11-19T11:06:00Z", details_url: "https://github.com/x/actions/runs/1/job/66" },
+    { conclusion: "failure", started_at: "2026-11-19T11:30:00Z", details_url: "https://github.com/x/actions/runs/2/job/77" },
+  ] };
+  const answers = (opts: { labels?: string[]; conclusion?: string; log?: string; createdAts?: string[] } = {}) => ({
+    "search/issues": { items: (opts.createdAts ?? burst).map((created_at) => ({ created_at })) },
+    "pulls?state=open": pullsOpen(opts.labels ?? ["agent-pr", "granskad"]),
+    "repos/ulrik-s/ava/pulls/30": { head: { sha: "abc" } },
+    "check-runs": opts.conclusion === undefined ? failedRuns
+      : { check_runs: [{ conclusion: opts.conclusion, started_at: "2026-11-19T11:30:00Z", details_url: "https://github.com/x/actions/runs/2/job/77" }] },
+    "jobs/77/logs": opts.log ?? capLog(AGENT_PR_PER_DAY, AGENT_PR_PER_DAY + 2),
   });
 
-  it("klockan kör om Agentvakten på en granskad PR som taket släppt, och bara den", () => {
-    const gh = fakeGh({
-      "search/issues": { items: [...burst, "2026-11-20T11:00:00Z"].map((created_at) => ({ created_at })) },
-      "pulls?state=open": pullsOpen(["agent-pr", "granskad"]),
-      "repos/ulrik-s/ava/pulls/30": { head: { sha: "abc" } },
-      "check-runs": { check_runs: [
-        { conclusion: "success", started_at: "2026-11-19T11:06:00Z", details_url: "https://github.com/x/actions/runs/1/job/66" },
-        { conclusion: "failure", started_at: "2026-11-19T11:30:00Z", details_url: "https://github.com/x/actions/runs/2/job/77" },
-      ] },
-    });
+  it("klockan kör om Agentvakten på en granskad PR som bara föll på taket, och bara den", () => {
+    const gh = fakeGh(answers());
     const lines: string[] = [];
     expect(rerunReleasedFromCap(gitHub("ulrik-s/ava", gh.run), now, true, (l) => lines.push(l))).toEqual([30]);
     expect(gh.calls.filter((c) => c.includes("/rerun"))).toEqual(["api -X POST repos/ulrik-s/ava/actions/jobs/77/rerun"]);
     expect(lines[0]).toContain("PR #30");
+  });
+
+  it("en PR som föll på ett gamla, lägre tak körs om nu när den är under det nya (#2158)", () => {
+    const createdAts = burst.slice(0, 22); // nr 22: över taket 20 då, under 30 nu
+    const gh = fakeGh(answers({ createdAts, log: capLog(20, 22) }));
+    const pulls = [[{ number: 30, title: "t", body: "Closes #3", labels: [{ name: "agent-pr" }, { name: "granskad" }], created_at: createdAts.at(-1) }]];
+    const run: GhRunner = (args) => (args.join(" ").includes("pulls?state=open") ? JSON.stringify(pulls) : gh.run(args));
+    expect(rerunReleasedFromCap(gitHub("ulrik-s/ava", run), Date.parse("2026-11-19T12:00:00Z"), true, () => {})).toEqual([30]);
+    expect(gh.calls.some((c) => c.includes("actions/jobs/77/rerun"))).toBe(true);
   });
 
   it("klockans räkning hoppar över blockerade och stängda PR:er, som Agentvakten (2026-11-27)", () => {
@@ -418,27 +427,34 @@ describe("klockan mot GitHub", () => {
     expect(gh.agentPullsCreatedSince("2026-11-18T00:00:00Z")).toEqual(["2026-11-19T10:00:00Z", "2026-11-19T10:01:00Z"]);
   });
 
-  it("inget att köra om: blockerad, ogranskad, grön Agentvakt, eller rapportläge", () => {
-    const answers = (labels: string[], conclusion: string) => ({
-      "search/issues": { items: burst.map((created_at) => ({ created_at })) },
-      "pulls?state=open": pullsOpen(labels),
-      "repos/ulrik-s/ava/pulls/30": { head: { sha: "abc" } },
-      "check-runs": { check_runs: [{ conclusion, started_at: "2026-11-19T11:30:00Z", details_url: "https://github.com/x/actions/runs/2/job/77" }] },
-    });
-    const check = (labels: string[], conclusion: string, enforce = true) =>
-      rerunReleasedFromCap(gitHub("ulrik-s/ava", fakeGh(answers(labels, conclusion)).run), now, enforce, () => {});
-    expect(check(["agent-pr", "granskad", "blockerad"], "failure")).toEqual([]);
-    expect(check(["agent-pr", "att-granska"], "failure")).toEqual([]);
-    expect(check(["agent-pr", "granskad"], "success")).toEqual([]);
-    expect(check(["agent-pr", "granskad"], "failure", false)).toEqual([]);
+  it("inget att köra om: blockerad, ogranskad, grön Agentvakt, annat skäl, över taket, eller rapportläge", () => {
+    const check = (opts: Parameters<typeof answers>[0], enforce = true, at = now) => {
+      const gh = fakeGh(answers(opts));
+      const out = rerunReleasedFromCap(gitHub("ulrik-s/ava", gh.run), at, enforce, () => {});
+      expect(gh.calls.some((c) => c.includes("/rerun"))).toBe(false);
+      return out;
+    };
+    expect(check({ labels: ["agent-pr", "granskad", "blockerad"] })).toEqual([]);
+    expect(check({ labels: ["agent-pr", "att-granska"] })).toEqual([]);
+    expect(check({ conclusion: "success" })).toEqual([]);
+    expect(check({ log: `${capLog(AGENT_PR_PER_DAY, 31)}\n✗ Skyddad sökväg: .github/x.yml (kräver etiketten människa-godkänd).` })).toEqual([]);
+    expect(check({}, true, Date.parse(lastInBurst) + 60_000)).toEqual([]); // fortfarande över taket
+    expect(check({}, false)).toEqual([]);
   });
 
-  it("ett fel vid omkörningen loggas och stoppar inte klockan", () => {
+  it("failedCheckLog: null för en grön senaste körning, loggtexten för en röd", () => {
+    expect(gitHub("ulrik-s/ava", fakeGh(answers({ conclusion: "success" })).run).failedCheckLog(30, "Agentvakt")).toBeNull();
+    expect(gitHub("ulrik-s/ava", fakeGh(answers({ log: "loggen" })).run).failedCheckLog(30, "Agentvakt")).toBe("loggen");
+  });
+
+  it.each([
+    ["läses", "jobs/77/logs"],
+    ["körs om", "/rerun"],
+  ])("ett fel när loggen %s loggas och stoppar inte klockan", (_label, failing) => {
+    const gh = fakeGh(answers());
     const run: GhRunner = (args) => {
-      const line = args.join(" ");
-      if (line.includes("search/issues")) return JSON.stringify({ items: burst.map((created_at) => ({ created_at })) });
-      if (line.includes("pulls?state=open")) return JSON.stringify(pullsOpen(["agent-pr", "granskad"]));
-      throw new Error("HTTP 403");
+      if (args.join(" ").includes(failing)) throw new Error("HTTP 403");
+      return gh.run(args);
     };
     const lines: string[] = [];
     expect(rerunReleasedFromCap(gitHub("ulrik-s/ava", run), now, true, (l) => lines.push(l))).toEqual([]);

@@ -26,8 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # Vakten körs från main, aldrig från PR:ens egen (möjligen ändrade) version.
-          ref: ${{ github.event.pull_request.base.sha }}
+          # Vakten körs från main som den är när jobbet körs, också vid en omkörning
+          # (#2158), och aldrig från PR:ens egen (möjligen ändrade) version.
+          ref: main
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - name: Kontrollera agent-PR:en
         env:

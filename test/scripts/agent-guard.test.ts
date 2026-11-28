@@ -6,8 +6,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
 import {
-  AGENT_PR_CAP_MAX, AGENT_PR_PER_DAY, addedMigrationLines, agentPrCap, baselineDiffTightens, cappedCreatedAts, countsTowardCap, FILE_SIZE_BASELINE,
-  ROUTER_SIZE_BASELINE, guardLabels, guardViolations as violationsWith, type GuardInput, humanApproved as approvedBy, rankInLast24h,
+  AGENT_PR_CAP_MAX, AGENT_PR_PER_DAY, addedMigrationLines, CAP_LINE_START, agentPrCap, baselineDiffTightens, cappedCreatedAts, countsTowardCap, FILE_SIZE_BASELINE,
+  ROUTER_SIZE_BASELINE, guardLabels, guardViolations as violationsWith, type GuardInput, humanApproved as approvedBy, onlyCapViolation, rankInLast24h,
   trustedLabels as trustedWith,
 } from "../../tooling/scripts/agent-guard";
 import { loadFlow } from "../../tooling/scripts/flow/load";
@@ -299,5 +299,27 @@ describe("guardLabels läser etiketterna ur flow.yaml (#1996)", () => {
   it("kastar när flödet saknar PR-maskinen", () => {
     const { "code-pr": _dropped, ...machines } = flow.machines;
     expect(() => guardLabels({ ...flow, machines })).toThrow("code-pr");
+  });
+});
+
+describe("onlyCapViolation (#2158)", () => {
+  const stamp = "2026-11-19T11:30:01.1234567Z ";
+  const capLine = `${stamp}✗ ${CAP_LINE_START} 20 agent-PR:er per dygn — den här är nr 22.`;
+
+  it("bara takraden med tidsstämpel: sant, också med det gamla taket 20", () => {
+    expect(onlyCapViolation(`${stamp}kör vakten\n${capLine}\n${stamp}##[error]Process completed with exit code 1.`)).toBe(true);
+  });
+
+  it("takraden plus en annan ✗-rad: falskt", () => {
+    expect(onlyCapViolation(`${capLine}\n${stamp}✗ människa-godkänd är inte satt av Ulrik själv — räknas inte.`)).toBe(false);
+  });
+
+  it("ingen ✗-rad: falskt", () => {
+    expect(onlyCapViolation(`${stamp}##[error]The runner has received a shutdown signal.`)).toBe(false);
+  });
+
+  it("känner igen takraden som guardViolations skriver den", () => {
+    const log = guardViolations({ ...BASE, agentPrsLast24h: AGENT_PR_PER_DAY + 1 }).map((v) => `${stamp}✗ ${v}`).join("\n");
+    expect(onlyCapViolation(log)).toBe(true);
   });
 });
