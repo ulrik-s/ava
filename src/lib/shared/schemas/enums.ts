@@ -266,6 +266,29 @@ export const SUGGESTION_STATUS_LABELS = {
 export const suggestionStatusSchema = enumFromLabels(SUGGESTION_STATUS_LABELS);
 export type SuggestionStatus = z.infer<typeof suggestionStatusSchema>;
 
+// ─── Dokument: riktning och mottagare (#880, #901) ────────────────────────
+
+/** Dokumentets riktning (#880): inkommande (från motpart/domstol) vs utgående (byrån skickar). */
+export const DOCUMENT_DIRECTION_LABELS = {
+  INKOMMANDE: "Inkommande",
+  UTGAENDE: "Utgående",
+} as const satisfies Record<string, string>;
+export const documentDirectionSchema = enumFromLabels(DOCUMENT_DIRECTION_LABELS);
+export type DocumentDirection = z.infer<typeof documentDirectionSchema>;
+
+/** Motpart/instans dokumentet utväxlats med (#901) — mottagare för utgående,
+ *  avsändare för inkommande. Driver "visa dok skickade till domstol"-filtret. */
+export const DOCUMENT_RECIPIENT_LABELS = {
+  DOMSTOL: "Domstol",
+  MOTPART: "Motpart",
+  KLIENT: "Klient",
+  FORSAKRING: "Försäkringsbolag",
+  MYNDIGHET: "Myndighet",
+  OVRIGT: "Övrigt",
+} as const satisfies Record<string, string>;
+export const documentRecipientSchema = enumFromLabels(DOCUMENT_RECIPIENT_LABELS);
+export type DocumentRecipient = z.infer<typeof documentRecipientSchema>;
+
 // ─── Matter role (parts roll i ett ärende) ────────────────────────────────
 
 export const MATTER_ROLE_LABELS = {

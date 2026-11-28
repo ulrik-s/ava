@@ -4,7 +4,7 @@
  * Spara är avstängd när inget ändrats.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { DocumentDetailsDialog } from "@/components/documents/_document-details-dialog";
 import { detailsChanges, detailsFromDocument } from "@/components/documents/_document-details-input";
@@ -68,6 +68,15 @@ describe("DocumentDetailsDialog", () => {
     expect(screen.getByRole("checkbox", { name: "Korrespondens" })).not.toBeChecked();
     expect(screen.getByLabelText("Riktning")).toHaveValue("INKOMMANDE");
     expect(screen.getByRole("button", { name: "Spara" })).toBeDisabled();
+  });
+
+  it("valrutorna listar etiketterna ur enums.ts: Försäkringsbolag, Inkommande, Utgående (#1999)", () => {
+    openDialog();
+    const recipient = screen.getByLabelText("Mottagare / avsändare");
+    expect(within(recipient).getByRole("option", { name: "Försäkringsbolag" })).toHaveValue("FORSAKRING");
+    const direction = screen.getByLabelText("Riktning");
+    expect(within(direction).getByRole("option", { name: "Inkommande" })).toHaveValue("INKOMMANDE");
+    expect(within(direction).getByRole("option", { name: "Utgående" })).toHaveValue("UTGAENDE");
   });
 
   it("flera typer + nytt namn skickas, med förhandsvisning av filnamnet och huvudtypen markerad", () => {

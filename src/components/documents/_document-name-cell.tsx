@@ -1,7 +1,7 @@
 "use client";
 
 import type { DocumentDirection, DocumentRecipient } from "@/lib/shared/schemas/document";
-import { DOCUMENT_RECIPIENT_LABELS } from "./_document-details-input";
+import { DOCUMENT_DIRECTION_LABELS, DOCUMENT_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
 import { DocumentPartsList, documentKindsLabel, type PartsDocLike } from "./_document-parts";
 import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
 
@@ -86,7 +86,7 @@ function DirectionBadge({ direction }: { direction?: NameCellDoc["direction"] })
   const incoming = direction === "INKOMMANDE";
   return (
     <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0 ${incoming ? "bg-sky-50 text-sky-700" : "bg-emerald-50 text-emerald-700"}`}
-      title={incoming ? "Inkommande dokument" : "Utgående dokument"}>
+      title={`${DOCUMENT_DIRECTION_LABELS[direction]} dokument`}>
       {incoming ? "↓ Ink." : "↑ Utg."}
     </span>
   );
@@ -95,7 +95,7 @@ function DirectionBadge({ direction }: { direction?: NameCellDoc["direction"] })
 /** Mottagar-badge (#901): "till/från Domstol". Null → inget. */
 function RecipientBadge({ recipient, direction }: { recipient?: NameCellDoc["recipient"]; direction?: NameCellDoc["direction"] }) {
   if (!recipient) return null;
-  const label = DOCUMENT_RECIPIENT_LABELS[recipient] ?? recipient;
+  const label = DOCUMENT_RECIPIENT_LABELS[recipient];
   const prep = direction === "INKOMMANDE" ? "från" : "till";
   return (
     <span className="inline-block rounded-full bg-gray-100 text-gray-600 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0" title={`${prep} ${label}`}>

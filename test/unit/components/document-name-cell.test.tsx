@@ -51,6 +51,17 @@ describe("DocumentNameCell", () => {
     expect(screen.getByText(/till/)).toBeInTheDocument();
   });
 
+  it("mottagarens etikett ur enums.ts: till Försäkringsbolag (#1999)", () => {
+    renderCell({ doc: { ...baseDoc, direction: "UTGAENDE", recipient: "FORSAKRING" } });
+    expect(screen.getByText("till Försäkringsbolag")).toBeInTheDocument();
+    expect(screen.getByTitle("Utgående dokument")).toBeInTheDocument();
+  });
+
+  it("riktningsmärkets verktygstips för inkommande (#1999)", () => {
+    renderCell({ doc: { ...baseDoc, direction: "INKOMMANDE" } });
+    expect(screen.getByTitle("Inkommande dokument")).toHaveTextContent("↓ Ink.");
+  });
+
   it("visar \"⏳ analyseras…\" när isAnalyzing", () => {
     renderCell({ isAnalyzing: true });
     expect(screen.getByText("⏳ analyseras…")).toBeInTheDocument();

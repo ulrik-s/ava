@@ -11,9 +11,10 @@ import { useId, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { trpc } from "@/lib/client/trpc";
 import { cleanFileName } from "@/lib/shared/document-file-name";
+import { DOCUMENT_DIRECTION_LABELS, DOCUMENT_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
 import {
-  canSaveDetails, detailsChanges, detailsFromDocument, DOCUMENT_RECIPIENT_LABELS, type DocumentDetailsValues, type EditableDocument,
+  canSaveDetails, detailsChanges, detailsFromDocument, type DocumentDetailsValues, type EditableDocument,
 } from "./_document-details-input";
 import { DocumentKindsPicker, kindOptions } from "./_document-kinds-picker";
 
@@ -59,8 +60,7 @@ function DetailsForm({ docId, doc, onClose }: { docId: DocumentId; doc: Editable
           {(id) => (
             <select id={id} className={INPUT} value={v.direction} onChange={(e) => set("direction")(e.target.value as DocumentDetailsValues["direction"])}>
               <option value="">–</option>
-              <option value="INKOMMANDE">Inkommande</option>
-              <option value="UTGAENDE">Utgående</option>
+              {Object.entries(DOCUMENT_DIRECTION_LABELS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
             </select>
           )}
         </Field>

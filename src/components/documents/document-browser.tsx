@@ -9,10 +9,11 @@ import { enqueueTextExtraction } from "@/lib/client/jobs/enqueue-text-extraction
 import { trpc } from "@/lib/client/trpc";
 import { kindLabel } from "@/lib/shared/document-kind";
 import { documentKinds } from "@/lib/shared/document-kinds";
+import { DOCUMENT_DIRECTION_LABELS, DOCUMENT_RECIPIENT_LABELS, type DocumentDirection } from "@/lib/shared/schemas/enums";
 import { asId, type DocumentFolderId, type DocumentId, type MatterId } from "@/lib/shared/schemas/ids";
 import { BrowserTable } from "./_browser-table";
 import { useDocumentsWithParts } from "./_document-parts";
-import { DocumentRow, DOCUMENT_RECIPIENT_LABELS, type DocumentRecord } from "./_document-row";
+import { DocumentRow, type DocumentRecord } from "./_document-row";
 import { MoveDocumentsButton, rowToggle, useDocumentSelection } from "./_document-selection";
 import { DocumentsListView } from "./_documents-list-view";
 import { FolderRow, type FolderRecord } from "./_folder-row";
@@ -174,7 +175,7 @@ function matchesFilter(d: DocumentRecord, f: { dir: string; recipient: string; k
 /** Dokumentfilter-state (#901, #1220): riktning + mottagare + typ, samt den filtrerade
  *  vyn och typerna som finns. Egen hook så DocumentBrowser håller sig under max-lines. */
 function useDocumentFilter(documents: DocumentRecord[]) {
-  const [dirFilter, setDirFilter] = useState<"" | "INKOMMANDE" | "UTGAENDE">("");
+  const [dirFilter, setDirFilter] = useState<"" | DocumentDirection>("");
   const [recipientFilter, setRecipientFilter] = useState<string>("");
   const [kindFilter, setKindFilter] = useState<string>("");
   const visibleDocuments = useMemo<DocumentRecord[]>(
@@ -198,10 +199,9 @@ function DocumentFilterBar({ filter, totalCount }: { filter: ReturnType<typeof u
   return (
     <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 text-xs flex-wrap">
       <span className="text-gray-500">Filter:</span>
-      <select aria-label="Riktning" value={dir} onChange={(e) => onDir(e.target.value as "" | "INKOMMANDE" | "UTGAENDE")} className={selectCls}>
+      <select aria-label="Riktning" value={dir} onChange={(e) => onDir(e.target.value as "" | DocumentDirection)} className={selectCls}>
         <option value="">Alla riktningar</option>
-        <option value="UTGAENDE">Utgående (skickat)</option>
-        <option value="INKOMMANDE">Inkommande</option>
+        {Object.entries(DOCUMENT_DIRECTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
       </select>
       <select aria-label="Mottagare" value={recipient} onChange={(e) => onRecipient(e.target.value)} className={selectCls}>
         <option value="">Alla mottagare</option>

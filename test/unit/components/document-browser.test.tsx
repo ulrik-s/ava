@@ -7,7 +7,7 @@
  * etc.
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -235,6 +235,14 @@ describe("DocumentBrowser", () => {
     fireEvent.change(screen.getByLabelText("Mottagare"), { target: { value: "DOMSTOL" } });
     expect(screen.getByText("kostnadsrakning.pdf")).toBeInTheDocument();
     expect(screen.queryByText("svaromal.pdf")).not.toBeInTheDocument();
+  });
+
+  it("filtret Riktning listar Inkommande och Utgående ur enums.ts (#1999)", () => {
+    treeQuery.data = { folders: [], documents: [baseDoc({ id: "d1", fileName: "a.pdf", direction: "UTGAENDE" })] };
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    const options = within(screen.getByLabelText("Riktning")).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["Alla riktningar", "Inkommande", "Utgående"]);
+    expect(within(screen.getByLabelText("Mottagare")).getByRole("option", { name: "Försäkringsbolag" })).toBeInTheDocument();
   });
 
   describe("sammansatta dokument (#1220)", () => {

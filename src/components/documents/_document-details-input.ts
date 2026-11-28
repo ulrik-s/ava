@@ -7,12 +7,6 @@ import { cleanFileName } from "@/lib/shared/document-file-name";
 import { documentKinds, type KindsCarrier } from "@/lib/shared/document-kinds";
 import type { DocumentDirection, DocumentRecipient } from "@/lib/shared/schemas/document";
 
-/** Mänskliga etiketter för dokumentets motpart/mottagare (#901). */
-export const DOCUMENT_RECIPIENT_LABELS: Record<string, string> = {
-  DOMSTOL: "Domstol", MOTPART: "Motpart", KLIENT: "Klient",
-  FORSAKRING: "Försäkring", MYNDIGHET: "Myndighet", OVRIGT: "Övrigt",
-};
-
 /** Det dialogen behöver av dokumentet (typerna via läsregeln, ADR 0038). */
 export interface EditableDocument extends KindsCarrier {
   fileName: string;
