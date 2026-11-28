@@ -8,6 +8,7 @@
  */
 
 import { buildPaymentVoucher } from "@/lib/shared/accounting/semantic-voucher";
+import { ledgerRefOf } from "@/lib/shared/ledger-ref";
 import { markBookedOrExplain } from "./book-invoices";
 import type { LedgerConnector } from "./port";
 
@@ -47,7 +48,7 @@ async function bookOne<P extends BookablePayment>(p: P, deps: BookPaymentsDeps<P
 /** Bokför alla obokförda betalningar, i betalningsordning (äldst först). */
 export async function bookUnbookedPayments<P extends BookablePayment>(deps: BookPaymentsDeps<P>): Promise<PaymentBookingOutcome[]> {
   const pending = deps.payments
-    .filter((p) => !p.fortnoxId)
+    .filter((p) => ledgerRefOf(p) === null)
     .sort((a, b) => new Date(a.paidAt).getTime() - new Date(b.paidAt).getTime());
   const outcomes: PaymentBookingOutcome[] = [];
   for (const p of pending) outcomes.push(await bookOne(p, deps));

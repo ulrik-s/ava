@@ -21,6 +21,7 @@ import { invoiceBreakdown, type SettlementView } from "@/lib/shared/billing/sett
 import { roundingOf, timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
 import { formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
+import { ledgerRefOf } from "@/lib/shared/ledger-ref";
 import { INVOICE_STATUS_LABELS, type AmountRounding } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { AmountHeading } from "./_amount-heading";
@@ -159,14 +160,13 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
         onShowSend={() => s.setShowSend(true)}
         onSetStatus={(status) => s.setStatus.mutate({ invoiceId: inv.id, status: status as Parameters<typeof s.setStatus.mutate>[0]["status"] })}
       />
-      <LedgerBooking invoiceId={inv.id} status={inv.status} fortnoxId={inv.fortnoxId} payments={inv.payments} />
+      <LedgerBooking invoiceId={inv.id} status={inv.status} fortnoxId={ledgerRefOf(inv)} payments={inv.payments} />
       {inv.notes && <p className="mt-2 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
     </div>
   );
 }
 
-/** Primär specifikation: slutregleringsfakturor (#876) visar den PERSISTERADE vyn
- *  (identisk med faktura-dokumentet), övriga fakturor den vanliga tids-/utläggsspecen. */
+/** Primär specifikation: slutreglering (#876) visar den PERSISTERADE vyn (som dokumentet), övriga tids-/utläggsspecen. */
 function PrimarySpecCard({ inv }: { inv: Inv }) {
   const view = invoiceBreakdown(inv);
   return view ? <SettlementBreakdownCard view={view} /> : <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} rounding={roundingOf(inv)} />;
