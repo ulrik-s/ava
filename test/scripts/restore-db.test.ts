@@ -74,4 +74,21 @@ describe("restore-db.sh", () => {
     run();
     expect(readFileSync(log, "utf8")).toContain(readFileSync("tooling/db/rotate-sync-epoch.sql", "utf8"));
   });
+
+  // #1897: en dump ur en krypterad export bär en .sha256 med sökvägen där den
+  // gjordes (backup-db.sh). Summan ska jämföras, inte sökvägen.
+  it("checksumma med en annan sökväg än dumpens nuvarande godtas när summan stämmer", () => {
+    spawnSync("bash", ["-c", `cd "${root}" && sha256sum ava.sql.gz | sed 's#  ava.sql.gz#  /tmp/borta/data/ava.sql.gz#' > ava.sql.gz.sha256`]);
+    const { status, out } = run();
+    expect(status, out).toBe(0);
+    expect(out).toContain("✓ checksumma ok");
+  });
+
+  it("fel checksumma stoppar före något rörs", () => {
+    writeFileSync(join(root, "ava.sql.gz.sha256"), `${"0".repeat(64)}  /tmp/borta/data/ava.sql.gz\n`);
+    const { status, out } = run();
+    expect(status).toBe(1);
+    expect(out).toContain("Checksumman stämmer inte");
+    expect(() => readFileSync(log, "utf8")).toThrow();
+  });
 });
