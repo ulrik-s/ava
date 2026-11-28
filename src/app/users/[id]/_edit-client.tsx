@@ -4,15 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { labelForUserRole } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { mileageRateFromFormValue, mileageRateToFormValue } from "@/lib/shared/mileage-rate";
 import { UserForm, type UserFormState } from "../_user-form";
-
-const roleLabels: Record<string, string> = {
-  ADMIN: "Admin",
-  LAWYER: "Advokat",
-  ASSISTANT: "Assistent",
-};
 
 const EMPTY_FORM: UserFormState = {
   name: "", title: "", email: "", role: "LAWYER", matterNumberPrefix: "",
@@ -112,7 +107,7 @@ export default function EditUserClient({ id: paramId }: { id: string }) {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Redigera användare</h1>
           <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-            {roleLabels[user.data.role] || user.data.role}
+            {labelForUserRole(user.data.role)}
           </span>
         </div>
 

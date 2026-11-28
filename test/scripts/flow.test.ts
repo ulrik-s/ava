@@ -4,7 +4,7 @@
  * övergångar och klockan verkställer timeouterna.
  */
 import { describe, expect, it } from "vitest-compat";
-import { INTAKE_LABELS } from "@/lib/shared/feedback";
+import { feedbackState, INTAKE_LABELS } from "@/lib/shared/feedback";
 import { AGENT_PR_PER_DAY } from "../../tooling/scripts/agent-guard";
 import { dispatchTarget, earlierFire, type FetchFn, FIRE_WINDOW_MS } from "../../tooling/scripts/flow/dispatch";
 import { renderMermaid } from "../../tooling/scripts/flow/generate";
@@ -46,6 +46,17 @@ describe("flow.yaml", () => {
   it("AVA:s statusetiketter (feedback.ts) finns alla i intagets flöde", () => {
     const known = new Set([...Object.values(intake.states).map((s) => s.label), ...Object.keys(intake.flags)]);
     expect(Object.values(INTAKE_LABELS).filter((l) => !known.has(l))).toEqual([]);
+  });
+
+  it("varje tillstånd och statusflagga i intagets flöde har en status i appen (#1995)", () => {
+    // Flaggor som inte är någon status för användaren: förfrågan är fortfarande "mottagen".
+    const statusless = ["blockerad", "agentstatus", "intern", "user-request", "bugg", "förslag", "auto-godkänn"];
+    const statuslessPrefixes = ["prio-", "rek-"];
+    const isStatusless = (l: string): boolean =>
+      statusless.includes(l) || statuslessPrefixes.some((p) => l.startsWith(p));
+    const states = Object.values(intake.states).flatMap((s) => (s.label === null ? [] : [s.label]));
+    const flags = Object.keys(intake.flags).filter((l) => !isStatusless(l));
+    expect([...states, ...flags].filter((l) => feedbackState(true, [l]) === "mottagen")).toEqual([]);
   });
 
   it("hittar trasiga övergångar, dubbla etiketter, onåbara tillstånd och okända agenter", () => {
