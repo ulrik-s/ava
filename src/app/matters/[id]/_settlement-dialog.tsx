@@ -87,12 +87,23 @@ type OrgSettings = inferRouterOutputs<AppRouter>["organization"]["getSettings"];
 /** Generera faktura-dokument (template-motorn) för klient- + betalar-fakturan
  *  efter slutreglering (#852). Utbrutet så dialogen håller sig ≤8 i komplexitet. */
 function settlementMeta(matter: MatterDetail | undefined, org: OrgSettings | undefined): FakturaDocMeta {
-  // Byråns namn, org.nr och logga (#1439) — samma mappning som övriga fakturaflöden.
-  return { matterNumber: matter?.matterNumber ?? "", matterTitle: matter?.title ?? "", ...fakturaOrgMeta(org) };
+  // Byråns namn, org.nr, logga och sidfot (#1439/#2255) — samma mappning som övriga fakturaflöden.
+  const clientName = clientContactOf(matter)?.name;
+  return { matterNumber: matter?.matterNumber ?? "", matterTitle: matter?.title ?? "", ...(clientName ? { clientName } : {}), ...fakturaOrgMeta(org) };
+}
+
+function clientContactOf(matter: MatterDetail | undefined) {
+  return matter?.contacts?.find((c) => c.role === "KLIENT")?.contact;
 }
 
 function clientNameOf(matter: MatterDetail | undefined): string {
-  return matter?.contacts?.find((c) => c.role === "KLIENT")?.contact?.name ?? "Klient";
+  return clientContactOf(matter)?.name ?? "Klient";
+}
+
+/** Klientfakturans fönsteradress: klientens postadress, när den finns (#2255). */
+function clientAddressMeta(matter: MatterDetail | undefined): Pick<FakturaDocMeta, "recipientAddress"> {
+  const address = clientContactOf(matter)?.address;
+  return address ? { recipientAddress: address } : {};
 }
 
 type FakturaViewArgs = Pick<Parameters<typeof generateFakturaFromTemplate>[0], "spec" | "breakdown">;
@@ -117,7 +128,10 @@ async function generateSettlementDocs(res: SettleResult, opts: {
   // Båda fakturorna renderas ur den PERSISTERADE vyn (#876) — exakt samma rader som
   // Slutfaktura-sidan visar, så dokument och detaljsida aldrig glider isär.
   await generateFakturaFromTemplate({ invoice: res.payerInvoice, matterId, recipient: payerLabel, meta, register, utils, ...viewToFakturaArgs(res.payerInvoice.settlementBreakdown) });
-  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils, ...viewToFakturaArgs(res.clientInvoice.settlementBreakdown) });
+  await generateFakturaFromTemplate({
+    invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta: { ...meta, ...clientAddressMeta(matter) },
+    register, utils, ...viewToFakturaArgs(res.clientInvoice.settlementBreakdown),
+  });
 }
 
 /** Härleder alla metod-beroende texter/argument (håller komponenten ≤8). */

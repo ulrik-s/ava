@@ -16,7 +16,7 @@ import { VatBreakdown } from "@/components/billing/vat-breakdown";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
-import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
+import { pickFakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { useTRPC } from "@/lib/client/trpc";
@@ -37,6 +37,8 @@ export interface BillingMeta extends FakturaOrgMeta {
   matterNumber: string;
   matterTitle: string;
   clientName?: string;
+  /** Klientens postadress — i fönsterkuvertet när fakturan går till klienten (#2255). */
+  clientAddress?: string;
   /** Klientens andel i bips (2500 = 25 %); förifyller acconto-förslaget (#778). */
   clientShareBips?: number | null;
 }
@@ -63,11 +65,13 @@ function titleFor(type: string): string {
   return "Faktura";
 }
 
-function docMetaFrom(meta: BillingMeta): FakturaDocMeta {
+/** Fakturadokumentets metadata; klientens adress bara när fakturan går till klienten. */
+function docMetaFrom(meta: BillingMeta, recipient: string): FakturaDocMeta {
   return {
     matterNumber: meta.matterNumber, matterTitle: meta.matterTitle,
     ...(meta.clientName ? { clientName: meta.clientName } : {}),
-    ...fakturaOrgMeta({ name: meta.organizationName, orgNumber: meta.organizationOrgNumber, logo: meta.organizationLogo }),
+    ...(recipient === "KLIENT" && meta.clientAddress ? { recipientAddress: meta.clientAddress } : {}),
+    ...pickFakturaOrgMeta(meta),
   };
 }
 
@@ -89,17 +93,18 @@ type DocInvoice = FakturaDocInvoice & {
   accontoBreakdown?: FakturaBreakdown | null | undefined; settlementBreakdown?: FakturaBreakdown | null | undefined;
 };
 
+/** `recipient` = mottagarens kod (KLIENT, FORSAKRING …). */
 function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: DocInvoice, recipient: string) => Promise<void> {
   const t = useTRPC();
   const queryClient = useQueryClient();
   const utils = useBillingQueryUtils();
   const register = useMutation(t.document.register.mutationOptions());
-  const docMeta = docMetaFrom(meta);
   return async (invoice: DocInvoice, recipient: string) => {
     try {
       const spec = await queryClient.query(t.billingRun.invoiceSpecification.queryOptions({ matterId, invoiceId: invoice.id }));
       await generateFakturaFromTemplate({
-        invoice, matterId, recipient, meta: docMeta, register, utils, spec, breakdown: invoiceBreakdown(invoice),
+        invoice, matterId, recipient: recipientLabel(recipient, meta.clientName), meta: docMetaFrom(meta, recipient),
+        register, utils, spec, breakdown: invoiceBreakdown(invoice),
       });
     } catch (e) { console.warn("[billing] faktura-dokument misslyckades:", e); }
   };
@@ -141,7 +146,7 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   const makeDoc = useFakturaDoc(matterId, meta);
   const { suggestedOre, fieldKr, effectiveOre, roundedFromOre } = accontoAmounts(workValueOre, clientShareBips, priorOre, amountKr);
   const mut = useMutation(t.billingRun.createAcconto.mutationOptions({
-    onSuccess: async (res) => { await makeDoc(res.invoice, recipientLabel("KLIENT", meta.clientName)); onDone(); },
+    onSuccess: async (res) => { await makeDoc(res.invoice, "KLIENT"); onDone(); },
   }));
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({
@@ -204,7 +209,7 @@ function FinalForm({ matterId, meta, accontos, onDone }: { matterId: MatterId; m
   const [invoiceDate, setInvoiceDate] = useState(() => toIsoDate(new Date()));
   const makeDoc = useFakturaDoc(matterId, meta);
   const mut = useMutation(t.billingRun.createFinal.mutationOptions({
-    onSuccess: async (res) => { await makeDoc(res.invoice, recipientLabel(recipient, meta.clientName)); onDone(); },
+    onSuccess: async (res) => { await makeDoc(res.invoice, recipient); onDone(); },
   }));
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({
