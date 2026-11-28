@@ -3,9 +3,10 @@
  * sidornas innehåll.
  */
 
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { AppShell } from "@/components/shell/app-shell";
+import { renderWithFakeTrpc } from "../../helpers/trpc-both-fake";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
@@ -16,31 +17,29 @@ vi.mock("@/components/shell/release-notes", () => ({ ReleaseNotesLink: () => nul
 vi.mock("@/components/shell/ledger-reconnect-banner", () => ({ LedgerReconnectBanner: () => <div data-testid="ledger-reconnect-banner-stub" /> }));
 
 const currentQuery = { data: undefined as { name?: string } | undefined };
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    user: {
-      current: { useQuery: () => currentQuery },
-    },
-    // ExternalEditRegistrar (mountad av AppShell) anropar trpc.useUtils().
-    // Resultatet derefereras bara i en FSA-event-callback (ej vid render).
-    useUtils: () => ({}),
-  },
-}));
+
+/**
+ * Renderar skalet under båda tRPC-bindningarna: AppShell läser `user.current`
+ * med den nya, ExternalEditRegistrar (som skalet monterar) ännu med den klassiska.
+ */
+function renderShell(children: React.ReactNode) {
+  return renderWithFakeTrpc(<AppShell>{children}</AppShell>, { "user.current": () => currentQuery.data ?? null });
+}
 
 describe("AppShell", () => {
-  it("renderar Sidebar med användarnamn när tillgängligt", () => {
+  it("renderar Sidebar med användarnamn när tillgängligt", async () => {
     currentQuery.data = { name: "Anna Advokat" };
-    render(<AppShell>barn</AppShell>);
+    renderShell("barn");
     // Sidebar har Startsida-knappen bredvid "AVA" (#1749)
     expect(screen.getAllByText("Startsida").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Anna Advokat").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Anna Advokat")).length).toBeGreaterThan(0);
   });
 
   // #1297: toppremsan (under 1024 px) ligger i flödet ovanför main — inte
   // fixed ovanpå bannrarna — så main behöver ingen utfyllnad för den.
   it("smala fönster: toppremsa och main staplas; main har ingen utfyllnad för en fast toppremsa", () => {
     currentQuery.data = undefined;
-    const { container } = render(<AppShell>barn</AppShell>);
+    const { container } = renderShell("barn");
     const main = container.querySelector("main");
     expect(main?.className).not.toContain("pt-16");
     expect(main?.parentElement?.className).toContain("flex-col");
@@ -50,13 +49,13 @@ describe("AppShell", () => {
 
   it("renderar barn-content som main", () => {
     currentQuery.data = undefined;
-    render(<AppShell><div data-testid="page-content">Innehåll</div></AppShell>);
+    renderShell(<div data-testid="page-content">Innehåll</div>);
     expect(screen.getByTestId("page-content")).toBeInTheDocument();
   });
 
   it("sidebar: Frister, ingen Att bevaka, ingen Att göra (#1167) och ingen Kalender (#1623)", () => {
     currentQuery.data = { name: "X" };
-    render(<AppShell>x</AppShell>);
+    renderShell("x");
     // Två förekomster (mobil + desktop) — räkna att minst en finns
     expect(screen.getAllByRole("link", { name: /Frister/ }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /Att bevaka/i })).not.toBeInTheDocument();
@@ -66,12 +65,12 @@ describe("AppShell", () => {
 
   it("renderar bannern för Fortnox-anslutningen på alla sidor (#1816)", () => {
     currentQuery.data = undefined;
-    render(<AppShell>x</AppShell>);
+    renderShell("x");
     expect(screen.getByTestId("ledger-reconnect-banner-stub")).toBeInTheDocument();
   });
 
   it("tål null/undefined user.current utan att krascha", () => {
     currentQuery.data = undefined;
-    expect(() => render(<AppShell>x</AppShell>)).not.toThrow();
+    expect(() => renderShell("x")).not.toThrow();
   });
 });

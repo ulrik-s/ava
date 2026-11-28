@@ -9,9 +9,10 @@
  * ut), måste anslutas igen (Fortnox godtog inte förnyelsen) och inte ansluten.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { useConnectLedger, useLedgerStatus } from "@/lib/client/backend/server-ledger";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 interface StatusFields {
@@ -50,7 +51,8 @@ function StatusLine({ status }: { status: StatusFields }) {
 
 export function FortnoxSection() {
   const status = useLedgerStatus();
-  const me = trpc.user.current.useQuery();
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions());
   const connect = useConnectLedger();
 
   if (!status.data?.configured) return null;

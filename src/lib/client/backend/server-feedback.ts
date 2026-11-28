@@ -9,7 +9,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { anyClaudeWorking, type FeedbackInput, type FeedbackItem, type FeedbackReply } from "@/lib/shared/feedback";
 import { serverTrpcClient as server } from "./server-trpc-client";
 
@@ -82,8 +82,9 @@ function seenFrom(raw: Record<string, unknown> | null | undefined): Record<strin
  * direkt så den inte blinkar medan sparandet går.
  */
 export function useFeedbackSeen(): { seen: Record<string, string>; markSeen: (number: number, at: string) => void } {
-  const stored = trpc.prefs.get.useQuery({ key: SEEN_PREF_KEY });
-  const save = trpc.prefs.save.useMutation();
+  const t = useTRPC();
+  const stored = useQuery(t.prefs.get.queryOptions({ key: SEEN_PREF_KEY }));
+  const save = useMutation(t.prefs.save.mutationOptions());
   const [local, setLocal] = useState<Record<string, string>>({});
   const seen = { ...seenFrom(stored.data?.user), ...local };
   const markSeen = (number: number, at: string): void => {

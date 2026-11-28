@@ -12,7 +12,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { serverTrpcClient } from "@/lib/client/backend/server-trpc-client";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import type { SearchScope } from "./search-scope";
 
 /** Sökningens indata (samma form som `document.search`). */
@@ -23,7 +23,8 @@ export interface DocumentSearchInput {
 
 export function useDocumentSearch(input: DocumentSearchInput, scope: SearchScope) {
   const active = input.query.length > 0;
-  const local = trpc.document.search.useQuery(input, { enabled: active && scope !== "server" });
+  const t = useTRPC();
+  const local = useQuery(t.document.search.queryOptions(input, { enabled: active && scope !== "server" }));
   const server = useQuery({
     queryKey: ["server", "document.search", input],
     queryFn: () => serverTrpcClient().document.search.query(input),

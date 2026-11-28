@@ -7,7 +7,8 @@
  * inte frågar efter någon annans poster ens kortvarigt.
  */
 
-import { trpc } from "@/lib/client/trpc";
+import { useQuery } from "@tanstack/react-query";
+import { useTRPC } from "@/lib/client/trpc";
 import { seesAllTime } from "@/lib/shared/report-subject";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { asId, type UserId } from "@/lib/shared/schemas/ids";
@@ -32,6 +33,7 @@ export function timeViewerOf(me: CurrentUser | undefined): TimeViewer {
 
 /** Den inloggade tittaren på Tidregistrering. */
 export function useTimeViewer(): TimeViewer {
-  const me = trpc.user.current.useQuery();
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions());
   return timeViewerOf(me.data);
 }

@@ -8,8 +8,9 @@
  * att valet består när sidan visas igen efter navigering (#1612).
  */
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { hiddenPanelsPrefKey, parseHiddenPanels } from "@/lib/shared/layout/dock-layout";
 
 /** Dolda paneler på en sida, och hur de döljs och läggs tillbaka. */
@@ -25,14 +26,15 @@ export interface HiddenPanels {
 /** Utan valbara paneler hämtas ingenting: sidan beter sig som förut. */
 export function useHiddenPanels(page: string, closable: readonly string[]): HiddenPanels {
   const key = hiddenPanelsPrefKey(page);
-  const stored = trpc.prefs.get.useQuery({ key }, { enabled: closable.length > 0 });
-  const utils = trpc.useUtils();
-  const save = trpc.prefs.save.useMutation();
+  const t = useTRPC();
+  const stored = useQuery(t.prefs.get.queryOptions({ key }, { enabled: closable.length > 0 }));
+  const queryClient = useQueryClient();
+  const save = useMutation(t.prefs.save.mutationOptions());
   const [local, setLocal] = useState<readonly string[] | null>(null);
   const hidden = useMemo(() => local ?? parseHiddenPanels(stored.data?.user), [local, stored.data]);
   const update = (next: readonly string[]): void => {
     setLocal(next);
-    save.mutate({ key, prefs: { hidden: [...next] } }, { onSuccess: () => { void utils.prefs.get.invalidate({ key }); } });
+    save.mutate({ key, prefs: { hidden: [...next] } }, { onSuccess: () => { void queryClient.invalidateQueries(t.prefs.get.queryFilter({ key })); } });
   };
   return {
     hidden,

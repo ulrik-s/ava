@@ -9,8 +9,9 @@
  * i ärendet, och trädvyn hämtar samma query (react-query dedupar).
  */
 
+import { useQuery } from "@tanstack/react-query";
 import type { inferRouterOutputs } from "@trpc/server";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
@@ -19,5 +20,6 @@ export type MatterDocument = inferRouterOutputs<AppRouter>["document"]["tree"]["
 
 /** Alla dokument i ärendet; `undefined` tills de laddats. */
 export function useMatterDocuments(matterId: MatterId): readonly MatterDocument[] | undefined {
-  return trpc.document.tree.useQuery({ matterId }).data?.documents;
+  const t = useTRPC();
+  return useQuery(t.document.tree.queryOptions({ matterId })).data?.documents;
 }

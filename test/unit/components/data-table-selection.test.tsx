@@ -4,12 +4,13 @@
  * kolumnmenyn. Utan `selection` finns inga kryssrutor alls.
  */
 
-import { act, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
-import { useState } from "react";
+import { act, fireEvent, renderHook, screen, within, type RenderResult } from "@testing-library/react";
+import { useState, type ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { useRowSelection } from "@/components/ui/data-table-selection";
 import { rowWith } from "../../helpers/data-table";
+import { renderWithSeededTrpc, seedDataTable } from "../../helpers/trpc-seeded";
 
 interface Row { id: string; name: string; locked: boolean; hours: number }
 const cols: Column<Row>[] = [
@@ -23,21 +24,16 @@ const rows: Row[] = [
 ];
 
 const persisted = { data: undefined as undefined | { user: unknown; org: unknown } };
-const noopMut = () => ({ mutate: vi.fn(), isPending: false });
+const ME = { id: "u1", role: "LAWYER" };
 
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
-    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
-    prefs: {
-      get: { useQuery: () => ({ data: persisted.data, isLoading: false }) },
-      save: { useMutation: noopMut },
-      clear: { useMutation: noopMut },
-      setOrgDefault: { useMutation: noopMut },
-      clearOrgDefault: { useMutation: noopMut },
-    },
-  },
-}));
+/** Renderar under en fejkad tRPC-länk; listans val och rollen finns redan i cachen. */
+function render(ui: ReactElement): RenderResult {
+  return renderWithSeededTrpc(ui, {
+    "prefs.get": () => persisted.data ?? { user: null, org: null },
+    "user.current": () => ME,
+    "prefs.save": () => ({}),
+  }, seedDataTable("x", persisted.data, ME));
+}
 
 /** Det sidan senast fick som markering. */
 const changes = vi.fn((_next: ReadonlySet<string>) => undefined);

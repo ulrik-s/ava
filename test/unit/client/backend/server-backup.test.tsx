@@ -2,17 +2,15 @@
  * Backup på begäran (#1431) från klienten: läses och begärs AV SERVERN, bara
  * för admin mot en server som har det; nedladdningen är en vanlig länk.
  */
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { backupFileNameSchema, type BackupStatus } from "@/lib/shared/backup";
+import { callsTo } from "../../../helpers/trpc-both-fake";
+import { fakeTrpcWrapper, type FakeTrpcWrapper } from "../../../helpers/trpc-fake";
 
 const state = { backup: true, role: "ADMIN", statusCalls: 0, status: null as BackupStatus | null, requested: 0 };
 
 vi.mock("@/lib/client/capabilities/use-capabilities", () => ({ useCapabilities: () => ({ backup: state.backup }) }));
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: { user: { current: { useQuery: (_: unknown, o: { enabled: boolean }) => ({ data: o.enabled ? { role: state.role } : undefined }) } } },
-}));
 vi.mock("@/lib/client/backend/server-trpc-client", () => ({
   serverTrpcClient: () => ({
     backup: {
@@ -28,9 +26,9 @@ function idle(): BackupStatus {
   return { state: "idle", latest: null, requestedAt: null, nextRequestAt: 0 };
 }
 
-function wrapper() {
-  const qc = new QueryClient();
-  return { qc, wrapper: ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider> };
+/** En ny länk där `user.current` svarar med testets roll. */
+function wrapper(): FakeTrpcWrapper {
+  return fakeTrpcWrapper({ "user.current": () => ({ role: state.role }) });
 }
 
 beforeEach(() => {
@@ -47,13 +45,21 @@ describe("useCanSeeBackup / useBackupStatus", () => {
     await waitFor(() => expect(result.current.data).toEqual(idle()));
   });
 
-  it("jurist, eller servern utan backup: inget visas och inget hämtas", () => {
+  it("jurist, eller servern utan backup: inget visas och inget hämtas", async () => {
     state.role = "LAWYER";
-    expect(renderHook(() => useCanSeeBackup(), { wrapper: wrapper().wrapper }).result.current).toBe(false);
+    const jurist = wrapper();
+    const lawyer = renderHook(() => useCanSeeBackup(), { wrapper: jurist.wrapper });
+    await waitFor(() => expect(callsTo(jurist.fake, "user.current")).toHaveLength(1));
+    await waitFor(() => expect(jurist.queryClient.isFetching()).toBe(0));
+    expect(lawyer.result.current).toBe(false);
     state.role = "ADMIN";
     state.backup = false;
-    expect(renderHook(() => useCanSeeBackup(), { wrapper: wrapper().wrapper }).result.current).toBe(false);
-    renderHook(() => useBackupStatus(), { wrapper: wrapper().wrapper });
+    const noBackup = wrapper();
+    expect(renderHook(() => useCanSeeBackup(), { wrapper: noBackup.wrapper }).result.current).toBe(false);
+    renderHook(() => useBackupStatus(), { wrapper: noBackup.wrapper });
+    await waitFor(() => expect(noBackup.queryClient.isFetching()).toBe(0));
+    // Utan backup på servern frågas inte ens efter rollen.
+    expect(callsTo(noBackup.fake, "user.current")).toEqual([]);
     expect(state.statusCalls).toBe(0);
   });
 
@@ -67,7 +73,7 @@ describe("useCanSeeBackup / useBackupStatus", () => {
 
 describe("useRequestBackup", () => {
   it("begär och lägger serverns svar i läget", async () => {
-    const { qc, wrapper: w } = wrapper();
+    const { queryClient: qc, wrapper: w } = wrapper();
     const { result } = renderHook(() => useRequestBackup(), { wrapper: w });
     await act(async () => { await result.current.mutateAsync(); });
     expect(state.requested).toBe(1);

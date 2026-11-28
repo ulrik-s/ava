@@ -3,10 +3,12 @@
  * inloggade, en Advokat har bara sig själv, en Admin har Alla överst.
  */
 
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import ReportsPage from "@/app/reports/page";
 import { rowOrder, rowWith, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc, type NewTrpcRender } from "../../../helpers/trpc-classic-mock";
+import { seedQuery } from "../../../helpers/trpc-seeded";
 
 const usersQuery = {
   data: undefined as Record<string, unknown> | undefined,
@@ -34,6 +36,7 @@ vi.mock("@/components/layout/panel-page", () => ({
 }));
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     user: {
@@ -72,6 +75,14 @@ vi.mock("@/lib/client/trpc", () => ({
     },
   },
 }));
+
+/** Renderar som den inloggade (`user.current`, som tittaren på rapporterna läser med den nya bindningen). */
+function renderAsViewer(ui: React.ReactElement): NewTrpcRender {
+  return renderWithNewTrpc(ui, {
+    handlers: { "user.current": () => currentUser.data },
+    seed: (t, qc) => { seedQuery(qc, t.user.current.queryKey(), currentUser.data); },
+  });
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -139,7 +150,7 @@ const sampleReport = {
 
 describe("ReportsPage", () => {
   it("renderar rubrik och period-formulär", () => {
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getByRole("heading", { name: /Rapporter/i })).toBeInTheDocument();
     expect(screen.getByText(/Från/i)).toBeInTheDocument();
     expect(screen.getByText(/Till/i)).toBeInTheDocument();
@@ -148,12 +159,12 @@ describe("ReportsPage", () => {
 
   it("visar Laddar... i select när users inte är laddade", () => {
     usersQuery.data = undefined;
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getByText(/Laddar\.\.\./i)).toBeInTheDocument();
   });
 
   it("listar advokater i select", () => {
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     const options = screen.getAllByRole<HTMLOptionElement>("option");
     const names = options.map((o) => o.textContent);
     expect(names).toContain("Anna");
@@ -162,27 +173,27 @@ describe("ReportsPage", () => {
 
   it("visar Laddar rapport... när report.isLoading", () => {
     reportQuery.isLoading = true;
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getAllByText(/Laddar rapport/i).length).toBeGreaterThan(0); // en per rapportpanel (#1184)
   });
 
   it("rapporten felar → panelerna visar felet, inte \"Välj jurist och period.\" (#1303)", () => {
     reportQuery.error = { message: "w.getUTCFullYear is not a function" };
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getAllByText(/Rapporten kunde inte hämtas: w.getUTCFullYear is not a function/).length).toBe(4);
     expect(screen.queryByText("Välj jurist och period.")).toBeNull();
   });
 
   it("advokaten finns inte (null) → säger det (#1303)", () => {
     reportQuery.data = null;
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getAllByText("Advokaten hittades inte.").length).toBe(4);
     expect(screen.queryByText("Välj jurist och period.")).toBeNull();
   });
 
   it("innan rollen är känd: Laddar... och ingen rapport, inga kundfordringar och inget diagram (#2116)", () => {
     currentUser.data = undefined;
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getByRole("option", { name: "Laddar..." })).toBeInTheDocument();
     expect(reportCalls.every((c) => !c.enabled)).toBe(true);
     expect(arCalls).toHaveLength(0);
@@ -193,14 +204,14 @@ describe("ReportsPage", () => {
 
   it("förvald är den inloggade, också när den inte står först i listan (#2116)", () => {
     currentUser.data = { id: "u2", role: "ADMIN" };
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getByRole<HTMLSelectElement>("combobox").value).toBe("u2");
     expect(reportCalls[reportCalls.length - 1]).toMatchObject({ input: { userId: "u2" }, enabled: true });
   });
 
   it("en Advokat har bara sig själv i listan (#2116)", () => {
     currentUser.data = { id: "u2", role: "LAWYER" };
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Bo"]);
     expect(reportCalls[reportCalls.length - 1]?.input).toMatchObject({ userId: "u2" });
   });
@@ -209,7 +220,7 @@ describe("ReportsPage", () => {
     reportQuery.data = {
       ...sampleReport, scope: "firm", user: null,
     };
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Alla", "Anna", "Bo"]);
     fireEvent.change(screen.getByRole<HTMLSelectElement>("combobox"), { target: { value: "ALLA" } });
 
@@ -224,7 +235,7 @@ describe("ReportsPage", () => {
 
   it("för en vald advokat: namnet i texterna och kundfordringarna för advokaten", () => {
     reportQuery.data = sampleReport;
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getByText("Ärenden där Anna har registrerat tid eller utlägg.")).toBeInTheDocument();
     expect(screen.getByText(/Debiterbar tid och utlägg för Anna inom perioden/)).toBeInTheDocument();
     expect(arCalls[arCalls.length - 1]).toMatchObject({ userId: "u1" });
@@ -232,7 +243,7 @@ describe("ReportsPage", () => {
 
   it("renderar SummaryCard, MattersTable, WeeklyTable och UnbilledTable när data finns", () => {
     reportQuery.data = sampleReport;
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getByText(/Ärenden under perioden/)).toBeInTheDocument();
     expect(screen.getByText(/Timdebitering per vecka/)).toBeInTheDocument();
     expect(screen.getByText(/Upparbetat, icke fakturerat/)).toBeInTheDocument();
@@ -242,7 +253,7 @@ describe("ReportsPage", () => {
 
   it("tid visas i decimaltimmar med enhet i rubrikerna (#1542)", () => {
     reportQuery.data = sampleReport;
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getByText("10 h")).toBeInTheDocument(); // totalt 600 min
     expect(screen.getByText("8 h")).toBeInTheDocument(); // debiterbart 480 min
     expect(screen.getAllByRole("columnheader", { name: /^Tid \(h\)/ }).length).toBe(2);
@@ -259,14 +270,14 @@ describe("ReportsPage", () => {
       ],
       unbilled: { rows: [], total: 0 },
     };
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     expect(screen.getByText(/Inga ärenden i vald period/i)).toBeInTheDocument();
     expect(screen.getByText(/Ingen tid registrerad i vald period/i)).toBeInTheDocument();
     expect(screen.getByText(/Inget ofakturerat i vald period/i)).toBeInTheDocument();
   });
 
   it("byter period via from/to-input", () => {
-    const { container } = render(<ReportsPage />);
+    const { container } = renderAsViewer(<ReportsPage />);
     const inputs = container.querySelectorAll('input[type="date"]');
     fireEvent.change(inputs[0]!, { target: { value: "2026-03-01" } });
     fireEvent.change(inputs[1]!, { target: { value: "2026-04-01" } });
@@ -275,14 +286,14 @@ describe("ReportsPage", () => {
   });
 
   it("byter advokat via select", () => {
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "u2" } });
     expect(select.value).toBe("u2");
   });
 
   it("Exportera Excel-knapp är inaktiv tills rapport finns", () => {
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     const btn = screen.getByRole("button", { name: /Exportera Excel/i });
     expect(btn).toBeDisabled();
   });
@@ -299,7 +310,7 @@ describe("ReportsPage", () => {
       downloads.push(this.download);
     });
 
-    const { container } = render(<ReportsPage />);
+    const { container } = renderAsViewer(<ReportsPage />);
     const from = (container.querySelector('input[type="date"]') as HTMLInputElement).value;
     const btn = screen.getByRole("button", { name: /Exportera Excel/i });
     expect(btn).not.toBeDisabled();
@@ -320,7 +331,7 @@ describe("ReportsPage", () => {
   });
 
   it("rutan Stapeldiagram visar veckan som innehåller Till för vald advokat, och ett nytt Till flyttar den (#2110)", () => {
-    const { container } = render(<ReportsPage />);
+    const { container } = renderAsViewer(<ReportsPage />);
     expect(container.querySelector('[data-panel="chart"]')).not.toBeNull();
     fireEvent.change(screen.getByLabelText("Till"), { target: { value: "2026-04-01" } });
     expect(chartCalls[chartCalls.length - 1]).toEqual({ userId: "u1", from: "2026-03-30", to: "2026-04-05", granularity: "day" });
@@ -354,7 +365,7 @@ describe("ReportsPage — sortering per kolumn (#1907)", () => {
           totalMinutes: 120, billableMinutes: 60, workValueOre: 100, expenseOre: 500 },
       ],
     });
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     const order = (): string[] => rowOrder(["2026-0001 — Alfa", "2026-0002 — Beta"]);
     sortColumn("Ärende", "desc");
     expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
@@ -382,7 +393,7 @@ describe("ReportsPage — sortering per kolumn (#1907)", () => {
         { isoYear: 2026, week: 3, start: "2026-01-12", end: "2026-01-18", totalMinutes: 120, billableMinutes: 90, workValueOre: 500 },
       ],
     });
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     const order = (): string[] => rowOrder(["01-05 – 01-11", "03-02 – 03-08", "01-12 – 01-18"]);
     // Vecka sorterar på år och tvåsiffrig vecka: v. 10 efter v. 3.
     sortColumn("Vecka", "asc");
@@ -410,7 +421,7 @@ describe("ReportsPage — sortering per kolumn (#1907)", () => {
         total: 1400,
       },
     });
-    render(<ReportsPage />);
+    renderAsViewer(<ReportsPage />);
     const order = (): string[] => rowOrder(["2026-0001 — Alfa", "2026-0002 — Beta"]);
     sortColumn("Ärende", "desc");
     expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);

@@ -6,10 +6,13 @@
  * Admin-knappar (Spara org-default etc.) sitter i samma toolbar.
  */
 
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within, type RenderOptions, type RenderResult } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { columnHeader, openColumnMenu, rowOrder, sortColumn } from "../../helpers/data-table";
+import { invalidatedPaths, type InvalidateSpy } from "../../helpers/trpc-fake";
+import { renderWithSeededTrpc, seedDataTable } from "../../helpers/trpc-seeded";
 
 interface Row { id: string; name: string; age: number }
 const cols: Column<Row>[] = [
@@ -27,21 +30,23 @@ const setOrgMutate = vi.fn();
 const clearOrgMutate = vi.fn();
 const me = { data: { id: "u1", role: "ADMIN" as string } };
 const persisted = { data: undefined as undefined | { user: unknown; org: unknown } };
-const invalidatePrefs = vi.fn();
+/** Spionen på den senaste renderingens invalideringar. */
+let invalidate: InvalidateSpy;
 
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    useUtils: () => ({ prefs: { get: { invalidate: invalidatePrefs } } }),
-    user: { current: { useQuery: () => me } },
-    prefs: {
-      get: { useQuery: () => ({ data: persisted.data, isLoading: false }) },
-      save: { useMutation: () => ({ mutate: saveMutate, isPending: false }) },
-      clear: { useMutation: () => ({ mutate: clearMutate, isPending: false }) },
-      setOrgDefault: { useMutation: () => ({ mutate: setOrgMutate, isPending: false }) },
-      clearOrgDefault: { useMutation: () => ({ mutate: clearOrgMutate, isPending: false }) },
-    },
-  },
-}));
+/** Ändringarna svarar tomt och spelas in i respektive spion. */
+const recorded = (fn: ReturnType<typeof vi.fn>) => (input: unknown) => { fn(input); return {}; };
+
+/** Renderar under en fejkad tRPC-länk; listans val och rollen finns redan i cachen. */
+function render(ui: ReactElement, options?: Omit<RenderOptions, "wrapper">): RenderResult {
+  const view = renderWithSeededTrpc(ui, {
+    "prefs.get": () => persisted.data ?? { user: null, org: null },
+    "user.current": () => me.data,
+    "prefs.save": recorded(saveMutate), "prefs.clear": recorded(clearMutate),
+    "prefs.setOrgDefault": recorded(setOrgMutate), "prefs.clearOrgDefault": recorded(clearOrgMutate),
+  }, seedDataTable("x", persisted.data, me.data), options);
+  ({ invalidate } = view);
+  return view;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -154,10 +159,10 @@ describe("DataTable", () => {
     expect(screen.getByText(/Spara som org-default/)).toBeInTheDocument();
   });
 
-  it("klick på 'Spara som org-default' anropar setOrgDefault", () => {
+  it("klick på 'Spara som org-default' anropar setOrgDefault", async () => {
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
     fireEvent.click(screen.getByText(/Spara som org-default/));
-    expect(setOrgMutate).toHaveBeenCalled();
+    await waitFor(() => expect(setOrgMutate).toHaveBeenCalledWith({ key: "x", prefs: {} }));
   });
 
   it("non-admin ser INTE org-default-knappar", () => {
@@ -315,7 +320,6 @@ describe("DataTable — footer/summa + interaktioner", () => {
 // ── Händelser i menyer, toolbar och rubriker (#1903) ─────────────────────
 
 /** Mutationsmocken anropar sitt onSuccess som servern hade gjort. */
-const succeed = (_input: unknown, opts?: { onSuccess?: () => void }): void => { opts?.onSuccess?.(); };
 
 /** Den genomskinliga ytan bakom en öppen meny (klick där stänger den). */
 const backdrop = (root: HTMLElement): HTMLElement => {
@@ -326,32 +330,30 @@ const backdrop = (root: HTMLElement): HTMLElement => {
 const headerLabels = (): Array<string | null> => screen.getAllByRole("columnheader").map((h) => h.textContent);
 
 describe("DataTable — händelser (#1903)", () => {
-  it("'Återställ vy' rensar den personliga vyn och laddar om prefs", () => {
+  it("'Återställ vy' rensar den personliga vyn och laddar om prefs", async () => {
     persisted.data = { user: { sortBy: "age", sortDir: "desc" }, org: null };
-    clearMutate.mockImplementation(succeed);
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
     expect(rowOrder(["Anna", "Bo"])).toEqual(["Bo", "Anna"]);
     fireEvent.click(screen.getByRole("button", { name: "Återställ vy" }));
-    expect(clearMutate).toHaveBeenCalledWith({ key: "x" }, expect.anything());
-    expect(invalidatePrefs).toHaveBeenCalledWith({ key: "x" });
     expect(screen.queryByText(/Sortering:/)).not.toBeInTheDocument();
     expect(rowOrder(["Anna", "Bo"])).toEqual(["Anna", "Bo"]);
+    await waitFor(() => expect(clearMutate).toHaveBeenCalledWith({ key: "x" }));
+    await waitFor(() => expect(invalidatedPaths(invalidate)).toEqual(['prefs.get {"key":"x"}']));
   });
 
-  it("'Spara som org-default' laddar om prefs när servern svarat", () => {
-    setOrgMutate.mockImplementation(succeed);
+  it("'Spara som org-default' laddar om prefs när servern svarat", async () => {
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
     fireEvent.click(screen.getByRole("button", { name: "Spara som org-default" }));
-    expect(invalidatePrefs).toHaveBeenCalledWith({ key: "x" });
+    expect(invalidatedPaths(invalidate)).toEqual([]);
+    await waitFor(() => expect(invalidatedPaths(invalidate)).toEqual(['prefs.get {"key":"x"}']));
   });
 
-  it("'Ta bort org-default' tar bort byråns vy och laddar om prefs", () => {
+  it("'Ta bort org-default' tar bort byråns vy och laddar om prefs", async () => {
     persisted.data = { user: null, org: { sortBy: "age" } };
-    clearOrgMutate.mockImplementation(succeed);
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
     fireEvent.click(screen.getByRole("button", { name: "Ta bort org-default" }));
-    expect(clearOrgMutate).toHaveBeenCalledWith({ key: "x" }, expect.anything());
-    expect(invalidatePrefs).toHaveBeenCalledWith({ key: "x" });
+    await waitFor(() => expect(clearOrgMutate).toHaveBeenCalledWith({ key: "x" }));
+    await waitFor(() => expect(invalidatedPaths(invalidate)).toEqual(['prefs.get {"key":"x"}']));
   });
 
   it("Sortera fallande vänder ordningen; 'Ta bort sortering' återställer den", () => {

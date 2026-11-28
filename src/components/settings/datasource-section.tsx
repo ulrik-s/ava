@@ -7,13 +7,14 @@
  * automatiskt i bakgrunden (se `AutoSync`).
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { Database } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSignOutFlow } from "@/components/shell/sign-out-flow";
 import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import type { FirmaConfig } from "@/lib/client/firma/firma-config";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { FirmaSettingsPanel } from "./firma-settings-panel";
 import { StorageStatus } from "./storage-status";
 import { SyncDiagnostics } from "./sync-diagnostics";
@@ -64,7 +65,8 @@ export function DatasourceSection() {
 /** Vem är inloggad? Läser `user.current` (in-process för demo, HTTP för
  *  self-hosted) + erbjuder utloggning (rensar lokal session → /login). */
 export function LoginStatus() {
-  const me = trpc.user.current.useQuery(undefined, { retry: false });
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions(undefined, { retry: false }));
   const { requestSignOut, busy, dialog } = useSignOutFlow();
 
   return (

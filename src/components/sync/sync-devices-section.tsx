@@ -7,9 +7,10 @@
  * eller som inte synkat på en vecka, markeras.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForgetSyncDevice, useSyncDevices } from "@/lib/client/backend/sync-devices";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { deviceHealth, type DeviceHealth, type SyncDevice } from "@/lib/shared/sync/device-health";
 
 const HEALTH: Readonly<Record<DeviceHealth, { label: string; className: string }>> = {
@@ -54,7 +55,8 @@ export function SyncDevicesSection({ now }: { now?: number }) {
   const [openedAt] = useState(() => Date.now());
   const at = now ?? openedAt;
   const devices = useSyncDevices();
-  const users = trpc.user.list.useQuery(undefined, { enabled: devices.isSuccess });
+  const t = useTRPC();
+  const users = useQuery(t.user.list.queryOptions(undefined, { enabled: devices.isSuccess }));
   if (!devices.data) return null;
   const names = new Map<string, string>((users.data?.users ?? []).map((u) => [u.id, u.name]));
   if (devices.data.length === 0) return <p className="text-sm text-gray-500">Ingen enhet har synkat än.</p>;

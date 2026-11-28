@@ -8,7 +8,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { serverTrpcClient as server } from "./server-trpc-client";
 
 const DEVICES_KEY = ["server", "sync.devices"] as const;
@@ -16,7 +16,8 @@ const DEVICES_KEY = ["server", "sync.devices"] as const;
 /** Visas översikten här? (server + admin) */
 export function useCanSeeSyncDevices(): boolean {
   const { sync } = useCapabilities();
-  const me = trpc.user.current.useQuery(undefined, { enabled: sync });
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions(undefined, { enabled: sync }));
   return sync && me.data?.role === "ADMIN";
 }
 

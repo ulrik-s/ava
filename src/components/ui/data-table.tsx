@@ -17,8 +17,9 @@
  *     prefs.setOrgDefault. Merge: personal > org > komponent-default.
  */
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { ColumnMenu, type HeaderActions } from "./data-table-column-menu";
 
 // Pure logik + typer bor i `data-table-logic.ts` (#62, SRP). Re-exporteras här
@@ -83,14 +84,15 @@ function cellClass<T>(col: Column<T>): string {
 }
 
 export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage, footer, selection }: Props<T>) {
-  const persisted = trpc.prefs.get.useQuery({ key: prefKey });
-  const save = trpc.prefs.save.useMutation();
-  const clear = trpc.prefs.clear.useMutation();
-  const setOrg = trpc.prefs.setOrgDefault.useMutation();
-  const clearOrg = trpc.prefs.clearOrgDefault.useMutation();
-  const me = trpc.user.current.useQuery();
-  const isAdmin = me.data?.role === "ADMIN";
-  const utils = trpc.useUtils();
+  const t = useTRPC();
+  const persisted = useQuery(t.prefs.get.queryOptions({ key: prefKey }));
+  const save = useMutation(t.prefs.save.mutationOptions());
+  const clear = useMutation(t.prefs.clear.mutationOptions());
+  const setOrg = useMutation(t.prefs.setOrgDefault.mutationOptions());
+  const clearOrg = useMutation(t.prefs.clearOrgDefault.mutationOptions());
+  const isAdmin = useQuery(t.user.current.queryOptions()).data?.role === "ADMIN";
+  const queryClient = useQueryClient();
+  const refetchPrefs = { onSuccess: () => { void queryClient.invalidateQueries(t.prefs.get.queryFilter({ key: prefKey })); } };
   const remote = useMemo(
     () => mergePrefs(persisted.data?.user as DataTablePrefs | null, persisted.data?.org as DataTablePrefs | null),
     [persisted.data],
@@ -125,16 +127,9 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   const selectCol = useSelectionColumn(selection, filtered, rowKey);
   const fixedWidth = fixedTableWidth(vCols, prefs, NARROW_COL_WIDTH + selectCol.width);
 
-  const resetPersonal = (): void => {
-    setLocalPrefs({});
-    clear.mutate({ key: prefKey }, { onSuccess: () => { void utils.prefs.get.invalidate({ key: prefKey }); } });
-  };
-  const saveAsOrgDefault = (): void => {
-    setOrg.mutate({ key: prefKey, prefs: prefs as Record<string, unknown> }, { onSuccess: () => { void utils.prefs.get.invalidate({ key: prefKey }); } });
-  };
-  const removeOrgDefault = (): void => {
-    clearOrg.mutate({ key: prefKey }, { onSuccess: () => { void utils.prefs.get.invalidate({ key: prefKey }); } });
-  };
+  const resetPersonal = (): void => { setLocalPrefs({}); clear.mutate({ key: prefKey }, refetchPrefs); };
+  const saveAsOrgDefault = (): void => { setOrg.mutate({ key: prefKey, prefs: prefs as Record<string, unknown> }, refetchPrefs); };
+  const removeOrgDefault = (): void => { clearOrg.mutate({ key: prefKey }, refetchPrefs); };
 
   return (
     <div>

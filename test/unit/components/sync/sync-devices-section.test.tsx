@@ -2,8 +2,10 @@
  * Enheter och synk (#1267): adminens tabell, bevakningen i Att bevaka och sidan.
  */
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import type { SyncDevice } from "@/lib/shared/sync/device-health";
+import { fakeTrpcLink, TrpcTestProvider } from "../../../helpers/trpc-fake";
 
 const NOW = Date.UTC(2026, 8, 30, 12, 0);
 const HOUR = 3600_000;
@@ -18,9 +20,12 @@ vi.mock("@/lib/client/backend/sync-devices", () => ({
   useCanSeeSyncDevices: () => state.canSee,
   useForgetSyncDevice: () => ({ isPending: false, mutate: (id: string) => { state.forgotten.push(id); } }),
 }));
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: { user: { list: { useQuery: () => ({ data: { users: [{ id: "u-anna", name: "Anna Advokat" }] } }) } } },
-}));
+
+/** Renderar under en fejkad tRPC-länk där byråns användare är Anna. */
+function renderTrpc(ui: ReactElement) {
+  const fake = fakeTrpcLink({ "user.list": () => ({ users: [{ id: "u-anna", name: "Anna Advokat" }] }) });
+  return render(<TrpcTestProvider link={fake.link}>{ui}</TrpcTestProvider>);
+}
 
 const { SyncDevicesSection } = await import("@/components/sync/sync-devices-section");
 const { StaleDevicesNotice } = await import("@/components/sync/stale-devices-notice");
@@ -38,23 +43,24 @@ beforeEach(() => {
 
 describe("SyncDevicesSection", () => {
   it("visas inte när översikten inte är tillgänglig", () => {
-    const { container } = render(<SyncDevicesSection now={NOW} />);
+    const { container } = renderTrpc(<SyncDevicesSection now={NOW} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("inga enheter än", () => {
     state.devices = [];
-    render(<SyncDevicesSection now={NOW} />);
+    renderTrpc(<SyncDevicesSection now={NOW} />);
     expect(screen.getByText(/Ingen enhet har synkat än/)).toBeInTheDocument();
   });
 
-  it("en rad per enhet: användare, enhet, kö och läge", () => {
+  it("en rad per enhet: användare, enhet, kö och läge", async () => {
     state.devices = [
       device({ deviceId: "ok" }),
       device({ deviceId: "stuck", userId: "okänd", label: null, pendingCount: 3, oldestPendingAt: NOW - 30 * HOUR }),
       device({ deviceId: "one", pendingCount: 1, oldestPendingAt: null, lastSeenAt: NOW - 8 * 24 * HOUR }),
     ];
-    render(<SyncDevicesSection now={NOW} />);
+    renderTrpc(<SyncDevicesSection now={NOW} />);
+    await screen.findAllByText("Anna Advokat");
     const rows = screen.getAllByTestId("sync-device-row");
     expect(rows).toHaveLength(3);
     for (const row of rows) expect(row).toHaveClass("align-top"); // cellerna börjar längst upp (#1753)
@@ -65,7 +71,7 @@ describe("SyncDevicesSection", () => {
 
   it("enhetens senaste synkfel visas (#1353); utan fel visas inget", () => {
     state.devices = [device({ deviceId: "fel", pendingCount: 2, lastError: "Kunde inte spara till servern: 500" }), device({ deviceId: "ok" })];
-    render(<SyncDevicesSection now={NOW} />);
+    renderTrpc(<SyncDevicesSection now={NOW} />);
     const errors = screen.getAllByTestId("sync-device-error");
     expect(errors).toHaveLength(1);
     expect(errors[0]).toHaveTextContent("Senaste synkfel: Kunde inte spara till servern: 500");
@@ -74,7 +80,7 @@ describe("SyncDevicesSection", () => {
   it("Glöm frågar först och glömmer sedan enheten", () => {
     state.devices = [device({ deviceId: "gammal" })];
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
-    render(<SyncDevicesSection />);
+    renderTrpc(<SyncDevicesSection />);
     fireEvent.click(screen.getByRole("button", { name: "Glöm" }));
     expect(state.forgotten).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Glöm" }));
@@ -86,13 +92,13 @@ describe("SyncDevicesSection", () => {
 describe("StaleDevicesNotice", () => {
   it("ingen bevakning när allt är i ordning", () => {
     state.devices = [device({})];
-    const { container } = render(<StaleDevicesNotice now={NOW} />);
+    const { container } = renderTrpc(<StaleDevicesNotice now={NOW} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("bevakningen räknar enheterna som larmar och leder till översikten", () => {
     state.devices = [device({ pendingCount: 1, oldestPendingAt: NOW - 25 * HOUR }), device({ deviceId: "d2", lastSeenAt: NOW - 8 * 24 * HOUR })];
-    render(<StaleDevicesNotice now={NOW} />);
+    renderTrpc(<StaleDevicesNotice now={NOW} />);
     const link = screen.getByTestId("stale-devices-notice");
     expect(link).toHaveTextContent(/2 enheter/);
     expect(link).toHaveAttribute("href", "/sync-devices");
@@ -100,7 +106,7 @@ describe("StaleDevicesNotice", () => {
 
   it("en enhet i singular; utan now används tiden då vyn öppnades", () => {
     state.devices = [device({ lastSeenAt: 0 })];
-    render(<StaleDevicesNotice />);
+    renderTrpc(<StaleDevicesNotice />);
     expect(screen.getByTestId("stale-devices-notice")).toHaveTextContent(/1 enhet har/);
   });
 });
@@ -108,14 +114,14 @@ describe("StaleDevicesNotice", () => {
 describe("SyncDevicesPage", () => {
   it("admin mot server ser tabellen", () => {
     state.devices = [device({})];
-    render(<SyncDevicesPage />);
+    renderTrpc(<SyncDevicesPage />);
     expect(screen.getByRole("heading", { name: "Enheter och synk" })).toBeInTheDocument();
     expect(screen.getByTestId("sync-devices")).toBeInTheDocument();
   });
 
   it("annars ett besked om vem översikten är för", () => {
     state.canSee = false;
-    render(<SyncDevicesPage />);
+    renderTrpc(<SyncDevicesPage />);
     expect(screen.getByText(/Översikten finns för administratörer/)).toBeInTheDocument();
   });
 });

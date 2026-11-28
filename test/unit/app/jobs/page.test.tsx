@@ -3,10 +3,11 @@
  * rad-actions (Avbryt / Försök igen). Täcker den utbrutna `JobActions`
  * (#6-ratchet: JobRow låg på complexity 9) i alla tre grenar.
  */
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import JobsPage from "@/app/jobs/page";
 import type { Job } from "@/lib/client/jobs/job-queue";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 // Importeras efter mockarna (bun/vitest hoistar vi.mock).
 
@@ -24,6 +25,7 @@ vi.mock("@/components/layout/panel-page", () => ({
 }));
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     // DataTable (#1146) läser/sparar vy-inställningar.
@@ -54,7 +56,7 @@ beforeEach(() => {
 describe("JobsPage / JobActions", () => {
   it("körande jobb → Avbryt-knapp som anropar jobQueue.cancel", () => {
     JOBS = [job({ id: "r1", status: "running", progress: 0.5 })];
-    render(<JobsPage />);
+    renderWithNewTrpc(<JobsPage />);
     const row = screen.getByRole("row", { name: /Jobb r1/ });
     fireEvent.click(within(row).getByRole("button", { name: /Avbryt/ }));
     expect(cancel).toHaveBeenCalledWith("r1");
@@ -63,7 +65,7 @@ describe("JobsPage / JobActions", () => {
 
   it("köat jobb utan progress → '↻ Körs'/'⏳ Köad' + Avbryt", () => {
     JOBS = [job({ id: "q1", status: "queued" }), job({ id: "r2", status: "running" })];
-    render(<JobsPage />);
+    renderWithNewTrpc(<JobsPage />);
     expect(screen.getByText("⏳ Köad")).toBeInTheDocument();
     expect(screen.getByText("↻ Körs")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Avbryt/ })).toHaveLength(2);
@@ -71,7 +73,7 @@ describe("JobsPage / JobActions", () => {
 
   it("misslyckat jobb → Försök igen (anropar retry) + felmeddelande", () => {
     JOBS = [job({ id: "f1", status: "failed", error: "boom", startedAt: 1000, finishedAt: 1500 })];
-    render(<JobsPage />);
+    renderWithNewTrpc(<JobsPage />);
     const row = screen.getByRole("row", { name: /Jobb f1/ });
     expect(within(row).getByTitle("boom")).toBeInTheDocument();
     fireEvent.click(within(row).getByRole("button", { name: /Försök igen/ }));
@@ -80,13 +82,13 @@ describe("JobsPage / JobActions", () => {
 
   it("avbrutet jobb → Försök igen", () => {
     JOBS = [job({ id: "c1", status: "canceled", startedAt: 1000, finishedAt: 1500 })];
-    render(<JobsPage />);
+    renderWithNewTrpc(<JobsPage />);
     expect(screen.getByRole("button", { name: /Försök igen/ })).toBeInTheDocument();
   });
 
   it("klart jobb → varken Avbryt eller Försök igen", () => {
     JOBS = [job({ id: "d1", status: "done", startedAt: 1000, finishedAt: 1500 })];
-    render(<JobsPage />);
+    renderWithNewTrpc(<JobsPage />);
     expect(screen.getByText("✓ Klart")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Avbryt/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Försök igen/ })).not.toBeInTheDocument();
@@ -98,7 +100,7 @@ describe("JobsPage / JobActions", () => {
       job({ id: "s", status: "done", startedAt: 0, finishedAt: 5_000 }),
       job({ id: "min", status: "done", startedAt: 0, finishedAt: 120_000 }),
     ];
-    render(<JobsPage />);
+    renderWithNewTrpc(<JobsPage />);
     expect(screen.getByText("500 ms")).toBeInTheDocument();
     expect(screen.getByText("5.0 s")).toBeInTheDocument();
     expect(screen.getByText("2.0 min")).toBeInTheDocument();
@@ -106,14 +108,14 @@ describe("JobsPage / JobActions", () => {
 
   it("'Rensa historik' syns när historik finns och anropar clearFinished", () => {
     JOBS = [job({ id: "d1", status: "done", startedAt: 0, finishedAt: 10 })];
-    render(<JobsPage />);
+    renderWithNewTrpc(<JobsPage />);
     fireEvent.click(screen.getByRole("button", { name: /Rensa historik/ }));
     expect(clearFinished).toHaveBeenCalled();
   });
 
   it("tomt läge → tom-texter, ingen Rensa-knapp", () => {
     JOBS = [];
-    render(<JobsPage />);
+    renderWithNewTrpc(<JobsPage />);
     expect(screen.getByText("Inga aktiva jobb.")).toBeInTheDocument();
     expect(screen.getByText("Ingen historik ännu.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Rensa historik/ })).not.toBeInTheDocument();

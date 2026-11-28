@@ -9,17 +9,19 @@
  * (react-query dedupar), så ingen extra nätverkstrafik tillkommer.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { reportSelfDetected } from "@/lib/client/diagnostics";
 import { useMatterDocuments } from "@/lib/client/documents/use-matter-documents";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { detectMatterInvariants, type BillingRunView, type DocumentView } from "@/lib/shared/diagnostics/invariants";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
 export function useMatterInvariants(input: { matterId: MatterId; matterNumber?: string }): void {
   const { matterId, matterNumber } = input;
-  const runs = trpc.billingRun.list.useQuery({ matterId });
+  const t = useTRPC();
+  const runs = useQuery(t.billingRun.list.queryOptions({ matterId }));
   // Alla mappar: KR-dokumentet ligger i en undermapp (#1308).
   const docs = useMatterDocuments(matterId);
 

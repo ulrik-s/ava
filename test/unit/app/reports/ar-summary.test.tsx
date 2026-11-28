@@ -2,15 +2,17 @@
  * Test för ArSummarySection (ADR 0007): brygga + åldersanalys renderas.
  */
 
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 
 import { ArSummarySection } from "@/app/reports/_ar-summary";
 import { rowOrder, rowWith, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 const arQuery = { data: undefined as Record<string, unknown> | undefined, isLoading: false };
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     // DataTable (#1146) läser/sparar vy-inställningar.
@@ -34,7 +36,7 @@ beforeEach(() => {
 describe("ArSummarySection", () => {
   it("visar laddningsläge", () => {
     arQuery.isLoading = true;
-    render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
+    renderWithNewTrpc(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     expect(screen.getByText("Laddar…")).toBeInTheDocument();
   });
 
@@ -56,7 +58,7 @@ describe("ArSummarySection", () => {
         { id: "i1", invoiceNumber: "F-2026-0001", invoiceDate: "2026-03-10", matterId: "m1", matterNumber: "2026-0001", title: "Tvist", fakturerat: 100_00, inbetalt: 30_00, avskrivet: 0, utestaende: 70_00 },
       ],
     };
-    render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
+    renderWithNewTrpc(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     expect(screen.getByText("Kundfordringar")).toBeInTheDocument();
     expect(screen.getByText("Fakturerat (brutto)")).toBeInTheDocument();
     expect(screen.getByText("= Utestående fordran")).toBeInTheDocument();
@@ -85,7 +87,7 @@ describe("ArSummarySection", () => {
       ],
       rows: [],
     };
-    render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
+    renderWithNewTrpc(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     expect(screen.getByText("Inga förfallna fakturor.")).toBeInTheDocument();
   });
 
@@ -102,7 +104,7 @@ describe("ArSummarySection", () => {
         { id: "i2", invoiceNumber: "", invoiceDate: "2026-03-10", matterId: "", matterNumber: "2026-0001", title: "", fakturerat: 300_00, inbetalt: 100_00, avskrivet: 0, utestaende: 200_00 },
       ],
     };
-    render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
+    renderWithNewTrpc(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     const order = (): string[] => rowOrder(["2026-0009 — Alfa", "2026-0001"]);
     sortColumn("Fakturanr", "asc");
     expect(order()).toEqual(["2026-0001", "2026-0009 — Alfa"]);

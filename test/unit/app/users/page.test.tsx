@@ -2,11 +2,12 @@
  * Test för UsersPage (lista).
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import UsersPage from "@/app/users/page";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { rowOrder, sortColumn } from "../../../helpers/data-table";
+import { NEW_TRPC_BINDING, renderWithNewTrpc } from "../../../helpers/trpc-classic-mock";
 
 const usersQuery = {
   data: { users: [] as Array<Record<string, unknown>> },
@@ -27,6 +28,7 @@ let deactivated: (() => void) | undefined;
 const listInvalidate = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
+  ...NEW_TRPC_BINDING,
   trpc: {
     user: {
       list: { useQuery: () => usersQuery },
@@ -63,7 +65,7 @@ const sampleUser = {
 
 describe("UsersPage", () => {
   it("renderar rubrik + Ny användare-länk", () => {
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     expect(screen.getByRole("heading", { name: /Användare/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /\+ Ny användare/i })).toBeInTheDocument();
   });
@@ -91,7 +93,7 @@ describe("UsersPage", () => {
         },
       ],
     };
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     // Eget timarvode visas; saknas det följer juristen byråns (#1206).
     expect(screen.getByText(/^3\s000 kr\/h$/)).toBeInTheDocument();
     expect(screen.getByText("byråns")).toBeInTheDocument();
@@ -109,7 +111,7 @@ describe("UsersPage — behörighet + inaktivera + status", () => {
   it("icke-admin: visar notis + döljer Ny användare-länk + actions", () => {
     currentQuery.data = { id: "u9", role: "LAWYER" };
     usersQuery.data = { users: [sampleUser] };
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     expect(screen.getByText(/Endast administratörer/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /\+ Ny användare/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Inaktivera")).not.toBeInTheDocument();
@@ -118,7 +120,7 @@ describe("UsersPage — behörighet + inaktivera + status", () => {
   it("admin: Inaktivera med confirm → deactivate.mutate med id", () => {
     usersQuery.data = { users: [sampleUser] }; // id "u1" ≠ current "admin"
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     fireEvent.click(screen.getByText("Inaktivera"));
     expect(deactivateMutation.mutate).toHaveBeenCalledWith({ id: "u1" });
     confirmSpy.mockRestore();
@@ -127,7 +129,7 @@ describe("UsersPage — behörighet + inaktivera + status", () => {
   it("admin: Inaktivera med avbruten confirm → ingen mutation", () => {
     usersQuery.data = { users: [sampleUser] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     fireEvent.click(screen.getByText("Inaktivera"));
     expect(deactivateMutation.mutate).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
@@ -135,13 +137,13 @@ describe("UsersPage — behörighet + inaktivera + status", () => {
 
   it("egen rad får ingen Inaktivera-knapp (kan inte inaktivera sig själv)", () => {
     usersQuery.data = { users: [{ ...sampleUser, id: "admin" }] }; // = current user
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     expect(screen.queryByText("Inaktivera")).not.toBeInTheDocument();
   });
 
   it("laddar-tillstånd visar 'Laddar...'", () => {
     usersQuery.isLoading = true;
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     expect(screen.getByText("Laddar...")).toBeInTheDocument();
   });
 });
@@ -150,14 +152,14 @@ describe("UsersPage — Bli denna (#1109)", () => {
   it("demo: admin kan byta principal till en annan användare", () => {
     localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo" }));
     usersQuery.data = { users: [sampleUser] };
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     expect(screen.getByText("Bli denna")).toBeInTheDocument();
   });
 
   it("OIDC: ingen Bli denna — principalen är serverns inloggade användare", () => {
     localStorage.setItem("ava.firma", JSON.stringify({ tier: "self-hosted" }));
     usersQuery.data = { users: [sampleUser] };
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     expect(screen.queryByText("Bli denna")).not.toBeInTheDocument();
     expect(screen.getByText("Inaktivera")).toBeInTheDocument();
   });
@@ -183,7 +185,7 @@ describe("UsersPage — kolumnerna sorterar på det som visas (#1904)", () => {
   const names = ["Alva", "Bertil", "Cecilia"];
 
   it("Namn, Titel och E-post", () => {
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     sortColumn("Namn", "desc");
     expect(rowOrder(names)).toEqual(["Cecilia", "Bertil", "Alva"]);
     sortColumn("Titel", "asc");
@@ -193,14 +195,14 @@ describe("UsersPage — kolumnerna sorterar på det som visas (#1904)", () => {
   });
 
   it("Roll sorterar på etiketten och okänd roll på koden", () => {
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     sortColumn("Roll", "desc");
     expect(rowOrder(names)).toEqual(["Cecilia", "Bertil", "Alva"]);
     expect(screen.getByText("OKÄND")).toBeInTheDocument();
   });
 
   it("Timarvode och Milersättning sorterar på beloppet, saknat belopp först", () => {
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     sortColumn("Timarvode", "asc");
     expect(rowOrder(names)).toEqual(["Bertil", "Cecilia", "Alva"]);
     sortColumn("Milersättning", "desc");
@@ -214,7 +216,7 @@ describe("UsersPage — Bli denna och inaktiveringens svar (#1904)", () => {
     usersQuery.data = { users: [sampleUser] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const replaceSpy = vi.spyOn(window.location, "replace").mockImplementation(() => undefined);
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     fireEvent.click(screen.getByText("Bli denna"));
     expect(confirmSpy).toHaveBeenCalledWith("Logga in som Anna Karlsson?");
     expect(loadFirmaConfig()).toMatchObject({
@@ -230,7 +232,7 @@ describe("UsersPage — Bli denna och inaktiveringens svar (#1904)", () => {
     usersQuery.data = { users: [sampleUser] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     const replaceSpy = vi.spyOn(window.location, "replace").mockImplementation(() => undefined);
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     fireEvent.click(screen.getByText("Bli denna"));
     expect(replaceSpy).not.toHaveBeenCalled();
     expect(loadFirmaConfig().principalId).toBeUndefined();
@@ -239,7 +241,7 @@ describe("UsersPage — Bli denna och inaktiveringens svar (#1904)", () => {
   });
 
   it("när användaren inaktiverats laddas listan om", () => {
-    render(<UsersPage />);
+    renderWithNewTrpc(<UsersPage />);
     deactivated?.();
     expect(listInvalidate).toHaveBeenCalled();
   });

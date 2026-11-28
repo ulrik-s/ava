@@ -1,8 +1,9 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { contactInput, EMPTY_CONTACT_FORM, type ContactForm } from "./contact-fields";
 import { NewContactForm } from "./new-contact-form";
 
@@ -28,14 +29,15 @@ interface Props {
  */
 export function NewClientDialog({ initialName = "", onCreated, onClose, noun = "klient" }: Props) {
   const [form, setForm] = useState<ContactForm>({ ...EMPTY_CONTACT_FORM, name: initialName });
-  const utils = trpc.useUtils();
-  const createContact = trpc.contacts.create.useMutation({
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const createContact = useMutation(t.contacts.create.mutationOptions({
     onSuccess: (contact) => {
-      void utils.contacts.list.invalidate();
-      void utils.contacts.search.invalidate();
+      void queryClient.invalidateQueries(t.contacts.list.queryFilter());
+      void queryClient.invalidateQueries(t.contacts.search.queryFilter());
       onCreated({ id: contact.id, name: contact.name });
     },
-  });
+  }));
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

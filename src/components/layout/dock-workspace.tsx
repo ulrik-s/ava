@@ -20,13 +20,14 @@
  */
 
 import "dockview-react/dist/styles/dockview.css";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DockviewDefaultTab, DockviewReact, themeDark, themeLight,
   type AddPanelPositionOptions, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type SerializedDockview,
 } from "dockview-react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useScreenClass } from "@/lib/client/layout/use-screen-class";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import {
   hiddenChoices, LAYOUT_VERSION, layoutPrefKey, panelOrder, parseStoredLayout, reconcileLayout, visiblePanels, withoutMaximized,
   type SerializedLayout,
@@ -180,7 +181,8 @@ function PhoneWorkspace({ page, panels, choices, activePanel }: {
   page: string; panels: readonly PanelDef[]; choices: PanelChoices | null; activePanel: string | null | undefined;
 }) {
   const close = useContext(TabCloseContext);
-  const prefs = trpc.prefs.get.useQuery({ key: layoutPrefKey(page, "laptop") });
+  const t = useTRPC();
+  const prefs = useQuery(t.prefs.get.queryOptions({ key: layoutPrefKey(page, "laptop") }));
   const ordered = useMemo(() => {
     const layout = parseStoredLayout(prefs.data?.user) ?? parseStoredLayout(prefs.data?.org);
     if (!layout) return panels;
@@ -194,7 +196,8 @@ function PhoneWorkspace({ page, panels, choices, activePanel }: {
 function DesktopWorkspace({ page, panels, defaultLayout, screen, choices, activePanel }: Props & { screen: "laptop" | "large"; choices: PanelChoices | null }) {
   const key = layoutPrefKey(page, screen);
   const [generation, setGeneration] = useState(0);
-  const prefs = trpc.prefs.get.useQuery({ key });
+  const t = useTRPC();
+  const prefs = useQuery(t.prefs.get.queryOptions({ key }));
   const apiRef = useRef<DockviewApi | null>(null);
   const defs = useMemo(() => new Map(panels.map((p) => [p.id, p])), [panels]);
   const layout = useLayoutPersistence(key, () => { setGeneration((g) => g + 1); });
@@ -257,15 +260,16 @@ function DesktopWorkspace({ page, panels, defaultLayout, screen, choices, active
 
 /** Spara (debouncat, bara efter egen ändring), återställ och firmastandard. */
 function useLayoutPersistence(key: string, remount: () => void) {
-  const utils = trpc.useUtils();
-  const save = trpc.prefs.save.useMutation();
-  const clear = trpc.prefs.clear.useMutation();
-  const setOrg = trpc.prefs.setOrgDefault.useMutation();
-  const clearOrg = trpc.prefs.clearOrgDefault.useMutation();
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const save = useMutation(t.prefs.save.mutationOptions());
+  const clear = useMutation(t.prefs.clear.mutationOptions());
+  const setOrg = useMutation(t.prefs.setOrgDefault.mutationOptions());
+  const clearOrg = useMutation(t.prefs.clearOrgDefault.mutationOptions());
   const touched = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stored = (layout: SerializedDockview) => ({ version: LAYOUT_VERSION, layout: withoutMaximized(layout) });
-  const refresh = () => { void utils.prefs.get.invalidate({ key }).then(remount); };
+  const refresh = () => { void queryClient.invalidateQueries(t.prefs.get.queryFilter({ key })).then(remount); };
   return {
     markTouched: () => { touched.current = true; },
     onChange: (layout: SerializedDockview) => {
@@ -289,7 +293,8 @@ function LayoutToolbar({ hasOrgDefault, maximized, onReset, onSaveOrg, onClearOr
   /** Valbara paneler (#1612); `null` = sidan har inga. */
   choices: PanelChoices | null;
 }) {
-  const me = trpc.user.current.useQuery();
+  const t = useTRPC();
+  const me = useQuery(t.user.current.queryOptions());
   const btn = TOOLBAR_BUTTON;
   return (
     <div className="flex shrink-0 items-center justify-end gap-1 pb-1 text-xs text-gray-500">

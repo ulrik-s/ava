@@ -1,9 +1,10 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { labelForContactType } from "@/lib/client/labels";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import type { ContactType } from "@/lib/shared/schemas/enums";
 import { NewClientDialog, type PickedClient } from "./new-client-dialog";
 
@@ -103,7 +104,8 @@ interface HitsProps {
 /** Träfflistan — bäst först. Tom sökning visar en ledtråd i st.f. alla kontakter. */
 function ClientHits({ term, noun, contactType, onPick }: HitsProps) {
   const trimmed = term.trim();
-  const search = trpc.contacts.search.useQuery({ term: trimmed, ...(contactType ? { contactType } : {}) }, { enabled: trimmed.length > 0 });
+  const t = useTRPC();
+  const search = useQuery(t.contacts.search.queryOptions({ term: trimmed, ...(contactType ? { contactType } : {}) }, { enabled: trimmed.length > 0 }));
   if (trimmed.length === 0) return <p className="mt-3 text-sm text-gray-500">Skriv för att söka.</p>;
   const hits = (search.data?.contacts ?? []) as Hit[];
   if (search.isLoading) return <p className="mt-3 text-sm text-gray-500">Söker…</p>;
