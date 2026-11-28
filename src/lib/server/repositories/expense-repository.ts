@@ -6,6 +6,7 @@
 
 import type { Expense } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, ExpenseId, InvoiceId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
+import type { InvoiceRelease } from "@/lib/shared/time-entry-lock";
 import type { ReportMatterRef } from "./time-entry-repository";
 import type { Repository } from "./types";
 
@@ -57,6 +58,8 @@ export interface ExpenseRepository extends Repository<Expense> {
   freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void>;
   /** Lås upp ENBART posterna som just denna körning frös (annullerad kostnadsräkning, #1121). */
   unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void>;
+  /** Släpp en makulerad/krediterad fakturas utlägg (#2260): regeln är `releasePatch`. */
+  releaseInvoice(release: InvoiceRelease): Promise<void>;
   /** En advokats utlägg i en period (date asc), med ärende-ref (perLawyer-rapporten). */
   listForLawyerInPeriod(organizationId: OrganizationId, userId: UserId, from: Date, to: Date): Promise<LawyerReportExpense[]>;
 }

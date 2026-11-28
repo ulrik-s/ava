@@ -71,3 +71,34 @@ export function hasInvoice(t: Pick<LockableEntry, "invoiceId">): boolean {
 export function isInvoicedOutsideCoverage(t: LockableEntry): boolean {
   return t.frozenAt != null && t.frozenByBillingRunId == null;
 }
+
+/**
+ * Vad en makulerad eller krediterad faktura släpper (#2260): fakturan och de
+ * körningar som skapade den (`billingRunIds`, slutfakturans eller acontots
+ * egen körning — aldrig en kostnadsräkning, som står fast hos domstolen).
+ */
+export interface InvoiceRelease {
+  invoiceId: string;
+  billingRunIds: readonly BillingRunId[];
+}
+
+/** Låsfälten ett släpp nollar på en post (tomt = posten berörs inte). */
+export type ReleasePatch = Partial<Record<BillingLockField, null>>;
+
+/**
+ * Vilka låsfält ett släpp av fakturan nollar på posten (#2260) — EN regel för
+ * minnesrepona och Drizzle-villkoren (`releasedFreezeWhere`):
+ * - fakturans egen koppling (`invoiceId`) nollas,
+ * - frysningen nollas när en släppt körning frös posten och posten inte hör
+ *   till en annan faktura.
+ * En post som en kostnadsräkning frös behåller frysningen: den är inskickad
+ * till domstolen och står fast.
+ */
+export function releasePatch(t: LockableEntry, r: InvoiceRelease): ReleasePatch {
+  const own = t.invoiceId === r.invoiceId;
+  const frozenByReleased = t.frozenByBillingRunId != null && r.billingRunIds.includes(t.frozenByBillingRunId);
+  return {
+    ...(own ? { invoiceId: null } : {}),
+    ...(frozenByReleased && (own || t.invoiceId == null) ? { frozenAt: null, frozenByBillingRunId: null } : {}),
+  };
+}

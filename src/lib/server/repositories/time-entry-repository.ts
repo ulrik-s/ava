@@ -7,6 +7,7 @@
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
+import type { InvoiceRelease } from "@/lib/shared/time-entry-lock";
 import type { Repository } from "./types";
 
 /** Tidspost + relationer för listvyn. matter alltid satt (matterId NOT NULL FK). */
@@ -105,6 +106,8 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
    *  En post kopplad till en faktura (`invoiceId`, rådgivningstimmen #1235) tappar bara
    *  körningen och behåller `frozenAt` — den förblir låst direkt mot fakturan. */
   unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void>;
+  /** Släpp en makulerad/krediterad fakturas tidsposter (#2260): regeln är `releasePatch`. */
+  releaseInvoice(release: InvoiceRelease): Promise<void>;
   /** En advokats tidsposter i en period (date asc), med ärende-ref (perLawyer-rapporten). */
   listForLawyerInPeriod(organizationId: OrganizationId, userId: UserId, from: Date, to: Date): Promise<LawyerReportTimeEntry[]>;
   /** Alla debiterbara tidsposter i org:en (för fakturerat/AR-attribuering). */

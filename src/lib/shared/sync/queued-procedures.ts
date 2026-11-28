@@ -61,6 +61,10 @@ export const QUEUED_PROCEDURES: Readonly<Record<string, QueuedProcedureSpec>> = 
   "billingRun.createAcconto": Object.freeze({ entity: "invoice", idField: "id" }),
   "billingRun.createFinal": Object.freeze({ entity: "invoice", idField: "id" }),
   "invoice.createCredit": Object.freeze({ entity: "invoice", idField: "id" }),
+  // "Fel på fakturan?" (#2260): kreditnotan får klientens id; släppet av
+  // posterna och körningen körs om på servern.
+  "invoice.creditAndRedo": Object.freeze({ entity: "invoice", idField: "id" }),
+  "invoice.voidDraft": Object.freeze({ entity: "invoice" }),
   "invoice.createRadgivning": Object.freeze({ entity: "invoice" }),
   // Steg 2d (#1276): kostnadsräkningsflödet och slutregleringen.
   "billingRun.createKostnadsrakning": Object.freeze({ entity: "billingRun" }),

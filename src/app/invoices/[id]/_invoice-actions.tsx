@@ -7,12 +7,12 @@ interface Props {
   invoiceType: InvoiceType;
   status: InvoiceStatus;
   hasPlan: boolean;
-  hasCreditNote: boolean;
   /** Utestående (öre) > 0 → avskrivning möjlig (räkna-en-gång, ADR 0007). */
   outstanding: number;
   onShowPayment: () => void;
   onShowPlan: () => void;
-  onShowCredit: () => void;
+  /** "Fel på fakturan?" (#2260): makulera eller kreditera och gör om. */
+  onShowRedo: () => void;
   onShowWriteOff: () => void;
   onShowSend: () => void;
   onSetStatus: (status: InvoiceStatus) => void;
@@ -22,8 +22,7 @@ interface Visibility {
   pay: boolean;
   plan: boolean;
   draft: boolean;
-  cancel: boolean;
-  credit: boolean;
+  redo: boolean;
   writeOff: boolean;
   send: boolean;
 }
@@ -37,7 +36,7 @@ function canSend(isCredit: boolean, status: InvoiceStatus): boolean {
   return isSendable(status) || (isCredit && status !== "CANCELLED");
 }
 
-function computeVisibility(invoiceType: InvoiceType, status: InvoiceStatus, hasPlan: boolean, hasCreditNote: boolean, outstanding: number): Visibility {
+function computeVisibility(invoiceType: InvoiceType, status: InvoiceStatus, hasPlan: boolean, outstanding: number): Visibility {
   const isCredit = invoiceType === "CREDIT";
   const sentNoPlan = !isCredit && status === "SENT" && !hasPlan;
   // Utställd & aktiv (SENT eller pågående avbetalningsplan, ej kreditfaktura).
@@ -46,8 +45,9 @@ function computeVisibility(invoiceType: InvoiceType, status: InvoiceStatus, hasP
     pay: !isCredit && !isTerminal(status),
     plan: sentNoPlan,
     draft: status === "DRAFT",
-    cancel: sentNoPlan,
-    credit: issuedActive && !hasCreditNote,
+    // En ingång för alla icke-annullerade fakturor; dialogen förklarar vägen
+    // per läge. En skickad faktura annulleras aldrig rakt av — den krediteras.
+    redo: !isCredit && status !== "CANCELLED",
     // Avskrivning: utställd faktura med utestående kvar (även en plan-faktura
     // som klienten slutat betala) → räkna-en-gång (ADR 0007).
     writeOff: issuedActive && outstanding > 0,
@@ -56,10 +56,10 @@ function computeVisibility(invoiceType: InvoiceType, status: InvoiceStatus, hasP
 }
 
 export function InvoiceActions({
-  invoiceType, status, hasPlan, hasCreditNote, outstanding,
-  onShowPayment, onShowPlan, onShowCredit, onShowWriteOff, onShowSend, onSetStatus,
+  invoiceType, status, hasPlan, outstanding,
+  onShowPayment, onShowPlan, onShowRedo, onShowWriteOff, onShowSend, onSetStatus,
 }: Props) {
-  const v = computeVisibility(invoiceType, status, hasPlan, hasCreditNote, outstanding);
+  const v = computeVisibility(invoiceType, status, hasPlan, outstanding);
 
   return (
     <div className="mt-2 flex gap-2 flex-wrap">
@@ -83,19 +83,14 @@ export function InvoiceActions({
           Markera som skickad
         </button>
       )}
-      {v.cancel && (
-        <button onClick={() => onSetStatus("CANCELLED")} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
-          Annullera
-        </button>
-      )}
       {v.writeOff && (
         <button onClick={onShowWriteOff} className="px-3 py-1.5 text-sm border border-red-200 text-red-700 rounded hover:bg-red-50">
           Skriv av som kundförlust
         </button>
       )}
-      {v.credit && (
-        <button onClick={onShowCredit} className="px-3 py-1.5 text-sm border border-orange-200 text-orange-700 rounded hover:bg-orange-50">
-          Kreditera
+      {v.redo && (
+        <button onClick={onShowRedo} className="px-3 py-1.5 text-sm border border-orange-200 text-orange-700 rounded hover:bg-orange-50">
+          Fel på fakturan?
         </button>
       )}
     </div>

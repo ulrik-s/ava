@@ -4,7 +4,7 @@
  */
 
 import type { BillingRun } from "@/lib/shared/schemas/billing";
-import type { BillingRunId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
+import { asId, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import { nextSeriesNumber } from "../number-series";
 import {
@@ -45,6 +45,12 @@ export class InMemoryBillingRunRepository
     return (await this.delegate.findMany({
       where: { matterId, type: "ACCONTO", status: "SENT" },
     })) as BillingRun[];
+  }
+
+  async listByInvoice(invoiceId: InvoiceId): Promise<BillingRun[]> {
+    // Via getByIds: typade rader utan cast, och raderade utelämnas.
+    const rows = await this.delegate.findMany({ where: { invoiceId } });
+    return this.getByIds(rows.map((r) => asId<"BillingRunId">(String(r.id))));
   }
 
   async listAccontoByIds(matterId: MatterId, ids: BillingRunId[]): Promise<BillingRun[]> {

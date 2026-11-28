@@ -7,8 +7,9 @@
 import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
-import { isInvoicedOutsideCoverage, unlockedMatch } from "@/lib/shared/time-entry-lock";
+import { isInvoicedOutsideCoverage, unlockedMatch, type InvoiceRelease } from "@/lib/shared/time-entry-lock";
 import type { IDataStore } from "../data-store/IDataStore";
+import { releaseInvoiceInMemory } from "./in-memory-invoice-release";
 import { InMemoryRepository, withDateObject } from "./in-memory-repository";
 import type {
   LawyerReportTimeEntry, TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow,
@@ -177,6 +178,10 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
       where: { frozenByBillingRunId: billingRunId },
       data: { frozenByBillingRunId: null },
     });
+  }
+
+  async releaseInvoice(release: InvoiceRelease): Promise<void> {
+    await releaseInvoiceInMemory(this.delegate, release);
   }
 
   async freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void> {

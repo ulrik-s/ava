@@ -33,6 +33,8 @@ export interface BillingRunRepository extends Repository<BillingRun> {
   getByIdInOrg(id: BillingRunId, organizationId: OrganizationId): Promise<BillingRunDetailRow | null>;
   /** Utställda ACCONTO-runs i ett ärende (för Σ tidigare aconto, #397). */
   listAccontoSent(matterId: MatterId): Promise<BillingRun[]>;
+  /** Körningarna som pekar på en faktura (ej raderade) — släppet av en makulerad/krediterad faktura (#2260). */
+  listByInvoice(invoiceId: InvoiceId): Promise<BillingRun[]>;
   /** ACCONTO-runs i ett ärende med givna id:n (FINAL-avdrag, #60-validering). */
   listAccontoByIds(matterId: MatterId, ids: BillingRunId[]): Promise<BillingRun[]>;
   /**

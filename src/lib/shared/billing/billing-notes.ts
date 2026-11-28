@@ -43,6 +43,19 @@ export function creditCreatedNote(creditNumber: string | null | undefined, amoun
   return `Kreditfaktura ${nr(creditNumber)} skapad (${formatKr(amountOre)}) — krediterar faktura ${nr(originalNumber)}`;
 }
 
+/**
+ * Kreditering för att göra om fakturan (#2260): som `creditCreatedNote`, och
+ * att originalets poster är tillbaka under Fakturera.
+ */
+export function creditForRedoNote(creditNumber: string | null | undefined, amountOre: number, originalNumber: string | null | undefined): string {
+  return `${creditCreatedNote(creditNumber, amountOre, originalNumber)} för att göras om; posterna är tillbaka under Fakturera`;
+}
+
+/** Ett utkast makulerat (#2260): numret finns kvar, posterna är tillbaka under Fakturera. */
+export function invoiceVoidedNote(invoiceNumber: string | null | undefined): string {
+  return `Faktura ${nr(invoiceNumber)} makulerad`;
+}
+
 export function kostnadsrakningSubmittedNote(reference: string | null | undefined, court: string | null | undefined, grossOre: number): string {
   const ref = reference ? ` ${reference}` : "";
   // Skapas först, skickas i ett senare steg — anteckningen säger därför "skapad".

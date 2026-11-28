@@ -111,12 +111,32 @@ describe("faktureringen i procedur-kön (#1276, steg 2a)", () => {
   });
 
   it("setStatus: anteckningen får klientens id och anropets datum", async () => {
-    const inv = await invoice("SENT");
+    const inv = await invoice("DRAFT");
     const c = call("invoice.setStatus", { invoiceId: inv, status: "CANCELLED" });
     expect((await replayer.replay(c, ctx)).status).toBe("accepted");
     const noteId = derivedId(c.mutationId, "serviceNote");
     const note = await repos.serviceNotes.getById(asId<"ServiceNoteId">(noteId));
     expect(note).toMatchObject({ matterId, date: "2026-01-15" });
+  });
+
+  it("setStatus annullerar aldrig en skickad faktura utan kreditnota (#2260)", async () => {
+    const inv = await invoice("SENT");
+    const c = call("invoice.setStatus", { invoiceId: inv, status: "CANCELLED" });
+    expect(await replayer.replay(c, ctx)).toMatchObject({ status: "rejected", code: "BAD_REQUEST" });
+    expect((await repos.invoices.getById(asId<"InvoiceId">(inv)))?.status).toBe("SENT");
+  });
+
+  it("voidDraft och creditAndRedo köas som anrop; kreditnotan får klientens id (#2260)", async () => {
+    expect(isQueuedProcedure("invoice.voidDraft")).toBe(true);
+    expect(isQueuedProcedure("invoice.creditAndRedo")).toBe(true);
+    const draft = await invoice("DRAFT");
+    expect((await replayer.replay(call("invoice.voidDraft", { invoiceId: draft }), ctx)).status).toBe("accepted");
+    expect((await repos.invoices.getById(asId<"InvoiceId">(draft)))?.status).toBe("CANCELLED");
+    const sent = await invoice("SENT");
+    const creditId = uuidv7();
+    const res = await replayer.replay(call("invoice.creditAndRedo", { id: creditId, invoiceId: sent }, [{ entity: "invoice", id: creditId }]), ctx);
+    expect(res.status).toBe("accepted");
+    expect(await repos.invoices.getById(asId<"InvoiceId">(creditId))).toMatchObject({ invoiceType: "CREDIT", creditedInvoiceId: sent, amount: -100_000 });
   });
 
   it("setStatus med en otillåten övergång avvisas — ingen anteckning skrivs", async () => {

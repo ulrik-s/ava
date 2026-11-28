@@ -13,9 +13,10 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } fro
 import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import { asId, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type TimeEntryId, type UserId } from "@/lib/shared/schemas/ids";
+import type { InvoiceRelease } from "@/lib/shared/time-entry-lock";
 import { matters, timeEntries, users } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { unlockedWhere } from "./billing-lock-sql";
+import { releaseInvoiceWhere, unlockedWhere } from "./billing-lock-sql";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import { matterOrg } from "./matter-org";
 import type {
@@ -241,6 +242,10 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       { frozenAt: null, frozenByBillingRunId: null },
     );
     await this.updateWhere(eq(timeEntries.frozenByBillingRunId, billingRunId), { frozenByBillingRunId: null });
+  }
+
+  async releaseInvoice(release: InvoiceRelease): Promise<void> {
+    await releaseInvoiceWhere(timeEntries, release, (where, patch) => this.updateWhere(where, patch));
   }
 
   async freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void> {
