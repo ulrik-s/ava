@@ -522,6 +522,13 @@ describe("InvoiceDetailPage", () => {
     for (const text of ["Brev", "Porto", /Aconto 2026-03-01/]) expect(screen.getByText(text).closest("tr")).toHaveClass("align-top");
   });
 
+  it("en cachad faktura med bara fortnoxId (äldre rad) visas som bokförd, utan bokför-knapp (#1932)", async () => {
+    invoiceQuery.data = { ...baseInvoice, fortnoxId: "A/12" };
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/Bokförd i Fortnox \(verifikat A\/12\)/)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /Bokför/ })).not.toBeInTheDocument();
+  });
+
   it("renderar PAID-status utan Registrera betalning-knapp", async () => {
     invoiceQuery.data = { ...baseInvoice, status: "PAID" };
     renderPage();

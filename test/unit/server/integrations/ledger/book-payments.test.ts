@@ -15,7 +15,7 @@ describe("bookUnbookedPayments", () => {
     const markBooked = vi.fn(async () => undefined);
     const payments = [
       { id: "b", amount: 200, paidAt: "2026-09-20" },
-      { id: "x", amount: 50, paidAt: "2026-09-01", fortnoxId: "A/0" },
+      { id: "x", amount: 50, paidAt: "2026-09-01", ledgerRef: "A/0" },
       { id: "a", amount: 100, paidAt: "2026-09-10" },
     ];
     const out = await bookUnbookedPayments({ payments, invoice, connector, markBooked });

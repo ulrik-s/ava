@@ -36,14 +36,14 @@ export interface BookableInvoice {
   invoiceNumber: string | null;
   status: string;
   /** Satt = redan bokförd → aldrig kandidat. */
-  fortnoxId: string | null;
+  ledgerRef: string | null;
   matter: { matterNumber: string | null } | null;
 }
 
 /** Är fakturan en kandidat för bokföring? */
 export function isBookable(inv: BookableInvoice): boolean {
   // Utställda bokförs (isIssued, samma regel som SIE-exporten); se modulens header.
-  return !inv.fortnoxId && isIssued(inv.status);
+  return !inv.ledgerRef && isIssued(inv.status);
 }
 
 /** Utfallet per faktura — `error` sätts i st.f. att kasta, se `bookUnbookedInvoices`. */

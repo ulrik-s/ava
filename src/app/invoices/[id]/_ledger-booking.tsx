@@ -16,7 +16,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 interface Props {
   invoiceId: string;
   status: InvoiceStatus;
-  fortnoxId: string | null | undefined;
+  ledgerRef: string | null | undefined;
   payments: ReadonlyArray<LedgerRefRow>;
 }
 
@@ -26,10 +26,10 @@ function buttonLabel(invoiceBooked: boolean, pending: number): string {
   return pending === 1 ? "Bokför 1 betalning i Fortnox" : `Bokför ${pending} betalningar i Fortnox`;
 }
 
-function BookedLine({ fortnoxId, bookedPayments }: { fortnoxId: string; bookedPayments: number }) {
+function BookedLine({ ledgerRef, bookedPayments }: { ledgerRef: string; bookedPayments: number }) {
   return (
     <p className="mt-2 text-sm text-green-700">
-      ✓ Bokförd i Fortnox (verifikat {fortnoxId}){bookedPayments > 0 && ` · ${bookedPayments} betalning${bookedPayments === 1 ? "" : "ar"} bokförd${bookedPayments === 1 ? "" : "a"}`}
+      ✓ Bokförd i Fortnox (verifikat {ledgerRef}){bookedPayments > 0 && ` · ${bookedPayments} betalning${bookedPayments === 1 ? "" : "ar"} bokförd${bookedPayments === 1 ? "" : "a"}`}
     </p>
   );
 }
@@ -39,17 +39,17 @@ function shouldOfferBooking(connected: boolean, status: InvoiceStatus, invoiceBo
   return connected && isIssued(status) && (!invoiceBooked || pending > 0);
 }
 
-export function LedgerBooking({ invoiceId, status, fortnoxId, payments }: Props) {
+export function LedgerBooking({ invoiceId, status, ledgerRef, payments }: Props) {
   const utils = trpc.useUtils();
   const ledger = useLedgerStatus();
   // Även vid fel: fakturan kan vara bokförd fast en betalning fastnade.
   const book = useBookInvoice(asId<"InvoiceId">(invoiceId), () => { void utils.invoice.getById.invalidate({ id: invoiceId }); });
   const pending = payments.filter((p) => ledgerRefOf(p) === null).length;
-  const canBook = shouldOfferBooking(ledger.data?.connected === true, status, !!fortnoxId, pending);
+  const canBook = shouldOfferBooking(ledger.data?.connected === true, status, !!ledgerRef, pending);
 
   return (
     <>
-      {fortnoxId && <BookedLine fortnoxId={fortnoxId} bookedPayments={payments.length - pending} />}
+      {ledgerRef && <BookedLine ledgerRef={ledgerRef} bookedPayments={payments.length - pending} />}
       {canBook && (
         <div className="mt-2">
           <button
@@ -58,7 +58,7 @@ export function LedgerBooking({ invoiceId, status, fortnoxId, payments }: Props)
             onClick={() => book.mutate()}
             className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
           >
-            {book.isPending ? "Bokför…" : buttonLabel(!!fortnoxId, pending)}
+            {book.isPending ? "Bokför…" : buttonLabel(!!ledgerRef, pending)}
           </button>
         </div>
       )}

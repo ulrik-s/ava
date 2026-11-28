@@ -156,7 +156,7 @@ export const invoiceSchema = z.object({
    *  skapande. BARA kundfakturor (ACCONTO/FINAL) — kostnadsräkningar till
    *  domstol och CREDIT har null (betalas inte med OCR, jfr #173/#175). */
   ocrReference: z.string().nullish(),
-  fortnoxId: z.string().nullish(),
+  ledgerRef: z.string().nullish(),
   invoiceDate: dateLike,
   dueDate: optionalDateLike,
   notes: z.string().nullish(),
@@ -186,7 +186,7 @@ export const paymentSchema = z.object({
    *  betalfils-import: samma fil omladdad bokför inte om samma betalning. */
   reference: z.string().nullish(),
   /** Verifikatet i bokföringssystemet (t.ex. "A/13", #1173). Satt = bokförd. */
-  fortnoxId: z.string().nullish(),
+  ledgerRef: z.string().nullish(),
   recordedById: userIdSchema,
   createdAt: dateLike,
 }).passthrough();

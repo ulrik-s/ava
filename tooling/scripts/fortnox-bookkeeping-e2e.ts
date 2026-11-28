@@ -64,7 +64,7 @@ function toBookable(inv: {
   return {
     id: inv.id, amount: inv.amount, vatOre: inv.vatOre ?? null, vatBreakdown: null,
     invoiceDate: bookingDate, invoiceNumber: inv.invoiceNumber ?? null,
-    status: inv.status, fortnoxId: null,
+    status: inv.status, ledgerRef: null,
     matter: { matterNumber: inv.matter?.matterNumber ?? null },
   };
 }
@@ -150,7 +150,7 @@ async function bookAndVerify(ctx: BookingCtx, invoiceId: string, label: string):
   // rapporterades båda som "inget utfall", vilket dolde att fakturan var DRAFT.
   if (!outcome) {
     throw new Error(
-      `${label} var inte bokförbar: status ${inv.status}, fortnoxId ${inv.fortnoxId ?? "null"} `
+      `${label} var inte bokförbar: status ${inv.status}, ledgerRef ${inv.ledgerRef ?? "null"} `
       + "— drivrutinen såg den inte som kandidat.",
     );
   }

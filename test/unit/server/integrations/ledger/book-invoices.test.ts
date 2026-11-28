@@ -21,7 +21,7 @@ function invoice(over: Partial<BookableInvoice> = {}): BookableInvoice {
   return {
     id: "inv-1", amount: 125_000, vatOre: 25_000, vatBreakdown: null,
     invoiceDate: "2026-05-02", invoiceNumber: "F-2026-0001", status: "SENT",
-    fortnoxId: null, matter: { matterNumber: "2026-0001" },
+    ledgerRef: null, matter: { matterNumber: "2026-0001" },
     ...over,
   };
 }
@@ -47,7 +47,7 @@ describe("isBookable", () => {
   });
 
   it("redan bokförd faktura är ALDRIG kandidat", () => {
-    expect(isBookable(invoice({ fortnoxId: "A/17" }))).toBe(false);
+    expect(isBookable(invoice({ ledgerRef: "A/17" }))).toBe(false);
   });
 
   it("utkast bokförs inte — det är inte utställt", () => {
@@ -83,7 +83,7 @@ describe("bookUnbookedInvoices", () => {
     });
     // Andra körningen ser fakturan som den nu ÄR: med externt id.
     const second = await bookUnbookedInvoices({
-      invoices: [invoice({ fortnoxId: first[0]!.externalId })], connector: c, markBooked: async () => {},
+      invoices: [invoice({ ledgerRef: first[0]!.externalId })], connector: c, markBooked: async () => {},
     });
     expect(second).toEqual([]);
     expect(c.pushed).toHaveLength(1);

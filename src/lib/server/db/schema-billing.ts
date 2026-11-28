@@ -82,7 +82,7 @@ export const invoices = pgTable("invoices", {
   invoiceType: text("invoice_type").notNull().default("STANDARD").$type<InvoiceType>(),
   invoiceNumber: text("invoice_number"),
   ocrReference: text("ocr_reference"),
-  fortnoxId: text("fortnox_id"),
+  ledgerRef: text("fortnox_id"),
   invoiceDate: timestamp("invoice_date", { withTimezone: true }).notNull(),
   dueDate: timestamp("due_date", { withTimezone: true }),
   notes: text("notes"),
@@ -116,7 +116,7 @@ export const payments = pgTable("payments", {
   note: text("note"),
   reference: text("reference"),
   /** Verifikat i bokföringssystemet (#1173). */
-  fortnoxId: text("fortnox_id"),
+  ledgerRef: text("fortnox_id"),
   recordedById: uuid("recorded_by_id").notNull().$type<UserId>(),
 }, (t) => [index("payments_invoice_idx").on(t.invoiceId)]);
 

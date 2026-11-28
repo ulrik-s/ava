@@ -515,10 +515,10 @@ export const invoiceRouter = router({
 
   /**
    * Märk en faktura som bokförd i Fortnox (#82). Anropas av server-runtime:ns
-   * Fortnox-connector efter en lyckad verifikat-push; `fortnoxId` =
-   * "<VoucherSeries>/<VoucherNumber>".
+   * Fortnox-connector efter en lyckad verifikat-push; indatans `fortnoxId` =
+   * "<VoucherSeries>/<VoucherNumber>" och sparas som `ledgerRef` (ADR 0011).
    *
-   * IDEMPOTENT: skriver ALDRIG över en redan satt `fortnoxId` — det är
+   * IDEMPOTENT: skriver ALDRIG över en redan satt `ledgerRef` — det är
    * dubbelbokförings-skyddet (en omkörd peer-cykel får inte boka om). Redan
    * märkt → returnera oförändrad rad.
    *
@@ -531,6 +531,6 @@ export const invoiceRouter = router({
       const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId); // org-scope (ADR 0020)
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
       if (ledgerRefOf(inv) !== null) return inv; // redan bokförd → no-op (idempotens)
-      return ctx.repos.invoices.update(input.invoiceId, { fortnoxId: input.fortnoxId });
+      return ctx.repos.invoices.update(input.invoiceId, { ledgerRef: input.fortnoxId });
     }),
 });

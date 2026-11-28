@@ -40,7 +40,7 @@ function lockingTransaction<R extends { invoices: object }>(repos: R, locks: { t
 
 function setup(o: Opts = {}) {
   const invoice = o.invoice === undefined
-    ? { id: INV_ID, amount: 12500, vatOre: 2500, vatBreakdown: null, invoiceDate: "2026-09-25", invoiceNumber: "F-1", status: "SENT", fortnoxId: null, matter: { matterNumber: "M-1" }, payments: [], documents: [] }
+    ? { id: INV_ID, amount: 12500, vatOre: 2500, vatBreakdown: null, invoiceDate: "2026-09-25", invoiceNumber: "F-1", status: "SENT", ledgerRef: null, matter: { matterNumber: "M-1" }, payments: [], documents: [] }
     : o.invoice;
   const files = o.content ?? {};
   const content = { read: vi.fn((path: string) => Promise.resolve(files[path] ?? null)) };
@@ -115,7 +115,7 @@ describe("ledger.bookInvoice", () => {
     const { caller, update, push } = setup();
     expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/7", payments: [] });
     expect(push).toHaveBeenCalledTimes(1);
-    expect(update).toHaveBeenCalledWith(INV_ID, { fortnoxId: "A/7" });
+    expect(update).toHaveBeenCalledWith(INV_ID, { ledgerRef: "A/7" });
   });
 
   it("två samtidiga anrop (dubbelklick, två flikar) ger ett verifikat (#1453)", async () => {
@@ -137,10 +137,12 @@ describe("ledger.bookInvoice", () => {
     expect(push).toHaveBeenCalledTimes(1);
   });
 
-  it("redan bokförd → samma verifikat, ingen ny push", async () => {
-    const { caller, push } = setup({ invoice: { id: INV_ID, fortnoxId: "A/3", status: "SENT", payments: [{ id: "p0", fortnoxId: "A/4" }] } });
+  it("en äldre rad med bara fortnoxId (faktura och betalning) räknas som bokförd → samma verifikat, ingen push (#1932)", async () => {
+    const { caller, push, update, updatePayment } = setup({ invoice: { id: INV_ID, fortnoxId: "A/3", status: "SENT", payments: [{ id: "p0", fortnoxId: "A/4" }] } });
     expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/3", payments: [] });
     expect(push).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(updatePayment).not.toHaveBeenCalled();
   });
 
   it("bokförd under det nya namnet (bara ledgerRef) → samma verifikat, ingen ny push (#1931)", async () => {
@@ -160,7 +162,7 @@ describe("ledger.bookInvoice", () => {
   });
 
   it("utkast bokförs inte", async () => {
-    const { caller } = setup({ invoice: { id: INV_ID, amount: 1, status: "DRAFT", fortnoxId: null, invoiceDate: "2026-09-25", matter: null } });
+    const { caller } = setup({ invoice: { id: INV_ID, amount: 1, status: "DRAFT", ledgerRef: null, invoiceDate: "2026-09-25", matter: null } });
     await expect(caller.bookInvoice({ invoiceId: INV_ID })).rejects.toThrow(/utställda/);
   });
 
@@ -178,23 +180,23 @@ describe("ledger.bookInvoice", () => {
   });
 
   const PAYMENTS = [
-    { id: "p2", amount: 5000, paidAt: "2026-09-20", fortnoxId: null },
-    { id: "p1", amount: 7500, paidAt: "2026-09-10", fortnoxId: null },
+    { id: "p2", amount: 5000, paidAt: "2026-09-20", ledgerRef: null },
+    { id: "p1", amount: 7500, paidAt: "2026-09-10", ledgerRef: null },
   ];
 
   it("delbetalningar bokförs efter fakturan, äldst först, och skrivs tillbaka", async () => {
     const { caller, updatePayment, push } = setup({
-      invoice: { id: INV_ID, amount: 12500, vatOre: 2500, invoiceDate: "2026-09-01", invoiceNumber: "F-1", status: "PAID", fortnoxId: null, matter: { matterNumber: "M-1" }, payments: PAYMENTS },
+      invoice: { id: INV_ID, amount: 12500, vatOre: 2500, invoiceDate: "2026-09-01", invoiceNumber: "F-1", status: "PAID", ledgerRef: null, matter: { matterNumber: "M-1" }, payments: PAYMENTS },
     });
     expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/7", payments: ["A/8", "A/9"] });
     expect(push).toHaveBeenCalledTimes(3);
-    expect(updatePayment).toHaveBeenNthCalledWith(1, "p1", { fortnoxId: "A/8" });
-    expect(updatePayment).toHaveBeenNthCalledWith(2, "p2", { fortnoxId: "A/9" });
+    expect(updatePayment).toHaveBeenNthCalledWith(1, "p1", { ledgerRef: "A/8" });
+    expect(updatePayment).toHaveBeenNthCalledWith(2, "p2", { ledgerRef: "A/9" });
   });
 
   it("redan bokförd faktura: bara nya betalningar bokförs", async () => {
     const { caller, push } = setup({
-      invoice: { id: INV_ID, fortnoxId: "A/3", status: "SENT", invoiceNumber: "F-1", matter: null, payments: [{ id: "p0", amount: 1, paidAt: "2026-09-01", fortnoxId: "A/4" }, PAYMENTS[0]] },
+      invoice: { id: INV_ID, ledgerRef: "A/3", status: "SENT", invoiceNumber: "F-1", matter: null, payments: [{ id: "p0", amount: 1, paidAt: "2026-09-01", ledgerRef: "A/4" }, PAYMENTS[0]] },
     });
     expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/3", payments: ["A/7"] });
     expect(push).toHaveBeenCalledTimes(1);
@@ -202,14 +204,14 @@ describe("ledger.bookInvoice", () => {
 
   it("betalningar utan bankkonto i mappningen → be om det", async () => {
     const { bank: _bank, ...noBank } = DEFAULT_LEDGER_ACCOUNT_MAP;
-    const { caller } = setup({ ledgerAccountMap: noBank, invoice: { id: INV_ID, fortnoxId: "A/3", status: "SENT", payments: PAYMENTS } });
+    const { caller } = setup({ ledgerAccountMap: noBank, invoice: { id: INV_ID, ledgerRef: "A/3", status: "SENT", payments: PAYMENTS } });
     await expect(caller.bookInvoice({ invoiceId: INV_ID })).rejects.toThrow(/bankkonto/);
   });
 
   it("en betalning som fastnar syns som fel", async () => {
     let calls = 0;
     const { caller } = setup({
-      invoice: { id: INV_ID, fortnoxId: "A/3", status: "SENT", payments: PAYMENTS },
+      invoice: { id: INV_ID, ledgerRef: "A/3", status: "SENT", payments: PAYMENTS },
       ledger: { connector: () => ({ capabilities: () => ({ pushVoucher: true, pushInvoice: false, pullPayments: false, exportSie: false }), pushVoucher: async () => { calls++; if (calls === 2) throw new Error("Fortnox 500"); return { externalId: "A/9" }; } }) },
     });
     await expect(caller.bookInvoice({ invoiceId: INV_ID })).rejects.toThrow("En betalning kunde inte bokföras: Fortnox 500");
@@ -225,7 +227,7 @@ describe("ledger.bookInvoice — fakturans PDF som bilaga (#1887)", () => {
   const PDF_PATH = "documents/content/faktura-1.pdf";
   const withDocuments = (documents: unknown[]) => ({
     id: INV_ID, amount: 12500, vatOre: 2500, vatBreakdown: null, invoiceDate: "2026-09-25", invoiceNumber: "F-1",
-    status: "SENT", fortnoxId: null, matter: { matterNumber: "M-1" }, payments: [], documents,
+    status: "SENT", ledgerRef: null, matter: { matterNumber: "M-1" }, payments: [], documents,
   });
   const pdfDoc = { fileName: "Faktura F-1.pdf", mimeType: "application/pdf", storagePath: PDF_PATH, createdAt: new Date("2026-09-25") };
 
@@ -243,7 +245,7 @@ describe("ledger.bookInvoice — fakturans PDF som bilaga (#1887)", () => {
     const { caller, push, update } = setup({ invoice: withDocuments([]) });
     expect(await caller.bookInvoice({ invoiceId: INV_ID })).toEqual({ externalId: "A/7", payments: [] });
     expect(push).toHaveBeenCalledWith(expect.anything(), { idempotencyKey: INV_ID });
-    expect(update).toHaveBeenCalledWith(INV_ID, { fortnoxId: "A/7" });
+    expect(update).toHaveBeenCalledWith(INV_ID, { ledgerRef: "A/7" });
     const warning = logged.find((r) => r.event === "ledger.attachment_failed");
     expect(warning).toMatchObject({ level: "warn", orgId: "org-1", ids: [INV_ID], message: "Fakturan har ingen PDF att bifoga." });
   });

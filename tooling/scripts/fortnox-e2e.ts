@@ -54,7 +54,7 @@ function testInvoice(stamp: string, bookingDate: string): BookableInvoice {
     invoiceDate: bookingDate,
     invoiceNumber: `E2E-${stamp}`,
     status: "SENT",
-    fortnoxId: null,
+    ledgerRef: null,
     matter: { matterNumber: `E2E-${stamp}` },
   };
 }
@@ -75,7 +75,7 @@ async function pushTestInvoice(connector: LedgerConnector, invoice: BookableInvo
   assertAttached(outcome);
   console.log("  ✓ PDF uppladdad till Inbox_v och kopplad till verifikatet (med räkenskapsår)");
   if (marked.length !== 1) throw new Error(`Write-back uteblev — markBooked anropades ${marked.length} gånger.`);
-  console.log(`  ✓ fortnoxId skrevs tillbaka: ${marked[0]![1]}`);
+  console.log(`  ✓ ledgerRef skrevs tillbaka: ${marked[0]![1]}`);
   return outcome.externalId;
 }
 
@@ -96,7 +96,7 @@ async function verifyVoucher(client: FortnoxClient, externalId: string): Promise
 /** Steg 4: samma faktura MED externt id får inte bokföras igen. */
 async function verifyIdempotens(connector: LedgerConnector, invoice: BookableInvoice, externalId: string): Promise<void> {
   const second = await bookUnbookedInvoices({
-    invoices: [{ ...invoice, fortnoxId: externalId }], connector, markBooked: async () => {},
+    invoices: [{ ...invoice, ledgerRef: externalId }], connector, markBooked: async () => {},
   });
   if (second.length !== 0) throw new Error("Idempotens bruten — en bokförd faktura bokfördes igen.");
   console.log("  ✓ Idempotens: omkörning skapade inget nytt verifikat");
