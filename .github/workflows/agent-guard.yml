@@ -1,7 +1,8 @@
 # Agentvakten (docs/feedback-pipeline.md): agent-PR:er får inte röra skyddade
 # sökvägar eller lägga till destruktiva migrationer utan `människa-godkänd`, och
-# högst 30 agent-PR:er per dygn (bara de som kan mergas räknas: mergade, och
-# öppna utan `blockerad`). Logiken: tooling/scripts/agent-guard.ts.
+# högst AGENT_PR_CAP (repovariabel, standard 30) agent-PR:er per dygn. Bara de som
+# kan mergas räknas, och en PR med Ulriks `människa-godkänd` stoppas aldrig av taket.
+# Logiken: tooling/scripts/agent-guard.ts.
 # Körs på ALLA PR:er (krävd check) — utan `agent-pr` passerar den direkt.
 name: Agentvakt
 
@@ -31,6 +32,8 @@ jobs:
       - name: Kontrollera agent-PR:en
         env:
           GH_TOKEN: ${{ github.token }}
+          # Dygnstaket (standard 30); höj en dag i repots variabler, Settings → Variables.
+          AGENT_PR_CAP: ${{ vars.AGENT_PR_CAP }}
           GH_REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
         # Första PR:en (den som inför vakten) har inget skript på main ännu.

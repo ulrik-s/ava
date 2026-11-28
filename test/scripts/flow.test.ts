@@ -372,6 +372,7 @@ describe("klockan mot GitHub", () => {
     expect(capReleased(created, burst, created + 60_000)).toBe(false); // fortfarande över taket
     expect(capReleased(created, burst, now)).toBe(true); // fönstret har passerat
     expect(capReleased(Date.parse(burst[3] ?? ""), burst, now)).toBe(false); // nr 4: aldrig över taket
+    expect(capReleased(created, burst, created + 60_000, 60)).toBe(false); // höjt tak: aldrig över, inget att släppa
   });
 
   it("klockan kör om Agentvakten på en granskad PR som taket släppt, och bara den", () => {

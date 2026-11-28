@@ -7,14 +7,18 @@ granskningsloopen mergar.
 
 ## 0. Taket
 
+Taket är repovariabeln `AGENT_PR_CAP` (Ulrik höjer den ibland en dag), annars 30:
+`gh api repos/ulrik-s/ava/actions/variables/AGENT_PR_CAP --jq .value`. Kan den inte
+läsas, eller är den inte ett heltal 1–200: 30.
+
 Räkna agent-PR:er de senaste 24 timmarna som kan mergas: mergade, och öppna
 utan `blockerad` (Ulrik, 2026-11-27). En PR som väntar på hans
-`människa-godkänd` eller stängts utan merge räknas inte. Två sökningar, lägg
-ihop dem (`<T>` = nu minus 24 h, ISO):
-`gh api -X GET search/issues -f q='repo:ulrik-s/ava is:pr label:agent-pr is:merged created:>=<T>' --jq .total_count`
+`människa-godkänd`, som han redan godkänt (`människa-godkänd`), eller som stängts
+utan merge räknas inte. Två sökningar, lägg ihop dem (`<T>` = nu minus 24 h, ISO):
+`gh api -X GET search/issues -f q='repo:ulrik-s/ava is:pr label:agent-pr -label:människa-godkänd is:merged created:>=<T>' --jq .total_count`
 och
-`gh api -X GET search/issues -f q='repo:ulrik-s/ava is:pr label:agent-pr is:open -label:blockerad created:>=<T>' --jq .total_count`.
-Är summan 30 eller mer: gör bara steg 1 (befintliga PR:er) och skapa ingen ny.
+`gh api -X GET search/issues -f q='repo:ulrik-s/ava is:pr label:agent-pr -label:människa-godkänd is:open -label:blockerad created:>=<T>' --jq .total_count`.
+Är summan lika med taket eller mer: gör bara steg 1 (befintliga PR:er) och skapa ingen ny.
 
 ## 1. Befintliga PR:er först
 
