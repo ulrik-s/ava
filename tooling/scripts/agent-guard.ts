@@ -10,11 +10,12 @@
  *      och deployens automatiska rollback, lib/migration-kind.ts, #1770) — en
  *      rollback backar koden men aldrig databasen, så migrationer från agenter
  *      måste vara additiva (expand),
- *   3. är fler än AGENT_PR_PER_DAY agent-PR:er på 24 timmar (bara de som kan
- *      mergas räknas: mergade, och öppna utan `blockerad`, `countsTowardCap`),
+ *   3. är fler än taket (repovariabeln AGENT_PR_CAP, standard 30) agent-PR:er på 24
+ *      timmar. Bara det som kan mergas räknas: mergade, och öppna utan `blockerad`;
+ *      det Ulrik godkänt (`människa-godkänd`) räknas aldrig och stoppas aldrig,
  *   4. inte är godkänd av granskningsloopen (`granskad`) eller är `blockerad` —
  *      så auto-merge aldrig kan släppa igenom en ogranskad agent-PR.
- * (1) och (2) släpps igenom när Ulrik satt `människa-godkänd`. (3)–(4) gäller alltid.
+ * (1)–(3) släpps igenom när Ulrik satt `människa-godkänd`. (4) gäller alltid.
  * PR:er utan `agent-pr` passerar direkt.
  *
  *   bun tooling/scripts/agent-guard.ts <pr-nummer>     (i CI, med GH_TOKEN)
@@ -26,7 +27,21 @@ import { parseJsonWith } from "@/lib/shared/parse-json";
 import { BASELINE_PATH, ROUTER_BASELINE_PATH } from "./file-size-ratchet";
 import { destructiveStatements } from "./lib/migration-kind";
 
+/** Dygnstakets standard; repovariabeln `AGENT_PR_CAP` kan ändra det (`agentPrCap`). */
 export const AGENT_PR_PER_DAY = 30;
+/** Högsta tak repovariabeln får sätta: ett skrivfel ska inte släppa igenom allt. */
+export const AGENT_PR_CAP_MAX = 200;
+
+/**
+ * Dygnstaket ur repovariabeln `AGENT_PR_CAP` (Ulrik, 2026-11-28): ett heltal
+ * 1–200, annars standarden. Så kan taket höjas en dag i GitHubs inställningar
+ * utan kodändring, och sänkas igen lika enkelt.
+ */
+export function agentPrCap(env: Readonly<Record<string, string | undefined>> = process.env): number {
+  const raw = env.AGENT_PR_CAP?.trim() ?? "";
+  const n = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  return n >= 1 && n <= AGENT_PR_CAP_MAX ? n : AGENT_PR_PER_DAY;
+}
 
 /** Sökvägar en agent inte får röra utan `människa-godkänd`. */
 export const PROTECTED_PATHS: readonly RegExp[] = [
@@ -71,6 +86,8 @@ export interface GuardInput {
   agentPrsLast24h: number;
   /** Ändrar PR:en storleksbaslinjerna bara åt det strängare hållet? */
   baselineOnlyTightens?: boolean;
+  /** Dygnstaket (`agentPrCap()`); standard `AGENT_PR_PER_DAY`. */
+  cap?: number;
 }
 
 /**
@@ -138,13 +155,21 @@ export function rankInLast24h(createdAts: readonly string[], created: number, no
   return createdAts.map((c) => new Date(c).getTime()).filter((t) => t >= since && t <= created).length;
 }
 
+/**
+ * Dygnstaket. En PR som Ulrik själv godkänt (labels är redan kontrollerade,
+ * trustedLabels) stoppas aldrig av det: taket finns för att begränsa det som
+ * landar hos honom, och den här har han sett (2026-11-28).
+ */
+function capViolations(input: GuardInput): string[] {
+  const cap = input.cap ?? AGENT_PR_PER_DAY;
+  if (input.labels.includes("människa-godkänd") || input.agentPrsLast24h <= cap) return [];
+  return [`Taket är ${cap} agent-PR:er per dygn — den här är nr ${input.agentPrsLast24h}.`];
+}
+
 /** Vad som bryter mot reglerna — tom lista = godkänd. */
 export function guardViolations(input: GuardInput): string[] {
   if (!input.labels.includes("agent-pr")) return [];
-  const out: string[] = [];
-  if (input.agentPrsLast24h > AGENT_PR_PER_DAY) {
-    out.push(`Taket är ${AGENT_PR_PER_DAY} agent-PR:er per dygn — den här är nr ${input.agentPrsLast24h}.`);
-  }
+  const out = capViolations(input);
   if (!input.labels.includes("granskad")) out.push("Inte godkänd av granskningsloopen ännu (etiketten granskad saknas).");
   if (input.labels.includes("blockerad")) out.push("Blockerad — väntar på Ulrik.");
   if (input.labels.includes("människa-godkänd")) return out;
@@ -178,6 +203,8 @@ export interface CapPull { number: number; createdAt: string; state: string; mer
  * ska inte äta upp dygnets kvot; den 26/11 band sju sådana en fjärdedel av den.
  */
 export function countsTowardCap(p: Omit<CapPull, "number" | "createdAt">): boolean {
+  // Godkänd av Ulrik: räknas inte mot kvoten (2026-11-28), mergad eller ej.
+  if (p.labels.includes("människa-godkänd")) return false;
   if (p.merged) return true;
   return p.state.toUpperCase() === "OPEN" && !p.labels.includes("blockerad");
 }
@@ -251,6 +278,7 @@ function main(pr: string): number {
     agentPrsLast24h: rankInLast24h(cappedCreatedAts(recent.map((p) => ({
       number: p.number, createdAt: p.createdAt, state: p.state, merged: p.mergedAt != null, labels: p.labels.map((l) => l.name),
     })), Number(pr)), created, now),
+    cap: agentPrCap(),
   });
   for (const v of violations) console.error(`✗ ${v}`);
   if (violations.length === 0) console.log("✓ agentvakten: inget att invända");

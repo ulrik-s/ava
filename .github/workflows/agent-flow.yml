@@ -41,6 +41,8 @@ concurrency:
 env:
   FLOW_GUARD_MODE: ${{ vars.FLOW_GUARD_MODE || 'report' }}
   GH_TOKEN: ${{ github.token }}
+  # Dygnstaket för klockans omkörning av Agentvakten (samma som agent-guard.yml).
+  AGENT_PR_CAP: ${{ vars.AGENT_PR_CAP }}
 
 jobs:
   guard:
