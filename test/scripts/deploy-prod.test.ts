@@ -31,6 +31,8 @@ const COPIED = [
   "tooling/docker/caddy/Caddyfile",
   "tooling/systemd/ava-backup-request.path",
   "tooling/systemd/ava-backup-request.service",
+  "tooling/systemd/ava-backup-hourly.timer",
+  "tooling/systemd/ava-backup-hourly.service",
   "tooling/systemd/ava-deploy.timer",
   "tooling/systemd/ava-deploy.service",
 ];
@@ -294,6 +296,57 @@ describe("deploy-prod.sh — en lyckad deploy", () => {
     expect(readdirSync(systemd).sort()).toEqual(DEPLOY_UNITS);
     expect(calls.some((c) => c.includes("ava-backup-request"))).toBe(false);
     expect(out).toContain("ingen ava-backup.service");
+  });
+
+  describe("timexporten (ADR 0039)", () => {
+    const HOURLY_UNITS = ["ava-backup-hourly.service", "ava-backup-hourly.timer"];
+    /** Mottagarfilen (den publika age-nyckeln) via AVA_BACKUP_RECIPIENT. */
+    const recipient = (content = "age1publik\n"): string => {
+      const p = join(root, "backup-recipient.txt");
+      writeFileSync(p, content);
+      return p;
+    };
+
+    it("nattjobbet och mottagarfilen finns: enheterna installeras och timern startas, en omkörning rör bara det som ändrats", () => {
+      const env = { FAKE_SYSTEMD: "1", AVA_BACKUP_RECIPIENT: recipient() };
+      const first = deploy([], env);
+      expect(first.status, first.out).toBe(0);
+      for (const unit of HOURLY_UNITS) {
+        expect(readFileSync(join(systemd, unit), "utf8")).toBe(readFileSync(join(REPO, "tooling/systemd", unit), "utf8"));
+      }
+      expect(first.calls).toContain("systemctl enable --now ava-backup-hourly.timer");
+
+      const again = deploy([], env);
+      expect(again.status, again.out).toBe(0);
+      expect(again.calls).not.toContain("systemctl daemon-reload");
+      expect(again.calls).toContain("systemctl enable --now ava-backup-hourly.timer");
+    });
+
+    it("med --dry-run: stegen visas men inget installeras", () => {
+      const { status, out } = deploy(["--dry-run"], { FAKE_SYSTEMD: "1", AVA_BACKUP_RECIPIENT: recipient() });
+      expect(status, out).toBe(0);
+      expect(out).toContain("[dry-run] install -m 644 tooling/systemd/ava-backup-hourly.timer");
+      expect(out).toContain("[dry-run] systemctl enable --now ava-backup-hourly.timer");
+      expect(readdirSync(systemd)).toEqual([]);
+    });
+
+    it("utan nattjobbet: ingen timer, och skälet står i utskriften", () => {
+      const { status, out, calls } = deploy([], { AVA_BACKUP_RECIPIENT: recipient() });
+      expect(status, out).toBe(0);
+      expect(calls.some((c) => c.includes("ava-backup-hourly"))).toBe(false);
+      expect(out).toContain("timexporten installeras först när nattjobbet finns");
+    });
+
+    it("utan mottagarfil (saknas eller är tom): ingen timer, och skälet står i utskriften", () => {
+      for (const path of [join(root, "finns-inte.txt"), recipient("")]) {
+        const { status, out, calls } = deploy([], { FAKE_SYSTEMD: "1", AVA_BACKUP_RECIPIENT: path });
+        expect(status, out).toBe(0);
+        expect(calls.some((c) => c.includes("ava-backup-hourly"))).toBe(false);
+        expect(out).toContain(`ingen mottagarfil (${path})`);
+      }
+      // Utan AVA_BACKUP_RECIPIENT: samma standard som tjänsten.
+      expect(deploy([], { FAKE_SYSTEMD: "1" }).out).toContain("ingen mottagarfil (/srv/ava/backup-recipient.txt)");
+    });
   });
 
   it("deploy via tagg: timern installeras och startas vid varje deploy", () => {

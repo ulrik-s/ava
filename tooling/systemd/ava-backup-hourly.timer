@@ -1,0 +1,27 @@
+# Timexporten (ADR 0039): startar ava-backup-hourly.service kvart över varje
+# timme, dygnet runt. Kl. 03.15 hoppar tjänsten själv över om nattjobbet
+# (ava-backup.service, kl. 03) fortfarande kör.
+#
+# Persistent=false: en missad timme tas inte igen vid uppstart. Nästa kvart
+# över kommer inom en timme, och vid uppstart är docker kanske inte uppe än.
+#
+# När klockan ställs tillbaka på hösten körs :15 två gånger med samma
+# stämpel i filnamnet. Den andra timexporten skriver då över den första. Det
+# skadar inte backupen: den andra är nyare och räknas från samma bas, så den
+# innehåller allt som den första hade.
+#
+# Installeras och uppdateras av deploy-prod.sh (idempotent), när
+# ava-backup.service och mottagarfilen finns:
+#   install -m 644 tooling/systemd/ava-backup-hourly.* /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now ava-backup-hourly.timer
+
+[Unit]
+Description=AVA: timexport av backupen kvart över varje timme
+
+[Timer]
+OnCalendar=*:15
+Persistent=false
+Unit=ava-backup-hourly.service
+
+[Install]
+WantedBy=timers.target

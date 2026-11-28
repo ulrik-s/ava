@@ -259,15 +259,41 @@ samma maskin som databasen skyddar mot råttfel, inte mot att servern brinner:
 ### Backup utanför servern (pull, krypterat)
 
 En backup på samma maskin skyddar inte mot att servern försvinner eller
-kapas. Därför **hämtar** en dator på byrån backupen varje natt — servern har
+kapas. Därför **hämtar** en dator på byrån backupen varje timme — servern har
 ingen väg in till den datorn och kan inte radera kopiorna där.
 
 ```
 server 03:00  backup-export.sh ── db-dump + content-volymen → tar → age (publik nyckel)
                                    → /srv/backup-chroot/ava/  (read-only SFTP, chroot)
-byrå   04:00  backup-pull.sh  ◄── hämtar nya, verifierar checksumma, provdekrypterar,
+server  *:15  backup-export.sh --hourly ── db-dump + dokument ändrade sedan nattens
+                                   export → ava-<datum>-hourly.tar.age, samma katalog
+byrå    *:30  backup-pull.sh  ◄── hämtar nya, verifierar checksumma, provdekrypterar,
                                    sparar 90 dagar, larmar om senaste > 48 h
 ```
+
+**Timexporten (ADR 0039).** `ava-backup-hourly.timer` på hosten kör
+`backup-export.sh --hourly` kvart över varje timme, dygnet runt
+(`ava-backup-hourly.service`). Den tar hela databasen och de dokument som
+ändrats sedan den senaste fulla exporten, så en återställning förlorar högst
+ungefär en timme. Medan nattjobbet `ava-backup.service` kör (natten, "Ta
+backup nu", deployen) hoppar den över. Timjobbet ligger på hosten och inte i
+servern, eftersom containern inte har någon host-åtkomst (#1431).
+`deploy-prod.sh` installerar och uppdaterar enheterna när
+`ava-backup.service` och mottagarfilen finns. Saknas någon av dem säger
+deployen varför. Exportkatalogen är `AVA_BACKUP_EXPORT_HOST_DIR` och
+mottagarfilen `AVA_BACKUP_RECIPIENT` (standard `/srv/backup-chroot/ava` och
+`/srv/ava/backup-recipient.txt`), båda i `ava-server.env`. Loggen:
+`journalctl -u ava-backup-hourly`.
+
+- **Gallringen på servern:** timexporter sparas 48 timmar
+  (`AVA_EXPORT_KEEP_HOURLY_H`), fulla exporter 14 dagar som förut. Den ena
+  sortens gallring rör aldrig den andra sortens filer.
+- **Hämtaren** körs varje timme (launchd `StartInterval=3600`, eller cron
+  `30 * * * *`), så att timexporten kommer av servern samma timme.
+- **Hämtarens kopia av repot** uppdateras med `git pull` (t.ex. i samma
+  jobb, före `backup-pull.sh`). `backup-verify.sh` klarar timexporter först
+  i den version som har stödet, och en gammal kopia provåterställer bara
+  fulla exporter.
 
 **Nyckeln:** age-nyckelparet skapas på datorn som hämtar
 (`age-keygen -o ~/.config/ava-backup/age.key`); bara den *publika* nyckeln
@@ -307,8 +333,10 @@ EOF
 sshd -t && systemctl reload ssh
 ```
 
-Lägg `backup-export.sh` efter `backup-db.sh` i nattjobbet (systemd-timer eller
-cron). **Hämtaren** (macOS: launchd, Linux/NAS: cron):
+Lägg `backup-export.sh` efter `backup-db.sh` i nattjobbet, som systemd-tjänsten
+`ava-backup.service` med en timer kl. 03 (med cron i stället installeras varken
+timexporten eller "Ta backup nu"). **Hämtaren** (macOS: launchd, Linux/NAS:
+cron, varje timme):
 
 ```bash
 AVA_BACKUP_HOST=avabackup@ava.byra.se AVA_BACKUP_KEY=~/.config/ava-backup/age.key \
@@ -368,6 +396,10 @@ samma krypterade `ava-<datum>.tar.age` i `/srv/backup-chroot/ava`, och när den
 är klar laddar webbläsaren ner den (med sha256-summan visad bredvid). Panelen
 syns bara för administratörer och bara när servern har backup på begäran.
 
+Knappen ger **alltid en full export**, som går att återställa ensam.
+Timexporterna (`ava-<datum>-hourly.tar.age`) syns inte i panelen och går inte
+att ladda ner där; de hämtas av hämtaren.
+
 ```
 browser  "Ta backup nu" ─► backup.request (admin, max en per 10 min)
 server   skriver /data/backup-requests/request.json   (= /srv/ava/backup-requests)
@@ -382,9 +414,9 @@ browser  GET /api/backup/download?name=… ─► filen strömmas till datorn
 - **Containern får ingen host-åtkomst.** Den kan bara ändra en fil i
   `/srv/ava/backup-requests`; vad som körs står i enhetsfilerna
   ([`tooling/systemd/`](../tooling/systemd/)), filens innehåll läses aldrig av
-  hosten. `ava-backup-request.service` kör ingenting om en export skrevs de
-  senaste fem minuterna — en kapad container kan inte köra backupjobbet i en
-  loop och fylla disken.
+  hosten. `ava-backup-request.service` kör ingenting om en full export skrevs
+  de senaste fem minuterna — en kapad container kan inte köra backupjobbet i
+  en loop och fylla disken. En färsk timexport stoppar inte knappen.
 - **Granskning:** varje begäran (`backup.requested`) och nedladdning
   (`backup.downloaded`) loggas med användarens id — `docker compose … logs server-first`.
 - Nedladdningen går under `/api`, så Caddy kräver en inloggad session innan
@@ -393,19 +425,24 @@ browser  GET /api/backup/download?name=… ─► filen strömmas till datorn
   `journalctl -u ava-backup -u ava-backup-request`.
 
 **Engångssteg på hosten:** inget, om nattjobbet körs som `ava-backup.service`
-— `deploy-prod.sh` installerar och uppdaterar `.path`-enheten själv (bara när
-filerna ändrats) och compose monterar katalogerna. Saknas `ava-backup.service`
-(cron i stället) säger deployen det, och knappen ger då "inte klar inom en
-timme" tills nattjobbet läggs som en systemd-tjänst. För hand:
+och mottagarfilen finns — `deploy-prod.sh` installerar och uppdaterar
+`.path`-enheten och timexportens timer själv (bara när filerna ändrats) och
+compose monterar katalogerna. Saknas `ava-backup.service` (cron i stället)
+säger deployen det, och knappen ger då "inte klar inom en timme" tills
+nattjobbet läggs som en systemd-tjänst; timexporten installeras inte heller.
+Saknas mottagarfilen säger deployen det och hoppar över timexporten. För hand:
 
 ```bash
-install -m 644 tooling/systemd/ava-backup-request.* /etc/systemd/system/
-systemctl daemon-reload && systemctl enable --now ava-backup-request.path
+install -m 644 tooling/systemd/ava-backup-request.* tooling/systemd/ava-backup-hourly.* /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now ava-backup-request.path ava-backup-hourly.timer
 ```
 
 Ligger exporterna någon annanstans än `/srv/backup-chroot/ava`, sätt
-`AVA_BACKUP_EXPORT_HOST_DIR` i `ava-server.env` (och rätta sökvägen i
-`ava-backup-request.service`).
+`AVA_BACKUP_EXPORT_HOST_DIR` i `ava-server.env` (timexporten läser den
+därifrån, men rätta sökvägen i `ava-backup-request.service`). Ligger
+mottagarfilen någon annanstans än `/srv/ava/backup-recipient.txt`, sätt
+`AVA_BACKUP_RECIPIENT`.
 
 #### Provåterställning (varje vecka)
 

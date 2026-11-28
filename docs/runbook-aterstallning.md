@@ -131,7 +131,8 @@ dokumentfilerna (ADR 0039).
   docker compose -f tooling/docker/docker-compose.production.yml exec -T postgres \
     psql -U ava -d ava -tAc "SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM matters), (SELECT count(*) FROM documents WHERE deleted_at IS NULL)"
   ```
-- Allt som skrevs efter exporten är borta. Meddela byrån vilken tidpunkt som
+- Allt som skrevs efter den senaste exporten är borta. Med timexporten (ADR
+  0039) är det högst ungefär en timme. Meddela byrån vilken tidpunkt som
   gäller (exportens datum och klockslag). Vad som händer i klienterna står i
   nästa avsnitt.
 - `SELECT epoch, rotated_at FROM sync_epoch` ska visa en `rotated_at` från
@@ -171,22 +172,34 @@ vänta tills synken visar *Synkat* innan de arbetar vidare, och gå igenom
 
 **Begränsning:** det som skrevs efter exporten, och som klienterna redan
 hade synkat, tas bort även ur klienternas kopior. Servern är källan till
-sanning, och en klient kan inte avgöra om en sådan rad ska tillbaka. Att
-rädda den datan ur klienternas cache följs upp i #1426.
+sanning, och en klient kan inte avgöra om en sådan rad ska tillbaka.
+
+**Det som skrevs efter nattbackupen räddas med timexporten**, inte ur
+klienterna. Återställ från den senaste timexporten och dess bas, inte från
+nattens fulla export ensam: provåterställ timexporten i steg 0 (skriptet
+skriver ut basen), packa upp båda i steg 2, läs in timexportens dump i steg 3
+och packa upp basens dokument och sedan tillägget i steg 4. Då är det bara
+det som skrevs efter den senaste timexporten, högst ungefär en timme, som
+försvinner.
 
 ## 6. Backupen igen
 
 Den nya servern har ingen backup förrän du lägger tillbaka den:
 
-1. Lägg in nattjobben igen (`backup-db.sh` och `backup-export.sh`) och
-   read-only-kontot för hämtning, enligt [Backup](./deploy-server-first.md#backup).
+1. Lägg in nattjobbet igen som `ava-backup.service` (`backup-db.sh` och
+   `backup-export.sh`), den publika nyckeln i `/srv/ava/backup-recipient.txt`
+   och read-only-kontot för hämtning, enligt [Backup](./deploy-server-first.md#backup).
    Första `deploy-prod.sh` därefter installerar `.path`-enheten för "Ta backup
-   nu" i Inställningar.
-2. Uppdatera `AVA_BACKUP_HOST` hos hämtaren om adressen ändrades, och kör
+   nu" i Inställningar och timexportens timer (`ava-backup-hourly.timer`).
+2. Ta en **full** export direkt (`systemctl start ava-backup.service`), så att
+   timexporterna får en bas på den nya servern. Utan den blir nästa timexport
+   en full export.
+3. Uppdatera `AVA_BACKUP_HOST` hos hämtaren om adressen ändrades, och kör
    `backup-pull.sh` en gång manuellt. Den ska sluta med `✓ senaste: …` och
    utan larm. Larmar den om *ingen andra backupplats*, sätt
    `AVA_BACKUP_MIRROR` ([Andra backupplatsen](./deploy-server-first.md#andra-backupplatsen)).
-3. `rm -rf /root/restore` på servern.
+   Efter nästa kvart över ska en `ava-<datum>-hourly.tar.age` ha hämtats.
+4. `rm -rf /root/restore` på servern.
 
 ## Övning
 

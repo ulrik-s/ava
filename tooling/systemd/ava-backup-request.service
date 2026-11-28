@@ -2,9 +2,11 @@
 # sin tur nattjobbets ava-backup.service (backup-db.sh + backup-export.sh) —
 # samma backup, samma krypterade export i /srv/backup-chroot/ava.
 #
-# Hostens egen spärr, oberoende av containern: skrevs en export de senaste
-# fem minuterna körs ingenting (servern vägrar själv inom tio). En kapad
-# container kan alltså inte köra backupjobbet i en loop och fylla disken.
+# Hostens egen spärr, oberoende av containern: skrevs en full export de
+# senaste fem minuterna körs ingenting (servern vägrar själv inom tio). En
+# kapad container kan alltså inte köra backupjobbet i en loop och fylla
+# disken. Timexporterna (ava-*-hourly.tar.age, ADR 0039) räknas inte: en
+# färsk timexport stoppar inte "Ta backup nu".
 # Pågår backupjobbet redan är `systemctl start` en no-op.
 
 [Unit]
@@ -13,5 +15,5 @@ Description=AVA: starta backupjobbet på begäran från Inställningar
 [Service]
 Type=oneshot
 NoNewPrivileges=yes
-ExecCondition=/bin/sh -c 'test -z "$$(find /srv/backup-chroot/ava -maxdepth 1 -name "ava-*.tar.age" -mmin -5 -print -quit 2>/dev/null)"'
+ExecCondition=/bin/sh -c 'test -z "$$(find /srv/backup-chroot/ava -maxdepth 1 -name "ava-*.tar.age" ! -name "ava-*-hourly.tar.age" -mmin -5 -print -quit 2>/dev/null)"'
 ExecStart=/bin/systemctl start --no-block ava-backup.service
