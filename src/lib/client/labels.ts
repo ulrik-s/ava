@@ -26,6 +26,9 @@ import {
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
   type TimeEntryKind,
+  USER_ROLE_LABELS,
+  type UserRole,
+  userRoleSchema,
 } from "@/lib/shared/schemas/enums";
 
 // MatterRole/ContactType/PaymentMethod — labels + schema + typ bor i
@@ -101,6 +104,24 @@ export const paymentMethodOptions: ReadonlyArray<PaymentMethodOption> = paymentM
 
 export function labelForPaymentMethod(v: PaymentMethod): string {
   return PAYMENT_METHOD_LABELS[v];
+}
+
+// ─── User roles (UI-derivationer, #1990) ─────────────────────────
+// USER_ROLE_LABELS i shared/schemas/enums.ts är enda källan för rollernas texter.
+
+export type UserRoleOption = { readonly value: UserRole; readonly label: string };
+
+export const userRoleOptions: ReadonlyArray<UserRoleOption> = userRoleSchema.options.map(
+  (value) => ({ value, label: USER_ROLE_LABELS[value] }),
+);
+
+/**
+ * Användarens roll som text. Tar bara `UserRole`; en okänd roll i rå data
+ * (som typen inte ser) visas som den är, via reserven `?? role`.
+ */
+export function labelForUserRole(role: UserRole): string {
+  const labels: Readonly<Record<string, string>> = USER_ROLE_LABELS;
+  return labels[role] ?? role;
 }
 
 /**
