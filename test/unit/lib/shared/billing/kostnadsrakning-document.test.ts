@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest-compat";
 import type { TaxaResult } from "@/lib/shared/billing/brottmalstaxa";
 import type { ForordnandeResult, TidsspillanUtover } from "@/lib/shared/billing/forordnandetaxa";
 import { buildKostnadsrakningContext, withDocumentFields, type BuildInput } from "@/lib/shared/billing/kostnadsrakning";
-import { buildKrDocument, cityFromAddress, displayWebsite, vatNumberFromOrgNumber, type KrDocumentInput } from "@/lib/shared/billing/kostnadsrakning-document";
+import { buildKrDocument, cityFromAddress, displayWebsite, krArvodePart, vatNumberFromOrgNumber, type KrDocumentInput } from "@/lib/shared/billing/kostnadsrakning-document";
 import { expenseSpec, hourlyRowSpecs, timeSpecSections, type KrTimeLineLike } from "@/lib/shared/billing/kostnadsrakning-document-rows";
 import { krClaim, type KrClaim } from "@/lib/shared/billing/kr-claim";
 import { roundToKronor } from "@/lib/shared/billing/whole-kronor";
@@ -31,7 +31,7 @@ const BASE: KrDocumentInput = {
   hasFTax: true,
   yrkandeDate: DAY,
   basis: { kind: "lopande", notes: [] },
-  huf: { start: DAY, end: DAY, minutes: 0, rateOrePerH: 162_600, amountOre: 0 },
+  huf: { start: DAY, end: DAY, minutes: 0, rateOrePerH: 162_600 },
   timeLines: [],
   expenseLines: [],
   claim: NO_CLAIM,
@@ -160,11 +160,12 @@ describe("sammanställningen — löpande räkning", () => {
     expect(buildKrDocument(BASE).totals.vatLabel).toBe("Moms (25%)");
   });
   it("huvudförhandlingen ingår som arvodesrad och i redogörelsen", () => {
-    const huf = { start: new Date("2026-09-22T09:00:00+02:00"), end: new Date("2026-09-22T11:30:00+02:00"), minutes: 150, rateOrePerH: 162_600, amountOre: 406_500 };
+    const huf = { start: new Date("2026-09-22T09:00:00+02:00"), end: new Date("2026-09-22T11:30:00+02:00"), minutes: 150, rateOrePerH: 162_600 };
     const d = buildKrDocument({ ...BASE, huf, timeLines: [line({})], claim: krClaim({ arvodeRowsOre: [569_100], expenseChargedNetOre: 0, expensePassThroughOre: 0 }) });
     expect(nb(d.summaryRows[0]?.amount ?? "")).toBe("5 691,00 kr");
     expect(nb(d.summaryRows[0]?.quantity ?? "")).toBe("3,5 á 1 626 kr");
     expect(d.specSections[0]?.rows[0]).toEqual({ date: "2026-09-22", description: "Huvudförhandling kl. 09:00–11:30", quantity: "2,5" });
+    expect(krArvodePart({ kind: "lopande", notes: [] }, huf, []).lines[0]?.amountOre).toBe(406_500);
   });
 });
 
@@ -190,7 +191,7 @@ describe("arbetsredogörelsen", () => {
 
 describe("taxeärenden", () => {
   const taxa = (kind: TaxaResult["kind"]): TaxaResult => ({ kind, level: 1, intervalLabel: "2 tim - 2 tim 14 min", ersattningExclVat: 563_500, gransvardeExclVat: 0, notes: [] });
-  const huf = { start: new Date("2026-09-22T09:00:00+02:00"), end: new Date("2026-09-22T11:10:00+02:00"), minutes: 130, rateOrePerH: 0, amountOre: 0 };
+  const huf = { start: new Date("2026-09-22T09:00:00+02:00"), end: new Date("2026-09-22T11:10:00+02:00"), minutes: 130, rateOrePerH: 0 };
   /** Ingen tidsspillan utöver taxan. */
   const noExtra: TidsspillanUtover = { ingarOvrigMinutes: 0, ingarVardagMinutes: 0, extraVardagMinutes: 0, extraOvrigMinutes: 0, vardagRateOre: 0, ovrigRateOre: 0, amountOre: 0 };
 

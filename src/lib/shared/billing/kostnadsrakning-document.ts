@@ -29,6 +29,7 @@ import {
   type KrExpenseLineLike, type KrExpenseSpec, type KrRowSpec, type KrSpecSection, type KrSummaryRow, type KrTimeLineLike,
 } from "./kostnadsrakning-document-rows";
 import type { KrClaim } from "./kr-claim";
+import { timeEntryValueOre } from "./whole-kronor";
 
 /** Byråns uppgifter som dokumentet visar (brevhuvud, sidfot, bankgiro, ort). */
 export interface KrOrganization {
@@ -48,13 +49,15 @@ export interface KrOrganization {
   footerSeal?: OrgImage | undefined;
 }
 
-/** Huvudförhandlingen (0 min = ingen). `amountOre` = dess värde vid löpande räkning. */
+/**
+ * Huvudförhandlingen (0 min = ingen). Radens belopp räknas ur `minutes` ×
+ * `rateOrePerH` i `hufLine`.
+ */
 export interface KrHuvudforhandling {
   start: Date;
   end: Date;
   minutes: number;
   rateOrePerH: number;
-  amountOre: number;
 }
 
 /** Vad arvodet står på — styr sammanställningens arvodesrader och noter. */
@@ -232,7 +235,8 @@ function hufLine(huf: KrHuvudforhandling): KrTimeLineLike[] {
   return [{
     date: toIsoDate(huf.start),
     description: `Huvudförhandling kl. ${toLocalTime(huf.start)}–${toLocalTime(huf.end)}`,
-    minutes: huf.minutes, kind: "ARBETE", rateOrePerH: huf.rateOrePerH, amountOre: huf.amountOre,
+    minutes: huf.minutes, kind: "ARBETE", rateOrePerH: huf.rateOrePerH,
+    amountOre: timeEntryValueOre(huf.minutes, huf.rateOrePerH),
   }];
 }
 

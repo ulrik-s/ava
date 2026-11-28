@@ -8,5 +8,5 @@
   "src/lib/server/routers/invoice.ts": 537,
   "src/lib/server/routers/matter.ts": 408,
   "src/lib/shared/billing/brottmalstaxa.ts": 536,
-  "src/lib/shared/billing/kostnadsrakning.ts": 684
+  "src/lib/shared/billing/kostnadsrakning.ts": 681
 }
