@@ -9,7 +9,7 @@ import { AGENT_PR_PER_DAY } from "../../tooling/scripts/agent-guard";
 import { dispatchTarget, earlierFire, type FetchFn, FIRE_WINDOW_MS } from "../../tooling/scripts/flow/dispatch";
 import { renderMermaid } from "../../tooling/scripts/flow/generate";
 import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
-import { flowErrors, loadFlow, parseFlow } from "../../tooling/scripts/flow/load";
+import { flowErrors, labelIn, loadFlow, machineNamed, parseFlow } from "../../tooling/scripts/flow/load";
 import type { Flow, Machine } from "../../tooling/scripts/flow/schema";
 import { decide, GUARD_ACTOR, type LabelEvent, normalizeRemovals, previousStateLabel } from "../../tooling/scripts/flow/transition";
 import { closesIssue, dueNudges, dueTimeouts, duplicatePulls, hungRuns, parseDuration } from "../../tooling/scripts/flow/watchdog";
@@ -66,6 +66,7 @@ ulrik: u
 ci: { hang_minutes: 5 }
 nudge: { after: 2h }
 health: { stuck_after: 6h }
+inbox: { grace: 2h }
 release: { every: 6h, types: [feat] }
 routines: {}
 machines:
@@ -111,6 +112,21 @@ machines:
     const label = state.label;
     state.description = "x".repeat(101);
     expect(flowErrors(broken).join("\n")).toContain(`etiketten ${label} har en beskrivning på 101 tecken`);
+  });
+
+  it("inkorgens graceperiod står i flödet (inbox.grace)", () => {
+    expect(flow.inbox.grace).toBe("2h");
+  });
+
+  it("labelIn ger ett tillstånds eller en flaggas etikett och kastar för en okänd", () => {
+    const pr = machineNamed(flow, "code-pr");
+    expect(labelIn(pr, "granskad")).toBe("granskad");
+    expect(labelIn(pr, "blockerad")).toBe("blockerad");
+    expect(() => labelIn(pr, "finns-inte")).toThrow("flow.yaml saknar etiketten finns-inte");
+  });
+
+  it("machineNamed kastar för en okänd maskin", () => {
+    expect(() => machineNamed(flow, "finns-inte")).toThrow("flow.yaml saknar maskinen finns-inte");
   });
 
   it("kastar när filen inte hänger ihop", () => {

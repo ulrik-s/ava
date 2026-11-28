@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest-compat";
 import { gitHub, type GhRunner } from "../../tooling/scripts/flow/github";
-import { healthReport, type HealthItem, newAlarms, previousAlarmKeys, prioOrder, renderStatus } from "../../tooling/scripts/flow/health";
+import { healthLabels, healthReport, type HealthItem, newAlarms, previousAlarmKeys, prioOrder, renderStatus } from "../../tooling/scripts/flow/health";
 import { loadFlow } from "../../tooling/scripts/flow/load";
 import { commitType, nextVersion, releaseDecision } from "../../tooling/scripts/flow/release";
 import { collectItems, lastClockRun, openIntakeRefs, publishStatus } from "../../tooling/scripts/flow-health";
@@ -261,5 +261,16 @@ describe("den automatiska taggen", () => {
     const off = fakeGh(answers);
     expect(runRelease(flow, gitHub("ulrik-s/ava", off.run), { now, disabled: true, enforce: true, log: (l) => lines.push(l) }).release).toBe(false);
     expect(lines.at(-1)).toContain("ingen tagg");
+  });
+});
+
+describe("healthLabels läser etiketterna ur flow.yaml (#1996)", () => {
+  it("granskad och blockerad ur PR-maskinen, undersökt ur intaget", () => {
+    expect(healthLabels(flow)).toEqual({ reviewed: "granskad", blocked: "blockerad", investigated: "undersökt" });
+  });
+
+  it("kastar när flödet saknar intaget", () => {
+    const { intake: _dropped, ...machines } = flow.machines;
+    expect(() => healthLabels({ ...flow, machines })).toThrow("intake");
   });
 });

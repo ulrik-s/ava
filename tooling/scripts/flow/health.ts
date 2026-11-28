@@ -3,7 +3,7 @@
  * Ulrik tittar på i stället för att fråga. Rena funktioner — GitHub-anropen
  * ligger i `flow-health.ts`.
  */
-import { stateLabels } from "./load";
+import { labelIn, machineNamed, stateLabels } from "./load";
 import type { Flow, Machine } from "./schema";
 import { parseDuration } from "./watchdog";
 
@@ -125,21 +125,34 @@ const queueAlarms = (flow: Flow, snap: HealthSnapshot): Alarm[] =>
   Object.values(flow.machines).flatMap((m) =>
     Object.values(m.states).filter((s) => s.queue).flatMap((s) => queueAlarm(flow, m, s, snap)));
 
-function itemAlarms(flow: Flow, item: HealthItem, now: number): Alarm[] {
+/** Etiketterna som kontrollen läser, uppslagna i flödet (kastar om någon saknas). */
+export interface HealthLabels { reviewed: string; blocked: string; investigated: string }
+
+/** `granskad` och `blockerad` ur PR-maskinen, `undersökt` ur intaget. */
+export function healthLabels(flow: Flow): HealthLabels {
+  const pr = machineNamed(flow, "code-pr");
+  return {
+    reviewed: labelIn(pr, "granskad"),
+    blocked: labelIn(pr, "blockerad"),
+    investigated: labelIn(machineNamed(flow, "intake"), "undersökt"),
+  };
+}
+
+function itemAlarms(flow: Flow, item: HealthItem, now: number, reviewed: string): Alarm[] {
   const states = currentStates(flow, item);
   const out: Alarm[] = states.length > 1
     ? [{ key: `multi:${ref(item)}`, text: line(item, `flera tillstånd samtidigt (${states.join(", ")})`) }]
     : [];
   out.push(...stuckAlarm(flow, item, now));
-  if (item.isPr && item.mergeState === "clean" && item.labels.includes("granskad") && hoursSince(item.labeledAt.granskad, now) >= 1) {
-    out.push({ key: `unmerged:${ref(item)}`, text: line(item, "granskad och grön men inte mergad på över en timme") });
+  if (item.isPr && item.mergeState === "clean" && item.labels.includes(reviewed) && hoursSince(item.labeledAt[reviewed], now) >= 1) {
+    out.push({ key: `unmerged:${ref(item)}`, text: line(item, `${reviewed} och grön men inte mergad på över en timme`) });
   }
   return out;
 }
 
-function waitsForUlrik(item: HealthItem): string | null {
-  if (item.labels.includes("blockerad")) return line(item, "blockerad — läs senaste kommentaren och svara");
-  if (item.labels.includes("undersökt")) return line(item, "undersökt — sätt verifierad om den ska byggas");
+function waitsForUlrik(item: HealthItem, labels: HealthLabels): string | null {
+  if (item.labels.includes(labels.blocked)) return line(item, `${labels.blocked} — läs senaste kommentaren och svara`);
+  if (item.labels.includes(labels.investigated)) return line(item, `${labels.investigated} — sätt verifierad om den ska byggas`);
   return null;
 }
 
@@ -149,7 +162,7 @@ export function prioOrder(flow: Flow): string[] {
 }
 
 /** Det som väntar på Ulrik, högst prioritet först (utan flagga sist), med prioriteten först på raden. */
-function waitingByPrio(items: readonly HealthItem[], order: readonly string[]): string[] {
+function waitingByPrio(items: readonly HealthItem[], order: readonly string[], labels: HealthLabels): string[] {
   const rank = (i: HealthItem): number => {
     const r = order.findIndex((p) => i.labels.includes(p));
     return r === -1 ? order.length : r;
@@ -159,20 +172,21 @@ function waitingByPrio(items: readonly HealthItem[], order: readonly string[]): 
     return p === undefined ? "" : `[${p.slice("prio-".length)}] `;
   };
   return items
-    .flatMap((i) => (waitsForUlrik(i) === null ? [] : [i]))
+    .flatMap((i) => (waitsForUlrik(i, labels) === null ? [] : [i]))
     .sort((a, b) => rank(a) - rank(b) || a.number - b.number)
-    .map((i) => `${tag(i)}${waitsForUlrik(i) ?? ""}`);
+    .map((i) => `${tag(i)}${waitsForUlrik(i, labels) ?? ""}`);
 }
 
 /** Hela kedjans hälsa. */
 export function healthReport(flow: Flow, snap: HealthSnapshot): HealthReport {
-  const alarms = [...snap.items.flatMap((i) => itemAlarms(flow, i, snap.now)), ...queueAlarms(flow, snap)];
+  const labels = healthLabels(flow);
+  const alarms = [...snap.items.flatMap((i) => itemAlarms(flow, i, snap.now, labels.reviewed)), ...queueAlarms(flow, snap)];
   if (snap.lastClockRun === null || hoursSince(snap.lastClockRun, snap.now) > 3) {
     alarms.push({ key: "clock", text: "Flödesvaktens klocka har inte gått på över 3 timmar (PR-vakten/verifieringen startar den)." });
   }
-  const waitingForUlrik = waitingByPrio(snap.items, prioOrder(flow));
+  const waitingForUlrik = waitingByPrio(snap.items, prioOrder(flow), labels);
   const moving = snap.items
-    .filter((i) => waitsForUlrik(i) === null && currentStates(flow, i).length > 0)
+    .filter((i) => waitsForUlrik(i, labels) === null && currentStates(flow, i).length > 0)
     .map((i) => line(i, movingText(flow, i)));
   return { alarms, waitingForUlrik, moving };
 }
