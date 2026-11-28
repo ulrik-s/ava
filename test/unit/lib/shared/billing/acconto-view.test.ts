@@ -41,8 +41,10 @@ function proposalKr(i: AccontoViewInput): number {
 
 /** Raderna från andelen och nedåt, med tecken. */
 function payableSum(v: SettlementView): number {
-  const from = v.rows.findIndex((r) => r.label.startsWith("Klientens "));
-  return v.rows.slice(from).reduce((s, r) => s + (r.kind === "deduct" ? -r.amountOre : r.amountOre), 0);
+  // Avräkningstabellen (#151) räknar raderna utan `role`: från andelen och nedåt.
+  const counted = v.rows.filter((r) => r.role === undefined && r.kind !== "info");
+  expect(counted[0]?.label.startsWith("Klientens ")).toBe(true);
+  return counted.reduce((s, r) => s + (r.kind === "deduct" ? -r.amountOre : r.amountOre), 0);
 }
 
 const rowsOf = (v: SettlementView): Array<[string, number]> => v.rows.map((r) => [r.label, r.amountOre]);
@@ -51,7 +53,7 @@ const amountOf = (v: SettlementView, label: string): number | undefined => v.row
 /** Invarianterna: summan är beloppet, momsraden är fakturans moms, totalen är beloppet. */
 function expectInvariants(v: SettlementView, amountOre: number): void {
   expect(payableSum(v)).toBe(amountOre);
-  expect(v.rows.find((r) => r.label.startsWith("Moms"))?.amountOre).toBe(accontoSplit(amountOre).vatOre);
+  expect(v.rows.find((r) => r.label === "Moms")?.amountOre).toBe(accontoSplit(amountOre).vatOre);
   expect(v.totalOre).toBe(amountOre);
   expect(v.totalLabel).toBe("Att betala (inkl moms)");
 }
@@ -61,8 +63,12 @@ describe("buildAccontoView — raderna", () => {
     const v = buildAccontoView(input());
     expect(rowsOf(v)).toEqual([
       ["Upparbetat arvode (exkl moms)", 500_000],
-      ["Klientens andel 20 % (exkl moms)", 100_000],
-      ["Moms 25 %", 25_000],
+      ["Klientens andel (exkl moms)", 100_000],
+      ["Moms", 25_000],
+    ]);
+    // Underlag och andel i egna fält (#151), inte i etiketten.
+    expect(v.rows.map((r) => [r.role, r.basisOre, r.shareBips])).toEqual([
+      ["basis", undefined, undefined], [undefined, 500_000, 2000], [undefined, 100_000, 2500],
     ]);
     expectInvariants(v, 125_000);
   });
@@ -73,20 +79,20 @@ describe("buildAccontoView — raderna", () => {
     const v = buildAccontoView(i);
     expect(rowsOf(v)).toEqual([
       ["Upparbetat arvode (exkl moms)", 500_000],
-      ["Klientens andel 20 % (exkl moms)", 100_000],
+      ["Klientens andel (exkl moms)", 100_000],
       ["Avgår aconto — faktura F-2026-0001 (2026-05-01), exkl moms", 40_000],
       ["Avgår aconto — faktura F-2026-0002 (2026-05-01), exkl moms", 24_000],
-      ["Moms 25 %", 9_000],
+      ["Moms", 9_000],
     ]);
     expect(v.rows.filter((r) => r.kind === "deduct")).toHaveLength(2);
     expectInvariants(v, 45_000);
   });
 
-  it("öresavrundning när avdragens netto och fakturans netto avrundas olika", () => {
+  it("öresutjämning när avdragens netto och fakturans netto avrundas olika", () => {
     const i = input({ work: { timeEntries: [te(125)], expenses: [] }, deductions: [ded("F-1", 10_100)], amountOre: 120_200 });
     expect(proposalKr(i)).toBe(120_200);
     const v = buildAccontoView(i);
-    expect(amountOf(v, "Öresavrundning")).toBe(100);
+    expect(amountOf(v, "Öresutjämning")).toBe(100);
     expect(amountOf(v, "Justering (exkl moms)")).toBeUndefined();
     expectInvariants(v, 120_200);
   });
@@ -94,7 +100,7 @@ describe("buildAccontoView — raderna", () => {
   it("ett ändrat belopp uppåt och nedåt ger Justering med tecken", () => {
     const up = buildAccontoView(input({ amountOre: 150_000 }));
     expect(amountOf(up, "Justering (exkl moms)")).toBe(20_000);
-    expect(amountOf(up, "Öresavrundning")).toBeUndefined();
+    expect(amountOf(up, "Öresutjämning")).toBeUndefined();
     expectInvariants(up, 150_000);
     const down = buildAccontoView(input({ amountOre: 100_000 }));
     expect(amountOf(down, "Justering (exkl moms)")).toBe(-20_000);
@@ -152,15 +158,15 @@ describe("buildAccontoView — raderna", () => {
   it("ett icke debiterbart utlägg syns inte i specifikationen", () => {
     const v = buildAccontoView(input({ work: { timeEntries: [te(120)], expenses: [ex(10_000, { billable: false })] } }));
     expect(v.expenseLines).toEqual([]);
-    expect(rowsOf(v)[1]?.[0]).toBe("Klientens andel 20 % (exkl moms)");
+    expect(rowsOf(v)[1]?.[0]).toBe("Klientens andel (exkl moms)");
   });
 });
 
 describe("buildAccontoView — andelens benämning och tidsraderna", () => {
   it.each([
-    ["RATTSHJALP", "Klientens rättshjälpsavgift 20 % (exkl moms)"],
-    ["RATTSSKYDD", "Klientens självrisk 20 % (exkl moms)"],
-    ["PRIVAT", "Klientens andel 20 % (exkl moms)"],
+    ["RATTSHJALP", "Klientens rättshjälpsavgift (exkl moms)"],
+    ["RATTSSKYDD", "Klientens självrisk (exkl moms)"],
+    ["PRIVAT", "Klientens andel (exkl moms)"],
   ] as const)("%s: %s", (paymentMethod, label) => {
     const base = input({ matter: { paymentMethod } });
     const i = { ...base, amountOre: proposalKr(base) };
