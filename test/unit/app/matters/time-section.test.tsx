@@ -42,6 +42,8 @@ let runs: Array<Record<string, unknown>> = [];
 let radgivningStatus: unknown = { kind: "present", invoiceId: "inv-r" };
 /** Spärr för `timeEntry.update`: svaret dröjer tills testet släpper den. */
 let updateGate: Promise<void> = Promise.resolve();
+/** Spärr för `timeEntry.moveToMatter`: svaret dröjer tills testet släpper den. */
+let moveGate: Promise<void> = Promise.resolve();
 /** Fel som `timeEntry.moveToMatter` ger, eller null. */
 let moveError: string | null = null;
 
@@ -52,7 +54,8 @@ const HANDLERS = {
   "timeEntry.radgivningStatus": () => radgivningStatus,
   "matter.list": () => ({ matters: MATTERS }),
   "timeEntry.update": async () => { await updateGate; return { id: "t1" }; },
-  "timeEntry.moveToMatter": () => {
+  "timeEntry.moveToMatter": async () => {
+    await moveGate;
     if (moveError) throw new Error(moveError);
     return { moved: 1 };
   },
@@ -61,11 +64,25 @@ const HANDLERS = {
 type Props = Parameters<typeof renderTimeSection>[1];
 const renderTime = (props?: Props): Promise<FakeTrpcRender> => renderTimeSection(HANDLERS, props);
 
+/** En spärr som håller ett svar tills `release` anropas. */
+function gate(): { promise: Promise<void>; release: () => void } {
+  let release: () => void = () => {};
+  const promise = new Promise<void>((resolve) => { release = resolve; });
+  return { promise, release: () => release() };
+}
+
 /** Håller `timeEntry.update` tills den returnerade funktionen anropas. */
 function holdUpdate(): () => void {
-  let release: () => void = () => {};
-  updateGate = new Promise((resolve) => { release = resolve; });
-  return () => release();
+  const held = gate();
+  updateGate = held.promise;
+  return held.release;
+}
+
+/** Håller `timeEntry.moveToMatter` tills den returnerade funktionen anropas. */
+function holdMove(): () => void {
+  const held = gate();
+  moveGate = held.promise;
+  return held.release;
 }
 
 /** Väntar på att `timeEntry.create` anropats en gång med fälten. */
@@ -90,6 +107,7 @@ beforeEach(() => {
   runs = [];
   radgivningStatus = { kind: "present", invoiceId: "inv-r" };
   updateGate = Promise.resolve();
+  moveGate = Promise.resolve();
   moveError = null;
 });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -516,7 +534,8 @@ describe("TimeSection — flytta posten till ett annat ärende (#2042)", () => {
   });
 
   it("ett annat ärende: update, sedan moveToMatter med postens id, och båda ärendena läses om", async () => {
-    const release = holdUpdate();
+    const releaseUpdate = holdUpdate();
+    const releaseMove = holdMove();
     const view = await renderTime();
     fireEvent.click(nthText("Ändra", 0));
     fireEvent.change(screen.getByLabelText("Ärende"), { target: { value: "2026-0002 — Arvskifte" } });
@@ -524,8 +543,11 @@ describe("TimeSection — flytta posten till ett annat ärende (#2042)", () => {
     await waitFor(() => expect(callsTo(view.fake, "timeEntry.update")).toEqual([expect.objectContaining({ id: "t1" })]));
     expect(callsTo(view.fake, "timeEntry.moveToMatter")).toEqual([]);
     expect(editDialog()).toBeInTheDocument();
-    release();
+    releaseUpdate();
     await waitFor(() => expect(callsTo(view.fake, "timeEntry.moveToMatter")).toEqual([{ ids: ["t1"], matterId: "m2" }]));
+    // update har lyckats men flytten har inte svarat: dialogen står kvar.
+    expect(editDialog()).toBeInTheDocument();
+    releaseMove();
     await waitFor(() => expect(editDialog()).not.toBeInTheDocument());
     expect(invalidatedPaths(view.invalidate)).toEqual(expect.arrayContaining([...refreshedFor("m1"), ...refreshedFor("m2")]));
   });

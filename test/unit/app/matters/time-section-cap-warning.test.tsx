@@ -5,7 +5,7 @@
  */
 
 import { screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest-compat";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest-compat";
 import { invalidatedPaths } from "../../../helpers/trpc-fake";
 import { forMatter, renderTimeSection, TIME_MATTER_ID as matterId } from "./time-section-fixture";
 
@@ -23,6 +23,7 @@ beforeEach(() => {
   usage = { billableMinutes: 0, billableValueOre: 0 };
   entries.length = 0;
 });
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe("TimeSection — takvarning (#1520)", () => {
   it("rättshjälp över tröskeln: varningen visas i tidssektionen", async () => {
@@ -79,6 +80,5 @@ describe("TimeSection — takvarning (#1520)", () => {
     const { invalidate } = await renderTimeSection(HANDLERS, { paymentMethod: "RATTSHJALP" });
     fireEvent.click(screen.getByText("Ta bort"));
     await waitFor(() => expect(invalidatedPaths(invalidate)).toEqual(expect.arrayContaining(REFRESHED)));
-    vi.restoreAllMocks();
   });
 });

@@ -32,7 +32,6 @@ interface ProposalData { workValueOre: number; priorAccontoSumOre: number; timeE
 let proposalData: ProposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
 interface InvoiceRow { id: string; amount: number; status: string; payments: Array<{ amount: number }>; invoiceNumber?: string; invoiceType?: string }
 let invoiceListData: InvoiceRow[] = [];
-let coverageSplitData: { clientOre: number } | undefined = undefined;
 let radgivningError: string | null = null;
 /** Rådgivningsfakturan som skapas; `null` = anropet blir aldrig klart. */
 let radgivningInvoice: Record<string, unknown> | null = null;
@@ -62,7 +61,7 @@ function handlers(): TrpcHandlers {
     "prefs.save": () => ({}),
     "billingRun.list": runsAnswer,
     "billingRun.proposal": () => proposalData,
-    "billingRun.coverageSplit": () => coverageSplitData ?? null,
+    "billingRun.coverageSplit": () => null,
     "billingRun.createKostnadsrakning": () => ({ run: { id: "run-new" } }),
     "billingRun.appealKostnadsrakning": () => ({}),
     "billingRun.voidKostnadsrakning": () => ({}),
@@ -156,7 +155,6 @@ beforeEach(() => {
   documentListData = { documents: [] };
   proposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
   invoiceListData = [];
-  coverageSplitData = undefined;
   radgivningError = null;
   radgivningInvoice = null;
   hasDoc = false;

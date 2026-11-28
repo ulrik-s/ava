@@ -191,6 +191,17 @@ describe("Ärendelistan — sammanslagen sökning (#1642)", () => {
     expect(screen.queryByText("Inga träffar")).toBeNull();
   });
 
+  it("en ny sökterm glömmer jävskontrollen (kolumnen och märkningen försvinner)", async () => {
+    check = () => ({ searchTerm: "Anna", matchCount: 0, results: [] });
+    await renderLoaded();
+    await search("Anna");
+    expect(screen.getByText("Inga träffar")).toBeInTheDocument();
+    fireEvent.change(searchBox(), { target: { value: "Bo" } });
+    expect(searchBox().value).toBe("Bo");
+    await waitFor(() => expect(columnHeaders().some((h) => h.includes("Träff"))).toBe(false));
+    expect(screen.queryByText("Inga träffar")).toBeNull();
+  });
+
   it("medan jävskontrollen pågår visar knappen 'Söker...'", async () => {
     check = () => new Promise(() => {});
     await renderLoaded();
