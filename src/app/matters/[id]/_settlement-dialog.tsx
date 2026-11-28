@@ -11,14 +11,16 @@
  * Skapar klient- + betalar-faktura och bokar ev. byrå-förlust.
  */
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import { fakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate, type DocUtils, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
@@ -138,12 +140,14 @@ export function SettlementDialog({ matterId, paymentMethod, onClose }: { matterI
   const [kr, setKr] = useState<number | null>(null);
   const ore = kr != null ? Math.round(kr * 100) : undefined;
   const cfg = settlementConfig(paymentMethod === "RATTSHJALP", matterId, ore);
-  const split = trpc.billingRun.coverageSplit.useQuery(cfg.splitArg);
-  const utils = trpc.useUtils();
-  const matterQ = trpc.matter.getById.useQuery({ id: matterId });
-  const orgQ = trpc.organization.getSettings.useQuery();
-  const register = trpc.document.register.useMutation();
-  const settle = trpc.billingRun.settleCoverage.useMutation({
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const utils = useBillingQueryUtils();
+  const split = useQuery(t.billingRun.coverageSplit.queryOptions(cfg.splitArg));
+  const matterQ = useQuery(t.matter.getById.queryOptions({ id: matterId }));
+  const orgQ = useQuery(t.organization.getSettings.queryOptions());
+  const register = useMutation(t.document.register.mutationOptions());
+  const settle = useMutation(t.billingRun.settleCoverage.mutationOptions({
     onSuccess: async (res) => {
       // Generera faktura-DOKUMENT (via template-motorn, #852) för båda fakturorna
       // → syns i fil-listan + länkas från faktura-objektet. Best-effort.
@@ -152,11 +156,11 @@ export function SettlementDialog({ matterId, paymentMethod, onClose }: { matterI
           matterId, matter: matterQ.data, org: orgQ.data, payerLabel: cfg.payerLabel, register, utils,
         });
       } catch (e) { console.warn("[settlement] fakturadokument misslyckades:", e); }
-      void utils.billingRun.list.invalidate({ matterId });
-      void utils.invoice.list.invalidate();
+      void queryClient.invalidateQueries(t.billingRun.list.queryFilter({ matterId }));
+      void queryClient.invalidateQueries(t.invoice.list.queryFilter());
       onClose();
     },
-  });
+  }));
   return (
     <Modal open title="Slutreglera ärende" onClose={onClose} widthClass="max-w-md">
       <form onSubmit={(e) => { e.preventDefault(); settle.mutate(cfg.settleArg); }} className="space-y-3">

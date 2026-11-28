@@ -71,24 +71,3 @@ export async function runContentIntegrityCheck(
   log.error("content.integrity.missing", { total: report.checked, count: documentIds.length, ids: documentIds });
   return report;
 }
-
-export interface IntegritySchedule {
-  /** Kör en kontroll (fel fångas och loggas — en kontroll får aldrig ta ned servern). */
-  run: () => Promise<unknown>;
-  intervalMs: number;
-  setTimer?: (fn: () => void, ms: number) => unknown;
-  clearTimer?: (handle: unknown) => void;
-}
-
-/** Dagligen. */
-export const DEFAULT_INTEGRITY_INTERVAL_MS = 24 * 60 * 60 * 1000;
-
-/** Kör kontrollen nu och sedan periodiskt. Returnerar stopp-funktionen. */
-export function scheduleContentIntegrity(s: IntegritySchedule): () => void {
-  const setTimer = s.setTimer ?? ((fn, ms) => setInterval(fn, ms));
-  const clearTimer = s.clearTimer ?? ((h) => clearInterval(h as ReturnType<typeof setInterval>));
-  const tick = (): void => { void s.run().catch(() => undefined); };
-  tick();
-  const handle = setTimer(tick, s.intervalMs);
-  return () => clearTimer(handle);
-}

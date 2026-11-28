@@ -5,11 +5,12 @@
  * (datum + tid + text + författare). Redigerbara/raderbara (#375).
  */
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { NotebookPen, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { noteTimestamp } from "@/lib/shared/billing/billing-notes";
 import type { MatterId, ServiceNoteId } from "@/lib/shared/schemas/ids";
 
@@ -67,16 +68,16 @@ function initialValues(initial?: ServiceNote | null): { date: string; time: stri
 }
 
 export function ServiceNotesSection({ matterId }: { matterId: MatterId }) {
-  const utils = trpc.useUtils();
-  const notes = trpc.serviceNote.list.useQuery({ matterId });
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const notes = useQuery(t.serviceNote.list.queryOptions({ matterId }));
+  const invalidateNotes = (): void => { void queryClient.invalidateQueries(t.serviceNote.list.queryFilter({ matterId })); };
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ServiceNote | null>(null);
-  const del = trpc.serviceNote.delete.useMutation({
-    onSuccess: () => void utils.serviceNote.list.invalidate({ matterId }),
-  });
+  const del = useMutation(t.serviceNote.delete.mutationOptions({ onSuccess: invalidateNotes }));
 
   const close = (): void => { setAdding(false); setEditing(null); };
-  const refresh = (): void => { close(); void utils.serviceNote.list.invalidate({ matterId }); };
+  const refresh = (): void => { close(); invalidateNotes(); };
   const showForm = adding || editing !== null;
 
   const items = ((notes.data ?? []) as ServiceNote[]).slice().sort(byDateTimeDesc);
@@ -126,8 +127,9 @@ function NoteForm({ matterId, initial, onDone, onCancel }: {
   const [date, setDate] = useState(start.date);
   const [time, setTime] = useState(start.time);
   const [text, setText] = useState(start.text);
-  const create = trpc.serviceNote.create.useMutation({ onSuccess: onDone });
-  const update = trpc.serviceNote.update.useMutation({ onSuccess: onDone });
+  const t = useTRPC();
+  const create = useMutation(t.serviceNote.create.mutationOptions({ onSuccess: onDone }));
+  const update = useMutation(t.serviceNote.update.mutationOptions({ onSuccess: onDone }));
   const pending = create.isPending || update.isPending;
 
   function submit(e: React.FormEvent): void {

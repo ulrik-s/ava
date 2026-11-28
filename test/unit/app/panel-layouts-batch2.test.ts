@@ -14,7 +14,7 @@ function record(layout: DefaultLayout, screen: "laptop" | "large") {
 }
 
 const CASES: Array<[string, DefaultLayout, string[]]> = [
-  ["inställningar", settingsLayout, ["atgarder", "backup", "datasource", "devices", "external", "ledger", "matter-types", "offices", "org", "tags", "views"]],
+  ["inställningar", settingsLayout, ["atgarder", "backup", "datasource", "devices", "external", "ledger", "matter-types", "offices", "org", "tags", "views", "watchlist"]],
   ["rapporter", reportsLayout, ["ar", "chart", "matters", "summary", "unbilled", "weekly"]],
   ["jobbkö", jobsLayout, ["active", "history"]],
   ["profil", profileLayout, ["basics", "integrations"]],
@@ -30,5 +30,10 @@ describe("standardlayouter, batch 2", () => {
 
   it("inställningar på stor skärm: tre kolumner", () => {
     expect(record(settingsLayout, "large").find((c) => c.id === "atgarder")?.opts?.position).toEqual({ referencePanel: "ledger", direction: "right" });
+  });
+
+  it.each(["laptop", "large"] as const)("inställningar (%s): Frister står direkt efter Standardåtgärder (#1912)", (screen) => {
+    const ids = record(settingsLayout, screen).map((c) => c.id);
+    expect(ids.indexOf("watchlist")).toBe(ids.indexOf("atgarder") + 1);
   });
 });

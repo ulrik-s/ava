@@ -144,3 +144,45 @@ describe("TimeEntryRepository coverageUsageForMatter(s) — Drizzle (pglite, #12
     expect((await repo.coverageUsageForMatters([asId<"MatterId">(mId)]))[mId]).toEqual(expected);
   });
 });
+
+describe("TimeEntryRepository latestEntryAtForMatters (#2100) — in-memory + Drizzle", () => {
+  let handle: TestDbHandle;
+  beforeAll(async () => { handle = await createTestDb(); });
+  afterAll(async () => { await handle.close(); });
+
+  /** A: senast registrerad sent (6/20) för en post daterad 6/1; en ej debiterbar 6/10; en raderad 7/1. B utan poster. */
+  const mA = uuidv7(), mB = uuidv7(), mC = uuidv7(), userId = uuidv7();
+  const rows = [
+    { id: uuidv7(), userId, matterId: mA, minutes: 60, hourlyRate: 1000, billable: true, description: "a", date: new Date("2026-06-01T08:00:00Z"), createdAt: new Date("2026-06-20T08:00:00Z") },
+    { id: uuidv7(), userId, matterId: mA, minutes: 30, hourlyRate: 1000, billable: false, description: "b", date: new Date("2026-06-10T08:00:00Z"), createdAt: new Date("2026-06-10T08:00:00Z") },
+    { id: uuidv7(), userId, matterId: mA, minutes: 30, hourlyRate: 1000, billable: true, description: "c", date: new Date("2026-07-01T08:00:00Z"), createdAt: new Date("2026-07-01T08:00:00Z"), deletedAt: new Date("2026-07-02T08:00:00Z") },
+    { id: uuidv7(), userId, matterId: mC, minutes: 30, hourlyRate: 1000, billable: false, description: "d", date: new Date("2026-08-05T08:00:00Z"), createdAt: new Date("2026-08-01T08:00:00Z") },
+  ];
+  const expected = { [mA]: new Date("2026-06-20T08:00:00Z"), [mC]: new Date("2026-08-05T08:00:00Z") };
+  const ids = [mA, mB, mC].map((id) => asId<"MatterId">(id));
+
+  it("in-memory: det senare av arbetsdatum och registrering, raderade och ärenden utan poster utelämnas", async () => {
+    const source = prebakeJoins({
+      matters: [mA, mB, mC].map((id) => ({ id, organizationId: "org-1", matterNumber: id, title: "T" })),
+      users: [{ id: userId, name: "Anna" }],
+      timeEntries: rows,
+    });
+    const repo = new InMemoryTimeEntryRepository(new LocalStore(source, async () => {}));
+    expect(await repo.latestEntryAtForMatters(ids)).toEqual(expected);
+    expect(await repo.latestEntryAtForMatters([asId<"MatterId">(mA)])).toEqual({ [mA]: expected[mA] });
+    expect(await repo.latestEntryAtForMatters([])).toEqual({});
+  });
+
+  it("Drizzle: samma svar", async () => {
+    const db = handle.db;
+    const org = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    for (const id of [mA, mB, mC]) await db.insert(matters).values(v({ id, organizationId: org, matterNumber: id, title: "T" }));
+    await db.insert(users).values(v({ id: userId, organizationId: org, email: "b@x", name: "Anna" }));
+    for (const r of rows) await db.insert(timeEntries).values(v(r));
+    const repo = new DrizzleTimeEntryRepository(handle.db);
+    expect(await repo.latestEntryAtForMatters(ids)).toEqual(expected);
+    expect(await repo.latestEntryAtForMatters([])).toEqual({});
+  });
+});

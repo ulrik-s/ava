@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useActiveMatterOptions } from "@/components/matter/use-active-matter-options";
 import { MoveTimeEntriesButton, useTimeEntrySelection } from "@/components/time/move-time-entries";
@@ -10,8 +11,10 @@ import { useSaveTimeEntry } from "@/components/time/use-save-time-entry";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
+import { invalidateUnbilledWork } from "@/lib/client/billing/invalidate-billing-side-effects";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { isCoverageMethod } from "@/lib/shared/billing/billing-flow";
 import { isPerDayKind } from "@/lib/shared/billing/brottmalstaxa";
 import { formatDecimalHours, formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
@@ -66,8 +69,10 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   const isCoverage = isCoverageMethod(paymentMethod);
   const atgarder = useStandardAtgarder(paymentMethod);
   const radgivning = useMarkRadgivning(matterId, paymentMethod);
-  const utils = trpc.useUtils();
-  const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const billingUtils = useBillingQueryUtils();
+  const timeEntries = useQuery(t.timeEntry.list.queryOptions({ matterId }));
   // EN källa för både tabellen och förslagsraden (#958) — annars kunde de visa
   // olika bild av vilka standardåtgärder som redan är registrerade.
   const rows = (timeEntries.data?.entries ?? []) as TimeEntryRow[];
@@ -80,32 +85,33 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
   const matterOptions = useActiveMatterOptions();
   const marking = useTimeEntrySelection<TimeEntryRow>();
 
-  /** Tidslistan + upparbetat mot taket (#1520) — takvarningen följer med direkt. */
+  /** Tidslistan + upparbetat mot taket (#1520) + fakturaförslaget (#2201). */
   function refreshMatters(matterIds: MatterId[]): void {
     for (const id of matterIds) {
-      void utils.timeEntry.list.invalidate({ matterId: id });
-      void utils.matter.coverageUsage.invalidate({ matterId: id });
+      void queryClient.invalidateQueries(t.timeEntry.list.queryFilter({ matterId: id }));
+      void queryClient.invalidateQueries(t.matter.coverageUsage.queryFilter({ matterId: id }));
     }
+    invalidateUnbilledWork(billingUtils, matterIds);
   }
   const refreshTime = (): void => refreshMatters([matterId]);
 
-  const createTimeEntry = trpc.timeEntry.create.useMutation({
+  const createTimeEntry = useMutation(t.timeEntry.create.mutationOptions({
     onSuccess: () => {
       refreshTime();
       setShowCreate(false);
       setCreateForm(emptyForm());
     },
-  });
+  }));
 
   const saver = useSaveTimeEntry({
     refresh: refreshMatters,
     done: () => { setEditingId(null); setEditForm(null); },
   });
 
-  const deleteTimeEntry = trpc.timeEntry.delete.useMutation({
+  const deleteTimeEntry = useMutation(t.timeEntry.delete.mutationOptions({
     onSuccess: refreshTime,
     onError: (e) => { console.error("[timeEntry.delete] misslyckades:", e); alert(`Kunde inte ta bort: ${e.message}`); },
-  });
+  }));
 
   function startEdit(entry: TimeEntryRow): void {
     setEditingId(entry.id);

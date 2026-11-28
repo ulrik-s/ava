@@ -38,7 +38,11 @@ describe("SuggestionRow — header", () => {
   it("okänd kontakttyp/roll faller tillbaka på råvärdet", () => {
     render(
       <SuggestionRow
-        group={makeGroup({ contactType: "ALIEN", roles: ["WIZARD"] })}
+        group={makeGroup({
+          contactType: "ALIEN",
+          // @ts-expect-error -- en okänd roll i rå data, som typen inte släpper in
+          roles: ["WIZARD"],
+        })}
         isBusy={false}
         onAccept={vi.fn()}
         onReject={vi.fn()}

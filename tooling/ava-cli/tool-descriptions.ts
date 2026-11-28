@@ -91,6 +91,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "document.renameFolder": "Byt namn på en mapp.",
   "document.deleteFolder": "Radera en mapp. Innehållet flyttas upp till föräldramappen — inget raderas med den.",
   "document.moveDocument": "Flytta ett dokument till en annan mapp.",
+  "document.moveToMatter": "Flytta ett eller flera dokument till ett annat ärende och en mapp där (null = överst). Fakturans och kostnadsräkningens egna dokument flyttas inte; allt eller inget.",
   "document.moveFolder": "Flytta en mapp. Cykler (mapp in i sig själv eller sin egen undermapp) blockeras.",
   "document.breadcrumb": "Sökvägen från roten till en viss mapp.",
   "document.acquireLease": "Ta redigeringslåset på ett dokument. Ledigt, utgånget eller redan ditt → du får det; annars returneras vem som håller det.",
@@ -199,7 +200,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
 
   // ── Rapporter ────────────────────────────────────────────────────
   "reports.firmOverview": "Byråöversikt för en period: en rad per jurist med arbetade timmar, debiterbart värde, upparbetat ofakturerat och fakturerat netto, plus byråtotaler och kundfordringsläget. Rätt startpunkt för hur det går för byrån; djupdyk per person med reports.perLawyer.",
-  "reports.perLawyer": "Advokatrapport för en period: vilka ärenden advokaten arbetat i, timdebitering per vecka, och upparbetat men ofakturerat arbete.",
+  "reports.perLawyer": "Advokatrapport för en period: vilka ärenden advokaten arbetat i, timdebitering per vecka, och upparbetat men ofakturerat arbete. Utan `userId` gäller rapporten hela byrån (`scope: \"firm\"`, `user: null`).",
   "reports.billed": "Fakturerat per advokat och period, attribuerat mot advokatens andel av det frysta arbetsvärdet, netto efter avskrivningar.",
   "reports.arSummary": "Kundfordringar över byråns livstid: brygga och åldersanalys, byggd på de daterade avskrivningsposterna.",
 
@@ -255,7 +256,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   // ── Att göra-vy ──────────────────────────────────────────────────
   "todo.list": "Sammanställd att göra-lista: uppgifter, frister och kalenderhändelser som kräver åtgärd.",
   "watchlist.list": "Att bevaka: härledda påminnelser över alla ärenden — täckningstak som nås, ofakturerat arbete över tröskel, tidsfrister, förfallna fakturor och misslyckade fakturautskick. Sorterat efter hur brådskande.",
-  "watchlist.actionItems": "Att åtgärda: takvarningar för rättshjälp och rättsskydd och jävskontroller med träffar som ingen advokat bedömt. `mine` (förvalt) begränsar till ärenden där användaren är ansvarig.",
+  "watchlist.actionItems": "Att åtgärda: takvarningar för rättshjälp och rättsskydd och jävskontroller med träffar som ingen advokat bedömt, och aktiva ärenden utan registrerad tid på två kalendermånader (\"Ska ärendet markeras som avslutat?\", räknat från senaste tidspost, skapande eller Behåll som aktivt). Samma fråga ställs när ett dokument som ser ut att vara ett slutligt avgörande (avskrivning, dom från HD eller HFD, eller nekat prövningstillstånd i HD eller HFD) lagts in efter senaste Behåll som aktivt; `detail` nämner då dokumentet, och `closeSuggestion.noTimeSince` är null om bara dokument ger skäl. Aktiva avbetalningsplaner där klienten ligger efter ger en rad (`kind: \"paymentPlan\"`, \"Delbetalning förfallen N dagar\") med beloppet klienten ligger efter, den äldsta obetalda delbetalningens förfallodag och länk till planen; AVA skickar ingen påminnelse till klienten. `mine` (förvalt) begränsar till ärenden där användaren är ansvarig.",
 
   // ── Användare ────────────────────────────────────────────────────
   "user.list": "Byråns medarbetare.",

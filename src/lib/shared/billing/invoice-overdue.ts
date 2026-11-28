@@ -8,9 +8,7 @@
  */
 
 import { daysBetween } from "../watchlist";
-
-/** Statusar som betyder "fordran lever och kan förfalla". */
-const LIVE_INVOICE_STATUSES: ReadonlySet<string> = new Set(["SENT", "INSTALLMENT_PLAN"]);
+import { isLive } from "./invoice-state-machine";
 
 /** Fakturans fält som regeln läser. Datum kan vara Date eller ISO-sträng. */
 export interface OverdueCandidate {
@@ -31,7 +29,7 @@ export function outstandingOre(inv: OverdueCandidate): number {
  * förfallodagen är i dag eller senare).
  */
 export function overdueDays(inv: OverdueCandidate, now: Date): number | null {
-  if (!LIVE_INVOICE_STATUSES.has(inv.status) || inv.dueDate == null) return null;
+  if (!isLive(inv.status) || inv.dueDate == null) return null;
   if (outstandingOre(inv) <= 0) return null;
   const days = daysBetween(new Date(inv.dueDate), now);
   return days > 0 ? days : null;

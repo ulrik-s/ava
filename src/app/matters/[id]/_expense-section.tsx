@@ -1,11 +1,14 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
+import { invalidateUnbilledWork } from "@/lib/client/billing/invalidate-billing-side-effects";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { netOreOf, vatOreOf } from "@/lib/shared/billing/billing-work-value";
 import { chargedExpenseLines, expenseNetOre } from "@/lib/shared/billing/expense-vat";
 import { VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/billing/vat";
@@ -174,8 +177,10 @@ function expenseFooter(rows: Expense[]): Partial<Record<string, React.ReactNode>
 }
 
 export function ExpenseSection({ matterId, isTaxeArende }: Props) {
-  const utils = trpc.useUtils();
-  const expenses = trpc.expense.list.useQuery({ matterId });
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const billingUtils = useBillingQueryUtils();
+  const expenses = useQuery(trpc.expense.list.queryOptions({ matterId }));
   const [showCreate, setShowCreate] = useState(false);
   const [showMileage, setShowMileage] = useState(false);
   const [editingId, setEditingId] = useState<ExpenseId | null>(null);
@@ -188,9 +193,15 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
     setForm(initialForm());
   }
 
-  const createExpense = trpc.expense.create.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
-  const updateExpense = trpc.expense.update.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
-  const deleteExpense = trpc.expense.delete.useMutation({ onSuccess: () => void utils.expense.list.invalidate({ matterId }) });
+  /** Utläggslistan + fakturaförslaget (#2201). */
+  function refreshExpenses(): void {
+    void queryClient.invalidateQueries(trpc.expense.list.queryFilter({ matterId }));
+    invalidateUnbilledWork(billingUtils, [matterId]);
+  }
+
+  const createExpense = useMutation(trpc.expense.create.mutationOptions({ onSuccess: () => { refreshExpenses(); resetClose(); } }));
+  const updateExpense = useMutation(trpc.expense.update.mutationOptions({ onSuccess: () => { refreshExpenses(); resetClose(); } }));
+  const deleteExpense = useMutation(trpc.expense.delete.mutationOptions({ onSuccess: refreshExpenses }));
 
   function startEdit(e: Expense): void {
     setEditingId(e.id);

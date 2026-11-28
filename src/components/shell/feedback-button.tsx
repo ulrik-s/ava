@@ -29,6 +29,7 @@ import {
   type FeedbackItem, type FeedbackMessage, type MessageAuthor,
 } from "@/lib/shared/feedback";
 import { AttachmentPicker, FeedbackAttachments } from "./feedback-attachments";
+import { FeedbackProgress } from "./feedback-progress";
 
 const EMPTY: NewFeedbackDraft = { kind: "bug", title: "", body: "" };
 const loadNew = (): NewFeedbackDraft => loadNewDraft() ?? EMPTY;
@@ -146,6 +147,7 @@ function ThreadView({ item, onBack, markSeen }: {
       </button>
       <h4 className="font-semibold text-gray-900">{item.kind === "bug" ? "🐞" : "💡"} {item.title}</h4>
       <p className="mb-3 text-xs text-gray-500">Status: <StatusText item={item} /></p>
+      <FeedbackProgress item={item} />
       {item.attachments.length > 0 && <div className="mb-3"><FeedbackAttachments number={item.number} paths={item.attachments} /></div>}
       {item.messages.length === 0
         ? <p className="text-sm text-gray-500 italic">Inga meddelanden ännu. Du får en röd prick här om vi har frågor.</p>

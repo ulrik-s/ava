@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { FileDown } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -8,11 +9,12 @@ import { PanelPage } from "@/components/layout/panel-page";
 import { CoverageCapWarning } from "@/components/matter/coverage-cap-warning";
 import { EventsPanel } from "@/components/matter/events-panel";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
+import { useMatterStatusActions } from "@/components/matter/use-matter-status-actions";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
-import { trpc } from "@/lib/client/trpc";
-import { isTaxeMatter } from "@/lib/shared/public-assignment";
+import { useTRPC } from "@/lib/client/trpc";
+import { isTaxeMatter, PUBLIC_ASSIGNMENT_METHOD } from "@/lib/shared/public-assignment";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { BillingPanel } from "./_billing-panel";
@@ -38,22 +40,25 @@ function referenceOf(m: unknown, key: ReferenceKey = "courtCaseNumber"): string 
 }
 
 /**
- * Domstolsärende = domstolen betalar dig utan AVA-faktura (offentligt uppdrag
- * eller taxeärende). Styr om Domstolsbetalnings-panelen visas — i andra ärenden
- * är den bara förvirrande.
+ * Domstolsärende = domstolen betalar dig utan AVA-faktura: offentligt uppdrag.
+ * Ett taxeärende är alltid ett offentligt uppdrag (ADR 0034, `isTaxeMatter`),
+ * så taxeflaggan ensam styr inget: ett ärende som bytt betalningssätt behåller
+ * den (#1972). Styr om Domstolsbetalnings-panelen visas — i andra ärenden är
+ * den bara förvirrande, utom när fordringar redan registrerats (#1213).
  */
-function isCourtMatter(m: { paymentMethod?: PaymentMethod | null; isTaxeArende?: boolean | null }): boolean {
-  return m.paymentMethod === "OFFENTLIGT_UPPDRAG" || m.isTaxeArende === true;
+function isCourtMatter(m: { paymentMethod?: PaymentMethod | null }): boolean {
+  return m.paymentMethod === PUBLIC_ASSIGNMENT_METHOD;
 }
 
 export default function MatterDetailClient({ id: paramId }: { id: string }) {
   // Static export serverar en sentinel-shell för nya id:n → läs riktiga
   // id:t ur URL:en (faller tillbaka till build-time-param i server-mode).
   const id = asId<"MatterId">(useRouteId() ?? paramId);
-  const matter = trpc.matter.getById.useQuery({ id });
+  const t = useTRPC();
+  const matter = useQuery(t.matter.getById.queryOptions({ id }));
   // Samma query som panelen (react-query delar cachen): redan registrerade
   // fordringar håller panelen kvar även i ett icke-domstolsärende (#1213).
-  const receivables = trpc.expectedReceivable.list.useQuery({ matterId: id });
+  const receivables = useQuery(t.expectedReceivable.list.queryOptions({ matterId: id }));
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   // Bör faktureras i Frister öppnar faktureringen direkt (#1854).
   const shortcut = useBillingShortcut(id);
@@ -65,7 +70,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   if (!matter.data) return null;
 
   const m = matter.data;
-  const klient = m.contacts.filter((c: { role: string }) => c.role === "KLIENT");
+  const klient = m.contacts.filter((c) => c.role === "KLIENT");
 
   const panels = matterPanels({
     time: () => <TimeSection matterId={id} isTaxeArende={isTaxeMatter(m)} paymentMethod={m.paymentMethod}
@@ -187,18 +192,8 @@ function MatterHeaderActions({ m, isPending, onClose, onReopen, onGenerate }: {
 }
 
 function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderProps) {
-  const utils = trpc.useUtils();
-  const updateStatus = trpc.matter.update.useMutation({
-    onSuccess: () => utils.matter.getById.invalidate({ id: m.id }),
-  });
-
-  const onCloseMatter = () => {
-    if (!confirm(`Avsluta ärendet "${m.title}"? Det går att återöppna sen.`)) return;
-    updateStatus.mutate({ id: m.id, status: "CLOSED" });
-  };
-  const onReopenMatter = () => {
-    updateStatus.mutate({ id: m.id, status: "ACTIVE" });
-  };
+  // Avsluta och Återöppna delas med Att åtgärda (#2100).
+  const status = useMatterStatusActions();
 
   return (
     // Kompakt (#1185): panelerna ska få höjden, inte huvudet.
@@ -221,9 +216,9 @@ function MatterHeader({ matter: m, klient, contacts, onOpenGenerate }: HeaderPro
         </div>
         <MatterHeaderActions
           m={m}
-          isPending={updateStatus.isPending}
-          onClose={onCloseMatter}
-          onReopen={onReopenMatter}
+          isPending={status.isPending}
+          onClose={() => status.close({ id: m.id, title: m.title })}
+          onReopen={() => status.reopen(m.id)}
           onGenerate={onOpenGenerate}
         />
       </div>

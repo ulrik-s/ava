@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileDown } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
@@ -9,11 +10,12 @@ import {
   buildTemplateContext, type TemplateContext, type TemplateMatterData, type TemplateOfficeData,
   type TemplateOrganizationData, type TemplateUserData,
 } from "@/lib/client/templates/build-template-context";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 
 type Contact = { id: string; name: string; email?: string | null; phone?: string | null };
-type MatterContact = { id: string; role: string; contact: Contact };
+type MatterContact = { id: string; role: MatterRole; contact: Contact };
 
 interface Props {
   matterId: MatterId;
@@ -86,13 +88,14 @@ async function runGenerate(a: GenerateArgs): Promise<void> {
 }
 
 export function GenerateModal({ matterId, contacts, onClose }: Props) {
-  const utils = trpc.useUtils();
-  const templates = trpc.documentTemplate.list.useQuery();
-  const matter = trpc.matter.getById.useQuery({ id: matterId });
-  const org = trpc.organization.getSettings.useQuery();
-  const offices = trpc.organization.listOffices.useQuery();
-  const me = trpc.user.current.useQuery();
-  const register = trpc.document.register.useMutation();
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const templates = useQuery(t.documentTemplate.list.queryOptions());
+  const matter = useQuery(t.matter.getById.queryOptions({ id: matterId }));
+  const org = useQuery(t.organization.getSettings.queryOptions());
+  const offices = useQuery(t.organization.listOffices.queryOptions());
+  const me = useQuery(t.user.current.queryOptions());
+  const register = useMutation(t.document.register.mutationOptions());
   const [generateTemplateId, setGenerateTemplateId] = useState("");
   const [generateFormat, setGenerateFormat] = useState<"pdf" | "docx">("pdf");
   const [generateRecipientIds, setGenerateRecipientIds] = useState<ContactId[]>([]);
@@ -117,7 +120,7 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
         offices: offices.data, user: me.data, matterId,
         registerDoc: (d) => register.mutateAsync(d),
       });
-      void utils.document.tree.invalidate({ matterId });
+      void queryClient.invalidateQueries(t.document.tree.queryFilter({ matterId }));
       onClose();
     } catch (e) {
       setGenerateError(e instanceof Error ? e.message : "Okänt fel");

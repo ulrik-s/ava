@@ -6,9 +6,10 @@
  * juristens profil (#1527) men kan ändras för just den här resan.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { formatKr } from "@/lib/shared/kr-format";
 import {
   mileageAmountOre, mileageExpensePayload, mileageRateKrPerMil, type MileageExpensePayload, type MileageTrip,
@@ -45,7 +46,7 @@ function tripOf(s: MileageFormState, krPerMil: number | null): MileageTrip | nul
 }
 
 export function MileageForm({ isPending, onSubmit, onCancel }: Props) {
-  const me = trpc.user.current.useQuery();
+  const me = useQuery(useTRPC().user.current.queryOptions());
   const [state, setState] = useState<MileageFormState>(initialState);
   const krPerMil = state.krPerMil === undefined ? mileageRateKrPerMil(me.data?.mileageRate) : state.krPerMil;
   const trip = tripOf(state, krPerMil);

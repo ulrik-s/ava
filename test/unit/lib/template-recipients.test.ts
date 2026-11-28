@@ -5,6 +5,7 @@ import {
   buildGeneratedFileName,
   RecipientNotLinkedError,
   type MatterContactLink,
+  type RecipientContactData,
 } from "@/lib/client/template-recipients";
 import { asId, type ContactId } from "@/lib/shared/schemas/ids";
 
@@ -40,6 +41,12 @@ describe("linkToRecipientData", () => {
   it("saknade kontaktfält blir null", () => {
     const sparse: MatterContactLink = { contactId: cId("c2"), role: "MOTPART", contact: { name: "Bo" } };
     expect(linkToRecipientData(sparse)).toMatchObject({ email: null, phone: null, address: null, personalNumber: null, orgNumber: null, notes: null });
+  });
+
+  it("rollen är MatterRole: ett stavfel i en jämförelse kompilerar inte (#1909)", () => {
+    const { role } = linkToRecipientData(link({ contactId: cId("c1"), role: "KLIENT" }));
+    // @ts-expect-error -- "KLIENTT" är ingen MatterRole, så jämförelsen fälls av typen
+    expect(role === "KLIENTT").toBe(false);
   });
 });
 
@@ -80,6 +87,7 @@ describe("resolveRecipients", () => {
   });
 
   it("faller tillbaka på rå roll-sträng om ingen label finns", () => {
+    // @ts-expect-error -- en okänd roll i rå data, som typen inte släpper in
     const links = [link({ contactId: cId("c1"), role: "UNKNOWN_ROLE" })];
     const result = resolveRecipients([cId("c1")], links, mId("m1"));
     expect(result[0]!.data.roleLabel).toBe("UNKNOWN_ROLE");
@@ -146,7 +154,7 @@ describe("buildGeneratedFileName", () => {
   });
 
   it("lägger till mottagarnamn som suffix", () => {
-    const recipient = {
+    const recipient: RecipientContactData = {
       name: "Anna Svensson",
       role: "KLIENT",
       roleLabel: "Klient",
@@ -163,7 +171,7 @@ describe("buildGeneratedFileName", () => {
   });
 
   it("ersätter filsystem-osäkra tecken med bindestreck", () => {
-    const recipient = {
+    const recipient: RecipientContactData = {
       name: "A/B AB",
       role: "KLIENT",
       roleLabel: "Klient",

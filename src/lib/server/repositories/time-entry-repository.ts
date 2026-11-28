@@ -93,6 +93,9 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   /** Som ovan men batchat för flera ärenden (täcknings-kolumn i listan, #793).
    *  Keyas på matterId; ärenden utan poster utelämnas (→ 0 hos anroparen). */
   coverageUsageForMatters(matterIds: MatterId[]): Promise<Record<string, CoverageUsage>>;
+  /** Senaste tidsposten per ärende (#2100): det senare av arbetsdatum och registrering,
+   *  alla poster utom raderade (också ej debiterbara). Ärenden utan poster utelämnas. */
+  latestEntryAtForMatters(matterIds: MatterId[]): Promise<Record<string, Date>>;
   /** Frys alla ofrysta tidsposter i ett ärende mot en billing-run (bulk). Redan
    *  låsta poster (t.ex. rådgivningstimmen, #1205) lämnas orörda. */
   freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void>;

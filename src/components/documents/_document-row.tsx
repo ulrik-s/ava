@@ -4,15 +4,19 @@ import { Trash2 } from "lucide-react";
 import { Fragment, useState } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
-import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
+import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import { DocumentDetailsDialog } from "./_document-details-dialog";
 import { DocumentNameCell } from "./_document-name-cell";
 import type { DocumentPartView } from "./_document-parts";
+import type { RowToggle } from "./_document-selection";
+import { MailDocumentDialog } from "./_mail-document-dialog";
 import type { SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
+import { documentMoveDisabledReason, MoveDocumentsDialog, UPLOADING_TITLE } from "./move-documents-dialog";
 import { useLeaseAwareOpen } from "./use-lease-aware-open";
+import { useOffice365Configured } from "./use-office365-configured";
 
 export interface DocumentRecord {
   id: DocumentId;
@@ -39,6 +43,9 @@ export interface DocumentRecord {
   summary?: string | null | undefined;
   analyzedAt?: string | Date | null | undefined;
   analysisError?: string | null | undefined;
+  /** Fakturans eller kostnadsräkningens eget dokument (#2045): flyttas inte. */
+  invoiceId?: string | null | undefined;
+  billingRunId?: string | null | undefined;
 }
 
 interface Props {
@@ -51,6 +58,8 @@ interface Props {
   isUploading?: boolean;
   /** Helperns write-back-status för dokumentet (ADR 0031): "ändringar på ingång". */
   syncStatus?: SyncStatus | undefined;
+  /** Kryssrutan för markeringen (#2046); saknas när dokumentet inte kan markeras. */
+  selection?: RowToggle | undefined;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   onReanalyze: () => void;
@@ -65,6 +74,7 @@ export function DocumentRow({
   isAnalyzing,
   isUploading,
   syncStatus,
+  selection,
   onDragStart,
   onDragEnd,
   onReanalyze,
@@ -103,9 +113,15 @@ export function DocumentRow({
         title={isUploading ? "Laddar upp…" : undefined}
       >
         <td className="px-3 sm:px-6 py-2.5 text-sm">
-          <div style={{ paddingLeft: `${depth * 16 + 4}px` }} className="min-w-0">
-            <DocumentNameCell doc={doc} isAnalyzing={isAnalyzing} isUploading={isUploading} syncStatus={syncStatus}
-              onOpen={() => void openPrimary()} />
+          <div style={{ paddingLeft: `${depth * 16 + 4}px` }} className="min-w-0 flex items-start gap-2">
+            {selection && (
+              <input type="checkbox" aria-label="Markera rad" className="mt-1" checked={selection.checked}
+                onChange={selection.onToggle} />
+            )}
+            <div className="min-w-0 flex-1">
+              <DocumentNameCell doc={doc} isAnalyzing={isAnalyzing} isUploading={isUploading} syncStatus={syncStatus}
+                onOpen={() => void openPrimary()} />
+            </div>
           </div>
         </td>
         <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
@@ -134,21 +150,13 @@ export function DocumentRow({
  * på små skärmar. Nu en touch-vänlig overflow-meny som funkar på alla
  * skärmstorlekar (se [[ActionMenu]]).
  *
- * Länk-vägar:
- *   - demo-build → GH Pages-URL (Visa/Ladda ner).
- *   - server-build → /api/documents/<id>/download.
+ * Länk-vägar: runtime-tiern (`isDemoTier()`) avgör i `DocumentActions` om
+ * Visa/Ladda ner är länkar (demo → GH Pages) eller öppnar via servern.
  */
-/** Bygg Visa/Ladda-ner-URL:erna (demo → GH Pages, server → /api). Utbruten
- *  ur DocumentActions så komplexiteten (demo vs server + repo-parsning) bor
- *  i en egen funktion. */
+/** Bygg demons Visa/Ladda-ner-URL:er (GH Pages). Används bara när runtime-
+ *  tiern är demo (#1913); self-hosted öppnar via servern och ignorerar dem.
+ *  Utbruten ur DocumentActions så repo-parsningen bor i en egen funktion. */
 function buildDocHrefs(doc: DocumentRecord): { viewHref: string; downloadHref: string } {
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
-  if (!isDemo) {
-    return {
-      viewHref: `/api/documents/${doc.id}/download`,
-      downloadHref: `/api/documents/${doc.id}/download?download=1`,
-    };
-  }
   const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
   const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
   const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
@@ -175,6 +183,18 @@ interface ActionItemsOpts {
   onReanalyze: () => void;
   onDelete: () => void;
   onEditDetails: () => void;
+  /** Varför **Flytta till ärende…** är spärrad (#2045), eller `null`. */
+  moveBlocked: string | null;
+  onMoveToMatter: () => void;
+  /** Office 365 är konfigurerad (#1951): raden Maila… finns. */
+  mail: boolean;
+  onMail: () => void;
+}
+
+/** "Maila…" (#1951): bara med en Office 365-konfiguration, inte i demon (ADR 0027). */
+function mailItems(o: ActionItemsOpts): ActionMenuItem[] {
+  if (!o.mail) return [];
+  return [{ key: "mail", label: "Maila…", icon: <span aria-hidden>✉️</span>, onSelect: o.onMail, disabled: o.isDisabled, title: o.uploadingTitle ?? "Skicka dokumentet med e-post till klienten" }];
 }
 
 /** "Visa"/"Ladda ner": demo → direkt GH-href; self-hosted → hämta via servern
@@ -199,7 +219,9 @@ function buildActionItems(o: ActionItemsOpts): ActionMenuItem[] {
     { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: o.onOpenInEditor, disabled: o.isDisabled, title: o.uploadingTitle ?? "Öppna i din browser" },
     { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: o.onExternal, disabled: o.isDisabled, title: o.uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
     ...viewDownloadItems(o),
+    ...mailItems(o),
     { key: "details", label: "Redigera uppgifter…", icon: <span aria-hidden>✏️</span>, onSelect: o.onEditDetails, disabled: o.isDisabled, title: o.uploadingTitle ?? "Ändra titel, filnamn, dokumenttyp, riktning och mottagare" },
+    { key: "move-matter", label: "Flytta till ärende…", icon: <span aria-hidden>📁</span>, onSelect: o.onMoveToMatter, disabled: o.moveBlocked !== null, title: o.moveBlocked ?? "Flytta dokumentet till ett annat ärende och en mapp där" },
     // ADR 0027: LLM-analys är en server-förmåga → dölj affordansen utan den.
     ...(o.llm
       ? [{ key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: o.onReanalyze, disabled: o.isDisabled || o.reanalyzePending, title: o.uploadingTitle ?? "Kör AI-analys på nytt" }]
@@ -234,7 +256,7 @@ export function DocumentActions({
   // Runtime-tier (#651): self-hosted öppnar via servern (cache-medveten), demo
   // via GH-Pages-href. Bygg-tids-NEXT_PUBLIC_DEMO_BUILD duger inte — den är sann
   // även i den lokala self-hosted-builden (→ tidigare GH-länkar i self-hosted).
-  const serverMode = loadFirmaConfig().tier !== "demo";
+  const serverMode = !isDemoTier();
 
   const openViaServerOrGh = async () => {
     const rec = doc as DocumentRecord & { storagePath?: string };
@@ -243,22 +265,30 @@ export function DocumentActions({
   };
 
   const isDisabled = !!disabled;
-  const uploadingTitle = isDisabled ? "Vänta tills uppladdningen är klar" : undefined;
+  const uploadingTitle = isDisabled ? UPLOADING_TITLE : undefined;
   const { llm } = useCapabilities();
   const [editing, setEditing] = useState(false);
+  const mail = useOffice365Configured();
+  const [mailing, setMailing] = useState(false);
+  const [moving, setMoving] = useState(false);
   const items = buildActionItems({
-    isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle, llm, serverMode,
+    isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle, llm, serverMode, mail,
+    onMail: () => setMailing(true),
     onOpenInEditor: () => void openViaServerOrGh(),
     onView: () => void openViaServerOrGh(),
     onExternal: () => void onExternalEdit(),
     onReanalyze, onDelete,
     onEditDetails: () => setEditing(true),
+    moveBlocked: documentMoveDisabledReason(doc, isDisabled),
+    onMoveToMatter: () => setMoving(true),
   });
 
   return (
     <>
       <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" title={uploadingTitle} />
       <DocumentDetailsDialog docId={doc.id} doc={doc} open={editing} onClose={() => setEditing(false)} />
+      {mailing && <MailDocumentDialog doc={doc} onClose={() => setMailing(false)} />}
+      {moving && <MoveDocumentsDialog ids={[doc.id]} excludeMatterId={doc.matterId} open onClose={() => setMoving(false)} />}
     </>
   );
 }

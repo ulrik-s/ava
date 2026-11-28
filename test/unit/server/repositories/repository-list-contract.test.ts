@@ -28,7 +28,9 @@ import { asId, type MatterId, type OrganizationId, type UserId } from "@/lib/sha
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { type KnownDeviation, ratchetDiff } from "../../../../tooling/scripts/ratchet";
-import { DRIZZLE_NAME, type OpenRepos, openDrizzleRepos, openInMemoryRepos } from "./contract-backends";
+import {
+  DRIZZLE_HAS_SWEDISH_COLLATION, DRIZZLE_NAME, type OpenRepos, openDrizzleRepos, openInMemoryRepos,
+} from "./contract-backends";
 
 type BackendKind = "in-memory" | "drizzle";
 
@@ -36,29 +38,44 @@ interface Backend {
   readonly kind: BackendKind;
   readonly name: string;
   readonly open: () => Promise<OpenRepos>;
+  /** Saknar svensk ordning i databasen (pglite, #1917): flaggade scenarier hoppas över. */
+  readonly lacksSwedishCollation?: boolean;
 }
 
 const BACKENDS: readonly Backend[] = [
   { kind: "in-memory", name: "in-memory", open: () => Promise.resolve(openInMemoryRepos()) },
-  { kind: "drizzle", name: DRIZZLE_NAME, open: () => openDrizzleRepos() },
+  { kind: "drizzle", name: DRIZZLE_NAME, open: () => openDrizzleRepos(), lacksSwedishCollation: !DRIZZLE_HAS_SWEDISH_COLLATION },
 ];
 
 /** Ett scenario svarar med en beskrivning av skillnaden, eller `null` när backenden gör rätt. */
 interface Scenario {
   readonly name: string;
   readonly run: (repos: Repositories) => Promise<string | null>;
+  /** Kräver svensk ordning i databasen (#1917); körs inte mot en backend utan den. */
+  readonly needsSwedishCollation?: boolean;
+}
+
+/** Körs scenariot mot backenden? Ett flaggat scenario hoppas över utan svensk ordning, som `itPg`. */
+function applies(backend: Backend, scenario: Scenario): boolean {
+  return !(scenario.needsSwedishCollation && backend.lacksSwedishCollation);
 }
 
 /** Kända avvikelser: `backend: scenario`. */
 const KNOWN: Readonly<Record<string, KnownDeviation>> = {
-  "drizzle: kontakter sorteras på namn i svensk ordning": {
-    why: "Postgres sorterar i databasens kollation: C/byteordning i pglite och Alpine-imagen (Ä före Å, gemener efter Ö). Svensk ordning kräver en ICU-kollation, som pglite saknar.",
+  "in-memory: kontaktpersoner sorteras på namn i svensk ordning": {
+    why: "Minnesrepot tillämpar inte `orderBy` i en `include` (read-only-delegate, resolveRelation): kontaktpersonerna kommer i skapad ordning. Drizzle sorterar dem i svensk ordning (#1917). Uppföljning: Intag: ava-feedback#147.",
     issue: 1698,
   },
 };
 
 const SWEDISH = new Intl.Collator("sv");
+/** Namn där byteordning och svensk ordning skiljer sig (Å/Ä/Ö, versaler och gemener). */
+const SWEDISH_NAMES: readonly string[] = ["Örjan", "Åsa", "ärla", "Bertil", "anna", "Adam", "Zelda"];
 const swedish = (a: string, b: string): number => SWEDISH.compare(a, b);
+/** Mallar som `[kategori, namn]`, i en ordning som varken är svensk eller byteordning; utan kategori sist (#1918). */
+const TEMPLATES: readonly (readonly [string | null, string])[] = [
+  [null, "Adam"], ["Brev", "Bertil"], ["avtal", "ärla"], ["Ärende", "Örjan"], ["Brev", "anna"], ["Ärende", "Åsa"],
+];
 const day = (iso: string): Date => new Date(`${iso}T08:00:00.000Z`);
 const newOrg = (): OrganizationId => asId<"OrganizationId">(uuidv7());
 const newUser = (): UserId => asId<"UserId">(uuidv7());
@@ -144,12 +161,54 @@ const forEveryKind = (value: unknown): Record<string, unknown> => Object.fromEnt
 const SCENARIOS: readonly Scenario[] = [
   {
     name: "kontakter sorteras på namn i svensk ordning",
+    needsSwedishCollation: true,
     run: async (repos) => {
       const org = newOrg();
-      const names = ["Örjan", "Åsa", "ärla", "Bertil", "anna", "Adam", "Zelda"];
-      for (const name of names) await addContact(repos, org, { name });
+      for (const name of SWEDISH_NAMES) await addContact(repos, org, { name });
       const { contacts } = await repos.contacts.listForOrg(org, { page: 1, pageSize: 50 });
-      return differs(contacts.map((c) => c.name), [...names].sort(swedish));
+      return differs(contacts.map((c) => c.name), [...SWEDISH_NAMES].sort(swedish));
+    },
+  },
+  {
+    name: "kontaktpersoner sorteras på namn i svensk ordning",
+    needsSwedishCollation: true,
+    run: async (repos) => {
+      const org = newOrg();
+      const parent = await addContact(repos, org, { name: "Bolaget", contactType: "COMPANY" });
+      for (const name of SWEDISH_NAMES) await addContact(repos, org, { name, parentId: parent.id });
+      const children = (await repos.contacts.getByIdFull(parent.id, org))?.children ?? [];
+      return differs(children.map((c) => c.name), [...SWEDISH_NAMES].sort(swedish));
+    },
+  },
+  {
+    // #1918: mappar, mallar, kontor och användare i svensk ordning, som kontakterna.
+    name: "mappar, mallar, kontor och användare sorteras på namn i svensk ordning",
+    needsSwedishCollation: true,
+    run: async (repos) => {
+      const org = newOrg();
+      const matterId = (await addMatter(repos, org, {})).id;
+      const userId = newUser();
+      for (const name of SWEDISH_NAMES) {
+        await repos.documentFolders.create({ id: asId<"DocumentFolderId">(uuidv7()), matterId, name, parentId: null, createdAt: day("2026-01-01") });
+        await repos.offices.create({ id: asId<"OfficeId">(uuidv7()), organizationId: org, name, isMain: name === "Zelda" });
+        await repos.users.create({ id: asId<"UserId">(uuidv7()), organizationId: org, email: `${uuidv7()}@byra.se`, name, role: "LAWYER", hourlyRates: {}, active: true });
+      }
+      for (const [category, name] of TEMPLATES) {
+        await repos.documentTemplates.create({ id: asId<"DocumentTemplateId">(uuidv7()), organizationId: org, name, category, content: "", createdById: userId });
+      }
+      const sorted = [...SWEDISH_NAMES].sort(swedish);
+      return differs({
+        folders: (await repos.documentFolders.listInParent(matterId, null)).map((f) => f.name),
+        byMatter: (await repos.documentFolders.listByMatter(matterId)).map((f) => f.name),
+        templates: (await repos.documentTemplates.listForOrg(org)).map((t) => [t.category, t.name]),
+        offices: (await repos.offices.listByOrg(org)).map((o) => o.name),
+        users: (await repos.users.listByOrg(org)).map((u) => u.name),
+      }, {
+        folders: sorted, byMatter: sorted,
+        templates: [["avtal", "ärla"], ["Brev", "anna"], ["Brev", "Bertil"], ["Ärende", "Åsa"], ["Ärende", "Örjan"], [null, "Adam"]],
+        offices: ["Zelda", ...sorted.filter((n) => n !== "Zelda")],
+        users: sorted,
+      });
     },
   },
   {
@@ -350,7 +409,7 @@ for (const backend of BACKENDS) {
 
     it("listor, sökning och sortering beter sig som i den andra backenden — utom de listade", async () => {
       const found: Record<string, string> = {};
-      for (const scenario of SCENARIOS) {
+      for (const scenario of SCENARIOS.filter((s) => applies(backend, s))) {
         const mismatch = await scenario.run(open.repos);
         if (mismatch !== null) found[`${backend.kind}: ${scenario.name}`] = mismatch;
       }

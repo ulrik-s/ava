@@ -52,9 +52,9 @@ export function buildRattsskyddPositivtScenario(parties: Parties): SimEvent[] {
     { kind: "time", dayOffset: 160, minutes: 240, description: "Förberedelse inför slutförhandling" },
     // Helgtaxan är ovanlig men gäller även i rättsskydd (DVFS 2025:7 § 1).
     { kind: "time", dayOffset: 168, minutes: 90, description: "Akut hantering av interimistiskt yrkande under helg", entryKind: "ARBETE_OBEKVAM_TID" },
-    { kind: "expense", dayOffset: 189, amountOre: 64_000, description: "Hotellnatt före slutförhandlingen", vatRate: 1200 },
-    { kind: "time", dayOffset: 190, minutes: 240, description: "Slutförhandling och överenskommelse" },
-    { kind: "time", dayOffset: 190, minutes: 120, description: "Hemresa efter slutförhandlingen (kväll)", entryKind: "TIDSSPILLAN_OVRIG_TID" },
+    { kind: "expense", dayOffset: 179, amountOre: 64_000, description: "Hotellnatt före slutförhandlingen", vatRate: 1200 },
+    { kind: "time", dayOffset: 180, minutes: 240, description: "Slutförhandling och överenskommelse" },
+    { kind: "time", dayOffset: 180, minutes: 120, description: "Hemresa efter slutförhandlingen (kväll)", entryKind: "TIDSSPILLAN_OVRIG_TID" },
     { kind: "expense", dayOffset: 195, amountOre: 18_000, description: "Kopiering och porto", vatRate: 2500 },
     { kind: "note", dayOffset: 200, text: "Förlikning nådd — tvisten avslutas." },
     // ── Slutreglering mot försäkringen: försäkringsfaktura + klientens slutliga självrisk ──

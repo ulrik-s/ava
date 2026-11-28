@@ -1,10 +1,12 @@
 /**
- * Test för ReportsPage.
+ * Test för ReportsPage. Fältet Advokat följer rollen (#2116): förvald är den
+ * inloggade, en Advokat har bara sig själv, en Admin har Alla överst.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import ReportsPage from "@/app/reports/page";
+import { rowOrder, rowWith, sortColumn } from "../../../helpers/data-table";
 
 const usersQuery = {
   data: undefined as Record<string, unknown> | undefined,
@@ -14,7 +16,10 @@ const reportQuery = {
   isLoading: false,
   error: null as { message: string } | null,
 };
-const chartCalls: Array<{ userId: string; from: string; to: string; granularity: string }> = [];
+const chartCalls: Array<{ userId?: string; from: string; to: string; granularity: string }> = [];
+const currentUser = { data: undefined as { id: string; role: string } | undefined };
+const reportCalls: Array<{ input: Record<string, unknown>; enabled: boolean }> = [];
+const arCalls: Array<Record<string, unknown>> = [];
 const billedQuery = {
   data: undefined as Record<string, unknown> | undefined,
   isLoading: false,
@@ -33,7 +38,7 @@ vi.mock("@/lib/client/trpc", () => ({
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     user: {
       list: { useQuery: () => usersQuery },
-      current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
+      current: { useQuery: () => currentUser },
     },
     timeEntry: {
       chart: {
@@ -44,9 +49,19 @@ vi.mock("@/lib/client/trpc", () => ({
       },
     },
     reports: {
-      perLawyer: { useQuery: () => reportQuery },
+      perLawyer: {
+        useQuery: (input: Record<string, unknown>, opts: { enabled: boolean }) => {
+          reportCalls.push({ input, enabled: opts.enabled });
+          return reportQuery;
+        },
+      },
       billed: { useQuery: () => billedQuery },
-      arSummary: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      arSummary: {
+        useQuery: (input: Record<string, unknown>) => {
+          arCalls.push(input);
+          return { data: undefined, isLoading: false };
+        },
+      },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
@@ -61,6 +76,9 @@ vi.mock("@/lib/client/trpc", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   chartCalls.length = 0;
+  reportCalls.length = 0;
+  arCalls.length = 0;
+  currentUser.data = { id: "u1", role: "ADMIN" };
   usersQuery.data = { users: [{ id: "u1", name: "Anna" }, { id: "u2", name: "Bo" }] };
   reportQuery.data = undefined;
   reportQuery.isLoading = false;
@@ -70,6 +88,7 @@ beforeEach(() => {
 });
 
 const sampleReport = {
+  scope: "lawyer",
   user: { id: "u1", name: "Anna" },
   totals: {
     totalMinutes: 600,
@@ -161,12 +180,54 @@ describe("ReportsPage", () => {
     expect(screen.queryByText("Välj jurist och period.")).toBeNull();
   });
 
-  it("ingen advokat att välja → \"Välj jurist och period.\"", () => {
-    usersQuery.data = { users: [] };
+  it("innan rollen är känd: Laddar... och ingen rapport, inga kundfordringar och inget diagram (#2116)", () => {
+    currentUser.data = undefined;
     render(<ReportsPage />);
-    // Stapeldiagrammet (#2110) visar samma text utan vald advokat.
-    expect(screen.getAllByText("Välj jurist och period.").length).toBe(5);
+    expect(screen.getByRole("option", { name: "Laddar..." })).toBeInTheDocument();
+    expect(reportCalls.every((c) => !c.enabled)).toBe(true);
+    expect(arCalls).toHaveLength(0);
     expect(chartCalls).toHaveLength(0);
+    // Rapportpanelerna, kundfordringarna och diagrammet väntar.
+    expect(screen.getAllByText("Välj jurist och period.").length).toBe(6);
+  });
+
+  it("förvald är den inloggade, också när den inte står först i listan (#2116)", () => {
+    currentUser.data = { id: "u2", role: "ADMIN" };
+    render(<ReportsPage />);
+    expect(screen.getByRole<HTMLSelectElement>("combobox").value).toBe("u2");
+    expect(reportCalls[reportCalls.length - 1]).toMatchObject({ input: { userId: "u2" }, enabled: true });
+  });
+
+  it("en Advokat har bara sig själv i listan (#2116)", () => {
+    currentUser.data = { id: "u2", role: "LAWYER" };
+    render(<ReportsPage />);
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Bo"]);
+    expect(reportCalls[reportCalls.length - 1]?.input).toMatchObject({ userId: "u2" });
+  });
+
+  it("en Admin har Alla överst; med Alla gäller allt hela byrån (#2116)", () => {
+    reportQuery.data = {
+      ...sampleReport, scope: "firm", user: null,
+    };
+    render(<ReportsPage />);
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Alla", "Anna", "Bo"]);
+    fireEvent.change(screen.getByRole<HTMLSelectElement>("combobox"), { target: { value: "ALLA" } });
+
+    expect(reportCalls[reportCalls.length - 1]?.input).not.toHaveProperty("userId");
+    expect(arCalls[arCalls.length - 1]).not.toHaveProperty("userId");
+    expect(chartCalls[chartCalls.length - 1]).not.toHaveProperty("userId");
+    expect(screen.queryByText(/andel för/)).toBeNull();
+    expect(screen.getByText("Alla", { selector: "div" })).toBeInTheDocument();
+    expect(screen.getByText("Ärenden där någon på byrån har registrerat tid eller utlägg.")).toBeInTheDocument();
+    expect(screen.getByText(/Debiterbar tid och utlägg för hela byrån inom perioden som/)).toBeInTheDocument();
+  });
+
+  it("för en vald advokat: namnet i texterna och kundfordringarna för advokaten", () => {
+    reportQuery.data = sampleReport;
+    render(<ReportsPage />);
+    expect(screen.getByText("Ärenden där Anna har registrerat tid eller utlägg.")).toBeInTheDocument();
+    expect(screen.getByText(/Debiterbar tid och utlägg för Anna inom perioden/)).toBeInTheDocument();
+    expect(arCalls[arCalls.length - 1]).toMatchObject({ userId: "u1" });
   });
 
   it("renderar SummaryCard, MattersTable, WeeklyTable och UnbilledTable när data finns", () => {
@@ -267,5 +328,102 @@ describe("ReportsPage", () => {
 
     fireEvent.change(screen.getByRole<HTMLSelectElement>("combobox"), { target: { value: "u2" } });
     expect(chartCalls[chartCalls.length - 1]).toMatchObject({ userId: "u2", from: "2026-03-30" });
+  });
+});
+
+// ── Tabellernas sortering (#1907) ─────────────────────────────────────────
+
+/** Två rader där varje kolumn ger en egen ordning. */
+const sortableReport = (over: Record<string, unknown>): Record<string, unknown> => ({
+  ...sampleReport,
+  matters: [],
+  weeklyRows: [{ ...sampleReport.weeklyRows[0], totalMinutes: 0 }],
+  unbilled: { rows: [], total: 0 },
+  ...over,
+});
+
+const ALL_SORTS = ["asc", "desc"] as const;
+
+describe("ReportsPage — sortering per kolumn (#1907)", () => {
+  it("Ärenden under perioden sorterar på varje kolumn", () => {
+    reportQuery.data = sortableReport({
+      matters: [
+        { matterId: "m1", matterNumber: "2026-0001", title: "Alfa", client: null, paymentMethod: "PRIVAT",
+          totalMinutes: 60, billableMinutes: 120, workValueOre: 300, expenseOre: 0 },
+        { matterId: "m2", matterNumber: "2026-0002", title: "Beta", client: "Klient B", paymentMethod: "RATTSHJALP",
+          totalMinutes: 120, billableMinutes: 60, workValueOre: 100, expenseOre: 500 },
+      ],
+    });
+    render(<ReportsPage />);
+    const order = (): string[] => rowOrder(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Ärende", "desc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Klient", "asc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Betalning", "desc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Tid (h)", "asc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Deb. tid (h)", "asc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Arbetsvärde", "desc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Utlägg", "desc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    // Utan klient står "—", och utlägg 0 visas som "—".
+    expect(within(rowWith("2026-0001 — Alfa")).getAllByText("—")).toHaveLength(2);
+  });
+
+  it("Timdebitering per vecka sorterar på varje kolumn", () => {
+    reportQuery.data = sortableReport({
+      weeklyRows: [
+        { isoYear: 2026, week: 2, start: "2026-01-05", end: "2026-01-11", totalMinutes: 60, billableMinutes: 0, workValueOre: 0 },
+        { isoYear: 2026, week: 10, start: "2026-03-02", end: "2026-03-08", totalMinutes: 0, billableMinutes: 0, workValueOre: 0 },
+        { isoYear: 2026, week: 3, start: "2026-01-12", end: "2026-01-18", totalMinutes: 120, billableMinutes: 90, workValueOre: 500 },
+      ],
+    });
+    render(<ReportsPage />);
+    const order = (): string[] => rowOrder(["01-05 – 01-11", "03-02 – 03-08", "01-12 – 01-18"]);
+    // Vecka sorterar på år och tvåsiffrig vecka: v. 10 efter v. 3.
+    sortColumn("Vecka", "asc");
+    expect(order()).toEqual(["01-05 – 01-11", "01-12 – 01-18", "03-02 – 03-08"]);
+    sortColumn("Period", "desc");
+    expect(order()).toEqual(["03-02 – 03-08", "01-12 – 01-18", "01-05 – 01-11"]);
+    sortColumn("Tid (h)", "desc");
+    expect(order()).toEqual(["01-12 – 01-18", "01-05 – 01-11", "03-02 – 03-08"]);
+    for (const dir of ALL_SORTS) {
+      sortColumn("Deb. tid (h)", dir);
+      sortColumn("Arbetsvärde", dir);
+      expect(order()[dir === "asc" ? 2 : 0]).toBe("01-12 – 01-18");
+    }
+  });
+
+  it("Upparbetat, icke fakturerat sorterar på varje kolumn och varnar för hög risk", () => {
+    reportQuery.data = sortableReport({
+      unbilled: {
+        rows: [
+          { matterId: "m1", matterNumber: "2026-0001", title: "Alfa", client: "Klient A", paymentMethod: "RATTSHJALP",
+            timeOre: 0, expenseOre: 900, total: 900 },
+          { matterId: "m2", matterNumber: "2026-0002", title: "Beta", client: null, paymentMethod: "PRIVAT",
+            timeOre: 500, expenseOre: 0, total: 500 },
+        ],
+        total: 1400,
+      },
+    });
+    render(<ReportsPage />);
+    const order = (): string[] => rowOrder(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Ärende", "desc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Klient", "desc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Betalning", "asc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Tid", "asc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    sortColumn("Utlägg", "asc");
+    expect(order()).toEqual(["2026-0002 — Beta", "2026-0001 — Alfa"]);
+    sortColumn("Summa", "desc");
+    expect(order()).toEqual(["2026-0001 — Alfa", "2026-0002 — Beta"]);
+    expect(screen.getByText(/av det ofakturerade\s+arbetet ligger under hög eller okänd kreditrisk/)).toBeInTheDocument();
   });
 });

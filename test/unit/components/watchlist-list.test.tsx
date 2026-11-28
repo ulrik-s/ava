@@ -1,7 +1,11 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest-compat";
-import { WatchlistList } from "@/components/watchlist/watchlist-list";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import type { WatchlistItem } from "@/lib/shared/watchlist";
+
+const openMatterDocument = vi.fn(() => Promise.resolve());
+vi.mock("@/lib/client/firma/open-matter-document", () => ({ openMatterDocument }));
+
+const { WatchlistList } = await import("@/components/watchlist/watchlist-list");
 
 function item(p: Partial<WatchlistItem> = {}): WatchlistItem {
   return {
@@ -105,5 +109,98 @@ describe("WatchlistList — klient och ärendenummer överst (#1965)", () => {
     render(<WatchlistList items={[item({ klientName: "Klient A" })]} emptyText="" />);
     expect(screen.queryByText(/Klient A/)).not.toBeInTheDocument();
     expect(screen.getByText("2026-0001")).toBeInTheDocument();
+  });
+});
+
+describe("WatchlistList — Ska ärendet markeras som avslutat? (#2100)", () => {
+  const suggestion = (): WatchlistItem => item({
+    kind: "closeSuggestion", title: "Ska ärendet markeras som avslutat?",
+    detail: "Ingen tid registrerad sedan 2026-09-25.", at: null,
+    closeSuggestion: { matterTitle: "Vårdnadstvist", noTimeSince: "2026-09-25", documents: [] },
+  });
+  const actions = (isPending = false) => ({ close: vi.fn(), keepActive: vi.fn(), isPending });
+
+  it("med closeActions: rubriklänk till ärendet, skälet och de två knapparna", () => {
+    const a = actions();
+    render(<WatchlistList items={[suggestion()]} emptyText="" closeActions={a} />);
+    const link = screen.getByRole("link");
+    expect(link.textContent).toContain("Ska ärendet markeras som avslutat?");
+    expect(link.textContent).toContain("2026-0001");
+    expect(link.getAttribute("href")).toContain("id=m1");
+    expect(screen.getByText(/Ingen tid registrerad sedan 2026-09-25/)).toBeInTheDocument();
+    expect(screen.getByText("Avslut:")).toBeInTheDocument();
+    // Knapparna ligger utanför länken.
+    expect(within(link).queryByRole("button")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Avsluta ärendet" }));
+    expect(a.close).toHaveBeenCalledWith({ id: "m1", title: "Vårdnadstvist" });
+    fireEvent.click(screen.getByRole("button", { name: "Behåll som aktivt" }));
+    expect(a.keepActive).toHaveBeenCalledWith("m1");
+  });
+
+  it("med isPending är knapparna inaktiva", () => {
+    render(<WatchlistList items={[suggestion()]} emptyText="" closeActions={actions(true)} />);
+    expect(screen.getByRole("button", { name: "Avsluta ärendet" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Behåll som aktivt" })).toBeDisabled();
+  });
+
+  it("utan closeActions: en vanlig rad med skälet och inga knappar", () => {
+    render(<WatchlistList items={[suggestion()]} emptyText="" />);
+    expect(screen.getByRole("link").textContent).toContain("Ingen tid registrerad sedan 2026-09-25.");
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("med closeActions ser de andra sorterna ut som i dag", () => {
+    render(<WatchlistList items={[item()]} emptyText="" closeActions={actions()} />);
+    expect(screen.getByRole("link").textContent).toContain("Förfaller 2026-09-08.");
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("ett dokument som skäl (#2101): filnamnet är en knapp utanför länken som öppnar dokumentet", async () => {
+    const doc = { id: "d1", fileName: "protokoll.pdf", storagePath: "documents/content/d1.pdf", ruling: "PT_HD" as const };
+    const withDoc = item({
+      kind: "closeSuggestion", title: "Ska ärendet markeras som avslutat?", at: null,
+      detail: "protokoll.pdf ser ut att vara …",
+      closeSuggestion: { matterTitle: "Vårdnadstvist", noTimeSince: null, documents: [doc] },
+    });
+    render(<WatchlistList items={[withDoc]} emptyText="" closeActions={actions()} />);
+    expect(screen.queryByText(/Ingen tid registrerad/)).toBeNull();
+    const button = screen.getByRole("button", { name: "protokoll.pdf" });
+    expect(within(screen.getByRole("link")).queryByRole("button")).toBeNull();
+    expect(button.parentElement?.textContent).toBe(
+      "protokoll.pdf ser ut att vara ett beslut från Högsta domstolen att inte meddela prövningstillstånd.",
+    );
+    fireEvent.click(button);
+    await waitFor(() => expect(openMatterDocument).toHaveBeenCalledWith(
+      { id: "d1", storagePath: "documents/content/d1.pdf", fileName: "protokoll.pdf" },
+    ));
+  });
+
+  it("tidsskälet först, sedan dokumenten i den ordning de kommer", () => {
+    const doc = (id: string, ruling: "DOM_HD" | "AVSKRIVNING") => ({ id, fileName: `${id}.pdf`, storagePath: id, ruling });
+    const both = suggestion();
+    render(<WatchlistList items={[{ ...both, closeSuggestion: {
+      matterTitle: "Vårdnadstvist", noTimeSince: "2026-09-25", documents: [doc("b", "DOM_HD"), doc("a", "AVSKRIVNING")],
+    } }]} emptyText="" closeActions={actions()} />);
+    const texts = [...screen.getByRole("listitem").querySelectorAll("p")].map((p) => p.textContent);
+    expect(texts).toEqual([
+      "Ingen tid registrerad sedan 2026-09-25.",
+      "b.pdf ser ut att vara en dom från Högsta domstolen.",
+      "a.pdf ser ut att vara ett slutligt beslut om avskrivning.",
+    ]);
+  });
+
+  it("en avbetalning som ligger efter: ikonen 💳, etiketten Avbetalning och länken till planen (#2137)", () => {
+    render(<WatchlistList items={[item({
+      kind: "paymentPlan", severity: "passed", title: "Delbetalning förfallen 31 dagar",
+      detail: "Förföll 2026-10-25. AVA skickar ingen påminnelse, så kontakta klienten.",
+      at: "2026-10-25", amountOre: 50_000, link: { route: "payment-plans", id: "pp1" },
+    })]} emptyText="" />);
+    expect(screen.getByText("💳")).toBeInTheDocument();
+    expect(screen.getByText(/Avbetalning:/)).toBeInTheDocument();
+    expect(screen.getByText(/Delbetalning förfallen 31 dagar/)).toBeInTheDocument();
+    expect(screen.getByText(/500,00/)).toBeInTheDocument();
+    const href = screen.getByRole("link").getAttribute("href") ?? "";
+    expect(href).toContain("/payment-plans/__shell__");
+    expect(href).toContain("id=pp1");
   });
 });

@@ -248,3 +248,40 @@ describe("preload (#1950)", () => {
     expect(msal.popupCalls).toBe(1);
   });
 });
+
+/** Testsömmen (#1952): en fast Graph-token ger token utan MSAL. */
+describe("fast token (#1952)", () => {
+  /** Fabrik som räknar sina anrop: med fast token ska den aldrig anropas. */
+  function never() {
+    const calls: unknown[] = [];
+    const factory = (opts: unknown) => { calls.push(opts); return Promise.resolve(new FakeMsal()); };
+    return { calls, factory };
+  }
+
+  it("connect blir ansluten och token är den fasta, utan att MSAL laddas", async () => {
+    const { calls, factory } = never();
+    const c = new Office365Connector(factory, noServer, () => "fast");
+    await c.preload();
+    await c.connect();
+    expect((await c.getStatus()).kind).toBe("connected");
+    expect(await c.getAccessToken()).toBe("fast");
+    expect(calls).toEqual([]);
+  });
+
+  it("läser fältet ur localStorage som standard", async () => {
+    localStorage.setItem(OFFICE365_CONFIG_KEY, JSON.stringify({ staticGraphToken: "ur-lagringen" }));
+    const { calls, factory } = never();
+    const c = new Office365Connector(factory, noServer);
+    await c.connect();
+    expect(await c.getAccessToken()).toBe("ur-lagringen");
+    expect(calls).toEqual([]);
+  });
+
+  it("utan fältet är det MSAL som förut", async () => {
+    const msal = new FakeMsal();
+    const c = new Office365Connector(() => Promise.resolve(msal), noServer, () => null);
+    await c.connect();
+    expect(await c.getAccessToken()).toBe("at-silent");
+    expect(msal.popupCalls).toBe(1);
+  });
+});

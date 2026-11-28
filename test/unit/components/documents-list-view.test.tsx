@@ -10,6 +10,8 @@ import { asId } from "@/lib/shared/schemas/ids";
 /** Sparade kolumninställningar (DataTable läser dem via `prefs.get`). */
 const persisted = { data: undefined as undefined | { user: unknown; org: unknown } };
 
+// Office 365-konfigurationen (#1951): av som standard, så att Maila… inte syns.
+vi.mock("@/components/documents/use-office365-configured", () => ({ useOffice365Configured: () => false }));
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } }, document: { partsByMatter: { invalidate: vi.fn() }, tree: { invalidate: vi.fn() } } }),

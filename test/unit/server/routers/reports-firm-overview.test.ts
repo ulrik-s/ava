@@ -120,3 +120,28 @@ describe("reports.firmOverview (#1016)", () => {
     expect(after.lawyers.find((l) => l.name === "Anna")?.billedOre).toBe(0);
   });
 });
+
+describe("reports.perLawyer utan userId: hela byrån (#2116)", () => {
+  it("scope firm, user null, alla juristers ärenden och samma totaler som firmOverview", async () => {
+    const caller = makeCaller();
+    const [firm, overview] = await Promise.all([caller.reports.perLawyer(PERIOD), caller.reports.firmOverview(PERIOD)]);
+    expect(firm?.scope).toBe("firm");
+    expect(firm?.user).toBeNull();
+    expect(firm?.matters.map((m) => m.matterNumber)).toEqual(["2026-0001"]);
+    const { totalMinutes, billableMinutes, workValueOre, expenseOre } = overview.totals;
+    expect(firm?.totals).toEqual({ totalMinutes, billableMinutes, workValueOre, expenseOre });
+    expect(firm?.totals.totalMinutes).toBe(300); // Annas 180 + Bos 120
+    expect(firm?.unbilled.total).toBe(overview.totals.unbilledOre);
+  });
+
+  it("med userId: scope lawyer och bara den juristens arbete", async () => {
+    const res = await makeCaller().reports.perLawyer({ ...PERIOD, userId: asId<"UserId">("u-bo") });
+    expect(res?.scope).toBe("lawyer");
+    expect(res?.user?.name).toBe("Bo");
+    expect(res?.totals.totalMinutes).toBe(120);
+  });
+
+  it("ett okänt userId ger null", async () => {
+    expect(await makeCaller().reports.perLawyer({ ...PERIOD, userId: asId<"UserId">("u-okand") })).toBeNull();
+  });
+});

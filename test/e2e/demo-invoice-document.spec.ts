@@ -208,13 +208,10 @@ async function registerExpense(page: Page): Promise<void> {
 }
 
 /**
- * Aconto till klient med det ifyllda förslaget. Sidan laddas om först: förslaget
- * hämtas inte om när tid eller utlägg registreras (cachen håller i 60 s), och
- * ett inaktuellt förslag ger en Justering-rad. Det felet är inte #1941:s.
+ * Aconto till klient med det ifyllda förslaget, utan omladdning: förslaget
+ * hämtas om när tid eller utlägg registreras (#2201).
  */
 async function createAcconto(page: Page): Promise<void> {
-  await page.reload({ waitUntil: "load" });
-  await expect(page.getByTestId("matter-header")).toBeVisible({ timeout: 25_000 });
   await showPanel(page, "Fakturering");
   await page.getByRole("button", { name: "+ Skapa faktura" }).click();
   await page.getByRole("button", { name: "Aconto till klient" }).click();

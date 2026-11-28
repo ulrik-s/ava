@@ -39,12 +39,16 @@ function scheduleRow(name: string, cron: string): Schedule {
 }
 
 const noop = (): Promise<void> => Promise.resolve();
-const handlers: JobHandlers = { [JOB_QUEUES.indexDocument]: noop, [JOB_QUEUES.fortnoxSync]: noop };
+const handlers: JobHandlers = { [JOB_QUEUES.indexDocument]: noop, [JOB_QUEUES.classifyDocument]: noop };
 
 describe("JOB_SCHEDULES", () => {
-  it("schemalägger bokföringens keepalive måndag 03:00 (#1815)", () => {
-    expect(JOB_SCHEDULES).toEqual([{ queue: "ledger-keepalive", cron: "0 3 * * 1" }]);
+  it("schemalägger bokföringens keepalive måndag 03:00 (#1815) och integritetskontrollen varje natt 02:00 (#1993)", () => {
+    expect(JOB_SCHEDULES).toEqual([
+      { queue: "ledger-keepalive", cron: "0 3 * * 1" },
+      { queue: "content-integrity", cron: "0 2 * * *" },
+    ]);
     expect(Object.values(JOB_QUEUES)).toContain("ledger-keepalive");
+    expect(Object.values(JOB_QUEUES)).toContain("content-integrity");
   });
 });
 
@@ -53,12 +57,12 @@ describe("registerSchedules", () => {
     const f = fakeBoss();
     const schedules: JobSchedule[] = [
       { queue: JOB_QUEUES.indexDocument, cron: "0 3 * * *" },
-      { queue: JOB_QUEUES.fortnoxSync, cron: "*/15 * * * *", missed: "skip" },
+      { queue: JOB_QUEUES.classifyDocument, cron: "*/15 * * * *", missed: "skip" },
     ];
     await registerSchedules(f.boss, handlers, schedules);
     expect(f.scheduled).toEqual([
       { name: "index-document", cron: "0 3 * * *", data: null, options: { tz: "Europe/Stockholm", missed: "once" } },
-      { name: "fortnox-sync", cron: "*/15 * * * *", data: null, options: { tz: "Europe/Stockholm", missed: "skip" } },
+      { name: "classify-document-v2", cron: "*/15 * * * *", data: null, options: { tz: "Europe/Stockholm", missed: "skip" } },
     ]);
     expect(f.unscheduled).toEqual([]);
   });

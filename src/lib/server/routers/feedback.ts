@@ -22,6 +22,7 @@ import {
 import { log } from "@/lib/shared/observability/logger";
 import type { Principal } from "../auth/principal";
 import { attachmentMarkdown, attachmentPathsIn, attachmentTypeOf, uploadAttachments, withoutAttachments } from "../feedback/feedback-attachments";
+import { withProgress } from "../feedback/feedback-progress";
 import { releaseLabel } from "../http/health";
 import type { FeedbackComment, FeedbackIssue, IFeedbackSink } from "../ports";
 import { orgProcedure, router } from "../trpc";
@@ -180,8 +181,10 @@ export const feedbackRouter = router({
   /** Mina förfrågningar, var de är, och dialogen om dem. */
   mine: orgProcedure.output(z.array(feedbackItemSchema)).query(async ({ ctx }) => {
     const sink = requireSink(ctx.ports.feedback);
-    const mine = ownedBy(await sink.list(), ctx.user.id);
-    return mineFrom(mine, ctx.user.id, await commentsFor(sink, mine));
+    // Delarna ur kodrepot (#2216) hämtas samtidigt; källan kastar aldrig.
+    const [issues, workOrders] = await Promise.all([sink.list(), ctx.ports.workOrders?.snapshot() ?? null]);
+    const mine = ownedBy(issues, ctx.user.id);
+    return withProgress(mineFrom(mine, ctx.user.id, await commentsFor(sink, mine)), workOrders);
   }),
 
   /** Svara i dialogen om en av MINA öppna förfrågningar. */

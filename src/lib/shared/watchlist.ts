@@ -2,7 +2,8 @@
  * Frister (#1062, #1735) och Att åtgärda (#1734) — ren logik, ingen I/O.
  *
  * Frister visar tidsfrister och "Bör faktureras". Att åtgärda visar
- * takvarningar och jävskontroller. Förfallna fakturor, misslyckade utskick och
+ * takvarningar, jävskontroller och avbetalningar där klienten ligger efter
+ * (#2137, `payment-plan-overdue.ts`). Förfallna fakturor, misslyckade utskick och
  * faktureringssteg står där man redan arbetar med dem: fakturalistan och
  * ärendets flik Fakturering (#1735).
  *
@@ -20,19 +21,30 @@
  * Tidsfrister (dokument som ska in, överklagandetider) är INTE härledbara —
  * de är uppgifter någon skrivit in, alltså `Task` med `dueAt`. De tas med här
  * för att de hör hemma i samma vy, inte för att de räknas ut.
+ *
+ * Frågan om ett ärende ska avslutas (#2100, `close-suggestion.ts`) är också
+ * härledd: den försvinner när tid registreras eller ärendet stängs. Ett
+ * dokument som ser ut att vara ett slutligt avgörande (#2101) ger samma
+ * fråga. Undantaget är **Behåll som aktivt**: det datumet är ett faktum på ärendet
+ * (`keptActiveAt`), inte en avfärdad påminnelse. Det säger att någon bedömde
+ * att ärendet fortsätter, och frågan räknas från den dagen.
  */
 
 import { BILLING_SHORTCUT_PARAM } from "./billing/billing-flow";
 import { coverageStatus, type CoverageCapInput } from "./billing/coverage-cap";
+import type { FinalRuling } from "./schemas/document";
 import type { MatterRole } from "./schemas/enums";
+import type { Organization } from "./schemas/organization";
 import { stockholmDay } from "./stockholm-time";
 
 // ─── Trösklar ──────────────────────────────────────────────────────────────
 
-/** Ofakturerat över detta belopp (öre) är värt en påminnelse. Byrå-överstyrbart. */
+/** Ofakturerat över detta belopp (öre) är värt en påminnelse. Byrån överstyr det
+ *  med `organizations.unbilled_threshold_ore` (#1911); se `thresholdsForOrg`. */
 export const DEFAULT_UNBILLED_THRESHOLD_ORE = 2_500_000; // 25 000 kr
 
-/** …liksom arbete som legat ofakturerat längre än så här många dagar. */
+/** …liksom arbete som legat ofakturerat längre än så här många dagar. Byrån
+ *  överstyr det med `organizations.unbilled_age_days` (#1911). */
 export const DEFAULT_UNBILLED_AGE_DAYS = 60;
 
 /** Tidsfrister inom så här många dagar räknas som "närmar sig". */
@@ -50,6 +62,21 @@ export const DEFAULT_THRESHOLDS: WatchlistThresholds = {
   deadlineHorizonDays: DEADLINE_HORIZON_DAYS,
 };
 
+/** Byråns sparade trösklar (#1911); `null`/saknas = kodens standard. */
+type OrgThresholds = Pick<Organization, "unbilledThresholdOre" | "unbilledAgeDays">;
+
+/**
+ * Trösklarna för en byrå (#1911): byråns värde där det finns (0 räknas som ett
+ * värde), annars standard. Horisonten för tidsfrister är alltid standard.
+ */
+export function thresholdsForOrg(org: OrgThresholds | null): WatchlistThresholds {
+  return {
+    unbilledThresholdOre: org?.unbilledThresholdOre ?? DEFAULT_UNBILLED_THRESHOLD_ORE,
+    unbilledAgeDays: org?.unbilledAgeDays ?? DEFAULT_UNBILLED_AGE_DAYS,
+    deadlineHorizonDays: DEADLINE_HORIZON_DAYS,
+  };
+}
+
 // ─── Poster ────────────────────────────────────────────────────────────────
 
 /**
@@ -61,7 +88,9 @@ export type WatchlistKind =
   | "coverageCap"      // täckningstaket nås — arbete däröver ersätts inte
   | "unbilled"         // upparbetat som borde faktureras
   | "deadline"         // tidsfrist ur en uppgift (dokument, överklagande)
-  | "conflictCheck";   // jävskontrollen väntar eller har träffar (#1246)
+  | "conflictCheck"    // jävskontrollen väntar eller har träffar (#1246)
+  | "closeSuggestion"  // ska ärendet avslutas? ingen tid på länge (#2100)
+  | "paymentPlan";     // klienten ligger efter sin avbetalningsplan (#2137)
 
 /**
  * `passed` = det har redan hänt (taket passerat, fristen ute, utskicket
@@ -75,13 +104,21 @@ export type WatchlistSeverity = "passed" | "approaching";
  * route för ärenden som skapats efter bygget (static export) och gör ingenting.
  */
 export interface WatchlistLink {
-  route: "matters" | "invoices";
+  route: "matters" | "invoices" | "payment-plans";
   id: string;
   /**
    * Extra query-parametrar efter `?id=` (#1854), t.ex. att ärendesidan ska
    * öppna faktureringen. Utelämnad = bara detaljsidan.
    */
   query?: Readonly<Record<string, string>>;
+}
+
+/** Ett dokument som ger skäl att avsluta ärendet (#2101) — öppnas direkt ur posten. */
+export interface CloseSuggestionDocument {
+  id: string;
+  fileName: string;
+  storagePath: string;
+  ruling: FinalRuling;
 }
 
 export interface WatchlistItem {
@@ -101,6 +138,12 @@ export interface WatchlistItem {
   link: WatchlistLink | null;
   /** Uppgiften bakom en tidsfrist — så den kan bockas av direkt i listan (#1167). */
   taskId?: string;
+  /**
+   * Ska ärendet avslutas (#2100, #2101): titeln till frågan, dagen sedan dess
+   * ingen tid registrerats (null när bara dokument ger skäl) och dokumenten
+   * som ser ut att vara ett slutligt avgörande.
+   */
+  closeSuggestion?: { matterTitle: string; noTimeSince: string | null; documents: CloseSuggestionDocument[] };
   /**
    * Ärendets första KLIENT-part (#1965), som Frister på Startsidan och sidan
    * Frister visar överst på raden. Saknas när posten saknar ärende eller

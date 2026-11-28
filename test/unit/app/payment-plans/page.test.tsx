@@ -7,6 +7,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest-compat";
 
 import PaymentPlansPage, { formatScanResult } from "@/app/payment-plans/page";
+import { rowOrder, sortColumn } from "../../../helpers/data-table";
 
 // Kuvertform sedan #1014. `setRows` håller mockens form på ETT ställe, så
 // testerna fortsätter tilldela rader utan att upprepa kuvertet.
@@ -197,5 +198,50 @@ describe("PaymentPlansPage — Förfallen N dagar (#2136)", () => {
     setRows([behind([10_000])]);
     render(<PaymentPlansPage />);
     expect(screen.queryByText(/^Förfallen/)).toBeNull();
+  });
+});
+
+describe("PaymentPlansPage — sortering per kolumn (#1907)", () => {
+  const plan = (id: string, status: string, monthlyAmount: number, invoice?: Record<string, unknown>) => ({
+    id, status, monthlyAmount, dayOfMonth: 1, startDate: "2099-01-01", ...(invoice ? { invoice } : {}),
+  });
+  const rows = () => [
+    plan("p1", "ACTIVE", 5_000, {
+      amount: 100_000, payments: [{ amount: 75_000 }], writeOffs: [],
+      matter: { matterNumber: "2026-0002", title: "Beta", contacts: [{ contact: { id: "c1", name: "Örjan" } }] },
+    }),
+    plan("p2", "CANCELLED", 20_000, {
+      amount: 400_000, payments: [{ amount: 100_000 }], writeOffs: [{ amount: 200_000 }],
+      matter: { matterNumber: "2026-0001", title: "Alfa", contacts: [{ contact: { id: "c2", name: "Anna" } }] },
+    }),
+    // Utan faktura: tomma fält sorteras först och visas som "—", andelen 0 %.
+    plan("p3", "COMPLETED", 10_000),
+  ];
+  const order = (): string[] => rowOrder(["Beta", "Alfa", "Slutförd"]);
+
+  it("varje kolumn sorterar på det som visas", () => {
+    setRows(rows());
+    render(<PaymentPlansPage />);
+    sortColumn("Ärendenr", "asc");
+    expect(order()).toEqual(["Slutförd", "Alfa", "Beta"]);
+    sortColumn("Titel", "desc");
+    expect(order()).toEqual(["Beta", "Alfa", "Slutförd"]);
+    sortColumn("Klient", "asc");
+    expect(order()).toEqual(["Slutförd", "Alfa", "Beta"]);
+    sortColumn("Status", "asc");
+    expect(order()).toEqual(["Beta", "Alfa", "Slutförd"]);
+    sortColumn("Per månad", "desc");
+    expect(order()).toEqual(["Alfa", "Slutförd", "Beta"]);
+    sortColumn("Inbetalt", "asc");
+    expect(order()).toEqual(["Slutförd", "Beta", "Alfa"]);
+    sortColumn("Totalt", "desc");
+    expect(order()).toEqual(["Alfa", "Beta", "Slutförd"]);
+    sortColumn("Utestående", "desc");
+    expect(order()).toEqual(["Alfa", "Beta", "Slutförd"]);
+    sortColumn("Andel", "desc");
+    expect(order()).toEqual(["Beta", "Alfa", "Slutförd"]);
+    expect(screen.getByText("75%")).toBeInTheDocument();
+    expect(screen.getByText("0%")).toBeInTheDocument();
+    expect(screen.getAllByText("—")).toHaveLength(3);
   });
 });

@@ -1,6 +1,8 @@
 /**
  * Frister-router (#1062, #1735): tidsfrister och "Bör faktureras" i `list`,
- * takvarningar och jävskontroller i `actionItems` (#1734).
+ * takvarningar, jävskontroller och frågan om ett aktivt ärende utan tid på två
+ * månader, eller med ett slutligt avgörande (#2101), ska avslutas (#2100) i
+ * `actionItems` (#1734), liksom avbetalningar där klienten ligger efter (#2137).
  *
  * Varje signal härleds ur data som redan finns; ingenting lagras. Se
  * `@/lib/shared/watchlist` för varför (kort: en härledd påminnelse städar sig
@@ -13,12 +15,14 @@
 
 import { z } from "zod";
 import { timeEntryValueOre } from "@/lib/shared/billing/whole-kronor";
+import { closeSuggestionItems, type CloseSuggestionCandidate } from "@/lib/shared/close-suggestion";
+import { paymentPlanItems, type PlanItemInput } from "@/lib/shared/payment-plan-overdue";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import {
   conflictCheckItems, coverageItems, deadlineItems, sortWatchlist, unbilledItems, withKlientNames,
-  DEFAULT_THRESHOLDS, type CoverageMatter, type DeadlineTask, type UnbilledMatter, type WatchlistItem,
+  thresholdsForOrg, type CoverageMatter, type DeadlineTask, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
@@ -39,7 +43,11 @@ function isoDate(v: unknown): string | null {
 interface MatterRow {
   id: string;
   matterNumber: string;
+  title?: string | null;
   status?: string | null;
+  createdAt?: Date | string | null;
+  /** Senast någon valde Behåll som aktivt (#2098). */
+  keptActiveAt?: Date | string | null;
   paymentMethod?: PaymentMethod | null;
   rattsskyddMaxOre?: number | null;
   rattshjalpMaxTimmar?: number | null;
@@ -105,6 +113,43 @@ function unbilledInput(matters: readonly MatterRow[], entries: readonly EntryRow
   }));
 }
 
+/** Raderna grupperade per ärende (#2101). */
+function byMatter<T extends { matterId: string }>(rows: readonly T[]): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const r of rows) out.set(r.matterId, [...(out.get(r.matterId) ?? []), r]);
+  return out;
+}
+
+/**
+ * Kandidater till frågan om avslut (#2100, #2101): bara aktiva ärenden, med
+ * senaste tidsposten och dokumenten med ett slutligt avgörande för alla i ETT
+ * repo-anrop var. Inga aktiva ärenden → inga anrop.
+ */
+async function closeSuggestionInput(ctx: Ctx, matters: readonly MatterRow[]): Promise<CloseSuggestionCandidate[]> {
+  const active = matters.filter((m) => m.status === "ACTIVE");
+  if (active.length === 0) return [];
+  const ids = active.map((m) => asId<"MatterId">(m.id));
+  const [latest, rulings] = await Promise.all([
+    ctx.repos.timeEntries.latestEntryAtForMatters(ids),
+    ctx.repos.documents.listFinalRulingsForMatters(ids).then(byMatter),
+  ]);
+  return active.map((m) => ({
+    id: m.id, matterNumber: m.matterNumber, title: m.title ?? "",
+    createdAt: m.createdAt, keptActiveAt: m.keptActiveAt, latestEntryAt: latest[m.id],
+    finalRulings: rulings.get(m.id) ?? [],
+  }));
+}
+
+/**
+ * Aktiva avbetalningsplaner i urvalets ärenden (#2137): byråns planer i ETT
+ * repo-anrop, sedan bara de vars fakturas ärende finns bland `matters`.
+ */
+async function paymentPlanInput(ctx: Ctx, matters: readonly MatterRow[]): Promise<PlanItemInput[]> {
+  const ids = new Set(matters.map((m) => m.id));
+  const plans = await ctx.repos.paymentPlans.listForOrg(ctx.orgId, "ACTIVE");
+  return plans.filter((p) => ids.has(String(p.invoice?.matter?.id ?? "")));
+}
+
 /** Tidsfrister ur uppgifter — bara öppna, och bara de som har ett datum. */
 async function deadlineInput(ctx: Ctx, userId: string): Promise<DeadlineTask[]> {
   const tasks = await ctx.repos.tasks.listForUser(
@@ -151,17 +196,14 @@ export const watchlistRouter = router({
     .query(async ({ ctx, input }): Promise<{ items: WatchlistItem[]; generatedAt: string }> => {
       const userId = input?.userId ?? ctx.user.id;
       const now = new Date();
-      // Trösklarna är kodens defaults i v1. De VARIERAR mellan byråer (en byrå
-      // fakturerar vid 25 000 kr, en annan vid 50 000) och hör därför hemma i
-      // org-inställningarna — men det kräver en migration och hör inte hemma i
-      // samma ändring som signalerna själva. Se #1063.
-      const thresholds = DEFAULT_THRESHOLDS;
-
-      const [matters, entries, deadlines] = await Promise.all([
+      const [matters, entries, deadlines, org] = await Promise.all([
         selectMatters(ctx, userId, input?.mine ?? true),
         ctx.repos.timeEntries.listBillableForOrg(ctx.orgId),
         deadlineInput(ctx, userId),
+        ctx.repos.organizations.getById(ctx.orgId),
       ]);
+      // Byråns trösklar för "Bör faktureras" (#1911); utan sparade värden kodens standard.
+      const thresholds = thresholdsForOrg(org);
       const items = sortWatchlist([
         ...unbilledItems(unbilledInput(matters, entries), now, thresholds),
         ...deadlineItems(deadlines, now, thresholds),
@@ -172,8 +214,10 @@ export const watchlistRouter = router({
     }),
 
   /**
-   * "Att åtgärda" (#1734): takvarningar och jävskontroller med träffar som
-   * ingen har bedömt. En kontroll som bara väntar (`PENDING`) hör inte hit.
+   * "Att åtgärda" (#1734): takvarningar, jävskontroller med träffar som
+   * ingen har bedömt, och aktiva ärenden utan tid på två månader eller med
+   * ett slutligt avgörande (#2101) som kanske ska avslutas (#2100), och
+   * avbetalningar där klienten ligger efter (#2137). En kontroll som bara väntar (`PENDING`) hör inte hit.
    * Samma `mine`-urval och sortering som `list`.
    */
   actionItems: orgProcedure
@@ -181,9 +225,14 @@ export const watchlistRouter = router({
     .query(async ({ ctx, input }): Promise<{ items: WatchlistItem[]; generatedAt: string }> => {
       const now = new Date();
       const matters = await selectMatters(ctx, input?.userId ?? ctx.user.id, input?.mine ?? true);
+      const [coverage, closeCandidates, plans] = await Promise.all([
+        coverageInput(ctx, matters), closeSuggestionInput(ctx, matters), paymentPlanInput(ctx, matters),
+      ]);
       const items = sortWatchlist([
-        ...coverageItems(await coverageInput(ctx, matters)),
+        ...coverageItems(coverage),
         ...conflictCheckItems(matters.filter((m) => m.conflictCheckStatus === "HITS")),
+        ...closeSuggestionItems(closeCandidates, now),
+        ...paymentPlanItems(plans, now),
       ], stockholmDay(now));
       return { items, generatedAt: now.toISOString() };
     }),

@@ -42,4 +42,9 @@ export class InMemoryTaskRepository extends InMemoryRepository<Task> implements 
     const row = (await this.delegate.findFirst({ where: { id, organizationId } })) as Task | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
+
+  async existingIdsInOrg(ids: readonly TaskId[], organizationId: OrganizationId): Promise<Set<TaskId>> {
+    const rows = (await this.delegate.findMany({ where: { id: { in: [...ids] }, organizationId } })) as Task[];
+    return new Set(rows.map((r) => r.id));
+  }
 }

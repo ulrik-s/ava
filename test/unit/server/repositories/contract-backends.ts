@@ -33,3 +33,9 @@ export async function openDrizzleRepos(onLog?: (e: ChangeLogEntry) => void): Pro
 
 /** Namnet på Drizzle-backenden: pglite i vanliga körningar, riktig Postgres i CI-jobbet. */
 export const DRIZZLE_NAME = process.env.PG_TEST_URL ? "Drizzle (Postgres)" : "Drizzle (pglite)";
+
+/**
+ * Har Drizzle-backenden svensk ordning i databasen (#1917)? Riktig Postgres har
+ * ICU-kollationen `sv-x-icu`; pglite har bara en ersättare i byteordning.
+ */
+export const DRIZZLE_HAS_SWEDISH_COLLATION = Boolean(process.env.PG_TEST_URL);

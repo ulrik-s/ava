@@ -23,7 +23,16 @@ const timeQuery: {
 const matterQuery: { data: { matters: Array<Record<string, unknown>> } } = {
   data: { matters: [] },
 };
-const utilsMock = { timeEntry: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } };
+const utilsMock = {
+  timeEntry: { list: { invalidate: vi.fn() } },
+  prefs: { get: { invalidate: vi.fn() } },
+  // Fakturaförslaget (#2201): /time hämtar om alla ärendens förslag.
+  billingRun: { proposal: { invalidate: vi.fn() } },
+};
+/** Alla ärendens förslag hämtades om, utan indata (#2201). */
+function expectAllProposalsRefetched(): void {
+  expect(utilsMock.billingRun.proposal.invalidate).toHaveBeenCalledWith();
+}
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
 const moveMutate = vi.fn();
@@ -363,8 +372,10 @@ describe("TimePage — markera flera poster och flytta dem (#2043)", () => {
     fireEvent.change(within(dialog).getByLabelText("2 tidsposter flyttas till:"), { target: { value: "UA2026-0002 — Hyrestvist" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Flytta" }));
     expect(moveMutate).toHaveBeenCalledWith({ ids: ["t1", "t2"], matterId: "m2" }, expect.anything());
+    expect(utilsMock.billingRun.proposal.invalidate).not.toHaveBeenCalled();
     act(() => (moveMutate.mock.calls.at(-1)?.[1] as CallOpts)?.onSuccess?.());
     expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expectAllProposalsRefetched();
     expect(screen.queryByRole("dialog", { name: "Flytta till ärende" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Flytta till ärende/ })).toBeNull();
   });
@@ -462,26 +473,30 @@ describe("TimePage — registreringens och ändringens svar (#1904)", () => {
     expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-05-04" }));
   });
 
-  it("när tiden registrerats stängs formuläret, fälten töms och listan laddas om", () => {
+  it("när tiden registrerats stängs formuläret, fälten töms och listan och förslagen laddas om", () => {
     render(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     fireEvent.change(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i), { target: { value: "Möte" } });
+    expect(utilsMock.billingRun.proposal.invalidate).not.toHaveBeenCalled();
     act(() => succeeded.create?.());
     expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expectAllProposalsRefetched();
     expect(screen.queryByRole("button", { name: /^Spara$/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
     expect(screen.getByLabelText<HTMLInputElement>(/Beskrivning/i).value).toBe("");
   });
 
-  it("när ändringen sparats stängs dialogen och listan laddas om", () => {
+  it("när ändringen sparats stängs dialogen och listan och förslagen laddas om", () => {
     timeQuery.data = { entries: sortableEntries(), total: 3, pages: 1, totalMinutes: 180 };
     render(<TimePage />);
     fireEvent.click(screen.getAllByRole("button", { name: "Ändra" })[0] as HTMLElement);
     const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
     fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
     // Ändringen skickar onSuccess med anropet (#2042), inte med hooken.
+    expect(utilsMock.billingRun.proposal.invalidate).not.toHaveBeenCalled();
     act(() => (updateMutate.mock.calls.at(-1)?.[1] as MutationOpts)?.onSuccess?.());
     expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expectAllProposalsRefetched();
     expect(screen.queryByRole("dialog", { name: /Ändra tidregistrering/ })).toBeNull();
   });
 
@@ -495,10 +510,11 @@ describe("TimePage — registreringens och ändringens svar (#1904)", () => {
     expect(updateMutate).not.toHaveBeenCalled();
   });
 
-  it("när posten tagits bort laddas listan om", () => {
+  it("när posten tagits bort laddas listan och förslagen om", () => {
     render(<TimePage />);
     act(() => succeeded.remove?.());
     expect(utilsMock.timeEntry.list.invalidate).toHaveBeenCalled();
+    expectAllProposalsRefetched();
   });
 });
 

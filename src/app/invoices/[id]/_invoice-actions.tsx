@@ -1,5 +1,6 @@
 "use client";
 
+import { isLive, isSendable, isTerminal } from "@/lib/shared/billing/invoice-state-machine";
 import type { InvoiceStatus, InvoiceType } from "@/lib/shared/schemas/enums";
 
 interface Props {
@@ -27,25 +28,22 @@ interface Visibility {
   send: boolean;
 }
 
-const TERMINAL_STATUS: ReadonlySet<InvoiceStatus> = new Set<InvoiceStatus>(["PAID", "CANCELLED"]);
-
 /**
  * Skicka-knappen (#179/#392): en faktura kan skickas i DRAFT (då blir den SENT),
  * är utställd (SENT/avbetalningsplan → kan skickas om), eller är en icke-annullerad
  * kreditfaktura. Modalen erbjuder automatiskt (köa → server) + manuellt utskick.
  */
 function canSend(isCredit: boolean, status: InvoiceStatus): boolean {
-  if (status === "DRAFT" || status === "SENT" || status === "INSTALLMENT_PLAN") return true;
-  return isCredit && status !== "CANCELLED";
+  return isSendable(status) || (isCredit && status !== "CANCELLED");
 }
 
 function computeVisibility(invoiceType: InvoiceType, status: InvoiceStatus, hasPlan: boolean, hasCreditNote: boolean, outstanding: number): Visibility {
   const isCredit = invoiceType === "CREDIT";
   const sentNoPlan = !isCredit && status === "SENT" && !hasPlan;
   // Utställd & aktiv (SENT eller pågående avbetalningsplan, ej kreditfaktura).
-  const issuedActive = !isCredit && (status === "SENT" || status === "INSTALLMENT_PLAN");
+  const issuedActive = !isCredit && isLive(status);
   return {
-    pay: !isCredit && !TERMINAL_STATUS.has(status),
+    pay: !isCredit && !isTerminal(status),
     plan: sentNoPlan,
     draft: status === "DRAFT",
     cancel: sentNoPlan,

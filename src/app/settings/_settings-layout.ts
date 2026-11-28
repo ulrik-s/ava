@@ -9,8 +9,8 @@ export const settingsLayout: DefaultLayout = (add, screen) => {
   addGroup(add, ["org", "offices", "datasource", "devices", "backup"]);
   if (screen === "large") {
     addGroup(add, ["ledger", "tags", "matter-types"], { referencePanel: "org", direction: "right" });
-    addGroup(add, ["atgarder", "views", "external"], { referencePanel: "ledger", direction: "right" });
+    addGroup(add, ["atgarder", "watchlist", "views", "external"], { referencePanel: "ledger", direction: "right" });
   } else {
-    addGroup(add, ["ledger", "tags", "matter-types", "atgarder", "views", "external"], { referencePanel: "org", direction: "right" });
+    addGroup(add, ["ledger", "tags", "matter-types", "atgarder", "watchlist", "views", "external"], { referencePanel: "org", direction: "right" });
   }
 };

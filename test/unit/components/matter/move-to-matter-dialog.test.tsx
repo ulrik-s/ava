@@ -80,6 +80,15 @@ describe("MoveToMatterDialog", () => {
     expect(screen.getByLabelText("Mapp")).toBeInTheDocument();
   });
 
+  it("onMatterChange får det valda ärendet, och \"\" när Avbryt glömmer det (#2045)", () => {
+    const onMatterChange = vi.fn();
+    renderDialog({ onMatterChange });
+    fireEvent.change(matterInput(), { target: { value: "2026-0002 — Arvskifte" } });
+    expect(onMatterChange).toHaveBeenLastCalledWith("m2");
+    fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
+    expect(onMatterChange).toHaveBeenLastCalledWith("");
+  });
+
   it("Avbryt stänger och glömmer valet", () => {
     const { props, rerender } = renderDialog();
     fireEvent.change(matterInput(), { target: { value: "2026-0002 — Arvskifte" } });

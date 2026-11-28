@@ -11,6 +11,13 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { DocumentRow, type DocumentRecord } from "@/components/documents/_document-row";
 
+// Office 365-konfigurationen (#1951): av som standard, så att Maila… inte syns.
+let mailConfigured = false;
+vi.mock("@/components/documents/use-office365-configured", () => ({ useOffice365Configured: () => mailConfigured }));
+vi.mock("@/components/documents/_mail-document-dialog", () => ({
+  MailDocumentDialog: ({ onClose }: { onClose: () => void }) => <button onClick={onClose}>mail-dialog-stub</button>,
+}));
+
 // "Redigera uppgifter…" (ADR 0038) läser byråns egna dokumenttyper när dialogen
 // öppnas; stubben påverkar inte guard-assertionerna.
 vi.mock("@/lib/client/trpc", () => ({
@@ -109,6 +116,38 @@ describe("DocumentRow — kebab-meny + isUploading-guard", () => {
     }
   });
 
+  it("demo-tier utan byggflaggan: Visa pekar på demons fil, inte på /api/ (#1913)", () => {
+    const prev = process.env.NEXT_PUBLIC_DEMO_BUILD;
+    delete process.env.NEXT_PUBLIC_DEMO_BUILD;
+    window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "u/r" }));
+    try {
+      renderRow({ isUploading: false });
+      openMenu();
+      const href = screen.getByText("Visa").closest("a")?.getAttribute("href") ?? "";
+      expect(href.endsWith("/documents/content/d-1.pdf")).toBe(true);
+      expect(href.startsWith("/api/")).toBe(false);
+    } finally {
+      window.localStorage.removeItem("ava.firma");
+      if (prev !== undefined) process.env.NEXT_PUBLIC_DEMO_BUILD = prev;
+    }
+  });
+
+  it("self-hosted med byggflaggan satt: Visa och Ladda ner är inte länkar (#651, #1913)", () => {
+    const prev = process.env.NEXT_PUBLIC_DEMO_BUILD;
+    process.env.NEXT_PUBLIC_DEMO_BUILD = "1";
+    window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "self-hosted", repo: "u/r" }));
+    try {
+      renderRow({ isUploading: false });
+      openMenu();
+      expect(screen.getByText("Visa").closest("a")).toBeNull();
+      expect(screen.getByText("Ladda ner").closest("a")).toBeNull();
+    } finally {
+      window.localStorage.removeItem("ava.firma");
+      if (prev === undefined) delete process.env.NEXT_PUBLIC_DEMO_BUILD;
+      else process.env.NEXT_PUBLIC_DEMO_BUILD = prev;
+    }
+  });
+
   it("isUploading=true: kebab-trigger är disabled → menyn kan inte öppnas", () => {
     const { onReanalyze, onDelete } = renderRow({ isUploading: true });
     const trigger = screen.getByLabelText("Dokumentåtgärder");
@@ -132,5 +171,38 @@ describe("DocumentRow — kebab-meny + isUploading-guard", () => {
     expect(nameBtn).toBeDisabled();
     expect(nameBtn).toHaveAttribute("title", "Laddar upp — vänta tills filen är registrerad");
     expect(screen.getByText("Laddar upp")).toBeInTheDocument();
+  });
+
+  it("Maila… (#1951): direkt efter Ladda ner med Office 365, och öppnar dialogen", () => {
+    mailConfigured = true;
+    try {
+      renderRow();
+      openMenu();
+      const labels = screen.getAllByRole("menuitem").map((el) => el.textContent);
+      const download = labels.findIndex((l) => l.includes("Ladda ner"));
+      expect(labels[download + 1]).toContain("Maila…");
+      fireEvent.click(screen.getByText("Maila…"));
+      fireEvent.click(screen.getByText("mail-dialog-stub"));
+      expect(screen.queryByText("mail-dialog-stub")).not.toBeInTheDocument();
+    } finally {
+      mailConfigured = false;
+    }
+  });
+
+  it("Maila… (#1951): finns inte utan Office 365-konfiguration", () => {
+    renderRow();
+    openMenu();
+    expect(screen.queryByText("Maila…")).not.toBeInTheDocument();
+  });
+
+  it("Maila… (#1951): spärrad under uppladdning, som de andra raderna", () => {
+    mailConfigured = true;
+    try {
+      renderRow({ isUploading: true });
+      expect(screen.getByLabelText("Dokumentåtgärder")).toBeDisabled();
+      expect(screen.getByLabelText("Dokumentåtgärder")).toHaveAttribute("title", "Vänta tills uppladdningen är klar");
+    } finally {
+      mailConfigured = false;
+    }
   });
 });

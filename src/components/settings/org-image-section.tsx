@@ -86,3 +86,19 @@ export function OrgImageSection({ title, description, value, onChange }: Props) 
     </div>
   );
 }
+
+/** Byråns bilder i genererade dokument (#1218): logga och sidfotsmärke. Sparas
+ *  direkt (inte via formulärets debounce) — en bild är ett helt värde. */
+export function OrgImagesSection({ logo, footerSeal, save }: {
+  logo: OrgImage | null; footerSeal: OrgImage | null;
+  save: (patch: { logo?: OrgImage | null; footerSeal?: OrgImage | null }) => void;
+}) {
+  return (
+    <>
+      <OrgImageSection title="Logotyp" description="Visas centrerad överst på kostnadsräkningar och andra genererade dokument (annars byråns namn)."
+        value={logo} onChange={(v) => save({ logo: v })} />
+      <OrgImageSection title="Sidfotsmärke" description="Visas till vänster i sidfoten, t.ex. märket för ledamot av Sveriges advokatsamfund."
+        value={footerSeal} onChange={(v) => save({ footerSeal: v })} />
+    </>
+  );
+}

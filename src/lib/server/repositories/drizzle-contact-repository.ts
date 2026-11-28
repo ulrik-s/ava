@@ -9,6 +9,7 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Contact } from "@/lib/shared/schemas/contact";
 import type { ContactId, OrganizationId } from "@/lib/shared/schemas/ids";
 import { contacts, matterContacts, matters } from "../db/schema";
+import { swedishOrder } from "../db/swedish-order";
 import type { AppDb } from "../db/types";
 import type {
   ContactFull, ContactListOptions, ContactListResult, ContactListRow, ContactRepository,
@@ -37,7 +38,7 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
     const rows = await this.db
       .select().from(contacts)
       .where(where)
-      .orderBy(asc(contacts.name))
+      .orderBy(asc(swedishOrder(contacts.name)))
       .limit(opts.pageSize).offset((opts.page - 1) * opts.pageSize);
     const [{ total } = { total: 0 }] = await this.db
       .select({ total: sql<number>`count(*)` }).from(contacts).where(where);
@@ -73,7 +74,7 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
     if (!c) return null;
     const children = await this.db
       .select().from(contacts)
-      .where(and(eq(contacts.parentId, id), isNull(contacts.deletedAt))).orderBy(asc(contacts.name));
+      .where(and(eq(contacts.parentId, id), isNull(contacts.deletedAt))).orderBy(asc(swedishOrder(contacts.name)));
     const parentId = c.parentId;
     const parentRows = parentId
       ? await this.db.select({ id: contacts.id, name: contacts.name }).from(contacts).where(eq(contacts.id, parentId)).limit(1)

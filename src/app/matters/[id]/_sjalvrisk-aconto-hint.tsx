@@ -10,7 +10,8 @@
  * aconto finns bland ärendets åtgärder (ADR 0034). Self-gating.
  */
 
-import { trpc } from "@/lib/client/trpc";
+import { useQuery } from "@tanstack/react-query";
+import { useTRPC } from "@/lib/client/trpc";
 import { isCoverageMethod, type BillingAction } from "@/lib/shared/billing/billing-flow";
 import { DEFAULT_ACCONTO_SHARE_BIPS } from "@/lib/shared/billing/billing-proposal";
 import { sjalvriskAccontoDue, unbilledClientShareNetOre } from "@/lib/shared/billing/billing-todo";
@@ -33,14 +34,16 @@ export interface SjalvriskAccontoHintProps {
 
 /** Gränsbeloppet är en byrå-inställning (#885); faller tillbaka på default-konstanten. */
 function useAccontoThreshold(enabled: boolean): number {
-  const orgThreshold = trpc.organization.getSettings.useQuery(undefined, { enabled }).data?.accontoThresholdOre;
+  const t = useTRPC();
+  const orgThreshold = useQuery(t.organization.getSettings.queryOptions(undefined, { enabled })).data?.accontoThresholdOre;
   return orgThreshold ?? SJALVRISK_ACCONTO_THRESHOLD_ORE;
 }
 
 export function SjalvriskAccontoHint({ matterId, paymentMethod, clientShareBips, actions, onOpen }: SjalvriskAccontoHintProps) {
   const accontoAllowed = actions.some((a) => a.type === "ACCONTO");
   const enabled = accontoAllowed && isCoverageMethod(paymentMethod);
-  const proposal = trpc.billingRun.proposal.useQuery({ matterId }, { enabled }).data;
+  const t = useTRPC();
+  const proposal = useQuery(t.billingRun.proposal.queryOptions({ matterId }, { enabled })).data;
   const thresholdOre = useAccontoThreshold(enabled);
   if (!proposal) return null;
   const shareBips = clientShareBips ?? DEFAULT_ACCONTO_SHARE_BIPS;

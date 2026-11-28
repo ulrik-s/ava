@@ -14,6 +14,7 @@ import {
   documentIdSchema,
   type DocumentFolderId,
 } from "@/lib/shared/schemas/ids";
+import { moveDocumentsToMatter } from "../../documents/move-to-matter";
 import { orgProcedure } from "../../trpc";
 import { assertDocAccess, assertFolderAccess, assertFolderInMatter, assertMatterAccess } from "./shared";
 
@@ -63,6 +64,26 @@ export const folderProcedures = {
       const doc = await assertDocAccess(ctx, input.documentId);
       await assertFolderInMatter(ctx, input.folderId, doc.matterId);
       return ctx.repos.documents.updateMetadata(input.documentId, { folderId: input.folderId });
+    }),
+
+  /**
+   * Flytta dokument till ett annat ärende och en mapp där (#2045). En vanlig
+   * mutation: dokumentet och delarna går via radkön (#1884), där radpolicyn
+   * prövar samma spärrar (#2044). Versionen byts inte (ADR 0023).
+   */
+  moveToMatter: orgProcedure
+    .input(z.object({
+      ids: z.array(documentIdSchema).min(1).max(500)
+        .refine((ids) => new Set(ids).size === ids.length, "Samma dokument får bara anges en gång."),
+      matterId: matterIdSchema,
+      folderId: documentFolderIdSchema.nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertMatterAccess(ctx, input.matterId);
+      await assertFolderInMatter(ctx, input.folderId, input.matterId);
+      const target = { matterId: input.matterId, folderId: input.folderId };
+      const moved = await ctx.repos.transaction((repos) => moveDocumentsToMatter(repos, ctx.orgId, input.ids, target));
+      return { moved };
     }),
 
   /** Flyttar en mapp; blockerar cykler (mapp-in-i-sig-själv/descendant). */

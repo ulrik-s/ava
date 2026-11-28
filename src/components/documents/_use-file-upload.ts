@@ -115,6 +115,16 @@ function appendErrors(prev: string | null, errors: readonly string[]): string {
   return [prev, ...errors].filter((line): line is string => Boolean(line)).join("\n");
 }
 
+/**
+ * Listans dokument följda av placeholder-raderna. En placeholder vars id redan
+ * finns i listan hoppas över: när `register` gått igenom och trädet hämtats om
+ * medan bytes:en laddas upp ska dokumentet synas en gång, inte två.
+ */
+export function withPendingUploads(visible: readonly DocumentRecord[], pending: readonly DocumentRecord[]): DocumentRecord[] {
+  const ids = new Set(visible.map((d) => d.id));
+  return [...visible, ...pending.filter((d) => !ids.has(d.id))];
+}
+
 /** Placeholder-raderna medan en uppladdning pågår. */
 function usePendingUploads() {
   const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());

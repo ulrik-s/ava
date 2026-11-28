@@ -38,9 +38,10 @@ export const JOB_QUEUES = {
   classifyDocument: "classify-document-v2",
   /** Indexera ett dokuments sidtext utan omklassificering (#1215, backfill). */
   indexDocument: "index-document",
-  fortnoxSync: "fortnox-sync",
   /** Håll bokföringsanslutningen vid liv, veckovis (#1815). */
   ledgerKeepAlive: "ledger-keepalive",
+  /** Dokument med metadata men utan innehåll, varje natt (#1145, #1993). */
+  contentIntegrity: "content-integrity",
 } as const;
 
 export type JobQueueName = (typeof JOB_QUEUES)[keyof typeof JOB_QUEUES];
@@ -85,6 +86,8 @@ export interface JobSchedule {
 export const JOB_SCHEDULES: readonly JobSchedule[] = [
   // Måndag 03:00: sex tillfällen inom refresh-tokenets 45 dygn (#1815).
   { queue: JOB_QUEUES.ledgerKeepAlive, cron: "0 3 * * 1" },
+  // Varje natt 02:00: integritetskontrollen av dokumentens innehåll (#1993).
+  { queue: JOB_QUEUES.contentIntegrity, cron: "0 2 * * *" },
 ];
 
 const DEFAULT_SCHEMA = "pgboss";

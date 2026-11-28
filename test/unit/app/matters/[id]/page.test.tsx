@@ -1,165 +1,84 @@
 /**
  * Test för MatterDetailPage — den största sidan i appen.
  *
- * Mockar alla relaterade trpc-queries + mutations + barnkomponenter.
+ * Alla tRPC-anrop går genom en fejkad länk (`renderWithFakeTrpc`, ADR 0041);
+ * tunga barnkomponenter mockas som platshållare.
  */
 
-import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
+import { act, screen, within, fireEvent, waitFor, type RenderResult } from "@testing-library/react";
 import { Suspense } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import MatterDetailPage from "@/app/matters/[id]/_client";
+import { callsTo, DATA_TABLE_HANDLERS, renderWithFakeTrpc } from "../../../../helpers/trpc-both-fake";
+import type { FakeTrpcLink, TrpcHandlers } from "../../../../helpers/trpc-fake";
 
-const matterQuery = {
-  data: undefined as Record<string, unknown> | undefined,
+/** `matter.getById`: ärendet, eller "laddar" (svarar aldrig) / ett fel. */
+const matterQuery: { data: Record<string, unknown> | undefined; isLoading: boolean; error: Error | null } = {
+  data: undefined,
   isLoading: false,
-  error: null as Error | null,
+  error: null,
 };
-const timeQuery = {
-  data: { entries: [], totalMinutes: 0 } as Record<string, unknown>,
-};
-const expenseQuery = {
-  data: { expenses: [], totalAmount: 0 } as Record<string, unknown>,
-};
-const contactsQuery = { data: { contacts: [] } };
-const templatesQuery = { data: undefined as undefined | Array<{ id: string; name: string; category: string | null; content?: string }>, isLoading: false };
-
-const utilsMock = {
-  matter: { getById: { invalidate: vi.fn() } },
-  timeEntry: { list: { invalidate: vi.fn() } },
-  expense: { list: { invalidate: vi.fn() } },
-  contacts: { list: { invalidate: vi.fn() } },
-  document: { tree: { invalidate: vi.fn() } },
-  prefs: { get: { invalidate: vi.fn() } },
-  expectedReceivable: { list: { invalidate: vi.fn() } },
-  serviceNote: { list: { invalidate: vi.fn() } },
-};
-const stubs = {
-  addContact: { mutate: vi.fn(), isPending: false },
-  addNewContact: { mutate: vi.fn(), isPending: false },
-  removeContact: { mutate: vi.fn(), isPending: false },
-  createTimeEntry: { mutate: vi.fn(), isPending: false },
-  createExpense: { mutate: vi.fn(), isPending: false },
-  deleteExpense: { mutate: vi.fn(), isPending: false },
-};
-
+const timeQuery: { data: Record<string, unknown> } = { data: { entries: [], totalMinutes: 0 } };
+const expenseQuery: { data: Record<string, unknown> } = { data: { expenses: [], totalAmount: 0 } };
+const templatesQuery: { data: undefined | Array<{ id: string; name: string; category: string | null; content?: string }> } = { data: undefined };
 const receivablesQuery: { data: unknown[] } = { data: [] };
 // Upparbetat mot taket — styr takvarningen (#793/#1520).
-const coverageQuery = { data: { billableMinutes: 0, billableValueOre: 0 }, isLoading: false };
+const coverageQuery = { data: { billableMinutes: 0, billableValueOre: 0 } };
 
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    useUtils: () => utilsMock,
-    matter: {
-      getById: { useQuery: () => matterQuery },
-      addContact: { useMutation: () => stubs.addContact },
-      addNewContact: { useMutation: () => stubs.addNewContact },
-      removeContact: { useMutation: () => stubs.removeContact },
-      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      coverageUsage: { useQuery: () => coverageQuery },
-      // Ärendena en tidspost kan flyttas till (#2042).
-      list: { useQuery: () => ({ data: { matters: [] } }) },
-    },
-    watchlist: {
-      // WatchSection: ärendets övriga signaler (#1167).
-      list: { useQuery: () => ({ data: { items: [] } }) },
-    },
-    task: {
-      // WatchSection (#1162/#1167).
-      listForMatter: { useQuery: () => ({ data: [], isLoading: false }) },
-      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-    },
-    timeEntry: {
-      radgivningStatus: { useQuery: () => ({ data: undefined }) }, markAsRadgivning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      list: { useQuery: () => timeQuery },
-      create: { useMutation: () => stubs.createTimeEntry },
-      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      moveToMatter: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-    },
-    expense: {
-      list: { useQuery: () => expenseQuery },
-      create: { useMutation: () => stubs.createExpense },
-      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      delete: { useMutation: () => stubs.deleteExpense },
-    },
-    contacts: {
-      list: { useQuery: () => contactsQuery },
-      search: { useQuery: () => ({ data: { contacts: [] }, isLoading: false }) },
-      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
-    },
-    documentTemplate: {
-      list: { useQuery: () => templatesQuery },
-    },
-    document: {
-      register: { useMutation: () => ({ mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false }) },
-      // useMatterInvariants (diagnostik) frågar dokument-listan för att
-      // upptäcka KR-utan-dokument — måste finnas i mocken.
-      list: { useQuery: () => ({ data: { documents: [] }, isLoading: false }) },
-      // useEagerCacheMatterDocuments (ADR 0028 §4a) frågar dokument-trädet.
-      tree: { useQuery: () => ({ data: { documents: [] }, isLoading: false }) },
-    },
-    organization: {
-      getSettings: { useQuery: () => ({ data: undefined }) },
-      // Mallkontextens kontor (#2118).
-      listOffices: { useQuery: () => ({ data: [] }) },
-    },
-    kostnadsrakning: {
-      record: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
-    },
-    billingRun: {
-      list: { useQuery: () => ({ data: { runs: [] }, isLoading: false, refetch: vi.fn() }) },
-      proposal: { useQuery: () => ({ data: undefined, isLoading: false }) },
-      createAcconto: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      createFinal: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      createKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      setVerdict: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      voidKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
-      recordKostnadsrakningBeslut: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      recordInsurerPruning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      coverageSplit: { useQuery: () => ({ data: undefined }) },
-    },
-    invoice: {
-      // #819: BillingPanel → BillingSummary summerar Fakturerat/Betalt ur list.
-      list: { useQuery: () => ({ data: [] }) },
-      // #383: BillingPanel → RadgivningBanner använder createRadgivning.
-      createRadgivning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-    },
-    calendar: {
-      listForMatter: { useQuery: () => ({ data: [] }) },
-      listForUsers: { useQuery: () => ({ data: [] }) },
-      list: { useQuery: () => ({ data: [] }) },
-      create: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
-      update: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
-      delete: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
-    },
-    expectedReceivable: {
-      list: { useQuery: () => ({ data: receivablesQuery.data, isLoading: false }) },
-      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      settle: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-    },
-    serviceNote: {
-      list: { useQuery: () => ({ data: [], isLoading: false }) },
-      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-    },
-    user: {
-      current: { useQuery: () => ({ data: { id: "u1", name: "Anna", email: "anna@firma.local" } }) },
-      list: { useQuery: () => ({ data: { users: [] } }) },
-    },
-    prefs: {
-      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
-      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-    },
-  },
-}));
+function matterResponse(): unknown {
+  if (matterQuery.isLoading) return new Promise(() => {});
+  if (matterQuery.error) throw matterQuery.error;
+  return matterQuery.data;
+}
+
+/** Mallarna; utan värde svarar vägen inte (som en fråga utan data). */
+function templatesResponse(): unknown {
+  if (templatesQuery.data === undefined) throw new Error("inga mallar");
+  return templatesQuery.data;
+}
+
+const ok = () => ({});
+/** Svaren sidan och dess paneler läser; vägar utan svar ger ett fel (frågan saknar data). */
+const HANDLERS: TrpcHandlers = {
+  ...DATA_TABLE_HANDLERS,
+  "matter.getById": matterResponse,
+  "matter.coverageUsage": () => coverageQuery.data,
+  "matter.removeContact": ok,
+  // Ärendena en tidspost kan flyttas till (#2042).
+  "matter.list": () => ({ matters: [], total: 0, pages: 0 }),
+  // WatchSection: ärendets övriga signaler (#1162/#1167).
+  "watchlist.list": () => ({ items: [] }),
+  "task.listForMatter": () => [],
+  "timeEntry.list": () => timeQuery.data,
+  "timeEntry.create": (input) => ({ id: "te-ny", ...Object(input) }),
+  "expense.list": () => expenseQuery.data,
+  "expense.create": (input) => ({ id: "e-ny", ...Object(input) }),
+  "expense.delete": ok,
+  "contacts.list": () => ({ contacts: [] }),
+  "contacts.search": () => ({ contacts: [] }),
+  "documentTemplate.list": templatesResponse,
+  // useMatterInvariants (diagnostik) och useEagerCacheMatterDocuments (ADR 0028 §4a).
+  "document.list": () => ({ documents: [] }),
+  "document.tree": () => ({ documents: [] }),
+  "organization.getSettings": () => ({}),
+  // Mallkontextens kontor (#2118).
+  "organization.listOffices": () => [],
+  "billingRun.list": () => ({ runs: [] }),
+  // #819: BillingPanel → BillingSummary summerar Fakturerat/Betalt ur list.
+  "invoice.list": () => [],
+  "calendar.listForMatter": () => [],
+  "expectedReceivable.list": () => receivablesQuery.data,
+  "serviceNote.list": () => [],
+  "user.current": () => ({ id: "u1", name: "Anna", email: "anna@firma.local", role: "LAWYER" }),
+  "user.list": () => ({ users: [] }),
+};
+
+/** Den senaste renderingens länk. */
+let fake: FakeTrpcLink;
+
+/** Indata till anropen av `path`, som objekt. */
+const inputsTo = (path: string): Array<Record<string, unknown>> =>
+  callsTo(fake, path).map((i) => (typeof i === "object" && i !== null ? { ...i } : {}));
 
 // Navigation: kalender-sektionen (tillagd denna session) använder
 // useRouter/Link → måste mockas annars "app router not mounted".
@@ -171,6 +90,9 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => navigation.search,
 }));
 vi.mock("@/lib/client/demo/use-route-id", () => ({ useRouteId: () => "m1" }));
+// Avsluta och Återöppna går genom den delade hooken (#2100); frågan och anropen testas i dess test.
+const statusActions = { close: vi.fn(), reopen: vi.fn(), keepActive: vi.fn(), isPending: false };
+vi.mock("@/components/matter/use-matter-status-actions", () => ({ useMatterStatusActions: () => statusActions }));
 
 // Dockytan (#1185) kräver en riktig webbläsarlayout — här renderas alla
 // paneler efter varandra så testerna kan granska innehållet.
@@ -217,12 +139,21 @@ const M = {
 };
 
 
-const renderPage = () =>
-  render(
+const renderPage = (): RenderResult => {
+  const view = renderWithFakeTrpc(
     <Suspense fallback={<div>laddar</div>}>
       <MatterDetailPage id="m1" />
     </Suspense>,
+    HANDLERS,
   );
+  fake = view.fake;
+  return view;
+};
+
+/** Låter länkens svar och React Querys notiser landa. */
+async function settle(): Promise<void> {
+  await act(async () => { for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0)); });
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -235,12 +166,7 @@ beforeEach(() => {
   timeQuery.data = { entries: [], totalMinutes: 0 };
   expenseQuery.data = { expenses: [], totalAmount: 0 };
   templatesQuery.data = undefined;
-  stubs.addContact.mutate = vi.fn();
-  stubs.addNewContact.mutate = vi.fn();
-  stubs.removeContact.mutate = vi.fn();
-  stubs.createTimeEntry.mutate = vi.fn();
-  stubs.createExpense.mutate = vi.fn();
-  stubs.deleteExpense.mutate = vi.fn();
+  receivablesQuery.data = [];
 });
 
 describe("MatterDetailPage", () => {
@@ -248,6 +174,7 @@ describe("MatterDetailPage", () => {
     it("gör Fakturering aktiv, öppnar Aconto till klient och tar bort parametern en gång", async () => {
       navigation.search = new URLSearchParams("id=m1&fakturera=1");
       const { rerender } = renderPage();
+      await settle();
       await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/matters/__shell__/?id=m1"));
       expect(panelPage.activePanel).toBe("billing");
       expect(screen.getAllByText(/Aconto till klient/).length).toBeGreaterThan(0);
@@ -426,6 +353,31 @@ describe("MatterDetailPage", () => {
     receivablesQuery.data = [];
   });
 
+  it("Domstolsbetalningar följer betalningssättet, inte taxeflaggan ensam (#1972)", async () => {
+    const panel = (c: HTMLElement) => c.querySelector('[data-panel="receivables"]');
+    const shows = async (data: Record<string, unknown>, rows: unknown[] = []): Promise<boolean> => {
+      matterQuery.data = { ...M, ...data };
+      receivablesQuery.data = rows;
+      const r = renderPage();
+      await waitFor(() => expect(screen.getByText("2026-0001")).toBeInTheDocument());
+      const shown = panel(r.container) !== null;
+      r.unmount();
+      return shown;
+    };
+
+    // Bytt från offentligt uppdrag men behållit flaggan: ingen panel utan fordringar.
+    expect(await shows({ paymentMethod: "PRIVAT", isTaxeArende: true })).toBe(false);
+    expect(await shows({ paymentMethod: "RATTSHJALP", isTaxeArende: true })).toBe(false);
+    // …men en registrerad fordran döljs aldrig.
+    expect(await shows({ paymentMethod: "PRIVAT", isTaxeArende: true }, [{ id: "r1" }])).toBe(true);
+    expect(await shows({ paymentMethod: "RATTSHJALP", isTaxeArende: true }, [{ id: "r1" }])).toBe(true);
+    // Offentligt uppdrag, med och utan flaggan: som i dag.
+    expect(await shows({ paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: true })).toBe(true);
+    expect(await shows({ paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: false })).toBe(true);
+    matterQuery.data = M;
+    receivablesQuery.data = [];
+  });
+
   it("märket Taxa och taxetexterna följer isTaxeMatter, inte flaggan ensam (#1971)", async () => {
     const taxeTexts = async (): Promise<{ badge: boolean; time: boolean; expense: boolean }> => {
       const header = await waitFor(() => screen.getByTestId("matter-header"));
@@ -489,12 +441,36 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByText("Stängt")).toBeInTheDocument());
   });
 
+  it("Avsluta ärende går genom hooken med ärendets id och titel (#2100)", async () => {
+    statusActions.close.mockClear();
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Avsluta ärende" }));
+    expect(statusActions.close).toHaveBeenCalledWith({ id: "m1", title: M.title });
+  });
+
+  it("Återöppna går genom hooken för ett stängt ärende, och knapparna är inaktiva medan ett anrop pågår (#2100)", async () => {
+    statusActions.reopen.mockClear();
+    matterQuery.data = { ...M, status: "CLOSED" };
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Återöppna" }));
+    expect(statusActions.reopen).toHaveBeenCalledWith("m1");
+    statusActions.isPending = true;
+    try {
+      renderPage();
+      await waitFor(() => expect(screen.getAllByRole("button", { name: "Återöppna" })).toHaveLength(2));
+      expect(screen.getAllByRole("button", { name: "Återöppna" }).at(-1)).toBeDisabled();
+    } finally {
+      statusActions.isPending = false;
+    }
+  });
+
   it("öppnar Generera dokument-modal", async () => {
     renderPage();
     const button = await waitFor(() =>
       screen.getByRole("button", { name: /Generera dokument/i }),
     );
     fireEvent.click(button);
+    await settle();
     expect(screen.getByText(/Välj mall/i)).toBeInTheDocument();
   });
 
@@ -547,7 +523,7 @@ describe("MatterDetailPage", () => {
     await waitFor(() => screen.getByText("2026-0001"));
     const removeButtons = screen.getAllByRole("button", { name: /^Ta bort$/i });
     fireEvent.click(removeButtons[0]!);
-    expect(stubs.removeContact.mutate).toHaveBeenCalledWith({ matterContactId: "mc1" });
+    await waitFor(() => expect(inputsTo("matter.removeContact")).toEqual([{ matterContactId: "mc1" }]));
   });
 
   it("öppnar tidsformulär och submittar", async () => {
@@ -557,8 +533,8 @@ describe("MatterDetailPage", () => {
     const desc = screen.getByPlaceholderText(/Beskrivning/i);
     fireEvent.change(desc, { target: { value: "Mejl och telefon" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
-    expect(stubs.createTimeEntry.mutate).toHaveBeenCalled();
-    const arg = stubs.createTimeEntry.mutate.mock.calls[0]![0];
+    await waitFor(() => expect(inputsTo("timeEntry.create")).toHaveLength(1));
+    const arg = inputsTo("timeEntry.create")[0] ?? {};
     expect(arg.matterId).toBe("m1");
     expect(arg.description).toBe("Mejl och telefon");
     expect(arg.billable).toBe(true);
@@ -583,8 +559,8 @@ describe("MatterDetailPage", () => {
     const numberInput = screen.getByPlaceholderText(/0,00/);
     fireEvent.change(numberInput, { target: { value: "150" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
-    expect(stubs.createExpense.mutate).toHaveBeenCalled();
-    const arg = stubs.createExpense.mutate.mock.calls[0]![0];
+    await waitFor(() => expect(inputsTo("expense.create")).toHaveLength(1));
+    const arg = inputsTo("expense.create")[0] ?? {};
     expect(arg.amount).toBe(15000); // 150 kr exkl. → lagras netto 150 kr (#782)
     expect(arg.description).toBe("Domstolsavgift");
   });
@@ -628,7 +604,7 @@ describe("MatterDetailPage", () => {
     // Knappen på just utläggsraden — panelernas ordning styrs av layouten (#1185).
     const row = screen.getByRole("row", { name: /Domstolsavgift/ });
     fireEvent.click(within(row).getByRole("button", { name: /^Ta bort$/i }));
-    expect(stubs.deleteExpense.mutate).toHaveBeenCalledWith({ id: "e1" });
+    await waitFor(() => expect(inputsTo("expense.delete")).toEqual([{ id: "e1" }]));
     confirmSpy.mockRestore();
   });
 
@@ -636,6 +612,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    await settle();
     // Format-alternativen är nu "PDF (via utskrift)" / "HTML-fil" (värde docx).
     const htmlRadio = screen.getByRole<HTMLInputElement>("radio", { name: /HTML/i });
     fireEvent.click(htmlRadio);
@@ -646,6 +623,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    await settle();
     // Mottagar-checkboxen för Anna
     const allChecks = screen.getAllByRole("checkbox");
     const annaCheck = allChecks.find((c) =>
@@ -666,6 +644,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    await settle();
     expect(screen.getByText(/Avtal – Stämning/)).toBeInTheDocument();
     expect(screen.getByText(/Fullmakt/)).toBeInTheDocument();
   });
@@ -675,6 +654,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    await settle();
     expect(screen.getByRole("link", { name: /Skapa en mall/i })).toBeInTheDocument();
   });
 
@@ -682,6 +662,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    await settle();
     expect(screen.getByText(/Välj mall/i)).toBeInTheDocument();
     const avbrytButtons = screen.getAllByRole("button", { name: /Avbryt/i });
     fireEvent.click(avbrytButtons[avbrytButtons.length - 1]!);
@@ -698,6 +679,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    await settle();
     const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "tpl1" } });
     fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));
@@ -709,6 +691,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    await settle();
     const select = screen.getByRole<HTMLSelectElement>("combobox");
     fireEvent.change(select, { target: { value: "tpl1" } });
     fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));

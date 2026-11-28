@@ -32,20 +32,18 @@
  *   AVA_MCP_RESOURCE + AVA_MCP_ISSUER + AVA_MCP_AUDIENCE (+ AVA_MCP_SCOPES)
  *                         (valfria) remote-MCP på /mcp för Claude (#1026), OAuth
  *                         mot byråns IdP — se docs/mcp-remote.md
- *   AVA_POSTHOG_KEY       (valfri) PostHog-projektets token (phc_…) — tomt = av
- *                         (#1343). Värd: AVA_POSTHOG_HOST, default PostHog EU
- *                         (eu.i.posthog.com); amerikansk värd vägras.
- *                         + AVA_ERROR_ENVIRONMENT, AVA_RELEASE. Se docs/observability.md.
+ *   AVA_RELEASE           (valfri) versionsstämpeln i /readyz, som deploy-prod.sh
+ *                         sätter till taggen.
  */
 
 import { loadContentDirFromEnv, makeContentStore } from "@/lib/server/adapters/git-content-store";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { backupDirsFromEnv, FsBackupStore } from "@/lib/server/backup/fs-backup-store";
 import { feedbackConfigFromEnv, GithubFeedbackSink } from "@/lib/server/feedback/github-feedback-sink";
+import { GithubWorkOrders } from "@/lib/server/feedback/github-work-orders";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { emailStatusLine } from "@/lib/server/integrations/email/disabled-email-sender";
 import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-service";
-import { DEFAULT_INTEGRITY_INTERVAL_MS, runContentIntegrityCheck, scheduleContentIntegrity } from "@/lib/server/integrity/content-integrity";
 import { createDrizzleEmailDispatchLog } from "@/lib/server/jobs/email-dispatch-log";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
@@ -54,13 +52,12 @@ import { buildServerFirstJobHandlers, type JobHandlerConfig, loadActiveSmtpConfi
 import { runStartupBackfills } from "@/lib/server/jobs/startup-backfills";
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
-import { startErrorReporting } from "@/lib/server/observability/posthog-sink";
-import type { IBackupStore, IFeedbackSink, ILedgerService } from "@/lib/server/ports";
+import type { IBackupStore, ILedgerService, IPorts } from "@/lib/server/ports";
 import { GithubReleaseNotes } from "@/lib/server/release-notes/github-release-notes";
 import { appRouter } from "@/lib/server/routers/_app";
 import { organizationKinds } from "@/lib/shared/document-kinds";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
-import { createLogger, jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
+import { jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
 import { mountMcpFromEnv } from "../../tooling/ava-cli/mcp-http";
 
@@ -81,8 +78,6 @@ function log(msg: string): void {
  */
 function startLogging(): void {
   setLogSink(jsonSink);
-  // Oväntade serverfel till PostHog EU när AVA_POSTHOG_KEY är satt (#1343).
-  log(startErrorReporting(process.env));
   const level = process.env.AVA_LOG_LEVEL;
   if (level === "debug" || level === "info" || level === "warn" || level === "error") {
     setLogLevel(level satisfies LogLevel);
@@ -100,11 +95,11 @@ function ledgerWiring(orgId: string): { port: { ledger?: ILedgerService }; jobs:
   return ledger ? { port: { ledger }, jobs: { ledger: { service: ledger, orgId } } } : { port: {}, jobs: {} };
 }
 
-/** Förfrågningar → intag-repot: kräver token + repo. Annars av. */
-function feedbackPort(): { feedback?: IFeedbackSink } {
+/** Förfrågningar → intag-repot, och deras delar i kodrepot (#2216): kräver token + repo. Annars av. */
+function feedbackPort(): Pick<IPorts, "feedback" | "workOrders"> {
   const config = feedbackConfigFromEnv();
   log(config ? `förfrågningar: till ${config.repo}` : "förfrågningar: av (AVA_FEEDBACK_* saknas)");
-  return config ? { feedback: new GithubFeedbackSink(config) } : {};
+  return config ? { feedback: new GithubFeedbackSink(config), workOrders: new GithubWorkOrders(config.token) } : {};
 }
 
 /** Backup på begäran (#1431): kräver båda backupkatalogerna. Annars av. */
@@ -198,6 +193,14 @@ function main(): void {
     pageIndex: api.pageIndex,
     // #1815: veckojobbet håller bokföringsanslutningen vid liv (samma instans som porten).
     ...ledger.jobs,
+    // #1145/#1993: integritetskontrollen varje natt 02:00 (`content-integrity`),
+    // bara med ett innehållslager — utan det saknas ju allt.
+    ...(contentStore ? {
+      integrity: {
+        deps: { listStoredContent: () => api.repos.documents.listStoredContent(), exists: (p: string) => contentStore.exists(p) },
+        orgId: config.organizationId,
+      },
+    } : {}),
   });
   void startJobRuntime({ connectionString: config.databaseUrl, handlers })
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })
@@ -210,23 +213,9 @@ function main(): void {
     log,
   });
 
-  // Integritetskontroll (#1145): dokument med metadata men utan innehåll loggas
-  // som `content.integrity.missing` (level error) vid start och sedan dagligen.
-  // Bara med ett innehållslager — utan det saknas ju allt.
-  const stopIntegrity = contentStore
-    ? scheduleContentIntegrity({
-      run: () => runContentIntegrityCheck(
-        { listStoredContent: () => api.repos.documents.listStoredContent(), exists: (p) => contentStore.exists(p) },
-        createLogger({ orgId: config.organizationId }),
-      ),
-      intervalMs: DEFAULT_INTEGRITY_INTERVAL_MS,
-    })
-    : () => {};
-
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, () => {
       log(`${sig} — stoppar`);
-      stopIntegrity();
       server.close();
       void Promise.allSettled([api.close(), jobRuntime?.stop() ?? Promise.resolve()])
         .finally(() => process.exit(0));

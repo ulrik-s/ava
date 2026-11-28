@@ -4,6 +4,7 @@
  * (#1221). Valet sparas inte på körningen, och ärendets parter rörs inte.
  */
 import { TRPCError } from "@trpc/server";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import type { ContactId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 
@@ -12,7 +13,7 @@ async function matterCourtName(repos: Repositories, orgId: OrganizationId, matte
   const detail = await repos.matters.getByIdWithContacts(matterId, orgId);
   // In-memory-lagret bakar bara in kontakt-joinen när seeden gjort det (demo-
   // prebake) — rå rader ger inga `contacts`. Saknas de: "domstolen" i texten.
-  const contacts: ReadonlyArray<{ role: string; contact?: { name: string } | undefined }> = detail?.contacts ?? [];
+  const contacts: ReadonlyArray<{ role: MatterRole; contact?: { name: string } | undefined }> = detail?.contacts ?? [];
   return contacts.find((c) => c.role === "DOMSTOL")?.contact?.name ?? null;
 }
 

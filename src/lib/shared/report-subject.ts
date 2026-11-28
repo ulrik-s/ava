@@ -16,3 +16,38 @@ export type ReportSubject = { kind: "lawyer"; userId: UserId } | { kind: "firm" 
 export function seesAllTime(role: UserRole): boolean {
   return role === "ADMIN";
 }
+
+/** Värdet för **Alla** (hela byrån) i fältet Advokat (#2116). */
+export const FIRM_CHOICE = "ALLA";
+
+/** Ett värde i fältet Advokat: en användares id, eller {@link FIRM_CHOICE}. */
+export type SubjectValue = UserId | typeof FIRM_CHOICE;
+
+/** Ett alternativ i fältet Advokat. */
+export interface SubjectChoice { value: SubjectValue; label: string }
+
+/**
+ * Alternativen i Rapporters fält Advokat (#2116). Den som inte ser allas
+ * tider får ett enda alternativ, sig själv; en Admin får **Alla** överst och
+ * sedan alla användare.
+ */
+export function subjectChoices(
+  users: readonly { id: UserId; name: string }[], selfId: UserId, seesAll: boolean,
+): SubjectChoice[] {
+  if (!seesAll) return [{ value: selfId, label: users.find((u) => u.id === selfId)?.name ?? "" }];
+  return [{ value: FIRM_CHOICE, label: "Alla" }, ...users.map((u) => ({ value: u.id, label: u.name }))];
+}
+
+/**
+ * Vem rapporten gäller (#2116). Den som inte ser allas tider får alltid sig
+ * själv, oavsett `explicit`. En Admin får sitt val, och utan val sig själv.
+ */
+export function resolveSubject(explicit: SubjectValue | null, selfId: UserId, seesAll: boolean): ReportSubject {
+  if (!seesAll || explicit === null) return { kind: "lawyer", userId: selfId };
+  return explicit === FIRM_CHOICE ? { kind: "firm" } : { kind: "lawyer", userId: explicit };
+}
+
+/** Fältets värde för `subject`. */
+export function subjectValue(subject: ReportSubject): SubjectValue {
+  return subject.kind === "firm" ? FIRM_CHOICE : subject.userId;
+}

@@ -268,6 +268,25 @@ Användaren ser statusen i AVA: *Mottagen → Undersökt — väntar på beslut*
 (eller *Kunde inte bekräftas*) *→ Verifierad → Under arbete → Levererad i vX*.
 Stängs issuen utan leverans visas *Avslutad*.
 
+När förfrågan är nedbruten visar tråden i AVA också hur långt den kommit
+(#2216): en tidslinje (*Mottaget → Godkänt → Byggs: N av M delar klara →
+Levereras*), delarna — arbetsordrarna i `ava` med raden
+`Intag: ava-feedback#N`, rubriken utan Conventional-Commit-prefix — som
+*klar*, *pågår*, *i kön* eller *väntar på beslut* (`blockerad`), och en
+uppskattning i ord, aldrig ett datum:
+
+    dygn ≈ (delar före i kön + återstående delar) ÷ takten + ½ dygn till release
+
+Takten är mergade `agent-pr` de senaste 7 dygnen ÷ 7 (10 per dygn om sökningen
+fallerar). Kön före är andra förfrågningars delar i kön som skapades före den
+här förfrågans äldsta återstående del — en förenkling: den riktiga ordningen tar
+också hänsyn till prioritet. Väntar en del på beslut eller förfrågan på
+användaren står det så, utan uppskattning. Servern hämtar arbetsordrarna med
+sök-API:t (en sida per 100, ändrade de senaste 90 dygnen) och takten med ett
+anrop till, med samma token, och delar svaret mellan alla användare i 5 minuter
+(`src/lib/server/feedback/github-work-orders.ts`). Regeln:
+`src/lib/shared/feedback-eta.ts`.
+
 ### Så verifierar du en förfrågan
 
 Läs verifieringsrapporten på issuen i `ava-feedback`, och sätt sedan
@@ -465,7 +484,6 @@ håller staging helt isär.
    ```bash
    AVA_DOMAIN=staging.ava-crm.io
    AVA_DEPLOY_TRACK=main            # följ main, inte taggar
-   AVA_ERROR_ENVIRONMENT=staging
    AVA_EMAIL_DISABLED=1             # staging skickar aldrig e-post
    # inga AVA_FEEDBACK_*, inga AVA_FORTNOX_*: inget riktigt utanför staging
    ```
@@ -571,6 +589,7 @@ om den inom 10 minuter.
 | Vad | Var |
 |---|---|
 | Knappen + dialogen | `src/components/shell/feedback-button.tsx` |
+| Trådens tidslinje, delar och uppskattning | `src/components/shell/feedback-progress.tsx`, `src/lib/shared/feedback-eta.ts` |
 | Server: router, GitHub-adapter | `src/lib/server/routers/feedback.ts`, `src/lib/server/feedback/` |
 | Kontrakt, statusar | `src/lib/shared/feedback.ts` |
 | Agentpromptar | `tooling/agents/*.md` |

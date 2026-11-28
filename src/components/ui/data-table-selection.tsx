@@ -7,7 +7,7 @@
  * Logiken (vilka rader, av/på, delvis markerad) står i `data-table-logic.ts`.
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { selectableKeys, selectAllState, toggleAll, toggleRow, type RowSelection } from "./data-table-logic";
 
 const CELL_CLASS = "px-2 py-2 w-8 align-top";
@@ -67,4 +67,22 @@ export function useSelectionColumn<T>(
   const keys = useMemo(() => selectableKeys(visibleRows, rowKey, isSelectable), [visibleRows, rowKey, isSelectable]);
   if (!selection) return { header: null, lead: false, width: 0 };
   return { header: <SelectAllHeaderCell selection={selection} keys={keys} />, lead: true, width: SELECTION_COL_WIDTH };
+}
+
+/** Sidans markering till `DataTable`: propen `selection` och en tömning (t.ex. efter en flytt). */
+export interface RowSelectionState<T> {
+  /** Skickas till `DataTable` som `selection`. */
+  selection: RowSelection<T>;
+  /** Avmarkerar alla rader. */
+  clear: () => void;
+}
+
+/**
+ * Markeringens state för en lista med `DataTable`-propen `selection`. Sidan
+ * äger markeringen; `isSelectable` utelämnad betyder att alla rader går att markera.
+ */
+export function useRowSelection<T>(isSelectable?: (row: T) => boolean): RowSelectionState<T> {
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const clear = useCallback(() => setSelected(new Set()), []);
+  return { selection: { selected, onChange: setSelected, isSelectable }, clear };
 }

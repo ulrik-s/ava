@@ -25,7 +25,12 @@ import {
   type ContactType,
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
+  PAYMENT_PLAN_STATUS_LABELS,
+  type PaymentPlanStatus,
   type TimeEntryKind,
+  USER_ROLE_LABELS,
+  type UserRole,
+  userRoleSchema,
 } from "@/lib/shared/schemas/enums";
 
 // MatterRole/ContactType/PaymentMethod — labels + schema + typ bor i
@@ -45,10 +50,11 @@ export const matterRoleOptions: ReadonlyArray<MatterRoleOption> = matterRoleKeys
   (value) => ({ value, label: MATTER_ROLE_LABELS[value] }),
 );
 
-/** Säker label-lookup: accepterar okänd input men smalnar av om argumentet är typat. */
-export function labelForMatterRole(role: MatterRole): string;
-export function labelForMatterRole(role: string): string;
-export function labelForMatterRole(role: string): string {
+/**
+ * Partens roll i ärendet som text. Tar bara `MatterRole`; en okänd roll i rå
+ * data (som typen inte ser) visas som den är, via reserven `?? role`.
+ */
+export function labelForMatterRole(role: MatterRole): string {
   return (MATTER_ROLE_LABELS as Record<string, string>)[role] ?? role;
 }
 
@@ -100,6 +106,36 @@ export const paymentMethodOptions: ReadonlyArray<PaymentMethodOption> = paymentM
 
 export function labelForPaymentMethod(v: PaymentMethod): string {
   return PAYMENT_METHOD_LABELS[v];
+}
+
+// ─── Avbetalningsplanens status (UI-derivation, #1991) ───────────
+// PAYMENT_PLAN_STATUS_LABELS i shared/schemas/enums.ts är enda källan.
+
+/**
+ * Avbetalningsplanens status som text (singular: "Aktiv", "Slutförd",
+ * "Avbruten"). En okänd status i rå data visas som den är, via `?? status`.
+ */
+export function labelForPaymentPlanStatus(status: PaymentPlanStatus): string {
+  const labels: Readonly<Record<string, string>> = PAYMENT_PLAN_STATUS_LABELS;
+  return labels[status] ?? status;
+}
+
+// ─── User roles (UI-derivationer, #1990) ─────────────────────────
+// USER_ROLE_LABELS i shared/schemas/enums.ts är enda källan för rollernas texter.
+
+export type UserRoleOption = { readonly value: UserRole; readonly label: string };
+
+export const userRoleOptions: ReadonlyArray<UserRoleOption> = userRoleSchema.options.map(
+  (value) => ({ value, label: USER_ROLE_LABELS[value] }),
+);
+
+/**
+ * Användarens roll som text. Tar bara `UserRole`; en okänd roll i rå data
+ * (som typen inte ser) visas som den är, via reserven `?? role`.
+ */
+export function labelForUserRole(role: UserRole): string {
+  const labels: Readonly<Record<string, string>> = USER_ROLE_LABELS;
+  return labels[role] ?? role;
 }
 
 /**

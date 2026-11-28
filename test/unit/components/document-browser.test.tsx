@@ -15,6 +15,8 @@ import { asId } from "@/lib/shared/schemas/ids";
 // Self-hosted-läget letar efter ett FSA-handle via IndexedDB; jsdom har inte
 // någon working copy uppsatt. Mock:a explicit så testen är deterministisk
 // oavsett om andra tester polyfillar IndexedDB.
+// Office 365-konfigurationen (#1951): av som standard, så att Maila… inte syns.
+vi.mock("@/components/documents/use-office365-configured", () => ({ useOffice365Configured: () => false }));
 vi.mock("@/lib/client/fsa/handle-store", () => ({
   loadHandle: vi.fn(async () => null),
   saveHandle: vi.fn(async () => {}),
@@ -765,6 +767,19 @@ describe("DocumentBrowser — listvyn visar pågående uppladdningar (#1796)", (
     expect(nameButton("skiss.pdf").closest(".opacity-60")).toBeNull();
   });
 
+  it("ett dokument som laddas upp har ingen kryssruta, i listvyn och i mappvyn (#2046)", async () => {
+    const release = holdRegister();
+    treeQuery.data = { folders: [], documents: [baseDoc()] };
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    pick([pdf("skiss.pdf")]);
+    await waitFor(() => expect(nameButton("skiss.pdf")).toBeDisabled());
+    expect(screen.getAllByLabelText("Markera rad")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Mapp-vy" }));
+    expect(screen.getAllByLabelText("Markera rad")).toHaveLength(1);
+    release();
+    await waitFor(() => expect(screen.queryByText("skiss.pdf")).not.toBeInTheDocument());
+  });
+
   it("\"Analysera (AI)\" i listvyn är spärrad medan analysen pågår", () => {
     mutationStubs.analyze.isPending = true;
     try {
@@ -944,5 +959,69 @@ describe("DocumentBrowser — nytt ärende har standardmappar (#1228)", () => {
     ]) {
       expect(inTree(name)).toHaveLength(1);
     }
+  });
+});
+
+// #2046: markera flera dokument och flytta dem tillsammans. Själva flytten
+// (dialogen och document.moveToMatter) prövas i document-selection.test.tsx.
+describe("DocumentBrowser — markera dokument (#2046)", () => {
+  const markRow = (name: string): HTMLInputElement => {
+    const row = screen.getByText(name).closest("tr");
+    const box = row?.querySelector<HTMLInputElement>("input[type=checkbox]");
+    if (!box) throw new Error(`ingen kryssruta på raden ${name}`);
+    return box;
+  };
+  const moveButton = (): HTMLElement | null => screen.queryByRole("button", { name: /^Flytta till ärende…/ });
+  const docs = () => [
+    baseDoc({ id: "d1", fileName: "a.pdf" }),
+    baseDoc({ id: "d2", fileName: "b.pdf", folderId: "f1" }),
+    baseDoc({ id: "d3", fileName: "faktura.pdf", invoiceId: "i-1" }),
+    baseDoc({ id: "d4", fileName: "kr.pdf", billingRunId: "b-1" }),
+  ];
+
+  beforeEach(() => {
+    treeQuery.data = { folders: [baseFolder()], documents: docs() };
+  });
+
+  it("mappvyn: kryssruta på dokumentraderna som kan flyttas, inte på mappar, rot-raden eller fakturans dokument", () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    expect(screen.getAllByLabelText("Markera rad")).toHaveLength(2);
+    expect(markRow("a.pdf")).not.toBeChecked();
+    expect(markRow("b.pdf")).not.toBeChecked();
+    for (const name of ["Inlagor", "Rot", "faktura.pdf", "kr.pdf"]) {
+      expect(screen.getByText(name).closest("tr")?.querySelector("input[type=checkbox]")).toBeNull();
+    }
+  });
+
+  it("listvyn: kryssrutor via tabellens markering, inte på fakturans och kostnadsräkningens dokument", () => {
+    window.localStorage.setItem("ava.documents.viewMode", "list");
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    expect(screen.getByLabelText("Markera alla")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Markera rad")).toHaveLength(2);
+    expect(screen.getByText("faktura.pdf").closest("tr")?.querySelector("input[type=checkbox]")).toBeNull();
+  });
+
+  it("knappen syns först när något är markerat och visar antalet", () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    expect(moveButton()).toBeNull();
+    fireEvent.click(markRow("a.pdf"));
+    expect(markRow("a.pdf")).toBeChecked();
+    expect(moveButton()).toHaveTextContent("Flytta till ärende… (1)");
+    fireEvent.click(markRow("b.pdf"));
+    expect(moveButton()).toHaveTextContent("Flytta till ärende… (2)");
+    fireEvent.click(markRow("a.pdf"));
+    expect(moveButton()).toHaveTextContent("Flytta till ärende… (1)");
+  });
+
+  it("markeringen töms när man byter vy", () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    fireEvent.click(markRow("a.pdf"));
+    fireEvent.click(screen.getByRole("button", { name: "Lista" }));
+    expect(moveButton()).toBeNull();
+    expect(markRow("a.pdf")).not.toBeChecked();
+    fireEvent.click(markRow("b.pdf"));
+    fireEvent.click(screen.getByRole("button", { name: "Mapp-vy" }));
+    expect(moveButton()).toBeNull();
+    expect(markRow("b.pdf")).not.toBeChecked();
   });
 });

@@ -17,6 +17,7 @@
  * annan också använder.
  */
 
+import { z } from "zod";
 import { type Office365Config, office365ConfigSchema } from "@/lib/shared/office365-config";
 import { withinOrNull } from "../backend/local-data/browser-sign-out";
 import { loadServerOffice365Config } from "../backend/server-trpc-client";
@@ -56,6 +57,19 @@ export function loadOffice365Config(): Office365Config | null {
   const merged = { clientId: stored.clientId ?? env.clientId, tenantId: stored.tenantId ?? env.tenantId };
   const parsed = office365ConfigSchema.safeParse(merged);
   return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Testsömmen (#1952): en fast Graph-token i samma localStorage-post, som
+ * tilläggets `staticTokens` (`addin-auth.ts`). Bara connectorn läser den. Den
+ * ingår inte i `office365ConfigSchema`, så serverns `system.office365Config`
+ * och konfigurationen ovan är oförändrade. E2E sätter den med `addInitScript`.
+ */
+const staticGraphTokenSchema = z.object({ staticGraphToken: z.string().min(1).optional() });
+
+/** Den fasta Graph-token, eller `null` när fältet saknas (normalfallet). */
+export function loadStaticGraphToken(): string | null {
+  return loadFromStorage(OFFICE365_CONFIG_KEY, staticGraphTokenSchema, {}).staticGraphToken ?? null;
 }
 
 /** Hur länge connectorn väntar på serverns konfiguration innan den går vidare utan. */

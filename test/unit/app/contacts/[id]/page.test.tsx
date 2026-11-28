@@ -250,7 +250,8 @@ describe("ContactDetailPage", () => {
     fireEvent.change(screen.getByLabelText(/^Namn \*$/), { target: { value: "Annika" } });
     fireEvent.change(screen.getByLabelText(/^Typ$/), { target: { value: "PERSON" } });
     fireEvent.change(screen.getByLabelText(/Personnummer/), { target: { value: "19900101-1111" } });
-    fireEvent.change(screen.getByLabelText(/Organisationsnummer/), { target: { value: "" } });
+    // En person utan organisationsnummer får inget sådant fält (#1925).
+    expect(screen.queryByLabelText(/Organisationsnummer/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/Telefon/), { target: { value: "070-9" } });
     fireEvent.change(screen.getByLabelText(/^Adress$/), { target: { value: "Lillgatan" } });
     fireEvent.change(screen.getByLabelText(/Anteckningar/), { target: { value: "ny" } });

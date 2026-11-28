@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { TimeChartPanel } from "@/components/time/time-chart-panel";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -8,13 +8,16 @@ import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
+import { useTimeViewer } from "@/lib/client/use-time-viewer";
 import { formatDecimalHours, formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { resolveSubject, subjectChoices, subjectValue, type SubjectValue } from "@/lib/shared/report-subject";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
-import { asId, type UserId } from "@/lib/shared/schemas/ids";
+import type { UserId } from "@/lib/shared/schemas/ids";
 import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { ArSummarySection } from "./_ar-summary";
 import { COLUMN_LABELS as L, exportReportCsv, matterLabel, type Report, SECTION_TITLES, sumOf, weekLabel } from "./_report-csv";
+import { ReportsFilterBar } from "./_reports-filter-bar";
 import { reportsLayout } from "./_reports-layout";
 
 const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
@@ -38,12 +41,6 @@ function PaymentBadge({ method }: { method: PaymentMethod }) {
 
 type UserList = { users: Array<{ id: UserId; name: string }> } | undefined;
 
-/** Förvald advokat = explicit vald, annars första i listan. Derivat istället
- *  för effekt + setState (undviker kaskaderenderingar). */
-function resolveUserId(explicit: UserId, users: UserList): UserId {
-  return explicit || users?.users[0]?.id || asId<"UserId">("");
-}
-
 /** Namnet på vald advokat (för AR-summary-rubriken). */
 function lawyerNameFor(users: UserList, userId: UserId): string | undefined {
   return users?.users.find((u) => u.id === userId)?.name;
@@ -60,52 +57,17 @@ function reportStatusText(report: { isLoading: boolean; error: { message: string
   return "Välj jurist och period.";
 }
 
-interface FilterBarProps {
-  from: string;
-  to: string;
-  userId: UserId;
-  users: UserList;
-  canExport: boolean;
-  onFrom: (v: string) => void;
-  onTo: (v: string) => void;
-  onUser: (v: UserId) => void;
-  onExport: () => void;
-}
-
-function ReportsFilterBar({ from, to, userId, users, canExport, onFrom, onTo, onUser, onExport }: FilterBarProps) {
-  const fromId = useId();
-  const toId = useId();
-  const lawyerId = useId();
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-end">
-        <div>
-          <label htmlFor={fromId} className="block text-sm text-gray-500 mb-1">Från</label>
-          <input id={fromId} type="date" value={from} onChange={(e) => onFrom(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label htmlFor={toId} className="block text-sm text-gray-500 mb-1">Till</label>
-          <input id={toId} type="date" value={to} onChange={(e) => onTo(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-        <div className="flex-1">
-          <label htmlFor={lawyerId} className="block text-sm text-gray-500 mb-1">Advokat</label>
-          <select id={lawyerId} value={userId} onChange={(e) => onUser(asId<"UserId">(e.target.value))}
-            className="w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm">
-            {!users && <option value="">Laddar...</option>}
-            {users?.users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        </div>
-        <button onClick={onExport} disabled={!canExport} title="Laddar ner rapporten som en CSV-fil som öppnas i Excel"
-          className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50">
-          Exportera Excel
-        </button>
-      </div>
-    </div>
-  );
+/**
+ * Vem rapporten gäller och alternativen i fältet Advokat (#2116). Tills
+ * rollen är känd är båda `null`, så att ingen annans siffror hämtas ens
+ * kortvarigt. Förvald är den inloggade själv, för alla roller.
+ */
+function useReportSubject(explicit: SubjectValue | null, users: UserList) {
+  const viewer = useTimeViewer();
+  if (viewer.status !== "ready") return { subject: null, choices: null };
+  const subject = resolveSubject(explicit, viewer.selfId, viewer.seesAll);
+  const choices = users ? subjectChoices(users.users, viewer.selfId, viewer.seesAll) : null;
+  return { subject, choices };
 }
 
 export default function ReportsPage() {
@@ -115,27 +77,28 @@ export default function ReportsPage() {
 
   const [from, setFrom] = useState(firstOfYear);
   const [to, setTo] = useState(today);
-  const [explicitUserId, setExplicitUserId] = useState<UserId>(asId<"UserId">(""));
+  const [explicit, setExplicit] = useState<SubjectValue | null>(null);
 
   const users = trpc.user.list.useQuery({});
-  const userId = resolveUserId(explicitUserId, users.data);
+  const { subject, choices } = useReportSubject(explicit, users.data);
+  // Utan userId gäller rapporten, kundfordringarna och diagrammet hela byrån.
+  const userId = subject?.kind === "lawyer" ? subject.userId : undefined;
+  const lawyer = userId ? { userId, ...omitUndefined({ lawyerName: lawyerNameFor(users.data, userId) }) } : {};
 
   const report = trpc.reports.perLawyer.useQuery(
-    { from, to, userId },
-    { enabled: !!userId },
+    { from, to, ...omitUndefined({ userId }) },
+    { enabled: subject !== null },
   );
 
   const loading = <p className="text-sm text-gray-500">{reportStatusText(report)}</p>;
   const r = report.data;
   const panels = [
-    { id: "ar", title: "Kundfordringar", render: () => (
-      <ArSummarySection from={from} to={to} userId={userId} {...omitUndefined({ lawyerName: lawyerNameFor(users.data, userId) })} />
-    ) },
+    { id: "ar", title: "Kundfordringar", render: () => (subject ? <ArSummarySection from={from} to={to} {...lawyer} /> : loading) },
     { id: "summary", title: "Sammanfattning", render: () => (r ? <SummaryCard report={r} /> : loading) },
     { id: "matters", title: "Ärenden", render: () => (r ? <MattersTable report={r} /> : loading) },
     { id: "weekly", title: "Veckor", render: () => (r ? <WeeklyTable report={r} /> : loading) },
     { id: "unbilled", title: "Ofakturerat", render: () => (r ? <UnbilledTable report={r} /> : loading) },
-    { id: "chart", title: "Stapeldiagram", render: () => (userId ? <TimeChartPanel userId={userId} anchorDay={to} /> : loading) },
+    { id: "chart", title: "Stapeldiagram", render: () => (subject ? <TimeChartPanel {...omitUndefined({ userId })} anchorDay={to} /> : loading) },
   ];
 
   return (
@@ -147,15 +110,20 @@ export default function ReportsPage() {
         <div className="mb-3">
           <h1 className="text-2xl font-bold text-gray-900 mb-3">Rapporter</h1>
           <ReportsFilterBar
-            from={from} to={to} userId={userId} users={users.data}
-            canExport={!!userId && !!report.data}
-            onFrom={setFrom} onTo={setTo} onUser={setExplicitUserId}
+            from={from} to={to} value={subject ? subjectValue(subject) : ""} choices={choices}
+            canExport={!!report.data}
+            onFrom={setFrom} onTo={setTo} onSubject={setExplicit}
             onExport={() => exportReportCsv(r, from, to)}
           />
         </div>
       )}
     />
   );
+}
+
+/** Vem rapporten gäller, i löptext: advokatens namn eller hela byrån (#2116). */
+function subjectName(report: Report): string {
+  return report.scope === "firm" ? "hela byrån" : report.user.name;
 }
 
 // ─── Toppkort: sammanfattning ────────────────────────────────────────
@@ -167,7 +135,7 @@ function SummaryCard({ report }: { report: Report }) {
       <div className="flex flex-wrap gap-6 text-sm">
         <div>
           <div className="text-gray-500 text-xs uppercase">Advokat</div>
-          <div className="font-medium text-gray-900">{user.name}</div>
+          <div className="font-medium text-gray-900">{user?.name ?? "Alla"}</div>
         </div>
         <div>
           <div className="text-gray-500 text-xs uppercase">Totalt tid</div>
@@ -223,7 +191,9 @@ function MattersTable({ report }: { report: Report }) {
     <div className={`${SECTION_FILL_CLASS} p-2`}>
       <h2 className="font-semibold text-gray-900 mb-1">{SECTION_TITLES.matters}</h2>
       <p className="text-sm text-gray-500 mb-2">
-        Ärenden där {report.user.name} har registrerat tid eller utlägg.
+        {report.scope === "firm"
+          ? "Ärenden där någon på byrån har registrerat tid eller utlägg."
+          : `Ärenden där ${report.user.name} har registrerat tid eller utlägg.`}
       </p>
 
       {report.matters.length === 0 ? (
@@ -321,7 +291,7 @@ function UnbilledTable({ report }: { report: Report }) {
     <div className={`${SECTION_FILL_CLASS} p-2`}>
       <h2 className="font-semibold text-gray-900 mb-1">{SECTION_TITLES.unbilled}</h2>
       <p className="text-sm text-gray-500 mb-2">
-        Debiterbar tid och utlägg för {report.user.name} inom perioden som
+        Debiterbar tid och utlägg för {subjectName(report)} inom perioden som
         ännu inte är knutna till en faktura.
       </p>
 
