@@ -35,6 +35,8 @@ const one = (tag: string): Element => {
   return els[0] as Element;
 };
 const text = (tag: string): string => one(tag).textContent.trim();
+/** Task-panens adress i den gamla vägen (FormSettings); knappens SourceLocation pekar på en resurs i stället. */
+const formSource = (): string => byTag("SourceLocation").find((el) => el.hasAttribute("DefaultValue"))?.getAttribute("DefaultValue") ?? "";
 /** Alla URL:er manifestet pekar på (DefaultValue-attribut och SupportUrl m.fl.). */
 const urls = (): string[] =>
   [...doc.getElementsByTagName("*")]
@@ -83,16 +85,16 @@ describe("Outlook-manifestet", () => {
     expect(all.length).toBeGreaterThan(0);
     for (const u of all) expect(new URL(u).protocol, u).toBe("https:");
     // SupportUrl är bara en länk; task-panen och ikonerna måste serveras från samma ställe.
-    const loaded = ["SourceLocation", "IconUrl", "HighResolutionIconUrl"].map((t) => one(t).getAttribute("DefaultValue") ?? "");
+    const loaded = [formSource(), ...["IconUrl", "HighResolutionIconUrl"].map((t) => one(t).getAttribute("DefaultValue") ?? "")];
     expect(new Set(loaded.map((u) => new URL(u).origin)).size).toBe(1);
   });
 
   it("serveras från AVA:s domän under /addin/", () => {
-    expect(one("SourceLocation").getAttribute("DefaultValue")).toBe("https://ava-crm.io/addin/taskpane.html");
+    expect(formSource()).toBe("https://ava-crm.io/addin/taskpane.html");
   });
 
   it("task-panen och ikonerna pekar på filer som bygget levererar", () => {
-    const source = one("SourceLocation").getAttribute("DefaultValue") ?? "";
+    const source = formSource();
     expect(new URL(source).pathname).toBe("/addin/taskpane.html");
     const assets = new Set(readdirSync(join(ROOT, "assets")));
     for (const tag of ["IconUrl", "HighResolutionIconUrl"]) {
@@ -100,6 +102,31 @@ describe("Outlook-manifestet", () => {
       expect(path.startsWith("/addin/assets/"), `${tag}: ${path}`).toBe(true);
       expect(assets.has(path.slice("/addin/assets/".length)), `${tag}: ${path} saknas i office-addin/assets`).toBe(true);
     }
+  });
+
+  describe("knappen i läsvyn (Outlook för Mac och nya Outlook visar inget utan den, 2026-11-28)", () => {
+    const resource = (id: string): string =>
+      [...doc.getElementsByTagName("*")].find((el) => el.getAttribute("id") === id)?.getAttribute("DefaultValue") ?? "";
+
+    it("en knapp i MessageReadCommandSurface som öppnar task-panen", () => {
+      const point = one("ExtensionPoint");
+      expect(point.getAttribute("xsi:type")).toBe("MessageReadCommandSurface");
+      const action = one("Action");
+      expect(action.getAttribute("xsi:type")).toBe("ShowTaskpane");
+      const resid = action.getElementsByTagName("SourceLocation")[0]?.getAttribute("resid") ?? "";
+      expect(resource(resid)).toBe(formSource());
+    });
+
+    it("knappen har en svensk etikett och ikoner i 16, 32 och 80 px som bygget levererar", () => {
+      expect(resource("ButtonLabel")).toBe("Spara i AVA");
+      const assets = new Set(readdirSync(join(ROOT, "assets")));
+      const images = byTag("bt:Image").filter((el) => el.hasAttribute("size"));
+      expect(images.map((el) => el.getAttribute("size"))).toEqual(["16", "32", "80"]);
+      for (const el of images) {
+        const path = new URL(resource(el.getAttribute("resid") ?? "")).pathname;
+        expect(assets.has(path.slice("/addin/assets/".length)), path).toBe(true);
+      }
+    });
   });
 });
 
