@@ -28,7 +28,6 @@ import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { QueuedProcedureCall } from "./data-store/in-memory/queue-entry";
 import type { ProcedureReplayResult } from "./data-store/in-memory/sync-transport";
-import { reportError } from "./observability/error-reporter";
 import type { IPorts } from "./ports";
 import type { QueuedCallIdentity } from "./queued-call";
 import type { Repositories } from "./repositories/repositories";
@@ -130,10 +129,6 @@ export const router = t.router;
  * (19670312-4521) saknar …" — och ett felmeddelande är den väg strukturskyddet
  * inte täcker.
  *
- * Serverfel (5xx, och allt som inte är ett `TRPCError`) går dessutom till
- * byråns felrapportering om den är påslagen (#1343) — utan meddelandet och
- * utan ids för användare och org, se `observability/error-reporter.ts`.
- *
  * Kastar vidare oförändrat. En logg som sväljer fel är värre än ingen logg.
  */
 const logged = t.middleware(async ({ ctx, path, type, next }) => {
@@ -155,7 +150,6 @@ const logged = t.middleware(async ({ ctx, path, type, next }) => {
       code: result.error.code,
       message: errorMessage(result.error.cause ?? result.error),
     });
-    reportError(result.error, { path, requestId });
   }
   return result;
 });
