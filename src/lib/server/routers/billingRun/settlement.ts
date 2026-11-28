@@ -39,7 +39,7 @@ import {
   bookFirmLoss, bookPayerRun, buildSettlementBreakdown, createClientSettlementInvoice, linkSettlementInvoices,
 } from "./settlement-invoices";
 import {
-  applyKrTransition, assertFlowAction, fetchDeductedAccontoRuns, fetchUnfrozenWork, fetchWorkByRun, invoiceNumbering,
+  applyKrTransition, assertFlowAction, fetchUnfrozenWork, fetchWorkByRun, invoiceNumbering, undeductedAccontoRuns,
 } from "./shared";
 
 /**
@@ -174,7 +174,8 @@ export const settlementProcedures = {
    *   - KLIENT-faktura (självrisk + ev. prutning, minus tidigare aconton)
    *   - BETALAR-faktura (försäkring/stat) + utlägg
    *   - byrå-förlust (rättshjälp) som icke-debiterbar PRUTNING-post
-   * Allt arbete fryses. Moms enligt #782 (arvode 25 %, utlägg per sats).
+   * Utan kostnadsräkning fryses det ofrysta arbetet; med en är bara dess poster
+   * frysta (#1892). Moms enligt #782 (arvode 25 %, utlägg per sats).
    */
   settleCoverage: orgProcedure
     .input(z.object({
@@ -208,12 +209,11 @@ export const settlementProcedures = {
         const { split, clientLines, payerLines } = allocation;
 
         // Klient: självrisk (+ ev. prutning), moms 25 %, minus tidigare aconton.
-        // Auto-dra av ALLA skickade klient-aconton (#856): de har redan betalats,
-        // så slutfakturan reduceras med dem (utöver ev. explicit valda).
-        const sentAccontoIds = (await tx.billingRuns.listAccontoSent(input.matterId)).map((r) => r.id);
-        const deductIds = [...new Set([...input.deductedBillingRunIds, ...sentAccontoIds])];
+        // Auto-dra av skickade klient-aconton (#856), utöver ev. explicit valda,
+        // men aldrig ett som en tidigare slutfaktura redan dragit av (#1892).
+        const deductedRuns = await undeductedAccontoRuns(tx, input.matterId, input.deductedBillingRunIds);
+        const deductIds = deductedRuns.map((r) => r.id);
         const clientGross = allocation.clientGrossOre;
-        const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, deductIds);
         const deductionOre = deductedRuns.reduce((s, r) => s + (r.amountOre ?? 0), 0);
         const clientAmount = Math.max(0, clientGross - deductionOre);
         const payerGross = allocation.payerGrossOre;

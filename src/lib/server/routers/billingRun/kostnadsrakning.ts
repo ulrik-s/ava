@@ -32,7 +32,7 @@ import type { BillingRunDetailRow } from "../../repositories/billing-run-reposit
 import type { Repositories } from "../../repositories/repositories";
 import { orgProcedure } from "../../trpc";
 import {
-  applyKrTransition, assertFlowAction, fetchSelectedWork, fetchWorkByRun, freezeSelectedWork, freezeWork,
+  applyKrTransition, assertFlowAction, fetchSelectedWork, fetchWorkByRun, freezeSelectedWork,
   invoiceNumbering, linkFinalInvoice, type SelectedWork,
 } from "./shared";
 
@@ -209,7 +209,8 @@ export const kostnadsrakningProcedures = {
           prutningExpenseId = prutning.id;
         }
         // Posterna frystes redan vid kostnadsräkningens inskick (#806) → läs dem
-        // via körningen. PRUTNING (nyss skapad) länkas separat nedan.
+        // via körningen. PRUTNING (nyss skapad) länkas separat nedan. Inget mer
+        // fryses: senare tid väntar på nästa kostnadsräkning (#1892).
         const work = await fetchWorkByRun(tx, run.id);
         const invoiceDate = callTime(ctx);
         const invoice = await tx.invoices.create({
@@ -227,7 +228,6 @@ export const kostnadsrakningProcedures = {
           status: "SENT", invoiceId: invoice.id, amountOre: finalAmount,
           kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt,
         });
-        await freezeWork(tx, run.matterId, run.id, invoiceDate);
         // Länka poster + PRUTNING-utlägget → kostnadsräknings-vyn visar uppdelning
         // och totalen (arvode + utlägg − prutning) reconciler mot beloppet (#732).
         await linkFinalInvoice(tx, invoice.id, work, [], ctx);

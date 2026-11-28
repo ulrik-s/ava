@@ -50,8 +50,8 @@ En **enda deklarativ sanningskälla**: `src/lib/shared/billing/billing-flow.ts`.
 |---|---|
 | **PRIVAT / MIX** | `ARBETE`: Faktura till klient (FINAL). Löpande, ingen besluts-/domslivscykel. |
 | **RÄTTSSKYDD** | `ARBETE`: Aconto · Faktura till försäkring (FINAL→`SLUTREGLERAD`) · Slutreglera (försäkringsbesked, SETTLE→`SLUTREGLERAD`). `NEKAD` (avslagsdatum satt): inga åtgärder — banner föreslår rättshjälp. |
-| **RÄTTSHJÄLP** | `ARBETE`: Aconto · Kostnadsräkning till domstol (KOSTNADSRAKNING→`VANTAR_DOM`) · Slutreglera (dom, SETTLE→`SLUTREGLERAD`). `VANTAR_DOM`: Slutreglera (dom). |
-| **OFFENTLIGT_UPPDRAG** | `ARBETE`: Kostnadsräkning till domstol (→`VANTAR_DOM`) · Faktura till klient (återbetalningsskyldighet). `VANTAR_DOM`: klient-FINAL; domstolsfakturan skapas ur KR-maskinen, ej coverage-split. |
+| **RÄTTSHJÄLP** | `ARBETE`: Aconto · Kostnadsräkning till domstol (KOSTNADSRAKNING→`VANTAR_DOM`) · Slutreglera (dom, SETTLE→`SLUTREGLERAD`). `VANTAR_DOM`: Slutreglera (dom). `SLUTREGLERAD`: Kostnadsräkning till domstol (→`VANTAR_DOM`, se tillägget). |
+| **OFFENTLIGT_UPPDRAG** | `ARBETE`: Kostnadsräkning till domstol (→`VANTAR_DOM`) · Faktura till klient (återbetalningsskyldighet). `VANTAR_DOM`: klient-FINAL; domstolsfakturan skapas ur KR-maskinen, ej coverage-split. `SLUTREGLERAD`: Kostnadsräkning till domstol (→`VANTAR_DOM`, se tillägget). |
 | **PENDING** | Som PRIVAT/MIX (aconto och faktura till klient) medan beslut om rättsskydd/rättshjälp väntar. |
 
 ### Två maskiner: fas per ärende, status per körning
@@ -173,6 +173,24 @@ Testerna hittade två avvikelser, som nu är rättade:
   på betalarens arvodesrad (`settleToAward`), så klientens och betalarens
   fakturor tillsammans blir exakt det domstolen beslutat. (Ersatt av
   delningsmodellen i #1438 nedan: beslutet ÄR totalen och betalaren får resten.)
+
+## Tillägg: flera kostnadsräkningar i samma ärende (#1892)
+
+Ett mål kan behöva flera kostnadsräkningar. Ett exempel är en till hovrätten när ett häktningsbeslut överklagas under pågående mål, och sedan en till tingsrätten för resten av arbetet. "Två maskiner" ovan säger att ett ärende kan ha flera kostnadsräkningar. Ändå gjorde flödestabellen `SLUTREGLERAD` till slutfas för rättshjälp och offentligt uppdrag, och beslutet fryste allt ofryst arbete i ärendet på den första körningen.
+
+**Beslut.**
+- I `RATTSHJALP` och `OFFENTLIGT_UPPDRAG` har `SLUTREGLERAD` åtgärden Kostnadsräkning till domstol (KOSTNADSRAKNING → `VANTAR_DOM`). Rättsskyddets `SLUTREGLERAD` och `NEKAD` är fortfarande slutfaser. Faserna härleds som förut i `currentPhase`, och ingen kolumn tillkommer.
+- En kostnadsräkning yrkar och fryser bara sina valda poster, eller alla ofrysta när inget val görs. Beslutet och fakturan ur kostnadsräkningen fryser inget mer. Arbete som registreras efter inskicket ligger kvar ofakturerat till nästa kostnadsräkning eller faktura.
+- Slutregleringen drar automatiskt av bara de skickade aconton som ingen tidigare slutfaktura i ärendet har dragit av. Ett aconto dras aldrig av två gånger.
+- Domstol och målnummer väljs per kostnadsräkning och gäller bara dokumentet och ärendeanteckningen. Valet mellan taxa och löpande räkning gäller körningen och skrivs inte till ärendet. Inget av det sparas på körningen: yrkandet lagras som förut i `workValueOreAtRun`.
+
+**Alternativ.** `SLUTREGLERAD` bara när inget ofryst arbete finns kvar: fasen beror då på posterna, och rättsskyddet får nya åtgärder efter slutregleringen. Bara offentligt uppdrag. Ingen ändring, så att kostnadsräkningen skrivs utanför AVA.
+
+**Konsekvenser.**
+- **+** Hovrättens och tingsrättens kostnadsräkningar i samma ärende, var och en med sina egna poster.
+- **+** Inga nya kolumner. Faserna är fortfarande härledda.
+- **−** `SLUTREGLERAD` är inte längre slutfas i två flöden. Menyn visar Kostnadsräkning till domstol i ett slutreglerat ärende också när inget arbete finns kvar, och dialogen säger då att det inte finns några poster.
+- **−** Domstolen som en kostnadsräkning ställdes till finns bara i dokumentet och anteckningen, inte på körningen.
 
 ## Hela kronor per rad (#1438)
 

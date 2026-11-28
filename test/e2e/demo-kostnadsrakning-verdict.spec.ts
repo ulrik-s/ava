@@ -73,6 +73,11 @@ test("kostnadsräkning som väntar på dom: registrera beslut → skapa faktura"
     expect(await invoiceLinks.count()).toBeGreaterThan(invoicesBefore);
   }).toPass({ timeout: 20_000 });
   await expect(page.getByText(/Väntar på dom/i)).toHaveCount(0);
+
+  // Ett ärende kan ha flera kostnadsräkningar (#1892): efter fakturan erbjuder
+  // menyn en ny kostnadsräkning till domstol.
+  await page.getByRole("button", { name: "+ Skapa faktura" }).click();
+  await expect(page.getByRole("button", { name: "Kostnadsräkning till domstol" })).toBeVisible({ timeout: 15_000 });
 });
 
 /**
