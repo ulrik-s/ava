@@ -15,6 +15,7 @@ import {
   expenseNetOre, invoiceGrossOre, invoiceVatBreakdown, matterArvodeNet, vatOreOf,
   type UnfrozenWork, type ValuationMatter,
 } from "@/lib/shared/billing/billing-work-value";
+import { dueDateOr } from "@/lib/shared/billing/payment-terms";
 import type { SettlementView } from "@/lib/shared/billing/settlement-view";
 import { DEFAULT_VAT_RATE } from "@/lib/shared/billing/vat";
 import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/billing/whole-kronor";
@@ -70,17 +71,18 @@ async function resolveFinalWork(
 
 /**
  * Valfritt klient-id + datum (paritet med legacy `invoice.createFinal` så demo-
- * generatorn/fixtures kan styra dem). Default-invoiceDate = nu. Tomma → store
- * genererar id / sätter dueDate null.
+ * generatorn/fixtures kan styra dem). Default-invoiceDate = nu, och utan
+ * förfallodag gäller betalningsvillkoret: fakturadagen plus tio dagar.
  */
 function invoiceMeta(
   scope: QueuedCallScope,
   input: { id?: string | undefined; invoiceDate?: string | undefined; dueDate?: string | undefined },
 ): Partial<{ id: ReturnType<typeof asId<"InvoiceId">>; invoiceDate: Date; dueDate: Date }> {
+  const invoiceDate = dateOrCallTime(scope, input.invoiceDate);
   return omitUndefined({
     id: input.id ? asId<"InvoiceId">(input.id) : undefined,
-    invoiceDate: dateOrCallTime(scope, input.invoiceDate),
-    dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+    invoiceDate,
+    dueDate: dueDateOr(input.dueDate, invoiceDate),
   });
 }
 

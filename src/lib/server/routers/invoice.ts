@@ -16,14 +16,11 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { creditCreatedNote, invoiceStatusNote, radgivningInvoicedNote } from "@/lib/shared/billing/billing-notes";
-import { arvodeInclVatOre, isPaymentPlanSettled } from "@/lib/shared/billing/invoice-calc";
+import { isPaymentPlanSettled } from "@/lib/shared/billing/invoice-calc";
 import { canTransition, transitionErrorMessage } from "@/lib/shared/billing/invoice-state-machine";
-import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry";
 import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/billing/rattshjalp";
-import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/billing/whole-kronor";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/billing/write-off-calc";
 import { ledgerRefOf } from "@/lib/shared/ledger-ref";
-import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { pageEnvelope } from "@/lib/shared/paginate";
 import type { Invoice, Payment, PaymentPlan, TimeEntry, WriteOff } from "@/lib/shared/schemas/billing";
@@ -46,6 +43,7 @@ import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
 import { gatherInvoiceLedger } from "../billing/invoice-ledger";
 import { logMatterNote } from "../billing/matter-note";
+import { createRadgivningInvoice } from "../billing/radgivning-invoice";
 import { emit } from "../events/emit";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
@@ -203,19 +201,9 @@ export const invoiceRouter = router({
         const when = dateOrCallTime(ctx, input.invoiceDate);
         // Norm efter mötesdagen (#897): rådgivning i nov 2025 → 2025 års timkostnadsnorm.
         const avgift = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }), date: when });
-        // Fakturans enda rad → hela kronor (#1438), momsen på den.
-        const netOre = roundToKronor(avgift.beloppExclVatOre);
-        const grossOre = arvodeInclVatOre(netOre);
-        const vatOre = grossOre - netOre;
-        const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId, stockholmYear(when));
-        const invoice = await repos.invoices.create({
-          id: asId<"InvoiceId">(newRowId(ctx, "invoice")),
-          matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
-          amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }], amountRounding: CURRENT_ROUNDING,
-          invoiceType: "STANDARD", status: "DRAFT", invoiceDate: when, // "Skapad" tills den skickas (#1138)
-          dueDate: input.dueDate ? new Date(input.dueDate) : null,
-          notes: RADGIVNING_INVOICE_NOTES, purpose: "RADGIVNING",
-        } satisfies Partial<Invoice>);
+        const { invoice, netOre, grossOre } = await createRadgivningInvoice(repos, {
+          orgId: ctx.orgId, matterId: input.matterId, when, avgift, dueDate: input.dueDate, scope: ctx,
+        });
         await repos.matters.update(input.matterId, { radgivningBetaldAt: when } satisfies Partial<Matter>);
         await logMatterNote(repos, ctx, input.matterId, radgivningInvoicedNote(invoice.invoiceNumber, grossOre), when);
         await emit.invoiceCreated(ctx, invoice);

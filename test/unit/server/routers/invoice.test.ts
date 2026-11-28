@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
 import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 // ─── Mock prisma ─────────────────────────────────────────────────
@@ -141,6 +142,13 @@ describe("invoice.createRadgivning", () => {
     expect(mockPrisma.invoice.create.mock.calls[0]?.[0].data).toMatchObject({
       purpose: "RADGIVNING", notes: RADGIVNING_INVOICE_NOTES, invoiceType: "STANDARD",
     });
+  });
+
+  it("utan förfallodag gäller betalningsvillkoret: fakturadagen plus tio dagar (2026-11-28)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+    await makeCaller().createRadgivning({ matterId: "m1", invoiceDate: "2026-03-02T09:00:00.000Z" });
+    const due: unknown = mockPrisma.invoice.create.mock.calls[0]?.[0].data.dueDate;
+    expect(due instanceof Date ? stockholmDay(due) : due).toBe("2026-03-12");
   });
 
   it("förfallodatum: en dag eller tidpunkt sparas; ett ogiltigt avvisas i stället för Invalid Date (#1362)", async () => {

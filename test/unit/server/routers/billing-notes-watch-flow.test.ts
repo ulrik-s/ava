@@ -12,6 +12,7 @@ import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
 import { asId } from "@/lib/shared/schemas/ids";
+import { stockholmDay } from "@/lib/shared/stockholm-time";
 
 const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
@@ -85,6 +86,14 @@ describe("faktureringshändelser blir tjänsteanteckningar (#1221)", () => {
     const texts = notes.map((n) => norm(n.text));
     expect(texts).toContain(`Faktura ${a.invoice.invoiceNumber} skapad (aconto, 1 000,00 kr)`);
     expect(texts.some((t) => t.startsWith(`Faktura ${f.invoice.invoiceNumber} skapad (slutfaktura, `))).toBe(true);
+  });
+
+  it("aconto och slutfaktura förfaller tio dagar efter fakturadagen när ingen förfallodag anges (2026-11-28)", async () => {
+    const c = makeCaller({ paymentMethod: "PRIVAT" });
+    const a = await c.billingRun.createAcconto({ matterId: M, clientShareBips: 2000, amountOre: 100_000, invoiceDate: "2026-02-01" });
+    expect(stockholmDay(new Date(a.invoice.dueDate ?? ""))).toBe("2026-02-11");
+    const f = await c.billingRun.createFinal({ matterId: M, recipient: "KLIENT", invoiceDate: "2026-02-20", dueDate: "2026-03-31" });
+    expect(new Date(f.invoice.dueDate ?? "").toISOString().slice(0, 10)).toBe("2026-03-31");
   });
 
   it("kostnadsräkningens livscykel: inskick → beslut → överklagande → hovrätt → faktura", async () => {
