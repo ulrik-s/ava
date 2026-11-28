@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { getTableColumns, is, SQL, Table, type InferSelectModel } from "drizzle-orm";
 import { describe, expect, it } from "vitest-compat";
-import type { z } from "zod";
+import { z } from "zod";
 import * as db from "@/lib/server/db/schema";
 import {
   accontoDeductionSchema, billingRunSchema, calendarEventSchema, conflictCheckSchema, contactSchema,
@@ -82,16 +82,7 @@ const RECONCILE_COLUMNS: ReadonlySet<string> = new Set(["id", "createdAt", "upda
 // ─── Standardvärde, nullbarhet och fält (körtid) ─────────────────────────────
 
 /** Kända avvikelser mellan kolumn och zod-fält: `tabell.fält:slag`. */
-const KNOWN_COLUMN_DEVIATIONS: Readonly<Record<string, KnownDeviation>> = {
-  "matters.taxaHasFTax:null": {
-    why: "Kolumnen är NOT NULL DEFAULT true (#1675), men zod tar emot null. Ett ärende med null sparas inte i Postgres.",
-    issue: 1694,
-  },
-  "matters.taxaHasFTax:standardvärde": {
-    why: "Databasen ger true, zod saknar standardvärde. Koden kompenserar med `taxaHasFTax ?? true`, som dolde #1675.",
-    issue: 1694,
-  },
-};
+const KNOWN_COLUMN_DEVIATIONS: Readonly<Record<string, KnownDeviation>> = {};
 
 type Column = ReturnType<typeof getTableColumns>[string];
 
@@ -267,9 +258,10 @@ describe("Drizzle ↔ zod-paritet (#1678)", () => {
 
   it("grinden ser det den ska: F-skatt-felet (#1675) och ett motsägande reservvärde", () => {
     const { isTaxeArende } = getTableColumns(db.matters);
-    // Före #1675: kolumnen hade DEFAULT false och zod-fältet var nullish utan standardvärde.
-    expect(defaultDeviates(isTaxeArende, matterSchema.shape.taxaHasFTax)).toBe(true);
-    expect(nullDeviates(isTaxeArende, matterSchema.shape.taxaHasFTax)).toBe(true);
+    // Före #1675 och #1919: kolumnen hade DEFAULT false och zod-fältet var nullish utan standardvärde.
+    const fSkattFeletsForm = z.boolean().nullish();
+    expect(defaultDeviates(isTaxeArende, fSkattFeletsForm)).toBe(true);
+    expect(nullDeviates(isTaxeArende, fSkattFeletsForm)).toBe(true);
     expect(fieldDeviations("matters.isTaxeArende", isTaxeArende, matterSchema.shape.isTaxeArende)).toEqual([]);
     expect(fileFallbacks("src/lib/shared/billing/kostnadsrakning.ts", new Map([["isTaxeArende", false]]))).toContain(
       "src/lib/shared/billing/kostnadsrakning.ts: isTaxeArende ?? true (4)",

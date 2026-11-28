@@ -247,7 +247,7 @@ export interface SeedDataset {
 
 /** Nullbara matter-fält som defaultar till null i seed-raden. */
 const MATTER_NULLABLE_FIELDS: readonly (keyof MatterSeed)[] = [
-  "taxaLevel", "taxaHuvudforhandlingMin", "taxaHasFTax", "clientShareBips",
+  "taxaLevel", "taxaHuvudforhandlingMin", "clientShareBips",
   "rattshjalpMaxTimmar", "rattsskyddMaxOre", "rattsskyddSjalvriskMinOre",
 ];
 
@@ -259,6 +259,7 @@ function toMatterRow(m: MatterSeed, orgId: string): Record<string, unknown> {
     paymentMethod: m.paymentMethod, paymentMethodNote: null,
     paymentMethodDecidedAt: isoDate(-m.createdDaysAgo + 5),
     isTaxeArende: m.isTaxeArende ?? false,
+    taxaHasFTax: m.taxaHasFTax ?? true,
     createdAt: isoDate(-m.createdDaysAgo),
     updatedAt: isoDate(-Math.max(1, m.createdDaysAgo - 7)),
   };

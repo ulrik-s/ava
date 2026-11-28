@@ -58,10 +58,10 @@ const matterCreateInput = z.object({
   paymentMethod: paymentMethodSchema.optional(),
   paymentMethodNote: z.string().nullable().optional(),
   paymentMethodDecidedAt: z.string().nullable().optional(),
-  isTaxeArende: z.boolean().optional(),
+  isTaxeArende: z.boolean().default(false),
   taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
   taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),
-  taxaHasFTax: z.boolean().nullable().optional(),
+  taxaHasFTax: z.boolean().default(true),
   /** Klientens självrisk-/kostnadsandel i bips (#801) — sätts vid skapande i
    *  seed/fixtures; annars via `update`. */
   clientShareBips: z.number().int().min(0).max(10000).nullable().optional(),
@@ -151,7 +151,6 @@ function buildMatterData(
     paymentMethodDecidedAt: toDateOrNull(input.paymentMethodDecidedAt),
     taxaLevel: input.taxaLevel,
     taxaHuvudforhandlingMin: input.taxaHuvudforhandlingMin,
-    taxaHasFTax: input.taxaHasFTax,
     clientShareBips: input.clientShareBips,
     rattshjalpMaxTimmar: input.rattshjalpMaxTimmar,
     rattsskyddMaxOre: input.rattsskyddMaxOre,
@@ -162,11 +161,12 @@ function buildMatterData(
     title: input.title,
     description: input.description,
     matterType: input.matterType,
-    isTaxeArende: input.isTaxeArende ?? false,
     matterNumber,
     organizationId: orgId,
-    // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
+    // Explicit (databasens standardvärden gäller inte i minnesstoren).
     status: input.status ?? "ACTIVE",
+    isTaxeArende: input.isTaxeArende,
+    taxaHasFTax: input.taxaHasFTax,
   };
   for (const [k, v] of Object.entries(optional)) if (v !== undefined) data[k] = v;
   return data;
@@ -287,7 +287,7 @@ export const matterRouter = router({
         isTaxeArende: z.boolean().optional(),
         taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
         taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),
-        taxaHasFTax: z.boolean().nullable().optional(),
+        taxaHasFTax: z.boolean().optional(),
         taxaHufStart: z.string().nullable().optional(),
       })
     )

@@ -5,11 +5,16 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
+import { noopPorts } from "@/lib/server/adapters/noop-ports";
+import { buildContext } from "@/lib/server/build-context";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
-import { matters } from "@/lib/server/db/schema";
+import { matters, users } from "@/lib/server/db/schema";
+import { serverFirstEventLog } from "@/lib/server/http/server-context";
 import { DrizzleMatterRepository } from "@/lib/server/repositories/drizzle-matter-repository";
+import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
 import type { MatterRepository } from "@/lib/server/repositories/matter-repository";
+import { appRouter } from "@/lib/server/routers/_app";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
@@ -78,5 +83,18 @@ describe("MatterRepository — Drizzle (pglite)", () => {
     const repo = new DrizzleMatterRepository(handle.db);
     expect(await repo.getByIdInOrg(id, org)).toMatchObject({ id });
     expect(await repo.getByIdInOrg(id, asId<"OrganizationId">(uuidv7()))).toBeNull(); // fel org
+  });
+
+  it("matter.create utan taxeflaggorna läses tillbaka med kolumnernas standardvärden (#1919)", async () => {
+    const org = asId<"OrganizationId">(uuidv7());
+    const user = asId<"UserId">(uuidv7());
+    await handle.db.insert(users).values({ id: user, organizationId: org, email: "a@b.se", name: "A", role: "LAWYER", active: true, version: 1 });
+    const repos = buildDrizzleRepositories(handle.db);
+    const caller = appRouter.createCaller(buildContext({
+      repos, eventLog: serverFirstEventLog, ports: noopPorts,
+      principal: { id: user, email: "a@b.se", name: "A", role: "LAWYER", organizationId: org },
+    }));
+    const created = await caller.matter.create({ title: "Utan flaggor" });
+    expect(await repos.matters.getById(asId<"MatterId">(created.id))).toMatchObject({ isTaxeArende: false, taxaHasFTax: true });
   });
 });
