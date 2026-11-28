@@ -1,0 +1,38 @@
+{
+ "title": "Kreditfaktura K-2026-0003",
+ "subject": "Faktura",
+ "pageSizes": [
+  [
+   595,
+   842
+  ]
+ ],
+ "pages": [
+  [
+   "q BT 0 0 0 rg /Helvetica-Bold 20 Tf 24 TL 1 0 0 1 50 800 Tm \"KREDITFAKTURA\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 10 Tf 24 TL 1 0 0 1 50 774 Tm \"Advokatfirman Exempel AB\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 11 Tf 24 TL 1 0 0 1 50 755 Tm \"Ärende 2026-0042 - Brottmål Falk\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 739 Tm \"Fakturanr: K-2026-0003\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 725 Tm \"Fakturadatum: 2026-06-30\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 711 Tm \"Mottagare: Klient AB\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 13 Tf 24 TL 1 0 0 1 50 689 Tm \"Sammanställning\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 9 Tf 24 TL 1 0 0 1 50 671 Tm \"Benämning\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 9 Tf 24 TL 1 0 0 1 333.998 671 Tm \"Tim\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 9 Tf 24 TL 1 0 0 1 417.492 671 Tm \"Timpris\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 9 Tf 24 TL 1 0 0 1 514.499 671 Tm \"Belopp\" Tj T* ET Q",
+   "q 0.72 0.72 0.72 RG 0.5 w [] 0 d 50 666 m 50 666 m 545 666 l S Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 491.64 653 Tm \"-2 032,50 kr\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 653 Tm \"Arvode\" Tj T* ET Q",
+   "q 0.72 0.72 0.72 RG 1.2 w [] 0 d 50 641 m 50 641 m 545 641 l S Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 10 Tf 24 TL 1 0 0 1 50 626 Tm \"Summa inkl moms\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 10 Tf 24 TL 1 0 0 1 490.52 626 Tm \"-2 032,50 kr\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 491.64 604 Tm \"-1 626,00 kr\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 604 Tm \"Netto (exkl moms)\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 499.98 589 Tm \"-406,50 kr\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 589 Tm \"Moms\" Tj T* ET Q",
+   "q 0.72 0.72 0.72 RG 1.2 w [] 0 d 50 577 m 50 577 m 545 577 l S Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 12 Tf 24 TL 1 0 0 1 50 560 Tm \"Att betala (inkl moms)\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 12 Tf 24 TL 1 0 0 1 479.624 560 Tm \"-2 032,50 kr\" Tj T* ET Q"
+  ]
+ ]
+}

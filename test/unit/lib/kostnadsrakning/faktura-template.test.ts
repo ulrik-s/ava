@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest-compat";
+import { renderFakturaPdf } from "@/lib/client/documents/faktura-pdf";
 import { buildFakturaView, fakturaHeading, type FakturaBreakdown, type FakturaTemplateArgs, type InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
-import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 import { tidsspillanOvrigFtaxForDate } from "@/lib/shared/billing/brottmalstaxa";
 import { buildInvoiceSpecification } from "@/lib/shared/billing/invoice-specification";
 import { formatKr } from "@/lib/shared/kr-format";

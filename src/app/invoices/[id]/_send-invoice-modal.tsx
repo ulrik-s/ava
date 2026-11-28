@@ -86,7 +86,7 @@ async function fetchSpec(fetcher: SpecFetcher, p: SendInvoiceModalProps): Promis
  */
 async function buildPdf(p: SendInvoiceModalProps, recipient: string, sources: PdfSources): Promise<Uint8Array> {
   const { buildFakturaView } = await import("@/lib/client/kostnadsrakning/faktura-template");
-  const { renderFakturaPdf } = await import("@/lib/client/kostnadsrakning/render-faktura-pdf");
+  const { renderFakturaPdf } = await import("@/lib/client/documents/faktura-pdf");
   const [spec, org] = await Promise.all([fetchSpec(sources.spec, p), fetchOrgMeta(sources.org)]);
   const view = buildFakturaView({
     invoice: {

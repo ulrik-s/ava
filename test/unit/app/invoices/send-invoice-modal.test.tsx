@@ -35,7 +35,7 @@ vi.mock("@/lib/client/helper/use-helper", () => ({
   composeMailViaHelper: (...a: unknown[]) => composeMail(...a),
 }));
 vi.mock("@/lib/client/download-text", () => ({ downloadBytes: (...a: unknown[]) => downloadBytes(...a) }));
-vi.mock("@/lib/client/kostnadsrakning/render-faktura-pdf", () => ({ renderFakturaPdf: (view: unknown) => renderFakturaPdf(view) }));
+vi.mock("@/lib/client/documents/faktura-pdf", () => ({ renderFakturaPdf: (view: unknown) => renderFakturaPdf(view) }));
 
 const baseProps = {
   invoiceId: asId<"InvoiceId">("inv-1"),

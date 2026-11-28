@@ -81,6 +81,11 @@
 >   tRPC**: `@trpc/tanstack-react-query` (`TRPCProvider`, `useTRPC`) ersätter den
 >   utfasade `createTRPCReact`. Under flytten delar båda bindningarna klient och
 >   QueryClient, och ett spärrtest låter bara de gamla filerna använda den gamla (#1926).
+> - [ADR 0042](./adr/0042-dokumentmotor-handlebars-layoutsprak.md) — **dokumentmotorn**:
+>   en Handlebars-mall ger layoutmarkering (`<document>`, `<text>`, `<table>`, `<block>`,
+>   `<page-footer>` …) som valideras med zod och ritas av `PdfWriter` till PDF i
+>   webbläsaren. Fakturan är första dokumentet, med exakt paritet bevisad av
+>   golden-tester; byråns egna mallar och kostnadsräkningen följer i fas 2 (#2251).
 
 ## Två lager
 

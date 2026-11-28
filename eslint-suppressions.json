@@ -511,11 +511,6 @@
       "count": 2
     }
   },
-  "src/lib/client/kostnadsrakning/render-faktura-pdf.ts": {
-    "@typescript-eslint/no-misused-spread": {
-      "count": 1
-    }
-  },
   "src/lib/client/labels.ts": {
     "@typescript-eslint/unified-signatures": {
       "count": 1
@@ -2402,11 +2397,6 @@
   "test/unit/lib/shared/payment-reminders.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 12
-    }
-  },
-  "test/unit/lib/shared/schema-migration.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
     }
   },
   "test/unit/lib/shared/uuid.test.ts": {
