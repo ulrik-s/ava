@@ -96,7 +96,9 @@ Därför:
    läsregeln gäller; servern startar ändå.
 6. **Utfasning.** När inga äldre klienter finns kvar (minst 30 dagar och inga
    översatta äldre skrivningar i loggen) tas `document_type`, `tags`,
-   `document_tags` och översättningarna bort i en egen PR.
+   `document_tags` och översättningarna bort i en egen PR. Kodsteget har en
+   post i solnedgångsregistret (`tooling/config/sunset.json`, sista dag
+   2027-01-31): ligger spåren kvar efter den dagen fäller `bun test`.
 
 ## Konsekvenser
 
