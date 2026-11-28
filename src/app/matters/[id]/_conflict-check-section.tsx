@@ -10,11 +10,12 @@
  * och annars direkt ovanför den senaste bedömningen.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { ConflictCheckActions } from "@/components/watchlist/conflict-check-actions";
 import { ConflictHitList } from "@/components/watchlist/conflict-hit-list";
 import { ConflictReviewInfo } from "@/components/watchlist/conflict-review-info";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import { conflictCheckItems, type WatchlistItem } from "@/lib/shared/watchlist";
 
@@ -37,7 +38,8 @@ function conflictItemOf(m: MatterConflictFields | undefined): WatchlistItem | un
 }
 
 export function ConflictCheckSection({ matterId }: { matterId: MatterId }) {
-  const matter = trpc.matter.getById.useQuery({ id: matterId });
+  const t = useTRPC();
+  const matter = useQuery(t.matter.getById.queryOptions({ id: matterId }));
   const item = conflictItemOf(matter.data);
   /* Träffar = passerad; en kontroll som väntar = annalkande (#1246). */
   const hasHits = item?.severity === "passed";

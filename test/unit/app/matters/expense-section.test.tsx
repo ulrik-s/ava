@@ -4,11 +4,13 @@
  * och "Nytt utlägg"-modalen.
  */
 
-import { act, render, screen, fireEvent, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest-compat";
 import { ExpenseSection } from "@/app/matters/[id]/_expense-section";
 import { expenseBreakdownLines, grossOreOf, netOreOf, vatOreOf } from "@/lib/shared/billing/billing-work-value";
 import { asId } from "@/lib/shared/schemas/ids";
+import { callsTo, renderWithFakeTrpc, type FakeTrpcRender } from "../../../helpers/trpc-both-fake";
+import { invalidatedPaths, type TrpcHandlers } from "../../../helpers/trpc-fake";
 
 vi.mock("@/lib/client/demo/entity-link", () => ({
   EntityLink: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
@@ -21,90 +23,69 @@ const defaultData: unknown = {
     ],
     totalAmount: 62500,
 };
-const expenseQuery: { data: unknown; isLoading: boolean } = { data: defaultData, isLoading: false };
-const createMutate = vi.fn();
-const updateMutate = vi.fn();
-const deleteMutate = vi.fn();
-const noopMut = () => ({ mutate: vi.fn(), isPending: false });
-const listInvalidate = vi.fn();
-/** Fakturaförslaget (#2201). */
-const proposalInvalidate = vi.fn();
-/** onSuccess som varje mutation registrerat (#2201). */
-const onSuccessOf: Record<"create" | "update" | "delete", (() => void) | undefined> = { create: undefined, update: undefined, delete: undefined };
-type MutOpts = { onSuccess?: () => void } | undefined;
-function mutation(name: "create" | "update" | "delete", mutate: ReturnType<typeof vi.fn>) {
-  return (opts?: MutOpts) => {
-    onSuccessOf[name] = opts?.onSuccess;
-    return { mutate, isPending: false };
-  };
-}
+let expenseData: unknown = defaultData;
 
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    useUtils: () => ({
-      expense: { list: { invalidate: listInvalidate } },
-      billingRun: { proposal: { invalidate: proposalInvalidate } },
-    }),
-    expense: {
-      list: { useQuery: () => expenseQuery },
-      create: { useMutation: mutation("create", createMutate) },
-      update: { useMutation: mutation("update", updateMutate) },
-      delete: { useMutation: mutation("delete", deleteMutate) },
-    },
-    prefs: {
-      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
-      save: { useMutation: noopMut },
-      clear: { useMutation: noopMut },
-      setOrgDefault: { useMutation: noopMut },
-      clearOrgDefault: { useMutation: noopMut },
-    },
-    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
-  },
-}));
+const handlers: TrpcHandlers = {
+  "expense.list": () => expenseData,
+  "expense.create": () => ({ id: "e-ny" }),
+  "expense.update": () => ({ id: "e1" }),
+  "expense.delete": () => ({ id: "e1" }),
+  "prefs.get": () => null,
+  "user.current": () => ({ id: "u1", role: "LAWYER" }),
+};
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  expenseData = defaultData;
 });
 
+afterEach(() => { vi.restoreAllMocks(); });
+
+/** Renderar sektionen och väntar tills raden `firstRow` syns. */
+async function renderSection(firstRow = "Tågbiljett"): Promise<FakeTrpcRender> {
+  const view = renderWithFakeTrpc(<ExpenseSection matterId={asId<"MatterId">("m1")} />, handlers);
+  await screen.findByText(firstRow);
+  return view;
+}
+
 describe("ExpenseSection", () => {
-  it("renderar rubrik med total och utläggsraderna", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("renderar rubrik med total och utläggsraderna", async () => {
+    await renderSection();
     expect(screen.getByText("Utlägg")).toBeInTheDocument();
     expect(screen.getByText(/totalt/)).toBeInTheDocument();
     expect(screen.getByText("Tågbiljett")).toBeInTheDocument();
     expect(screen.getByText("Domstolsavgift")).toBeInTheDocument();
   });
 
-  it("visar summa-footer", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("visar summa-footer", async () => {
+    await renderSection();
     expect(screen.getByText("Summa")).toBeInTheDocument();
   });
 
-  it("låser fakturerade utlägg (ingen ändra/ta-bort) men tillåter åtgärder på ej fakturerade", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("låser fakturerade utlägg (ingen ändra/ta-bort) men tillåter åtgärder på ej fakturerade", async () => {
+    await renderSection();
     expect(screen.getByText("Låst (på faktura)")).toBeInTheDocument();
     // Endast det ofakturerade utlägget (e1) har Ändra/Ta bort.
     expect(screen.getByText("Ändra")).toBeInTheDocument();
     expect(screen.getByText("Ta bort")).toBeInTheDocument();
   });
 
-  it("Ta bort med confirm → delete.mutate med utläggets id", () => {
+  it("Ta bort med confirm → delete.mutate med utläggets id", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+    const view = await renderSection();
     fireEvent.click(screen.getByText("Ta bort"));
-    expect(deleteMutate).toHaveBeenCalledWith({ id: "e1" });
-    confirmSpy.mockRestore();
+    await waitFor(() => expect(callsTo(view.fake, "expense.delete")).toEqual([{ id: "e1" }]));
+    expect(confirmSpy).toHaveBeenCalled();
   });
 
-  it("'+ Nytt utlägg' öppnar skapa-modalen", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("'+ Nytt utlägg' öppnar skapa-modalen", async () => {
+    await renderSection();
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     expect(screen.getByText("Nytt utlägg")).toBeInTheDocument();
     expect(screen.getByText("Debiterbar")).toBeInTheDocument();
   });
 
-  it("fyller i skapa-formuläret + Spara → create.mutate med matterId + payload", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("fyller i skapa-formuläret + Spara → create.mutate med matterId + payload", async () => {
+    const view = await renderSection();
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
     fireEvent.change(dateInput, { target: { value: "2026-03-15" } });
@@ -115,13 +96,13 @@ describe("ExpenseSection", () => {
     fireEvent.click(screen.getByText("Spara"));
     // Inmatat exkl. 150 kr → lagras NETTO 150 kr, vatIncluded=false (#782).
     // passThrough=false: utlägget är ett kostnadselement tills motsatsen sägs (#975).
-    expect(createMutate).toHaveBeenCalledWith(
+    await waitFor(() => expect(callsTo(view.fake, "expense.create")).toEqual([
       expect.objectContaining({ matterId: "m1", description: "Parkering", amount: 15000, vatRate: 2500, vatIncluded: false, passThrough: false }),
-    );
+    ]));
   });
 
-  it("byter momssats-select + Debiterbar utan att krascha (ingen incl/excl-toggel längre)", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("byter momssats-select + Debiterbar utan att krascha (ingen incl/excl-toggel längre)", async () => {
+    await renderSection();
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     // Incl/excl-radions är borttagen — inmatning är alltid exkl. moms (#781).
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
@@ -133,8 +114,8 @@ describe("ExpenseSection", () => {
     expect(screen.getByText("Spara")).toBeInTheDocument();
   });
 
-  it("'Äkta utlägg' → passThrough=true och momsen faller bort (#975)", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("'Äkta utlägg' → passThrough=true och momsen faller bort (#975)", async () => {
+    const view = await renderSection();
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "900" } });
     fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Ansökningsavgift" } });
@@ -143,20 +124,20 @@ describe("ExpenseSection", () => {
     fireEvent.click(screen.getAllByRole("checkbox")[0]!); // Äkta utlägg på
     expect(screen.getByText(/moms 0 %/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("Spara"));
-    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ passThrough: true }));
+    await waitFor(() => expect(callsTo(view.fake, "expense.create")).toEqual([expect.objectContaining({ passThrough: true })]));
   });
 
-  it("'Ändra' öppnar förifyllt edit-formulär → Spara ändring → update.mutate med id", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("'Ändra' öppnar förifyllt edit-formulär → Spara ändring → update.mutate med id", async () => {
+    const view = await renderSection();
     fireEvent.click(screen.getByText("Ändra"));
     expect(screen.getByText("Ändra utlägg")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Tågbiljett")).toBeInTheDocument(); // förifyllt ur e1
     fireEvent.click(screen.getByText("Spara ändring"));
-    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "e1" }));
+    await waitFor(() => expect(callsTo(view.fake, "expense.update")).toEqual([expect.objectContaining({ id: "e1" })]));
   });
 
-  it("Avbryt stänger skapa-modalen", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("Avbryt stänger skapa-modalen", async () => {
+    await renderSection();
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     fireEvent.click(screen.getByText("Avbryt"));
     expect(screen.queryByText("Nytt utlägg")).not.toBeInTheDocument();
@@ -175,8 +156,7 @@ describe("ExpenseSection — summorna som på fakturan (#1826)", () => {
     { id: asId<"ExpenseId">("x3"), date: "2026-03-03", amount: 9000, description: "Ansökningsavgift", billable: true, vatRate: 2500, vatIncluded: false, passThrough: true, invoiceId: null },
   ];
 
-  beforeEach(() => { expenseQuery.data = { expenses, totalAmount: 64050 }; });
-  afterEach(() => { expenseQuery.data = defaultData; });
+  beforeEach(() => { expenseData = { expenses, totalAmount: 64050 }; });
 
   const rowOf = (text: string): HTMLElement => {
     const row = screen.getByText(text).closest("tr");
@@ -184,8 +164,8 @@ describe("ExpenseSection — summorna som på fakturan (#1826)", () => {
     return row;
   };
 
-  it("summaraden är fakturans utläggsrader: 641,00 / 138,00 / 779,00 kr", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("summaraden är fakturans utläggsrader: 641,00 / 138,00 / 779,00 kr", async () => {
+    await renderSection("Porto");
     const footer = within(rowOf("Summa"));
     const lines = expenseBreakdownLines({ timeEntries: [], expenses });
     expect([netOreOf(lines), vatOreOf(lines), grossOreOf(lines)]).toEqual([64_100, 13_800, 77_900]);
@@ -194,36 +174,62 @@ describe("ExpenseSection — summorna som på fakturan (#1826)", () => {
     expect(footer.getByText(/779,00/)).toBeInTheDocument();
   });
 
-  it("varje rad i hela kronor: 100,50 kr blir 101,00 / 25,00 / 126,00 kr", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("varje rad i hela kronor: 100,50 kr blir 101,00 / 25,00 / 126,00 kr", async () => {
+    await renderSection("Porto");
     const row = within(rowOf("Porto"));
     expect(row.getByText(/101,00/)).toBeInTheDocument();
     expect(row.getByText(/25,00/)).toBeInTheDocument();
     expect(row.getByText(/126,00/)).toBeInTheDocument();
   });
 
-  it("ett utlägg utan vatIncluded är netto, och ett äkta utlägg bär ingen moms", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("ett utlägg utan vatIncluded är netto, och ett äkta utlägg bär ingen moms", async () => {
+    await renderSection("Porto");
     expect(within(rowOf("Tåg")).getByText(/450,00/)).toBeInTheDocument();
     expect(within(rowOf("Ansökningsavgift")).getByText(/^0,00/)).toBeInTheDocument();
     expect(within(rowOf("Ansökningsavgift")).getAllByText(/90,00/)).toHaveLength(2);
   });
 
-  it("Ändra fyller i nettot ur expenseNetOre (utan vatIncluded: netto)", () => {
-    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+  it("Ändra fyller i nettot ur expenseNetOre (utan vatIncluded: netto)", async () => {
+    await renderSection("Porto");
     fireEvent.click(within(rowOf("Tåg")).getByText("Ändra"));
     expect(screen.getByDisplayValue("450")).toBeInTheDocument();
   });
 });
 
 describe("ExpenseSection — fakturaförslaget hämtas om (#2201)", () => {
+  const EXPECTED = ['billingRun.proposal {"matterId":"m1"}', 'expense.list {"matterId":"m1"}'];
+  const actions: Record<"create" | "update" | "delete", () => void> = {
+    create: () => {
+      fireEvent.click(screen.getByText("+ Nytt utlägg"));
+      fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "150" } });
+      fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Parkering" } });
+      fireEvent.click(screen.getByText("Spara"));
+    },
+    update: () => {
+      fireEvent.click(screen.getByText("Ändra"));
+      fireEvent.click(screen.getByText("Spara ändring"));
+    },
+    delete: () => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      fireEvent.click(screen.getByText("Ta bort"));
+    },
+  };
+
   for (const name of ["create", "update", "delete"] as const) {
-    it(`${name}: listan och ärendets förslag hämtas om när ändringen lyckats`, () => {
-      render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
-      expect(proposalInvalidate).not.toHaveBeenCalled();
-      act(() => onSuccessOf[name]?.());
-      expect(listInvalidate).toHaveBeenCalledWith({ matterId: "m1" });
-      expect(proposalInvalidate).toHaveBeenCalledWith({ matterId: "m1" });
+    it(`${name}: listan och ärendets förslag hämtas om när ändringen lyckats`, async () => {
+      const view = await renderSection();
+      expect(view.invalidate).not.toHaveBeenCalled();
+      actions[name]();
+      await waitFor(() => expect(invalidatedPaths(view.invalidate)).toEqual(EXPECTED));
+      expect(callsTo(view.fake, `expense.${name}`)).toHaveLength(1);
     });
   }
+
+  it("en misslyckad ändring hämtar inget om", async () => {
+    const failing = renderWithFakeTrpc(<ExpenseSection matterId={asId<"MatterId">("m1")} />, { ...handlers, "expense.delete": () => { throw new Error("nej"); } });
+    await screen.findByText("Tågbiljett");
+    actions.delete();
+    await waitFor(() => expect(callsTo(failing.fake, "expense.delete")).toHaveLength(1));
+    expect(failing.invalidate).not.toHaveBeenCalled();
+  });
 });

@@ -15,17 +15,17 @@
  * slutregleringen (rättshjälp). Servern läser prutningen ur beslutet; det finns
  * ingen ett-stegs-knapp som gör båda (#996).
  */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { DecimalInput } from "@/components/ui/decimal-input";
-import { Modal } from "@/components/ui/modal";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { invalidateBillingSideEffects, invalidateDocumentLists } from "@/lib/client/billing/invalidate-billing-side-effects";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 import { useMatterDocuments } from "@/lib/client/documents/use-matter-documents";
 import { fakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaDocInvoice } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC, useTRPCClient } from "@/lib/client/trpc";
 import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing/billing-flow";
 import { insurerPruningPending, krCanCreateInvoice } from "@/lib/shared/billing/billing-todo";
 import { availableKrActions, canVoidKostnadsrakning, isActiveKr, krStateOf, type KostnadsrakningState } from "@/lib/shared/billing/kostnadsrakning-flow";
@@ -38,6 +38,7 @@ import { krCardSuffix, openKrDoc, pickKrDoc, runDateOf, RunsList, svDate, type B
 import { BillingSummary } from "./_billing-summary";
 import { clientOf, KostnadsrakningEntry, type MatterContext } from "./_kostnadsrakning-entry";
 import { RadgivningEntryWarning } from "./_radgivning-entry";
+import { RecordBeslutDialog } from "./_record-beslut-dialog";
 import { SettlementDialog } from "./_settlement-dialog";
 import { SjalvriskAccontoHint } from "./_sjalvrisk-aconto-hint";
 import { VerdictDialog } from "./_verdict-dialog";
@@ -61,7 +62,7 @@ function standaloneInvoices(invoices: StandaloneInvoiceRow[] | undefined, rows: 
  *  billing-run). Egen hook så att kuvertets `?.items` (#1014) inte belastar
  *  `BillingPanel`:s komplexitetstak. */
 function useStandaloneInvoices(matterId: MatterId, rows: BillingRunRow[]): StandaloneInvoiceRow[] {
-  const invoices = trpc.invoice.list.useQuery({ matterId }).data;
+  const invoices = useQuery(useTRPC().invoice.list.queryOptions({ matterId })).data;
   return standaloneInvoices(invoices?.items as StandaloneInvoiceRow[] | undefined, rows);
 }
 
@@ -86,7 +87,7 @@ interface KrCardProps {
  */
 function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, onSkapaFaktura, onAngra }: KrCardProps) {
   const doc = useKrDocument(matterId, run);
-  const utils = trpc.useUtils();
+  const client = useTRPCClient();
   const state = krStateOf(run);
   return (
     <div className="mx-2 my-2 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -97,7 +98,7 @@ function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, o
         {doc && (
           <div className="text-xs text-amber-800">
             Dokument:{" "}
-            <button type="button" onClick={() => void openKrDoc(doc, utils.client)}
+            <button type="button" onClick={() => void openKrDoc(doc, client)}
               className="underline hover:text-amber-900 text-amber-900 cursor-pointer">{doc.fileName}</button>
           </div>
         )}
@@ -128,48 +129,6 @@ function KrCardButtons({ state, canInvoice, onRegistreraBeslut, onOverklaga, onS
   );
 }
 
-/**
- * Registrera domstolens beslut (#828): dömt belopp (kr) + ev. prutning (kr).
- * Används för både tingsrättens första beslut och hovrättens (slutgiltiga) —
- * servern väljer rätt övergång ur KR:ns nuvarande status.
- */
-function RecordBeslutDialog({ billingRunId, onClose, onDone }: { billingRunId: BillingRunId; onClose: () => void; onDone: () => void }) {
-  const [awardedKr, setAwardedKr] = useState<number | null>(null);
-  const [prutningKr, setPrutningKr] = useState<number | null>(null);
-  const record = trpc.billingRun.recordKostnadsrakningBeslut.useMutation({
-    onSuccess: () => { onDone(); onClose(); },
-  });
-  const submit = (): void => {
-    record.mutate({
-      billingRunId,
-      awardedOre: Math.round((awardedKr ?? 0) * 100),
-      ...(prutningKr != null ? { prutningOre: -Math.abs(Math.round(prutningKr * 100)) } : {}),
-    });
-  };
-  return (
-    <Modal open title="Registrera domstolens beslut" onClose={onClose} widthClass="max-w-md">
-      <form onSubmit={(e) => { e.preventDefault(); submit(); }} className="space-y-3">
-        <p className="text-sm text-gray-600">Ange det belopp domstolen dömde (och ev. prutning). Fakturan skapas i ett separat steg.</p>
-        <label className="block text-xs font-medium">Dömt belopp (kr)
-          <DecimalInput value={awardedKr} onChange={setAwardedKr} placeholder="Skriv in belopp"
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
-        </label>
-        <label className="block text-xs font-medium">Prutning (kr, valfritt)
-          <DecimalInput value={prutningKr} onChange={setPrutningKr} placeholder="0"
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
-        </label>
-        {record.error && <p className="text-sm text-red-700">{record.error.message}</p>}
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">Avbryt</button>
-          <button type="submit" disabled={record.isPending} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
-            {record.isPending ? "Sparar…" : "Spara beslut"}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 type DialogState = "NONE" | "ACCONTO" | "FINAL";
 
 /** Ångra-åtgärden för KR-kortet — bara när den är tillåten, och efter bekräftelse. */
@@ -194,7 +153,7 @@ interface DialogsProps {
 }
 
 function useBillingMeta(matter: MatterContext): BillingMeta {
-  const settings = trpc.organization.getSettings.useQuery().data;
+  const settings = useQuery(useTRPC().organization.getSettings.queryOptions()).data;
   return {
     matterNumber: matter.matterNumber, matterTitle: matter.title,
     ...omitUndefined({ clientName: clientOf(matter) || undefined, clientShareBips: matter.clientShareBips ?? undefined }),
@@ -233,8 +192,10 @@ function BillingDialogs({ matterId, matter, rows, dialog, setDialog, verdictRunI
 }
 
 export function BillingPanel({ matterId, matter, shortcutRequested, onShortcutDone }: Props) {
-  const runs = trpc.billingRun.list.useQuery({ matterId });
-  const utils = trpc.useUtils();
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const utils = useBillingQueryUtils();
+  const runs = useQuery(t.billingRun.list.queryOptions({ matterId }));
   // Självupptäck inkonsistenser (t.ex. KR väntar på dom utan KR-dokument).
   useMatterInvariants({ matterId, matterNumber: matter.matterNumber });
   const [dialog, setDialog] = useState<DialogState>("NONE");
@@ -258,14 +219,14 @@ export function BillingPanel({ matterId, matter, shortcutRequested, onShortcutDo
   const refetch = () => {
     void runs.refetch();
     void utils.billingRun.proposal.invalidate({ matterId });
-    void utils.invoice.list.invalidate();
-    void utils.timeEntry.list.invalidate({ matterId });
-    void utils.expense.list.invalidate({ matterId });
+    void queryClient.invalidateQueries(t.invoice.list.queryFilter());
+    void queryClient.invalidateQueries(t.timeEntry.list.queryFilter({ matterId }));
+    void queryClient.invalidateQueries(t.expense.list.queryFilter({ matterId }));
     invalidateBillingSideEffects(utils);
   };
-  const appeal = trpc.billingRun.appealKostnadsrakning.useMutation({ onSuccess: refetch });
+  const appeal = useMutation(t.billingRun.appealKostnadsrakning.mutationOptions({ onSuccess: refetch }));
   // Ångrad KR tar bort sitt dokument (#1230) → dokumentlistorna hämtas om.
-  const voidKr = trpc.billingRun.voidKostnadsrakning.useMutation({ onSuccess: () => { refetch(); invalidateDocumentLists(utils); } });
+  const voidKr = useMutation(t.billingRun.voidKostnadsrakning.mutationOptions({ onSuccess: () => { refetch(); invalidateDocumentLists(utils); } }));
   // Routa action → dialog via descriptorns `dialog`-fält (panelen är "dum").
   const onPick = (a: BillingAction) => {
     if (a.dialog === "kostnadsrakning") setShowKr(true);
@@ -317,19 +278,21 @@ export function BillingPanel({ matterId, matter, shortcutRequested, onShortcutDo
  *  debiteras ALLTID klienten → skapas automatiskt som en separat klientfaktura
  *  när den saknas. Renderar inget utom ett fel (#1221). */
 function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId; matter: MatterContext; onRecorded: () => void }) {
-  const register = trpc.document.register.useMutation();
-  const utils = trpc.useUtils();
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const utils = useBillingQueryUtils();
+  const register = useMutation(t.document.register.mutationOptions());
   const meta = useBillingMeta(matter);
   const fired = useRef(false);
   const isRattshjalp = matter.paymentMethod === "RATTSHJALP";
   const registered = !!matter.radgivningBetaldAt;
-  const create = trpc.invoice.createRadgivning.useMutation({
+  const create = useMutation(t.invoice.createRadgivning.mutationOptions({
     onSuccess: async (res) => {
       // Stäng luckan (#845): ingen faktura utan dokument — generera fakturan direkt
       // (samma delade mall som övriga klientfakturor, #937) så den syns + går att öppna.
       try {
         const invoice = (res as { invoice: FakturaDocInvoice }).invoice;
-        const spec = await utils.billingRun.invoiceSpecification.fetch({ matterId, invoiceId: invoice.id });
+        const spec = await queryClient.query(t.billingRun.invoiceSpecification.queryOptions({ matterId, invoiceId: invoice.id }));
         await generateFakturaFromTemplate({
           invoice, matterId, recipient: meta.clientName ?? BILLING_RUN_RECIPIENT_LABELS.KLIENT,
           meta, register, utils, spec,
@@ -337,7 +300,7 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
       } catch (e) { console.warn("[rådgivning] fakturadokument misslyckades:", e); }
       onRecorded();
     },
-  });
+  }));
   useEffect(() => {
     // Auto-skapa en gång när den saknas (#839): rådgivningstimmen är obligatorisk
     // i rättshjälp, så användaren ska inte behöva trycka på en knapp. Alltid
@@ -369,7 +332,7 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
  */
 function InsurerPruningBanner({ matterId, matter, rows, onRecorded }: { matterId: MatterId; matter: MatterContext; rows: BillingRunRow[]; onRecorded: () => void }) {
   const [krStr, setKrStr] = useState("");
-  const record = trpc.billingRun.recordInsurerPruning.useMutation({ onSuccess: onRecorded });
+  const record = useMutation(useTRPC().billingRun.recordInsurerPruning.mutationOptions({ onSuccess: onRecorded }));
   if (!insurerPruningPending(matter.paymentMethod, rows)) return null;
   const netOre = Math.round(Number.parseFloat(krStr.replace(",", ".")) * 100);
   const valid = Number.isFinite(netOre) && netOre > 0;

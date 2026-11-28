@@ -9,12 +9,14 @@
  * beslut (`setVerdict` tar inget belopp som input) och skapar Invoice +
  * ev. Expense(kind=PRUTNING) + fryser raderna.
  */
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { VatBreakdown } from "@/components/billing/vat-breakdown";
 import { Modal } from "@/components/ui/modal";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import type { FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaDocInvoice } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { formatKr } from "@/lib/shared/kr-format";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
@@ -36,15 +38,17 @@ interface Props {
 export function VerdictDialog(props: Props) {
   const { billingRunId, workValueOre, awardedOre, onClose } = props;
   const prutningOre = awardedOre - workValueOre;
-  const register = trpc.document.register.useMutation();
-  const utils = trpc.useUtils();
-  const mut = trpc.billingRun.setVerdict.useMutation({
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const utils = useBillingQueryUtils();
+  const register = useMutation(t.document.register.mutationOptions());
+  const mut = useMutation(t.billingRun.setVerdict.mutationOptions({
     onSuccess: async (res) => {
       // Lägg ett faktura-dokument i fil-listan ur den skapade fakturan — via den
       // delade mallen (#937), så domstolsfakturan får sammanställning + specifikation.
       try {
         const invoice = (res as { invoice: FakturaDocInvoice }).invoice;
-        const spec = await utils.billingRun.invoiceSpecification.fetch({ matterId: props.matterId, invoiceId: invoice.id });
+        const spec = await queryClient.query(t.billingRun.invoiceSpecification.queryOptions({ matterId: props.matterId, invoiceId: invoice.id }));
         await generateFakturaFromTemplate({
           invoice,
           matterId: props.matterId,
@@ -59,7 +63,7 @@ export function VerdictDialog(props: Props) {
       } catch (e) { console.warn("[verdict] faktura-dokument misslyckades:", e); }
       onClose();
     },
-  });
+  }));
   return (
     <Modal open title="Skapa faktura från beslut" onClose={onClose} widthClass="max-w-md">
       <form onSubmit={(e) => { e.preventDefault(); mut.mutate({ billingRunId }); }}

@@ -16,12 +16,14 @@
  *     `kostnadsrakning.generated`-event så byrå-regler kan trigga.
  */
 
+import { useMutation } from "@tanstack/react-query";
 import { Clock, FileText, X, AlertTriangle, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import { persistGeneratedDoc } from "@/lib/client/demo/persist-generated-doc";
 import { useHelper } from "@/lib/client/helper/use-helper";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import type { TaxaLevel } from "@/lib/shared/billing/brottmalstaxa";
 import { buildKostnadsrakningContext, hasHearingEntry, withDocumentFields, type KrDocumentFields } from "@/lib/shared/billing/kostnadsrakning";
 import { formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
@@ -35,7 +37,7 @@ import {
 import { defaultStart, effectiveHearing, toDatetimeLocalValue } from "./_hearing-time";
 import { maybeComposeMail, recordDocument } from "./_kostnadsrakning-record";
 import { UnbilledPosts, type SelectedPostIds } from "./_post-selection";
-import { useKrPosts } from "./_use-kr-posts";
+import { useMatterKrPosts } from "./_use-kr-posts";
 
 /** Dokumentfälten (#1218) — målnummer, titel och byråns sidfot — ärvs från KrDocumentFields. */
 interface Props extends KrDocumentFields {
@@ -108,16 +110,13 @@ function useKostnadsrakningModal(props: Props) {
   const [done, setDone] = useState<{ filename: string; mailOpened: boolean } | null>(null);
   const helper = useHelper();
 
-  const matterUpdate = trpc.matter.update.useMutation();
-  const utils = trpc.useUtils();
-  const recordKostn = trpc.kostnadsrakning.record.useMutation();
-  // De valda posterna (#1889) — billable rader inkluderas i kostnadsräkningen.
-  // För icke-taxa-ärenden räknas de in i arvodes-summan; för taxa-ärenden
-  // visas de bara som specifikation (beloppet styrs av taxa). Dokumentet och
-  // servern får exakt samma poster.
-  const proposal = trpc.billingRun.proposal.useQuery({ matterId: props.matterId });
-  const timeEntries = trpc.timeEntry.list.useQuery({ matterId: props.matterId, pageSize: 100 });
-  const posts = useKrPosts({ proposal, timeEntries }, props.expenses);
+  const trpc = useTRPC();
+  const matterUpdate = useMutation(trpc.matter.update.mutationOptions());
+  const utils = useBillingQueryUtils();
+  const recordKostn = useMutation(trpc.kostnadsrakning.record.mutationOptions());
+  // De valda posterna (#1889) ingår i kostnadsräkningen: i arvodet utanför taxa, annars bara
+  // som specifikation (taxan styr beloppet). Dokumentet och servern får exakt samma poster.
+  const posts = useMatterKrPosts(props.matterId, props.expenses);
   // Förhandlingsklockan bara när en vald post är "Deltagit i förhandling".
   // Annars: bara de valda posterna, utan klocka och taxa.
   const hearing = hasHearingEntry(posts.entries);
