@@ -140,13 +140,13 @@ describe("utskick, påminnelser och Fortnox i procedur-kön (#1242)", () => {
     const inv = await invoice("SENT");
     await accepted(call("invoice.markFortnoxBooked", { invoiceId: inv, fortnoxId: "FX-1" }), adminCtx);
     await accepted(call("invoice.markFortnoxBooked", { invoiceId: inv, fortnoxId: "FX-2" }), adminCtx);
-    expect(await repos.invoices.getById(asId<"InvoiceId">(inv))).toMatchObject({ fortnoxId: "FX-1" });
+    expect(await repos.invoices.getById(asId<"InvoiceId">(inv))).toMatchObject({ ledgerRef: "FX-1" });
   });
 
   it("markFortnoxBooked från en vanlig användare avvisas vid omkörningen och lämnar fakturan obokförd (#1450)", async () => {
     const inv = await invoice("SENT");
     const outcome = await replayer.replay(call("invoice.markFortnoxBooked", { invoiceId: inv, fortnoxId: "FX-FAKE" }), ctx);
     expect(outcome.status).not.toBe("accepted");
-    expect((await repos.invoices.getById(asId<"InvoiceId">(inv)))?.fortnoxId ?? null).toBeNull();
+    expect((await repos.invoices.getById(asId<"InvoiceId">(inv)))?.ledgerRef ?? null).toBeNull();
   });
 });

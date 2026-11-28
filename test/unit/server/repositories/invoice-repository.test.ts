@@ -314,6 +314,18 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await assertContract(new DrizzleInvoiceRepository(handle.db));
   });
 
+  it("ledgerRef skrivs i kolumnen fortnox_id och läses tillbaka (#1932)", async () => {
+    const repo = new DrizzleInvoiceRepository(handle.db);
+    const id = asId<"InvoiceId">(uuidv7());
+    await repo.create(inv({ id }));
+    await repo.update(id, { ledgerRef: "A/42" });
+    const column = z.object({ ref: z.string().nullable() });
+    const parsed = z.union([z.array(column), z.object({ rows: z.array(column) })])
+      .parse(await handle.db.execute(sql`SELECT fortnox_id AS ref FROM invoices WHERE id = ${id}`));
+    expect((Array.isArray(parsed) ? parsed : parsed.rows)[0]?.ref).toBe("A/42");
+    expect((await repo.getById(id))?.ledgerRef).toBe("A/42");
+  });
+
   it("nedbrytningens utläggsrader sparas och läses tillbaka (#1938)", async () => {
     await assertBreakdownExpenseLines(new DrizzleInvoiceRepository(handle.db));
   });

@@ -9,7 +9,7 @@
  * 0011: `pullPayments` löses vendor-neutralt via bankfil, #237).
  *
  * Idempotensen ägs av sync-drivern (invoice-job): kandidaten är "saknar
- * fortnoxId", och varje lyckad push märks direkt. Connectorn är därför ren
+ * ledgerRef", och varje lyckad push märks direkt. Connectorn är därför ren
  * push utan eget idempotens-state.
  */
 

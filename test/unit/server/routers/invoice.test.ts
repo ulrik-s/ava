@@ -587,7 +587,7 @@ describe("invoice.markFortnoxBooked", () => {
   const ADMIN = { role: "ADMIN" };
 
   it("nekar en vanlig användare (#1450) — ett påhittat id stoppar annars bokföringen", async () => {
-    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", fortnoxId: null });
+    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", ledgerRef: null });
 
     await expect(
       makeCaller().markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" }),
@@ -595,23 +595,23 @@ describe("invoice.markFortnoxBooked", () => {
     expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
   });
 
-  it("sätter fortnoxId på obokförd faktura", async () => {
-    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", fortnoxId: null });
-    mockPrisma.invoice.update.mockResolvedValue({ id: "inv-1", fortnoxId: "A/1" });
+  it("skriver indatans fortnoxId som ledgerRef på en obokförd faktura (#1932)", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", ledgerRef: null });
+    mockPrisma.invoice.update.mockResolvedValue({ id: "inv-1", ledgerRef: "A/1" });
 
     const res = await makeCaller("org-a", "user-1", ADMIN).markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" });
 
-    expect(res.fortnoxId).toBe("A/1");
-    // Repo.update bumpar version + updatedAt (ADR 0019), så matcha löst på fortnoxId.
+    expect(res.ledgerRef).toBe("A/1");
+    // Repo.update bumpar version + updatedAt (ADR 0019), så matcha löst på ledgerRef.
     expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "inv-1" },
-        data: expect.objectContaining({ fortnoxId: "A/1" }),
+        data: expect.objectContaining({ ledgerRef: "A/1" }),
       }),
     );
   });
 
-  it("idempotent: skriver INTE över befintlig fortnoxId", async () => {
+  it("idempotent: en äldre rad med bara fortnoxId skrivs inte över (no-op)", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", fortnoxId: "A/7" });
 
     const res = await makeCaller("org-a", "user-1", ADMIN).markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/99" });

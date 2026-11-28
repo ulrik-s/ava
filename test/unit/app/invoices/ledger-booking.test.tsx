@@ -26,29 +26,29 @@ beforeEach(() => {
 
 describe("LedgerBooking", () => {
   it("bokförd faktura visar verifikatet", () => {
-    render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId="A/12" payments={[]} />);
+    render(<LedgerBooking invoiceId={ID} status="SENT" ledgerRef="A/12" payments={[]} />);
     expect(screen.getByText(/Bokförd i Fortnox \(verifikat A\/12\)/)).toBeInTheDocument();
   });
 
   it("utan ansluten integration syns ingen knapp", () => {
     status.data = { configured: true, connected: false };
-    const { container } = render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId={null} payments={[]} />);
+    const { container } = render(<LedgerBooking invoiceId={ID} status="SENT" ledgerRef={null} payments={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("anslutningen måste göras om: ingen bokför-knapp (#1816)", () => {
     status.data = { configured: true, connected: false, reconnectRequired: true };
-    render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId={null} payments={[]} />);
+    render(<LedgerBooking invoiceId={ID} status="SENT" ledgerRef={null} payments={[]} />);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("utkast kan inte bokföras", () => {
-    const { container } = render(<LedgerBooking invoiceId={ID} status="DRAFT" fortnoxId={null} payments={[]} />);
+    const { container } = render(<LedgerBooking invoiceId={ID} status="DRAFT" ledgerRef={null} payments={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("knappen bokför och laddar om fakturan", () => {
-    render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId={null} payments={[]} />);
+    render(<LedgerBooking invoiceId={ID} status="SENT" ledgerRef={null} payments={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "Bokför i Fortnox" }));
     expect(book.mutate).toHaveBeenCalled();
     onSettled?.();
@@ -58,37 +58,37 @@ describe("LedgerBooking", () => {
   it("pågående och fel visas", () => {
     book.isPending = true;
     book.error = { message: "Fortnox 400" };
-    render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId={null} payments={[]} />);
+    render(<LedgerBooking invoiceId={ID} status="SENT" ledgerRef={null} payments={[]} />);
     expect(screen.getByRole("button", { name: "Bokför…" })).toBeDisabled();
     expect(screen.getByRole("alert")).toHaveTextContent("Kunde inte bokföra: Fortnox 400");
   });
 
   it("bokförd faktura med nya betalningar: status + knapp för betalningarna", () => {
-    render(<LedgerBooking invoiceId={ID} status="PAID" fortnoxId="A/12" payments={[{ fortnoxId: "A/13" }, { fortnoxId: null }, {}]} />);
+    render(<LedgerBooking invoiceId={ID} status="PAID" ledgerRef="A/12" payments={[{ fortnoxId: "A/13" }, { fortnoxId: null }, {}]} />);
     expect(screen.getByText(/verifikat A\/12\) · 1 betalning bokförd$/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bokför 2 betalningar i Fortnox" })).toBeInTheDocument();
   });
 
   it("en betalning med bara ledgerRef räknas som bokförd (#1931)", () => {
-    render(<LedgerBooking invoiceId={ID} status="PAID" fortnoxId="A/12" payments={[{ ledgerRef: "A/13" }]} />);
+    render(<LedgerBooking invoiceId={ID} status="PAID" ledgerRef="A/12" payments={[{ ledgerRef: "A/13" }]} />);
     expect(screen.getByText(/verifikat A\/12\) · 1 betalning bokförd$/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("en ny betalning: singular", () => {
-    render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId="A/12" payments={[{ fortnoxId: null }]} />);
+    render(<LedgerBooking invoiceId={ID} status="SENT" ledgerRef="A/12" payments={[{ ledgerRef: null }]} />);
     expect(screen.getByRole("button", { name: "Bokför 1 betalning i Fortnox" })).toBeInTheDocument();
   });
 
   it("allt bokfört: flera betalningar i plural, ingen knapp", () => {
-    render(<LedgerBooking invoiceId={ID} status="PAID" fortnoxId="A/12" payments={[{ fortnoxId: "A/13" }, { fortnoxId: "A/14" }]} />);
+    render(<LedgerBooking invoiceId={ID} status="PAID" ledgerRef="A/12" payments={[{ ledgerRef: "A/13" }, { ledgerRef: "A/14" }]} />);
     expect(screen.getByText(/2 betalningar bokförda/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("felet syns även när fakturan inte längre är bokförbar", () => {
     book.error = { message: "Bara utställda fakturor kan bokföras" };
-    render(<LedgerBooking invoiceId={ID} status="DRAFT" fortnoxId={null} payments={[]} />);
+    render(<LedgerBooking invoiceId={ID} status="DRAFT" ledgerRef={null} payments={[]} />);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("Bara utställda fakturor");
   });

@@ -4,7 +4,9 @@
  * `sumByInvoice` (betalt-hinken för fakturans ledger).
  */
 
+import { sql } from "drizzle-orm";
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
+import { z } from "zod";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { payments } from "@/lib/server/db/schema";
 import { DrizzlePaymentRepository } from "@/lib/server/repositories/drizzle-payment-repository";
@@ -41,5 +43,17 @@ describe("PaymentRepository — Drizzle (pglite)", () => {
     expect(await repo.sumByInvoice(asId<"InvoiceId">(uuidv7()))).toBe(0);
     // Kontroll att raderna skrevs (sanity för pglite-insert).
     expect((await handle.db.select().from(payments)).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("ledgerRef skrivs i kolumnen fortnox_id och läses tillbaka (#1932)", async () => {
+    const repo = new DrizzlePaymentRepository(handle.db);
+    const id = asId<"PaymentId">(uuidv7());
+    await repo.create({ id, invoiceId: uuidv7(), amount: 1_000, paidAt: new Date(), recordedById: uuidv7() } as never);
+    await repo.update(id, { ledgerRef: "A/43" });
+    const column = z.object({ ref: z.string().nullable() });
+    const parsed = z.union([z.array(column), z.object({ rows: z.array(column) })])
+      .parse(await handle.db.execute(sql`SELECT fortnox_id AS ref FROM payments WHERE id = ${id}`));
+    expect((Array.isArray(parsed) ? parsed : parsed.rows)[0]?.ref).toBe("A/43");
+    expect((await repo.getById(id))?.ledgerRef).toBe("A/43");
   });
 });

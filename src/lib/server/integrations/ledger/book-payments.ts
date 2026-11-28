@@ -16,7 +16,7 @@ export interface BookablePayment {
   id: string;
   amount: number;
   paidAt: Date | string;
-  fortnoxId?: string | null | undefined;
+  ledgerRef?: string | null | undefined;
 }
 
 export interface PaymentBookingOutcome {

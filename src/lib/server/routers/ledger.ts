@@ -42,7 +42,7 @@ function toBookable(inv: FullInvoice): BookableInvoice {
   return {
     id: inv.id, amount: inv.amount, vatOre: inv.vatOre ?? null, vatBreakdown: inv.vatBreakdown ?? null,
     invoiceDate: inv.invoiceDate, invoiceNumber: inv.invoiceNumber ?? null, status: inv.status,
-    fortnoxId: ledgerRefOf(inv), matter: { matterNumber: inv.matter?.matterNumber ?? null },
+    ledgerRef: ledgerRefOf(inv), matter: { matterNumber: inv.matter?.matterNumber ?? null },
   };
 }
 
@@ -63,7 +63,7 @@ async function bookTheInvoice(ctx: Ctx, inv: FullInvoice, connector: Connector):
   }
   const [outcome] = await bookUnbookedInvoices({
     invoices: [bookable], connector,
-    markBooked: (_id, externalId) => ctx.repos.invoices.update(inv.id, { fortnoxId: externalId }),
+    markBooked: (_id, externalId) => ctx.repos.invoices.update(inv.id, { ledgerRef: externalId }),
     // Fakturans PDF arkiveras med verifikatet (#1887); ett fel här stoppar inte bokföringen.
     attachmentFor: () => invoicePdfAttachment(ctx.ports.content, inv.documents),
   });
@@ -86,7 +86,7 @@ async function bookPaymentsOf(ctx: Ctx, inv: FullInvoice, map: LedgerAccountMap,
     payments: pending,
     invoice: { invoiceNumber: inv.invoiceNumber ?? null, matterNumber: inv.matter?.matterNumber ?? null },
     connector,
-    markBooked: (p, externalId) => ctx.repos.payments.update(p.id, { fortnoxId: externalId }),
+    markBooked: (p, externalId) => ctx.repos.payments.update(p.id, { ledgerRef: externalId }),
   });
   const failed = outcomes.find((o) => o.error);
   if (failed) throw asTrpcError(new Error(`En betalning kunde inte bokföras: ${failed.error ?? ""}`));
