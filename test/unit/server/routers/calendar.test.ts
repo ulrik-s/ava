@@ -204,16 +204,6 @@ describe("calendar.update", () => {
     })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(mockPrisma.calendarEvent.update).not.toHaveBeenCalled();
   });
-
-  it("en befintlig händelse med kind=deadline kan få ny titel, och kind står kvar (#2120)", async () => {
-    mockPrisma.calendarEvent.findFirst.mockResolvedValue({ id: "e1", kind: "deadline", title: "Gammal frist" });
-    mockPrisma.calendarEvent.update.mockResolvedValue({ id: "e1", kind: "deadline", title: "Ny titel" });
-    const res = await makeCaller().update({ id: "e1", title: "Ny titel" });
-    expect(res).toMatchObject({ id: "e1", kind: "deadline", title: "Ny titel" });
-    const arg = mockPrisma.calendarEvent.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
-    expect(arg.data).toMatchObject({ title: "Ny titel" });
-    expect(arg.data).not.toHaveProperty("kind");
-  });
 });
 
 describe("calendar.getById", () => {

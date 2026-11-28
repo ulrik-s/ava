@@ -76,7 +76,7 @@
 >   hosten, hämtaren varje timme. Förlusten vid haveri blir högst ungefär en timme (#1895).
 > - [ADR 0040](./adr/0040-kalendern-som-api-utan-egen-vy.md) — **kalendern är ett API
 >   utan egen vy**: tidsbokningar via MCP/CLI, frister är uppgifter, `kind: "deadline"`
->   avvecklas senast 2027-01-31 (#2178).
+>   är avvecklad och raderna borttagna (#2178, #2214).
 > - [ADR 0041](./adr/0041-trpc-react-bindning-tanstack.md) — **React-bindningen för
 >   tRPC**: `@trpc/tanstack-react-query` (`TRPCProvider`, `useTRPC`) ersätter den
 >   utfasade `createTRPCReact`. Under flytten delar båda bindningarna klient och
