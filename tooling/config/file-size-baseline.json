@@ -1,6 +1,6 @@
 {
   "src/app/invoices/[id]/_client.tsx": 578,
-  "src/app/settings/page.tsx": 493,
+  "src/app/settings/page.tsx": 489,
   "src/components/documents/document-browser.tsx": 493,
   "src/components/shell/demo-bootstrap.tsx": 569,
   "src/components/ui/data-table.tsx": 638,

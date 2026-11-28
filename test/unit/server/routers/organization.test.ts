@@ -348,6 +348,37 @@ describe("organization.getSettings — timpriser", () => {
   });
 });
 
+describe("organization — betalningsvillkor (#2265)", () => {
+  it("getSettings: utan val → null; valt → dagarna (0 är ett värde)", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB" });
+    expect(await makeCaller("org-a").getSettings()).toMatchObject({ paymentTermDays: null });
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB", paymentTermDays: 0 });
+    expect(await makeCaller("org-a").getSettings()).toMatchObject({ paymentTermDays: 0 });
+  });
+
+  it("updateSettings sparar dagarna och null går tillbaka till standard", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
+    await makeCaller("org-a").updateSettings({ paymentTermDays: 30 });
+    expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paymentTermDays: 30 }) }),
+    );
+    await makeCaller("org-a").updateSettings({ paymentTermDays: null });
+    expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paymentTermDays: null }) }),
+    );
+  });
+
+  it.each([
+    ["negativt", -1],
+    ["decimaltal", 1.5],
+    ["över 365", 366],
+  ])("updateSettings nekar %s (BAD_REQUEST)", async (_label, paymentTermDays) => {
+    await expect(makeCaller("org-a").updateSettings({ paymentTermDays })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("organization — trösklar för Bör faktureras (#1911)", () => {
   it("getSettings: inga sparade värden → null; sparade → värdena (0 är ett värde)", async () => {
     mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a", name: "Advokat AB" });
@@ -538,6 +569,7 @@ describe("organization — behörighet för icke-admin (#1370)", () => {
     ["aconto-gränsen", { accontoThresholdOre: 1 }],
     ["beloppet för Bör faktureras", { unbilledThresholdOre: 1 }],
     ["åldern för Bör faktureras", { unbilledAgeDays: 1 }],
+    ["betalningsvillkoret", { paymentTermDays: 30 }],
     ["standardåtgärderna", { standardAtgarder: [] as never[] }],
     ["ärendetyperna", { matterTypes: ["Bodelning"] }],
     ["offentligt uppdrag", { publicAssignmentMatterTypes: ["Bodelning"] }],

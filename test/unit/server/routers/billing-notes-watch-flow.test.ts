@@ -19,9 +19,9 @@ const PRINCIPAL: Principal = {
 };
 const M = asId<"MatterId">("m-1");
 
-function makeCaller(matter: Record<string, unknown>, extra: { minutes?: number; noCourt?: boolean } = {}) {
+function makeCaller(matter: Record<string, unknown>, extra: { minutes?: number; noCourt?: boolean; org?: Record<string, unknown> } = {}) {
   const ds = new DemoDataStore({
-    organizations: [{ id: "org-1", name: "X" }],
+    organizations: [{ id: "org-1", name: "X", ...extra.org }],
     matters: [{
       id: "m-1", organizationId: "org-1", matterNumber: "AA2026-0001", title: "T", status: "ACTIVE",
       responsibleLawyerId: "u-1", createdAt: new Date(), ...matter,
@@ -94,6 +94,25 @@ describe("faktureringshändelser blir tjänsteanteckningar (#1221)", () => {
     expect(stockholmDay(new Date(a.invoice.dueDate ?? ""))).toBe("2026-02-11");
     const f = await c.billingRun.createFinal({ matterId: M, recipient: "KLIENT", invoiceDate: "2026-02-20", dueDate: "2026-03-31" });
     expect(new Date(f.invoice.dueDate ?? "").toISOString().slice(0, 10)).toBe("2026-03-31");
+  });
+
+  it("byråns betalningsvillkor 30 dagar ger förfallodagen för aconto, slutfaktura och rådgivning (#2265)", async () => {
+    const c = makeCaller({ paymentMethod: "PRIVAT" }, { org: { paymentTermDays: 30 } });
+    const a = await c.billingRun.createAcconto({ matterId: M, clientShareBips: 2000, amountOre: 100_000, invoiceDate: "2026-02-01" });
+    expect(stockholmDay(new Date(a.invoice.dueDate ?? ""))).toBe("2026-03-03");
+    const f = await c.billingRun.createFinal({ matterId: M, recipient: "KLIENT", invoiceDate: "2026-02-20" });
+    expect(stockholmDay(new Date(f.invoice.dueDate ?? ""))).toBe("2026-03-22");
+    const r = makeCaller({ paymentMethod: "RATTSHJALP", clientShareBips: 0 }, { org: { paymentTermDays: 30 } });
+    const { invoice } = await r.invoice.createRadgivning({ matterId: M, invoiceDate: "2026-03-01T10:00:00Z" });
+    expect(stockholmDay(new Date(invoice.dueDate ?? ""))).toBe("2026-03-31");
+  });
+
+  it("byråns villkor sparat i Inställningar gäller nästa faktura (#2265)", async () => {
+    const c = makeCaller({ paymentMethod: "PRIVAT" });
+    await c.organization.updateSettings({ paymentTermDays: 0 });
+    expect((await c.organization.getSettings()).paymentTermDays).toBe(0);
+    const a = await c.billingRun.createAcconto({ matterId: M, clientShareBips: 2000, amountOre: 100_000, invoiceDate: "2026-02-01" });
+    expect(stockholmDay(new Date(a.invoice.dueDate ?? ""))).toBe("2026-02-01");
   });
 
   it("kostnadsräkningens livscykel: inskick → beslut → överklagande → hovrätt → faktura", async () => {
