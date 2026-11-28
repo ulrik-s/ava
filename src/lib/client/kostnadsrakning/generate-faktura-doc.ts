@@ -80,7 +80,7 @@ export async function generateFakturaFromTemplate(args: GenerateFakturaFromTempl
     ? { ...args.invoice, invoiceNumber: number.invoiceNumber, ocrReference: number.ocrReference }
     : args.invoice;
   const { buildFakturaView } = await import("./faktura-template");
-  const { renderFakturaPdf } = await import("./render-faktura-pdf");
+  const { renderFakturaPdf } = await import("@/lib/client/documents/faktura-pdf");
   const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
   const bytes = await renderFakturaPdf(buildFakturaView({ invoice, recipient, meta, spec, breakdown }));
   // uuid — servern lagrar bara uuid-nycklade rader (#1124; fakturan missades där).

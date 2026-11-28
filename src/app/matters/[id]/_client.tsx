@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { FileDown } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -12,7 +13,7 @@ import { useMatterStatusActions } from "@/components/matter/use-matter-status-ac
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { isTaxeMatter, PUBLIC_ASSIGNMENT_METHOD } from "@/lib/shared/public-assignment";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -53,10 +54,11 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   // Static export serverar en sentinel-shell för nya id:n → läs riktiga
   // id:t ur URL:en (faller tillbaka till build-time-param i server-mode).
   const id = asId<"MatterId">(useRouteId() ?? paramId);
-  const matter = trpc.matter.getById.useQuery({ id });
+  const t = useTRPC();
+  const matter = useQuery(t.matter.getById.queryOptions({ id }));
   // Samma query som panelen (react-query delar cachen): redan registrerade
   // fordringar håller panelen kvar även i ett icke-domstolsärende (#1213).
-  const receivables = trpc.expectedReceivable.list.useQuery({ matterId: id });
+  const receivables = useQuery(t.expectedReceivable.list.queryOptions({ matterId: id }));
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   // Bör faktureras i Frister öppnar faktureringen direkt (#1854).
   const shortcut = useBillingShortcut(id);

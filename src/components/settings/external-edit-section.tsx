@@ -10,6 +10,7 @@
 import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SECTION_CARD_CLASS } from "@/components/ui/section-tone";
+import { DEMO_REPO } from "@/lib/client/firma/firma-config";
 import { isFsaSupported, loadHandle, ensureReadWrite } from "@/lib/client/fsa/handle-store";
 import { preloadAllDocuments } from "@/lib/client/fsa/preload-documents";
 
@@ -48,7 +49,7 @@ export function ExternalEditSection() {
   }, []);
 
   const baseUrl = (() => {
-    const repo = process.env.NEXT_PUBLIC_DEMO_REPO || process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO || "ulrik-s/ava-demo";
+    const repo = DEMO_REPO;
     const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
     return m ? `https://${m[1]}.github.io/${m[2]}` : repo;
   })();

@@ -15,9 +15,9 @@
 
 /**
  * Datamodellens version. **Bumpa BARA vid en BRYTANDE schemaändring** (rename,
- * typbyte, fält som blir obligatoriskt) — och para alltid en bump med en
- * migrate-on-read-kedja i `schema-migrations.ts`. Additiva optionella fält bärs
- * av schemats `.passthrough()` och kräver ingen bump.
+ * typbyte, fält som blir obligatoriskt): versionsgrinden nedan vägrar då repon
+ * som skrivits av en nyare version. Additiva optionella fält bärs av schemats
+ * `.passthrough()` och kräver ingen bump.
  *
  * Historik:
  *   - v1: baslinje (ADR 0004, PR 1).
@@ -59,7 +59,7 @@ export function parseSchemaVersion(raw: unknown): number | undefined {
  *
  *   - saknas (`undefined`) → tolka som v1-baslinje (repon skapade före ADR:t) → OK
  *   - repo === kod         → OK
- *   - repo  <  kod         → OK (migrate-on-read lyfter raderna i en senare fas)
+ *   - repo  <  kod         → OK (läses som de är, ingen uppgradering)
  *   - repo  >  kod         → kasta {@link IncompatibleSchemaVersionError}
  */
 export function assertRepoSchemaCompatible(

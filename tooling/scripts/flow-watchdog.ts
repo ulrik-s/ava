@@ -9,7 +9,7 @@
  *
  * FLOW_GUARD_MODE=enforce gör ändringarna; annars (report) loggas de bara.
  */
-import { AGENT_PR_PER_DAY, rankInLast24h } from "./agent-guard";
+import { agentPrCap, rankInLast24h } from "./agent-guard";
 import { dispatchTarget, type FetchFn, fire } from "./flow/dispatch";
 import { type GitHub, gitHub, runGhWithToken } from "./flow/github";
 import { prioOrder } from "./flow/health";
@@ -141,8 +141,8 @@ const DAY_MS = 24 * 3_600_000;
  * räknar taket vid varje körning (#1955), men ingenting kör den igen när
  * fönstret har passerat (#2027) — det gör klockan.
  */
-export function capReleased(created: number, createdAts: readonly string[], now: number): boolean {
-  return rankInLast24h(createdAts, created, created) > AGENT_PR_PER_DAY && rankInLast24h(createdAts, created, now) <= AGENT_PR_PER_DAY;
+export function capReleased(created: number, createdAts: readonly string[], now: number, cap = agentPrCap()): boolean {
+  return rankInLast24h(createdAts, created, created) > cap && rankInLast24h(createdAts, created, now) <= cap;
 }
 
 /** Kör om Agentvakten på granskade agent-PR:er som taket släppt. Ger PR-numren. */

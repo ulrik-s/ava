@@ -16,6 +16,18 @@ import { decodeOrgImage, type OrgImage } from "@/lib/shared/org-image";
 export const PAGE_WIDTH = 595.28;
 export const PAGE_HEIGHT = 841.89;
 
+/** Sidans storlek i punkter. */
+export interface PageSize {
+  width: number;
+  height: number;
+}
+
+/** A4 (ISO 216) — standardstorleken för `PdfWriter`. */
+const A4_SIZE: PageSize = { width: PAGE_WIDTH, height: PAGE_HEIGHT };
+
+/** En färg som RGB-andelar 0–1 (pdf-libs `rgb(r, g, b)`). */
+export type RgbTuple = readonly [number, number, number];
+
 /** Teckensnitten dokumentet använder. */
 export interface PdfFonts {
   regular: PDFFont;
@@ -33,6 +45,8 @@ export interface TextOpts {
   /** x är vänsterkant (left), högerkant (right) eller mitt (center). */
   align?: "left" | "right" | "center";
   grey?: boolean;
+  /** Exakt färg — går före `grey`. */
+  color?: RgbTuple;
 }
 
 /** Rutan en bild skalas in i (bevarat bildförhållande). `top` = överkant. */
@@ -41,8 +55,8 @@ export interface ImageBox {
   top: number;
   maxWidth: number;
   maxHeight: number;
-  /** x är bildens mitt (center) eller vänsterkant (left). */
-  align: "center" | "left";
+  /** x är bildens mitt (center), vänsterkant (left) eller högerkant (right). */
+  align: "center" | "left" | "right";
 }
 
 /** En inbäddad byråbild, inskalad i en ruta (bevarat bildförhållande). */
@@ -76,18 +90,29 @@ const REPLACEMENTS: Readonly<Record<string, string>> = {
   "→": "->",
 };
 
+/** Bildens vänsterkant: rutans x är vänsterkant, mitt eller högerkant. */
+function imageLeft(box: ImageBox, width: number): number {
+  if (box.align === "center") return box.x - width / 2;
+  return box.align === "right" ? box.x - width : box.x;
+}
+
 export class PdfWriter {
   readonly pages: PDFPage[] = [];
   private current: PDFPage;
   private readonly charsets = new Map<PDFFont, Set<number>>();
 
-  constructor(private readonly pdf: PDFDocument, readonly fonts: PdfFonts, private readonly rgb: (r: number, g: number, b: number) => RGB) {
+  constructor(
+    private readonly pdf: PDFDocument,
+    readonly fonts: PdfFonts,
+    private readonly rgb: (r: number, g: number, b: number) => RGB,
+    readonly size: PageSize = A4_SIZE,
+  ) {
     this.current = this.addPage();
   }
 
   /** Ny sida (blir den aktuella). */
   addPage(): PDFPage {
-    const page = this.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    const page = this.pdf.addPage([this.size.width, this.size.height]);
     this.pages.push(page);
     this.current = page;
     return page;
@@ -125,8 +150,22 @@ export class PdfWriter {
     const safe = this.safe(text, font);
     const w = this.fonts[font].widthOfTextAtSize(safe, size);
     const left = opts.align === "right" ? x - w : opts.align === "center" ? x - w / 2 : x;
-    this.current.drawText(safe, { x: left, y: PAGE_HEIGHT - top, size, font: this.fonts[font], color: this.colour(opts.grey) });
+    this.current.drawText(safe, { x: left, y: this.size.height - top, size, font: this.fonts[font], color: opts.color ? this.rgb(...opts.color) : this.colour(opts.grey) });
     return w;
+  }
+
+  /**
+   * Kör `draw` med `page` som aktuell sida och återställ sedan — för det som
+   * ritas på en tidigare sida i efterhand (sidhuvud, sidfot, sidnummer).
+   */
+  async withPage<T>(page: PDFPage, draw: () => Promise<T>): Promise<T> {
+    const previous = this.current;
+    this.current = page;
+    try {
+      return await draw();
+    } finally {
+      this.current = previous;
+    }
   }
 
   /** Som `text`, men på en given (tidigare) sida — t.ex. sidnummer i efterhand. */
@@ -144,10 +183,15 @@ export class PdfWriter {
     return grey ? this.rgb(0.5, 0.5, 0.5) : this.rgb(0, 0, 0);
   }
 
-  /** Vågrät linje på avståndet `top` från överkanten. */
-  rule(x1: number, x2: number, top: number, thickness: number, grey = false): void {
-    const y = PAGE_HEIGHT - top;
-    this.current.drawLine({ start: { x: x1, y }, end: { x: x2, y }, thickness, color: grey ? this.rgb(0.75, 0.75, 0.75) : this.rgb(0, 0, 0) });
+  /** Vågrät linje på avståndet `top` från överkanten — grå, svart eller en exakt färg. */
+  rule(x1: number, x2: number, top: number, thickness: number, grey: boolean | RgbTuple = false): void {
+    const y = this.size.height - top;
+    this.current.drawLine({ start: { x: x1, y }, end: { x: x2, y }, thickness, color: this.ruleColour(grey) });
+  }
+
+  private ruleColour(grey: boolean | RgbTuple): RGB {
+    if (typeof grey !== "boolean") return this.rgb(...grey);
+    return grey ? this.rgb(0.75, 0.75, 0.75) : this.rgb(0, 0, 0);
   }
 
   /**
@@ -158,8 +202,7 @@ export class PdfWriter {
     const scaled = await embedOrgImage(this.pdf, image, box.maxWidth, box.maxHeight);
     if (!scaled) return false;
     const { embedded, width, height } = scaled;
-    const x = box.align === "center" ? box.x - width / 2 : box.x;
-    this.current.drawImage(embedded, { x, y: PAGE_HEIGHT - box.top - height, width, height });
+    this.current.drawImage(embedded, { x: imageLeft(box, width), y: this.size.height - box.top - height, width, height });
     return true;
   }
 

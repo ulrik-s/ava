@@ -1,12 +1,13 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ClientPickerDialog } from "@/components/contacts/client-picker-dialog";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForMatterRole, matterRoleOptions } from "@/lib/client/labels";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { matterRoleSchema, type MatterRole } from "@/lib/shared/schemas/enums";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 import { ConflictCheckSection } from "./_conflict-check-section";
@@ -40,22 +41,23 @@ interface Props {
  * namn är ofta detsamma som titeln. Under parterna: jävskontrollen (#1733).
  */
 export function ContactsSection({ matterId, contacts, matterTitle }: Props) {
-  const utils = trpc.useUtils();
+  const t = useTRPC();
+  const queryClient = useQueryClient();
   const [picking, setPicking] = useState(false);
   const [role, setRole] = useState<MatterRole>("MOTPART");
 
-  const addContact = trpc.matter.addContact.useMutation({
+  const addContact = useMutation(t.matter.addContact.mutationOptions({
     onSuccess: () => {
       // En ny part kontrolleras mot byråns ärenden (#1354) — jävskontrollen här och i Att bevaka ändras.
-      void utils.matter.getById.invalidate({ id: matterId });
-      void utils.watchlist.list.invalidate();
+      void queryClient.invalidateQueries(t.matter.getById.queryFilter({ id: matterId }));
+      void queryClient.invalidateQueries(t.watchlist.list.queryFilter());
       setPicking(false);
     },
-  });
+  }));
 
-  const removeContact = trpc.matter.removeContact.useMutation({
-    onSuccess: () => utils.matter.getById.invalidate({ id: matterId }),
-  });
+  const removeContact = useMutation(t.matter.removeContact.mutationOptions({
+    onSuccess: () => queryClient.invalidateQueries(t.matter.getById.queryFilter({ id: matterId })),
+  }));
 
   return (
     <section aria-label="Parter" className={SECTION_FILL_CLASS}>

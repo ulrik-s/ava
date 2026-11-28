@@ -38,7 +38,7 @@ export interface HealthResult {
   release?: string;
 }
 
-/** Samma etikettregel som PostHog-sinken: en miljövariabel ska inte kunna skriva vad som helst i svaret. */
+/** En miljövariabel ska inte kunna skriva vad som helst i svaret. */
 const SAFE_LABEL = /^[\w.+-]{1,64}$/;
 
 /** Versionsstämpeln ur miljön, eller undefined när den saknas eller ser konstig ut. */

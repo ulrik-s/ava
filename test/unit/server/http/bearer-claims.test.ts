@@ -6,7 +6,7 @@
 
 import { SignJWT, exportJWK, generateKeyPair, createLocalJWKSet, type JWTVerifyGetKey } from "jose";
 import { describe, it, expect, beforeAll } from "vitest-compat";
-import { bearerClaims, bearerConfigFromEnv, CLOCK_TOLERANCE_S, helperOidcConfig, parseAudience, verifyBearerToken } from "@/lib/server/http/bearer-claims";
+import { bearerClaims, bearerConfigFromEnv, CLOCK_TOLERANCE_S, helperOidcConfig, parseAudience, parseBearerToken, verifyBearerToken } from "@/lib/server/http/bearer-claims";
 
 const ISSUER = "https://idp.example/realms/ava";
 const AUDIENCE = "ava";
@@ -168,5 +168,25 @@ describe("helperOidcConfig (ADR 0029)", () => {
 
   it("respekterar AVA_OIDC_CLIENT_ID + AVA_OIDC_AUDIENCE", () => {
     expect(helperOidcConfig({ AVA_OIDC_ISSUER: ISSUER, AVA_OIDC_CLIENT_ID: "c", AVA_OIDC_AUDIENCE: "a" })).toEqual({ oidcIssuer: ISSUER, oidcClientId: "c", oidcAudience: "a" });
+  });
+});
+
+describe("parseBearerToken", () => {
+  it("plockar ut token ur 'Bearer <token>'", () => {
+    expect(parseBearerToken("Bearer abc123")).toBe("abc123");
+  });
+  it("är skiftlägesokänsligt för schemat och trimmar token", () => {
+    expect(parseBearerToken("bearer   abc123  ")).toBe("abc123");
+    expect(parseBearerToken("  Bearer\tabc123")).toBe("abc123");
+  });
+  it("returnerar null för saknad/tom/annan auth", () => {
+    expect(parseBearerToken(null)).toBeNull();
+    expect(parseBearerToken(undefined)).toBeNull();
+    expect(parseBearerToken("")).toBeNull();
+    expect(parseBearerToken("Basic dXNlcjpwYXNz")).toBeNull();
+  });
+  it("returnerar null när Bearer saknar token", () => {
+    expect(parseBearerToken("Bearer")).toBeNull();
+    expect(parseBearerToken("Bearer    ")).toBeNull();
   });
 });

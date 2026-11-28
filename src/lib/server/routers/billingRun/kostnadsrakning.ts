@@ -16,13 +16,14 @@ import { isKrWorkEntry } from "@/lib/shared/billing/kostnadsrakning";
 import { canVoidKostnadsrakning, krStateOf, type KostnadsrakningAction } from "@/lib/shared/billing/kostnadsrakning-flow";
 import { DEFAULT_VAT_RATE } from "@/lib/shared/billing/vat";
 import { CURRENT_ROUNDING, splitGross } from "@/lib/shared/billing/whole-kronor";
-import { forordnandeAvslutSchema, type MatterRole } from "@/lib/shared/schemas/enums";
+import { forordnandeAvslutSchema } from "@/lib/shared/schemas/enums";
 import {
-  asId, billingRunIdSchema, expenseIdSchema, matterIdSchema, timeEntryIdSchema,
+  asId, billingRunIdSchema, contactIdSchema, expenseIdSchema, matterIdSchema, timeEntryIdSchema,
   type BillingRunId, type ExpenseId, type MatterId, type OrganizationId,
 } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
-import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, valueKrRun } from "../../billing/kr-run-valuation";
+import { krCourtName } from "../../billing/kr-court";
+import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, krRunValuedMatter, valueKrRun } from "../../billing/kr-run-valuation";
 import { logMatterNote } from "../../billing/matter-note";
 import { removeVoidedKrDocuments } from "../../billing/void-kr-documents";
 import { emit } from "../../events/emit";
@@ -55,15 +56,6 @@ async function assertKostnadsrakning(repos: Repositories, billingRunId: BillingR
   return run;
 }
 
-/** Domstolens namn ur ärendets DOMSTOL-kontakt (till anteckningen, #1221), eller null. */
-async function courtNameOf(repos: Repositories, orgId: OrganizationId, matterId: MatterId): Promise<string | null> {
-  const detail = await repos.matters.getByIdWithContacts(matterId, orgId);
-  // In-memory-lagret bakar bara in kontakt-joinen när seeden gjort det (demo-
-  // prebake) — rå rader ger inga `contacts`. Saknas de: "domstolen" i texten.
-  const contacts: ReadonlyArray<{ role: MatterRole; contact?: { name: string } | undefined }> = detail?.contacts ?? [];
-  return contacts.find((c) => c.role === "DOMSTOL")?.contact?.name ?? null;
-}
-
 export const kostnadsrakningProcedures = {
   createKostnadsrakning: orgProcedure
     .input(z.object({
@@ -79,10 +71,13 @@ export const kostnadsrakningProcedures = {
       // Urvalet (#1889), som createFinal: anges → yrka/frys ENBART dessa; utelämnas → allt ofryst.
       timeEntryIds: z.array(timeEntryIdSchema).optional(),
       expenseIds: z.array(expenseIdSchema).optional(),
+      // Domstolen vald i dialogen (#1891), bara till anteckningen; utan fältet ärendets.
+      courtContactId: contactIdSchema.optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
         await assertFlowAction(tx, ctx.orgId, input.matterId, "KOSTNADSRAKNING");
+        const court = await krCourtName(tx, ctx.orgId, input.matterId, input.courtContactId);
         const selected = await fetchSelectedWork(tx, input.matterId, input);
         const work = await fetchKrWork(tx, input.matterId, selected);
         const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
@@ -97,7 +92,7 @@ export const kostnadsrakningProcedures = {
         const valuation = valueKrRun(matter, work, input, now);
         if (Object.keys(valuation.matterPatch).length > 0) await tx.matters.update(input.matterId, valuation.matterPatch);
         const grossValue = krRunGrossOre(valuation, () =>
-          krGrossOre(work, matterKrArvodeRows({ ...matter, ...valuation.matterPatch }, work, now)));
+          krGrossOre(work, matterKrArvodeRows(krRunValuedMatter(matter, valuation, input), work, now)));
         const run = await tx.billingRuns.create({
           id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
@@ -112,7 +107,7 @@ export const kostnadsrakningProcedures = {
         // lämnar "Upparbetat ofakturerat". Dom/slutreglering läser raderna via
         // körningen (fetchWorkByRun), inte som ofryst.
         await freezeSelectedWork(tx, { matterId: input.matterId, selected, runId: run.id, now });
-        await logMatterNote(tx, ctx, input.matterId, kostnadsrakningSubmittedNote(run.reference, await courtNameOf(tx, ctx.orgId, input.matterId), grossValue));
+        await logMatterNote(tx, ctx, input.matterId, kostnadsrakningSubmittedNote(run.reference, court, grossValue));
         return { run };
       });
     }),

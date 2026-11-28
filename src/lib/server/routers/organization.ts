@@ -8,11 +8,10 @@ import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { orgThresholdSchema, type Office, type Organization } from "@/lib/shared/schemas/organization";
 import { standardAtgarderInputSchema } from "@/lib/shared/standard-atgard";
-import { assertAdmin } from "../auth/assert-admin";
 import { assertSetupFieldsAllowed } from "../auth/setup-fields";
 import { updateOrgSettings } from "../organization/settings";
 import { newRowId } from "../queued-call";
-import { router, protectedProcedure } from "../trpc";
+import { router, adminProcedure, protectedProcedure } from "../trpc";
 
 /** Nullbara org-fält (nullish → null). Utbruten så komplexiteten (många `??`)
  *  inte räknas in i `toOrgSettings` (#199 complexity@8). */
@@ -131,7 +130,7 @@ export const organizationRouter = router({
    * generatorn skapar org:en först, sedan org-scopade entiteter. Id:t är
    * klient-/app-genererat (ADR 0003).
    */
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         id: organizationIdSchema,
@@ -149,7 +148,6 @@ export const organizationRouter = router({
       })
     )
     .mutation(({ ctx, input }) => {
-      assertAdmin(ctx);
       // omitUndefined: `exactOptionalPropertyTypes` tillåter inte explicit
       // undefined på fält med default (standardAtgarder).
       return ctx.repos.organizations.create(omitUndefined(input) satisfies Partial<Organization>);
@@ -161,7 +159,7 @@ export const organizationRouter = router({
     ctx.repos.offices.listByOrg(ctx.user.organizationId),
   ),
 
-  addOffice: protectedProcedure
+  addOffice: adminProcedure
     .input(
       z.object({
         /** Setup-id (demo-generatorn, ADR 0003): bara admin, direkt, aldrig i kön (#1362). */
@@ -175,7 +173,6 @@ export const organizationRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // Kontoren syns på dokument och fakturor (#1370).
-      assertAdmin(ctx);
       // Id:t bestäms av servern (#1362): härlett ur anropet (samma i klientens
       // körning och serverns omkörning), aldrig valt av klienten.
       assertSetupFieldsAllowed(ctx, { id: input.id });
@@ -188,7 +185,7 @@ export const organizationRouter = router({
       }) satisfies Partial<Office>);
     }),
 
-  updateOffice: protectedProcedure
+  updateOffice: adminProcedure
     .input(
       z.object({
         id: officeIdSchema,
@@ -200,7 +197,6 @@ export const organizationRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       const { id, ...data } = input;
       const office = await ctx.repos.offices.getByIdInOrg(id, ctx.user.organizationId);
       if (!office) throw new TRPCError({ code: "NOT_FOUND" });
@@ -209,10 +205,9 @@ export const organizationRouter = router({
       return ctx.repos.offices.update(id, omitUndefined(data) satisfies Partial<Office>);
     }),
 
-  deleteOffice: protectedProcedure
+  deleteOffice: adminProcedure
     .input(z.object({ id: officeIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       const office = await ctx.repos.offices.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!office) throw new TRPCError({ code: "NOT_FOUND" });
       await ctx.repos.offices.hardDelete(input.id);

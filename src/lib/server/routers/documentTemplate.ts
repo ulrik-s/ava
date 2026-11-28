@@ -7,9 +7,8 @@ import {
   userIdSchema,
 } from "@/lib/shared/schemas/ids";
 import type { DocumentTemplate } from "@/lib/shared/schemas/misc";
-import { assertAdmin } from "../auth/assert-admin";
 import { assertSetupFieldsAllowed, onBehalfOf } from "../auth/setup-fields";
-import { router, protectedProcedure } from "../trpc";
+import { router, adminProcedure, protectedProcedure } from "../trpc";
 
 export const documentTemplateRouter = router({
   // Migrerad till repository-sömmen (ADR 0020).
@@ -25,7 +24,7 @@ export const documentTemplateRouter = router({
       return template;
     }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -40,7 +39,6 @@ export const documentTemplateRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // Mallarna blir byråns dokument — bara admin förvaltar dem (#1370).
-      assertAdmin(ctx);
       // Mallen köas (#1344): skapare och skapad-datum i någon annans namn är
       // setup-fält — aldrig i kön, och direkt bara för ADMIN (#1345).
       assertSetupFieldsAllowed(ctx, { createdById: onBehalfOf(ctx, input.createdById), createdAt: input.createdAt });
@@ -58,7 +56,7 @@ export const documentTemplateRouter = router({
       } satisfies Partial<DocumentTemplate>);
     }),
 
-  update: protectedProcedure
+  update: adminProcedure
     .input(
       z.object({
         id: documentTemplateIdSchema,
@@ -69,17 +67,15 @@ export const documentTemplateRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       const existing = await ctx.repos.documentTemplates.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, name, description, category, content } = input;
       return ctx.repos.documentTemplates.update(id, omitUndefined({ name, description, category, content }) satisfies Partial<DocumentTemplate>);
     }),
 
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: documentTemplateIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       const existing = await ctx.repos.documentTemplates.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
       await ctx.repos.documentTemplates.hardDelete(input.id);

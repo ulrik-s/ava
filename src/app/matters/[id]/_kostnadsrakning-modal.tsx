@@ -16,12 +16,14 @@
  *     `kostnadsrakning.generated`-event så byrå-regler kan trigga.
  */
 
-import { Clock, FileText, X, AlertTriangle, Save } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { Clock, FileText, X, AlertTriangle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import { persistGeneratedDoc } from "@/lib/client/demo/persist-generated-doc";
 import { useHelper } from "@/lib/client/helper/use-helper";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import type { TaxaLevel } from "@/lib/shared/billing/brottmalstaxa";
 import { buildKostnadsrakningContext, hasHearingEntry, withDocumentFields, type KrDocumentFields } from "@/lib/shared/billing/kostnadsrakning";
 import { formatDecimalHoursWithUnit, formatKr } from "@/lib/shared/kr-format";
@@ -33,9 +35,11 @@ import {
   AvslutChoice, ErsattningSection, ForhorSection, forhorOf, forordnandeInputOf, krRunClaimOf, type KrRunClaim, useErsattning,
 } from "./_ersattning-section";
 import { defaultStart, effectiveHearing, toDatetimeLocalValue } from "./_hearing-time";
+import { HelperStatusNote, ModalFooter, StatusMessages } from "./_kostnadsrakning-modal-footer";
 import { maybeComposeMail, recordDocument } from "./_kostnadsrakning-record";
+import { KrRecipientFields, useKrRecipient, type KrCourtChoice } from "./_kr-recipient-fields";
 import { UnbilledPosts, type SelectedPostIds } from "./_post-selection";
-import { useKrPosts } from "./_use-kr-posts";
+import { useMatterKrPosts } from "./_use-kr-posts";
 
 /** Dokumentfälten (#1218) — målnummer, titel och byråns sidfot — ärvs från KrDocumentFields. */
 interface Props extends KrDocumentFields {
@@ -67,12 +71,12 @@ interface Props extends KrDocumentFields {
    *  Escape/X skapade förut en inskickad KR, #1121). Id:t länkar dokumentet till
    *  körningen så att "Ångra kostnadsräkning" kan ta bort det (#1230). Dialogens
    *  huvudförhandling, nivå och taxeval följer med: servern yrkar samma taxa som
-   *  dokumentet (#1024). Urvalet ur postlistan (#1889) följer också med. */
-  createRun: (claim: KrRunClaim, posts: SelectedPostIds) => Promise<BillingRunId>;
+   *  dokumentet (#1024). Urvalet ur postlistan (#1889) och domstolen (#1891) följer också med. */
+  createRun: (claim: KrRunClaim, posts: SelectedPostIds, court: KrCourtChoice) => Promise<BillingRunId>;
 }
 
-/** Ärendet, försvararen, byrån och domstolen till räkningens underlag. */
-function krPartiesOf(props: Props) {
+/** Ärendet, försvararen, byrån och den valda domstolen (#1891) till räkningens underlag. */
+function krPartiesOf(props: Props, courtName: string | undefined) {
   return {
     matter: { matterNumber: props.matterNumber, title: props.matterTitle, clientName: props.clientName, ...omitUndefined({ radgivningPaid: props.radgivningPaid }) },
     defender: {
@@ -84,12 +88,11 @@ function krPartiesOf(props: Props) {
       orgNumber: props.organizationOrgNumber,
       address: props.organizationAddress,
     }),
-    ...omitUndefined({ courtName: props.courtName }),
+    ...omitUndefined({ courtName }),
   };
 }
 
 type KostnContext = ReturnType<typeof buildKostnadsrakningContext>;
-type HelperState = ReturnType<typeof useHelper>;
 
 /** All state, auto-save, ctx-beräkning och generate-flödet för modalen. */
 function useKostnadsrakningModal(props: Props) {
@@ -107,17 +110,15 @@ function useKostnadsrakningModal(props: Props) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ filename: string; mailOpened: boolean } | null>(null);
   const helper = useHelper();
+  const recipient = useKrRecipient(props.courtName, props.courtCaseNumber);
 
-  const matterUpdate = trpc.matter.update.useMutation();
-  const utils = trpc.useUtils();
-  const recordKostn = trpc.kostnadsrakning.record.useMutation();
-  // De valda posterna (#1889) — billable rader inkluderas i kostnadsräkningen.
-  // För icke-taxa-ärenden räknas de in i arvodes-summan; för taxa-ärenden
-  // visas de bara som specifikation (beloppet styrs av taxa). Dokumentet och
-  // servern får exakt samma poster.
-  const proposal = trpc.billingRun.proposal.useQuery({ matterId: props.matterId });
-  const timeEntries = trpc.timeEntry.list.useQuery({ matterId: props.matterId, pageSize: 100 });
-  const posts = useKrPosts({ proposal, timeEntries }, props.expenses);
+  const trpc = useTRPC();
+  const matterUpdate = useMutation(trpc.matter.update.mutationOptions());
+  const utils = useBillingQueryUtils();
+  const recordKostn = useMutation(trpc.kostnadsrakning.record.mutationOptions());
+  // De valda posterna (#1889) ingår i kostnadsräkningen: i arvodet utanför taxa, annars bara
+  // som specifikation (taxan styr beloppet). Dokumentet och servern får exakt samma poster.
+  const posts = useMatterKrPosts(props.matterId, props.expenses);
   // Förhandlingsklockan bara när en vald post är "Deltagit i förhandling".
   // Annars: bara de valda posterna, utan klocka och taxa.
   const hearing = hasHearingEntry(posts.entries);
@@ -137,7 +138,7 @@ function useKostnadsrakningModal(props: Props) {
   }, [hufStart]);
 
   const ctx = useMemo(() => buildKostnadsrakningContext(withDocumentFields({
-    ...krPartiesOf(props),
+    ...krPartiesOf(props, recipient.courtName),
     hufStart: new Date(hufStart),
     hufEnd: new Date(claim.hufEnd),
     yrkandeDate,
@@ -149,7 +150,7 @@ function useKostnadsrakningModal(props: Props) {
     expenses: posts.expenses,
     // Låsta (redan fakturerade/redovisade) poster utelämnas av byggaren (#1205).
     timeEntries: posts.entries,
-  }, props)), [hufStart, claim.hufEnd, yrkandeDate, level, ersattning, avslut, hasFTax, props, posts.entries, posts.expenses]);
+  }, { ...props, courtCaseNumber: recipient.courtCaseNumber })), [hufStart, claim.hufEnd, yrkandeDate, level, ersattning, avslut, hasFTax, props, posts.entries, posts.expenses, recipient.courtName, recipient.courtCaseNumber]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };
@@ -173,7 +174,7 @@ function useKostnadsrakningModal(props: Props) {
         result: ctx,
         meta: {
           matterNumber: props.matterNumber, matterTitle: props.matterTitle,
-          clientName: props.clientName, courtName: props.courtName ?? "",
+          clientName: props.clientName, courtName: recipient.courtName ?? "",
           defenderName: props.defenderName,
           ...omitUndefined({
             organizationName: props.organizationName,
@@ -182,7 +183,7 @@ function useKostnadsrakningModal(props: Props) {
         },
       });
       const storagePath = `documents/content/${docId}.pdf`;
-      const billingRunId = await props.createRun(runClaim, posts.selection.ids);
+      const billingRunId = await props.createRun(runClaim, posts.selection.ids, recipient.court);
       // Innehåll: in-memory blob-cache (öppna nu) + FSA (self-hosted) + demo-slab
       // (överlever reload). Metadata-raden skapas separat av recordDocument.
       await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });
@@ -212,7 +213,7 @@ function useKostnadsrakningModal(props: Props) {
     hufStart, setHufStart, hufEnd, setHufEnd, level, setLevel,
     generating, error, done, helper, ctx, stoppaNu, generate,
     hearing, showHuf, entriesLoading: posts.loading, selection: posts.selection,
-    ...choice, entries: posts.entries, ready: runClaim !== null,
+    ...choice, entries: posts.entries, ready: runClaim !== null, recipient,
   };
 }
 
@@ -234,6 +235,7 @@ export function KostnadsrakningModal(props: Props) {
         </div>
 
         <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
+          <KrRecipientFields recipient={k.recipient} />
           <BasisSections k={k} />
           <UnbilledPosts selection={k.selection} loading={k.entriesLoading} />
           <TimeSpecSection ctx={ctx} isTaxe={k.ersattning !== "lopande"} />
@@ -384,71 +386,5 @@ function PreviewSection({ ctx }: { ctx: KostnContext }) {
         <dd className="font-mono text-right font-bold text-gray-900 pt-1 border-t border-gray-200">{formatKr(ctx.totalInclVat)}</dd>
       </dl>
     </section>
-  );
-}
-
-/** Helper-status-noten (mail-app-integration). */
-function HelperStatusNote({ helper }: { helper: HelperState }) {
-  return (
-    <section className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
-      {helper.checked && helper.version
-        ? <>✓ AVA Helper {helper.version} installerad — mail-appen öppnas med bilaga efter generering.</>
-        : helper.checked
-          ? <>Helper ej installerad — dokumentet sparas i ärendet, du kan skicka mail manuellt därifrån.</>
-          : <>Kontrollerar helper-status…</>}
-    </section>
-  );
-}
-
-/** Fel- och klar-meddelanden. */
-function StatusMessages({ error, done }: { error: string | null; done: { filename: string; mailOpened: boolean } | null }) {
-  return (
-    <>
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
-          <AlertTriangle size={12} className="inline mr-1" /> {error}
-        </p>
-      )}
-      {done && (
-        <p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded p-3">
-          ✓ <strong>{done.filename}</strong> sparad i ärendets dokument.
-          {done.mailOpened
-            ? <> Mail-appen öppnas med kostnadsräkningen som bilaga — fyll i adressaten och skicka.</>
-            : <> Bifoga manuellt när du skickar mail till rätten.</>}
-        </p>
-      )}
-    </>
-  );
-}
-
-/** Footer: avbryt/stäng + generera-knappen. */
-function ModalFooter({ done, generating, blocked, helperVersion, onClose, onGenerate }: {
-  done: boolean; generating: boolean;
-  /** Inte redo: posterna läses in, eller förhandlingen saknar tid. */
-  blocked: boolean;
-  helperVersion: HelperState["version"]; onClose: () => void; onGenerate: () => void;
-}) {
-  return (
-    <div className="border-t border-gray-200 px-4 sm:px-6 py-3 bg-gray-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sticky bottom-0">
-      <button onClick={onClose}
-        className="text-sm text-gray-600 hover:text-gray-900 py-2 px-3 order-2 sm:order-1">
-        {done ? "Stäng" : "Avbryt"}
-      </button>
-      <button
-        type="button"
-        onClick={onGenerate}
-        disabled={generating || blocked}
-        className="w-full sm:w-auto px-6 py-3.5 bg-indigo-600 text-white text-base font-semibold rounded-lg shadow hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2 touch-manipulation order-1 sm:order-2"
-      >
-        {generating ? (
-          <>Genererar…</>
-        ) : (
-          <>
-            <Save size={18} />
-            {helperVersion ? "Generera + öppna mail" : "Generera + spara"}
-          </>
-        )}
-      </button>
-    </div>
   );
 }

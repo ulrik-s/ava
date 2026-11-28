@@ -22,6 +22,7 @@ import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry"
 import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/billing/rattshjalp";
 import { CURRENT_ROUNDING, roundToKronor } from "@/lib/shared/billing/whole-kronor";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/billing/write-off-calc";
+import { ledgerRefOf } from "@/lib/shared/ledger-ref";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { pageEnvelope } from "@/lib/shared/paginate";
@@ -41,7 +42,6 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
-import { assertAdmin } from "../auth/assert-admin";
 import { requireUserInOrg } from "../auth/org-scope";
 import { assertSetupFieldsAllowed, onBehalfOf, type SetupFieldCaller } from "../auth/setup-fields";
 import { gatherInvoiceLedger } from "../billing/invoice-ledger";
@@ -49,7 +49,7 @@ import { logMatterNote } from "../billing/matter-note";
 import { emit } from "../events/emit";
 import { callTime, dateOrCallTime, newRowId, type QueuedCallScope } from "../queued-call";
 import type { Repositories } from "../repositories/repositories";
-import { router, orgProcedure } from "../trpc";
+import { router, adminProcedure, orgProcedure } from "../trpc";
 
 
 /**
@@ -214,7 +214,7 @@ export const invoiceRouter = router({
           amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }], amountRounding: CURRENT_ROUNDING,
           invoiceType: "STANDARD", status: "DRAFT", invoiceDate: when, // "Skapad" tills den skickas (#1138)
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
-          notes: RADGIVNING_INVOICE_NOTES,
+          notes: RADGIVNING_INVOICE_NOTES, purpose: "RADGIVNING",
         } satisfies Partial<Invoice>);
         await repos.matters.update(input.matterId, { radgivningBetaldAt: when } satisfies Partial<Matter>);
         await logMatterNote(repos, ctx, input.matterId, radgivningInvoicedNote(invoice.invoiceNumber, grossOre), when);
@@ -525,14 +525,12 @@ export const invoiceRouter = router({
    * Bara administratör (#1450): ett påhittat id stoppar annars den riktiga
    * bokföringen, eftersom ett satt id aldrig skrivs över.
    */
-  markFortnoxBooked: orgProcedure
+  markFortnoxBooked: adminProcedure
     .input(z.object({ invoiceId: invoiceIdSchema, fortnoxId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
-      // Migrerad till repository-sömmen (ADR 0020). Org-scope via getByIdInOrg.
-      const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
+      const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId); // org-scope (ADR 0020)
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-      if (inv.fortnoxId) return inv; // redan bokförd → no-op (idempotens)
+      if (ledgerRefOf(inv) !== null) return inv; // redan bokförd → no-op (idempotens)
       return ctx.repos.invoices.update(input.invoiceId, { fortnoxId: input.fortnoxId });
     }),
 });

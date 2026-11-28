@@ -17,7 +17,6 @@
 import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
 import type { OidcClaims } from "@/lib/server/auth/oidc-auth-provider";
 import type { HelperConfigRequest } from "@/lib/shared/helper/protocol";
-import { parseBearerToken } from "./pat";
 
 export interface BearerVerifyConfig {
   /** Förväntad issuer (`iss`) — IdP:ns issuer-URL. */
@@ -65,6 +64,18 @@ export async function bearerClaims(headers: Headers, config: BearerVerifyConfig)
 export async function verifyBearerHeader(value: string | null, config: BearerVerifyConfig): Promise<OidcClaims | null> {
   const result = await verifyBearerToken(value, config);
   return result.kind === "verified" ? result.claims : null;
+}
+
+/**
+ * Plocka ut Bearer-token ur ett `Authorization`-headervärde.
+ * Returnerar `null` om headern saknas eller inte är ett Bearer-schema.
+ * Schemat matchas skiftlägesokänsligt ("Bearer"/"bearer"); token trimmas.
+ */
+export function parseBearerToken(header: string | null | undefined): string | null {
+  if (!header) return null;
+  const match = /^Bearer[ \t]+(.+)$/i.exec(header.trim());
+  const token = match?.[1]?.trim();
+  return token ? token : null;
 }
 
 /** Verifiera en `Bearer <jwt>`-headers värde, med skälet när den inte godtas. */

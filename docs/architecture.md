@@ -76,11 +76,16 @@
 >   hosten, hämtaren varje timme. Förlusten vid haveri blir högst ungefär en timme (#1895).
 > - [ADR 0040](./adr/0040-kalendern-som-api-utan-egen-vy.md) — **kalendern är ett API
 >   utan egen vy**: tidsbokningar via MCP/CLI, frister är uppgifter, `kind: "deadline"`
->   avvecklas senast 2027-01-31 (#2178).
+>   är avvecklad och raderna borttagna (#2178, #2214).
 > - [ADR 0041](./adr/0041-trpc-react-bindning-tanstack.md) — **React-bindningen för
 >   tRPC**: `@trpc/tanstack-react-query` (`TRPCProvider`, `useTRPC`) ersätter den
 >   utfasade `createTRPCReact`. Under flytten delar båda bindningarna klient och
 >   QueryClient, och ett spärrtest låter bara de gamla filerna använda den gamla (#1926).
+> - [ADR 0042](./adr/0042-dokumentmotor-handlebars-layoutsprak.md) — **dokumentmotorn**:
+>   en Handlebars-mall ger layoutmarkering (`<document>`, `<text>`, `<table>`, `<block>`,
+>   `<page-footer>` …) som valideras med zod och ritas av `PdfWriter` till PDF i
+>   webbläsaren. Fakturan är första dokumentet, med exakt paritet bevisad av
+>   golden-tester; byråns egna mallar och kostnadsräkningen följer i fas 2 (#2251).
 
 ## Två lager
 
@@ -562,14 +567,16 @@ LLM och klassificerar därför enbart med filnamns-heuristiken.
 
 Samma 5 users / 17 contacts / 15 matters / 40 PDF/DOCX / 7 payment plans / 25 calendar events i båda deployments. Single source of truth.
 
-## Datamodell-evolution (schemaVersion + migrate-on-read)
+## Datamodell-evolution (schemaVersion + versionsgrind)
 
-Data lever i användarens git-repo, så kod-version och data-version kan skilja
-sig. `.ava/meta.json` bär ett `schemaVersion` (`src/lib/shared/schema-version.ts`).
-Vid hydrering kör en **versionsgrind** (repo nyare än koden → vägra starta) och
-**migrate-on-read** (`src/lib/shared/schema-migrations.ts`) som lyfter äldre
-rader till aktuell form innan zod-parsern ser dem. Se
-[ADR 0004](./adr/0004-schemaversion-och-versionsgrind.md).
+`.ava/meta.json` bär ett `schemaVersion` (`src/lib/shared/schema-version.ts`).
+Demons laddare (`src/lib/client/demo/demo-meta.ts`, `demo-seed-loader.ts`) kör
+**versionsgrinden** `assertRepoSchemaCompatible`: data som skrivits av en nyare
+version än koden → vägra starta. Migrate-on-read finns inte längre. Serverns
+schema ändras med Drizzle-migrationer i `tooling/db/migrations/` (ADR 0019),
+märkta `-- kind: expand` eller `-- kind: contract` (se
+[deploy-server-first](./deploy-server-first.md), "Migrationer: expand och
+contract"). Se [ADR 0004](./adr/0004-schemaversion-och-versionsgrind.md).
 
 ## Webbläsarstöd (#1299)
 

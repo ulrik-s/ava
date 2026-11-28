@@ -15,6 +15,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
+import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/billing/radgivning-entry";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 // ─── Mock prisma ─────────────────────────────────────────────────
@@ -132,6 +133,14 @@ describe("invoice.createRadgivning", () => {
     expect(te.frozenAt).toEqual(new Date("2026-03-02"));
     expect(te.date).toEqual(new Date("2026-03-02"));
     expect(te.frozenByBillingRunId).toBeUndefined();
+  });
+
+  it("fakturan bär markören RADGIVNING och samma anteckningstext som förut (#1933)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+    await makeCaller().createRadgivning({ matterId: "m1", invoiceDate: "2026-03-02" });
+    expect(mockPrisma.invoice.create.mock.calls[0]?.[0].data).toMatchObject({
+      purpose: "RADGIVNING", notes: RADGIVNING_INVOICE_NOTES, invoiceType: "STANDARD",
+    });
   });
 
   it("förfallodatum: en dag eller tidpunkt sparas; ett ogiltigt avvisas i stället för Invalid Date (#1362)", async () => {
@@ -608,6 +617,16 @@ describe("invoice.markFortnoxBooked", () => {
     const res = await makeCaller("org-a", "user-1", ADMIN).markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/99" });
 
     expect(res.fortnoxId).toBe("A/7"); // oförändrad
+    expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
+  });
+
+  it("idempotent: en faktura med bara ledgerRef skrivs inte över (#1931)", async () => {
+    const row = { id: "inv-1", ledgerRef: "A/7", fortnoxId: null };
+    mockPrisma.invoice.findFirst.mockResolvedValue(row);
+
+    const res = await makeCaller("org-a", "user-1", ADMIN).markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/99" });
+
+    expect(res).toEqual(row); // oförändrad
     expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
   });
 

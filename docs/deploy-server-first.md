@@ -221,6 +221,9 @@ docker compose -f tooling/docker/docker-compose.production.yml ps
 curl -s https://ava.byra.se/readyz     # {"status":"ok","checks":{"database":{"ok":true}},"release":"v0.2.0"}
 ```
 
+`release` i svaret är `AVA_RELEASE`: deployen sätter den till taggen, och
+`ava-server.env` får sätta en egen (`AVA_RELEASE=<etikett>`).
+
 ### Vad som INTE finns
 
 Ingen strukturerad loggning, ingen felrapportering (Sentry e.d.), ingen
@@ -276,7 +279,8 @@ backuperna inte att läsa.** Därför, samma dag som nyckeln skapas (#1254):
    lösenordshanterare. Den får inte bara ligga på datorn som hämtar.
 2. **Bevisa att kopian fungerar:** klistra ut den ur lösenordshanteraren till
    en temporär fil och provåterställ med den (se *Provåterställning* nedan):
-   `bash tooling/scripts/backup-verify.sh ~/AVA-backup/<senaste>.tar.age /tmp/kopia.key`,
+   `bash tooling/scripts/backup-verify.sh ~/AVA-backup/<senaste>.tar.age /tmp/kopia.key`
+   (är den senaste en timexport läser skriptet basen ur samma katalog),
    och radera sedan filen. En kopia som aldrig prövats är lika osäker som en
    backup som aldrig återställts.
 3. Minst två personer på byrån ska kunna nå posten i lösenordshanteraren.
@@ -313,7 +317,10 @@ AVA_BACKUP_HOST=avabackup@ava.byra.se AVA_BACKUP_KEY=~/.config/ava-backup/age.ke
 
 Återställ från en hämtad kopia: `age -d -i age.key ava-<datum>.tar.age | tar -x`
 ger `ava-<datum>.sql.gz` (→ `restore-db.sh`) och `content.tar.gz` (packas upp i
-`content`-volymen). Steg för steg när servern är borta:
+`content`-volymen). En timexport (`ava-<datum>-hourly.tar.age`, ADR 0039) ger
+dumpen och `content-diff.tar.gz`, och behöver sin bas (filnamnet står i
+arkivets `BASE`): basens `content.tar.gz` packas upp först, tillägget sist.
+Steg för steg när servern är borta:
 [`runbook-aterstallning.md`](./runbook-aterstallning.md).
 
 #### Andra backupplatsen
@@ -412,9 +419,17 @@ finns i dokumentarkivet**. Produktionen berörs inte.
 bash tooling/scripts/backup-verify.sh ~/AVA-backup/ava-2026-09-29-0300.tar.age ~/.config/ava-backup/age.key
 ```
 
+En **timexport** (`ava-<datum>-hourly.tar.age`) provåterställs på samma sätt,
+med basen i samma katalog. Båda arkivens checksummor kontrolleras, databasen
+läses ur timexportens dump, och dokumentkontrollen görs mot basens
+`content.tar.gz` och tilläggets `content-diff.tar.gz` tillsammans. Saknas
+basen, eller är namnet i timexportens `BASE` inte en full exports namn, stannar
+skriptet med ett fel innan någon container startar. Basens namn skrivs ut.
+
 Lägg den i launchd eller cron varje söndag, på den senaste backupen. Samma
 kedja (export → dekryptering → återställning → kontroll) körs i CI av
-återställningsövningen nedan, mot en export med ett riktigt uppladdat dokument.
+återställningsövningen nedan, mot en full export och en timexport med
+riktigt uppladdade dokument.
 
 ### Återställning
 
@@ -426,6 +441,15 @@ Stoppar server-first, kopplar ner kvarvarande sessioner, **återskapar
 databasen**, läser in dumpen, startar och väntar tills `/readyz` svarar ok.
 Skriver applikationen under tiden blir resultatet en blandning av två
 tidpunkter — värre än båda var för sig.
+
+**Den senaste timmen på en levande server:** den lokala dumpen i
+`/srv/ava/backup` är nattens. Ska läget från den senaste timexporten
+tillbaka behövs timexporten, dess bas och den privata nyckeln ur
+lösenordshanteraren (servern har bara den publika). Gör som i
+[runbooken](./runbook-aterstallning.md), steg 2–4: dumpen ur timexporten,
+dokumenten ur basen och sedan tillägget. Ta en **full** backup
+(`backup-export.sh` utan `--hourly`) direkt efter återställningen, så att
+nästa tillägg utgår från det återställda läget.
 
 > Varför drop-and-create i stället för `pg_dump --clean`: pg-boss partitionerar
 > sina jobbtabeller, och de DROP-satser `--clean` genererar fallerar på ärvda
@@ -448,8 +472,12 @@ bash tooling/scripts/restore-drill.sh
 
 Övningen går dessutom igenom **offsite-kedjan**: en krypterad export
 (`backup-export.sh`) med ett riktigt uppladdat dokument provåterställs med
-`backup-verify.sh` i en engångs-Postgres. Det är samma väg som används när
-servern är borta ([`runbook-aterstallning.md`](./runbook-aterstallning.md)).
+`backup-verify.sh` i en engångs-Postgres. Sedan skapas ett andra ärende med ett
+nytt dokument, och en **timexport** (`--hourly`) provåterställs med sin bas.
+Datan förstörs, och båda ärendena och dokumenten återställs med runbookens
+kommandon: databasen ur timexportens dump, dokumenten ur basens arkiv och
+sedan tillägget. Det är samma väg som används när servern är borta
+([`runbook-aterstallning.md`](./runbook-aterstallning.md)).
 
 Steget "bekräfta att den är borta" är det som gör övningen ärlig — utan det
 skulle en återställning som inte gör någonting alls se ut att lyckas.
@@ -757,30 +785,6 @@ annars saknar helperns token det oauth2-proxy verifierar mot — se
 ```bash
 docker compose -f tooling/docker/docker-compose.production.yml up -d oauth2-proxy server-first
 ```
-
-## Felrapportering till PostHog EU (valfritt)
-
-Ingen felrapportering är påslagen som standard. Med en PostHog-nyckel skickas
-serverns oväntade fel (5xx, aldrig 4xx) till PostHog **EU Cloud (Frankfurt)** —
-standardvärden är `eu.i.posthog.com` och en amerikansk värd vägras. Teckna
-PostHogs biträdesavtal (DPA) innan nyckeln sätts. Vad som skickas: se
-`docs/observability.md`. I `ava-server.env`:
-
-```bash
-AVA_POSTHOG_KEY=phc_<byråns-projekt-token>   # skapas på eu.posthog.com
-# AVA_POSTHOG_HOST=https://posthog.byran.se   # bara vid själv-hostad PostHog
-# AVA_ERROR_ENVIRONMENT=staging               # default production
-# AVA_RELEASE=<etikett>   # sätts annars av deploy-prod.sh (taggen); syns i /readyz
-```
-
-```bash
-docker compose -f tooling/docker/docker-compose.production.yml up -d server-first
-docker compose -f tooling/docker/docker-compose.production.yml logs server-first | grep felrapportering
-```
-
-Exakt vad som skickas (felklass, felkod, procedur, requestId, version, miljö,
-tid och `fil:rad`-ramar — aldrig meddelanden, användare eller indata) står i
-[observability.md](observability.md#felrapportering-till-posthog-eu-1343).
 
 ## Dokumentklassificering med lokal LLM (valfritt)
 

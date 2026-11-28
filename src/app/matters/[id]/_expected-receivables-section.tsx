@@ -8,10 +8,11 @@
  * Målnumret (matchningsnyckel, #175) redigeras i ärendehuvudet (#1134).
  */
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { Money } from "@/components/ui/money";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
 interface Receivable {
@@ -34,9 +35,9 @@ function AddReceivableForm({ matterId, onAdded }: { matterId: MatterId; onAdded:
   const amtId = useId();
   const [desc, setDesc] = useState("");
   const [kr, setKr] = useState("");
-  const create = trpc.expectedReceivable.create.useMutation({
+  const create = useMutation(useTRPC().expectedReceivable.create.mutationOptions({
     onSuccess: () => { setDesc(""); setKr(""); onAdded(); },
-  });
+  }));
   const submit = () =>
     create.mutate({ matterId, description: desc, expectedAmount: Math.round(Number(kr) * 100) });
   return (
@@ -60,8 +61,9 @@ function AddReceivableForm({ matterId, onAdded }: { matterId: MatterId; onAdded:
 /** En fordran-rad med avprickning (markera mottagen) / avbryt. */
 function ReceivableRow({ r, onChanged }: { r: Receivable; onChanged: () => void }) {
   const [kr, setKr] = useState("");
-  const settle = trpc.expectedReceivable.settle.useMutation({ onSuccess: onChanged });
-  const cancel = trpc.expectedReceivable.cancel.useMutation({ onSuccess: onChanged });
+  const trpc = useTRPC();
+  const settle = useMutation(trpc.expectedReceivable.settle.mutationOptions({ onSuccess: onChanged }));
+  const cancel = useMutation(trpc.expectedReceivable.cancel.mutationOptions({ onSuccess: onChanged }));
   return (
     <li className="py-2 text-sm">
       <div className="flex items-center justify-between gap-2">
@@ -101,9 +103,10 @@ function ReceivableRow({ r, onChanged }: { r: Receivable; onChanged: () => void 
  * fordringar visas alltid (annars går de inte att se/pricka av/avbryta).
  */
 export function ExpectedReceivablesSection({ matterId, isCourtMatter }: { matterId: MatterId; isCourtMatter: boolean }) {
-  const list = trpc.expectedReceivable.list.useQuery({ matterId });
-  const utils = trpc.useUtils();
-  const refetch = () => void utils.expectedReceivable.list.invalidate({ matterId });
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const list = useQuery(trpc.expectedReceivable.list.queryOptions({ matterId }));
+  const refetch = () => void queryClient.invalidateQueries(trpc.expectedReceivable.list.queryFilter({ matterId }));
   const rows = (list.data ?? []) as Receivable[];
   if (!isCourtMatter && rows.length === 0) return null;
   return (

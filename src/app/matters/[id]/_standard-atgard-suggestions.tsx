@@ -11,7 +11,8 @@
  * en autoinlagd post med fel datum ger fel belopp i acontot.
  */
 
-import { trpc } from "@/lib/client/trpc";
+import { useQuery } from "@tanstack/react-query";
+import { useTRPC } from "@/lib/client/trpc";
 import { formatDecimalHoursWithUnit } from "@/lib/shared/kr-format";
 import type { MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
@@ -46,8 +47,9 @@ function isSettled(runs: readonly RunRow[]): boolean {
 }
 
 export function StandardAtgardSuggestions({ matterId, paymentMethod, matterStatus, entries, onPick }: Props) {
-  const settings = trpc.organization.getSettings.useQuery();
-  const runs = (trpc.billingRun.list.useQuery({ matterId }).data?.runs ?? []) as RunRow[];
+  const t = useTRPC();
+  const settings = useQuery(t.organization.getSettings.queryOptions());
+  const runs = (useQuery(t.billingRun.list.queryOptions({ matterId })).data?.runs ?? []) as RunRow[];
 
   const suggestions = suggestedStandardAtgarder(settings.data?.standardAtgarder, paymentMethod, {
     hasTimeEntries: entries.length > 0,

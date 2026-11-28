@@ -3,14 +3,14 @@ import { baseFields, dateLike, optionalDateLike } from "./common";
 import { calendarEventIdSchema, taskIdSchema, userIdSchema, organizationIdSchema, matterIdSchema } from "./ids";
 
 /**
- * `CalendarEvent` — användarens kalender (möten, förhandlingar, frister).
+ * `CalendarEvent` — användarens kalender (möten och förhandlingar).
  *
  * Lagras flat under `calendar/<eventId>.json`. `userId` på raden anger
  * ägare; filtrering per användare sker i routern.
  *
- * Två "kinds" v1:
- *   - `appointment` — har start + end. Mätbar tidsperiod.
- *   - `deadline`    — punkt i tiden. allDay=true, endAt ignoreras.
+ * En "kind": `appointment` — har start + end. Mätbar tidsperiod.
+ * En frist är en uppgift (`Task` med `dueAt`), inte en kalenderhändelse; värdet
+ * `deadline` är avvecklat och raderna borttagna (ADR 0040 §3, #2214).
  *
  * Outlook-spegling (Microsoft Graph /me/events):
  *   - `mirrorToOutlook=true` + användaren ansluten via O365-connectorn
@@ -24,7 +24,7 @@ import { calendarEventIdSchema, taskIdSchema, userIdSchema, organizationIdSchema
  *   - I AVA: bara ägaren ser `private`-events.
  *   - I Outlook: `private` → `sensitivity: private` på Graph-eventet.
  */
-export const calendarEventKindSchema = z.enum(["appointment", "deadline"]);
+export const calendarEventKindSchema = z.enum(["appointment"]);
 export type CalendarEventKind = z.infer<typeof calendarEventKindSchema>;
 
 export const calendarEventVisibilitySchema = z.enum(["normal", "private"]);
@@ -46,9 +46,9 @@ export const calendarEventSchema = z.object({
   description: z.string().nullish(),
   location: z.string().nullish(),
 
-  /** ISO-datum eller Date. Krävs för båda kinds. */
+  /** ISO-datum eller Date. Krävs. */
   startAt: dateLike,
-  /** För deadlines: oanvänd (ignoreras av rendering). */
+  /** Slut; null för en händelse utan sluttid. */
   endAt: optionalDateLike,
   allDay: z.boolean().default(false),
 

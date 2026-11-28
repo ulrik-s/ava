@@ -9,7 +9,7 @@ Allt du behöver finns **utanför** den gamla servern:
 
 | Vad | Var |
 |---|---|
-| Senaste krypterade export `ava-<datum>.tar.age` | datorn som hämtar (`~/AVA-backup`), den andra backupplatsen (`AVA_BACKUP_MIRROR`), eller nedladdningsmappen hos en administratör som tagit en backup med "Ta backup nu" i Inställningar ([#1431](./deploy-server-first.md#ta-backup-nu-från-inställningar-1431)) |
+| Senaste krypterade export: en full `ava-<datum>.tar.age`, eller en timexport `ava-<datum>-hourly.tar.age` **och** dess bas (den fulla export som `backup-verify.sh` skriver ut, steg 0) | datorn som hämtar (`~/AVA-backup`), den andra backupplatsen (`AVA_BACKUP_MIRROR`), eller nedladdningsmappen hos en administratör som tagit en backup med "Ta backup nu" i Inställningar ([#1431](./deploy-server-first.md#ta-backup-nu-från-inställningar-1431)) |
 | Den privata age-nyckeln `age.key` | datorn som hämtar, och byråns lösenordshanterare |
 | `ava-server.env` (OIDC, domän, byrå-id) | lösenordshanteraren. Hämta annars värdena hos IdP:n och skapa filen på nytt |
 | Koden | `git clone https://github.com/ulrik-s/ava` |
@@ -23,6 +23,18 @@ Innan du rör en ny server: bevisa att backupen och nyckeln fungerar.
 ```bash
 bash tooling/scripts/backup-verify.sh ~/AVA-backup/ava-<datum>.tar.age ~/.config/ava-backup/age.key
 ```
+
+Är den senaste exporten en **timexport** (`ava-<datum>-hourly.tar.age`, ADR
+0039) går den inte att återställa ensam: databasen finns i den, men dokumenten
+finns i basens fulla arkiv plus timexportens tillägg. Basen ska ligga i samma
+katalog. Provåterställ timexporten, så kontrolleras båda:
+
+```bash
+bash tooling/scripts/backup-verify.sh ~/AVA-backup/ava-<datum>-hourly.tar.age ~/.config/ava-backup/age.key
+```
+
+Skriptet skriver ut `Basen: ava-<basdatum>.tar.age`. Det är de två filerna,
+timexporten och basen, som ska till servern i steg 2.
 
 Skriv upp raden `användare · ärenden · dokument · migrationer`. Du jämför mot
 den i steg 5. Misslyckas det här, prova den näst senaste exporten och kopian
@@ -50,6 +62,24 @@ shred -u age.key 2>/dev/null || rm -f age.key   # nyckeln ska inte ligga kvar p�
 
 Nu finns `ava-<datum>.sql.gz` (databasen) och `content.tar.gz` (dokumenten).
 
+**Timexport:** kopiera också basen, till en egen katalog `/root/restore/bas/`
+(båda arkiven har en `SHA256SUMS`). Packa upp båda och kontrollera båda:
+
+```bash
+cd /root/restore
+docker run --rm -v "$PWD":/w alpine sh -c \
+  'apk add -q --no-cache age && age -d -i /w/age.key /w/ava-<datum>-hourly.tar.age | tar -C /w -xf - \
+   && age -d -i /w/age.key /w/bas/ava-<basdatum>.tar.age | tar -C /w/bas -xf -'
+sha256sum -c SHA256SUMS              # timexporten: dumpen, content-diff.tar.gz och BASE
+(cd bas && sha256sum -c SHA256SUMS)  # basen: dess dump och content.tar.gz
+shred -u age.key 2>/dev/null || rm -f age.key
+```
+
+Nu finns timexportens `ava-<datum>.sql.gz` (databasen, den som läses in i
+steg 3), basens `bas/content.tar.gz` (dokumenten vid basen) och
+`content-diff.tar.gz` (det som tillkommit sedan dess). Basens egen dump används
+inte.
+
 ## 3. Databasen
 
 Starta bara Postgres, migrera schemat och läs in dumpen:
@@ -74,6 +104,22 @@ docker run --rm -v ava_content:/content -v /root/restore:/r:ro alpine \
   tar -C /content -xzf /r/content.tar.gz
 docker compose -f tooling/docker/docker-compose.production.yml up -d --wait
 ```
+
+**Timexport:** packa upp basens `content.tar.gz` först och **sedan**
+`content-diff.tar.gz`, i den ordningen. Tillägget innehåller de filer som
+ändrats sedan basen, också `.git/index` och refs i dokumentvolymen, och de
+ska skriva över basens versioner på plats:
+
+```bash
+docker compose -f tooling/docker/docker-compose.production.yml stop server-first
+docker run --rm -v ava_content:/content -v /root/restore:/r:ro alpine \
+  sh -c 'tar -C /content -xzf /r/bas/content.tar.gz && tar -C /content -xzf /r/content-diff.tar.gz'
+docker compose -f tooling/docker/docker-compose.production.yml up -d --wait
+```
+
+Har git:s städning packat refs efter basen kan en gammal lös ref från basen
+ligga kvar efter uppackningen. Det påverkar bara git-historiken, inte
+dokumentfilerna (ADR 0039).
 
 ## 5. Kontrollera
 
@@ -146,5 +192,6 @@ Den nya servern har ingen backup förrän du lägger tillbaka den:
 
 Gör steg 0 till 5 mot en **testserver** en gång om året, och skriv upp hur lång
 tid det tog. Återställningsövningen i CI (`restore-drill.sh`) täcker kedjan
-export → dekryptering → återställning → kontroll vid varje ändring. Den
+export → dekryptering → återställning → kontroll vid varje ändring, ur en
+timexport och dess bas med kommandona ovan. Den
 täcker inte DNS, IdP-konfigurationen eller att någon hittar nyckeln.

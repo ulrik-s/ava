@@ -220,10 +220,12 @@ förfrågan i inkorgen, medan en grund kan höra till flera.
     (`src/lib/shared/billing/brottmalstaxa.ts`, `forordnandetaxa.ts`) och bokföringen
     (`src/lib/shared/accounting/`). Samma lista står i `.github/CODEOWNERS`.
   - innehåller en destruktiv migration,
-  - är fler än 30 på ett dygn. Bara det som kan mergas räknas: mergade PR:er
-    och öppna utan `blockerad`. En PR som väntar på Ulriks `människa-godkänd`
-    eller stängts utan merge räknas inte (2026-11-27; den 26/11 band sju
-    väntande PR:er en fjärdedel av dygnets kvot),
+  - är fler än taket på ett dygn: repovariabeln `AGENT_PR_CAP` (Settings →
+    Secrets and variables → Actions → Variables), annars 30. Bara det som kan
+    mergas räknas: mergade PR:er och öppna utan `blockerad`. En PR som väntar på
+    Ulriks `människa-godkänd` eller stängts utan merge räknas inte (2026-11-27;
+    den 26/11 band sju väntande PR:er en fjärdedel av dygnets kvot). En PR som
+    Ulrik godkänt räknas inte och stoppas aldrig av taket (2026-11-28),
   - eller inte har `granskad`.
 
   `människa-godkänd` (bara Ulrik) släpper de två första. Granskningsloopen
@@ -484,7 +486,6 @@ håller staging helt isär.
    ```bash
    AVA_DOMAIN=staging.ava-crm.io
    AVA_DEPLOY_TRACK=main            # följ main, inte taggar
-   AVA_ERROR_ENVIRONMENT=staging
    AVA_EMAIL_DISABLED=1             # staging skickar aldrig e-post
    # inga AVA_FEEDBACK_*, inga AVA_FORTNOX_*: inget riktigt utanför staging
    ```

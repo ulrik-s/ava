@@ -9,6 +9,7 @@
  * fälten alltid startar från ärendets sparade uppgifter.
  */
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CoverageCapWarning } from "@/components/matter/coverage-cap-warning";
 import { PaymentMethodFields } from "@/components/matter/payment-method-fields";
@@ -18,7 +19,8 @@ import {
 } from "@/components/matter/use-payment-method-form";
 import { Modal } from "@/components/ui/modal";
 import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-billing-side-effects";
-import { trpc } from "@/lib/client/trpc";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
+import { useTRPC } from "@/lib/client/trpc";
 import { hasInsuranceCompany, type MatterContactWithRole } from "@/lib/shared/matter-insurance";
 import { lockedPaymentMethod, type PublicAssignmentSettings } from "@/lib/shared/public-assignment";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
@@ -91,19 +93,21 @@ function shownPayment(
 function MatterEditForm({ matterId, matter, contacts, onClose }: EditProps & { onClose: () => void }) {
   const [details, setDetails] = useState(() => matterDetailsFromMatter(matter));
   const payment = usePaymentMethodForm(paymentInitial(matter));
-  const settings = trpc.organization.getSettings.useQuery().data;
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const billingUtils = useBillingQueryUtils();
+  const settings = useQuery(t.organization.getSettings.queryOptions()).data;
   const matterTypes = settings?.matterTypes ?? [];
   const shown = shownPayment(payment.values, settings, details.matterType);
-  const users = trpc.user.list.useQuery().data?.users ?? [];
+  const users = useQuery(t.user.list.queryOptions()).data?.users ?? [];
   const showInsuranceReference = hasInsuranceCompany(contacts);
-  const utils = trpc.useUtils();
-  const update = trpc.matter.update.useMutation({
+  const update = useMutation(t.matter.update.mutationOptions({
     onSuccess: () => {
-      void utils.matter.getById.invalidate({ id: matterId });
-      invalidateBillingSideEffects(utils);
+      void queryClient.invalidateQueries(t.matter.getById.queryFilter({ id: matterId }));
+      invalidateBillingSideEffects(billingUtils);
       onClose();
     },
-  });
+  }));
   const save = () => update.mutate({
     id: matterId,
     ...matterDetailsInput(details, { matterTypes, showInsuranceReference }),

@@ -1,0 +1,40 @@
+{
+ "title": "Rådgivningsfaktura F-2026-0101",
+ "subject": "Faktura",
+ "pageSizes": [
+  [
+   595,
+   842
+  ]
+ ],
+ "pages": [
+  [
+   "q BT 0 0 0 rg /Helvetica-Bold 20 Tf 24 TL 1 0 0 1 50 800 Tm \"RÅDGIVNINGSFAKTURA\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 11 Tf 24 TL 1 0 0 1 50 768 Tm \"Ärende 2026-0010 - Umgängestvist Carlsson\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 752 Tm \"Fakturanr: F-2026-0101\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 738 Tm \"Fakturadatum: 2026-06-30\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 724 Tm \"Mottagare: Cecilia Carlsson\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 10 Tf 24 TL 1 0 0 1 50 710 Tm \"OCR-referens: 202601014\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 13 Tf 24 TL 1 0 0 1 50 688 Tm \"Sammanställning\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 9 Tf 24 TL 1 0 0 1 50 670 Tm \"Benämning\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 9 Tf 24 TL 1 0 0 1 333.998 670 Tm \"Tim\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 9 Tf 24 TL 1 0 0 1 417.492 670 Tm \"Timpris\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 9 Tf 24 TL 1 0 0 1 514.499 670 Tm \"Belopp\" Tj T* ET Q",
+   "q 0.72 0.72 0.72 RG 0.5 w [] 0 d 50 665 m 50 665 m 545 665 l S Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 494.97 652 Tm \"1 626,00 kr\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 652 Tm \"Rådgivningstimme enligt rättshjälpstaxan (1 tim).\" Tj T* ET Q",
+   "q 0.72 0.72 0.72 RG 1.2 w [] 0 d 50 640 m 50 640 m 545 640 l S Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 10 Tf 24 TL 1 0 0 1 50 625 Tm \"Summa inkl moms\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 10 Tf 24 TL 1 0 0 1 493.85 625 Tm \"1 626,00 kr\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 494.97 603 Tm \"1 300,80 kr\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 603 Tm \"Netto (exkl moms)\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 503.31 588 Tm \"325,20 kr\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica 10 Tf 24 TL 1 0 0 1 50 588 Tm \"Moms\" Tj T* ET Q",
+   "q 0.72 0.72 0.72 RG 1.2 w [] 0 d 50 576 m 50 576 m 545 576 l S Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 12 Tf 24 TL 1 0 0 1 50 559 Tm \"Att betala (inkl moms)\" Tj T* ET Q",
+   "q BT 0 0 0 rg /Helvetica-Bold 12 Tf 24 TL 1 0 0 1 483.62 559 Tm \"1 626,00 kr\" Tj T* ET Q",
+   "q BT 0.45 0.45 0.45 rg /Helvetica 9 Tf 24 TL 1 0 0 1 50 539 Tm \"Rådgivningstimmen (1 tim enligt rättshjälpstaxan) faktureras klienten separat och ingår INTE i kostnadsräkningen till\" Tj T* ET Q",
+   "q BT 0.45 0.45 0.45 rg /Helvetica 9 Tf 24 TL 1 0 0 1 50 527 Tm \"domstolen.\" Tj T* ET Q"
+  ]
+ ]
+}

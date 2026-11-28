@@ -10,14 +10,16 @@
  * Båda flödena skapar ett DRAFT-utkast OCH ett faktura-dokument i ärendets
  * dokumentlista (via `generateFakturaFromTemplate`), redo för utskick.
  */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { VatBreakdown } from "@/components/billing/vat-breakdown";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
+import { useBillingQueryUtils } from "@/lib/client/billing/use-billing-query-utils";
 import { fakturaOrgMeta, type FakturaOrgMeta } from "@/lib/client/kostnadsrakning/faktura-org-meta";
 import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { DEFAULT_ACCONTO_SHARE_BIPS, proposedAccontoOre } from "@/lib/shared/billing/billing-proposal";
 import { arvodeInclVatOre } from "@/lib/shared/billing/invoice-calc";
 import { invoiceBreakdown } from "@/lib/shared/billing/settlement-view";
@@ -88,12 +90,14 @@ type DocInvoice = FakturaDocInvoice & {
 };
 
 function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: DocInvoice, recipient: string) => Promise<void> {
-  const register = trpc.document.register.useMutation();
-  const utils = trpc.useUtils();
+  const t = useTRPC();
+  const queryClient = useQueryClient();
+  const utils = useBillingQueryUtils();
+  const register = useMutation(t.document.register.mutationOptions());
   const docMeta = docMetaFrom(meta);
   return async (invoice: DocInvoice, recipient: string) => {
     try {
-      const spec = await utils.billingRun.invoiceSpecification.fetch({ matterId, invoiceId: invoice.id });
+      const spec = await queryClient.query(t.billingRun.invoiceSpecification.queryOptions({ matterId, invoiceId: invoice.id }));
       await generateFakturaFromTemplate({
         invoice, matterId, recipient, meta: docMeta, register, utils, spec, breakdown: invoiceBreakdown(invoice),
       });
@@ -126,7 +130,8 @@ function RoundedNote({ fromOre, toOre }: { fromOre: number | null; toOre: number
 }
 
 function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: BillingMeta; onDone: () => void }) {
-  const proposal = trpc.billingRun.proposal.useQuery({ matterId });
+  const t = useTRPC();
+  const proposal = useQuery(t.billingRun.proposal.queryOptions({ matterId }));
   const workValueOre = proposal.data?.workValueOre ?? 0;
   const priorOre = proposal.data?.priorAccontoSumOre ?? 0;
   // Förifyll med ärendets %-sats (#778); 20 % som fallback om ej satt.
@@ -135,9 +140,9 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   const [invoiceDate, setInvoiceDate] = useState(() => toIsoDate(new Date()));
   const makeDoc = useFakturaDoc(matterId, meta);
   const { suggestedOre, fieldKr, effectiveOre, roundedFromOre } = accontoAmounts(workValueOre, clientShareBips, priorOre, amountKr);
-  const mut = trpc.billingRun.createAcconto.useMutation({
+  const mut = useMutation(t.billingRun.createAcconto.mutationOptions({
     onSuccess: async (res) => { await makeDoc(res.invoice, recipientLabel("KLIENT", meta.clientName)); onDone(); },
-  });
+  }));
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({
       matterId, clientShareBips, amountOre: effectiveOre, recipient: "KLIENT", invoiceDate,
@@ -190,16 +195,17 @@ function Stat({ label, value, strong }: { label: string; value: number; strong?:
 }
 
 function FinalForm({ matterId, meta, accontos, onDone }: { matterId: MatterId; meta: BillingMeta; accontos: AccontoRow[]; onDone: () => void }) {
-  const proposal = trpc.billingRun.proposal.useQuery({ matterId });
+  const t = useTRPC();
+  const proposal = useQuery(t.billingRun.proposal.queryOptions({ matterId }));
   const [recipient, setRecipient] = useState<"KLIENT" | "FORSAKRING" | "RATTSHJALPSMYNDIGHET">("KLIENT");
   const [selected, setSelected] = useState<string[]>(accontos.map((a) => a.id));
   // Per-post-val (#734) med datumintervall (#1888): en orörd lista skickar inga id:n.
   const posts = usePostSelection(proposal.data);
   const [invoiceDate, setInvoiceDate] = useState(() => toIsoDate(new Date()));
   const makeDoc = useFakturaDoc(matterId, meta);
-  const mut = trpc.billingRun.createFinal.useMutation({
+  const mut = useMutation(t.billingRun.createFinal.mutationOptions({
     onSuccess: async (res) => { await makeDoc(res.invoice, recipientLabel(recipient, meta.clientName)); onDone(); },
-  });
+  }));
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({
       matterId, recipient, deductedBillingRunIds: selected, ...posts.ids, invoiceDate,

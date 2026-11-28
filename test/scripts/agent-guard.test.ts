@@ -6,8 +6,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest-compat";
 import {
-  AGENT_PR_PER_DAY, addedMigrationLines, baselineDiffTightens, cappedCreatedAts, countsTowardCap, FILE_SIZE_BASELINE, ROUTER_SIZE_BASELINE,
-  guardLabels, guardViolations as violationsWith, type GuardInput, humanApproved as approvedBy, rankInLast24h,
+  AGENT_PR_CAP_MAX, AGENT_PR_PER_DAY, addedMigrationLines, agentPrCap, baselineDiffTightens, cappedCreatedAts, countsTowardCap, FILE_SIZE_BASELINE,
+  ROUTER_SIZE_BASELINE, guardLabels, guardViolations as violationsWith, type GuardInput, humanApproved as approvedBy, rankInLast24h,
   trustedLabels as trustedWith,
 } from "../../tooling/scripts/agent-guard";
 import { loadFlow } from "../../tooling/scripts/flow/load";
@@ -64,6 +64,32 @@ describe("dygnstaket räknar bara det som kan mergas (2026-11-27)", () => {
   });
 });
 
+describe("taket ur repovariabeln och Ulriks godkännande (2026-11-28)", () => {
+  it("AGENT_PR_CAP ger taket; tomt, skräp, 0 eller över högsta ger standarden", () => {
+    expect(agentPrCap({ AGENT_PR_CAP: "60" })).toBe(60);
+    expect(agentPrCap({ AGENT_PR_CAP: " 45 " })).toBe(45);
+    expect(agentPrCap({ AGENT_PR_CAP: String(AGENT_PR_CAP_MAX) })).toBe(AGENT_PR_CAP_MAX);
+    for (const bad of [undefined, "", "abc", "0", "-5", "3.5", String(AGENT_PR_CAP_MAX + 1)]) {
+      expect(agentPrCap({ AGENT_PR_CAP: bad })).toBe(AGENT_PR_PER_DAY);
+    }
+  });
+
+  it("ett höjt tak släpper igenom nr 45, och standardtaket stoppar den", () => {
+    expect(guardViolations({ ...BASE, agentPrsLast24h: 45, cap: 60 })).toEqual([]);
+    expect(guardViolations({ ...BASE, agentPrsLast24h: 45 })).toEqual([expect.stringContaining("Taket är 30")]);
+  });
+
+  it("en PR med Ulriks människa-godkänd stoppas aldrig av taket", () => {
+    const approved = { ...BASE, labels: [...BASE.labels, "människa-godkänd"], agentPrsLast24h: 45 };
+    expect(guardViolations(approved)).toEqual([]);
+  });
+
+  it("godkända PR:er räknas inte mot kvoten, mergade eller öppna", () => {
+    expect(countsTowardCap({ state: "MERGED", merged: true, labels: ["agent-pr", "människa-godkänd"] })).toBe(false);
+    expect(countsTowardCap({ state: "OPEN", merged: false, labels: ["agent-pr", "människa-godkänd"] })).toBe(false);
+  });
+});
+
 describe("guardViolations", () => {
   it("vanlig PR (utan agent-pr) passerar alltid", () => {
     expect(guardViolations({ ...BASE, labels: [], files: [".github/workflows/ci.yml"], agentPrsLast24h: 99 })).toEqual([]);
@@ -89,10 +115,10 @@ describe("guardViolations", () => {
     expect(guardViolations({ ...BASE, addedMigrationLines: ["ALTER TABLE x ADD COLUMN IF NOT EXISTS y text;"] })).toEqual([]);
   });
 
-  it("människa-godkänd släpper skyddade sökvägar och migrationer, men inte taket", () => {
+  it("människa-godkänd släpper skyddade sökvägar, migrationer och taket (2026-11-28)", () => {
     const input = { ...BASE, labels: ["agent-pr", "granskad", "människa-godkänd"], files: [".github/x.yml"], addedMigrationLines: ["DROP TABLE x;"] };
     expect(guardViolations(input)).toEqual([]);
-    expect(guardViolations({ ...input, agentPrsLast24h: AGENT_PR_PER_DAY + 1 })).toHaveLength(1);
+    expect(guardViolations({ ...input, agentPrsLast24h: AGENT_PR_PER_DAY + 1 })).toEqual([]);
   });
 
   it(`tak: nr ${AGENT_PR_PER_DAY} passerar, nr ${AGENT_PR_PER_DAY + 1} stoppas`, () => {
