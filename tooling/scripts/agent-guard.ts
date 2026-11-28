@@ -24,6 +24,8 @@ import { spawnSync } from "node:child_process";
 import { z } from "zod";
 import { parseJsonWith } from "@/lib/shared/parse-json";
 import { BASELINE_PATH, ROUTER_BASELINE_PATH } from "./file-size-ratchet";
+import { labelIn, loadFlow, machineNamed } from "./flow/load";
+import type { Flow } from "./flow/schema";
 import { destructiveStatements } from "./lib/migration-kind";
 
 export const AGENT_PR_PER_DAY = 30;
@@ -138,21 +140,35 @@ export function rankInLast24h(createdAts: readonly string[], created: number, no
   return createdAts.map((c) => new Date(c).getTime()).filter((t) => t >= since && t <= created).length;
 }
 
+/** Etiketterna vakten läser, uppslagna i flödets PR-maskin (`code-pr`). */
+export interface GuardLabels { reviewed: string; blocked: string; humanApproved: string; agentPr: string }
+
+/** Vaktens etiketter ur `flow.yaml`; kastar om flödet saknar någon av dem. */
+export function guardLabels(flow: Flow): GuardLabels {
+  const pr = machineNamed(flow, "code-pr");
+  return {
+    reviewed: labelIn(pr, "granskad"),
+    blocked: labelIn(pr, "blockerad"),
+    humanApproved: labelIn(pr, "människa-godkänd"),
+    agentPr: labelIn(pr, "agent-pr"),
+  };
+}
+
 /** Vad som bryter mot reglerna — tom lista = godkänd. */
-export function guardViolations(input: GuardInput): string[] {
-  if (!input.labels.includes("agent-pr")) return [];
+export function guardViolations(input: GuardInput, labels: GuardLabels): string[] {
+  if (!input.labels.includes(labels.agentPr)) return [];
   const out: string[] = [];
   if (input.agentPrsLast24h > AGENT_PR_PER_DAY) {
     out.push(`Taket är ${AGENT_PR_PER_DAY} agent-PR:er per dygn — den här är nr ${input.agentPrsLast24h}.`);
   }
-  if (!input.labels.includes("granskad")) out.push("Inte godkänd av granskningsloopen ännu (etiketten granskad saknas).");
-  if (input.labels.includes("blockerad")) out.push("Blockerad — väntar på Ulrik.");
-  if (input.labels.includes("människa-godkänd")) return out;
+  if (!input.labels.includes(labels.reviewed)) out.push(`Inte godkänd av granskningsloopen ännu (etiketten ${labels.reviewed} saknas).`);
+  if (input.labels.includes(labels.blocked)) out.push("Blockerad — väntar på Ulrik.");
+  if (input.labels.includes(labels.humanApproved)) return out;
   for (const f of input.files.filter((file) => isProtectedChange(file, input))) {
-    out.push(`Skyddad sökväg: ${f} (kräver etiketten människa-godkänd).`);
+    out.push(`Skyddad sökväg: ${f} (kräver etiketten ${labels.humanApproved}).`);
   }
   for (const d of destructiveStatements(input.addedMigrationLines.join("\n"))) {
-    out.push(`Destruktiv migration: ${d} — agentmigrationer ska vara additiva (kräver människa-godkänd).`);
+    out.push(`Destruktiv migration: ${d} — agentmigrationer ska vara additiva (kräver ${labels.humanApproved}).`);
   }
   return out;
 }
@@ -212,16 +228,17 @@ const labelEventsSchema = z.array(z.array(z.object({
 /** En etiketthändelse: vem, och om det gjordes via en GitHub-app (en agent). */
 export interface HumanLabelEvent { event: string; label: string; actor: string; viaApp: boolean }
 
-export const ULRIK = "ulrik-s";
+/** Vem som får godkänna (`flow.ulrik`) och med vilken etikett (`människa-godkänd`). */
+export interface Approver { ulrik: string; label: string }
 
 /**
  * `människa-godkänd` räknas bara om Ulrik själv satte den: agenterna agerar i
  * hans namn via Claudes GitHub-app, så etiketten i sig bevisar ingenting.
  * Den SISTA händelsen för etiketten avgör.
  */
-export function humanApproved(events: readonly HumanLabelEvent[]): boolean {
-  const last = events.filter((e) => e.label === "människa-godkänd" && (e.event === "labeled" || e.event === "unlabeled")).at(-1);
-  return last !== undefined && last.event === "labeled" && last.actor === ULRIK && !last.viaApp;
+export function humanApproved(events: readonly HumanLabelEvent[], approver: Approver): boolean {
+  const last = events.filter((e) => e.label === approver.label && (e.event === "labeled" || e.event === "unlabeled")).at(-1);
+  return last !== undefined && last.event === "labeled" && last.actor === approver.ulrik && !last.viaApp;
 }
 
 function labelEvents(pr: string): HumanLabelEvent[] {
@@ -230,28 +247,30 @@ function labelEvents(pr: string): HumanLabelEvent[] {
 }
 
 /** Etiketterna, utan `människa-godkänd` om den inte är satt av Ulrik själv. */
-export function trustedLabels(labels: readonly string[], events: () => readonly HumanLabelEvent[]): string[] {
-  if (!labels.includes("människa-godkänd") || humanApproved(events())) return [...labels];
-  console.error("✗ människa-godkänd är inte satt av Ulrik själv — räknas inte.");
-  return labels.filter((l) => l !== "människa-godkänd");
+export function trustedLabels(labels: readonly string[], events: () => readonly HumanLabelEvent[], approver: Approver): string[] {
+  if (!labels.includes(approver.label) || humanApproved(events(), approver)) return [...labels];
+  console.error(`✗ ${approver.label} är inte satt av Ulrik själv — räknas inte.`);
+  return labels.filter((l) => l !== approver.label);
 }
 
 function main(pr: string): number {
+  const flow = loadFlow();
+  const labels = guardLabels(flow);
   const view = parseJsonWith(prViewSchema, gh(["pr", "view", pr, "--json", "labels,files,createdAt"]));
   const created = new Date(view.createdAt).getTime();
   const now = Date.now();
   const since = new Date(now - DAY_MS).toISOString();
-  const recent = parseJsonWith(prListSchema, gh(["pr", "list", "--state", "all", "--label", "agent-pr", "--limit", "100", "--search", `created:>=${since}`, "--json", "number,createdAt,state,mergedAt,labels"]));
+  const recent = parseJsonWith(prListSchema, gh(["pr", "list", "--state", "all", "--label", labels.agentPr, "--limit", "100", "--search", `created:>=${since}`, "--json", "number,createdAt,state,mergedAt,labels"]));
   const diff = gh(["pr", "diff", pr]);
   const violations = guardViolations({
-    labels: trustedLabels(view.labels.map((l) => l.name), () => labelEvents(pr)),
+    labels: trustedLabels(view.labels.map((l) => l.name), () => labelEvents(pr), { ulrik: flow.ulrik, label: labels.humanApproved }),
     files: view.files.map((f) => f.path),
     addedMigrationLines: addedMigrationLines(diff),
     baselineOnlyTightens: baselineDiffTightens(diff),
     agentPrsLast24h: rankInLast24h(cappedCreatedAts(recent.map((p) => ({
       number: p.number, createdAt: p.createdAt, state: p.state, merged: p.mergedAt != null, labels: p.labels.map((l) => l.name),
     })), Number(pr)), created, now),
-  });
+  }, labels);
   for (const v of violations) console.error(`✗ ${v}`);
   if (violations.length === 0) console.log("✓ agentvakten: inget att invända");
   return violations.length === 0 ? 0 : 1;

@@ -91,6 +91,8 @@ export const flowSchema = z.object({
    * `skip_flags` väntar på en människa och knuffas inte.
    */
   nudge: z.object({ after: durationSchema, skip_flags: z.array(z.string()).default([]) }),
+  /** Inkorgen: ett issue i kodrepot utan arbetsorder-flagga flyttas till intaget efter `grace`. */
+  inbox: z.object({ grace: durationSchema }),
   /** Hälsokontrollen: en sak som stått så här länge trots knuffar larmar. */
   health: z.object({ stuck_after: durationSchema }),
   /** Automatisk tagg: högst en per `every`, bara med ändringar av de här typerna. */
