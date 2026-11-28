@@ -59,6 +59,13 @@ export class DrizzleCalendarEventRepository extends DrizzleRepository<CalendarEv
     return rows;
   }
 
+  async listDeadlinesForOrg(organizationId: OrganizationId): Promise<CalendarEvent[]> {
+    return this.db
+      .select().from(calendarEvents)
+      .where(and(eq(calendarEvents.organizationId, organizationId), eq(calendarEvents.kind, "deadline"), isNull(calendarEvents.deletedAt)))
+      .orderBy(asc(calendarEvents.startAt));
+  }
+
   async getOwned(id: CalendarEventId, userId: UserId, organizationId: OrganizationId): Promise<CalendarEvent | null> {
     const rows = await this.db
       .select().from(calendarEvents)

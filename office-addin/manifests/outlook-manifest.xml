@@ -46,4 +46,63 @@
   <Rule xsi:type="RuleCollection" Mode="Or">
     <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read" />
   </Rule>
+  <!--
+    Knappen i läsvyn (add-in command). Utan den visar Outlook för Mac och nya
+    Outlook för Windows inte tillägget alls, varken under "…" eller Appar
+    (2026-11-28, Maria och Cecilia på Outlook för Mac 16.115). Knappen öppnar
+    samma task-pane som FormSettings ovan; den gamla vägen finns kvar för
+    Outlook-klienter utan knappar.
+  -->
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Requirements>
+      <bt:Sets DefaultMinVersion="1.3">
+        <bt:Set Name="Mailbox" />
+      </bt:Sets>
+    </Requirements>
+    <Hosts>
+      <Host xsi:type="MailHost">
+        <DesktopFormFactor>
+          <ExtensionPoint xsi:type="MessageReadCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="avaGroup">
+                <Label resid="GroupLabel" />
+                <Control xsi:type="Button" id="avaOpenPane">
+                  <Label resid="ButtonLabel" />
+                  <Supertip>
+                    <Title resid="ButtonLabel" />
+                    <Description resid="ButtonTip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon16" />
+                    <bt:Image size="32" resid="Icon32" />
+                    <bt:Image size="80" resid="Icon80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="TaskpaneUrl" />
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon16" DefaultValue="{{BASE}}/assets/icon-16.png" />
+        <bt:Image id="Icon32" DefaultValue="{{BASE}}/assets/icon-32.png" />
+        <bt:Image id="Icon80" DefaultValue="{{BASE}}/assets/icon-80.png" />
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="TaskpaneUrl" DefaultValue="{{BASE}}/taskpane.html" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GroupLabel" DefaultValue="AVA" />
+        <bt:String id="ButtonLabel" DefaultValue="Spara i AVA" />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="ButtonTip" DefaultValue="Spara mejlet till ett ärende i AVA, med valfri tidspost." />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
 </OfficeApp>

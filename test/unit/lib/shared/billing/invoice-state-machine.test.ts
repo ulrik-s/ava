@@ -7,6 +7,9 @@
 import { describe, it, expect } from "vitest-compat";
 import {
   isIssued,
+  isLive,
+  isSendable,
+  isTerminal,
   canTransition,
   assertInvoiceTransition,
   transitionErrorMessage,
@@ -93,5 +96,17 @@ describe("isIssued (#1676)", () => {
     };
     for (const [status, expected] of Object.entries(issued)) expect(isIssued(status)).toBe(expected);
     expect(isIssued("OKÄND")).toBe(false);
+  });
+});
+
+describe("statusmängderna (#2003)", () => {
+  const cases: [string, (s: string) => boolean, readonly InvoiceStatus[]][] = [
+    ["isTerminal", isTerminal, ["PAID", "CANCELLED"]],
+    ["isLive", isLive, ["SENT", "INSTALLMENT_PLAN"]],
+    ["isSendable", isSendable, ["DRAFT", "SENT", "INSTALLMENT_PLAN"]],
+  ];
+  it.each(cases)("%s är sann exakt för sin mängd; okänd status ger false", (_name, pred, members) => {
+    for (const status of ALL) expect(pred(status)).toBe(members.includes(status));
+    expect(pred("OKÄND")).toBe(false);
   });
 });

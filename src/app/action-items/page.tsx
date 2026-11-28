@@ -4,7 +4,7 @@
  * "Att åtgärda" (#1734) — det som kräver ett beslut, inte en frist: takvarningar
  * för rättshjälp och rättsskydd, jävskontroller med träffar som ingen har bedömt,
  * aktiva ärenden utan tid på två månader som kanske ska avslutas (#2100),
- * och synkrutorna. Posterna är härledda och försvinner när de är åtgärdade.
+ * avbetalningar där klienten ligger efter (#2137), och synkrutorna. Posterna är härledda och försvinner när de är åtgärdade.
  * Samma uppbyggnad som sidan Att bevaka (`@/app/watchlist/page`).
  */
 

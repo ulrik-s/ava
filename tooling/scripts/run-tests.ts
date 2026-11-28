@@ -145,7 +145,11 @@ const FAST = process.argv.includes("--fast");
 // → 95.0 rader / 95.0 funktioner (#1906, steg 4 av 5: fakturasidan och
 // Importera betalfil utlöser sina händelser → de 38 otäckta funktionerna
 // täckta, lokalt 98.67% rader / 95.53% funktioner. LINE oförändrat; FUNC =
-// uppmätt avrundat nedåt till tiondel minus 0.5 = 95.0, målet nått).
+// uppmätt avrundat nedåt till tiondel minus 0.5 = 95.0, målet nått)
+// → 95.0 rader / 95.0 funktioner (#1907, steg 5 av 5: Rapporter, avbetalningar
+// och Inställningar utlöser sina händelser → de 47 otäckta funktionerna
+// täckta, lokalt 98.72% rader / 96.38% funktioner. Båda golven står kvar på
+// målet och taket 95.0, nu med ~1.4% funktions-marginal).
 const LINE_FLOOR = 0.950;
 const FUNC_FLOOR = 0.950;
 

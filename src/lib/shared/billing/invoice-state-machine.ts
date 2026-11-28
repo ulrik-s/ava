@@ -57,10 +57,45 @@ const ISSUED: Record<InvoiceStatus, boolean> = {
   DRAFT: false, SENT: true, PAID: true, CANCELLED: false, BAD_DEBT: true, INSTALLMENT_PLAN: true,
 };
 
+/** Avslutade fakturor (#2003): betalda eller annullerade, inget mer att registrera. */
+const TERMINAL: Record<InvoiceStatus, boolean> = {
+  DRAFT: false, SENT: false, PAID: true, CANCELLED: true, BAD_DEBT: false, INSTALLMENT_PLAN: false,
+};
+
+/** Fordringar som lever och kan förfalla (#2003): skickad eller på avbetalningsplan. */
+const LIVE: Record<InvoiceStatus, boolean> = {
+  DRAFT: false, SENT: true, PAID: false, CANCELLED: false, BAD_DEBT: false, INSTALLMENT_PLAN: true,
+};
+
+/** Fakturor som kan skickas (#2003): utkastet (blir Skickad) och de som lever (skickas om). */
+const SENDABLE: Record<InvoiceStatus, boolean> = {
+  DRAFT: true, SENT: true, PAID: false, CANCELLED: false, BAD_DEBT: false, INSTALLMENT_PLAN: true,
+};
+
+/** Ligger statusen i mängden? En status som inte finns ligger inte i någon. */
+function inSet(set: Record<InvoiceStatus, boolean>, status: string): boolean {
+  const parsed = invoiceStatusSchema.safeParse(status);
+  return parsed.success && set[parsed.data];
+}
+
 /** Är fakturan utställd? En status som inte finns räknas inte. */
 export function isIssued(status: string): boolean {
-  const parsed = invoiceStatusSchema.safeParse(status);
-  return parsed.success && ISSUED[parsed.data];
+  return inSet(ISSUED, status);
+}
+
+/** Är fakturan avslutad (betald eller annullerad)? */
+export function isTerminal(status: string): boolean {
+  return inSet(TERMINAL, status);
+}
+
+/** Lever fordran, så att den kan förfalla (skickad eller avbetalningsplan)? */
+export function isLive(status: string): boolean {
+  return inSet(LIVE, status);
+}
+
+/** Kan fakturan skickas (utkast, skickad eller avbetalningsplan)? */
+export function isSendable(status: string): boolean {
+  return inSet(SENDABLE, status);
 }
 
 /** Är `to` en laglig efterföljare till `from`? Samma tillstånd = alltid ok. */

@@ -8,11 +8,12 @@
  * sidan Frister. Under dem: "Bör faktureras" för ärendet — inget annat.
  */
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { isDeadlineDue } from "@/lib/shared/deadline";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 
@@ -32,9 +33,10 @@ function splitTasks(tasks: readonly MatterTask[]): { open: MatterTask[]; done: M
 }
 
 export function WatchSection({ matterId }: { matterId: MatterId }) {
-  const list = trpc.task.listForMatter.useQuery({ matterId });
-  const me = trpc.user.current.useQuery();
-  const users = trpc.user.list.useQuery();
+  const t = useTRPC();
+  const list = useQuery(t.task.listForMatter.queryOptions({ matterId }));
+  const me = useQuery(t.user.current.queryOptions());
+  const users = useQuery(t.user.list.queryOptions());
   const [showDone, setShowDone] = useState(false);
   const { open, done } = splitTasks((list.data ?? []) as MatterTask[]);
   const nameOf = (id: string): string =>
@@ -53,8 +55,8 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
       <AddTaskForm matterId={matterId} />
       {open.length === 0 && <p className="px-2 py-3 text-sm text-gray-500">Inga öppna frister i ärendet.</p>}
       <ul className="divide-y divide-gray-100">
-        {[...open, ...(showDone ? done : [])].map((t) => (
-          <TaskRow key={t.id} task={t} matterId={matterId} ownerName={t.userId === me.data?.id ? null : nameOf(t.userId)} />
+        {[...open, ...(showDone ? done : [])].map((task) => (
+          <TaskRow key={task.id} task={task} matterId={matterId} ownerName={task.userId === me.data?.id ? null : nameOf(task.userId)} />
         ))}
       </ul>
       <MatterSignals matterId={matterId} />
@@ -68,7 +70,8 @@ export function WatchSection({ matterId }: { matterId: MatterId }) {
  */
 
 function MatterSignals({ matterId }: { matterId: MatterId }) {
-  const q = trpc.watchlist.list.useQuery({ mine: false, matterId });
+  const t = useTRPC();
+  const q = useQuery(t.watchlist.list.queryOptions({ mine: false, matterId }));
   const items = (q.data?.items ?? []).filter((i) => i.kind === "unbilled");
   if (items.length === 0) return null;
   return (
@@ -80,10 +83,11 @@ function MatterSignals({ matterId }: { matterId: MatterId }) {
 
 /** Invalidera allt som visar frister: ärendet och sidan Frister. */
 function useInvalidateTasks(matterId: MatterId): () => void {
-  const utils = trpc.useUtils();
+  const t = useTRPC();
+  const queryClient = useQueryClient();
   return () => {
-    void utils.task.listForMatter.invalidate({ matterId });
-    void utils.watchlist.list.invalidate();
+    void queryClient.invalidateQueries(t.task.listForMatter.queryFilter({ matterId }));
+    void queryClient.invalidateQueries(t.watchlist.list.queryFilter());
   };
 }
 
@@ -93,9 +97,10 @@ function AddTaskForm({ matterId }: { matterId: MatterId }) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const invalidate = useInvalidateTasks(matterId);
-  const create = trpc.task.create.useMutation({
+  const t = useTRPC();
+  const create = useMutation(t.task.create.mutationOptions({
     onSuccess: () => { setTitle(""); setDate(""); invalidate(); },
-  });
+  }));
   const submit = (e: React.FormEvent): void => {
     e.preventDefault();
     // Datumet som lokal midnatt — en frist är en dag, inte ett klockslag.
@@ -128,9 +133,10 @@ function AddTaskForm({ matterId }: { matterId: MatterId }) {
  */
 function TaskRow({ task, matterId, ownerName }: { task: MatterTask; matterId: MatterId; ownerName: string | null }) {
   const invalidate = useInvalidateTasks(matterId);
-  const complete = trpc.task.complete.useMutation({ onSuccess: invalidate });
-  const reopen = trpc.task.update.useMutation({ onSuccess: invalidate });
-  const remove = trpc.task.delete.useMutation({ onSuccess: invalidate });
+  const t = useTRPC();
+  const complete = useMutation(t.task.complete.mutationOptions({ onSuccess: invalidate }));
+  const reopen = useMutation(t.task.update.mutationOptions({ onSuccess: invalidate }));
+  const remove = useMutation(t.task.delete.mutationOptions({ onSuccess: invalidate }));
   const done = task.status === "DONE";
   const due = isDeadlineDue(task);
   const id = asId<"TaskId">(task.id);

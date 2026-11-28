@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useId } from "react";
 import { HourlyRatesFields } from "@/components/billing/hourly-rates-fields";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
+import { userRoleOptions } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 
@@ -78,9 +79,7 @@ export function UserForm({
           <select id={roleId} value={form.role}
             onChange={(e) => setForm({ ...form, role: e.target.value })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-            <option value="ADMIN">Admin</option>
-            <option value="LAWYER">Advokat</option>
-            <option value="ASSISTANT">Assistent</option>
+            {userRoleOptions.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </FormField>
         <FormField id={matterPrefixId} label="Ärendenummer-prefix (1–3 versaler)">

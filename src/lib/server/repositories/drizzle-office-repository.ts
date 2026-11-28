@@ -6,6 +6,7 @@ import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { OfficeId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Office } from "@/lib/shared/schemas/organization";
 import { offices } from "../db/schema";
+import { swedishOrder } from "../db/swedish-order";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { OfficeRepository } from "./office-repository";
@@ -19,7 +20,7 @@ export class DrizzleOfficeRepository extends DrizzleRepository<Office> implement
     const rows = await this.db
       .select().from(offices)
       .where(and(eq(offices.organizationId, organizationId), isNull(offices.deletedAt)))
-      .orderBy(desc(offices.isMain), asc(offices.name));
+      .orderBy(desc(offices.isMain), asc(swedishOrder(offices.name)));
     return this.asRows(rows);
   }
 
