@@ -85,7 +85,7 @@ Finns ingen: avsluta.
    Avvisas pushen har en annan körning issuen. Rör då inga etiketter, gå
    tillbaka till `origin/main` och välj nästa issue. Den räknas inte som en
    av dina tre. Den tomma commiten försvinner när PR:en squash-mergas.
-2. Sätt `pågår` och ta bort `granskad`. Allt arbete för issuen görs på
+2. Sätt `pågår` (flödesvakten tar bort `granskad`). Allt arbete för issuen görs på
    `claude/<nr>-g<G>` (prefixet `claude/` krävs i molnet).
 3. **Arkitektur först (regel 4b):** läs issuens fält "Arkitektur", förebilden
    och de ADR:er som gäller, och gör likadant som förebilden. Upptäcker du
@@ -167,7 +167,7 @@ Finns ingen: avsluta.
 
 Är issuen oklar, kräver den en destruktiv migration, eller går CI inte att
 få grön? (En skyddad sökväg som arbetsordern beskriver bygger du: regel 4.) Kommentera på issuen vad du försökt och vad
-som behövs, ta bort `pågår` och sätt `blockerad`. Pusha inte det
+som behövs, sätt `granskad` och sedan `blockerad`. Pusha inte det
 halvfärdiga: branchen ska bara ha commiten som tog issuen.
 
 Avsluta med en rad: vad som gjordes (PR-nummer eller "inget att göra").
