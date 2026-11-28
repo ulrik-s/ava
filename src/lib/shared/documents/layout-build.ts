@@ -10,15 +10,17 @@
  *   <page-header>  <page-footer>  på varje sida (pages="all|first|rest")
  *   <block>        fritt placerat (at="window|top-left|top-right" eller x/top)
  *   <text>  <image>  <table>  <rule>  <spacer>  <page-break>
+ *   <u>            understruken del inne i <text> (layout-text.ts)
  */
 
 import type { BlockNode, FlowNode, ImageNode, LayoutDocument, PageBand, PageMargins, SpacerNode, TextNode } from "./layout-ast";
 import { ATTRS, attrsOf, type Attrs, type StyleAttrs } from "./layout-attrs";
 import { buildTable } from "./layout-build-table";
 import {
-  assertEmpty, buildRule, elementChildren, finalStyle, inheritStyle, ROOT_STYLE, spacingOf, textContent, unexpected,
+  assertEmpty, buildRule, elementChildren, finalStyle, inheritStyle, ROOT_STYLE, spacingOf, unexpected,
   type BuildCtx, type PageGeometry,
 } from "./layout-style";
+import { textSpans } from "./layout-text";
 import { LayoutError, parseMarkup, type MarkupElement } from "./markup-parser";
 
 const PT_PER_MM = 72 / 25.4;
@@ -43,7 +45,11 @@ const DOCUMENT_ONLY = ["style", "page-header", "page-footer"] as const;
 
 function buildText(el: MarkupElement, ctx: BuildCtx): TextNode {
   const a = attrsOf(ATTRS.text, el);
-  return { kind: "text", content: textContent(el), style: finalStyle(inheritStyle(ctx, a, el)), align: a.align ?? "left", ...spacingOf(a) };
+  const spans = textSpans(el);
+  return {
+    kind: "text", content: spans.map((s) => s.text).join(""), spans,
+    style: finalStyle(inheritStyle(ctx, a, el)), align: a.align ?? "left", ...spacingOf(a),
+  };
 }
 
 function buildSpacer(el: MarkupElement): SpacerNode {

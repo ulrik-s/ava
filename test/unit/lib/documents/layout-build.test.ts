@@ -75,7 +75,7 @@ describe("buildLayout — dokumentet", () => {
 describe("buildLayout — text och stilar", () => {
   it("standardstil: 10 pt, normal, svart, radavstånd 1,4 × storleken; blanktecken komprimeras", () => {
     expect(textOf("<text>\n  Hej\n   världen  </text>")).toEqual({
-      kind: "text", content: "Hej världen", align: "left", keep: 0, spaceBefore: 0, spaceAfter: 0,
+      kind: "text", content: "Hej världen", spans: [{ text: "Hej världen", underline: false }], align: "left", keep: 0, spaceBefore: 0, spaceAfter: 0,
       style: { font: "regular", size: 10, color: [0, 0, 0], leading: 14 },
     });
   });
@@ -97,8 +97,39 @@ describe("buildLayout — text och stilar", () => {
   });
 
   it("<text> får bara innehålla text; <spacer> och <rule> inget alls", () => {
-    fails("<document><text>a <b>fet</b></text></document>", /<text> får bara innehålla text, inte <b>/);
+    fails("<document><text>a <b>fet</b></text></document>", /<text> får bara innehålla text och <u>, inte <b>/);
     fails(`<document><spacer height="2"><text>x</text></spacer></document>`, /<spacer> får inte innehålla <text>/);
+  });
+});
+
+describe("buildLayout — <u> och font=\"sans\" (tillägg #2255)", () => {
+  it("<u> ger understrukna delar; blanktecken komprimeras över gränserna", () => {
+    const n = textOf("<text>  Ange <u> endast  fakturanummer</u>\n vid betalning tack!  </text>");
+    expect(n.content).toBe("Ange endast fakturanummer vid betalning tack!");
+    expect(n.spans).toEqual([
+      { text: "Ange ", underline: false },
+      { text: "endast fakturanummer", underline: true },
+      { text: " vid betalning tack!", underline: false },
+    ]);
+  });
+
+  it("understruket först och sist; intilliggande delar slås ihop; tom text ger en tom del", () => {
+    expect(textOf("<text><u>a</u><u> b </u></text>").spans).toEqual([{ text: "a b", underline: true }]);
+    expect(textOf("<text>x<u> </u></text>").spans).toEqual([{ text: "x", underline: false }]);
+    expect(textOf("<text><u></u></text>").spans).toEqual([{ text: "", underline: false }]);
+  });
+
+  it("<u> utan attribut, bara text, och bara i <text>", () => {
+    fails(`<document><text><u x="1">a</u></text></document>`, /<u> — okänt attribut "x"/);
+    fails(`<document><text><u>a <u>b</u></u></text></document>`, /<u> får bara innehålla text, inte <u>/);
+    fails(`<document><table><col width="1"/><row><cell><u>a</u></cell></row></table></document>`, /<cell> får bara innehålla text, inte <u>/);
+    fails(`<document><u>a</u></document>`, /<u> är inte tillåtet i <document>/);
+  });
+
+  it("font=\"sans\" på stil, text och cell", () => {
+    expect(textOf(`<style name="sidfot" font="sans" size="8"/><text style="sidfot">x</text>`).style).toMatchObject({ font: "sans", size: 8 });
+    expect(textOf(`<text font="sans">x</text>`).style.font).toBe("sans");
+    fails(`<document><text font="mono">x</text></document>`, /"font"/);
   });
 });
 
@@ -190,6 +221,14 @@ describe("buildLayout — table", () => {
     expect(rule).toMatchObject({ kind: "rule", keep: 30 });
     expect(plain?.kind === "row" && plain.cells[1]?.style.color).toEqual([0.45, 0.45, 0.45]);
     expect(plain).toMatchObject({ leading: 9 * 1.4, keep: undefined, spaceAfter: 0 });
+  });
+
+  it("fill: på raden, eller tabellens som standard för alla rader (tillägg #2255)", () => {
+    const t = tableOf(`<table fill="0.95"><col width="10"/><row><cell/></row><row fill="#ff0000"><cell/></row><tfoot><row><cell/></row></tfoot></table>`);
+    const fills = [...t.body, ...(t.foot?.items ?? [])].map((i) => (i.kind === "row" ? i.fill : null));
+    expect(fills).toEqual([[0.95, 0.95, 0.95], [1, 0, 0], [0.95, 0.95, 0.95]]);
+    expect(tableOf(`<table><col width="10"/><row><cell/></row></table>`).body[0]).toMatchObject({ fill: undefined });
+    fails(`<document><table><col width="10"/><row fill="grå"><cell/></row></table></document>`, /"fill": en färg som #rrggbb/);
   });
 
   it("standard: rubriken upprepas, ingen keep-extra", () => {

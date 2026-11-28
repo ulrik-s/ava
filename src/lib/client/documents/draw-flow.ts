@@ -7,23 +7,11 @@
  * plats för varje rad, så långa stycken fortsätter på nästa sida.
  */
 
-import type { BlockNode, FlowNode, ImageNode, TextNode } from "@/lib/shared/documents/layout-ast";
+import type { BlockNode, FlowNode, ImageNode } from "@/lib/shared/documents/layout-ast";
 import { LayoutError } from "@/lib/shared/documents/markup-parser";
-import { alignedX, drawLine, drawRule, FixedCursor, wrapLines, type DrawCtx } from "./draw-context";
+import { alignedX, drawRule, FixedCursor, type DrawCtx } from "./draw-context";
 import { drawTable } from "./draw-table";
-
-function drawText(ctx: DrawCtx, n: TextNode): void {
-  const { cursor, frame } = ctx;
-  const lines = wrapLines(ctx, n.content, n.style, frame.width);
-  cursor.ensure(Math.max(n.keep, n.style.leading));
-  cursor.y += n.spaceBefore;
-  lines.forEach((line, i) => {
-    if (i > 0) cursor.ensure(n.style.leading);
-    drawLine(ctx, line, n.style, { align: n.align, left: frame.left, width: frame.width, top: cursor.y });
-    cursor.y += n.style.leading;
-  });
-  cursor.y += n.spaceAfter;
-}
+import { drawText } from "./draw-text";
 
 /** Rita en namngiven bild i sin ruta. Bilden finns inte (null) → rutan står tom och tar ingen plats. */
 async function drawImage(ctx: DrawCtx, n: ImageNode): Promise<void> {
