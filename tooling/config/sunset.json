@@ -1,0 +1,11 @@
+[
+  {
+    "mechanism": "document_type, tags och document_tags (kodsteget)",
+    "adr": 38,
+    "issue": "ava-feedback#57",
+    "lastDay": "2027-01-31",
+    "traces": ["document_type", "documentType", "documentTags", "document_tags"],
+    "paths": ["src/"],
+    "exclude": ["src/lib/server/db/schema"]
+  }
+]
