@@ -19,7 +19,7 @@
 
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { AggregateArgs, Delegate, FindArgs } from "../IDataStore";
-import { InMemoryQueryEngine } from "./query-engine";
+import { InMemoryQueryEngine, type QueryOptions } from "./query-engine";
 
 export class ReadOnlyError extends Error {
   constructor(operation: string) {
@@ -215,7 +215,7 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> implements Dele
     if (subTree && relations) {
       children = children.map((c) => this.hydrateWith(c, relations, subTree, mode));
     }
-    children = applyTake(children, spec, mode);
+    children = includeQuery(children, spec, mode);
     return rc.kind === "one" ? (children[0] ?? null) : children;
   }
 
@@ -262,16 +262,25 @@ function userWhereFor(spec: unknown, mode: "where" | "include"): Record<string, 
   return (spec.where as Record<string, unknown>) ?? {};
 }
 
-/** Begränsa barn-listan med `take` (bara i include-läge med numeriskt take). */
-function applyTake(
+/** Query-motorn för relationernas barn (samma sortering som toppnivåfrågorna). */
+const RELATION_ENGINE = new InMemoryQueryEngine<Record<string, unknown>>();
+
+/**
+ * Sortera och begränsa barn-listan med include-specens `orderBy` och `take`
+ * (#2250): genom query-motorn, som `queryRows`, så att `take` gäller efter
+ * sorteringen och strängar jämförs i svensk ordning. Where-läget rörs inte.
+ */
+function includeQuery(
   children: Record<string, unknown>[],
   spec: unknown,
   mode: "where" | "include",
 ): Record<string, unknown>[] {
-  if (mode === "include" && isObj(spec) && typeof spec.take === "number") {
-    return children.slice(0, spec.take);
-  }
-  return children;
+  if (mode !== "include" || !isObj(spec)) return children;
+  return RELATION_ENGINE.query(children, omitUndefined({
+    // Include-specen är Prisma-formad (otypad här); query-motorn tolkar formen.
+    orderBy: spec.orderBy as QueryOptions["orderBy"],
+    take: typeof spec.take === "number" ? spec.take : undefined,
+  }));
 }
 
 /** Vilket sub-träd att rekursera ned i för nested include / nested where. */
