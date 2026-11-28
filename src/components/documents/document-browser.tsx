@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useMemo } from "react";
+import type { RowSelection } from "@/components/ui/data-table";
 import { SECTION_FILL_CLASS, sectionHeaderClass } from "@/components/ui/section-tone";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
@@ -9,8 +10,10 @@ import { trpc } from "@/lib/client/trpc";
 import { kindLabel } from "@/lib/shared/document-kind";
 import { documentKinds } from "@/lib/shared/document-kinds";
 import { asId, type DocumentFolderId, type DocumentId, type MatterId } from "@/lib/shared/schemas/ids";
+import { BrowserTable } from "./_browser-table";
 import { useDocumentsWithParts } from "./_document-parts";
 import { DocumentRow, DOCUMENT_RECIPIENT_LABELS, type DocumentRecord } from "./_document-row";
+import { MoveDocumentsButton, rowToggle, useDocumentSelection } from "./_document-selection";
 import { DocumentsListView } from "./_documents-list-view";
 import { FolderRow, type FolderRecord } from "./_folder-row";
 import { NewFolderForm } from "./_new-folder-form";
@@ -81,6 +84,8 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     setAnalyzingIds,
   });
   const upload = useFileUpload({ matterId, mutations });
+  // Markerade dokument (#2046): töms vid vybyte och efter flytten.
+  const marking = useDocumentSelection<DocumentRecord>(upload.uploadingIds);
   // Namnrutan före uppladdning (#1614, + Ladda upp #1976): `nameQueue.enqueue(filer, mapp)` öppnar den.
   const nameQueue = useUploadNameQueue();
   // Filer utifrån (#1615) går till namnrutan och sedan samma uppladdning.
@@ -108,7 +113,8 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
         fileInputRef={fileInputRef}
         onUpload={(e) => { nameQueue.enqueue(Array.from(e.target.files ?? []), null); e.target.value = ""; }}
         viewMode={viewMode}
-        onChangeViewMode={changeViewMode}
+        onChangeViewMode={(m) => { marking.clear(); changeViewMode(m); }}
+        moveButton={<MoveDocumentsButton selected={marking.selection.selected} matterId={matterId} onMoved={marking.clear} />}
       />
 
       <DocumentFilterBar filter={filter} totalCount={documents.length} />
@@ -138,6 +144,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
           docSync={docSync}
           rename={{ renamingFolderId, renameValue, setRenameValue, setRenamingFolderId }}
           mutations={mutations}
+          selection={marking.selection}
         />
       ) : (
         <DocumentsListView
@@ -150,6 +157,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
           onDelete={(id) => mutations.deleteDocument.mutate({ id })}
           onReanalyze={(id) => mutations.reanalyze.mutate({ documentId: id })}
           isDropTarget={drag.dropTarget === "root"}
+          selection={marking.selection}
         />
       )}
     </div>
@@ -212,7 +220,7 @@ function DocumentFilterBar({ filter, totalCount }: { filter: ReturnType<typeof u
 /** Träd-vyn: rekursiv mapp-/dokumentrendering med drag-and-drop + rename. */
 function DocumentTree({
   foldersByParent, docsByFolder, collapsedFolders, toggleFolder,
-  drag, analyzingIds, uploadingIds, docSync, rename, mutations,
+  drag, analyzingIds, uploadingIds, docSync, rename, mutations, selection,
 }: {
   foldersByParent: Map<string | null, FolderRecord[]>;
   docsByFolder: Map<string | null, DocumentRecord[]>;
@@ -224,6 +232,7 @@ function DocumentTree({
   docSync: Map<string, SyncStatus>;
   rename: RenameApi;
   mutations: ReturnType<typeof useDocumentMutations>;
+  selection: RowSelection<DocumentRecord>;
 }) {
   const { dragItem, dropTarget, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd } = drag;
   const { renamingFolderId, renameValue, setRenameValue, setRenamingFolderId } = rename;
@@ -237,6 +246,7 @@ function DocumentTree({
       isAnalyzing={analyzingIds.has(doc.id)}
       isUploading={uploadingIds.has(doc.id)}
       syncStatus={docSync.get(doc.id)}
+      selection={rowToggle(selection, doc)}
       onDragStart={handleDragStart("document", doc.id)}
       onDragEnd={handleDragEnd}
       onReanalyze={() => mutations.reanalyze.mutate({ documentId: doc.id })}
@@ -319,59 +329,6 @@ function UploadErrorBanner({ message, onDismiss }: { message: string; onDismiss:
   );
 }
 
-function BrowserTable({
-  rootFolders, rootDocs, renderFolderRow, renderDocRow,
-  dropTarget, onDragOver, onDragLeave, onDrop,
-}: {
-  rootFolders: FolderRecord[];
-  rootDocs: DocumentRecord[];
-  renderFolderRow: (folder: FolderRecord, depth: number) => React.ReactNode;
-  renderDocRow: (doc: DocumentRecord, depth: number) => React.ReactNode;
-  dropTarget: string | null;
-  onDragOver: (e: React.DragEvent) => void;
-  onDragLeave: () => void;
-  onDrop: (e: React.DragEvent) => void;
-}) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full table-fixed divide-y divide-gray-200">
-        <thead>
-          <tr className="bg-gray-50">
-            <th className="px-3 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Namn</th>
-            <th className="hidden sm:table-cell px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase w-28">Datum</th>
-            <th className="px-3 py-2 w-12"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            className={dropTarget === "root" ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" : "bg-gray-50"}
-          >
-            <td colSpan={3} className="px-6 py-1.5 text-xs font-medium text-gray-500 uppercase tracking-wide">
-              Rot
-            </td>
-          </tr>
-          {rootFolders.map((folder) => renderFolderRow(folder, 0))}
-          {rootDocs.map((doc) => renderDocRow(doc, 0))}
-          {rootFolders.length === 0 && rootDocs.length === 0 && (
-            <tr>
-              <td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-500">
-                Inga dokument eller mappar.
-                <br />
-                <span className="text-xs text-gray-400">
-                  Ladda upp filer eller skapa en mapp.
-                </span>
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function BrowserHeader({
   showNewFolder,
   uploading,
@@ -379,6 +336,7 @@ function BrowserHeader({
   onUpload,
   viewMode,
   onChangeViewMode,
+  moveButton,
 }: {
   showNewFolder: () => void;
   uploading: boolean;
@@ -386,12 +344,15 @@ function BrowserHeader({
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   viewMode: ViewMode;
   onChangeViewMode: (m: ViewMode) => void;
+  /** **Flytta till ärende… (N)** för de markerade dokumenten (#2046). */
+  moveButton: React.ReactNode;
 }) {
   return (
     <div className={sectionHeaderClass("purple", "flex flex-wrap items-center justify-between gap-2")}>
       <h2 className="font-semibold text-gray-900">Dokument</h2>
       <div className="flex items-center gap-3">
         <SegmentedControl options={VIEW_MODE_OPTIONS} value={viewMode} onChange={onChangeViewMode} ariaLabel="Dokumentvy" />
+        {moveButton}
         {viewMode === "tree" && (
           <button onClick={showNewFolder} className="text-sm text-blue-700 hover:underline">
             + Ny mapp

@@ -10,6 +10,7 @@ import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/share
 import { DocumentDetailsDialog } from "./_document-details-dialog";
 import { DocumentNameCell } from "./_document-name-cell";
 import type { DocumentPartView } from "./_document-parts";
+import type { RowToggle } from "./_document-selection";
 import { MailDocumentDialog } from "./_mail-document-dialog";
 import type { SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
@@ -57,6 +58,8 @@ interface Props {
   isUploading?: boolean;
   /** Helperns write-back-status för dokumentet (ADR 0031): "ändringar på ingång". */
   syncStatus?: SyncStatus | undefined;
+  /** Kryssrutan för markeringen (#2046); saknas när dokumentet inte kan markeras. */
+  selection?: RowToggle | undefined;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   onReanalyze: () => void;
@@ -71,6 +74,7 @@ export function DocumentRow({
   isAnalyzing,
   isUploading,
   syncStatus,
+  selection,
   onDragStart,
   onDragEnd,
   onReanalyze,
@@ -109,9 +113,15 @@ export function DocumentRow({
         title={isUploading ? "Laddar upp…" : undefined}
       >
         <td className="px-3 sm:px-6 py-2.5 text-sm">
-          <div style={{ paddingLeft: `${depth * 16 + 4}px` }} className="min-w-0">
-            <DocumentNameCell doc={doc} isAnalyzing={isAnalyzing} isUploading={isUploading} syncStatus={syncStatus}
-              onOpen={() => void openPrimary()} />
+          <div style={{ paddingLeft: `${depth * 16 + 4}px` }} className="min-w-0 flex items-start gap-2">
+            {selection && (
+              <input type="checkbox" aria-label="Markera rad" className="mt-1" checked={selection.checked}
+                onChange={selection.onToggle} />
+            )}
+            <div className="min-w-0 flex-1">
+              <DocumentNameCell doc={doc} isAnalyzing={isAnalyzing} isUploading={isUploading} syncStatus={syncStatus}
+                onOpen={() => void openPrimary()} />
+            </div>
           </div>
         </td>
         <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
