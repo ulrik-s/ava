@@ -35,9 +35,15 @@ PG_DB="${POSTGRES_DB:-ava}"
 
 # Kontrollera checksumman när den finns — en trasig dump ska upptäckas nu,
 # inte halvvägs in i återställningen med en tömd databas.
+# Summan jämförs, inte sökvägen i filen: backup-db.sh skriver den absoluta
+# sökvägen där dumpen gjordes, och en dump ur en krypterad export packas upp
+# någon annanstans (runbook-aterstallning.md, steg 3; #1897).
 if [ -f "$DUMP.sha256" ]; then
   echo "▸ Verifierar checksumma …"
-  if command -v sha256sum >/dev/null; then sha256sum -c "$DUMP.sha256"; else shasum -a 256 -c "$DUMP.sha256"; fi
+  EXPECTED="$(cut -d' ' -f1 < "$DUMP.sha256")"
+  if command -v sha256sum >/dev/null; then ACTUAL="$(sha256sum "$DUMP" | cut -d' ' -f1)"; else ACTUAL="$(shasum -a 256 "$DUMP" | cut -d' ' -f1)"; fi
+  [ "$EXPECTED" = "$ACTUAL" ] || { echo "✗ Checksumman stämmer inte för $DUMP." >&2; exit 1; }
+  echo "  ✓ checksumma ok"
 fi
 gzip -t "$DUMP" || { echo "✗ Dumpen är trasig." >&2; exit 1; }
 

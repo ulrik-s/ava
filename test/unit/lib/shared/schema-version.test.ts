@@ -32,7 +32,7 @@ describe("assertRepoSchemaCompatible", () => {
     expect(() => assertRepoSchemaCompatible(2, 2)).not.toThrow();
   });
 
-  it("OK när repo < kod (migrate-on-read i senare fas)", () => {
+  it("OK när repo < kod", () => {
     expect(() => assertRepoSchemaCompatible(1, 3)).not.toThrow();
   });
 

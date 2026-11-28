@@ -20,7 +20,7 @@
 
 import type { ModalState } from "@/components/documents/external-edit-modal";
 import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
-import { isDemoTier } from "@/lib/client/firma/firma-config";
+import { DEMO_REPO, isDemoTier } from "@/lib/client/firma/firma-config";
 import type { OpenInFinderResult } from "@/lib/client/fsa/open-in-finder";
 import { openViaHelper } from "@/lib/client/helper/use-helper";
 import type { HelperOpenRequest } from "@/lib/shared/helper/protocol";
@@ -43,8 +43,6 @@ export interface OpenOpts {
 
 /** Utfall av en öppning (ADR 0033 §2): klar, eller skrivskyddad pga annans lease. */
 export type OpenOutcome = { kind: "done" } | { kind: "read-only"; leaseHolder?: string };
-
-const DEFAULT_DEMO_REPO_FALLBACK = "ulrik-s/ava-demo";
 
 /**
  * Försök öppna via AVA Helper (1-klicks-flow). Returnerar true om
@@ -95,9 +93,7 @@ function helperTrpcUrl(): string {
  * skickade helpern ut mot LIVE-demon även när `out/` serverades lokalt.
  */
 function demoBase(): string {
-  return demoDataBaseUrl(
-    process.env.NEXT_PUBLIC_DEMO_REPO || process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO || DEFAULT_DEMO_REPO_FALLBACK,
-  );
+  return demoDataBaseUrl(DEMO_REPO);
 }
 
 function demoUrl(doc: Doc): string {

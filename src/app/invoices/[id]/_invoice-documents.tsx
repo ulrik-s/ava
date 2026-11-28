@@ -7,11 +7,10 @@
 
 import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
-import { isDemoTier } from "@/lib/client/firma/firma-config";
+import { DEMO_REPO, isDemoTier } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
 import { kindLabel } from "@/lib/shared/document-kind";
 import { documentKinds, type KindsCarrier } from "@/lib/shared/document-kinds";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
 
 /** Det listan behöver av ett fakturadokument. */
@@ -38,7 +37,7 @@ async function openInvoiceDoc(doc: InvoiceDocRow, client: DownloadClient): Promi
     // RUNTIME-tier, inte NEXT_PUBLIC_DEMO_BUILD (sant även i lokala self-hosted-
     // builden → länkade fakturadokument till GH Pages = 404). #844.
     isDemo: isDemoTier(),
-    ...omitUndefined({ demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO }),
+    demoRepo: DEMO_REPO,
     loadHandle: () => loadHandle("repo-root"),
     readFromHandle: readFromFsa,
     // Server-first (#518): hämta bytes från servern (+ klient-cache) i st.f. FSA.

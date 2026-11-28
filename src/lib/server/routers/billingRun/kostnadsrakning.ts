@@ -23,7 +23,7 @@ import {
 } from "@/lib/shared/schemas/ids";
 import { stockholmYear } from "@/lib/shared/stockholm-time";
 import { krCourtName } from "../../billing/kr-court";
-import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, valueKrRun } from "../../billing/kr-run-valuation";
+import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, krRunValuedMatter, valueKrRun } from "../../billing/kr-run-valuation";
 import { logMatterNote } from "../../billing/matter-note";
 import { removeVoidedKrDocuments } from "../../billing/void-kr-documents";
 import { emit } from "../../events/emit";
@@ -92,7 +92,7 @@ export const kostnadsrakningProcedures = {
         const valuation = valueKrRun(matter, work, input, now);
         if (Object.keys(valuation.matterPatch).length > 0) await tx.matters.update(input.matterId, valuation.matterPatch);
         const grossValue = krRunGrossOre(valuation, () =>
-          krGrossOre(work, matterKrArvodeRows({ ...matter, ...valuation.matterPatch }, work, now)));
+          krGrossOre(work, matterKrArvodeRows(krRunValuedMatter(matter, valuation, input), work, now)));
         const run = await tx.billingRuns.create({
           id: asId<"BillingRunId">(newRowId(ctx, "billingRun")),
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",

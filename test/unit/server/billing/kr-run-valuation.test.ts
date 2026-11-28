@@ -4,7 +4,7 @@
  * grenar som avgör VÄGEN.
  */
 import { describe, expect, it } from "vitest-compat";
-import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, valueKrRun, type KrRunMatter } from "@/lib/server/billing/kr-run-valuation";
+import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, krRunValuedMatter, valueKrRun, type KrRunMatter } from "@/lib/server/billing/kr-run-valuation";
 import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
 import { kostnadsrakningClaimInclVat } from "@/lib/shared/billing/kostnadsrakning";
 
@@ -33,7 +33,8 @@ describe("valueKrRun", () => {
       isTaxeArende: false, timeEntries: [], expenses: [],
     });
     const v = valueKrRun(TAXE, NO_WORK, { ...huf, isTaxeArende: false }, NOW);
-    expect(v).toEqual({ kind: "lopande", grossOre: expected, matterPatch: { isTaxeArende: false } });
+    // Taxevalet är körningens och sparas inte på ärendet (#1890).
+    expect(v).toEqual({ kind: "lopande", grossOre: expected, matterPatch: {} });
     expect(expected).toBeGreaterThan(0);
   });
 
@@ -49,9 +50,21 @@ describe("valueKrRun", () => {
       .toThrow(/slutar före/);
   });
 
-  it("dialogen kryssar i taxeärende på ett ärende som saknade det → taxan, och valet sparas", () => {
+  it("dialogen kryssar i taxeärende på ett ärende som saknade det → taxan; valet sparas inte, nivå och HUF gör (#1890)", () => {
     const v = valueKrRun({ ...TAXE, isTaxeArende: false }, NO_WORK, { isTaxeArende: true }, NOW);
-    expect(v).toMatchObject({ kind: "taxa", matterPatch: { isTaxeArende: true } });
+    expect(v).toEqual({
+      kind: "taxa", grossOre: taxaOf(1),
+      matterPatch: { taxaLevel: 1, taxaHuvudforhandlingMin: 95, taxaHufStart: NOW },
+    });
+  });
+
+  it("matterPatch innehåller aldrig isTaxeArende, vilket val dialogen än gör (#1890)", () => {
+    const huf = { hufStart: "2026-09-22T09:00:00.000Z", hufEnd: "2026-09-22T10:00:00.000Z" };
+    for (const isTaxeArende of [true, false, undefined]) {
+      for (const matter of [TAXE, { ...TAXE, isTaxeArende: false }, { ...TAXE, paymentMethod: "RATTSHJALP" }]) {
+        expect(valueKrRun(matter, NO_WORK, { ...huf, isTaxeArende }, NOW).matterPatch).not.toHaveProperty("isTaxeArende");
+      }
+    }
   });
 
   it("nivån: dialogens, annars ärendets, annars 1 — ett ogiltigt värde på ärendet blir 1", () => {
@@ -126,6 +139,21 @@ describe("valueKrRun — förordnandemål", () => {
 
   it("inte offentligt uppdrag → PRECONDITION_FAILED", () => {
     expect(() => valueKrRun({ paymentMethod: "RATTSHJALP" }, NO_WORK, NEDLAGD, NOW)).toThrow(/offentligt uppdrag/);
+  });
+});
+
+describe("krRunValuedMatter (#1890)", () => {
+  const norm = { kind: "norm" as const, matterPatch: {} };
+
+  it("dialogens taxeval ligger ovanpå ärendet och patchen, utan att ändra ärendet", () => {
+    const matter = { paymentMethod: "RATTSHJALP", isTaxeArende: true, taxaLevel: 2 };
+    const taxa = { kind: "taxa" as const, grossOre: 1, matterPatch: { taxaLevel: 3 as const } };
+    expect(krRunValuedMatter(matter, taxa, { isTaxeArende: false })).toEqual({ paymentMethod: "RATTSHJALP", isTaxeArende: false, taxaLevel: 3 });
+    expect(matter).toEqual({ paymentMethod: "RATTSHJALP", isTaxeArende: true, taxaLevel: 2 });
+  });
+
+  it("utan val i dialogen gäller ärendets flagga", () => {
+    expect(krRunValuedMatter({ isTaxeArende: true }, norm, {})).toEqual({ isTaxeArende: true });
   });
 });
 

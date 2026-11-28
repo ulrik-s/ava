@@ -21,7 +21,7 @@
  *
  * Transport-agnostisk: tar en `SyncTransport`-port (en HTTP/tRPC-impl mot
  * server-runtimen, #410/#411, eller en fejk i tester). Principalen offline
- * kommer från en cachad session (D2/ADR 0018, `CachedSessionAuthProvider`).
+ * kommer från den cachade sessionen i klientens sessionsgrind (ADR 0018, #1245).
  */
 
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";

@@ -69,6 +69,12 @@ describe("LedgerBooking", () => {
     expect(screen.getByRole("button", { name: "Bokför 2 betalningar i Fortnox" })).toBeInTheDocument();
   });
 
+  it("en betalning med bara ledgerRef räknas som bokförd (#1931)", () => {
+    render(<LedgerBooking invoiceId={ID} status="PAID" fortnoxId="A/12" payments={[{ ledgerRef: "A/13" }]} />);
+    expect(screen.getByText(/verifikat A\/12\) · 1 betalning bokförd$/)).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("en ny betalning: singular", () => {
     render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId="A/12" payments={[{ fortnoxId: null }]} />);
     expect(screen.getByRole("button", { name: "Bokför 1 betalning i Fortnox" })).toBeInTheDocument();

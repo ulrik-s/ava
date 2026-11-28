@@ -11,7 +11,7 @@ const openDocumentSpy = vi.fn(async () => "opened-gh-pages");
 const createServerDownloadClientSpy = vi.fn(() => ({}));
 const loadDocumentBlobSpy = vi.fn(async () => null);
 
-vi.mock("@/lib/client/firma/firma-config", () => ({ loadFirmaConfig: () => ({ tier }) }));
+vi.mock("@/lib/client/firma/firma-config", () => ({ DEMO_REPO: "byra/demo", loadFirmaConfig: () => ({ tier }) }));
 vi.mock("@/lib/client/firma/open-document", () => ({ openDocument: openDocumentSpy }));
 vi.mock("@/lib/client/fsa/handle-store", () => ({ loadHandle: async () => null }));
 vi.mock("@/lib/client/fsa/read-from-fsa", () => ({ readFromFsa: async () => null }));
@@ -46,5 +46,14 @@ describe("openMatterDocument (#651)", () => {
     openDocumentSpy.mockClear();
     await openMatterDocument({ id: "d1", fileName: "d1.pdf" });
     expect((openDocumentSpy.mock.calls[0]![0] as { page?: number }).page).toBeUndefined();
+  });
+
+  it("#1945: demoRepo är alltid DEMO_REPO, i båda lägena", async () => {
+    for (const t of ["demo", "self-hosted"] as const) {
+      tier = t;
+      openDocumentSpy.mockClear();
+      await openMatterDocument({ id: "d1", fileName: "d1.pdf" });
+      expect((openDocumentSpy.mock.calls.at(0)?.[0] as { demoRepo?: string } | undefined)?.demoRepo).toBe("byra/demo");
+    }
   });
 });

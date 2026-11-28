@@ -9,6 +9,7 @@
 import { useBookInvoice, useLedgerStatus } from "@/lib/client/backend/server-ledger";
 import { trpc } from "@/lib/client/trpc";
 import { isIssued } from "@/lib/shared/billing/invoice-state-machine";
+import { type LedgerRefRow, ledgerRefOf } from "@/lib/shared/ledger-ref";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 
@@ -16,7 +17,7 @@ interface Props {
   invoiceId: string;
   status: InvoiceStatus;
   fortnoxId: string | null | undefined;
-  payments: ReadonlyArray<{ fortnoxId?: string | null | undefined }>;
+  payments: ReadonlyArray<LedgerRefRow>;
 }
 
 /** Knapptext: hela fakturan, eller bara de nya betalningarna. */
@@ -43,7 +44,7 @@ export function LedgerBooking({ invoiceId, status, fortnoxId, payments }: Props)
   const ledger = useLedgerStatus();
   // Även vid fel: fakturan kan vara bokförd fast en betalning fastnade.
   const book = useBookInvoice(asId<"InvoiceId">(invoiceId), () => { void utils.invoice.getById.invalidate({ id: invoiceId }); });
-  const pending = payments.filter((p) => !p.fortnoxId).length;
+  const pending = payments.filter((p) => ledgerRefOf(p) === null).length;
   const canBook = shouldOfferBooking(ledger.data?.connected === true, status, !!fortnoxId, pending);
 
   return (

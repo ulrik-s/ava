@@ -48,11 +48,8 @@ jobs:
           DEMO_BASE_PATH: ${{ steps.pages.outputs.base_path }}
           # Tala om för app:en att data lever på samma origin/repo som den
           # själv. Annars defaultar firma-config till ulrik-s/ava-demo →
-          # CORS-fel + tom data. Båda env-namnen sätts eftersom olika filer
-          # läser olika varianter (NEXT_PUBLIC_DEMO_REPO i firma-config.ts;
-          # NEXT_PUBLIC_DEFAULT_DEMO_REPO i search/demo/document-row).
+          # CORS-fel + tom data.
           NEXT_PUBLIC_DEMO_REPO: ${{ github.repository }}
-          NEXT_PUBLIC_DEFAULT_DEMO_REPO: ${{ github.repository }}
           # Versionera OPFS-demo-cachen per deploy → användare ser ny data
           # utan att manuellt rensa OPFS (annars serverar restoreFromCache
           # en gammal snapshot tills den rensas).

@@ -562,14 +562,16 @@ LLM och klassificerar därför enbart med filnamns-heuristiken.
 
 Samma 5 users / 17 contacts / 15 matters / 40 PDF/DOCX / 7 payment plans / 25 calendar events i båda deployments. Single source of truth.
 
-## Datamodell-evolution (schemaVersion + migrate-on-read)
+## Datamodell-evolution (schemaVersion + versionsgrind)
 
-Data lever i användarens git-repo, så kod-version och data-version kan skilja
-sig. `.ava/meta.json` bär ett `schemaVersion` (`src/lib/shared/schema-version.ts`).
-Vid hydrering kör en **versionsgrind** (repo nyare än koden → vägra starta) och
-**migrate-on-read** (`src/lib/shared/schema-migrations.ts`) som lyfter äldre
-rader till aktuell form innan zod-parsern ser dem. Se
-[ADR 0004](./adr/0004-schemaversion-och-versionsgrind.md).
+`.ava/meta.json` bär ett `schemaVersion` (`src/lib/shared/schema-version.ts`).
+Demons laddare (`src/lib/client/demo/demo-meta.ts`, `demo-seed-loader.ts`) kör
+**versionsgrinden** `assertRepoSchemaCompatible`: data som skrivits av en nyare
+version än koden → vägra starta. Migrate-on-read finns inte längre. Serverns
+schema ändras med Drizzle-migrationer i `tooling/db/migrations/` (ADR 0019),
+märkta `-- kind: expand` eller `-- kind: contract` (se
+[deploy-server-first](./deploy-server-first.md), "Migrationer: expand och
+contract"). Se [ADR 0004](./adr/0004-schemaversion-och-versionsgrind.md).
 
 ## Webbläsarstöd (#1299)
 

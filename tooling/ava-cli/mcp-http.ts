@@ -18,8 +18,7 @@
 
 import { createMcpHandler, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/server";
 import { createRemoteJWKSet } from "jose";
-import { type BearerVerification, type BearerVerifyConfig, parseAudience, verifyBearerToken } from "@/lib/server/http/bearer-claims";
-import { parseBearerToken } from "@/lib/server/http/pat";
+import { type BearerVerification, type BearerVerifyConfig, parseAudience, parseBearerToken, verifyBearerToken } from "@/lib/server/http/bearer-claims";
 import type { ServerContextDeps } from "@/lib/server/http/server-context";
 import { discoveredJwks } from "@/lib/server/http/verified-identity";
 import { type AvaCaller, callerFromTrpc } from "./caller";
