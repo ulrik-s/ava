@@ -34,4 +34,14 @@ describe("conflictCheckItems", () => {
       { ...M, status: "ARCHIVED", conflictCheckStatus: "PENDING" },
     ])).toEqual([]);
   });
+
+  it("ärende med status null och träffar ger fortfarande en post med träffarna", () => {
+    const [item] = conflictCheckItems([{ ...M, status: null, conflictCheckStatus: "HITS", conflictCheckHits: 3 }]);
+    expect(item).toMatchObject({ severity: "passed", title: "Jävskontroll: 3 träffar att bedöma" });
+  });
+
+  it("ärende med okänd status och väntande kontroll ger fortfarande en post", () => {
+    const [item] = conflictCheckItems([{ ...M, status: "PAUSED", conflictCheckStatus: "PENDING" }]);
+    expect(item).toMatchObject({ severity: "approaching", title: "Jävskontroll väntar" });
+  });
 });

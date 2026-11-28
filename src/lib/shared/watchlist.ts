@@ -32,6 +32,7 @@
 
 import { BILLING_SHORTCUT_PARAM } from "./billing/billing-flow";
 import { coverageStatus, type CoverageCapInput } from "./billing/coverage-cap";
+import { isOpenMatter } from "./matter-status";
 import type { FinalRuling } from "./schemas/document";
 import type { MatterRole } from "./schemas/enums";
 import type { Organization } from "./schemas/organization";
@@ -363,8 +364,6 @@ export interface ConflictCheckMatter {
   conflictCheckHits?: number | null;
 }
 
-const isOpenMatter = (m: ConflictCheckMatter): boolean => m.status !== "CLOSED" && m.status !== "ARCHIVED";
-
 function conflictCheckItem(m: ConflictCheckMatter): WatchlistItem | null {
   const base = { kind: "conflictCheck" as const, matterId: m.id, matterNumber: m.matterNumber, at: null, amountOre: null, link: { route: "matters" as const, id: m.id } };
   if (m.conflictCheckStatus === "HITS") {
@@ -388,5 +387,5 @@ function conflictCheckItem(m: ConflictCheckMatter): WatchlistItem | null {
  * den lokala kopian. Träffar är mer akuta än en kontroll som väntar.
  */
 export function conflictCheckItems(matters: readonly ConflictCheckMatter[]): WatchlistItem[] {
-  return matters.filter(isOpenMatter).map(conflictCheckItem).filter((i): i is WatchlistItem => i !== null);
+  return matters.filter((m) => isOpenMatter(m.status)).map(conflictCheckItem).filter((i): i is WatchlistItem => i !== null);
 }
