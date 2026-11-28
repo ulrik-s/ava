@@ -164,7 +164,7 @@ git merge origin/main   # vid konflikt
 2. Kör `bun run quality:fast`, och för appändringar även `bun run build:demo`.
 3. Commit enligt Conventional Commits.
 4. Pusha: `git push origin HEAD:<branch>`. Aldrig `--force`.
-5. Har PR:en `granskad`: ta bort den och sätt `att-granska`. Den nya
+5. Har PR:en `granskad`: sätt `att-granska` (flödesvakten tar bort `granskad`). Den nya
    head-sha:n måste granskas om (loop 3 för agent-PR:er, steg 5 här för
    övriga).
 6. Kommentera kort vad du ändrat och varför.

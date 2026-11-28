@@ -153,7 +153,7 @@ machines:
         description: En fråga till användaren (i AVA) väntar på svar
         timeout:
           after: 7d
-          comment: Användaren har inte svarat på 7 dagar. Flödesvakten tog bort väntar-på-användaren; agenten går vidare utan svaret.
+          comment: Användaren har inte svarat på 7 dagar. Flödesvakten tog bort väntar-på-användaren. Den loop som äger saken gör det dess prompt säger; för frågor efter verifieringen gäller regel 2c (blockera för Ulrik).
       blockerad:
         color: "b60205"
         description: Agenten behöver ett beslut av Ulrik

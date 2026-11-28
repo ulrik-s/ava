@@ -127,10 +127,22 @@ sätt `blockerad` så att Ulrik ser det.
 
 ## 4. Gränser som CI också kontrollerar (Agentvakt)
 
-- Skyddade sökvägar: `.github/`, `tooling/config/`, `tooling/docker/`,
-  `tooling/systemd/`, `tooling/agents/`, deploy-/backup-/release-skript,
-  `.claude/`, `src/lib/server/auth/`, serverns HTTP-förtroendegräns, feedback-koden,
-  `package.json`, `bun.lock`, `AGENTS.md`. Rör dem bara när det Ulrik verifierat
+- Skyddade sökvägar (`PROTECTED_PATHS` i `tooling/scripts/agent-guard.ts`):
+  `.github/`, `.claude/`, `tooling/config/`, `tooling/docker/`,
+  `tooling/systemd/`, `tooling/agents/`, skripten `tooling/scripts/deploy*`,
+  `backup*`, `restore*`, `release*`, `agent-guard*`, `arch-metrics*` och
+  `file-size-ratchet*`, `tooling/scripts/lib/`, `tooling/scripts/flow*`,
+  `src/lib/server/auth/`, serverns HTTP-förtroendegräns
+  (`src/lib/server/http/` `forwarded*`, `server-context*`, `node-http*`,
+  `server-first-api*`), feedback-koden (`src/lib/server/feedback/`,
+  `src/lib/server/routers/feedback.ts`), `package.json`, `bun.lock`,
+  `AGENTS.md`, `CLAUDE.md`, de delade schemana (`src/lib/shared/schemas/`),
+  migrationerna (`tooling/db/migrations/`) och pengalogiken:
+  `src/lib/server/billing/`, routrarna `invoice.ts`, `billingRun.ts` och
+  `billingRun/` i `src/lib/server/routers/`, `src/lib/shared/accounting/` och
+  i `src/lib/shared/billing/` filerna `billing-*`, `kostnadsrakning*`,
+  `coverage-billing`, `invoice-calc`, `vat`, `invoice-vat`, `expense-vat`,
+  `acconto-vat`, `brottmalstaxa` och `forordnandetaxa`. Rör dem bara när det Ulrik verifierat
   kräver det, och bara så mycket som behövs. **Fråga inte i förväg** (#1872):
   bryt ner och bygg som vanligt, och skriv i arbetsordern och PR:en vilka
   skyddade sökvägar som ändras och varför. Ulriks enda godkännande är
