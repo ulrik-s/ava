@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
-import { matterRoleLabels, matterRoleOptions, contactTypeLabels, contactTypeOptions, labelForMatterRole } from "@/lib/client/labels";
+import { matterRoleLabels, matterRoleOptions, contactTypeLabels, contactTypeOptions, labelForMatterRole, labelForPaymentPlanStatus, labelForUserRole, userRoleOptions } from "@/lib/client/labels";
+import { USER_ROLE_LABELS } from "@/lib/shared/schemas/enums";
 
 describe("matterRoleLabels", () => {
   it("använder 'Klient' (inte 'Huvudman') som label för KLIENT", () => {
@@ -64,5 +65,35 @@ describe("contactTypeLabels", () => {
     for (const { value, label } of contactTypeOptions) {
       expect(contactTypeLabels[value]).toBe(label);
     }
+  });
+});
+
+describe("labelForPaymentPlanStatus (#1991)", () => {
+  it("ger statusens text i singular", () => {
+    expect(labelForPaymentPlanStatus("ACTIVE")).toBe("Aktiv");
+    expect(labelForPaymentPlanStatus("COMPLETED")).toBe("Slutförd");
+    expect(labelForPaymentPlanStatus("CANCELLED")).toBe("Avbruten");
+  });
+
+  it("ger en okänd status tillbaka som den är", () => {
+    // @ts-expect-error -- rå data utanför enumen ska visas oförändrad
+    expect(labelForPaymentPlanStatus("PAUSED")).toBe("PAUSED");
+  });
+});
+
+describe("användarroller ur USER_ROLE_LABELS (#1990)", () => {
+  it("userRoleOptions har varje roll med rätt text, i samma ordning", () => {
+    expect(userRoleOptions.map((o) => [o.value, o.label])).toEqual(Object.entries(USER_ROLE_LABELS));
+    expect(userRoleOptions.map((o) => o.label)).toEqual(["Admin", "Advokat", "Assistent"]);
+  });
+
+  it("labelForUserRole ger rollens text", () => {
+    expect(labelForUserRole("LAWYER")).toBe("Advokat");
+    expect(labelForUserRole("ADMIN")).toBe("Admin");
+  });
+
+  it("labelForUserRole visar en okänd roll i rå data som den är", () => {
+    // @ts-expect-error -- en roll som typen inte känner till (rå data)
+    expect(labelForUserRole("GAMMAL")).toBe("GAMMAL");
   });
 });

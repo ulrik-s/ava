@@ -832,6 +832,16 @@
       "count": 1
     }
   },
+  "src/lib/shared/billing/hourly-rate.ts": {
+    "@typescript-eslint/no-dynamic-delete": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/billing/kostnadsrakning-document.ts": {
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
   "src/lib/shared/conflict-match.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
@@ -858,16 +868,6 @@
   "src/lib/shared/gh-pages-url.ts": {
     "@typescript-eslint/restrict-template-expressions": {
       "count": 4
-    }
-  },
-  "src/lib/shared/billing/hourly-rate.ts": {
-    "@typescript-eslint/no-dynamic-delete": {
-      "count": 1
-    }
-  },
-  "src/lib/shared/billing/kostnadsrakning-document.ts": {
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
     }
   },
   "src/lib/shared/layout/dock-layout.ts": {
@@ -1309,7 +1309,7 @@
   },
   "test/unit/app/matters/[id]/page.test.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 6
+      "count": 4
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
@@ -1317,10 +1317,7 @@
   },
   "test/unit/app/matters/billing-dialog.test.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 11
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
+      "count": 7
     }
   },
   "test/unit/app/matters/billing-panel.test.tsx": {
@@ -1328,7 +1325,7 @@
       "count": 1
     },
     "@typescript-eslint/require-await": {
-      "count": 2
+      "count": 1
     }
   },
   "test/unit/app/matters/expense-section.test.tsx": {
@@ -1341,24 +1338,6 @@
       "count": 4
     },
     "@typescript-eslint/require-await": {
-      "count": 2
-    }
-  },
-  "test/unit/app/matters/page.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
-  "test/unit/app/matters/radgivning-entry.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    }
-  },
-  "test/unit/app/matters/service-notes-section.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
@@ -1372,14 +1351,6 @@
   },
   "test/unit/app/matters/time-section.test.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
-  "test/unit/app/matters/verdict-dialog.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 4
-    },
-    "@typescript-eslint/require-await": {
       "count": 1
     }
   },
@@ -1443,11 +1414,6 @@
   "test/unit/app/templates/page.test.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
-    }
-  },
-  "test/unit/app/time-section-invoiced.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 4
     }
   },
   "test/unit/app/time/page.test.tsx": {
@@ -2033,11 +1999,6 @@
       "count": 1
     }
   },
-  "test/unit/lib/shared/billing/advokatberedskap.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
   "test/unit/lib/auth-server-core.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
@@ -2398,6 +2359,16 @@
       "count": 2
     }
   },
+  "test/unit/lib/shared/billing/advokatberedskap.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/shared/billing/brottmalstaxa.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
   "test/unit/lib/shared/billing/coverage-billing.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
@@ -2413,6 +2384,21 @@
       "count": 6
     }
   },
+  "test/unit/lib/shared/billing/kostnadsrakning.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "test/unit/lib/shared/billing/settlement-view-build.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/shared/billing/write-off-migration.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
   "test/unit/lib/shared/payment-reminders.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 12
@@ -2420,11 +2406,6 @@
   },
   "test/unit/lib/shared/schema-migration.test.ts": {
     "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/lib/shared/billing/settlement-view-build.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
@@ -2469,11 +2450,6 @@
   "test/unit/lib/todo-views.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
-    }
-  },
-  "test/unit/lib/shared/billing/write-off-migration.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
     }
   },
   "test/unit/server/adapters/demo-document-analyzer.test.ts": {
@@ -2818,11 +2794,6 @@
     },
     "no-restricted-syntax": {
       "count": 2
-    }
-  },
-  "test/unit/server/observability/posthog-sink.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
     }
   },
   "test/unit/server/repositories/billing-run-repository.test.ts": {
@@ -3228,11 +3199,6 @@
       "count": 1
     }
   },
-  "test/unit/lib/shared/billing/brottmalstaxa.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 7
-    }
-  },
   "test/unit/shared/conflict-roles.test.ts": {
     "@typescript-eslint/restrict-template-expressions": {
       "count": 3
@@ -3248,11 +3214,6 @@
       "count": 2
     },
     "@typescript-eslint/require-await": {
-      "count": 6
-    }
-  },
-  "test/unit/lib/shared/billing/kostnadsrakning.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     }
   },

@@ -4,96 +4,66 @@
  * En post med faktura (`invoiceId`) är däremot låst, som en fryst (#1863):
  * samma regel (`isLockedEntry`) som servern.
  */
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { TimeSection } from "@/app/matters/[id]/_time-section";
-import { asId } from "@/lib/shared/schemas/ids";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
+import { callsTo } from "../../helpers/trpc-both-fake";
+import { invalidatedPaths, type TrpcHandlers } from "../../helpers/trpc-fake";
+import { forMatter, renderTimeSection } from "./matters/time-section-fixture";
 
-const createMut = vi.fn();
-const updateMut = vi.fn();
-const deleteMut = vi.fn();
-
-/** Extra rader per test (#1170: fryst post) + fel som update ska ge. */
+/** Extra rader per test (#1170: fryst post). */
 const extraEntries: unknown[] = [];
-const updateState: { error: { message: string } | null } = { error: null };
-/** delete-mutationens onError — så felvägen kan testas. */
-const deleteOpts: { onError?: ((e: { message: string }) => void) | undefined } = {};
 
-vi.mock("@/lib/client/trpc", () => {
-  const noopMut = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
-  return {
-    trpc: {
-      useUtils: () => ({
-        timeEntry: { list: { invalidate: vi.fn() } },
-        prefs: { get: { invalidate: vi.fn() }, listOrgDefaults: { invalidate: vi.fn() } },
-      }),
-      user: { current: { useQuery: () => ({ data: { id: "u-1", role: "LAWYER" } }) } },
-      // Byråns standardåtgärder (#956) — TimeSection läser dem för väljaren.
-      // Tom lista → ingen väljare renderas, vilket den här filens tester inte rör.
-      organization: { getSettings: { useQuery: () => ({ data: { standardAtgarder: [] }, isLoading: false }) } },
-      // Ärendets billing-runs driver förslagsraden (#958). Tom lista → inga förslag.
-      billingRun: { list: { useQuery: () => ({ data: { runs: [] }, isLoading: false }) } },
-      // Ärendena en post kan flyttas till (#2042).
-      matter: { list: { useQuery: () => ({ data: { matters: [] } }) } },
-      prefs: {
-        get: { useQuery: () => ({ data: null }) },
-        save: { useMutation: () => noopMut },
-        clear: { useMutation: () => noopMut },
-        setOrgDefault: { useMutation: () => noopMut },
-        clearOrgDefault: { useMutation: () => noopMut },
-        listOrgDefaults: { useQuery: () => ({ data: null }) },
-      },
-      timeEntry: {
-        radgivningStatus: { useQuery: () => ({ data: undefined }) }, markAsRadgivning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-        list: {
-          useQuery: () => ({
-            data: {
-              entries: [
-                { id: "te-1", date: new Date("2026-05-01"), minutes: 60, description: "Möte", billable: true,
-                  user: { name: "Anna" }, invoiceId: null, invoice: null },
-                { id: "te-2", date: new Date("2026-04-15"), minutes: 30, description: "Inlaga", billable: true,
-                  user: { name: "Björn" }, invoiceId: "inv-1", invoice: { id: "inv-1", invoiceNumber: "2026-0042" } },
-                ...extraEntries,
-              ],
-              totalMinutes: 90,
-            },
-          }),
-        },
-        create: { useMutation: () => ({ mutate: createMut, mutateAsync: vi.fn(), isPending: false }) },
-        update: { useMutation: () => ({ mutate: updateMut, mutateAsync: vi.fn(), isPending: false, error: updateState.error }) },
-        moveToMatter: { useMutation: () => noopMut },
-        delete: { useMutation: (o: { onError?: (e: { message: string }) => void }) => { deleteOpts.onError = o.onError; return { mutate: deleteMut, mutateAsync: vi.fn(), isPending: false }; } },
-      },
-    },
+/** Svaren: en öppen post och en fakturerad; `failing` gör de vägarna till fel. */
+function handlers(failing: Readonly<Record<string, string>> = {}): TrpcHandlers {
+  const fail = (path: string, ok: unknown) => () => {
+    const message = failing[path];
+    if (message) throw new Error(message);
+    return ok;
   };
-});
-
-beforeEach(() => { vi.clearAllMocks(); extraEntries.length = 0; updateState.error = null; });
-
-function renderSection() {
-  const client = new QueryClient();
-  return render(
-    <QueryClientProvider client={client}>
-      <TimeSection matterId={asId<"MatterId">("m-1")} />
-    </QueryClientProvider>,
-  );
+  return {
+    "timeEntry.list": () => ({
+      entries: [
+        { id: "te-1", date: new Date("2026-05-01"), minutes: 60, description: "Möte", billable: true,
+          user: { name: "Anna" }, invoiceId: null, invoice: null },
+        { id: "te-2", date: new Date("2026-04-15"), minutes: 30, description: "Inlaga", billable: true,
+          user: { name: "Björn" }, invoiceId: "inv-1", invoice: { id: "inv-1", invoiceNumber: "2026-0042" } },
+        ...extraEntries,
+      ],
+      totalMinutes: 90,
+    }),
+    "timeEntry.update": fail("timeEntry.update", { id: "te-1" }),
+    "timeEntry.delete": fail("timeEntry.delete", { id: "te-1" }),
+  };
 }
 
+beforeEach(() => { extraEntries.length = 0; });
+afterEach(() => { vi.restoreAllMocks(); });
+
+const renderSection = (failing?: Readonly<Record<string, string>>) => renderTimeSection(handlers(failing));
+
+/** Det första elementet med texten. */
+function firstText(text: string): HTMLElement {
+  const [el] = screen.getAllByText(text);
+  if (!el) throw new Error(`saknar ${text}`);
+  return el;
+}
+
+const LOCKED = "Tidposten ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort.";
+
 describe("TimeSection — utan invoice-koppling i UI", () => {
-  it("renderar INGEN 'Fakturerad'-kolumn", () => {
-    renderSection();
+  it("renderar INGEN 'Fakturerad'-kolumn", async () => {
+    await renderSection();
     expect(screen.queryByText("Fakturerad")).not.toBeInTheDocument();
   });
 
-  it("renderar INGEN 'Faktura'-kolumn (även för entries med invoiceId)", () => {
-    renderSection();
+  it("renderar INGEN 'Faktura'-kolumn (även för entries med invoiceId)", async () => {
+    await renderSection();
     expect(screen.queryByText("Faktura")).not.toBeInTheDocument();
     expect(screen.queryByText("2026-0042")).not.toBeInTheDocument();
   });
 
-  it("en post med bara fakturakoppling (invoiceId) är låst — bara den öppna får Ändra + Ta bort (#1863)", () => {
-    renderSection();
+  it("en post med bara fakturakoppling (invoiceId) är låst — bara den öppna får Ändra + Ta bort (#1863)", async () => {
+    await renderSection();
     expect(screen.getByText("🔒 Låst")).toHaveAttribute(
       "title", "Ingår i en faktura eller kostnadsräkning och kan inte ändras eller tas bort.",
     );
@@ -103,72 +73,72 @@ describe("TimeSection — utan invoice-koppling i UI", () => {
 });
 
 describe("TimeSection — frysta poster och sparfel (#1170)", () => {
-  it("post som ingår i slutfaktura/kostnadsräkning (frozenAt) visar Låst, inte Ändra/Ta bort", () => {
+  it("post som ingår i slutfaktura/kostnadsräkning (frozenAt) visar Låst, inte Ändra/Ta bort", async () => {
     extraEntries.push({ id: "te-3", date: new Date("2026-03-01"), minutes: 45, description: "Huvudförhandling", billable: true,
       user: { name: "Anna" }, frozenAt: new Date("2026-06-01") });
-    renderSection();
+    await renderSection();
     expect(screen.getAllByText("🔒 Låst")).toHaveLength(2); // den frysta och den fakturerade
     expect(screen.getAllByText("Ändra")).toHaveLength(1); // bara den olåsta
   });
 
-  it("misslyckad borttagning säger till (alert) — aldrig tyst", () => {
+  it("misslyckad borttagning säger till (alert) — aldrig tyst", async () => {
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
-    renderSection();
-    deleteOpts.onError?.({ message: "Tidposten ingår i en slutfaktura" });
-    expect(alertSpy).toHaveBeenCalledWith("Kunde inte ta bort: Tidposten ingår i en slutfaktura");
-    alertSpy.mockRestore();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await renderSection({ "timeEntry.delete": "Tidposten ingår i en slutfaktura" });
+    fireEvent.click(firstText("Ta bort"));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith("Kunde inte ta bort: Tidposten ingår i en slutfaktura"));
   });
 
-  it("misslyckat sparande visas i dialogen — aldrig tyst", () => {
-    updateState.error = { message: "Tidposten ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort." };
-    renderSection();
-    fireEvent.click(screen.getAllByText("Ändra")[0]!);
-    expect(screen.getByRole("alert")).toHaveTextContent("Kunde inte spara: Tidposten ingår i en slutfaktura");
+  it("misslyckat sparande visas i dialogen — aldrig tyst", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await renderSection({ "timeEntry.update": LOCKED });
+    fireEvent.click(firstText("Ändra"));
+    fireEvent.click(screen.getByText("Spara"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Kunde inte spara: Tidposten ingår i en slutfaktura");
   });
 });
 
 describe("TimeSection — registrera/ändra/ta-bort-flöden", () => {
-  it("'+ Registrera tid' → fyll formulär → Spara → create.mutate med matterId", () => {
-    renderSection();
+  it("'+ Registrera tid' → fyll formulär → Spara → create med matterId", async () => {
+    const { fake } = await renderSection();
     fireEvent.click(screen.getByText("+ Registrera tid"));
     expect(screen.getByText("Registrera tid")).toBeInTheDocument();
-    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
-    fireEvent.change(dateInput, { target: { value: "2026-05-20" } });
+    fireEvent.change(screen.getByLabelText("Datum *"), { target: { value: "2026-05-20" } });
     fireEvent.change(screen.getByLabelText("Tid (h) *"), { target: { value: "0,75" } });
     fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Telefonsamtal" } });
     fireEvent.click(screen.getByText("Spara"));
-    expect(createMut).toHaveBeenCalledWith(
-      expect.objectContaining({ matterId: "m-1", minutes: 45, description: "Telefonsamtal" }),
-    );
+    await waitFor(() => expect(callsTo(fake, "timeEntry.create")).toEqual([
+      expect.objectContaining({ matterId: "m1", minutes: 45, description: "Telefonsamtal" }),
+    ]));
   });
 
-  it("'Ändra' öppnar förifyllt edit-formulär → Spara → update.mutate med id", () => {
-    renderSection();
-    fireEvent.click(screen.getAllByText("Ändra")[0]!);
+  it("'Ändra' öppnar förifyllt edit-formulär → Spara → update med id", async () => {
+    const { fake } = await renderSection();
+    fireEvent.click(firstText("Ändra"));
     expect(screen.getByText("Ändra tidregistrering")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Möte")).toBeInTheDocument(); // förifyllt ur te-1
     fireEvent.click(screen.getByText("Spara"));
-    expect(updateMut).toHaveBeenCalledWith(expect.objectContaining({ id: "te-1" }), expect.anything());
+    await waitFor(() => expect(callsTo(fake, "timeEntry.update")).toEqual([expect.objectContaining({ id: "te-1" })]));
   });
 
-  it("'Ta bort' med confirm → delete.mutate med id", () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    renderSection();
-    fireEvent.click(screen.getAllByText("Ta bort")[0]!);
-    expect(deleteMut).toHaveBeenCalledWith({ id: "te-1" });
-    confirmSpy.mockRestore();
+  it("'Ta bort' med confirm → delete med id, och listan läses om", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { fake, invalidate } = await renderSection();
+    fireEvent.click(firstText("Ta bort"));
+    await waitFor(() => expect(callsTo(fake, "timeEntry.delete")).toEqual([{ id: "te-1" }]));
+    await waitFor(() => expect(invalidatedPaths(invalidate)).toContain(forMatter("timeEntry.list", "m1")));
   });
 
-  it("'Ta bort' med avbruten confirm → ingen delete", () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    renderSection();
-    fireEvent.click(screen.getAllByText("Ta bort")[0]!);
-    expect(deleteMut).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
+  it("'Ta bort' med avbruten confirm → ingen delete", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { fake } = await renderSection();
+    fireEvent.click(firstText("Ta bort"));
+    expect(callsTo(fake, "timeEntry.delete")).toEqual([]);
   });
 
-  it("toggla Debiterbar i skapa-formuläret + Avbryt stänger modalen", () => {
-    renderSection();
+  it("toggla Debiterbar i skapa-formuläret + Avbryt stänger modalen", async () => {
+    await renderSection();
     fireEvent.click(screen.getByText("+ Registrera tid"));
     fireEvent.click(screen.getByRole("checkbox", { name: "Debiterbar" })); // Debiterbar
     fireEvent.click(screen.getByText("Avbryt"));

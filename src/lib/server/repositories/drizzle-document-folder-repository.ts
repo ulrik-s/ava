@@ -7,6 +7,7 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DocumentFolder } from "@/lib/shared/schemas/document";
 import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
 import { documentFolders, documents } from "../db/schema";
+import { swedishOrder } from "../db/swedish-order";
 import type { AppDb } from "../db/types";
 import type {
   DocumentFolderRepository, DocumentFolderWithCounts,
@@ -35,7 +36,7 @@ export class DrizzleDocumentFolderRepository
     const rows = await this.db
       .select().from(documentFolders)
       .where(and(eq(documentFolders.matterId, matterId), parentEq(parentId), isNull(documentFolders.deletedAt)))
-      .orderBy(asc(documentFolders.name));
+      .orderBy(asc(swedishOrder(documentFolders.name)));
     const ids = rows.map((r) => r.id);
     // Grupperade count-queries (robustare än korrelerade subqueries, jfr #).
     const counts = await this.countsFor(ids);
@@ -65,7 +66,7 @@ export class DrizzleDocumentFolderRepository
     const rows = await this.db
       .select().from(documentFolders)
       .where(and(eq(documentFolders.matterId, matterId), isNull(documentFolders.deletedAt)))
-      .orderBy(asc(documentFolders.name));
+      .orderBy(asc(swedishOrder(documentFolders.name)));
     return rows;
   }
 

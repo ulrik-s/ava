@@ -8,6 +8,7 @@
  */
 
 import { z } from "zod";
+import type { UserRole } from "@/lib/shared/schemas/enums";
 
 export interface AuthStatus {
   hasAdmin: boolean;
@@ -17,7 +18,7 @@ export interface AuthStatus {
 export interface ProvisionedAccount {
   email: string;
   token: string;
-  role: "ADMIN" | "LAWYER" | "ASSISTANT";
+  role: UserRole;
 }
 
 export interface AuthClient {

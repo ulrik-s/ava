@@ -17,14 +17,16 @@
  * Panelen ligger i en dockpanel som kan vara smal → container query: 2×2 som
  * standard, 4 i rad först när panelen själv är bred (ingen horisontell scroll).
  */
+import { useQuery } from "@tanstack/react-query";
 import { Money } from "@/components/ui/money";
-import { trpc } from "@/lib/client/trpc";
+import { useTRPC } from "@/lib/client/trpc";
 import { invoicedTotals, krClaimedOre, paidOre, type SummaryRun } from "@/lib/shared/billing/billing-summary";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
 export function BillingSummary({ matterId, runs }: { matterId: MatterId; runs: readonly SummaryRun[] }) {
-  const proposal = trpc.billingRun.proposal.useQuery({ matterId });
-  const invoices = trpc.invoice.list.useQuery({ matterId });
+  const t = useTRPC();
+  const proposal = useQuery(t.billingRun.proposal.queryOptions({ matterId }));
+  const invoices = useQuery(t.invoice.list.queryOptions({ matterId }));
   // Förslagets värde följer ärendets betalningssätt (rättshjälp: normen). Den
   // redan fakturerade rådgivningstimmen är låst och ingår inte (#1205).
   const unbilledOre = proposal.data?.workValueOre ?? 0;

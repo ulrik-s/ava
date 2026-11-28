@@ -33,7 +33,7 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: { useUtils: () => ({ client: {}, document: { tree: { invalidate: treeInvalidate } } }) },
 }));
 
-const { useFileUpload, savedFileName, makePlaceholderDoc } = await import("@/components/documents/_use-file-upload");
+const { useFileUpload, savedFileName, makePlaceholderDoc, withPendingUploads } = await import("@/components/documents/_use-file-upload");
 
 const matterId = asId<"MatterId">("m1");
 const folderId = asId<"DocumentFolderId">("f1");
@@ -62,6 +62,16 @@ describe("makePlaceholderDoc", () => {
   it("med mål och namn", () => {
     expect(makePlaceholderDoc({ id: "p", file: pdf("a.pdf"), matterId, fileName: "B.pdf", folderId }))
       .toMatchObject({ fileName: "B.pdf", folderId });
+  });
+});
+
+describe("withPendingUploads", () => {
+  const doc = (id: string) => makePlaceholderDoc({ id, file: pdf(`${id}.pdf`), matterId });
+  it("placeholder-raderna kommer efter listans dokument", () => {
+    expect(withPendingUploads([doc("a")], [doc("p")]).map((d) => d.id)).toEqual(["a", "p"]);
+  });
+  it("ett registrerat dokument som redan finns i listan visas en gång", () => {
+    expect(withPendingUploads([doc("a"), doc("d1")], [doc("d1"), doc("p")]).map((d) => d.id)).toEqual(["a", "d1", "p"]);
   });
 });
 

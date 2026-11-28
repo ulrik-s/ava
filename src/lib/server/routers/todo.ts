@@ -71,7 +71,9 @@ export const todoRouter = router({
         status: t.status, priority: t.priority, kind: null, location: null,
         matter: t.matter ?? null, userId: t.userId,
       }));
-      const eventItems: TodoItem[] = events.map((e) => ({
+      // Frister i kalendern (`kind = "deadline"`) flyttas till uppgifter vid
+      // start (#2121) och visas där; här skulle de annars stå två gånger.
+      const eventItems: TodoItem[] = events.filter((e) => e.kind !== "deadline").map((e) => ({
         id: e.id, source: "event", title: e.title, description: e.description ?? null,
         at: toDate(e.startAt), endAt: e.endAt ? toDate(e.endAt) : null, allDay: e.allDay ?? false,
         status: null, priority: null, kind: e.kind, location: e.location ?? null,

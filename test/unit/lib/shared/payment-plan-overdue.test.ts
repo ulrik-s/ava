@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import type { JoinedPaymentPlan } from "@/lib/server/repositories/payment-plan-repository";
-import { paymentPlanOverdue, type PlanOverdueInput } from "@/lib/shared/payment-plan-overdue";
+import { paymentPlanItems, paymentPlanOverdue, type PlanItemInput, type PlanOverdueInput } from "@/lib/shared/payment-plan-overdue";
 
 /** Svensk middag en given dag, så att testerna inte beror på klockslaget. */
 const day = (ymd: string): Date => new Date(`${ymd}T10:00:00Z`);
@@ -90,6 +90,43 @@ describe("paymentPlanOverdue", () => {
 
   it("tar repots joinade plan utan omvandling (typkontrollen räcker)", () => {
     const fromRepo = (p: JoinedPaymentPlan) => paymentPlanOverdue(p, day("2026-11-25"));
+    expect(typeof fromRepo).toBe("function");
+  });
+});
+
+describe("paymentPlanItems (#2137)", () => {
+  const matter = { id: "m1", matterNumber: "2026-0001" };
+  function item(over: Partial<PlanItemInput> = {}, paid: number[] = []): PlanItemInput {
+    const base = plan({}, paid);
+    return { ...base, id: "pp1", invoice: { ...base.invoice, matter }, ...over };
+  }
+
+  it("en plan som ligger efter ger en rad med sort, text, datum, belopp och länk till planen", () => {
+    expect(paymentPlanItems([item({}, [150_000])], day("2026-11-25"))).toEqual([{
+      kind: "paymentPlan", severity: "passed",
+      title: "Delbetalning förfallen 31 dagar",
+      detail: "Förföll 2026-10-25. AVA skickar ingen påminnelse, så kontakta klienten.",
+      matterId: "m1", matterNumber: "2026-0001",
+      at: "2026-10-25", amountOre: 50_000,
+      link: { route: "payment-plans", id: "pp1" },
+    }]);
+  });
+
+  it("1 dag i singular", () => {
+    expect(paymentPlanItems([item()], day("2026-09-26"))[0]?.title).toBe("Delbetalning förfallen 1 dag");
+  });
+
+  it("ikapp, slutförd, avbruten och plan utan ärende ger ingen rad", () => {
+    const now = day("2026-11-25");
+    expect(paymentPlanItems([item({}, [200_000])], now)).toEqual([]);
+    expect(paymentPlanItems([item({ status: "COMPLETED" }), item({ status: "CANCELLED" })], now)).toEqual([]);
+    const noMatter = item();
+    expect(paymentPlanItems([{ ...noMatter, invoice: { ...noMatter.invoice, matter: null } }], now)).toEqual([]);
+    expect(paymentPlanItems([{ ...noMatter, invoice: null }], now)).toEqual([]);
+  });
+
+  it("tar repots joinade plan utan omvandling (typkontrollen räcker)", () => {
+    const fromRepo = (plans: JoinedPaymentPlan[]) => paymentPlanItems(plans, day("2026-11-25"));
     expect(typeof fromRepo).toBe("function");
   });
 });

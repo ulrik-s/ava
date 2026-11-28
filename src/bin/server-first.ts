@@ -32,10 +32,8 @@
  *   AVA_MCP_RESOURCE + AVA_MCP_ISSUER + AVA_MCP_AUDIENCE (+ AVA_MCP_SCOPES)
  *                         (valfria) remote-MCP på /mcp för Claude (#1026), OAuth
  *                         mot byråns IdP — se docs/mcp-remote.md
- *   AVA_POSTHOG_KEY       (valfri) PostHog-projektets token (phc_…) — tomt = av
- *                         (#1343). Värd: AVA_POSTHOG_HOST, default PostHog EU
- *                         (eu.i.posthog.com); amerikansk värd vägras.
- *                         + AVA_ERROR_ENVIRONMENT, AVA_RELEASE. Se docs/observability.md.
+ *   AVA_RELEASE           (valfri) versionsstämpeln i /readyz, som deploy-prod.sh
+ *                         sätter till taggen.
  */
 
 import { loadContentDirFromEnv, makeContentStore } from "@/lib/server/adapters/git-content-store";
@@ -54,7 +52,6 @@ import { buildServerFirstJobHandlers, type JobHandlerConfig, loadActiveSmtpConfi
 import { runStartupBackfills } from "@/lib/server/jobs/startup-backfills";
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
-import { startErrorReporting } from "@/lib/server/observability/posthog-sink";
 import type { IBackupStore, ILedgerService, IPorts } from "@/lib/server/ports";
 import { GithubReleaseNotes } from "@/lib/server/release-notes/github-release-notes";
 import { appRouter } from "@/lib/server/routers/_app";
@@ -81,8 +78,6 @@ function log(msg: string): void {
  */
 function startLogging(): void {
   setLogSink(jsonSink);
-  // Oväntade serverfel till PostHog EU när AVA_POSTHOG_KEY är satt (#1343).
-  log(startErrorReporting(process.env));
   const level = process.env.AVA_LOG_LEVEL;
   if (level === "debug" || level === "info" || level === "warn" || level === "error") {
     setLogLevel(level satisfies LogLevel);
