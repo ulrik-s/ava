@@ -16,16 +16,9 @@ import type { RattsskyddClientParts } from "./coverage-billing";
 import { arvodeInclVatOre } from "./invoice-calc";
 import type { SpecDeduction, SpecTimeLine } from "./invoice-specification";
 import { radgivningTextRad } from "./rattshjalp";
+import { vatRow, type SettlementRow } from "./settlement-row";
 
-/** `add` = delbelopp/steg i trappan, `deduct` = avgår (−), `info` = spårbarhets-
- *  rad utan beloppspåverkan (visas i parentes/grått, t.ex. rådgivnings-omnämnandet). */
-export type SettlementRowKind = "add" | "deduct" | "info";
-
-export interface SettlementRow {
-  label: string;
-  amountOre: number;
-  kind: SettlementRowKind;
-}
+export type { SettlementRow, SettlementRowKind } from "./settlement-row";
 
 /** En rad i tidsspecifikations-tabellen (arbetad tid). */
 export interface SettlementViewLine {
@@ -169,14 +162,19 @@ export const toViewLine = (l: SpecTimeLine): SettlementViewLine => ({
  * Nollposter utelämnas. Summan = klientens netto (invariant, testad i
  * `coverage-billing.test.ts`).
  */
-export function rattsskyddClientRows(p: RattsskyddClientParts, share: string): SettlementRow[] {
+export function rattsskyddClientRows(p: RattsskyddClientParts, shareBips: number): SettlementRow[] {
   const rows: SettlementRow[] = [];
-  if (p.uncoveredOre > 0) rows.push({ label: "Arbete utanför försäkringens täckning — klienten betalar 100 % (exkl moms)", amountOre: p.uncoveredOre, kind: "add" });
-  if (p.sjalvriskOre > 0) rows.push({ label: `Självrisk ${share} % av täckt arbete (exkl moms)`, amountOre: p.sjalvriskOre, kind: "add" });
+  if (p.uncoveredOre > 0) {
+    rows.push({ label: "Arbete utanför försäkringens täckning — klienten betalar (exkl moms)", amountOre: p.uncoveredOre, kind: "add", basisOre: p.uncoveredOre, shareBips: FULL_SHARE_BIPS });
+  }
+  if (p.sjalvriskOre > 0) rows.push({ label: "Självrisk av täckt arbete (exkl moms)", amountOre: p.sjalvriskOre, kind: "add", shareBips });
   if (p.prutningOre > 0) rows.push({ label: "Försäkringens prutning — klienten bär (exkl moms)", amountOre: p.prutningOre, kind: "add" });
   if (p.overCapOre > 0) rows.push({ label: "Belopp över försäkringens maxbelopp (exkl moms)", amountOre: p.overCapOre, kind: "add" });
   return rows;
 }
+
+/** 100 % i bips. */
+const FULL_SHARE_BIPS = 10_000;
 
 export const shareLabel = (bips: number): string => (bips / 100).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
 
@@ -193,8 +191,8 @@ export function arvodeLadderRows(b: SettlementBreakdown, payerNoun: string): Set
   const rows = workBaseRows(b.arvodeBaseNetOre, b.expensesBaseNetOre);
   const prutningOre = totalPrutningNetOre(b);
   if (prutningOre > 0) {
-    rows.push({ label: `Avgår ${payerNoun.toLowerCase()} prutning — byrån bär (exkl moms)`, amountOre: prutningOre, kind: "deduct" });
-    rows.push({ label: "Beviljat belopp (exkl moms)", amountOre: awardedBaseOre(b), kind: "add" });
+    rows.push({ label: `Avgår ${payerNoun.toLowerCase()} prutning — byrån bär (exkl moms)`, amountOre: prutningOre, kind: "deduct", role: "basis" });
+    rows.push({ label: "Beviljat belopp (exkl moms)", amountOre: awardedBaseOre(b), kind: "add", role: "basis" });
   }
   if (b.radgivningNetOre > 0) {
     rows.push({ label: radgivningTextRad("faktura"), amountOre: b.radgivningNetOre, kind: "info" });
@@ -208,13 +206,13 @@ export function arvodeLadderRows(b: SettlementBreakdown, payerNoun: string): Set
  */
 export function workBaseRows(arvodeNetOre: number, expensesNetOre: number): SettlementRow[] {
   const rows: SettlementRow[] = [
-    { label: "Upparbetat arvode (exkl moms)", amountOre: arvodeNetOre, kind: "add" },
+    { label: "Upparbetat arvode (exkl moms)", amountOre: arvodeNetOre, kind: "add", role: "basis" },
   ];
   // Utläggen tillhör BASEN — de prutas och delas precis som arvodet (#947), så de
   // hör hemma ovanför avdragen och inte som en lös rad längst ned.
   if (expensesNetOre > 0) {
-    rows.push({ label: "Utlägg (exkl moms)", amountOre: expensesNetOre, kind: "add" });
-    rows.push({ label: "Underlag (exkl moms)", amountOre: arvodeNetOre + expensesNetOre, kind: "add" });
+    rows.push({ label: "Utlägg (exkl moms)", amountOre: expensesNetOre, kind: "add", role: "basis" });
+    rows.push({ label: "Underlag (exkl moms)", amountOre: arvodeNetOre + expensesNetOre, kind: "add", role: "basis" });
   }
   return rows;
 }
@@ -248,17 +246,6 @@ export function feeBaseSuffix(b: SettlementBreakdown): string {
 }
 
 /**
- * Momsradens etikett (#947): "Moms 25 %" bara när hela underlaget faktiskt bär
- * 25 %. Klientens utlägg kan ha 0/6/12 %, och då är en 25 %-etikett direkt
- * felaktig — säg bara "Moms".
- */
-export function vatLabel(netOre: number, vatOre: number): string {
-  // Fakturans moms delas ur bruttot i hela kronor (#1438) och ligger då högst
-  // 62,5 öre från 25 % av nettot — inom det bär hela underlaget 25 %.
-  return netOre > 0 && Math.abs(vatOre * 10_000 - netOre * 2500) <= 625_000 ? "Moms 25 %" : "Moms";
-}
-
-/**
  * Momsraden på klientfakturan, med ev. aconto-avdrag (#968).
  *
  * UTAN aconton: oförändrad ordning — moms, sedan inkl-moms-raden.
@@ -275,8 +262,8 @@ export function clientVatRows(b: SettlementBreakdown, feeCap: string): Settlemen
   const fullVatOre = b.sjalvriskGrossOre - b.sjalvriskNetOre + b.clientExpensesVatOre;
   if (b.deductedAccontos.length === 0) {
     return [
-      { label: vatLabel(netOre, fullVatOre), amountOre: fullVatOre, kind: "add" },
-      { label: `${feeCap} inkl utlägg (inkl moms)`, amountOre: b.sjalvriskGrossOre + b.clientExpensesGrossOre, kind: "add" },
+      vatRow(netOre, fullVatOre),
+      { label: `${feeCap} inkl utlägg (inkl moms)`, amountOre: b.sjalvriskGrossOre + b.clientExpensesGrossOre, kind: "add", role: "subtotal" },
     ];
   }
   const rows: SettlementRow[] = [];
@@ -290,7 +277,6 @@ export function clientVatRows(b: SettlementBreakdown, feeCap: string): Settlemen
 }
 
 export function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, feeTerm: string): SettlementView {
-  const share = shareLabel(b.clientShareBips);
   const feeCap = feeTerm.charAt(0).toUpperCase() + feeTerm.slice(1);
   const rows: SettlementRow[] = arvodeLadderRows(b, isRattshjalp ? "Domstolens" : "Försäkringens");
   // Rättsskydd (#935): klientens del är summan av FYRA poster — särredovisa dem i
@@ -299,15 +285,24 @@ export function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, f
   if (!isRattshjalp && b.clientParts) {
     // Posterna räknas på hela underlaget, utläggen inräknade (#1438) — de
     // summerar till klientens netto, så utläggen har ingen egen rad här.
-    rows.push(...rattsskyddClientRows(b.clientParts, share));
+    rows.push(...rattsskyddClientRows(b.clientParts, b.clientShareBips));
   } else {
     // Andelen omfattar BÅDE arvode och utlägg (#947) — de delas i samma proportion.
-    rows.push({ label: `Klientens ${feeTerm} ${share} %${feeBaseSuffix(b)} (exkl moms)`, amountOre: b.sjalvriskNetOre + b.clientExpensesNetOre, kind: "add" });
+    rows.push({
+      label: `Klientens ${feeTerm}${feeBaseSuffix(b)} (exkl moms)`, amountOre: b.sjalvriskNetOre + b.clientExpensesNetOre, kind: "add",
+      basisOre: awardedBaseOre(b), shareBips: b.clientShareBips,
+    });
   }
   // Samma moms-trappa för BÅDA metoderna (#935) — rättsskydd fick förr bara en enda
   // inkl-moms-rad, vilket gjorde klientfakturorna asymmetriska och svårlästa.
   rows.push(...clientVatRows(b, feeCap));
   return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: "Att betala (inkl moms)", totalOre: b.clientPayableOre };
+}
+
+/** Trappans sista underlagsrad räknas i avräkningstabellen (betalarens faktura utgår från den). */
+function countLastBasis(rows: SettlementRow[]): SettlementRow[] {
+  const last = rows.findLastIndex((r) => r.role === "basis");
+  return rows.map((r, i) => (i === last ? { label: r.label, amountOre: r.amountOre, kind: r.kind } : r));
 }
 
 /**
@@ -324,11 +319,15 @@ export function buildPayerView(b: SettlementBreakdown, payerLabel: string, payer
   const payerShareNetOre = b.payerArvodeNetOre + b.payerExpensesNetOre;
   const clientShareNetOre = awardedBaseOre(b) - payerShareNetOre;
   const payerVatOre = b.payerArvodeVatOre + b.payerExpensesVatOre;
-  const rows: SettlementRow[] = arvodeLadderRows(b, payerNoun);
-  rows.push({ label: `Avgår klientens ${feeTerm} ${shareLabel(b.clientShareBips)} %${feeBaseSuffix(b)} (exkl moms)`, amountOre: clientShareNetOre, kind: "deduct" });
-  rows.push({ label: `${payerNoun} andel (exkl moms)`, amountOre: payerShareNetOre, kind: "add" });
-  rows.push({ label: vatLabel(payerShareNetOre, payerVatOre), amountOre: payerVatOre, kind: "add" });
-  rows.push({ label: `${payerNoun} andel (inkl moms)`, amountOre: payerShareNetOre + payerVatOre, kind: "add" });
+  // Avräkningstabellen (#151) räknar från underlaget: trappans sista rad räknas.
+  const rows: SettlementRow[] = countLastBasis(arvodeLadderRows(b, payerNoun));
+  rows.push({
+    label: `Avgår klientens ${feeTerm}${feeBaseSuffix(b)} (exkl moms)`, amountOre: clientShareNetOre, kind: "deduct",
+    basisOre: awardedBaseOre(b), shareBips: b.clientShareBips,
+  });
+  rows.push({ label: `${payerNoun} andel (exkl moms)`, amountOre: payerShareNetOre, kind: "add", role: "subtotal" });
+  rows.push(vatRow(payerShareNetOre, payerVatOre));
+  rows.push({ label: `${payerNoun} andel (inkl moms)`, amountOre: payerShareNetOre + payerVatOre, kind: "add", role: "subtotal" });
   for (const d of b.deductedAccontos) rows.push({ label: `Betalt via aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "info" });
   return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
 }

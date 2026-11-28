@@ -27,11 +27,16 @@ import { CHARGED_EXPENSE_VAT_RATE } from "@/lib/shared/billing/expense-vat";
 import { ARVODE_VAT_BIPS } from "@/lib/shared/billing/invoice-calc";
 import type { InvoiceSpecification, SpecExpenseLine } from "@/lib/shared/billing/invoice-specification";
 import { invoiceVatOre } from "@/lib/shared/billing/invoice-vat";
-import { svd as svDate } from "@/lib/shared/billing/settlement-view"; // svensk kalenderdag (#1677)
+import { svd as svDate, type SettlementRow } from "@/lib/shared/billing/settlement-view"; // svensk kalenderdag (#1677)
 import { formatKr } from "@/lib/shared/kr-format";
 import type { OrgImage } from "@/lib/shared/org-image";
 import { TIME_ENTRY_KIND_LABELS, type AmountRounding, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
+import {
+  fakturaTotals, formatSettlementRows, hasTableFields, settlementTable, specSettlementRows,
+  type FakturaSettlementRow, type FakturaTotals,
+} from "./faktura-avrakning";
+import { buildLetterFields, type FakturaLetterFields, type FakturaLetterMeta } from "./faktura-letter-view";
 import {
   expenseTotals, groupByKind, quantityLabel, resolveSpec, specTables, sumOf, unitRateOre,
   type CarriedWorkLine, type Fc, type FakturaExpenseRow, type FakturaTimeGroup, type FakturaTimeRow, type SpecLine,
@@ -41,8 +46,9 @@ export type { InvoiceSpecification };
 export type { FakturaExpenseRow, FakturaTimeGroup, FakturaTimeRow };
 
 /** En rad i den itemiserade summeringen (#858): `add` = delbelopp, `deduct` =
- *  avgår (−), `info` = spårbarhets-rad utan beloppspåverkan (visas parentes). */
-export interface BreakdownRow { label: string; amountOre: number; kind: "add" | "deduct" | "info" }
+ *  avgår (−), `info` = spårbarhets-rad utan beloppspåverkan (visas parentes).
+ *  Underlag, andel och plats i avräkningstabellen (#2255/#151) i egna fält. */
+export type BreakdownRow = SettlementRow;
 
 /**
  * Itemiserad summering (#858) — självförklarande nedbrytning (självrisk,
@@ -60,13 +66,12 @@ export interface FakturaBreakdown {
   expenseLines?: ReadonlyArray<SpecExpenseLine> | undefined;
 }
 
-export interface FakturaDocMeta {
+/** Ärendets, mottagarens och byråns uppgifter på fakturan. */
+export interface FakturaDocMeta extends FakturaLetterMeta {
   matterNumber: string;
   matterTitle: string;
-  clientName?: string;
   recipient?: string;
   organizationName?: string;
-  organizationOrgNumber?: string;
   /** Byråns logga ur organisationsinställningarna (#1439) — ritas i sidhuvudet. */
   organizationLogo?: OrgImage;
 }
@@ -79,6 +84,8 @@ export interface FakturaDocInvoice {
   invoiceNumber?: string | null | undefined;
   ocrReference?: string | null | undefined;
   invoiceDate?: string | Date | null | undefined;
+  /** Förfallodagen (#149) — saknas → raden utelämnas på fakturan. */
+  dueDate?: string | Date | null | undefined;
   /** Fakturatyp — styr rubriken (Aconto-/Kreditfaktura). Saknas → "Faktura". */
   invoiceType?: string | null | undefined;
   /** Fri text. Blir sammanställningens rad när fakturan saknar itemiserat
@@ -118,7 +125,7 @@ export interface FakturaSummaryRow { label: string; rateLabel: string; hours: st
 export interface FakturaSplitRow { label: string; amount: string; style: string; muted: boolean }
 
 /** Färdigformaterad faktura — allt en renderare behöver, inga öre kvar. */
-export interface FakturaView {
+export interface FakturaView extends FakturaLetterFields {
   heading: string;
   invoiceNumber: string;
   ocr: string;
@@ -136,11 +143,18 @@ export interface FakturaView {
   /** Etiketten på sammanställningens slutsumma ("Summa inkl moms"). */
   summaryTotalLabel: string;
   summaryTotal: string;
+  /** Sammanställningens slutsumma visas bara när den summerar flera rader. */
+  showSummaryTotal: boolean;
   /** Visa rubriken "Uppdelning klient / betalare" (bara vid faktisk split). */
   hasSplit: boolean;
   splitRows: FakturaSplitRow[];
   totalLabel: string;
   total: string;
+  /** Avräkningstabellen (#151): Avräkning | Underlag | Andel | Belopp, summerar
+   *  exakt till `total` (med Öresutjämning). Tom utan uppdelning. */
+  settlementRows: FakturaSettlementRow[];
+  /** Summeringsrutan: belopp exkl moms, moms och inkl moms (#149). */
+  totals: FakturaTotals;
   /** Finns underlag att specificera → egen sida efter sammanställningen. */
   hasSpec: boolean;
   /** Alla tidsposter i fakturans ordning (platt — för byrå-mallar, #852). */
@@ -284,6 +298,19 @@ function specSplitRows(spec: InvoiceSpecification, fc: Fc): FakturaSplitRow[] {
   return rows;
 }
 
+/** Avräkningstabellen (#151) ur nedbrytningen, annars ur spec-summeringen. */
+function settlementRowsFor(a: FakturaTemplateArgs, spec: InvoiceSpecification | null, fc: Fc): FakturaSettlementRow[] {
+  const { breakdown } = a;
+  if (breakdown) return formatSettlementRows(settlementTable(breakdown.rows, breakdown.totalOre, hasTableFields(breakdown.rows)), fc);
+  if (!spec || !hasSpecSplit(spec)) return [];
+  return formatSettlementRows(settlementTable(specSettlementRows(spec), a.invoice.amount, true), fc);
+}
+
+/** Har spec-summeringen något att dra av eller justera? */
+function hasSpecSplit(spec: InvoiceSpecification): boolean {
+  return spec.deductions.length > 0 || spec.adjustmentOre !== 0;
+}
+
 /**
  * Uppdelningen klient/betalare — EN lista oavsett källa (#938). Prioritet:
  * itemiserad nedbrytning (#858) → spec-summeringen (#856) → netto/moms ur
@@ -325,14 +352,19 @@ function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "fo
 export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatKr): FakturaView {
   const spec = resolveSpec(a);
   const showTimeAmounts = !isAcconto(a.invoice);
+  const summary = summarySection(a, spec, fc);
   return {
     ...headerFields(a),
-    ...summarySection(a, spec, fc),
+    ...buildLetterFields(a.invoice, a.recipient, a.meta),
+    ...summary,
+    showSummaryTotal: summary.summary.length > 1,
     // "Uppdelning klient / betalare"-rubriken (#925) visas bara när det finns en
     // faktisk split: en breakdown (självrisk/aconto/rättshjälpsavgift) ELLER
     // spec-avdrag/justering. Total-raden renderas alltid.
-    hasSplit: !!a.breakdown || (!!spec && (spec.deductions.length > 0 || spec.adjustmentOre !== 0)),
+    hasSplit: !!a.breakdown || (!!spec && hasSpecSplit(spec)),
     splitRows: splitRowsFor(a, spec, fc),
+    settlementRows: settlementRowsFor(a, spec, fc),
+    totals: fakturaTotals(a.invoice.amount, invoiceVatOre(a.invoice), fc),
     totalLabel: a.breakdown?.totalLabel ?? "Att betala (inkl moms)",
     total: fc(a.breakdown ? a.breakdown.totalOre : a.invoice.amount),
     ...specTables(spec, fc, showTimeAmounts),

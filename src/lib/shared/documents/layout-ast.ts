@@ -8,8 +8,11 @@
  * BASLINJE — en text ritas på markören och flyttar den `leading` per rad.
  */
 
-/** Teckensnittets variant inom dokumentets familj. */
-export type LayoutFont = "regular" | "bold" | "italic";
+/**
+ * Teckensnittets variant inom dokumentets familj — `sans` är Helvetica också i
+ * ett Times-dokument (t.ex. en sidfot i sans-serif).
+ */
+export type LayoutFont = "regular" | "bold" | "italic" | "sans";
 
 /** Dokumentets teckensnittsfamilj (pdf-libs standardteckensnitt). */
 export type FontFamily = "helvetica" | "times";
@@ -37,10 +40,18 @@ export interface FlowSpacing {
   spaceAfter: number;
 }
 
-/** Löptext; radbryts inom ramens bredd. */
+/** En del av en text: `<u>…</u>` ger `underline`. */
+export interface TextSpan {
+  text: string;
+  underline: boolean;
+}
+
+/** Löptext; radbryts inom ramens bredd. `content` = delarna ihopslagna. */
 export interface TextNode extends FlowSpacing {
   kind: "text";
   content: string;
+  /** Texten i delar, blanktecken komprimerade över gränserna (minst en del). */
+  spans: TextSpan[];
   style: TextStyle;
   align: LayoutAlign;
 }
@@ -105,6 +116,8 @@ export interface TableRow {
   leading: number;
   keep: number | undefined;
   spaceAfter: number;
+  /** Bakgrund bakom raden över tabellens bredd; `undefined` = ingen. */
+  fill: LayoutColor | undefined;
 }
 
 /** Det en tabell kan innehålla mellan raderna. */

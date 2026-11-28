@@ -36,11 +36,19 @@ export interface MatterContext {
   /** Domstolens målnummer — kostnadsräkningens rubrik (#1218). */
   courtCaseNumber?: string | null | undefined;
   rattsskyddNekadAt?: string | Date | null | undefined;
-  contacts?: ReadonlyArray<{ role: MatterRole; contact?: { name?: string | null | undefined; email?: string | null | undefined } | null | undefined }> | undefined;
+  contacts?: ReadonlyArray<{
+    role: MatterRole;
+    contact?: { name?: string | null | undefined; email?: string | null | undefined; address?: string | null | undefined } | null | undefined;
+  }> | undefined;
 }
 
 export function clientOf(matter: MatterContext): string {
   return matter.contacts?.find((c) => c.role === "KLIENT")?.contact?.name ?? "";
+}
+
+/** Klientens postadress (kontaktens adressfält) — fakturans fönsteradress (#2255). */
+export function clientAddressOf(matter: MatterContext): string {
+  return matter.contacts?.find((c) => c.role === "KLIENT")?.contact?.address ?? "";
 }
 
 function courtOf(matter: MatterContext): string | undefined {
