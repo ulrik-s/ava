@@ -810,3 +810,56 @@ ett dokument på ~11 s med `qwen2.5:1.5b` (6 av 7 rätt på testdokument), och
 `qwen2.5:3b` tar dubbelt så lång tid för samma resultat. Ollama har ett
 minnestak på 3 GB. Byt modell genom att ändra `AVA_LLM_MODEL` och starta om
 `ollama` + `server-first` — nedladdningen sker automatiskt.
+
+### Mät träffsäkerheten
+
+`tooling/scripts/document-kinds-accuracy.ts` kör samma klassning som jobbet mot
+dokument där en person har satt typerna själv (`kinds_manual`, ADR 0038), och
+skriver en rapport i markdown på stdout: träffsäkerhet och precision per typ,
+andel rätt primärtyp och exakt samma typer, tid och antal anrop per dokument.
+Skriptet läser bara (inga skrivningar, inga filer), kör ett dokument i taget och
+skriver aldrig ut id, filnamn, titel, text eller byråns egna typer. Systemets
+dokument (kostnadsräkningar, fakturor och importerad e-post) räknas inte.
+
+Server-imagen innehåller bara den kompilerade binären, så skriptet körs i en
+engångscontainer som `avarun` (samma image, volym och arbetskatalog). Den
+behöver två nät, som `server-first`: `ava_default` för databasen och `ava_llm`
+för ollama. Aldrig `edge`.
+
+```bash
+set -a && . ./ava-server.env && set +a
+# 1. Skapa containern på databasens nät (börja med --limit).
+docker create --rm --name ava-accuracy --network ava_default -v "$PWD:/app" -w /app \
+  -e AVA_DATABASE_URL="postgres://ava:$POSTGRES_PASSWORD@postgres:5432/ava" \
+  -e AVA_LLM_ENDPOINT -e AVA_LLM_MODEL \
+  oven/bun:1.4.4 bun tooling/scripts/document-kinds-accuracy.ts --limit 50
+# 2. Koppla på LLM-nätet (hoppa över utan profilen llm).
+docker network connect ava_llm ava-accuracy
+# 3. Kör och visa rapporten.
+docker start -a ava-accuracy
+```
+
+Utan profilen `llm` (eller utan `AVA_LLM_*`) hoppar man över steg 2 och får
+jämförelsebasen: bara rubriker och filnamn ("ingen LLM" i rapporten).
+
+En annan modell provas genom att först hämta den, `docker compose -f
+tooling/docker/docker-compose.production.yml exec ollama ollama pull qwen2.5:3b`,
+och sedan sätta `-e AVA_LLM_MODEL=qwen2.5:3b` i steg 1. Ollama har ett
+minnestak på 3 GB, så större modeller får inte plats. Klassningen tar CPU från
+servern (~11 s per anrop med `qwen2.5:1.5b`): kör utanför kontorstid och börja
+med `--limit`.
+
+### Modellbeslut
+
+Fylls i efter en mätning. Repot är publikt: skriv bara andelar (procent) per
+typ och det totala antalet mätta dokument, aldrig antal per typ, eftersom det
+skulle visa byråns ärendemix.
+
+- Datum:
+- Modell:
+- Antal mätta dokument:
+- Andel rätt primärtyp (totalt):
+- Andel rätt per typ:
+- Tid per dokument (median / p90):
+- Beslut:
+- Motivering:
