@@ -5,8 +5,9 @@
  */
 import { inflateSync } from "node:zlib";
 import { describe, it, expect } from "vitest-compat";
+import { toWinAnsi } from "@/lib/client/documents/win-ansi";
 import { buildFakturaView, type FakturaView } from "@/lib/client/kostnadsrakning/faktura-template";
-import { renderFakturaPdf, toWinAnsi } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
+import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 import { buildInvoiceSpecification } from "@/lib/shared/billing/invoice-specification";
 import { orgImageSchema } from "@/lib/shared/org-image";
 import { asId } from "@/lib/shared/schemas/ids";

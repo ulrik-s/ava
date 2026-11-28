@@ -81,3 +81,22 @@ function layoutOf(content: string): PdfPageLayout {
 export async function pdfPageLayouts(bytes: Uint8Array): Promise<PdfPageLayout[]> {
   return (await pdfPageContents(bytes)).map(layoutOf);
 }
+
+/** En `q … Q`-ritoperation på en rad: resursnamnens slumpsuffix bort, texten avkodad. */
+function normalizedOp(block: string): string {
+  return block
+    .replace(/\s+/g, " ")
+    .replace(/\/([A-Za-z]+(?:-[A-Za-z]+)*)-\d+ /g, "/$1 ")
+    .replace(/<([0-9A-Fa-f]*)> Tj/g, (_, hex: string) => `${JSON.stringify(Buffer.from(hex, "hex").toString("latin1"))} Tj`);
+}
+
+/**
+ * Varje sidas ritoperationer, en rad per `q … Q`, normaliserade så att två
+ * PDF:er med samma utseende ger samma rader (#2251): pdf-libs slumpade
+ * resursnamn (`/Helvetica-123`) skalas av och tomma textkörningar (`<> Tj`,
+ * som inte ritar något) utelämnas. Texten står avkodad för läsbara diffar.
+ */
+export async function pdfDrawingOps(bytes: Uint8Array): Promise<string[][]> {
+  return (await pdfPageContents(bytes)).map((content) =>
+    [...content.matchAll(/^q$[\s\S]*?^Q$/gm)].map((m) => m[0]).filter((b) => !/<> Tj/.test(b)).map(normalizedOp));
+}
