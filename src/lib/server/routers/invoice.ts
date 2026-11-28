@@ -214,7 +214,7 @@ export const invoiceRouter = router({
           amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }], amountRounding: CURRENT_ROUNDING,
           invoiceType: "STANDARD", status: "DRAFT", invoiceDate: when, // "Skapad" tills den skickas (#1138)
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
-          notes: RADGIVNING_INVOICE_NOTES,
+          notes: RADGIVNING_INVOICE_NOTES, purpose: "RADGIVNING",
         } satisfies Partial<Invoice>);
         await repos.matters.update(input.matterId, { radgivningBetaldAt: when } satisfies Partial<Matter>);
         await logMatterNote(repos, ctx, input.matterId, radgivningInvoicedNote(invoice.invoiceNumber, grossOre), when);

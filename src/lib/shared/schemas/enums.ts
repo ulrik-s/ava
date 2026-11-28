@@ -190,6 +190,19 @@ export const AMOUNT_ROUNDING_LABELS = {
 export const amountRoundingSchema = enumFromLabels(AMOUNT_ROUNDING_LABELS);
 export type AmountRounding = z.infer<typeof amountRoundingSchema>;
 
+/**
+ * En fakturas affärsroll (#1933, ADR 0038 §4) — något som varken är dess typ
+ * (`invoiceType`, som styr faktureringsflödena) eller dess text. `RADGIVNING` =
+ * rättshjälpens betalda rådgivningstimme. Saknas fältet (null) är fakturan en
+ * vanlig faktura. Nästa sådan roll blir ett nytt värde här, inte en ny
+ * textjämförelse.
+ */
+export const INVOICE_PURPOSE_LABELS = {
+  RADGIVNING: "Rådgivningstimme",
+} as const satisfies Record<string, string>;
+export const invoicePurposeSchema = enumFromLabels(INVOICE_PURPOSE_LABELS);
+export type InvoicePurpose = z.infer<typeof invoicePurposeSchema>;
+
 // ─── BillingRun (fakturerings-händelse) ───────────────────────────────────
 
 /** Typen av billing-händelse. Skiljer aconto (klient betalar andel) från

@@ -8,6 +8,7 @@ import {
   billingRunTypeSchema,
   expenseKindSchema,
   forordnandeAvslutSchema,
+  invoicePurposeSchema,
   invoiceStatusSchema,
   invoiceTypeSchema,
   paymentPlanStatusSchema,
@@ -165,6 +166,8 @@ export const invoiceSchema = z.object({
    *  null/`ORE` på äldre — deras specifikation räknas med öresavrundning så ett
    *  omrenderat dokument visar samma rader som det som skickades. */
   amountRounding: amountRoundingSchema.nullish(),
+  /** Fakturans affärsroll (#1933): `RADGIVNING` eller null (en vanlig faktura). */
+  purpose: invoicePurposeSchema.nullish(),
 }).passthrough();
 
 export type Invoice = z.infer<typeof invoiceSchema>;
