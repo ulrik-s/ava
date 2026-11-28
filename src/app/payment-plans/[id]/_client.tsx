@@ -7,16 +7,13 @@ import { Money } from "@/components/ui/money";
 import { SECTION_FILL_CLASS } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { labelForPaymentPlanStatus } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { computeInvoiceLedger } from "@/lib/shared/billing/write-off-calc";
+import type { PaymentPlanStatus } from "@/lib/shared/schemas/enums";
 import { paymentPlanLayout } from "./_payment-plan-layout";
 
-const STATUS_LABEL: Record<string, string> = {
-  ACTIVE: "Aktiv",
-  COMPLETED: "Slutförd",
-  CANCELLED: "Avbruten",
-};
-const STATUS_PILL: Record<string, string> = {
+const STATUS_PILL: Record<PaymentPlanStatus, string> = {
   ACTIVE: "bg-green-100 text-green-800",
   COMPLETED: "bg-gray-200 text-gray-700",
   CANCELLED: "bg-red-100 text-red-800",
@@ -69,10 +66,10 @@ function klientName(m: PlanMatter | undefined): string {
   return m?.contacts?.[0]?.contact?.name ?? "—";
 }
 
-function statusPillView(status: string): { label: string; cls: string } {
+function statusPillView(status: PaymentPlanStatus): { label: string; cls: string } {
   return {
-    label: STATUS_LABEL[status] ?? status,
-    cls: STATUS_PILL[status] ?? "bg-gray-100 text-gray-700",
+    label: labelForPaymentPlanStatus(status),
+    cls: STATUS_PILL[status],
   };
 }
 
@@ -244,7 +241,7 @@ function RemindersSection({ reminders }: { reminders: PlanDetail["reminders"] })
 
 interface PlanDetail {
   id: string;
-  status: string;
+  status: PaymentPlanStatus;
   monthlyAmount: number;
   dayOfMonth: number;
   startDate: string | Date;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest-compat";
-import { matterRoleLabels, matterRoleOptions, contactTypeLabels, contactTypeOptions, labelForMatterRole, labelForUserRole, userRoleOptions } from "@/lib/client/labels";
+import { matterRoleLabels, matterRoleOptions, contactTypeLabels, contactTypeOptions, labelForMatterRole, labelForPaymentPlanStatus, labelForUserRole, userRoleOptions } from "@/lib/client/labels";
 import { USER_ROLE_LABELS } from "@/lib/shared/schemas/enums";
 
 describe("matterRoleLabels", () => {
@@ -65,6 +65,19 @@ describe("contactTypeLabels", () => {
     for (const { value, label } of contactTypeOptions) {
       expect(contactTypeLabels[value]).toBe(label);
     }
+  });
+});
+
+describe("labelForPaymentPlanStatus (#1991)", () => {
+  it("ger statusens text i singular", () => {
+    expect(labelForPaymentPlanStatus("ACTIVE")).toBe("Aktiv");
+    expect(labelForPaymentPlanStatus("COMPLETED")).toBe("Slutförd");
+    expect(labelForPaymentPlanStatus("CANCELLED")).toBe("Avbruten");
+  });
+
+  it("ger en okänd status tillbaka som den är", () => {
+    // @ts-expect-error -- rå data utanför enumen ska visas oförändrad
+    expect(labelForPaymentPlanStatus("PAUSED")).toBe("PAUSED");
   });
 });
 
