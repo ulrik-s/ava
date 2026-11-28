@@ -26,6 +26,7 @@ import { invoiceBreakdown } from "@/lib/shared/billing/settlement-view";
 import { roundToKronor } from "@/lib/shared/billing/whole-kronor";
 import { toIsoDate } from "@/lib/shared/iso-date";
 import { formatKr } from "@/lib/shared/kr-format";
+import type { InvoiceType } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import { UnbilledPosts, usePostSelection } from "./_post-selection";
 
@@ -90,6 +91,8 @@ function recipientLabel(recipient: string, clientName?: string): string {
  * (#1941); en faktura utan nedbrytning får samma dokument som förut.
  */
 type DocInvoice = FakturaDocInvoice & {
+  /** Fakturatypen väljer nedbrytningens kolumn (`invoiceBreakdown`, #2192). */
+  invoiceType?: InvoiceType | null | undefined;
   accontoBreakdown?: FakturaBreakdown | null | undefined; settlementBreakdown?: FakturaBreakdown | null | undefined;
 };
 

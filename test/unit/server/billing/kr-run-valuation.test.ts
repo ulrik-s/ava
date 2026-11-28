@@ -4,7 +4,7 @@
  * grenar som avgör VÄGEN.
  */
 import { describe, expect, it } from "vitest-compat";
-import { krRunForordnandeAvslut, krRunGrossOre, krRunNotes, krRunValuedMatter, valueKrRun, type KrRunMatter } from "@/lib/server/billing/kr-run-valuation";
+import { krRunForordnandeAvslut, krRunGrossOre, krRunValuedMatter, valueKrRun, type KrRunMatter } from "@/lib/server/billing/kr-run-valuation";
 import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
 import { kostnadsrakningClaimInclVat } from "@/lib/shared/billing/kostnadsrakning";
 
@@ -154,18 +154,6 @@ describe("krRunValuedMatter (#1890)", () => {
 
   it("utan val i dialogen gäller ärendets flagga", () => {
     expect(krRunValuedMatter({ isTaxeArende: true }, norm, {})).toEqual({ isTaxeArende: true });
-  });
-});
-
-describe("krRunNotes", () => {
-  it("utan förordnande → anteckningen som den är", () => {
-    expect(krRunNotes("Egen", {})).toBe("Egen");
-    expect(krRunNotes(undefined, {})).toBeUndefined();
-  });
-
-  it("förordnande → avslutet sparas i anteckningen", () => {
-    expect(krRunNotes(null, { forordnande: { avslut: "NEDLAGD" } })).toBe("Förordnandetaxa – förundersökningen lades ned");
-    expect(krRunNotes("Egen", { forordnande: { avslut: "STRAFFORELAGGANDE" } })).toBe("Egen\nFörordnandetaxa – strafföreläggande godkändes");
   });
 });
 

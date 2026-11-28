@@ -221,10 +221,17 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
   it("dokumentet får fakturans sparade nedbrytning, som på fakturasidan (#1941)", async () => {
     const onClose = vi.fn();
     await renderDialog(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={onClose} />);
-    await submitWith("Skapa aconto-faktura", { invoice: { id: "inv-2", amount: 100_000, invoiceType: "ACCONTO", settlementBreakdown: BREAKDOWN } }, onClose);
+    await submitWith("Skapa aconto-faktura", { invoice: { id: "inv-2", amount: 100_000, invoiceType: "ACCONTO", accontoBreakdown: BREAKDOWN } }, onClose);
     const text = await docText();
     expect(text).toContain("Klientens andel av upparbetat");
     expect(text).toContain("Att betala nu");
+  });
+
+  it("ett aconto med bara settlementBreakdown får ingen nedbrytning (#2192)", async () => {
+    const onClose = vi.fn();
+    await renderDialog(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={onClose} />);
+    await submitWith("Skapa aconto-faktura", { invoice: { id: "inv-4", amount: 100_000, invoiceType: "ACCONTO", settlementBreakdown: BREAKDOWN } }, onClose);
+    expect(await docText()).not.toContain("Klientens andel av upparbetat");
   });
 
   it("dokumentet läser acontots egen kolumn före settlementBreakdown (#2180)", async () => {

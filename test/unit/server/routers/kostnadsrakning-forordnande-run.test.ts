@@ -63,11 +63,13 @@ describe("createKostnadsrakning — förordnandemål (#1857)", () => {
     expect(run.amountOre).toBe(run.workValueOreAtRun);
   });
 
-  it("avslutet sparas i anteckningen, och ärendet ändras inte", async () => {
+  it("avslutet sparas bara i kolumnen, anteckningen oförändrad, och ärendet ändras inte (#2192)", async () => {
     const { caller } = setup();
     const before = await caller.matter.getById({ id: MATTER });
-    const { run } = await caller.billingRun.createKostnadsrakning({ matterId: MATTER, forordnande: { avslut: "INGET_ATAL" }, isTaxeArende: true });
-    expect(run.notes).toBe("Förordnandetaxa – förundersökningen avslutades utan åtal");
+    const { run } = await caller.billingRun.createKostnadsrakning({
+      matterId: MATTER, forordnande: { avslut: "INGET_ATAL" }, isTaxeArende: true, notes: "Egen anteckning",
+    });
+    expect(run.notes).toBe("Egen anteckning");
     // Typad kolumn (#2180): avslutet går att läsa tillbaka strukturerat.
     expect(run.forordnandeAvslut).toBe("INGET_ATAL");
     const read = await caller.billingRun.byId({ id: run.id });

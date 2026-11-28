@@ -16,7 +16,7 @@ import { TRPCError } from "@trpc/server";
 import { TAXA_MAX_MINUTES, type TaxaLevel } from "@/lib/shared/billing/brottmalstaxa";
 import { forhorFromTimeEntries } from "@/lib/shared/billing/forordnandetaxa";
 import { type ExpenseInput, kostnadsrakningClaimInclVat, type TimeEntryInput } from "@/lib/shared/billing/kostnadsrakning";
-import { FORORDNANDE_AVSLUT_LABELS, type ForordnandeAvslut } from "@/lib/shared/schemas/enums";
+import type { ForordnandeAvslut } from "@/lib/shared/schemas/enums";
 
 /** Det dialogen skickar med inskicket (allt valfritt: skript/demo saknar dialog). */
 export interface KrRunTaxaInput {
@@ -179,21 +179,9 @@ function forordnandeValuation(
 }
 
 /**
- * Körningens anteckning (#1857): i ett förordnandemål sparas avslutet där, så
- * att det syns i efterhand ("Förordnandetaxa – förundersökningen lades ned").
- * Sedan #2180 står avslutet också i kolumnen (`krRunForordnandeAvslut`); raden
- * här skrivs kvar tills ett senare contract-steg, och migration 0054 läser den.
- */
-export function krRunNotes(notes: string | null | undefined, input: KrRunTaxaInput): string | null | undefined {
-  if (!input.forordnande) return notes;
-  const avslut = `Förordnandetaxa – ${FORORDNANDE_AVSLUT_LABELS[input.forordnande.avslut].toLowerCase()}`;
-  return notes ? `${notes}\n${avslut}` : avslut;
-}
-
-/**
- * Körningens typade avslut (#2180): förordnandemålets avslut, som också står i
- * anteckningen (`krRunNotes`), så att det går att fråga på. Null utanför
- * förordnandetaxan.
+ * Körningens typade avslut (#2180): förordnandemålets avslut, i egen kolumn så
+ * att det går att fråga på. Sedan contract-steget (#2192) står det bara där.
+ * Null utanför förordnandetaxan.
  */
 export function krRunForordnandeAvslut(input: KrRunTaxaInput): ForordnandeAvslut | null {
   return input.forordnande?.avslut ?? null;

@@ -6,8 +6,9 @@
  *   kopierad till acconto_breakdown. Slutfakturor och acontofakturor utan
  *   nedbrytning lämnas.
  * - Kostnadsräkningar vars anteckning slutar med förordnandetaxans rad får
- *   avslutet ur den. Raden skrivs av `krRunNotes`, så testet bygger
- *   anteckningarna med den: en ändrad etikett fäller testet.
+ *   avslutet ur den. Raden skrevs av koden fram till contract-steget (#2192);
+ *   testet bygger den historiska raden själv ("Förordnandetaxa – " + etiketten
+ *   i gemener), så att 0054 testas mot formatet som ligger i databasen.
  * - Ändrade rader får ny version och en change_log-rad (inte raderade), och
  *   migreringen går att köra igen utan nya ändringar.
  */
@@ -15,8 +16,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { getTableColumns } from "drizzle-orm";
-import { krRunNotes } from "@/lib/server/billing/kr-run-valuation";
 import { billingRuns, invoices } from "@/lib/server/db/schema";
+import { FORORDNANDE_AVSLUT_LABELS } from "@/lib/shared/schemas/enums";
 import { declaredKind, destructiveStatements } from "../../../tooling/scripts/lib/migration-kind";
 
 const DIR = "tooling/db/migrations";
@@ -42,8 +43,11 @@ const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
 const sqlOf = (f: string): string => readFileSync(`${DIR}/${f}`, "utf8");
 const lit = (v: string | null): string => (v === null ? "NULL" : `'${v.replace(/'/g, "''")}'`);
 
-const noteOf = (avslut: "NEDLAGD" | "STRAFFORELAGGANDE" | "INGET_ATAL", own: string | null = null): string =>
-  krRunNotes(own, { forordnande: { avslut } }) ?? "";
+/** Den historiska raden i anteckningen, som koden skrev den före #2192. */
+const noteOf = (avslut: "NEDLAGD" | "STRAFFORELAGGANDE" | "INGET_ATAL", own: string | null = null): string => {
+  const line = `Förordnandetaxa – ${FORORDNANDE_AVSLUT_LABELS[avslut].toLowerCase()}`;
+  return own ? `${own}\n${line}` : line;
+};
 
 function invoiceRow(rowId: string, type: string, breakdown: object | null): string {
   return `('${rowId}', '${MATTER}', 62500, now(), '${type}', ${breakdown ? lit(JSON.stringify(breakdown)) : "NULL"})`;

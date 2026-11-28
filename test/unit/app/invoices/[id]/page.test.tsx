@@ -530,6 +530,15 @@ describe("InvoiceDetailPage", () => {
     expect(screen.getByText("Samtal").closest("tr")?.textContent).toContain("1 h");
   });
 
+  it("en acontofaktura med bara settlementBreakdown visar ingen nedbrytning (#2192)", async () => {
+    const settlementBreakdown = { timeLines: [{ date: "2026-03-01", description: "Gammalt samtal", minutes: 60, amountOre: 100_000 }],
+      rows: [], totalLabel: "Att betala", totalOre: 100_000 };
+    invoiceQuery.data = { ...baseInvoice, invoiceType: "ACCONTO", settlementBreakdown };
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("heading", { name: /Aconto-faktura/i })).toBeInTheDocument());
+    expect(screen.queryByText("Gammalt samtal")).not.toBeInTheDocument();
+  });
+
   it("tabellernas datarader är toppjusterade; summaraden i specifikationen är det inte (#1753)", async () => {
     const settlementBreakdown = { timeLines: [{ date: "2026-03-01", description: "Möte", minutes: 90, amountOre: 150_000 }],
       rows: [], totalLabel: "Att betala", totalOre: 150_000 };

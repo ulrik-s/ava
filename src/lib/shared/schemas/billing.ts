@@ -140,12 +140,13 @@ export const invoiceSchema = z.object({
     netOre: z.number().int(),
     vatOre: z.number().int(),
   })).nullish(),
-  /** Persisterad slutregleringsvy (#876) — EN källa för både faktura-dokumentet
+  /** Slut- och kreditfakturans vy (#876) — EN källa för både faktura-dokumentet
    *  och Slutfaktura-sidan (`/invoices/[id]`). Sätts vid settleCoverage på klient-/
-   *  betalar-fakturan; null på övriga fakturor. Matchar `SettlementView`. */
+   *  betalar-fakturan; null på övriga fakturor (acontot har sin i `accontoBreakdown`,
+   *  #2192). Matchar `SettlementView`. */
   settlementBreakdown: settlementBreakdownSchema.nullish(),
-  /** Acontofakturans nedbrytning (#2147, egen kolumn #2180). Äldre acontofakturor
-   *  har den bara i `settlementBreakdown`; läs med `invoiceBreakdown`. */
+  /** Acontofakturans nedbrytning (#2147, egen kolumn #2180) — den enda källan för
+   *  acontot sedan contract-steget (#2192). Läs med `invoiceBreakdown`. */
   accontoBreakdown: settlementBreakdownSchema.nullish(),
   status: invoiceStatusSchema.default("DRAFT"),
   invoiceType: invoiceTypeSchema.default("STANDARD"),

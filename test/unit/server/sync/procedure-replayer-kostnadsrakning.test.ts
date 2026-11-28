@@ -126,7 +126,9 @@ describe("kostnadsräkning och slutreglering i procedur-kön (#1276, steg 2d)", 
     const withFord = call("billingRun.createKostnadsrakning", { matterId, forordnande: { avslut: "STRAFFORELAGGANDE" } });
     await accepted(withFord);
     const fordRun = await repos.billingRuns.getById(asId<"BillingRunId">(derivedId(withFord.mutationId, "billingRun")));
-    expect(fordRun).toMatchObject({ notes: "Förordnandetaxa – strafföreläggande godkändes", kostnadsrakningStatus: "INSKICKAD" });
+    // Avslutet bara i kolumnen (#2192); anteckningen lämnas som anroparen skickade den.
+    expect(fordRun).toMatchObject({ forordnandeAvslut: "STRAFFORELAGGANDE", kostnadsrakningStatus: "INSKICKAD" });
+    expect(fordRun?.notes ?? null).toBeNull();
     expect(fordRun?.workValueOreAtRun).toBeGreaterThan(0);
 
     const other = await matterWithWork("OFFENTLIGT_UPPDRAG");

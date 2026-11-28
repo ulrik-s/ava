@@ -8,7 +8,7 @@
 
 import type { VatBreakdownLine } from "../accounting/semantic-voucher";
 import { toIsoDate } from "../iso-date";
-import type { PaymentMethod, TimeEntryKind } from "../schemas/enums";
+import type { InvoiceType, PaymentMethod, TimeEntryKind } from "../schemas/enums";
 import { accontoCreditAmounts, accontoCreditLines, accontoSplit } from "./acconto-vat";
 import { coverageEntryRowOre, type UnfrozenWork } from "./billing-work-value";
 import { payableCoverageEntries } from "./brottmalstaxa";
@@ -373,13 +373,15 @@ export function creditPayload(clientLines: VatBreakdownLine[], deductionOre: num
 }
 
 /**
- * Fakturans sparade nedbrytning (#2180): acontofakturans egen kolumn
- * (`accontoBreakdown`), annars `settlementBreakdown`, där slutfakturan och
- * acontofakturor från före migration 0054 har den. Null utan nedbrytning.
+ * Fakturans sparade nedbrytning (#2180, contract #2192): en kolumn per
+ * fakturatyp, utan reserv mellan dem. Acontofakturan har sin i
+ * `accontoBreakdown`; slut- och kreditfakturan sin vy i `settlementBreakdown`.
+ * Null utan nedbrytning.
  */
 export function invoiceBreakdown<T>(inv: {
+  invoiceType?: InvoiceType | null | undefined;
   accontoBreakdown?: T | null | undefined;
   settlementBreakdown?: T | null | undefined;
 }): T | null {
-  return inv.accontoBreakdown ?? inv.settlementBreakdown ?? null;
+  return (inv.invoiceType === "ACCONTO" ? inv.accontoBreakdown : inv.settlementBreakdown) ?? null;
 }
