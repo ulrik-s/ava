@@ -20,6 +20,8 @@
 #   4. backup (systemd-tjänsten ava-backup, annars backup-db.sh)
 #   4b. backup på begäran (#1431): installera/uppdatera hostens
 #      ava-backup-request.path/.service (bara om ava-backup.service finns)
+#   4b2. timexporten (ADR 0039): installera/uppdatera ava-backup-hourly.timer/
+#      .service (bara om ava-backup.service och mottagarfilen finns)
 #   4c. deploy via tagg: installera/uppdatera ava-deploy.timer/.service
 #   5. (en gång) flytta Caddy från out/ till releases/current
 #   6. TÖM .next/cache — en gammal byggcache gav en gång gammal CSS i prod
@@ -52,6 +54,7 @@ cd "$(dirname "$0")/../.."
 COMPOSE="tooling/docker/docker-compose.production.yml"
 SYSTEMD_DIR="${AVA_SYSTEMD_DIR:-/etc/systemd/system}"
 BACKUP_UNITS="ava-backup-request.path ava-backup-request.service"
+HOURLY_UNITS="ava-backup-hourly.timer ava-backup-hourly.service"
 DEPLOY_UNITS="ava-deploy.timer ava-deploy.service"
 CADDYFILE="tooling/docker/caddy/Caddyfile"
 # Bygget och migreringen kör i samma Bun som CI testar (.github/actions/bun-setup).
@@ -248,6 +251,17 @@ if systemctl cat ava-backup.service >/dev/null 2>&1; then
   install_units "$BACKUP_UNITS" ava-backup-request.path
 else
   echo "ingen ava-backup.service — \"Ta backup nu\" fungerar först när nattjobbet finns (docs/deploy-server-first.md, Backup)"
+fi
+
+step "timexport: hostens timer (ava-backup-hourly.timer, ADR 0039)"
+# Samma standardvärde som i ava-backup-hourly.service.
+recipient="${AVA_BACKUP_RECIPIENT:-/srv/ava/backup-recipient.txt}"
+if ! systemctl cat ava-backup.service >/dev/null 2>&1; then
+  echo "ingen ava-backup.service — timexporten installeras först när nattjobbet finns (docs/deploy-server-first.md, Backup)"
+elif [ ! -s "$recipient" ]; then
+  echo "ingen mottagarfil ($recipient) — timexporten installeras först när den publika age-nyckeln finns (docs/deploy-server-first.md, Backup)"
+else
+  install_units "$HOURLY_UNITS" ava-backup-hourly.timer
 fi
 
 step "deploy via tagg: hostens timer (ava-deploy.timer)"

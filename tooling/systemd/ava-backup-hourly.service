@@ -1,0 +1,25 @@
+# Timexporten (ADR 0039): startas av ava-backup-hourly.timer och kör
+# backup-export.sh --hourly, som lägger hela databasen och dokumenten som
+# ändrats sedan den senaste fulla exporten i ava-<stämpel>-hourly.tar.age.
+# Hämtaren tar den varje timme, så högst ungefär en timme går förlorad.
+#
+# Timjobbet ligger på hosten och inte i servern: containern har medvetet
+# ingen host-åtkomst (#1431). Exportkatalogen är densamma som serverns
+# read-only-montering (AVA_BACKUP_EXPORT_HOST_DIR) och mottagaren den publika
+# age-nyckeln (AVA_BACKUP_RECIPIENT), båda ur ava-server.env, som compose
+# också behöver. Medan nattjobbet ava-backup.service kör (natten, "Ta backup
+# nu", deployen) hoppar tjänsten över (ExecCondition).
+#
+# Loggen: journalctl -u ava-backup-hourly. Installeras av deploy-prod.sh, se
+# ava-backup-hourly.timer.
+
+[Unit]
+Description=AVA: timexport av backupen (backup-export.sh --hourly)
+After=docker.service
+
+[Service]
+Type=oneshot
+NoNewPrivileges=yes
+WorkingDirectory=/srv/ava
+ExecCondition=/bin/sh -c '! systemctl is-active --quiet ava-backup.service'
+ExecStart=/bin/bash -c 'set -a && . ./ava-server.env && set +a && exec bash tooling/scripts/backup-export.sh "$${AVA_BACKUP_RECIPIENT:-/srv/ava/backup-recipient.txt}" "$${AVA_BACKUP_EXPORT_HOST_DIR:-/srv/backup-chroot/ava}" --hourly'
