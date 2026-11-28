@@ -2,9 +2,10 @@
  * Test för NewUserPage — formulär för att skapa användare.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import NewUserPage from "@/app/users/new/page";
+import { USER_ROLE_LABELS } from "@/lib/shared/schemas/enums";
 
 const routerPush = vi.fn();
 const utilsMock = { user: { list: { invalidate: vi.fn() } } };
@@ -90,6 +91,13 @@ describe("NewUserPage", () => {
     createState.error = { message: "E-post finns redan" };
     render(<NewUserPage />);
     expect(screen.getByText("E-post finns redan")).toBeInTheDocument();
+  });
+
+  it("rollvalet listar exakt rollerna i USER_ROLE_LABELS, i samma ordning (#1990)", () => {
+    render(<NewUserPage />);
+    const options = within(screen.getByRole("combobox")).getAllByRole("option");
+    expect(options.map((o) => [o.getAttribute("value"), o.textContent])).toEqual(Object.entries(USER_ROLE_LABELS));
+    expect(options.map((o) => o.textContent)).toEqual(["Admin", "Advokat", "Assistent"]);
   });
 
   it("byter roll till ADMIN och submittar", () => {
