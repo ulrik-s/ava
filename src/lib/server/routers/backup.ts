@@ -15,10 +15,9 @@ import { TRPCError } from "@trpc/server";
 import { backupStatusSchema, type BackupStatus } from "@/lib/shared/backup";
 import { log } from "@/lib/shared/observability/logger";
 import { uuidv7 } from "@/lib/shared/uuid";
-import { assertAdmin } from "../auth/assert-admin";
 import { assertMayRequest, backupStatus } from "../backup/backup-state";
 import type { IBackupStore } from "../ports";
-import { orgProcedure, router } from "../trpc";
+import { adminProcedure, router } from "../trpc";
 
 function requireBackup(store: IBackupStore | undefined): IBackupStore {
   if (!store) throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "Backup på begäran är inte konfigurerad på servern." });
@@ -32,14 +31,12 @@ async function currentStatus(store: IBackupStore, now: number): Promise<BackupSt
 
 export const backupRouter = router({
   /** Pågår en backup, och vilken är den nyaste exporten? */
-  status: orgProcedure.output(backupStatusSchema).query(({ ctx }) => {
-    assertAdmin(ctx);
+  status: adminProcedure.output(backupStatusSchema).query(({ ctx }) => {
     return currentStatus(requireBackup(ctx.ports.backup), Date.now());
   }),
 
   /** Begär en backup nu. Vägras om en pågår eller om den förra är för färsk. */
-  request: orgProcedure.output(backupStatusSchema).mutation(async ({ ctx }) => {
-    assertAdmin(ctx);
+  request: adminProcedure.output(backupStatusSchema).mutation(async ({ ctx }) => {
     const store = requireBackup(ctx.ports.backup);
     const now = Date.now();
     const before = await currentStatus(store, now);

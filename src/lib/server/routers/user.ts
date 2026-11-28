@@ -4,12 +4,11 @@ import { userRoleSchema, vehicleTypeSchema, type VehicleType } from "@/lib/share
 import { hourlyRatesSchema, type HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { userIdSchema, asId, type UserId } from "@/lib/shared/schemas/ids";
 import { matterNumberPrefixSchema, type User } from "@/lib/shared/schemas/user";
-import { assertAdmin } from "../auth/assert-admin";
 import {
   assertLoginEmailFree, assertMayChangeLoginEmail, auditLoginEmailChange, changesLoginEmail, type LoginEmailCtx,
 } from "../auth/login-email";
 import type { Repositories } from "../repositories/repositories";
-import { router, protectedProcedure } from "../trpc";
+import { router, adminProcedure, protectedProcedure } from "../trpc";
 
 /** Projektion till listvyns fält (utan passwordHash). */
 function pickList(u: User) {
@@ -117,7 +116,7 @@ export const userRouter = router({
   /**
    * Skapa användare. ADMIN-bara.
    */
-  create: protectedProcedure
+  create: adminProcedure
     .input(z.object({
       /** Valfritt klient-genererat id (ADR 0003) — annars genererar store:n. */
       id: userIdSchema.optional(),
@@ -133,7 +132,6 @@ export const userRouter = router({
       password: z.string().min(6).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       // E-posten är inloggningen: ett konto per adress, i alla byråer (#1408).
       // (En omkörning av samma köade anrop har samma id — den är inte en dubblett.)
       await assertLoginEmailFree(ctx.repos.users, input.email, input.id);
@@ -194,10 +192,9 @@ export const userRouter = router({
    * Inaktivera (ej hård-delete). ADMIN-bara. Sätter `active: false`
    * så historik bevaras.
    */
-  deactivate: protectedProcedure
+  deactivate: adminProcedure
     .input(z.object({ id: userIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       if (input.id === ctx.user.id) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Du kan inte inaktivera dig själv." });
       }
@@ -207,10 +204,9 @@ export const userRouter = router({
     }),
 
   /** Hård-delete behållen för bakåtkompabilitet, men ADMIN-only. */
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: userIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       if (input.id === ctx.user.id) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Du kan inte ta bort dig själv." });
       }

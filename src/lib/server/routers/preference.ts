@@ -10,11 +10,10 @@
 
 import { z } from "zod";
 import { asId } from "@/lib/shared/schemas/ids";
-import { assertAdmin } from "../auth/assert-admin";
 import { newRowId } from "../queued-call";
 import type { OrgPreferenceRow } from "../repositories/org-preference-repository";
 import type { UserPreferenceRow } from "../repositories/user-preference-repository";
-import { router, orgProcedure, protectedProcedure } from "../trpc";
+import { router, adminProcedure, orgProcedure, protectedProcedure } from "../trpc";
 
 const prefsPayloadSchema = z.record(z.string(), z.unknown());
 
@@ -59,10 +58,9 @@ export const preferenceRouter = router({
     }),
 
   /** Sätt org-default (endast ADMIN). */
-  setOrgDefault: orgProcedure
+  setOrgDefault: adminProcedure
     .input(z.object({ key: z.string().min(1), prefs: prefsPayloadSchema }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       const existing = await ctx.repos.orgPreferences.getByOrgKey(ctx.user.organizationId, input.key);
       if (existing) {
         return ctx.repos.orgPreferences.update(existing.id, { prefs: input.prefs, createdById: asId<"UserId">(ctx.user.id) } satisfies Partial<OrgPreferenceRow>);
@@ -76,10 +74,9 @@ export const preferenceRouter = router({
     }),
 
   /** Rensa org-default (endast ADMIN). */
-  clearOrgDefault: orgProcedure
+  clearOrgDefault: adminProcedure
     .input(z.object({ key: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       const existing = await ctx.repos.orgPreferences.getByOrgKey(ctx.user.organizationId, input.key);
       if (!existing) return { ok: true };
       await ctx.repos.orgPreferences.hardDelete(existing.id);
@@ -87,8 +84,7 @@ export const preferenceRouter = router({
     }),
 
   /** Lista alla nycklar som har en org-default (för admin-UI:t). */
-  listOrgDefaults: orgProcedure.query(({ ctx }) => {
-    assertAdmin(ctx);
+  listOrgDefaults: adminProcedure.query(({ ctx }) => {
     return ctx.repos.orgPreferences.listByOrg(ctx.user.organizationId);
   }),
 });

@@ -12,11 +12,10 @@ import { ledgerAccountMapSchema, type LedgerAccountMap } from "@/lib/shared/acco
 import { log } from "@/lib/shared/observability/logger";
 import { errorMessage } from "@/lib/shared/observability/redact";
 import { invoiceIdSchema, type OrganizationId } from "@/lib/shared/schemas/ids";
-import { assertAdmin } from "../auth/assert-admin";
 import { bookUnbookedInvoices, isBookable, type BookableInvoice } from "../integrations/ledger/book-invoices";
 import { bookUnbookedPayments } from "../integrations/ledger/book-payments";
 import { invoicePdfAttachment } from "../integrations/ledger/invoice-attachment";
-import { orgProcedure, router } from "../trpc";
+import { adminProcedure, orgProcedure, router } from "../trpc";
 import type { Context } from "../trpc-core";
 
 /** Fel från porten (nätet, Fortnox, saknad config) som ett läsbart tRPC-fel. */
@@ -96,15 +95,13 @@ async function bookPaymentsOf(ctx: Ctx, inv: FullInvoice, map: LedgerAccountMap,
 export const ledgerRouter = router({
   status: orgProcedure.query(({ ctx }) => ctx.ports.ledger.status(ctx.orgId)),
 
-  connectUrl: orgProcedure.mutation(async ({ ctx }) => {
-    assertAdmin(ctx);
+  connectUrl: adminProcedure.mutation(async ({ ctx }) => {
     return { url: await ctx.ports.ledger.authorizeUrl(ctx.orgId).catch((e: unknown) => { throw asTrpcError(e); }) };
   }),
 
-  completeConnect: orgProcedure
+  completeConnect: adminProcedure
     .input(z.object({ code: z.string().min(1), state: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      assertAdmin(ctx);
       await ctx.ports.ledger.completeConnect(ctx.orgId, input.code, input.state)
         .catch((e: unknown) => { throw asTrpcError(e); });
       return { connected: true };
